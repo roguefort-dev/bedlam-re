@@ -1,6 +1,9 @@
-game-data/
-goldens/media/
+# Reference game data (user-supplied original game; never redistributed)
+/game-data/
+# All derived/decoded dumps from tools (copyrighted asset derivatives)
+/derived/
+# Golden reference media stays out of git; fingerprints are committed instead
+/goldens/media/
 *.iso
-*.wav
-target/
-Cargo.lock
+/target/
+# Cargo.lock IS tracked (binary workspace -> reproducible builds)
