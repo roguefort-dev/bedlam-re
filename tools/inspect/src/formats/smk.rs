@@ -33,7 +33,8 @@ pub fn dump(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
     let fps_desc = if ms_raw > 0 {
         format!("{} fps", 1000 / ms_raw.max(1))
     } else {
-        format!("negative/zero ms value {}", ms_raw)
+        let us = (-ms_raw as i64) * 10;
+        format!("{} fps (us-per-frame encoding: {}us)", 1000000 / us, us)
     };
     let doc = serde_json::json!({
         "file": rel,

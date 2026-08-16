@@ -55,3 +55,10 @@ This materially affects decompiler setup — see PLAN.md §Tools.
 ## Known quirks from README.TXT (input for the bug-fix list)
 - DOS version needs UNIVBE (SciTech) VESA driver workarounds; `/NOSYNC` cmdline flag exists for cards that break vsync polling.
 - SETUP warns of crashes with wrong sound settings; game speed/audio tied to fragile hardware assumptions.
+
+## Additions measured by tools/inspect v0 (2026-08-17)
+- SINTABLE.BIN: 256 x u16, full-circle sine, amplitude 32767 (v[0]=0, v[1]=804=32767*sin(2pi/256), v[64]=32767). Confirms table-based trig, no FPU transcendental use.
+- SMK timing: negative ms_per_frame field = 10us units. Observed rates: TITLE 15fps; 26x BRF_* briefing videos 30fps; SHOP 40fps; END/GAMEOVER/GTLOG/LOGO/ZONEDONE 15fps. Dims: 640x320 (TITLE) / 640x480 (rest).
+- LANGUAGE.*: all six languages ship exactly 842 [sections] (ENG/FRE/GER/ITL/SPA/DCH) - parallel text DBs, section-keyed.
+- .PAL size families: 770B (52 files, 2B hdr + 768B 6-bit VGA), 256B x3 (DARKPAL/DARKPALS/SELDARK), 98B x2 (CONSPAL/FULLPAL), 65536B x3 (TXPAL1-3 = 256x256 byte tables, likely crossfade matrices - pending confirmation).
+- SAVED.BDL: "PLAYER" magic then mixed u16/u32 fields (900B total).
