@@ -1,0 +1,6 @@
+game-data/
+goldens/media/
+*.iso
+*.wav
+target/
+Cargo.lock
