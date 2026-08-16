@@ -10,6 +10,9 @@ Bedlam (GT Interactive / Mirage, 1996) that runs the original assets, fixes the 
 slowdowns/quirks/bugs, adds modern controls (WASD, 1-4 weapon hotkeys, rebinding),
 switches from frame-locked to time-based simulation, and stays testable and debuggable
 throughout so the project never gets stuck.
+Parity target: ~99% the same game (floor ~95%) — operationalized as the tiered parity
+budget in section 0b, NOT bit-exact full parity. The divergence allowance is spent
+deliberately: on the requested fixes and modernization, and on imperceptible internals.
 
 Companion docs: GROUNDWORK.md (verified file facts), RESEARCH.md (verified tooling
 facts + 8street prior work). MANIFEST.sha256 = integrity manifest of game-data/.
@@ -24,6 +27,28 @@ facts + 8street prior work). MANIFEST.sha256 = integrity manifest of game-data/.
 | 8street/Bedlam role | Navigation + hypothesis generation only — NOT a behavior oracle. It is a known-deviant build (44.1kHz mixer vs original 11kHz, unspecified bug fixes, crash fixes — from its own README). Its deviations list seeds docs/DIVERGENCES.md. Its crash-fix list is a lead list, never triage truth. Pin the exact commit hash we consult. |
 | 8street instrumented build | Allowed as a test-only comparator: recompile it with state-dump hooks to emit ground-truth state at tick boundaries for differential testing (see Testing). Does not change the not-a-porting-source rule. |
 | Tiebreak order | EXW disassembly > black-box observation of EXW > EXD (for its canon categories) > 8street (hints only). |
+
+## 0b. Parity budget (~99% target, ~95% floor)
+
+Divergence is budgeted by perception category, never as a global average (a global
+average hides concentrated divergence: wrong movement feel is 1% of features and 100%
+of the experience).
+
+| Tier | Contents | Bar |
+|---|---|---|
+| T1 exact | Asset formats; game rules; weapons/damage/economy/AI-behavior data and tables; mission logic/flow; UI flow | Implemented exactly (semantics verified vs RE + 8street); defects are bugs |
+| T2 perceptual | Rendering, palette, audio mix, timing feel, input latency | Perceptual thresholds + owner feel sign-off; no pixel/tick equality required |
+| T3 free divergence | Exact RNG streams (recover mechanics + distributions, not the bit stream); internal numeric representation (integer math for OUR determinism, not to mirror Watcom rounding); frame-exact AI micro-reactions; spawn tick ordering; every catalogued bug fix and modernization feature | Only statistical/observational equivalence; these ARE the 1-5% |
+
+Consequences:
+- Differential harness role changes from all-zone tick-parity gate to (a) divergence
+  meter, (b) structural-error catcher on the slice + targeted spots, (c) regression
+  tripwire. Tick-level completeness across all 37 zones is no longer required.
+- The original-behavior catalog scopes down to observable gameplay behavior only
+  (what players can notice), not internal quirks.
+- The classic-mode toggle set shrinks to feel-contested items only (timing lock,
+  control scheme, a few purist flags) — see P6.
+- 8street is precedent that this fidelity level reads as the same game to players.
 
 ## 1. Prior work (8street/Bedlam) — policy with teeth
 
@@ -151,19 +176,21 @@ Acceptance: replay determinism + state-dump parity on scripted slice scenes.
 37 missions playable; AI, weapons, shop, briefings, speech+music+SFX, save/load,
 languages. Multiplayer-only (deathmatch) content carved out of the parity exit
 (defined: maps load + local semantics correct; full DM = future work with netplay).
-Acceptance per zone: zone replay-set parity via differential harness + goldens;
-cross-OS replay hash equality.
+Acceptance per zone (playthrough-based, per the 0b budget): all scripted flows
+complete without crashes; T1 game rules verified against RE/8street; perceptual frame
+checks at key moments (T2); differential harness spot-checks for structure (not
+tick-complete); cross-OS replay hash equality of OUR engine (internal determinism).
 Original save compatibility: declared IN — original SAVED/OPTIONS.BDL import is
 read-only, bounds-checked, fuzzed; new saves use the new versioned format.
 Original-behavior catalog is a P5 artifact (per-bug ledger: repro, affected missions,
 severity, gameplay-coupling) — the input to P6 triage; owner signs it at each zone gate.
 
 ### P6 — Modernization (default = modern; classic available)
-Architecture: bug-complete parity core + composable toggleable fix layer above it —
-classic mode = faithful original behavior; modern mode = fixes on. Fixes land in the
-layer, never inside the core, so classic stays honest. Mode is one immutable ModeConfig
-injected at sim construction (no global config reads in core; test surface = 2
-profiles, not 2^features). Goldens run classic; modern gets its own smoke set.
+Architecture (simplified by the 99% target): fixes land directly in the engine —
+there is no bug-complete-faithful core to preserve. Classic mode shrinks to a small
+purist toggle set covering feel-contested items only (timing lock, control scheme,
+selected catalog entries the owner marks preserve). Mode is one immutable ModeConfig
+injected at sim construction; test surface = the purist toggles, not 2^features.
 - Time-based simulation: accumulator decouples tick rate from render; optional uncapped
   FPS. Interpolation scoped to camera/scroll only — grid-quantized 1996 sprites had no
   sub-pixel positions; interpolating them manufactures motion the original never showed
@@ -184,9 +211,12 @@ lossy cache generated on first run — never redistributed. SteamDeck defaults s
 
 ## 7. Determinism Charter (bedlam-core invariants)
 - Integer/fixed-point math or bit-specified soft-float; no ambient libm, no
-  transcendentals (use the original SINTABLE.BIN approach; record the original
-  representation per subsystem in P2 specs).
-- The PRNG is the original one, recovered from RE, seeded identically.
+  transcendentals. NOTE: this is for OUR cross-OS determinism, not to mirror Watcom
+  rounding (T3) — the SINTABLE approach is adopted because it is fast, exact enough,
+  and sidesteps libm variance entirely.
+- The PRNG mechanics and distributions are recovered from RE (what rolls happen,
+  when, with what parameters) but the original bit-stream is NOT mirrored (T3) — our
+  own seeded PRNG, statistically matched, is correct at this parity target.
 - No unordered iteration (HashMap et al.) may influence sim state.
 - All original entropy/timing reads are modeled as deterministic per-tick inputs (from
   the P2a entropy inventory); per-zone tick rate, if the original varies it, is data
