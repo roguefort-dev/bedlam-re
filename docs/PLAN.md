@@ -208,24 +208,56 @@ before the claim may be cited by engine code; 10% random re-verification; sub-hi
 confidence claims block phase exit. Unknown formats stay unknown — the CDDA music
 fallback makes that safe.
 
-## 10. Risks and mitigations
+## 10. Execution model (AI-assisted, ~24/7 — time is not the constraint)
+
+Parallel fan-out (concurrent agents, each with its own exit gate):
+- P1: one agent per file extension (17 parsers) + per-format fuzz agents; corpus
+  round-trip and MANIFEST checks run continuously in the background.
+- P2: subsystem agents partitioned by address range over the shared function DB
+  (integration is serialized; analysis fans out); anchoring sprints in batches.
+- P4+: golden/differential corpus generation and fuzzing run as background compute
+  around the clock; per-zone parity verification (P5) fans out one agent per zone.
+- Two-role split (§1) is enforced mechanically: reader agents write specs, builder
+  agents write Rust from specs; a verifier agent re-derives normative claims.
+
+True bottlenecks (invest here, not in schedule padding):
+1. Verification throughput — the differential harness is the rate limiter for
+   everything downstream; build it first and keep it fed 24/7.
+2. Serial integration points — function DB merges, harness upgrades, spec-gate
+   sign-offs.
+3. Human decisions — bug-catalog sign-off per zone, game-feel acceptance, legal
+   posture, and any call needing the owner. These are the only wall-clock waits.
+
+Stop-anytime ladder (value ordering if the project halts at any instant — NOT a
+schedule fallback; nothing is cut for time): every phase ends shippable. If work
+stops, the artifact is, in increasing order: asset tooling + format docs → + vertical
+slice → + N zones passing parity gates → + modernized controls/timing → + 3-OS
+packaging. Scope is never reduced for schedule reasons; only for owner preference.
+
+## 11. Risks and mitigations
 Watcom codegen → structures/constants first; DX import graph bootstraps; 8street
-answers semantics fast (governed by §1). Sim complexity → per-zone gates; editor data
-documents intent. Unknown formats → P2b inventory; music fallback = CDDA. Frame-locked
-balance → parity tick + measured re-tune + classic toggle. 8street disappears / legal →
-every fact re-anchored; engine-only repo. Schedule slip → descope ladder (cut order:
-macOS → goldens breadth → modern-mode polish → zone count; never cut: determinism,
-parsers, differential harness) and minimum shippable artifact defined at the P4 gate:
-slice + must-ship zones + classic timing + engine-only distribution.
+answers semantics fast (governed by §1). Sim complexity → per-zone gates; editor
+data documents intent. Unknown formats → P2b inventory; music fallback = CDDA.
+Frame-locked balance → parity tick + measured re-tune + classic toggle. 8street
+disappears / legal → every fact re-anchored; engine-only repo. Agent-specific risks
+(hallucinated semantics, silent consensus) → §9 QC protocol + independent re-derivation
++ differential harness as ground truth. The stuck-points of projects like this are
+wrong assumptions baked early, verification gaps, and data loss — not typing speed;
+the plan is shaped around exactly those (canon §0, harness §6-P4, manifest + backups §5).
 
-## 11. Milestones (ranges with honest uncertainty)
-P1 2-4w · P2 4-12w (overlaps P1/P3) · P3 2-4w (overlaps) · P4 2-5w (incl. differential
-harness) · P5 8-24w (per-zone gates) · P6 2-6w · P7 1-2w. Full parity ≈ 5-12 months
-focused part-time (the 8street solo full reconstruction is direct evidence the RE is
-tractable; our infra adds are the variance). If P5 runs long, the descope ladder
-applies — the plan never dead-ends.
+## 12. Milestones (gate-ordered, not calendar-estimated)
+Order is fixed; elapsed time ≈ compute time + owner decision latency. Meaningful
+metrics: verified-RE-facts per day (anchored/total ratio), zones passing parity gates,
+fuzz corpus coverage, differential-corpus pass rate.
+P1 (gates: every extension parsed; corpus round-trips; encodings identified) → P2
+(gates: loader inventory complete; slice-sufficient specs; entropy + slowdown
+catalogs) → P3 (gate: deterministic core replays cross-OS hash-equal from first tick)
+→ P4 (gates: slice scenes pass differential harness; dependency spikes decided) →
+P5 (gate: per-zone parity + signed original-behavior catalog) → P6 (gate: classic and
+modern profiles both green) → P7 (gate: 3-OS artifacts). Full parity target: all 37
+zones green; scope ceiling is the full plan, not a date.
 
-## 12. Immediate next actions
+## 13. Immediate next actions
 1. Install RE stack (Ghidra 12.1.2 + lx-loader + watcall cspec; rizin; DOSBox-X +
    DOSBox-staging; Wine) — versions pinned in DECISIONS.md.
 2. tools/inspect v0: .BIN sprite dumper + .PAL → PNG (prove the toolchain; outputs to
