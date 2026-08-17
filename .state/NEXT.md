@@ -240,7 +240,28 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
-
+- 2026-08-18 00:1x-00:2x (item3-dup watch run; stood down, NO work files
+  touched): DUPLICATE-SPAWN #5, contained, no damage. This run = the 00:12
+  nudge-item3 spawn. Protocol followed: found 3-claim stale (00:02, owner
+  died in the 00:04 client-death storm) + no live clients in pgrep ->
+  adopted the claim (fresh mtime 00:12, deleted own placeholder). ~90s
+  later commit 976f19f (00:12:54) landed: the 00:06:55 item-3 respawn was
+  ALIVE server-side all along (3rd case of rc=1 client death NOT killing
+  the server session). Stood down instantly and only watched: survivor
+  closed end-to-end (976f19f + b8f63e6 + 570e941 consolidation with the
+  eip/esp object-relative correction + 87fbed2 queue rewrite + push; it
+  also cleaned up the claim this run had adopted). Deliverable verified
+  before exit: RESEARCH-BEDLAM2-CENSUS.md B2 Ghidra import plan (4
+  sections + 5-step runbook + D18). Also observed live and left alone:
+  item-1 bedlam-core worker (f15eb60, 7396491, 889cbef), P4-prep slot-5
+  agent (84390d4: runtime pinned REPO-CONTAINED via tools/runtime +
+  gitignore /runtime/ - resolves the prior owner-decision flag, review
+  still pending). LESSON for stale-claim adoption: pgrep + claim mtime is
+  NOT enough - poll git log for 2-3 min before believing a lane is free,
+  because a live survivor can be invisible to pgrep while its server
+  session finishes the unit; the fresh-mtime claim rewrite only prevents
+  controller respawns, not survivor collisions (harmless here solely
+  because this run wrote nothing to work files).
 - 2026-08-18 00:0x-00:3x (b2-le-research run, item-3 respawn): clean unit,
   research-only (web + local parses, javap, no Ghidra). Claim-lane note: I am
   the 00:06:55 controller respawn predicted by the spawn-storm note; 1-claim +
