@@ -1,15 +1,12 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P1->P3] Promote the tools/inspect decoders into a proper workspace crate
-   engine/bedlam-assets (lib + unit tests + round-trip test over a sample of
-   game-data, manifest-checked). Keep tools/inspect as a thin CLI over the crate.
-2. [P2] RE the .MRS loader in EXW (open questions in RESEARCH-8STREET.md) to close
+1. [P2] RE the .MRS loader in EXW (open questions in RESEARCH-8STREET.md) to close
    the last mission-format gap; likewise CONFIG.BDL (61B).
-3. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00402bac gated
+2. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00402bac gated
    pump (20x38B records, chan 3), FUN_00425901 50Hz update, FUN_0044b428 scroll
    delta source, resolve .data slot 00457874, DDRAW vtable +0x18 mapping.
-4. [P2] GameMain second hop (from docs/RE-EXW-GAMETHREAD.md open list):
+3. [P2] GameMain second hop (from docs/RE-EXW-GAMETHREAD.md open list):
    decompile FUN_0043d00b (reads 50Hz gate 004ede10 - the per-frame sim/render
    step; settle whether the 50Hz gate is further subdivided) + FUN_00440e45
    (zone/level manager) + find GoFlagSet@0044d9b4 caller (releases TimerInit
@@ -17,7 +14,9 @@
 
 ## Backlog (not yet started)
 - B2: run inspect over game-data-2 again after any decoder change (second fuzz
-  corpus); document any B2-only format quirks in RESEARCH-BEDLAM2-CENSUS.md.
+  corpus; decoders now live in engine/bedlam-assets - the corpus test pattern
+  in engine/bedlam-assets/tests/corpus.rs is the model); document any B2-only
+  format quirks in RESEARCH-BEDLAM2-CENSUS.md.
 - B2: import BEDLAM.EXE (LE/DOS4GW) into Ghidra (needs LE loader handling);
   compare boot/init with EXW findings.
 - P4 prep: DOSBox-X AppImage download (user-level, no sudo), pinned Wine prefix for EXW.
@@ -29,6 +28,14 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 a6697e6 [P1->P3] tools/inspect decoders promoted to workspace
+  crate engine/bedlam-assets (pure buffer-in/out, thiserror, no-panic on user
+  bytes; 70 unit tests + corpus integration test over a deterministic 80-file
+  game-data sample: 70 ok/0 err, 13 byte-exact rebuilds, 20+20 codec
+  round-trips). tools/inspect kept as thin CLI; full-corpus output proven
+  byte-identical to pre-refactor HEAD. DECISIONS D14. NOTE: a prior run was
+  interrupted mid-refactor leaving the work uncommitted; this run verified and
+  completed it (build/fmt/clippy/tests/regression-diff all green).
 - 2026-08-17 9bb6793 [P2] EXW game worker-thread 0044dea0 decompiled: it is a
   59-byte trampoline -> GameMain@0041c050 (the real game shell/loop, decompiled
   + named). 8street 20fps claim REFUTED at this depth: no Sleep/timeGetTime on
@@ -54,6 +61,15 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+- 2026-08-17 07:2x (assets-promotion run): found the prior run's refactor
+  UNCOMMITTED mid-flight (engine/ + tools/inspect edits, build already green).
+  Verified rather than redid: cargo build/test/fmt/clippy clean; corpus test
+  real (1069 walked, 80 sampled); full-corpus inspect output diffed against a
+  HEAD git-worktree run = byte-identical (only summary.json "root" string
+  differs when invoked with abs vs rel path - expected). Leftover
+  .sprites/.images files inside derived/ predate HEAD (old experimental dump
+  format; NOT lost output - HEAD does not emit them either). .state/fails and
+  .state/spawns are nudge runtime counters -> gitignored.
 - 2026-08-17 04:2x (tick run): CONCURRENT-AGENT INCIDENT - my heartbeat went
   stale during the ~2min headless run (touched only at run start), so nudge
   spawned a second agent (d3c91f5/0a27bf9) that rewrote RE-EXW-MAINLOOP.md

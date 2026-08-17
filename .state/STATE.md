@@ -1,6 +1,8 @@
 # STATE - project snapshot (update when phase changes)
 
-- Phase: P1 essentially complete; P2 well underway. EXW outer architecture +
+- Phase: P1 essentially complete; P2 well underway. P3 STARTED: decoders
+  promoted to workspace crate engine/bedlam-assets (pure, 70 unit + corpus
+  round-trip tests, inspect CLI output byte-identical, D14). EXW outer architecture +
   100Hz tick + game worker thread FULLY mapped (GameThread@0044dea0 = 59-byte
   trampoline -> GameMain@0041c050 = real game shell/loop; pacing = 100Hz tick
   -> 50Hz gate 004ede10, 20fps claim refuted; 7x5 zone/level structure; RNG
