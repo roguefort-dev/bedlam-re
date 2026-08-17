@@ -9,4 +9,4 @@
 # Cargo.lock IS tracked (binary workspace -> reproducible builds)
 
 # Local Ghidra project (large binaries)
-/.ghidra-project/
+/ghidra-project/
