@@ -8,19 +8,50 @@
 2. [P2] Tick satellite naming pass: continue labeling 0044xxxx service-tick
    callees in RE-EXW-TICK.md open list (FUN_00402bac gated pump chan 3,
    .data slot 00457874 consumers) - decompile + name + commit incrementally.
-3. [P2] B2 prep: DOS4GW LE loader research for Ghidra (how to import
-   BEDLAM.EXE LE format - loader options, scripts, prior art); document a
-   concrete import plan in docs/RESEARCH-BEDLAM2-CENSUS.md. Read-only
-   research + doc work, no Ghidra project changes.
+3. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
+   (build from source preferred: gradle -PGHIDRA_INSTALL_DIR=/home/kato/
+   ghidra-12.1.2-watcom, no Ghidra source tree needed; force-install v12.0.1
+   as plan B), scratch-project smoke test in /tmp/opencode, then import
+   game-data-2/BEDLAM.EXE into BedlamWatcom per the 5-step runbook in
+   RESEARCH-BEDLAM2-CENSUS.md (B2 Ghidra import plan) sec 4; verify blocks
+   0x10000/0x80000 (span to 0x1304ee), entry 0x56a60, fixup labels; seed
+   function DB + first boot/init comparison vs EXW.
+
 ## Backlog (not yet started)
-- B2: import BEDLAM.EXE (LE/DOS4GW) into Ghidra (needs LE loader handling);
-  compare boot/init with EXW findings.
 - P4 prep: DOSBox-X AppImage download (user-level, no sudo), pinned Wine prefix for EXW.
 - Cosmetic RE: create+decompile LAB_00451fbc (Watcom CRT thread trampoline,
   see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 976f19f [P2] B2 prep: DOS4GW LE loader research CLOSED (this
+  run = the 00:06:55 item-3 respawn after the client-death storm; re-derived
+  every fact from scratch per the spawn-storm note, trusting nothing from the
+  dead session transcript). RESEARCH-BEDLAM2-CENSUS.md new section: (1) B2
+  BEDLAM.EXE + B1 EXD LE headers pinned via Open Watcom exeflat.h layout with
+  3-way structural cross-checks - B2: 2 objects (code 0x10000 R+X vsize
+  0x66970 / data 0x80000 R+W vsize 0xb04ee with only 7 file-backed pages =
+  mostly implicit zero-fill), 110 pages x 4096B all VALID sequential, data
+  pages file [0x36e00..], eip LINEAR 0x56a60 (code probe hit mov
+  [0xa5e10],ecx = obj2 store at the derived file offset), esp 0xb04ee,
+  module name BEDLAM; EXD same class (107 pages, eip 0x4fbb0). HEADLINE:
+  internal fixups NOT pre-applied (flags=0x200, 205KB fixup section) => a
+  raw-carve import yields garbage pointers - loader mandatory; honest
+  python fixup-applier fallback documented in the section. (2) Loader
+  census: stock Ghidra 12.1.2 incl. our -watcom build has NO LE loader
+  (Base.jar LinearExecutable = NotYetImplementedException stub,
+  javap-verified); yetmorecode/ghidra-lx-loader v12.0.1 (2026-01-29) = the
+  pick (MSDOS DOS/4 LE-Style, full page-map+fixup application, per-fixup
+  labels); alexbevi Harvester series 2026 = end-to-end prior art; SB.EXE
+  unbind NOT needed (our MZ region is just the 19KB Watcom launcher,
+  DOS4GW.EXE ships separate). (3) The 12.0-vs-12.1.2 risk is removable:
+  build from source against the install (build.gradle ->
+  support/buildExtension.gradle, Gradle >= 8.5); force-install + scratch
+  smoke test as plan B. RESEARCH.md lx-loader UNCERTAIN tag resolved.
+  Manifests OK before+after. GOTCHA FIX for the 23:2x note: MANIFEST-2.sha256
+  lives at REPO ROOT with corpus-relative entries, so the working command is
+  cd game-data-2 && sha256sum -c ../MANIFEST-2.sha256 (the earlier note
+  omitted the ../ and that exact form fails).
 - 2026-08-18 a3ad066 [P3] bedlam-render DESIGN NOTE CLOSED (docs/DESIGN-RENDER.md, new - docs-only run, no code, no Ghidra). Canonical Frame = 640x480 x 8-bit indices + 256 x 6-bit VGA palette; parity/goldens anchor there; everything above is presentation (D9/D12). Contents: RE-fact table with anchors (present chain + vsync verdict D16, palette upload r<<2 @SetPaletteRGB, banks SetPaletteIndex + 0x90..0x97 12.5Hz cycle + region bank 0x5d, fade engine 16.16 + 10-step = 200ms, palette-dirty handshake 004ee9b6, entry-0 quirks, composition order base->sprites->row blits->overlays->entities, camera clamps 9..631/9..463); palette policy: 6-bit canon everywhere, expansion at presentation ONLY (Original v<<2 default vs Full (v<<2)|(v>>4)); bedlam-assets pal.rs Palette = tooling repr, NOT render canon (flagged for a later Vga6 type); D17 concretized: 300Hz microstep scheduler (5 per 60Hz sim tick; service event %3 = 100Hz, fade %6 = 50Hz while fading, bank cycle %24 = 12.5Hz; counter zeroed at boot release mirroring FUN_0041e19d) -> deterministic satellites, hashed; ownership/hash boundary table (interpolation alpha + present timing shape frames, never state; goldens at tick boundaries with interpolation off); 7 open questions each naming its answer source. Manifest verified OK (run was docs-only).
 - 2026-08-17 fe14416 [P4 prep] EXW input/control map CLOSED (docs/RE-EXW-INPUT.md,
   new). Pass A ExwInputSinks.java: KeySink@0041be05(scan,down) = 256B
@@ -177,6 +208,16 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+
+- 2026-08-18 00:0x-00:3x (b2-le-research run, item-3 respawn): clean unit,
+  research-only (web + local parses, javap, no Ghidra). Claim-lane note: I am
+  the 00:06:55 controller respawn predicted by the spawn-storm note; 1-claim +
+  2-claim still had DEAD owners when I exited (reaper territory). Doc surgery
+  via staged bash-heredoc + assert-guarded python anchor replace per house
+  recipe; commit with explicit paths only (siblings bedlam-core + ExwTickSats
+  WIP left untouched). PLAN sec P2 raw-binary fallback is now known-NAIVE for
+  LE (unapplied fixups) - if anyone re-plans the fallback, start from the
+  census doc section, not PLAN.
 - 2026-08-18 00:0x (render-design run): arrived with all 3 Now items claimed -> claim protocol slot 4 = first unblocked BACKLOG item. Skip reasons recorded: B2 import blocked by in-flight item-3 LE-loader research; P4 prep DOSBox-X/Wine needs DURABLE writes outside the repo (AGENTS hard-rule violation for unattended runs - needs an owner decision on tool storage first); cosmetic RE (LAB_00451fbc + surface roles) would take the BedlamWatcom Ghidra -process lock concurrently with the live item-2 naming pass. FISH GOTCHA (new, same family as the apostrophe rule): a Rust lifetime annotation containing a single-quote char inside a bash -c SINGLE-QUOTED heredoc body closes the fish string early -> the whole command dies as a FISH parse error before bash runs (no partial file - verify with ls). Recipe that worked: write the heredoc body apostrophe-free to /tmp/opencode, verify wc/head, then cp into the repo. Also: commit with explicit paths (git add docs/DESIGN-RENDER.md) when siblings have uncommitted WIP in the tree (bedlam-core/* and ExwTickSats.java were live); push carried the prior local-only queue commit 22ca126 along.
 
 - 2026-08-18 00:0x (spawn-storm watch run; stood down, NO work files
