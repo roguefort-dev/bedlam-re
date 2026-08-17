@@ -26,8 +26,7 @@
 - Known open: GameMain second hop - FUN_0043d00b (per-frame sim/render; its
   004ede10 read = fade-status, real rate mechanism unknown - D15) +
   FUN_00440e45 (zone/level manager) + divider consumers (FUN_00448ef1,
-  FUN_00402b48); music small tails (FUN_0044c4a8 ratio/vol applier, table C
-  consumer, loop-flag 0045cdc0 writer); .BLD/.CTG (editor-only), PAL variant
+  FUN_00402b48); music chain FULLY closed incl. sub-voice start path (SubVoiceStart = SetFrequency ratio*11025 / SetVolume / SetPan / Play; table C + 0xFE loop flag + pending-restart all DEAD); .BLD/.CTG (editor-only), PAL variant
   renderers, EXD import (needs LE loader ext), goldens pipeline (P4).
   Parity budget: NO committed logic rate (D15 withdrew D13 50Hz).
   CLOSED 2026-08-17 (tick2 run): GoFlagSet caller = FUN_0041e19d; fade

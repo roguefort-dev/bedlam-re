@@ -1,12 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] Music small tails (one -process pass, no import): decompile
-   FUN_0044c4a8 (sub-voice start: presumed SetFrequency 16.16 ratio + volume
-   applier consuming 0045b03e/0045b042); xref census for header table C
-   (0045cda8) reads, loop-flag writer 0045cdc0[song]=1, restart-word writer
-   004543d4. Optional: plate comments for MusicPump/MrsChunkStart semantics.
-2. [P3] Rust .MRS/.MRW decoders + stream-parse corpus test in
+1. [P3] Rust .MRS/.MRW decoders + stream-parse corpus test in
    engine/bedlam-assets (grammar: docs/RE-EXW-MUSIC.md sections 2/2b/3; also
    decode-song tool => duration/instrument table). Natural follow-on to the
    existing codec tests. The .PAL/.BIN fade-path findings (RE-EXW-TICK.md
@@ -32,6 +27,27 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 62c00c3+567808f+8ed8482+a397267 [P2] Music small tails ALL
+  CLOSED (3 x -process passes, no import; queue-housekeeping commit f417543
+  first recorded the prior pacer run 7406875/D16 that died before NEXT.md
+  rewrite). (a) FUN_0044c4a8 = SubVoiceStart: five STOCK IDirectSoundBuffer
+  vtable calls (NO shift, unlike +4 ddraw surfaces) - SetFrequency =
+  (ratio * 11025) >> 16 (16.16 ratio x native rate), SetVolume =
+  ((master@004ee9b4 * vol)/48 - 127)*2000>>7, SetPan(0), SetCurrentPosition(0),
+  Play(0,0,0); full MusicPump -> MrsTriggerNote -> SubVoiceFind chain resolved
+  (master vol setter FUN_0044c630 + 2 UI callers; note-off-releases-BASE quirk
+  recorded for faithful impl). (b) table C (0045cda8) = write-only DEAD data
+  (zero readers, full listing census). (c) loop flag 0045cdc0 never set to 1
+  => 0xFE opcode DEAD; pending-restart 004543d4 initialized 0xffff + no
+  setter => never fires. Bonus: word 004ee9b6 = palette-dirty flag
+  (SetPaletteRGB sets, DDFlipOrBlt re-applies+clears - added to pacer doc).
+  Names: SubVoiceStart/SubVoiceFind/SubVoiceProbe + g_music_loopflag/
+  g_music_pending_restart/g_tableC_ptrs/g_song_inst_count/g_music_master_vol;
+  plate comments on MusicPump/MrsChunkStart/MrsNextEvent/MusicStart/load_midi/
+  mrw_load. Docs: RE-EXW-MUSIC.md sec 6 rewritten, RE-EXW-PACER.md handshake.
+  LESSON: Ghidra getReferencesTo MISSES scaled-index operands ([EAX*2+base])
+  - global censuses need a listing-text scan (ExwMusicTails3 pattern).
+  Manifest OK.
 - 2026-08-17 7406875 [P2] GameMain second hop + pacer CLOSED (pacer run,
   died before queue rewrite; follow-up run verified commit vs task text):
   mission loop FUN_0043d00b = poll -> sim/render -> PresentCopy ->
@@ -114,7 +130,14 @@
   stale - pacer run committed 7406875 (D16) at 19:58 but died before
   rewriting NEXT.md. This run verified the commit contents against the task
   text, marked task 1 done, promoted music tails to top. Tree clean,
-  manifest OK (1069 files) before work started.
+  manifest OK (1069 files) before work started. SAME RUN then closed the
+  music tails unit (see Done above): 3 clean -process passes
+  (exw-music-tails{,2,3}.txt). Script-compile lessons: Ghidra API is
+  getScriptArgs (not getScriptArguments), and monitor.checkCanceled in a
+  helper needs throws Exception. Fish quote gotcha bit once: a single quote
+  in the bash -c verification text AFTER the heredoc broke the wrapper
+  BEFORE the heredoc ran (file silently not written) - keep verification
+  commands quote-free or run them separately.
 - 2026-08-17 18:xx (tick2 run): clean run, 2 headless -process passes (no
   import), manifests OK. LESSON: pgrep -f analyzeHeadless FALSE-POSITIVES on
   the continuation agent own cmdline (the nudge prompt text contains the word
