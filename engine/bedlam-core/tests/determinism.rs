@@ -290,35 +290,36 @@ fn same_script_same_sim_hash_at_15_60_240hz() {
     assert_eq!(a.sim().actor().0, 30);
 }
 
-/// D17 (c): satellite clocks as exact integer substeps of the 60 Hz tick.
+/// D17 (c) + docs/DESIGN-RENDER.md sec 6: the 300Hz microstep
+/// scheduler — one global counter, satellites as divisibility tests.
 #[test]
 fn satellite_substep_rates() {
-    // 100 Hz service = 5 events per 3 ticks.
+    // 100 Hz service = 5 events per 3 ticks (15 microsteps, %3).
     let mut sim = Sim::new(&SimConfig::default());
     for _ in 0..3 {
         sim.tick(&InputFrame::default());
     }
     assert_eq!(sim.service_ticks(), 5);
-    assert_eq!(sim.service_phase(), 0);
+    assert_eq!(sim.microstep(), 15);
 
-    // 12.5 Hz palette cycle = 5 cycles per 24 ticks (and 40 service
-    // events over the same span: 24 * 5/3).
+    // 12.5 Hz palette cycle = 5 cycles per 24 ticks (120 microsteps,
+    // %24) and 40 service events over the same span (120/3).
     let mut sim = Sim::new(&SimConfig::default());
     for _ in 0..24 {
         sim.tick(&InputFrame::default());
     }
     assert_eq!(sim.pal_cycles(), 5);
-    assert_eq!(sim.pal_phase(), 0);
+    assert_eq!(sim.microstep(), 120);
     assert_eq!(sim.service_ticks(), 40);
 
-    // 50 Hz fade stepper = 5 steps per 6 ticks, but only while fading.
+    // 50 Hz fade stepper = 5 steps per 6 ticks (30 microsteps, %6), but
+    // only while fading.
     let mut fading = Sim::new(&SimConfig::default());
     fading.set_fading(true);
     for _ in 0..6 {
         fading.tick(&InputFrame::default());
     }
     assert_eq!(fading.fade_steps(), 5);
-    assert_eq!(fading.fade_phase(), 0);
     assert_eq!(fading.service_ticks(), 10); // satellites coexist
 
     let mut idle = Sim::new(&SimConfig::default());
@@ -327,6 +328,59 @@ fn satellite_substep_rates() {
     }
     assert_eq!(idle.fade_steps(), 0, "not fading: stepper stays idle");
     assert!(!idle.fading());
+}
+
+/// docs/DESIGN-RENDER.md sec 6: exact event multiplicity per tick on the
+/// 300 Hz microstep grid, and the shared-phase tick where one microstep
+/// (24 = lcm(3, 6, 24)) fires ALL three satellites in the same tick.
+#[test]
+fn microstep_event_multiplicity() {
+    // One tick runs microsteps 1..=5: only 3 is a multiple of 3, so
+    // exactly ONE service event fires, and no fade/palette event.
+    let mut sim = Sim::new(&SimConfig::default());
+    sim.tick(&InputFrame::default());
+    assert_eq!(sim.microstep(), 5);
+    assert_eq!(sim.service_ticks(), 1);
+    assert_eq!(sim.fade_steps(), 0);
+    assert_eq!(sim.pal_cycles(), 0);
+
+    // Second tick runs 6..=10: microsteps 6 and 9 both fire %3, so the
+    // total reaches 3 service events (and microstep 6 fired while NOT
+    // fading, so fade stays 0).
+    sim.tick(&InputFrame::default());
+    assert_eq!(sim.microstep(), 10);
+    assert_eq!(sim.service_ticks(), 3);
+    assert_eq!(sim.fade_steps(), 0);
+
+    // The counter first reaches a multiple of 24 during tick 5
+    // (microsteps 21..=25 contain 24 = lcm(3, 6, 24)): in THAT tick all
+    // three satellites advance — 21 and 24 fire %3 (+2 service), 24
+    // fires %6 (+1 fade) and %24 (+1 palette).
+    let mut aligned = Sim::new(&SimConfig::default());
+    aligned.set_fading(true);
+    for _ in 0..4 {
+        aligned.tick(&InputFrame::default());
+    }
+    assert_eq!(aligned.microstep(), 20);
+    assert_eq!(
+        (
+            aligned.service_ticks(),
+            aligned.fade_steps(),
+            aligned.pal_cycles()
+        ),
+        (6, 3, 0)
+    );
+    aligned.tick(&InputFrame::default());
+    assert_eq!(aligned.microstep(), 25);
+    assert_eq!(
+        (
+            aligned.service_ticks(),
+            aligned.fade_steps(),
+            aligned.pal_cycles()
+        ),
+        (8, 4, 1),
+        "microstep 24 fired service+fade+palette in the same tick"
+    );
 }
 
 /// D17 (b): frame-rate-driven state is excluded from the sim hash. Mouse

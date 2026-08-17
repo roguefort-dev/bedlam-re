@@ -20,6 +20,14 @@ use crate::sim::{Sim, SimConfig};
 /// quantize their dt to whole sub-ticks on this grid; the accumulator banks
 /// the remainder so the long-run tick rate stays exact (no drift, no
 /// rounding). dt NEVER enters sim math — it only counts whole 60Hz ticks.
+///
+/// Deliberately distinct from the SIM-side 300Hz microstep clock
+/// (`crate::sim::MICROSTEPS_PER_TICK`, docs/DESIGN-RENDER.md sec 6):
+/// this 240Hz grid is a HOST-display-oriented clock that quantizes host
+/// dt into whole 60Hz ticks (it serves the display rates 60/120/240Hz),
+/// while the 300Hz microstep clock schedules the satellites INSIDE each
+/// already-quantized tick at the original service rates
+/// (100/50/12.5Hz). The two clocks never mix, and neither is a float.
 pub const SUBTICKS_PER_TICK: u32 = 4;
 
 /// Game-space extents the cursor clamps into (640x480 canonical render

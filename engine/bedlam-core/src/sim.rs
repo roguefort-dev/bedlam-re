@@ -1,12 +1,13 @@
 //! The hashed half of the D17 timing model: the fixed-60Hz simulation
-//! bucket, its satellite substep clocks, the state hash, snapshot and
-//! restore.
+//! bucket, its 300Hz microstep satellite scheduler, the state hash,
+//! snapshot and restore.
 //!
 //! SKELETON ONLY (P3): no game logic lives here yet. The deliverable is
 //! the determinism framework — fixed tick, exactly-one-entropy-draw-per-
-//! tick, integer satellite substeps, FNV-1a state hash in a pinned field
-//! order, versioned snapshot bytes — exercised by `tests/determinism.rs`.
-//! The per-host-frame (non-hashed) half of D17 lives in `crate::frame`.
+//! tick, the 300Hz microstep scheduler of docs/DESIGN-RENDER.md sec 6,
+//! FNV-1a state hash in a pinned field order, versioned snapshot bytes —
+//! exercised by `tests/determinism.rs`. The per-host-frame (non-hashed)
+//! half of D17 lives in `crate::frame`.
 
 use crate::hash::{Fnv1a64, StateHash};
 use crate::input::InputFrame;
@@ -22,23 +23,33 @@ pub const SNAPSHOT_MAGIC: [u8; 4] = *b"BDLS";
 /// streams from the same seed.
 const STREAM_SIM: u64 = 1;
 
-/// Satellite clocks are integer substeps of the 60Hz tick (D17 c,
-/// docs/RE-EXW-TICK.md): every satellite adds [`SATELLITE_STEP`] phase
-/// per tick and fires one event per wrap value `n`, i.e. runs at
-/// `60 * 5 / n` Hz — no floats, no dt, fully hashed.
+/// Microsteps per 60Hz sim tick: 5 (docs/DESIGN-RENDER.md sec 6, D17).
+/// The sim runs a 300Hz service clock inside each tick —
+/// 300 = lcm(60, 100, 50, 12.5) — and the three satellite events are
+/// divisibility tests on ONE global microstep counter: %3 fires the 100Hz
+/// service event, %6 the 50Hz fade step (while fading), %24 the 12.5Hz
+/// palette bank cycle. All integer, all hashed.
 ///
-/// Shared numerator: 5 phase per tick (60 and the satellite rates share
-/// the factor that makes 100/50/12.5Hz all reduce to x/5).
-const SATELLITE_STEP: u32 = 5;
-/// 100Hz service tick: 5 events per 3 ticks (EXW TimerCallback@0044de58,
-/// docs/RE-EXW-TICK.md).
-const SERVICE_WRAP: u32 = 3;
+/// Deliberately distinct from the HOST-side 240Hz sub-tick grid
+/// (`crate::frame::SUBTICKS_PER_TICK`): that clock quantizes host dt
+/// into whole 60Hz ticks and serves the display rates 60/120/240Hz
+/// (D12); this 300Hz clock schedules the satellites INSIDE each tick at
+/// the original service rates (100/50/12.5Hz). The two clocks never mix,
+/// and neither is a float.
+pub const MICROSTEPS_PER_TICK: u32 = 5;
+/// 100Hz service event: every 3rd microstep of the 300Hz clock
+/// (EXW TimerCallback@0044de58 analog, docs/RE-EXW-TICK.md,
+/// docs/DESIGN-RENDER.md sec 6).
+const SERVICE_DIVISOR: u64 = 3;
 /// 50Hz palette-fade stepper FadeStep@00425901, active only while fading
-/// (docs/RE-EXW-TICK.md, D15): 5 events per 6 ticks.
-const FADE_WRAP: u32 = 6;
-/// 12.5Hz palette cycle, operating range 0x90..0x97 (docs/RE-EXW-TICK.md):
-/// 5 events per 24 ticks.
-const PAL_WRAP: u32 = 24;
+/// (docs/RE-EXW-TICK.md, D15): every 6th microstep — every 2nd service
+/// event, matching bit0 of the original 100Hz divider @004edbc8
+/// [verified, docs/DESIGN-RENDER.md sec 6].
+const FADE_DIVISOR: u64 = 6;
+/// 12.5Hz palette bank cycle, operating range 0x90..0x97
+/// (docs/RE-EXW-TICK.md): every 24th microstep — every 8th service
+/// event, matching (ctr & 7) == 0 [verified].
+const PAL_DIVISOR: u64 = 24;
 
 /// Placeholder actor clamp in 640x480 game space (grid coords).
 const ACTOR_MAX_X: i32 = 639;
@@ -82,20 +93,22 @@ pub struct Sim {
     /// state so any divergence in RNG consumption order shifts the hash.
     last_draw: u32,
 
-    // Satellite clocks (D17 c): integer substeps of this tick, all hashed.
-    /// 100Hz service tick: phase within the 5-per-3 pattern.
-    service_phase: u32,
+    // Satellite scheduler (D17 c, docs/DESIGN-RENDER.md sec 6): one
+    // global 300Hz microstep counter, events are divisibility tests.
+    /// Global 300Hz microstep counter: incremented
+    /// [`MICROSTEPS_PER_TICK`] times per tick and tested with
+    /// %`SERVICE_DIVISOR`/%`FADE_DIVISOR`/%`PAL_DIVISOR`. Zeroed at
+    /// construction, mirroring the original counter being zeroed at
+    /// boot release (FUN_0041e19d zeroes divider 004edbc8
+    /// [verified, docs/DESIGN-RENDER.md sec 6]).
+    microstep: u64,
     /// Total 100Hz service events elapsed.
     service_ticks: u64,
     /// Whether the 50Hz fade stepper is armed (EXW: fade countdown
     /// nonzero).
     fading: bool,
-    /// 50Hz fade stepper phase (only advances while `fading`).
-    fade_phase: u32,
     /// Total 50Hz fade steps elapsed.
     fade_steps: u64,
-    /// 12.5Hz palette-cycle phase.
-    pal_phase: u32,
     /// Total 12.5Hz palette cycles elapsed.
     pal_cycles: u64,
 
@@ -133,16 +146,18 @@ pub struct Snapshot {
 const SNAPSHOT_HEADER_LEN: usize = 4 + 2 + 2 + 4 + 8 + 8 + 4;
 
 /// Version-1 state-region layout (little-endian, fixed order):
-/// rng_state u64 @0, rng_stream u64 @8, last_draw u32 @16, service_phase
-/// u32 @20, service_ticks u64 @24, fading u8 @32 (+3 pad bytes @33..36),
-/// fade_phase u32 @36, fade_steps u64 @40, pal_phase u32 @48, pal_cycles
-/// u64 @52, actor_x i32 @60, actor_y i32 @64, initial_state_hash u64 @68.
-const STATE_LEN: usize = 76;
+/// rng_state u64 @0, rng_stream u64 @8, last_draw u32 @16, microstep u64
+/// @20, service_ticks u64 @28, fading u8 @36 (+3 pad bytes @37..40),
+/// fade_steps u64 @40, pal_cycles u64 @48, actor_x i32 @56, actor_y i32
+/// @60, initial_state_hash u64 @64.
+const STATE_LEN: usize = 72;
 
 impl Sim {
-    /// Create a simulation: PRNG on [`STREAM_SIM`], satellite clocks and
-    /// placeholder payload at their zeroed defaults, `fading` off, and
-    /// `initial_state_hash` recorded from the tick-0 state hash.
+    /// Create a simulation: PRNG on [`STREAM_SIM`], the microstep
+    /// counter at 0 (mirroring the boot-release counter zeroing,
+    /// FUN_0041e19d), satellite event totals and placeholder payload at
+    /// their zeroed defaults, `fading` off, and `initial_state_hash`
+    /// recorded from the tick-0 state hash.
     pub fn new(config: &SimConfig) -> Sim {
         let mut sim = Sim {
             tick: 0,
@@ -150,12 +165,10 @@ impl Sim {
             time_base: config.time_base,
             initial_state_hash: 0,
             last_draw: 0,
-            service_phase: 0,
+            microstep: 0,
             service_ticks: 0,
             fading: false,
-            fade_phase: 0,
             fade_steps: 0,
-            pal_phase: 0,
             pal_cycles: 0,
             actor_x: 0,
             actor_y: 0,
@@ -169,9 +182,13 @@ impl Sim {
     /// Order (each step is part of the determinism contract):
     /// 1. exactly ONE PRNG draw per tick (the entropy slot), stored in
     ///    `last_draw`;
-    /// 2. satellite clocks advance as integer substeps: 100Hz service
-    ///    always; 50Hz fade only while `fading`; 12.5Hz palette cycle
-    ///    always (D17 c, docs/RE-EXW-TICK.md);
+    /// 2. the 300Hz microstep scheduler runs
+    ///    [`MICROSTEPS_PER_TICK`] microsteps of one shared counter
+    ///    (docs/DESIGN-RENDER.md sec 6, D17 c); within EACH microstep the
+    ///    event tests are evaluated in the FIXED order service -> fade ->
+    ///    palette: %3 fires the 100Hz service event (always), %6 the 50Hz
+    ///    fade step (only while `fading`), %24 the 12.5Hz palette bank
+    ///    cycle (always);
     /// 3. placeholder payload: `buttons` bit 0 held advances `actor_x`
     ///    by 1, clamped at 639 — nothing else reaches the sim in this
     ///    skeleton (mouse deltas are per-frame data, `crate::frame`);
@@ -179,27 +196,24 @@ impl Sim {
     pub fn tick(&mut self, input: &InputFrame) {
         self.last_draw = self.rng.next_u32();
 
-        // 100Hz service: 5 events per 3 ticks.
-        self.service_phase += SATELLITE_STEP;
-        while self.service_phase >= SERVICE_WRAP {
-            self.service_phase -= SERVICE_WRAP;
-            self.service_ticks += 1;
-        }
-
-        // 50Hz fade stepper: 5 events per 6 ticks, only while fading.
-        if self.fading {
-            self.fade_phase += SATELLITE_STEP;
-            while self.fade_phase >= FADE_WRAP {
-                self.fade_phase -= FADE_WRAP;
+        // 300Hz microstep scheduler: 5 microsteps per tick, one global
+        // counter, fixed service -> fade -> palette test order (the
+        // %3/%6/%24 tests below are written is_multiple_of: identical
+        // integer semantics, clippy-clean).
+        for _ in 0..MICROSTEPS_PER_TICK {
+            self.microstep += 1;
+            // 100Hz service event.
+            if self.microstep.is_multiple_of(SERVICE_DIVISOR) {
+                self.service_ticks += 1;
+            }
+            // 50Hz fade stepper, armed while `fading`.
+            if self.fading && self.microstep.is_multiple_of(FADE_DIVISOR) {
                 self.fade_steps += 1;
             }
-        }
-
-        // 12.5Hz palette cycle: 5 events per 24 ticks.
-        self.pal_phase += SATELLITE_STEP;
-        while self.pal_phase >= PAL_WRAP {
-            self.pal_phase -= PAL_WRAP;
-            self.pal_cycles += 1;
+            // 12.5Hz palette bank cycle.
+            if self.microstep.is_multiple_of(PAL_DIVISOR) {
+                self.pal_cycles += 1;
+            }
         }
 
         // PLACEHOLDER payload update.
@@ -231,13 +245,15 @@ impl Sim {
         self.initial_state_hash
     }
 
-    /// 100Hz service satellite: phase within the 5-per-3 pattern
-    /// (0..=2 between events).
-    pub fn service_phase(&self) -> u32 {
-        self.service_phase
+    /// The global 300Hz microstep counter (5 per tick, zeroed at boot
+    /// release per DESIGN-RENDER sec 6; satellite events are the %3/%6/%24
+    /// divisibility tests on it).
+    pub fn microstep(&self) -> u64 {
+        self.microstep
     }
 
-    /// 100Hz service satellite: total events elapsed (5 per 3 ticks).
+    /// 100Hz service satellite: total events elapsed (fires on every
+    /// 3rd microstep).
     pub fn service_ticks(&self) -> u64 {
         self.service_ticks
     }
@@ -249,30 +265,20 @@ impl Sim {
 
     /// Arm or disarm the 50Hz fade stepper. Sim-side control for the
     /// skeleton (the real arming is EXW FadeSetup/FadeCancel, P4+);
-    /// disarming mid-fade freezes `fade_phase`/`fade_steps` where they
-    /// stand — both stay hashed either way.
+    /// disarming mid-fade freezes `fade_steps` where it stands — it
+    /// stays hashed either way.
     pub fn set_fading(&mut self, on: bool) {
         self.fading = on;
     }
 
-    /// 50Hz fade satellite: phase within the 5-per-6 pattern.
-    pub fn fade_phase(&self) -> u32 {
-        self.fade_phase
-    }
-
-    /// 50Hz fade satellite: total steps elapsed (5 per 6 ticks while
-    /// fading).
+    /// 50Hz fade satellite: total steps elapsed (fires on every 6th
+    /// microstep while `fading`).
     pub fn fade_steps(&self) -> u64 {
         self.fade_steps
     }
 
-    /// 12.5Hz palette-cycle satellite: phase within the 5-per-24 pattern.
-    pub fn pal_phase(&self) -> u32 {
-        self.pal_phase
-    }
-
-    /// 12.5Hz palette-cycle satellite: total cycles elapsed (5 per 24
-    /// ticks).
+    /// 12.5Hz palette-cycle satellite: total cycles elapsed (fires on
+    /// every 24th microstep).
     pub fn pal_cycles(&self) -> u64 {
         self.pal_cycles
     }
@@ -284,9 +290,9 @@ impl Sim {
 
     /// FNV-1a 64 over the canonical serialization of ALL hashed state
     /// fields, in this FIXED order: `tick` u64, rng state u64, rng stream
-    /// u64, `last_draw` u32, `service_phase` u32, `service_ticks` u64,
-    /// `fading` as u8, `fade_phase` u32, `fade_steps` u64, `pal_phase`
-    /// u32, `pal_cycles` u64, `actor_x` i32, `actor_y` i32.
+    /// u64, `last_draw` u32, `microstep` u64, `service_ticks` u64,
+    /// `fading` as u8, `fade_steps` u64, `pal_cycles` u64, `actor_x` i32,
+    /// `actor_y` i32.
     ///
     /// The order is a stability contract; appending new fields (P4+) goes
     /// at the END of this list with a `FORMAT_VERSION` bump.
@@ -298,12 +304,10 @@ impl Sim {
         h.write_u64(self.rng.state());
         h.write_u64(self.rng.stream());
         h.write_u32(self.last_draw);
-        h.write_u32(self.service_phase);
+        h.write_u64(self.microstep);
         h.write_u64(self.service_ticks);
         h.write_u8(u8::from(self.fading));
-        h.write_u32(self.fade_phase);
         h.write_u64(self.fade_steps);
-        h.write_u32(self.pal_phase);
         h.write_u64(self.pal_cycles);
         h.write_i32(self.actor_x);
         h.write_i32(self.actor_y);
@@ -318,13 +322,11 @@ impl Sim {
         state_bytes.extend_from_slice(&self.rng.state().to_le_bytes());
         state_bytes.extend_from_slice(&self.rng.stream().to_le_bytes());
         state_bytes.extend_from_slice(&self.last_draw.to_le_bytes());
-        state_bytes.extend_from_slice(&self.service_phase.to_le_bytes());
+        state_bytes.extend_from_slice(&self.microstep.to_le_bytes());
         state_bytes.extend_from_slice(&self.service_ticks.to_le_bytes());
         state_bytes.push(u8::from(self.fading));
-        state_bytes.extend_from_slice(&[0u8; 3]); // pad @33..36
-        state_bytes.extend_from_slice(&self.fade_phase.to_le_bytes());
+        state_bytes.extend_from_slice(&[0u8; 3]); // pad @37..40
         state_bytes.extend_from_slice(&self.fade_steps.to_le_bytes());
-        state_bytes.extend_from_slice(&self.pal_phase.to_le_bytes());
         state_bytes.extend_from_slice(&self.pal_cycles.to_le_bytes());
         state_bytes.extend_from_slice(&self.actor_x.to_le_bytes());
         state_bytes.extend_from_slice(&self.actor_y.to_le_bytes());
@@ -395,21 +397,20 @@ impl Sim {
         let rng_state = u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]);
         let rng_stream = u64::from_le_bytes([s[8], s[9], s[10], s[11], s[12], s[13], s[14], s[15]]);
         let last_draw = u32::from_le_bytes([s[16], s[17], s[18], s[19]]);
-        let service_phase = u32::from_le_bytes([s[20], s[21], s[22], s[23]]);
+        let microstep =
+            u64::from_le_bytes([s[20], s[21], s[22], s[23], s[24], s[25], s[26], s[27]]);
         let service_ticks =
-            u64::from_le_bytes([s[24], s[25], s[26], s[27], s[28], s[29], s[30], s[31]]);
-        let fading = s[32] != 0;
-        // s[33..36]: pad, ignored.
-        let fade_phase = u32::from_le_bytes([s[36], s[37], s[38], s[39]]);
+            u64::from_le_bytes([s[28], s[29], s[30], s[31], s[32], s[33], s[34], s[35]]);
+        let fading = s[36] != 0;
+        // s[37..40]: pad, ignored.
         let fade_steps =
             u64::from_le_bytes([s[40], s[41], s[42], s[43], s[44], s[45], s[46], s[47]]);
-        let pal_phase = u32::from_le_bytes([s[48], s[49], s[50], s[51]]);
         let pal_cycles =
-            u64::from_le_bytes([s[52], s[53], s[54], s[55], s[56], s[57], s[58], s[59]]);
-        let actor_x = i32::from_le_bytes([s[60], s[61], s[62], s[63]]);
-        let actor_y = i32::from_le_bytes([s[64], s[65], s[66], s[67]]);
+            u64::from_le_bytes([s[48], s[49], s[50], s[51], s[52], s[53], s[54], s[55]]);
+        let actor_x = i32::from_le_bytes([s[56], s[57], s[58], s[59]]);
+        let actor_y = i32::from_le_bytes([s[60], s[61], s[62], s[63]]);
         let initial_state_hash =
-            u64::from_le_bytes([s[68], s[69], s[70], s[71], s[72], s[73], s[74], s[75]]);
+            u64::from_le_bytes([s[64], s[65], s[66], s[67], s[68], s[69], s[70], s[71]]);
 
         let sim = Sim {
             tick,
@@ -417,12 +418,10 @@ impl Sim {
             time_base: TimeBase { tick_hz },
             initial_state_hash,
             last_draw,
-            service_phase,
+            microstep,
             service_ticks,
             fading,
-            fade_phase,
             fade_steps,
-            pal_phase,
             pal_cycles,
             actor_x,
             actor_y,
@@ -476,10 +475,11 @@ mod tests {
     #[test]
     fn satellite_counters_start_zeroed_and_fading_off() {
         let sim = Sim::new(&SimConfig::default());
-        assert_eq!((sim.service_phase(), sim.service_ticks()), (0, 0));
+        assert_eq!(sim.microstep(), 0);
+        assert_eq!(sim.service_ticks(), 0);
         assert!(!sim.fading());
-        assert_eq!((sim.fade_phase(), sim.fade_steps()), (0, 0));
-        assert_eq!((sim.pal_phase(), sim.pal_cycles()), (0, 0));
+        assert_eq!(sim.fade_steps(), 0);
+        assert_eq!(sim.pal_cycles(), 0);
     }
 
     #[test]
