@@ -213,3 +213,16 @@ import into BedlamWatcom ever, then -process only. Full anatomy + plan:
 docs/RESEARCH-BEDLAM2-CENSUS.md (B2 Ghidra import plan section; consolidated
 there 2026-08-18 after a parallel-run duplicate was folded in - entry-point
 reading corrected to object-relative eip 0x56a60 -> linear 0x66a60).
+
+## D19 — P4 runtime pinning: flathub user-install (commit-pinned, repo-local XDG_DATA_HOME) + wow64 wine prefix (2026-08-18)
+
+The queue said "DOSBox-X AppImage"; upstream ships no Linux release binaries
+anymore (verified across the last 6 tags on 2026-08-18), so the pin is the
+flathub build `com.dosbox_x.DOSBox-X` 2026.08.02 @ commit fa89039c... ,
+installed --user with XDG_DATA_HOME pointed INTO the repo (gitignored
+runtime/xdg) so the install is repo-contained and needs no sudo. Wine side:
+wow64-mode wine 11.15 (win32 WINEARCH unsupported there), one 64-bit prefix at
+runtime/wine-exw with mono/gecko/menus disabled. Both carry wrapper scripts
+(tools/runtime/dosbox-x.sh, wine-exw.sh) + full provenance in docs/RUNTIME.md.
+Consequence: goldens/harness references are only valid against these pins;
+upgrades require re-baselining (PLAN P4 "pin dosbox/wine versions + configs").

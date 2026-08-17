@@ -32,3 +32,6 @@
 /.state/concurrency
 /.state/conc-degraded-at
 /.state/last-spawn-ts
+
+# Pinned runtimes (flathub user-install + wine prefix) - see docs/RUNTIME.md
+/runtime/
