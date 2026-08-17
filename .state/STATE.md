@@ -1,6 +1,6 @@
 # STATE - project snapshot (update when phase changes)
 
-- Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY: decoders
+- Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
   promoted to workspace crate engine/bedlam-assets (pure, inspect CLI output
   byte-identical, D14); MUSIC FORMATS DECODED IN RUST 2026-08-17: music.rs
   module (MRS container + full event-stream walk + RATIO_TABLE verbatim from
@@ -44,3 +44,11 @@
   ratio table @00454174; CONFIG.BDL = installer SB-setup record, EXW never
   reads it; RNG seeds consumed by RandA@00402975 / RandB@004029b6) - see
   docs/RE-EXW-MUSIC.md.
+
+- CLOSED 2026-08-18 (bedlam-core run): P3 sim core skeleton DONE in
+  engine/bedlam-core (f15eb60+7396491+889cbef) - D17 hybrid timing: hashed
+  60Hz Sim (300Hz microstep satellites per DESIGN-RENDER sec 6) + non-hashed
+  per-frame FrameState + 240Hz sub-tick SimDriver accumulator; PCG32, Q16.16
+  fx, in-crate FNV-1a state hash, versioned b"BDLR" replay + b"BDLS"
+  snapshot; 132 tests green, clippy clean, manifest OK. Next P3: render
+  crate skeleton (design note a3ad066), Miri + cross-OS hash CI.

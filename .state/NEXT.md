@@ -1,14 +1,10 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
-   per PLAN sec 7) - TIMING DESIGN per D17 (hybrid: fixed 60Hz sim
-   accumulator, per-frame input/UI at refresh, satellite clocks as integer
-   substeps; determinism test at 15/60/240Hz).
-2. [P2] Tick satellite naming pass: continue labeling 0044xxxx service-tick
+1. [P2] Tick satellite naming pass: continue labeling 0044xxxx service-tick
    callees in RE-EXW-TICK.md open list (FUN_00402bac gated pump chan 3,
    .data slot 00457874 consumers) - decompile + name + commit incrementally.
-3. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
+2. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
    (build from source preferred: gradle -PGHIDRA_INSTALL_DIR=/home/kato/
    ghidra-12.1.2-watcom, no Ghidra source tree needed; force-install v12.0.1
    as plan B), scratch-project smoke test in /tmp/opencode, then import
@@ -19,6 +15,11 @@
    function DB + first boot/init comparison vs EXW.
 
 ## Backlog (not yet started)
+- P3: bedlam-render crate skeleton from docs/DESIGN-RENDER.md (canonical
+  640x480 indexed fb + 6-bit palette contract; scaling/refresh stay in
+  bedlam-platform).
+- P3: Miri pass over bedlam-core + cross-OS per-tick hash CI job (PLAN sec 7
+  charter item, from first playable tick onward).
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
   (needs desktop + DirectDraw - do NOT run unattended); flathub sandbox
   filesystem override for game-data + DOSBox-X harness config (cycles pinned,
@@ -28,6 +29,27 @@
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 f15eb60+7396491+889cbef [P3] bedlam-core crate skeleton CLOSED
+  (D17). engine/bedlam-core: hermetic deterministic sim skeleton per PLAN
+  sec 7 + D16/D17. fx.rs Q16.16 saturating fixed; rng.rs PCG32 XSH-RR +
+  SplitMix64 seeding + exact-unbiased bounded(); hash.rs in-crate FNV-1a 64
+  (+StateHash); time.rs NOMINAL_TICK_HZ=60 (D16) + TimeBase; input.rs
+  12-byte LE InputFrame (buttons bit layout deliberately unassigned pending
+  P2e; mouse bit0/1 = left/right per RE-EXW-INPUT); replay.rs b"BDLR"
+  versioned input log, never-panic parse (every-single-byte-truncation
+  tested); sim.rs hashed fixed-60Hz bucket: exactly one rng draw per tick
+  (entropy slot) + 300Hz microstep scheduler per DESIGN-RENDER sec 6 (one
+  global counter, %3 service=100Hz / %6 fade=50Hz-while-fading / %24
+  palette=12.5Hz, fixed order, zeroed at construction mirroring
+  FUN_0041e19d), b"BDLS" snapshot/restore with re-hash validation; frame.rs
+  NON-hashed per-frame bucket (cursor clamp / latch / volume / cooldown,
+  dt ok per D17 b) + SimDriver accumulator on 240Hz sub-tick grid
+  (SUBTICKS_PER_TICK=4, banked remainder; host dt never enters sim math).
+  tests/determinism.rs 12 gates incl. same-script same-sim-hash at
+  15/60/240Hz + replay/snapshot round-trips + tamper detection. 132 tests
+  green, clippy -D warnings clean, fmt clean, manifest OK x2. Deps:
+  thiserror only; forbid(unsafe_code); no floats/fs/time/thread/HashMap in
+  src (grep-verified by orchestrator).
 - 2026-08-18 84390d4 [P4 prep] pinned runtimes CLOSED (slot 5 - taken because
   3-claim existed from a dead session; spawner placeholder 3-1787004415.claim
   deleted as instructed). DOSBox-X = flathub com.dosbox_x.DOSBox-X 2026.08.02
@@ -405,3 +427,19 @@
   (extends AGENTS.md): touch heartbeat ALSO around long pure-edit phases
   (big doc rewrites), not just long shell commands - editing time counts.
   Minor cleanup: .state/last-progress gitignored (nudge runtime marker).
+
+- 2026-08-18 00:2x (bedlam-core run): task 1 delivered in 3 code slices
+  (f15eb60 skeleton, 7396491 D17 hybrid timing, 889cbef satellite alignment
+  to DESIGN-RENDER sec 6). Owner direction D17 landed MID-RUN (23:44
+  NEXT.md edit + commit 2ca2d41) - detected via the uncommitted queue diff
+  and honored in slice 2. COLLISION CAUGHT: slice-2 phase-accumulator
+  satellites vs sibling render-note a3ad066 300Hz-microstep concretization
+  - reconciled in 889cbef to follow the committed design doc (long-run
+  rates identical, hashed layout + firing phase differ; code follows
+  docs). AGENTS.md no-nesting rule landed during close-out: the 3 slices
+  predate it, close-out is direct work, rule in effect from now on.
+  Transport error on first subagent spawn (z.ai decode error, nothing
+  written) - one clean retry. tools/ghidra-scripts/ExwTickSats.java
+  appeared untracked at 00:00:28, still uncommitted WIP matching new queue
+  item 1 - whoever claims it should inspect it before rewriting. 132 tests
+  verified green twice by this run on top of slice reports; manifest OK.
