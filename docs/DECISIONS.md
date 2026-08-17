@@ -29,3 +29,16 @@ game-data integrity: MANIFEST.sha256 verified clean after the pass.
 ## D5 — Backups (2026-08-17)
 game-data copied to ~/Backups/bedlam-re/game-data (1069 files verified by count).
 Offsite copy pending (user picks provider). Repo has no remote yet.
+
+## D6 — Remote (2026-08-17)
+Public repo: https://github.com/roguefort-dev/bedlam-re (user choice: personal account;
+a future RogueFortDevelopment org can receive a zero-loss transfer). Pre-push audit
+clean: only docs/tools/CI/manifest tracked; game-data/ + derived/ + .ghidra-project/
+ignored. Branch renamed master -> main.
+
+## D7 — Toolchain install complete (2026-08-17)
+Installed via pacman: ghidra 12.1.2 (/opt/ghidra), jdk21-openjdk 21.0.11, rizin 0.8.2,
+radare2 6.1.4, wine 11.15 + wine-mono + winetricks, dosbox 0.74-3, ffmpeg n9.0.1,
+sox 14.8, gdb 17.2, python-capstone 5.0.7, python-unicorn 2.1.4, flatpak 1.18.1.
+Pending: dosbox-staging/-x (flathub/AppImage, no sudo needed), lib32-sdl2 (only for a
+native comparator build; Wine fallback exists).
