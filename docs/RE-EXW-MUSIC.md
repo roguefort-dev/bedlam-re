@@ -180,6 +180,23 @@ Validation: max(off+size) == file_size exactly, all records in range:
 max end 0x897+0xb11 = 5032 = size.) Voice slots land in the 0x40-stride-per-song
 table at 0x4ef4e0; global voice counter 004ef4d8.
 
+## 3b. Rust implementation (P3)
+
+The grammar lives as code in engine/bedlam-assets/src/music.rs (the D14
+assets crate): parse_mrs + Mrs::walk (the full MrsNextEvent grammar of
+2b) + byte-exact to_bytes container rebuild + parse_mrw (moved out of
+misc.rs) with wave_range accessors and an exhaustive layout check.
+RATIO_TABLE is embedded verbatim from the EXW image (128 dwords; the
+clamps described above are physical table contents, not code). CLI:
+cargo run -p inspect --bin decode-song -- <file.MRS> prints duration +
+per-chunk walk stats + the instrument histogram (auto-joined with the
+sibling .MRW bank); the inspect walker now emits <stem>.song.json for
+every .MRS (was a partial stub). The corpus integration test pins the
+data invariants: chunk 0 disabled, chunk-1 loop timer == song length ==
+first delta, terminal freeze word on every enabled stream, instruments
+inside the sibling n_inst, durations 331/400/1476/1600/3388 ticks.
+[CODE 7325d23 + 3530a1b, 2026-08-17]
+
 ## 4. CONFIG.BDL (root, 61 B) [DATA + EXW negative evidence, high confidence]
 
 Layout (no EXW code reads it - see below, so decoded from bytes only):

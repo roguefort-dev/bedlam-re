@@ -3,6 +3,8 @@ name = "inspect"
 version = "0.1.0"
 edition = "2021"
 
+default-run = "inspect"
+
 [dependencies]
 bedlam-assets = { path = "../../engine/bedlam-assets" }
 serde = { version = "1", features = ["derive"] }
