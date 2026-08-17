@@ -63,3 +63,14 @@ InitInstance / MsgPump / TimerInit / TimerCallback / WatcomCrtStartup /
 BedlamWndProc. Analysis scripts tracked in tools/ghidra-scripts/; raw dumps
 stay local (gitignored). docs/exw-functions.txt = function DB snapshot
 (675 fns). Full write-up: docs/RE-EXW-MAINLOOP.md.
+
+
+## D9 — Arbitrary-resolution output (2026-08-17, user requirement)
+User wants 1080p (any resolution) support. Decision: resolution independence lives
+entirely in the presentation layer. bedlam-render always produces the canonical
+640x480 indexed fb + palette (parity + goldens anchor there); bedlam-platform
+scales to any output. Default integer nearest-neighbor + 4:3 pillarbox; fit/fill/
+smooth options; hi-res world composite + extended widescreen viewport are allowed
+as later opt-in non-parity modes (gameplay-affecting, UI-flagged). Recorded in
+PLAN.md P3 (render contract) + P6 (modernization). Smacker video: decode native,
+present scaled. No changes to sim/timing (100Hz/20fps untouched).

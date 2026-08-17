@@ -20,6 +20,9 @@
 - Spec doc: input/control map — anchors: FUN_0041be05(vk,down) kb, FUN_0041bf35(btn,state)
   mouse, FUN_0044b4fc(x,y) cursor-per-tick (see RE-EXW-MAINLOOP.md).
 - bedlam-core crate skeleton (deterministic sim, replay, state hash per PLAN sec 7).
+- bedlam-render/P3 design note (D9): renderer emits canonical 640x480 indexed fb;
+  ALL resolution/scaling (1080p etc.) is presentation-layer only — design the
+  platform crate boundary accordingly from day one.
 - Find game-thread proc body (arg register-passed to FUN_00450242 _beginthread wrapper;
   thread signals readiness via 004ef674).
 

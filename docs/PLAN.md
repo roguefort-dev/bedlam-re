@@ -144,8 +144,9 @@ bedlam-core (hermetic deterministic sim: no I/O/threads/wall-clock; fixed timest
 1 original frame; Determinism Charter below; snapshot/restore; input-log replay +
 per-tick state hash; replay/snapshot format carries a version header + initial state
 hash + time base from day one); bedlam-render (indexed fb + palette; contract: render
-produces indexed fb + palette, platform presents — nothing above changes for GPU
-later); bedlam-audio (thin mix graph/device); bedlam-platform (thin window/input/
+produces the canonical 640x480 indexed fb + palette — platform presents at ANY
+output resolution (scale/pillarbox is a presentation concern, never a render
+concern); nothing above changes for GPU later); bedlam-audio (thin mix graph/device); bedlam-platform (thin window/input/
 gamepad); bedlam-game (scene FSM, config, save; no per-mission code — mission quirks
 are data — stated as a hypothesis to verify in P2d, with code-defined quirk hooks
 tolerated until P5 evidence settles it). Errors: thiserror in parsers, never panic on
@@ -200,6 +201,16 @@ injected at sim construction; test surface = the purist toggles, not 2^features.
 - Bug triage rubric (per catalog entry): crash/data-loss → fix everywhere;
   gameplay-coupled → classic preserves / modern fixes; cosmetic → fix in modern.
   Fixed = deviation from the catalog, decided by rubric, signed off — not vibes.
+- Resolution independence (USER REQUIREMENT 2026-08-17, elevated from QoL): any
+  window/borderless/fullscreen resolution incl. 1920x1080. Internal render stays
+  canonical 640x480; presentation scales it. Default: integer nearest-neighbor
+  (crisp) with 4:3 pillarboxing in non-4:3 windows; options: fit (letterbox),
+  fill (crop), smooth (linear). Optional later, explicitly non-parity and off by
+  default: hi-res world composite (2x/4x tile/sprite sampling — assets are 32px
+  tiles, amenable) and extended-viewport widescreen (shows more map = gameplay
+  change; flagged in UI when active). Smacker (35 files): decode native, scale
+  in presentation. Goldens compare the internal fb, so parity testing is
+  resolution-agnostic by construction.
 - QoL: window modes, vsync control, volume mixers, save slots + metadata + opt-in
   autosave. Game-feel proxies: input-to-present ≤ 1 original frame; animation cadence
   matches at 60Hz; no stutter under p95 frame-time budget.
