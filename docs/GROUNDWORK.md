@@ -62,3 +62,10 @@ This materially affects decompiler setup — see PLAN.md §Tools.
 - LANGUAGE.*: all six languages ship exactly 842 [sections] (ENG/FRE/GER/ITL/SPA/DCH) - parallel text DBs, section-keyed.
 - .PAL size families: 770B (52 files, 2B hdr + 768B 6-bit VGA), 256B x3 (DARKPAL/DARKPALS/SELDARK), 98B x2 (CONSPAL/FULLPAL), 65536B x3 (TXPAL1-3 = 256x256 byte tables, likely crossfade matrices - pending confirmation).
 - SAVED.BDL: "PLAYER" magic then mixed u16/u32 fields (900B total).
+
+## Launcher diff verdict (rizin warm-up, 2026-08-17)
+BEDLAM0/1/2.EXE: 172 functions each; all 155 common addresses have IDENTICAL sizes;
+differences are pure address shifts (+3 / -4 bytes) from data-length padding. Verdict:
+the three DIRECTX launchers are one program with trivial data changes (likely version
+strings). RE the launcher once; treat as a single target. Toolchain warm-up passed:
+rizin batch analysis + programmatic diff works.
