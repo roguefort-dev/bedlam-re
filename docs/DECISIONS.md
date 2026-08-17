@@ -105,3 +105,15 @@ original rate (charter-safe). Camera/scroll interpolation makes high refresh
 visibly worth it; sprite sub-pixel interpolation stays an off-by-default option.
 Frame pacing at 240Hz added to game-feel proxies. Historical note: Bedlam 2
 itself shipped VESA modes up to 1440p — the devs were already moving this way.
+
+## D13 — EXW pacing verdict: 50Hz gate, not 20fps (2026-08-17)
+GameThread@0044dea0 (worker thread) decompiled: 59-byte trampoline around
+GameMain@0041c050. Neither contains Sleep/timeGetTime/WaitForSingleObject —
+the 8street "20fps sim/render" claim is REFUTED for EXW at this depth. Pacing
+architecture [verified]: 100Hz timeSetEvent -> TickWorker -> counter 004edbc8
+bit0 + gate 004ede10 -> 50Hz update (FUN_00425901); the gameplay advance
+(FUN_0043d00b, second hop) reads the same gate. Parity budget therefore
+assumes 50Hz fixed logic tick (with 12.5Hz palette phase) until the second
+hop (FUN_0043d00b / FUN_00440e45 bodies) proves a further subdivision — any
+such rate must derive from the 50Hz gate. Write-up:
+docs/RE-EXW-GAMETHREAD.md (script: tools/ghidra-scripts/ExwGameThread.java).

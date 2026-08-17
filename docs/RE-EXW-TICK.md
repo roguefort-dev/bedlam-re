@@ -122,11 +122,14 @@ ThreadSpawnThunk (23 bytes):
 - CreateThread(0, 0x1000, 0x0044dea0, 0, 0, &004ef694) semantics through a
   .data function slot @00457874 (NOT the IAT at 0x4f0xxx; unresolved -
   possibly Watcom CRT indirection) [verified args, slot target unresolved].
-- **Worker thread body = 0x0044dea0** - instruction at 0044deca (inside that
-  region, currently outside any function) writes 004ef674, the exact flag
-  TimerInit spins on; FUN_0044d9b4 (10 bytes) also writes 004ef674
-  [verified xrefs]. Region 0044dea0..0044dfec = next RE target (the actual
-  sim/render loop, 20fps pacing claim to be settled there).
+- **Worker thread body = 0x0044dea0** - decompiled 2026-08-17 (follow-up run):
+  see **docs/RE-EXW-GAMETHREAD.md**. It is a 59-byte trampoline around
+  GameMain@0041c050 (the real game shell/loop). CORRECTION: the instruction at
+  0044deca is `MOV EDX,-1` feeding a write to thread id 004ef694 - it does NOT
+  write go flag 004ef674 (earlier reading conflated the two globals). Go-flag
+  writers are exactly GameThreadStart (reset 0) and GoFlagSet@0044d9b4
+  (word 1). 20fps pacing claim refuted at this depth: no Sleep on the game
+  thread; pacing = 100Hz tick -> 50Hz gate 004ede10 (see that doc).
 
 ## FKeyHandler @0044ceb0 = SCREENSHOT TO NUMBERED BMP [verified]
 
@@ -195,10 +198,14 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 
 ## Open questions / next steps
 
-1. **TOP: decompile 0044dea0..0044dfec** (worker thread body): create the
-   function, dump decompile + callees. Expect: sim/render pacing (20fps claim),
-   main state machine strides, RNG chain entry, who calls FUN_0044d9b4 / sets
-   004ef674 = 1.
+1. DONE 2026-08-17 (gamethread run, see docs/RE-EXW-GAMETHREAD.md): 0044dea0
+   decompiled + named GameThread - a trampoline; the loop is GameMain@0041c050
+   (also decompiled + named). Settled: no Sleep pacing (20fps refuted at this
+   depth; 50Hz gate chain is the pacer), zone/level strides (7x5, mission
+   1..26 via (zone-2)*5+level-1), RNG seeds 004ede48=123456/004ede4c=234567,
+   go-flag writer set {GameThreadStart, GoFlagSet}. Open remainder moved to
+   that doc: GoFlagSet caller, FUN_0043d00b/FUN_00440e45 bodies (per-frame
+   sim/render, possible sub-division of the 50Hz gate).
 2. FUN_00402bac: gated pump over 20 slots x 38-byte records (base ~0x45b020),
    channel 3 only, FUN_0044c480(id) fires entries; DAT_0046ae78 flag.
    [hyp: sound/event scheduler]
