@@ -13,7 +13,7 @@ LP="$STATE/last-progress"
 CLAIMS="$STATE/claims"
 STALE=300
 MAXSPAWN=16
-MAXAGENTS=1
+MAXAGENTS=3          # adaptive concurrency: target ceiling
 CLAIM_TTL=4200
 
 mkdir -p "$STATE" "$CLAIMS"
@@ -86,6 +86,31 @@ for c in "$CLAIMS"/*.claim; do
   fi
 done
 
+
+# --- adaptive concurrency controller ---
+# state: $CONC_FILE holds current limit. On a failed run (no progress +
+# provider errors) decrement (floor 1) and timestamp the degradation.
+# When progress is credited and >=3600s since last degradation, increment
+# back up (ceiling CONC_MAX). Written under the flock, so race-free.
+get_conc() { cat "$CONC_FILE" 2>/dev/null || echo "$CONC_MAX"; }
+conc_down() {
+  local cur; cur=$(get_conc)
+  if [ "$cur" -gt "$CONC_MIN" ]; then
+    echo $((cur-1)) > "$CONC_FILE"
+    date +%s > "$CONC_DOWN_TS"
+    echo "$(date -Is) concurrency degraded $cur -> $((cur-1)) (failures)" >> "$STATE/nudge.log"
+  fi
+}
+conc_up() {
+  local cur lastdown
+  cur=$(get_conc)
+  lastdown=$(cat "$CONC_DOWN_TS" 2>/dev/null || echo 0)
+  if [ "$cur" -lt "$CONC_MAX" ] && [ $(( $(date +%s) - lastdown )) -ge 3600 ]; then
+    echo $((cur+1)) > "$CONC_FILE"
+    echo "$(date -Is) concurrency recovered $cur -> $((cur+1)) (1h stable)" >> "$STATE/nudge.log"
+  fi
+}
+
 cd "$PLAN_DIR" || exit 1
 head_now=$(git rev-parse HEAD 2>/dev/null || echo none)
 next_mt=$(stat -c %Y "$STATE/NEXT.md" 2>/dev/null || echo 0)
@@ -117,6 +142,7 @@ if credit_if_progress; then
     echo "$(date -Is) progress observed (head=$head_now) - crediting, resetting fails" >> "$STATE/nudge.log"
   fi
   rm -f "$STATE/fails" "$STATE/cooldown-until"
+  conc_up
 fi
 
 # staleness gate
@@ -124,6 +150,12 @@ age=-1
 if [ -f "$HB" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$HB") ))
   [ "$age" -lt "$STALE" ] && exit 0
+fi
+
+# failure signal for the controller: heartbeat stale AND no live claims
+# means agents are dying before even claiming (provider-level rejection).
+if [ "$(ls "$CLAIMS"/*.claim 2>/dev/null | wc -l)" -eq 0 ]; then
+  conc_down
 fi
 
 # spawn budget (all agents combined, per hour)
@@ -137,9 +169,10 @@ if [ "$c" -ge "$MAXSPAWN" ]; then
 fi
 
 # concurrency gate
+cur_conc=$(get_conc)
 ncl=$(ls "$CLAIMS"/*.claim 2>/dev/null | wc -l)
-if [ "$ncl" -ge "$MAXAGENTS" ]; then
-  echo "$(date -Is) concurrency full ($ncl/$MAXAGENTS agents) - standing down" >> "$STATE/nudge.log"
+if [ "$ncl" -ge "$cur_conc" ]; then
+  echo "$(date -Is) concurrency full ($ncl/$cur_conc agents, adaptive) - standing down" >> "$STATE/nudge.log"
   exit 0
 fi
 

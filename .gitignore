@@ -29,3 +29,5 @@
 /.state/STATUS.md
 /.state/notified
 /.state/claims/
+/.state/concurrency
+/.state/conc-degraded-at
