@@ -1,15 +1,19 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] B2 entry-chain naming + tick-source hunt (needs BedlamWatcom
-   -process BEDLAM.EXE -noanalysis passes only - NEVER a second import):
-   name _entry@0x66a60, CRT init 6b1bc, game-init FUN_0002f731 (seeds both
-   RNGs 123456/234567; args DAT_001280d4/d8 = candidate rng globals);
-   find the B2 tick source (EXW = 100Hz Win timer + worker thread; B2 DOS
-   should show a PIT/INT 8 hook, INT 28h idle, or polled PIT read - probe
-   for int 8/1Ch vectors, ports 0x40-0x43, INT 28h); locate zone/level
-   stride table (EXW 7x5 @004decb2, mission clamp formula; B2 census says
-   6 zones x ? levels). Anchor facts in RESEARCH-BEDLAM2-CENSUS.md sec 5.
+1. [P2] B2 episode-loop progression + INT8-counter readers (BedlamWatcom
+   -process BEDLAM.EXE -noanalysis passes only - NEVER a second import;
+   javac-precompile new scripts vs the Ghidra jars first - getMnemonic-
+   String not getMnemonic). From census sec 6: (a) readers of the seven
+   Int8TickHandler counters (0x801a6, 0x80010, 0x11f158, 0x11f0c8,
+   0x11f0c4, 0x11f0b4, 0x11f0b0) - which gate sim/render vs satellites;
+   (b) DAT_0012576c / DAT_00126848 / DAT_00126858 progression writers
+   (how a completed level advances slot+sub; save-file FUN_00050a87
+   block); (c) decompile FUN_0001066b present helper + FUN_000136e0
+   background service; (d) resolve zone-letter dword[0]=25 semantics
+   (intro/endgame?) around 0x81dda; (e) B2 game-loop pacing: where does
+   the sim wait (vretrace only, or counter gate) - the D16-equivalent
+   question for the DOS build.
 
 ## Backlog (not yet started)
 - P3: bedlam-render + bedlam-platform wgpu skeleton per D20 and
@@ -27,6 +31,31 @@
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 2df7664+c3b1552+9b4d119 [P2] B2 entry-chain naming +
+  tick-source hunt + zone/stride CLOSED (3x -process BEDLAM.EXE
+  -noanalysis, no import; full 671-fn decompile sweep dumped as
+  b2-decomp-all.txt). ENTRY: _entry@0x66a60 -> CrtInitChain@0x6b1bc
+  (argc/argv stored at 0x1280d4/d8 - census candidate-rng guess
+  corrected) -> GameInit@0x2f731 = boot shell AND episode-loop host
+  (seeds both RNGs 123456/234567 as code constants; OPTIONS.BDL +
+  SETUP.EXE path; LANGUAGE.* select; 320x240 coord space planted).
+  TICK: NO INT28h/DPMI/constant-divisor - TickInstall@0x32546 does
+  DosGetVector(8) + PitProgram(0x2e9b = 100.01 Hz) + DosSetVector(8 ->
+  Int8TickHandler@0x12734): immediate EOI, XCHG reentrancy lock, 7
+  counters, ClockDivider100Hz (hundredths->hms), 12.5 Hz palette banks
+  0x90..0x97 (byte-identical behavior to EXW TimerCallback), 50 Hz
+  mouse poll+clamp vs 0x140/0xf0; TickShutdown restores 0xffff;
+  present = WaitVRetrace@0x10856 double-poll 0x3da bit3 via
+  FUN_0001066b. SAME two-clock architecture as EXW -> D22 (parity
+  budget carries). RNG: RngStepA/B@0x1220e/0x1224f coupled 16-bit
+  pairs, reseed site 0x5eaf9. ZONE/MISSION: lookup tables order[8]
+  @0x81dba / zone letters @0x81dda / mission[27] @0x81e46; formula
+  zone/mission = table[order[slot]+sub]; mode DAT_0011f11c==2 adds 5
+  -> corpus MISSION{1-4,6,7} numbering EXPLAINED (6 zones A-F x
+  {4 regular + 2 alt}, 27 linear missions; EXW 7x5 arithmetic differs).
+  15 fns + 16 labels persisted; docs census sec 6 + D22; scripts
+  B2EntryTick/B2EntryNames/B2TblDump committed. Manifest-2 OK
+  before+after; game-data-2 read-only.
 - 2026-08-18 dcf43d2+d09e41f+a36b15f+75c1474 [P2] B2 import EXECUTION CLOSED.
   ghidra-lx-loader built from source (master clone, gradle 8.14.3 vs our
   12.1.2 DEV install; clean 18s build = zero version risk) and installed.

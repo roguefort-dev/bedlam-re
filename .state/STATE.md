@@ -27,6 +27,20 @@
   First cross-build parity fact: RNG seeds 123456/234567 identical in B2
   (FUN_0002f731 game-init) and EXW (004ede48/4c). B2 pipeline = -process
   BEDLAM.EXE -noanalysis from here on (NEVER re-import).
+- CLOSED 2026-08-18 (b2 entry/tick run, 2df7664+c3b1552+9b4d119): B2
+  entry chain named + TICK SOURCE FOUND + zone/mission stride located
+  (census sec 6, D22). _entry@0x66a60 -> CrtInitChain@0x6b1bc (argc/argv
+  g_argc@0x1280d4/g_argv@0x1280d8) -> GameInit@0x2f731 = boot + episode
+  loop shell (seeds RNG 123456/234567 as code constants at 0x11ef1c/18).
+  Tick = 100.01 Hz PIT INT-8 ISR (divisor 0x2e9b, DOS INT21 AH=25h vector,
+  immediate EOI, drop-not-queue reentrancy): 7 counters, 12.5 Hz palette
+  banks 0x90..0x97 (same as EXW), 50 Hz mouse poll+clamp vs 320x240 coords,
+  play-clock divider; present = vblank double-poll 0x3da (WaitVRetrace).
+  Same two-clock architecture as EXW -> D16 parity budget carries to DOS.
+  Zone/mission = lookup tables (order[8]@0x81dba, zone letters@0x81dda,
+  mission[27]@0x81e46; +5 when mode==2 -> MISSION{6,7} corpus files; 6
+  zones x {4 regular + 2 alt}, 27 linear missions). 15 fns + 16 labels
+  persisted in BedlamWatcom:/BEDLAM.EXE.
 - Repo: github.com/roguefort-dev/bedlam-re (main). Local: ~/Documents/bedlam-re
 - Autonomy: tools/nudge.sh + systemd user timer bedlam-nudge.timer (60s) + crontab
   fallback. Heartbeat: .state/heartbeat (stale > 7 min => spawn continuation run).
