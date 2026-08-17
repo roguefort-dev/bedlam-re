@@ -129,6 +129,12 @@ See "Palette fade engine" below.
   compiled against carries 2 extra slots in the GetClipper..Initialize
   region. DD/palette/clipper objects (004ee9b8/d0/d4) are fully stock -
   see the DDRAW init section below.
+  CORRECTION (pacer run / D16, later same day): the shift is UNIFORM +4
+  = ONE extra slot at vtable 0x0c for the whole IDirectDrawSurface
+  layout; Blt@+0x14 is already +4 (stock 0x10), and the tick2 stock
+  comparison list was itself off by one slot. Verified on 9 anchors in
+  RE-EXW-PACER.md sec 4 - supersedes every +8/2-extra-slot reading in
+  this file.
 - Stores the clamped cursor: short@00457398 = x, short@004eedf6 = y.
 - Net effect [inferred]: hardware-cursor-style tracking + surface recovery at
   100Hz, decoupled from the (slower) sim/render on the worker thread.
@@ -220,7 +226,7 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004eddf8..004ede04 | direction-filtered scroll copies | verified |
 | 004edd7c | palette table base pointer | verified use |
 | 004ee9b8 | g_dd_obj: IDirectDraw object (stock vtable) | verified |
-| 004ee9bc/c0/c8/cc | g_dd surfaces 1..4 (roles not yet distinguished; +8-shifted vtable past GetCaps) | verified slots / inferred roles |
+| 004ee9bc/c0/c8/cc | g_dd surfaces 1..4 (roles not yet distinguished; +4-shifted vtable, ONE extra slot @0x0c - D16/pacer correction) | verified slots / inferred roles |
 | 004ee9d0 | g_dd_palette: IDirectDrawPalette (stock vtable; +0x18 SetEntries) | verified |
 | 004ee9d4 | g_dd_clipper: IDirectDrawClipper (stock vtable; +0x20 SetHWnd) | verified |
 | 004edc38 | g_fade_state_16_16: 768 x (cur,step) 16.16 fade accumulators | verified |
@@ -278,10 +284,12 @@ SetPaletteRGB@0044aed4(bytes, start, count):
   Sleep(500), Release(+8) on all seven object slots, clear 004ef676 hi.
 - Object slots: 004ee9b8=dd obj, 004ee9bc/c0/c8/cc=surfaces (roles of the
   four not yet distinguished), 004ee9d0=palette, 004ee9d4=clipper.
-- Vtable layouts: dd obj / palette / clipper = stock COM; surfaces = stock
-  up to GetCaps(+0x30) then +8 shifted (2 extra slots in the game ddraw.h,
-  see MousePosHandler note above). Irrelevant for reimplementation (we use
-  real ddraw semantics); matters only for RE reading.
+- Vtable layouts: dd obj / palette / clipper = stock COM; surfaces =
+  stock + ONE extra slot at 0x0c, uniform +4 from Blt@0x14 through
+  Unlock@0x80 (D16/pacer correction of the earlier +8 reading; see
+  MousePosHandler note above + RE-EXW-PACER.md sec 4). Irrelevant for
+  reimplementation (we use real ddraw semantics); matters only for RE
+  reading.
 
 ### Thread spawn slot resolved [verified]
 
@@ -325,6 +333,6 @@ gamethread doc open item 1. It also zeroes divider 004edbc8 there.
    (CRT trampoline 00451fbc).
 5. DONE 2026-08-17 (tick2 run): +0x18 in AppActivate is on the PALETTE
    object (004ee9d0) = stock IDirectDrawPalette::SetEntries (5-arg call:
-   0, 0, 0xFE, &entries[1]). Residual: the +8 surface-vtable shift past
-   GetCaps is documented empirically above (2 extra slots in the game
-   ddraw.h); naming them is cosmetic - not blocking anything.
+   0, 0, 0xFE, &entries[1]). CLOSED (pacer run / D16): surface vtable =
+   stock + ONE extra slot at 0x0c (uniform +4, 9 anchors - RE-EXW-PACER.md
+   sec 4); the earlier +8/2-extra-slots reading above is corrected.

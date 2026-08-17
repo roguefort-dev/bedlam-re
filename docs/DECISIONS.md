@@ -123,6 +123,9 @@ such rate must derive from the 50Hz gate. Write-up:
 docs/RE-EXW-GAMETHREAD.md (script: tools/ghidra-scripts/ExwGameThread.java).
 
 ## D15 - 004ede10 = palette-fade countdown; sim/render rate UNKNOWN again (2026-08-17)
+> RESOLVED by D16 (2026-08-17 pacer run): the mechanism is now known -
+> present-paced (DD Lock/Flip/Blt with wait semantics), no software frame clock.
+> Items (1) and (2) below stand.
 The tick2 run (ghidra-project/exw-tick2.txt) decompiled FUN_00425901 =
 FadeStep: 768-channel 16.16 fade accumulator -> 6-bit palette upload
 (SetPaletteRGB@0044aed4) -> decrement 004ede10. FUN_0041cbf0 = FadeSetup
@@ -144,6 +147,28 @@ CreateThread with CRT trampoline 00451fbc; AppActivate +0x18 =
 IDirectDrawPalette::SetEntries on 004ee9d0 (stock layout); surface vtables
 +8-shifted past GetCaps vs stock IDirectDrawSurface (game ddraw.h has 2
 extra slots there; cosmetic for RE).
+
+## D16 - Sim/render rate = DirectDraw present-paced (vsync-locked); no software frame clock (2026-08-17)
+The GameMain second hop + pacer passes (ghidra-project/exw-gamemainhop.txt,
+exw-pacer.txt, exw-pacer-names.txt; scripts ExwGameMainHop/ExwPacerFollowup/
+ExwPacerNames) closed D15 item (3). The mission loop (FUN_0043d00b) has NO
+software rate gate: each pass = poll -> pure-logic sim/render -> PresentCopy
+(SurfaceLock spin-until-DD-Lock-succeeds + 480 row MemCopies + Unlock) ->
+PresentEnd -> DDFlipOrBlt (fullscreen Flip@vt+0x2c / windowed Blt@vt+0x14),
+g_frame_count++ once per pass. Census: Sleep has exactly one caller (wrapper
+FUN_0044e1ca, shutdown paths); WaitForSingleObject exactly one (FUN_00451b62
+= Watcom CRT recursive mutex); 004edbcc waits = attract-mode input waits
+(20 s timeout); 00448ef1 divider reads = menu change-detection. Therefore one
+frame per completed present = display-flip rate: vsync-locked, 60Hz-class on
+period hardware. Cinematics add _SmackWait (Smaker-internal timing).
+PARITY BUDGET consequence: the reimplementation must NOT derive logic timing
+from host vsync (breaks determinism, PLAN sec 7). Per the D9/D12 sim/present
+split: canonical sim = fixed timestep at a nominal 60Hz (the period-norm
+refresh; revisitable if period sources show another dominant mode),
+presentation = host vsync / uncapped. Also this run: EXW surface vtable =
+stock IDirectDrawSurface + ONE extra slot at 0x0c (uniform +4 from Blt@0x14
+through Unlock@0x80; tick2 note corrected in RE-EXW-TICK.md); DD/palette/
+clipper objects stock (8 anchors). Full write-up: docs/RE-EXW-PACER.md.
 
 ## D14 — Decoder home: engine/bedlam-assets; inspect is a thin CLI (2026-08-17)
 tools/inspect's format decoders promoted into workspace crate
