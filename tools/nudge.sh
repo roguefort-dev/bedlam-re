@@ -72,7 +72,8 @@ fi
 h=0; c=0
 [ -f "$STATE/spawns" ] && read -r h c < "$STATE/spawns" 2>/dev/null || true
 nowh=$(( $(date +%s) / 3600 ))
-if [ "$h" -eq "$nowh" ] && [ "$c" -ge "$MAXSPAWN" ]; then
+if [ "$h" != "$nowh" ]; then c=0; fi
+if [ "$c" -ge "$MAXSPAWN" ]; then
   echo "$(date -Is) spawn cap reached ($c this hour) - standing down" >> "$STATE/nudge.log"
   exit 0
 fi
