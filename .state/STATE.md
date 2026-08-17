@@ -1,8 +1,11 @@
 # STATE - project snapshot (update when phase changes)
 
-- Phase: P1 essentially complete; P2 well underway. P3 STARTED: decoders
-  promoted to workspace crate engine/bedlam-assets (pure, 70 unit + corpus
-  round-trip tests, inspect CLI output byte-identical, D14). EXW outer architecture +
+- Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY: decoders
+  promoted to workspace crate engine/bedlam-assets (pure, inspect CLI output
+  byte-identical, D14); MUSIC FORMATS DECODED IN RUST 2026-08-17: music.rs
+  module (MRS container + full event-stream walk + RATIO_TABLE verbatim from
+  EXW, MRW bank with wave ranges, byte-exact rebuilds) + decode-song CLI +
+  inspect mrs dumper + corpus invariants (see RE-EXW-MUSIC.md 3b). EXW outer architecture +
   100Hz tick + game worker thread FULLY mapped (GameThread@0044dea0 = 59-byte
   trampoline -> GameMain@0041c050 = real game shell/loop; 7x5 zone/level
   structure; RNG seeds 123456/234567). RATES (D15): 100Hz service tick /

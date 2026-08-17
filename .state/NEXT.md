@@ -1,32 +1,45 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] Rust .MRS/.MRW decoders + stream-parse corpus test in
-   engine/bedlam-assets (grammar: docs/RE-EXW-MUSIC.md sections 2/2b/3; also
-   decode-song tool => duration/instrument table). Natural follow-on to the
-   existing codec tests. The .PAL/.BIN fade-path findings (RE-EXW-TICK.md
-   tick2 section) may inform palette handling.
+1. [P3->B2] Re-run tools/inspect over game-data-2 (second corpus) now that
+   the mrs arm is a real dumper (was a partial stub) + decode-song over any
+   B2 MRS/MRW pairs; diff statuses vs the game-data census; document any
+   B2-only quirks in RESEARCH-BEDLAM2-CENSUS.md. Manifest equivalent for
+   game-data-2 if absent (sha256 list only, never content commits).
+2. [P4 prep] Input/control map spec doc (anchors: FUN_0041be05(vk,down) kb,
+   FUN_0041bf35(btn,state) mouse, FUN_0044b4fc(x,y) cursor-per-tick,
+   FUN_0044b428=CursorToGame; see RE-EXW-MAINLOOP.md + RE-EXW-TICK.md).
+3. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
+   per PLAN sec 7).
 
 ## Backlog (not yet started)
-- B2: run inspect over game-data-2 again after any decoder change (second fuzz
-  corpus; decoders now live in engine/bedlam-assets - the corpus test pattern
-  in engine/bedlam-assets/tests/corpus.rs is the model); document any B2-only
-  format quirks in RESEARCH-BEDLAM2-CENSUS.md.
 - B2: import BEDLAM.EXE (LE/DOS4GW) into Ghidra (needs LE loader handling);
   compare boot/init with EXW findings.
 - P4 prep: DOSBox-X AppImage download (user-level, no sudo), pinned Wine prefix for EXW.
-- Spec doc: input/control map - anchors: FUN_0041be05(vk,down) kb,
-  FUN_0041bf35(btn,state) mouse, FUN_0044b4fc(x,y) cursor-per-tick,
-  FUN_0044b428=CursorToGame (window->640x480 mapping - tick2 run)
-  (see RE-EXW-MAINLOOP.md + RE-EXW-TICK.md).
 - Cosmetic RE: create+decompile LAB_00451fbc (Watcom CRT thread trampoline,
   see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
-- bedlam-core crate skeleton (deterministic sim, replay, state hash per PLAN sec 7).
 - bedlam-render/P3 design note (D9): renderer emits canonical 640x480 indexed fb;
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 7325d23 + 3530a1b + 0af337f (+66601cf reverted) [P3] Rust
+  .MRS/.MRW decoders + stream-parse corpus test + decode-song tool CLOSED.
+  (a) engine/bedlam-assets/src/music.rs (commit 7325d23, concurrent
+  sibling run): parse_mrs with exact layout validation + byte-exact
+  to_bytes rebuild, Mrs::walk = full MrsNextEvent grammar (notes
+  variant 0/1, song-end, rest, restart cond/uncond, freeze terminal,
+  30001..32767 backward reposition with budget), RATIO_TABLE 128 dwords
+  verbatim from EXW @00454174 (file off 0x52774), MRW moved out of
+  misc.rs with wave_range + exhaustive layout check; corpus test pins
+  chunk-0-disabled / chunk-1 loop timer == song length == first delta /
+  terminal freeze on every enabled stream / insts < sibling n_inst /
+  durations 331-400-1476-1600-3388. (b) decode-song CLI + inspect mrs
+  arm upgrade + inspect lib.rs split (commit 3530a1b, finished + verified
+  the sibling uncommitted WIP after its client died rc=1; output
+  validated against an independent byte-level probe). (c) Revert
+  0af337f removed THIS RUN duplicate parallel mrs.rs module (66601cf) -
+  see incident note. Manifest OK. Docs: RE-EXW-MUSIC.md sec 3b.
 - 2026-08-17 62c00c3+567808f+8ed8482+a397267 [P2] Music small tails ALL
   CLOSED (3 x -process passes, no import; queue-housekeeping commit f417543
   first recorded the prior pacer run 7406875/D16 that died before NEXT.md
@@ -126,6 +139,27 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+
+- 2026-08-17 22:3x-23:0x (mrs-rust run): DUPLICATE-SPAWN INCIDENT #3, no
+  damage, resolved same run. This run started on the P3 MRS/MRW task and
+  spent ~6 min in ONE non-shell generation phase (writing the 650-line
+  mrs.rs) -> heartbeat stale 357s -> nudge spawned a sibling at 22:35:46
+  that took the SAME top task. Sibling committed 7325d23 (music.rs
+  module, corpus test, MRW move) at 22:43; its client died rc=1 ~22:47
+  (server session lost) leaving decode-song WIP uncommitted. This run
+  had committed its own parallel mrs.rs (66601cf, 22:45) on top.
+  Resolution: detected the live writer via file mtimes (formats/music.rs
+  22:46:57), stood down from ALL writes, polled 6 min for silence, then:
+  verified + committed the sibling WIP (3530a1b), reverted the duplicate
+  (0af337f), fixed default-run=inspect. LESSONS (extend the heartbeat
+  rule): (1) touch heartbeat around long file-GENERATION phases too -
+  generating one big source file is as silent as a big doc edit;
+  (2) nudge rc=1 client death does NOT stop a server-side session - a
+  concurrent writer may still be alive: check file mtimes + git log
+  before touching shared files (>=6 min quiet + no commits = dead);
+  (3) when two runs produce parallel implementations, canonical = the
+  earlier commit that is integrated with tests/call sites - revert the
+  later duplicate, do not merge both.
 - 2026-08-17 20:2x (queue-housekeeping + music-tails run): found queue
   stale - pacer run committed 7406875 (D16) at 19:58 but died before
   rewriting NEXT.md. This run verified the commit contents against the task
