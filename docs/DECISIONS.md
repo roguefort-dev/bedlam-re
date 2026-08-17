@@ -226,3 +226,19 @@ runtime/wine-exw with mono/gecko/menus disabled. Both carry wrapper scripts
 (tools/runtime/dosbox-x.sh, wine-exw.sh) + full provenance in docs/RUNTIME.md.
 Consequence: goldens/harness references are only valid against these pins;
 upgrades require re-baselining (PLAN P4 "pin dosbox/wine versions + configs").
+
+## D20 — wgpu presentation backend + dual resolution modes (user decision, 2026-08-18)
+
+Use wgpu for GPU-accelerated presentation and modern rendering portability
+(Vulkan on supported Linux systems, DX12 on Windows, Metal where supported;
+backend selection remains wgpu-owned rather than raw Vulkan code). Two explicit
+modes share the same deterministic simulation and assets: PARITY mode renders
+the canonical 640x480 indexed framebuffer + 6-bit palette and GPU-scales it to
+any output resolution; ENHANCED mode may render supported world/UI elements at
+the native output resolution for additional detail. Enhanced output is
+non-parity and UI-flagged. Resolution, GPU timing, interpolation, and backend
+choice never feed back into simulation or hashed state. This specializes D9
+and D12; it does not remove the canonical frame used by goldens and regression
+tests. Initial implementation target: wgpu upload/palette-expand/fullscreen
+triangle scaler, then native-resolution enhanced passes incrementally.
+

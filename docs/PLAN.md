@@ -143,10 +143,12 @@ Crates: bedlam-assets (ALL decoders incl. SMK; pure, deterministic, buffer-in/ou
 bedlam-core (hermetic deterministic sim: no I/O/threads/wall-clock; fixed timestep =
 1 original frame; Determinism Charter below; snapshot/restore; input-log replay +
 per-tick state hash; replay/snapshot format carries a version header + initial state
-hash + time base from day one); bedlam-render (indexed fb + palette; contract: render
-produces the canonical 640x480 indexed fb + palette — platform presents at ANY
-output resolution (scale/pillarbox is a presentation concern, never a render
-concern); nothing above changes for GPU later); bedlam-audio (thin mix graph/device); bedlam-platform (thin window/input/
+hash + time base from day one); bedlam-render (dual-mode contract per D20: parity path produces the canonical
+640x480 indexed fb + palette; enhanced path may render supported world/UI
+passes at native output resolution, always non-parity/UI-flagged); bedlam-platform
+uses wgpu for GPU presentation (Vulkan/DX12/Metal selected by wgpu), scaling,
+pillarboxing and refresh; resolution/backend never feed sim or hashed state;
+bedlam-audio (thin mix graph/device); bedlam-platform (thin window/input/
 gamepad); bedlam-game (scene FSM, config, save; no per-mission code — mission quirks
 are data — stated as a hypothesis to verify in P2d, with code-defined quirk hooks
 tolerated until P5 evidence settles it). Errors: thiserror in parsers, never panic on
@@ -157,7 +159,7 @@ weekly; macOS nightly/manual (owner: if possible) — goldens never on macOS CI.
 ### P4 — Vertical slice + the two harnesses
 Boot → TITLE.SMK → menu → ZONEA/MISSION1 render → move one squad member → palette/
 audio present.
-1. Dependency spikes decided here (softbuffer vs pixels; smk-fork vs libsmacker-sys).
+1. Dependency spikes decided here (wgpu version/window integration and indexed-palette upload path; smk-fork vs libsmacker-sys).
 2. Differential test harness (budgeted ~2 weeks, built here — the project insurance
    policy): DOSBox-X debugger memory-watches on RE-ed structure addresses + scripted
    frame-stepped input injection → per-frame original state dumps, diffed against

@@ -12,9 +12,10 @@
    function DB + first boot/init comparison vs EXW.
 
 ## Backlog (not yet started)
-- P3: bedlam-render crate skeleton from docs/DESIGN-RENDER.md (canonical
-  640x480 indexed fb + 6-bit palette contract; scaling/refresh stay in
-  bedlam-platform).
+- P3: bedlam-render + bedlam-platform wgpu skeleton per D20 and
+  docs/DESIGN-RENDER.md: parity path = canonical indexed 640x480 frame scaled
+  on GPU; enhanced path = native-resolution world/UI passes, non-parity;
+  resolution/backend never feed simulation.
 - P3: Miri pass over bedlam-core + cross-OS per-tick hash CI job (PLAN sec 7
   charter item, from first playable tick onward).
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh

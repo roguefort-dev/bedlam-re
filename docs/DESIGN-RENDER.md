@@ -19,7 +19,7 @@ bedlam-render is a PURE function from game state to a canonical frame:
 - Parity, goldens, and cross-OS determinism anchor on THIS representation.
 - Everything above it - scaling, letterboxing, refresh rate, interpolation -
   is presentation (bedlam-platform) and NEVER feeds back into render or sim
-  (D12, PLAN sec 7). A later GPU path changes nothing in this contract
+  (D12, PLAN sec 7). The selected wgpu GPU path changes nothing in this parity contract
   (PLAN P3 wording).
 
 ## 2. RE basis (what the original does, with anchors)
@@ -160,12 +160,17 @@ Input: (&Frame, PresentMode). Presentation:
    windowed white entry 0, SetEntries skipping entry 0) is NOT replicated -
    T3 free divergence, recorded here for archaeology only.
 
-## 9. Deferred, explicitly non-parity options (all OFF by default, UI-flagged)
+## 9. wgpu backend and enhanced mode (D20; enhanced features OFF by default)
 
-- Hi-res world composite (2x/4x tile/sprite sampling).
-- Extended widescreen viewport (shows more map = gameplay change).
-- Sprite sub-pixel interpolation (feel-contested; explicit option later).
-- Any GPU-accelerated backend (contract above is unchanged).
+- Backend: wgpu (Vulkan/DX12/Metal selected by wgpu; no raw Vulkan surface in engine crates).
+- Parity mode: upload index texture + palette, expand/sample on GPU, scale the
+  full canonical 640x480 frame with nearest/integer default or selected filter.
+- Enhanced mode: native-output-resolution world/UI passes are allowed
+  incrementally; always non-parity and UI-flagged. It shares sim/assets with
+  parity mode and must never feed resolution or GPU timing into sim state.
+- Extended widescreen viewport (shows more map = gameplay change) remains an
+  additional explicit option, separate from merely rendering at high DPI.
+- Sprite sub-pixel interpolation remains explicit and off by default.
 
 ## 10. Goldens and testing [design, per PLAN P4]
 
