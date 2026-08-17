@@ -13,7 +13,6 @@ pub mod bdl;
 pub mod codecs;
 pub mod misc;
 pub mod mission;
-pub mod mrs;
 pub mod music;
 pub mod pal;
 pub mod smk;
@@ -44,10 +43,6 @@ pub enum CodecError {
     RawOverrun,
     #[error("byterle incomplete")]
     ByterleIncomplete,
-    #[error("mrs event truncated")]
-    MrsEventTruncated,
-    #[error("mrs reposition loop")]
-    MrsRepositionLoop,
 }
 
 /// Format-level parse failures. The inspect CLI maps these to the exact
@@ -80,13 +75,6 @@ pub enum AssetsError {
     /// Magic / signature mismatch.
     #[error("bad magic")]
     BadMagic,
-    /// Container size does not equal data_off + sum(sizes).
-    #[error("data_off {data_off} + sizes {sum} != len {len}B")]
-    ContainerSize {
-        data_off: usize,
-        sum: usize,
-        len: usize,
-    },
     /// .MRS size disagrees with the header-table layout formula
     /// (data_off + sum(sizes)). True for all shipped files.
     #[error("mrs layout: {len}B != data_off+sizes {expected}B")]
