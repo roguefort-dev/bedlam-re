@@ -14,7 +14,8 @@
    as plan B), scratch-project smoke test in /tmp/opencode, then import
    game-data-2/BEDLAM.EXE into BedlamWatcom per the 5-step runbook in
    RESEARCH-BEDLAM2-CENSUS.md (B2 Ghidra import plan) sec 4; verify blocks
-   0x10000/0x80000 (span to 0x1304ee), entry 0x56a60, fixup labels; seed
+   0x10000/0x80000 (span to 0x1304ee), entry 0x66a60 (object-relative eip
+   0x56a60 + base), fixup labels; seed
    function DB + first boot/init comparison vs EXW.
 
 ## Backlog (not yet started)
@@ -32,9 +33,10 @@
   3-way structural cross-checks - B2: 2 objects (code 0x10000 R+X vsize
   0x66970 / data 0x80000 R+W vsize 0xb04ee with only 7 file-backed pages =
   mostly implicit zero-fill), 110 pages x 4096B all VALID sequential, data
-  pages file [0x36e00..], eip LINEAR 0x56a60 (code probe hit mov
-  [0xa5e10],ecx = obj2 store at the derived file offset), esp 0xb04ee,
-  module name BEDLAM; EXD same class (107 pages, eip 0x4fbb0). HEADLINE:
+  pages file [0x36e00..0xa428f) consuming the file EXACTLY, eip/esp are
+  OBJECT-RELATIVE (spec form): linear entry 0x66a60, initial esp 0x1304ee =
+  obj2 top (gate that also holds in EXD); module name BEDLAM; EXD same
+  class (107 pages, linear eip 0x5fbb0). HEADLINE:
   internal fixups NOT pre-applied (flags=0x200, 205KB fixup section) => a
   raw-carve import yields garbage pointers - loader mandatory; honest
   python fixup-applier fallback documented in the section. (2) Loader
@@ -52,6 +54,15 @@
   lives at REPO ROOT with corpus-relative entries, so the working command is
   cd game-data-2 && sha256sum -c ../MANIFEST-2.sha256 (the earlier note
   omitted the ../ and that exact form fails).
+  FOLLOW-UP same run: a parallel sibling (b8f63e6, second item-3 respawn
+  from the storm, no claim file - the invisible-agent lesson again) had
+  committed a DUPLICATE research section; consolidated per incident-#3 rule
+  into the canonical section (its unique findings folded: Ghidra #532,
+  oshogbo fallback loader + version-crash #37, exact file-consumption gate,
+  concrete import command, -cspec openwatcomcpp form) and CORRECTED my own
+  eip/esp reading (offset-form per LX/LE spec, linear 0x66a60/0x1304ee -
+  the original linear claim was an arithmetic slip caught by cross-checking
+  the sibling derivation; D18 stands, pointer updated).
 - 2026-08-18 a3ad066 [P3] bedlam-render DESIGN NOTE CLOSED (docs/DESIGN-RENDER.md, new - docs-only run, no code, no Ghidra). Canonical Frame = 640x480 x 8-bit indices + 256 x 6-bit VGA palette; parity/goldens anchor there; everything above is presentation (D9/D12). Contents: RE-fact table with anchors (present chain + vsync verdict D16, palette upload r<<2 @SetPaletteRGB, banks SetPaletteIndex + 0x90..0x97 12.5Hz cycle + region bank 0x5d, fade engine 16.16 + 10-step = 200ms, palette-dirty handshake 004ee9b6, entry-0 quirks, composition order base->sprites->row blits->overlays->entities, camera clamps 9..631/9..463); palette policy: 6-bit canon everywhere, expansion at presentation ONLY (Original v<<2 default vs Full (v<<2)|(v>>4)); bedlam-assets pal.rs Palette = tooling repr, NOT render canon (flagged for a later Vga6 type); D17 concretized: 300Hz microstep scheduler (5 per 60Hz sim tick; service event %3 = 100Hz, fade %6 = 50Hz while fading, bank cycle %24 = 12.5Hz; counter zeroed at boot release mirroring FUN_0041e19d) -> deterministic satellites, hashed; ownership/hash boundary table (interpolation alpha + present timing shape frames, never state; goldens at tick boundaries with interpolation off); 7 open questions each naming its answer source. Manifest verified OK (run was docs-only).
 - 2026-08-17 fe14416 [P4 prep] EXW input/control map CLOSED (docs/RE-EXW-INPUT.md,
   new). Pass A ExwInputSinks.java: KeySink@0041be05(scan,down) = 256B

@@ -210,4 +210,6 @@ only, never copy). LAST RESORT = raw binary + -process postScript
 building the two blocks from the verified anatomy table (CODE 0x10000
 size 0x66970; DATA 0x80000 vsize 0xb04ee, 0x648f file-backed). One
 import into BedlamWatcom ever, then -process only. Full anatomy + plan:
-docs/RESEARCH-BEDLAM2-CENSUS.md (B2 import prep section).
+docs/RESEARCH-BEDLAM2-CENSUS.md (B2 Ghidra import plan section; consolidated
+there 2026-08-18 after a parallel-run duplicate was folded in - entry-point
+reading corrected to object-relative eip 0x56a60 -> linear 0x66a60).
