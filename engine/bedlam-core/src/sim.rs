@@ -1,10 +1,12 @@
-//! The hermetic simulation: deterministic tick, state hash, snapshot and
+//! The hashed half of the D17 timing model: the fixed-60Hz simulation
+//! bucket, its satellite substep clocks, the state hash, snapshot and
 //! restore.
 //!
-//! SKELETON ONLY (P3): no game logic lives here yet. The deliverable is the
-//! determinism framework — fixed tick, exactly-one-entropy-draw-per-tick,
-//! FNV-1a state hash in a pinned field order, versioned snapshot bytes —
-//! exercised by `tests/determinism.rs`.
+//! SKELETON ONLY (P3): no game logic lives here yet. The deliverable is
+//! the determinism framework — fixed tick, exactly-one-entropy-draw-per-
+//! tick, integer satellite substeps, FNV-1a state hash in a pinned field
+//! order, versioned snapshot bytes — exercised by `tests/determinism.rs`.
+//! The per-host-frame (non-hashed) half of D17 lives in `crate::frame`.
 
 use crate::hash::{Fnv1a64, StateHash};
 use crate::input::InputFrame;
@@ -20,10 +22,26 @@ pub const SNAPSHOT_MAGIC: [u8; 4] = *b"BDLS";
 /// streams from the same seed.
 const STREAM_SIM: u64 = 1;
 
-/// Game-space extents the placeholder cursor clamps into (640x480 canonical
-/// render space).
-const CURSOR_MAX_X: i32 = 639;
-const CURSOR_MAX_Y: i32 = 479;
+/// Satellite clocks are integer substeps of the 60Hz tick (D17 c,
+/// docs/RE-EXW-TICK.md): every satellite adds [`SATELLITE_STEP`] phase
+/// per tick and fires one event per wrap value `n`, i.e. runs at
+/// `60 * 5 / n` Hz — no floats, no dt, fully hashed.
+///
+/// Shared numerator: 5 phase per tick (60 and the satellite rates share
+/// the factor that makes 100/50/12.5Hz all reduce to x/5).
+const SATELLITE_STEP: u32 = 5;
+/// 100Hz service tick: 5 events per 3 ticks (EXW TimerCallback@0044de58,
+/// docs/RE-EXW-TICK.md).
+const SERVICE_WRAP: u32 = 3;
+/// 50Hz palette-fade stepper FadeStep@00425901, active only while fading
+/// (docs/RE-EXW-TICK.md, D15): 5 events per 6 ticks.
+const FADE_WRAP: u32 = 6;
+/// 12.5Hz palette cycle, operating range 0x90..0x97 (docs/RE-EXW-TICK.md):
+/// 5 events per 24 ticks.
+const PAL_WRAP: u32 = 24;
+
+/// Placeholder actor clamp in 640x480 game space (grid coords).
+const ACTOR_MAX_X: i32 = 639;
 
 /// Configuration a simulation is created from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,10 +64,14 @@ impl Default for SimConfig {
     }
 }
 
-/// The deterministic simulation.
+/// The deterministic simulation — the HASHED, fixed-60Hz bucket of D17 (a).
 ///
-/// All state is private and hashed in a pinned order (see [`Sim::state_hash`]).
-/// A `Sim` never performs I/O, never reads the clock, and contains no floats.
+/// Everything here advances in whole ticks with integer math only; dt never
+/// enters. All state is private and hashed in a pinned order (see
+/// [`Sim::state_hash`]). A `Sim` never performs I/O, never reads the
+/// clock, and contains no floats. Per-host-frame state (cursor, latches,
+/// volume, cooldown displays) deliberately does NOT live here — see
+/// `crate::frame::FrameState`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Sim {
     tick: Tick,
@@ -60,18 +82,29 @@ pub struct Sim {
     /// state so any divergence in RNG consumption order shifts the hash.
     last_draw: u32,
 
+    // Satellite clocks (D17 c): integer substeps of this tick, all hashed.
+    /// 100Hz service tick: phase within the 5-per-3 pattern.
+    service_phase: u32,
+    /// Total 100Hz service events elapsed.
+    service_ticks: u64,
+    /// Whether the 50Hz fade stepper is armed (EXW: fade countdown
+    /// nonzero).
+    fading: bool,
+    /// 50Hz fade stepper phase (only advances while `fading`).
+    fade_phase: u32,
+    /// Total 50Hz fade steps elapsed.
+    fade_steps: u64,
+    /// 12.5Hz palette-cycle phase.
+    pal_phase: u32,
+    /// Total 12.5Hz palette cycles elapsed.
+    pal_cycles: u64,
+
     // PLACEHOLDER scaffolding - replaced by real sim state in P4+:
-    /// Placeholder pointer position, clamped to 640x480 game space (clamp,
-    /// not modulo — mirrors EXW scroll-clamp style; exact EXW addresses TBD
-    /// pending P2e input RE).
-    cursor_x: i32,
-    /// Placeholder pointer Y (see `cursor_x`).
-    cursor_y: i32,
-    /// Placeholder edge latch on `buttons` bit 0 (press sets 1, release
-    /// clears; true multi-tick latching lands with P2e input RE).
-    latch_primary: u32,
-    /// Placeholder audio volume 0..=100 (doc nod: EXW music volume 0..100).
-    volume: i32,
+    /// Placeholder actor grid X (only `buttons` bit 0 reaches it in this
+    /// skeleton).
+    actor_x: i32,
+    /// Placeholder actor grid Y (no input path yet).
+    actor_y: i32,
 }
 
 /// Serialized simulation state.
@@ -100,15 +133,16 @@ pub struct Snapshot {
 const SNAPSHOT_HEADER_LEN: usize = 4 + 2 + 2 + 4 + 8 + 8 + 4;
 
 /// Version-1 state-region layout (little-endian, fixed order):
-/// rng_state u64 @0, rng_stream u64 @8, cursor_x i32 @16, cursor_y i32 @20,
-/// latch_primary u32 @24, volume i32 @28, last_draw u32 @32,
-/// initial_state_hash u64 @36.
-const STATE_LEN: usize = 44;
+/// rng_state u64 @0, rng_stream u64 @8, last_draw u32 @16, service_phase
+/// u32 @20, service_ticks u64 @24, fading u8 @32 (+3 pad bytes @33..36),
+/// fade_phase u32 @36, fade_steps u64 @40, pal_phase u32 @48, pal_cycles
+/// u64 @52, actor_x i32 @60, actor_y i32 @64, initial_state_hash u64 @68.
+const STATE_LEN: usize = 76;
 
 impl Sim {
-    /// Create a simulation: PRNG on [`STREAM_SIM`], placeholder state at its
-    /// documented defaults, and `initial_state_hash` recorded from the
-    /// tick-0 state hash.
+    /// Create a simulation: PRNG on [`STREAM_SIM`], satellite clocks and
+    /// placeholder payload at their zeroed defaults, `fading` off, and
+    /// `initial_state_hash` recorded from the tick-0 state hash.
     pub fn new(config: &SimConfig) -> Sim {
         let mut sim = Sim {
             tick: 0,
@@ -116,35 +150,64 @@ impl Sim {
             time_base: config.time_base,
             initial_state_hash: 0,
             last_draw: 0,
-            cursor_x: 0,
-            cursor_y: 0,
-            latch_primary: 0,
-            volume: 50,
+            service_phase: 0,
+            service_ticks: 0,
+            fading: false,
+            fade_phase: 0,
+            fade_steps: 0,
+            pal_phase: 0,
+            pal_cycles: 0,
+            actor_x: 0,
+            actor_y: 0,
         };
         sim.initial_state_hash = sim.state_hash().0;
         sim
     }
 
-    /// Advance exactly one fixed timestep.
+    /// Advance exactly one fixed timestep (1/60 s at the nominal base).
     ///
-    /// Determinism rules baked in here:
-    /// - exactly ONE PRNG draw per tick (the entropy slot), and it is stored;
-    /// - cursor integrates this tick's mouse deltas then CLAMPS to the
-    ///   640x480 game space (clamp, not modulo — divergence-safe and
-    ///   EXW-style);
-    /// - `buttons` bit 0 press latches 1, release clears 0.
+    /// Order (each step is part of the determinism contract):
+    /// 1. exactly ONE PRNG draw per tick (the entropy slot), stored in
+    ///    `last_draw`;
+    /// 2. satellite clocks advance as integer substeps: 100Hz service
+    ///    always; 50Hz fade only while `fading`; 12.5Hz palette cycle
+    ///    always (D17 c, docs/RE-EXW-TICK.md);
+    /// 3. placeholder payload: `buttons` bit 0 held advances `actor_x`
+    ///    by 1, clamped at 639 — nothing else reaches the sim in this
+    ///    skeleton (mouse deltas are per-frame data, `crate::frame`);
+    /// 4. the tick counter increments last.
     pub fn tick(&mut self, input: &InputFrame) {
-        self.tick += 1;
         self.last_draw = self.rng.next_u32();
-        self.cursor_x = (self.cursor_x + i32::from(input.mouse_dx)).clamp(0, CURSOR_MAX_X);
-        self.cursor_y = (self.cursor_y + i32::from(input.mouse_dy)).clamp(0, CURSOR_MAX_Y);
-        if input.buttons & 1 != 0 {
-            self.latch_primary = 1;
-        } else {
-            self.latch_primary = 0;
+
+        // 100Hz service: 5 events per 3 ticks.
+        self.service_phase += SATELLITE_STEP;
+        while self.service_phase >= SERVICE_WRAP {
+            self.service_phase -= SERVICE_WRAP;
+            self.service_ticks += 1;
         }
-        // `volume` has no input path yet (keyboard volume hotkeys are
-        // pending P2e input RE); it stays a hashed placeholder knob.
+
+        // 50Hz fade stepper: 5 events per 6 ticks, only while fading.
+        if self.fading {
+            self.fade_phase += SATELLITE_STEP;
+            while self.fade_phase >= FADE_WRAP {
+                self.fade_phase -= FADE_WRAP;
+                self.fade_steps += 1;
+            }
+        }
+
+        // 12.5Hz palette cycle: 5 events per 24 ticks.
+        self.pal_phase += SATELLITE_STEP;
+        while self.pal_phase >= PAL_WRAP {
+            self.pal_phase -= PAL_WRAP;
+            self.pal_cycles += 1;
+        }
+
+        // PLACEHOLDER payload update.
+        if input.buttons & 1 != 0 {
+            self.actor_x = (self.actor_x + 1).min(ACTOR_MAX_X);
+        }
+
+        self.tick += 1;
     }
 
     /// Current tick index (ticks elapsed since creation).
@@ -162,46 +225,109 @@ impl Sim {
         self.last_draw
     }
 
-    /// Placeholder cursor position `(x, y)` in 640x480 game space.
-    pub fn cursor(&self) -> (i32, i32) {
-        (self.cursor_x, self.cursor_y)
-    }
-
     /// `state_hash()` at tick 0, recorded at creation and carried across
     /// snapshots/replays (this is the `initial_state_hash` replay field).
     pub fn initial_state_hash(&self) -> u64 {
         self.initial_state_hash
     }
 
-    /// FNV-1a 64 over the canonical serialization of ALL state fields, in
-    /// this FIXED order: `tick` u64, rng state u64, rng stream u64,
-    /// `cursor_x` i32, `cursor_y` i32, `latch_primary` u32, `volume` i32,
-    /// `last_draw` u32. The order is a stability contract; appending new
-    /// fields (P4+) goes at the END of this list with a `FORMAT_VERSION`
-    /// bump.
+    /// 100Hz service satellite: phase within the 5-per-3 pattern
+    /// (0..=2 between events).
+    pub fn service_phase(&self) -> u32 {
+        self.service_phase
+    }
+
+    /// 100Hz service satellite: total events elapsed (5 per 3 ticks).
+    pub fn service_ticks(&self) -> u64 {
+        self.service_ticks
+    }
+
+    /// Whether the 50Hz fade stepper is armed.
+    pub fn fading(&self) -> bool {
+        self.fading
+    }
+
+    /// Arm or disarm the 50Hz fade stepper. Sim-side control for the
+    /// skeleton (the real arming is EXW FadeSetup/FadeCancel, P4+);
+    /// disarming mid-fade freezes `fade_phase`/`fade_steps` where they
+    /// stand — both stay hashed either way.
+    pub fn set_fading(&mut self, on: bool) {
+        self.fading = on;
+    }
+
+    /// 50Hz fade satellite: phase within the 5-per-6 pattern.
+    pub fn fade_phase(&self) -> u32 {
+        self.fade_phase
+    }
+
+    /// 50Hz fade satellite: total steps elapsed (5 per 6 ticks while
+    /// fading).
+    pub fn fade_steps(&self) -> u64 {
+        self.fade_steps
+    }
+
+    /// 12.5Hz palette-cycle satellite: phase within the 5-per-24 pattern.
+    pub fn pal_phase(&self) -> u32 {
+        self.pal_phase
+    }
+
+    /// 12.5Hz palette-cycle satellite: total cycles elapsed (5 per 24
+    /// ticks).
+    pub fn pal_cycles(&self) -> u64 {
+        self.pal_cycles
+    }
+
+    /// Placeholder actor grid coords `(x, y)` in 640x480 game space.
+    pub fn actor(&self) -> (i32, i32) {
+        (self.actor_x, self.actor_y)
+    }
+
+    /// FNV-1a 64 over the canonical serialization of ALL hashed state
+    /// fields, in this FIXED order: `tick` u64, rng state u64, rng stream
+    /// u64, `last_draw` u32, `service_phase` u32, `service_ticks` u64,
+    /// `fading` as u8, `fade_phase` u32, `fade_steps` u64, `pal_phase`
+    /// u32, `pal_cycles` u64, `actor_x` i32, `actor_y` i32.
+    ///
+    /// The order is a stability contract; appending new fields (P4+) goes
+    /// at the END of this list with a `FORMAT_VERSION` bump.
+    /// `FrameState` (crate::frame) is NEVER hashed — D17 excludes
+    /// frame-rate-driven systems from this value.
     pub fn state_hash(&self) -> StateHash {
         let mut h = Fnv1a64::new();
         h.write_u64(self.tick);
         h.write_u64(self.rng.state());
         h.write_u64(self.rng.stream());
-        h.write_i32(self.cursor_x);
-        h.write_i32(self.cursor_y);
-        h.write_u32(self.latch_primary);
-        h.write_i32(self.volume);
         h.write_u32(self.last_draw);
+        h.write_u32(self.service_phase);
+        h.write_u64(self.service_ticks);
+        h.write_u8(u8::from(self.fading));
+        h.write_u32(self.fade_phase);
+        h.write_u64(self.fade_steps);
+        h.write_u32(self.pal_phase);
+        h.write_u64(self.pal_cycles);
+        h.write_i32(self.actor_x);
+        h.write_i32(self.actor_y);
         StateHash(h.finish())
     }
 
-    /// Capture a snapshot of the full state.
+    /// Capture a snapshot of the hashed sim bucket. The non-hashed
+    /// `FrameState` is deliberately NOT serialized — hosts rebuild it
+    /// from their own UI state.
     pub fn snapshot(&self) -> Snapshot {
         let mut state_bytes = Vec::with_capacity(STATE_LEN);
         state_bytes.extend_from_slice(&self.rng.state().to_le_bytes());
         state_bytes.extend_from_slice(&self.rng.stream().to_le_bytes());
-        state_bytes.extend_from_slice(&self.cursor_x.to_le_bytes());
-        state_bytes.extend_from_slice(&self.cursor_y.to_le_bytes());
-        state_bytes.extend_from_slice(&self.latch_primary.to_le_bytes());
-        state_bytes.extend_from_slice(&self.volume.to_le_bytes());
         state_bytes.extend_from_slice(&self.last_draw.to_le_bytes());
+        state_bytes.extend_from_slice(&self.service_phase.to_le_bytes());
+        state_bytes.extend_from_slice(&self.service_ticks.to_le_bytes());
+        state_bytes.push(u8::from(self.fading));
+        state_bytes.extend_from_slice(&[0u8; 3]); // pad @33..36
+        state_bytes.extend_from_slice(&self.fade_phase.to_le_bytes());
+        state_bytes.extend_from_slice(&self.fade_steps.to_le_bytes());
+        state_bytes.extend_from_slice(&self.pal_phase.to_le_bytes());
+        state_bytes.extend_from_slice(&self.pal_cycles.to_le_bytes());
+        state_bytes.extend_from_slice(&self.actor_x.to_le_bytes());
+        state_bytes.extend_from_slice(&self.actor_y.to_le_bytes());
         state_bytes.extend_from_slice(&self.initial_state_hash.to_le_bytes());
         debug_assert_eq!(state_bytes.len(), STATE_LEN);
         Snapshot {
@@ -217,10 +343,11 @@ impl Sim {
     /// from the snapshot's tick. Never panics on user bytes.
     ///
     /// Checks, in order: length >= header, magic, version, declared state
-    /// length (truncation), then the stored hash is recomputed from the
-    /// parsed fields (canonical order, see [`Sim::state_hash`]) and must
-    /// match, and the snapshot's time base must equal
-    /// `expected_config.time_base` ([`CoreError::BadTickHz`] otherwise).
+    /// length (truncation), then the restored sim's recomputed
+    /// [`Sim::state_hash`] must equal the stored hash
+    /// ([`CoreError::HashMismatch`] otherwise), and the snapshot's time
+    /// base must equal `expected_config.time_base`
+    /// ([`CoreError::BadTickHz`] otherwise).
     ///
     /// The seed is deliberately NOT re-checked: continuity is carried by the
     /// live PRNG state inside the snapshot.
@@ -267,29 +394,46 @@ impl Sim {
 
         let rng_state = u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]);
         let rng_stream = u64::from_le_bytes([s[8], s[9], s[10], s[11], s[12], s[13], s[14], s[15]]);
-        let cursor_x = i32::from_le_bytes([s[16], s[17], s[18], s[19]]);
-        let cursor_y = i32::from_le_bytes([s[20], s[21], s[22], s[23]]);
-        let latch_primary = u32::from_le_bytes([s[24], s[25], s[26], s[27]]);
-        let volume = i32::from_le_bytes([s[28], s[29], s[30], s[31]]);
-        let last_draw = u32::from_le_bytes([s[32], s[33], s[34], s[35]]);
+        let last_draw = u32::from_le_bytes([s[16], s[17], s[18], s[19]]);
+        let service_phase = u32::from_le_bytes([s[20], s[21], s[22], s[23]]);
+        let service_ticks =
+            u64::from_le_bytes([s[24], s[25], s[26], s[27], s[28], s[29], s[30], s[31]]);
+        let fading = s[32] != 0;
+        // s[33..36]: pad, ignored.
+        let fade_phase = u32::from_le_bytes([s[36], s[37], s[38], s[39]]);
+        let fade_steps =
+            u64::from_le_bytes([s[40], s[41], s[42], s[43], s[44], s[45], s[46], s[47]]);
+        let pal_phase = u32::from_le_bytes([s[48], s[49], s[50], s[51]]);
+        let pal_cycles =
+            u64::from_le_bytes([s[52], s[53], s[54], s[55], s[56], s[57], s[58], s[59]]);
+        let actor_x = i32::from_le_bytes([s[60], s[61], s[62], s[63]]);
+        let actor_y = i32::from_le_bytes([s[64], s[65], s[66], s[67]]);
         let initial_state_hash =
-            u64::from_le_bytes([s[36], s[37], s[38], s[39], s[40], s[41], s[42], s[43]]);
+            u64::from_le_bytes([s[68], s[69], s[70], s[71], s[72], s[73], s[74], s[75]]);
 
-        // Re-hash in the canonical field order (tick comes from the header).
-        let mut h = Fnv1a64::new();
-        h.write_u64(tick);
-        h.write_u64(rng_state);
-        h.write_u64(rng_stream);
-        h.write_i32(cursor_x);
-        h.write_i32(cursor_y);
-        h.write_u32(latch_primary);
-        h.write_i32(volume);
-        h.write_u32(last_draw);
-        let computed = h.finish();
-        if computed != stored_hash {
+        let sim = Sim {
+            tick,
+            rng: Pcg32::from_raw_parts(rng_state, rng_stream),
+            time_base: TimeBase { tick_hz },
+            initial_state_hash,
+            last_draw,
+            service_phase,
+            service_ticks,
+            fading,
+            fade_phase,
+            fade_steps,
+            pal_phase,
+            pal_cycles,
+            actor_x,
+            actor_y,
+        };
+        // Re-hash the RESTORED object itself: the canonical form is what
+        // must match the stored hash, so the rebuilt sim is always
+        // self-consistent (e.g. a crafted `fading` byte of 2 cannot pass).
+        if sim.state_hash().0 != stored_hash {
             return Err(CoreError::HashMismatch {
                 stored: stored_hash,
-                computed,
+                computed: sim.state_hash().0,
             });
         }
 
@@ -297,17 +441,7 @@ impl Sim {
             return Err(CoreError::BadTickHz(tick_hz));
         }
 
-        Ok(Sim {
-            tick,
-            rng: Pcg32::from_raw_parts(rng_state, rng_stream),
-            time_base: TimeBase { tick_hz },
-            initial_state_hash,
-            last_draw,
-            cursor_x,
-            cursor_y,
-            latch_primary,
-            volume,
-        })
+        Ok(sim)
     }
 }
 
@@ -340,27 +474,36 @@ mod tests {
     }
 
     #[test]
-    fn cursor_clamps_into_game_space() {
-        let mut sim = Sim::new(&SimConfig::default());
-        for _ in 0..8 {
-            sim.tick(&InputFrame {
-                mouse_dx: 200,
-                mouse_dy: -100,
-                ..InputFrame::default()
-            });
-        }
-        assert_eq!(sim.cursor(), (639, 0));
+    fn satellite_counters_start_zeroed_and_fading_off() {
+        let sim = Sim::new(&SimConfig::default());
+        assert_eq!((sim.service_phase(), sim.service_ticks()), (0, 0));
+        assert!(!sim.fading());
+        assert_eq!((sim.fade_phase(), sim.fade_steps()), (0, 0));
+        assert_eq!((sim.pal_phase(), sim.pal_cycles()), (0, 0));
     }
 
     #[test]
-    fn latch_tracks_buttons_bit0() {
+    fn actor_advances_on_primary_button_and_clamps() {
+        let mut sim = Sim::new(&SimConfig::default());
+        let press = InputFrame {
+            buttons: 1,
+            ..InputFrame::default()
+        };
+        for _ in 0..700 {
+            sim.tick(&press);
+        }
+        assert_eq!(sim.actor(), (639, 0));
+    }
+
+    #[test]
+    fn primary_button_bit0_is_the_only_placeholder_input_path() {
         let config = SimConfig::default();
         let press = InputFrame {
             buttons: 1,
             ..InputFrame::default()
         };
-        // Held vs released on tick 2: identical RNG/cursor trajectory, the
-        // latch is the only difference => different state hashes.
+        // Held vs released on tick 2: identical RNG/satellite trajectory,
+        // the actor is the only difference => different state hashes.
         let mut held = Sim::new(&config);
         held.tick(&press);
         held.tick(&press);
@@ -369,21 +512,25 @@ mod tests {
         released.tick(&InputFrame::default());
         assert_ne!(held.state_hash(), released.state_hash());
 
-        // Buttons OUTSIDE bit 0 have no placeholder effect: same trajectory.
-        let mut other_bit = Sim::new(&config);
-        other_bit.tick(&InputFrame {
+        // Buttons OUTSIDE bit 0 — and all mouse deltas — have no
+        // placeholder effect on the sim: identical trajectory.
+        let mut other_bits = Sim::new(&config);
+        other_bits.tick(&InputFrame {
             buttons: 0b1110,
+            mouse_dx: 100,
+            mouse_dy: -100,
             ..InputFrame::default()
         });
-        let mut no_buttons = Sim::new(&config);
-        no_buttons.tick(&InputFrame::default());
-        assert_eq!(other_bit.state_hash(), no_buttons.state_hash());
+        let mut quiet = Sim::new(&config);
+        quiet.tick(&InputFrame::default());
+        assert_eq!(other_bits.state_hash(), quiet.state_hash());
     }
 
     #[test]
     fn one_draw_per_tick() {
-        // Tick with identical inputs: only the PRNG state advances, and it
-        // advances by exactly one draw per tick (hash changes every tick).
+        // Tick with identical inputs: only the PRNG state and satellites
+        // advance, and the PRNG advances by exactly one draw per tick
+        // (hash changes every tick).
         let mut sim = Sim::new(&SimConfig::default());
         let input = InputFrame::default();
         let mut prev = sim.state_hash();
@@ -401,6 +548,7 @@ mod tests {
             time_base: TimeBase::NOMINAL,
         };
         let mut sim = Sim::new(&config);
+        sim.set_fading(true);
         let input = InputFrame {
             buttons: 1,
             mouse_dx: 5,
@@ -415,6 +563,7 @@ mod tests {
         let mut restored = Sim::restore(&bytes, &config).unwrap();
         assert_eq!(restored.tick_index(), sim.tick_index());
         assert_eq!(restored.state_hash(), sim.state_hash());
+        assert_eq!(restored.fading(), sim.fading());
 
         // Continuing both stays identical.
         for i in 0..10 {

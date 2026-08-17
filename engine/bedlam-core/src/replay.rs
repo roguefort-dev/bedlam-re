@@ -3,6 +3,11 @@
 //! A replay = the seed/config the run started from (time base + seed +
 //! initial state hash) plus the exact ordered per-tick input frames.
 //! Everything is little-endian, fixed field order.
+//!
+//! Replay ticks are 60 Hz SIM ticks regardless of the host frame rate the
+//! recording was made at (D17): the host-rate accumulator that paced them
+//! is not recorded, and the time base travels in the header below — a
+//! recording made on a 240 Hz host replays bit-exactly on a 15 Hz one.
 
 use crate::input::{self, InputFrame};
 use crate::{CoreError, FORMAT_VERSION};
@@ -20,7 +25,9 @@ const HEADER_LEN: usize = 4 + 2 + 2 + 4 + 8 + 8 + 4;
 pub struct Replay {
     /// Format version the bytes were written with.
     pub version: u16,
-    /// Ticks per second the recording was made at (data, not code).
+    /// Ticks per second the recording was made at (data, not code). D17:
+    /// this is the SIM tick rate, not the host frame rate that paced the
+    /// original run.
     pub tick_hz: u32,
     /// Seed the simulation was created with.
     pub seed: u64,
