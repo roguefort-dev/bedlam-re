@@ -68,7 +68,7 @@ public class ExwMusicTails extends GhidraScript {
 
 	@Override
 	public void run() throws Exception {
-		String[] args = getScriptArguments();
+		String[] args = getScriptArgs();
 		Path outPath = args.length > 0 ? Paths.get(args[0])
 			: Paths.get("ghidra-project", "exw-music-tails.txt");
 		if (outPath.getParent() != null) {
@@ -163,7 +163,7 @@ public class ExwMusicTails extends GhidraScript {
 		println("ExwMusicTails: done -> " + outPath);
 	}
 
-	private void dumpFn(PrintWriter out, DecompInterface decomp, Function fn) {
+	private void dumpFn(PrintWriter out, DecompInterface decomp, Function fn) throws Exception {
 		out.println("----- DECOMP " + fn.getEntryPoint() + " " + fn.getName() + " -----");
 		try {
 			DecompileResults r = decomp.decompileFunction(fn, 120, monitor);
