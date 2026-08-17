@@ -22,6 +22,7 @@
 /game-data-2/
 /MANIFEST-2.sha256
 /derived-2/
-# nudge runtime counters
+# nudge runtime counters (incl. last-progress: last-commit marker)
 /.state/fails
 /.state/spawns
+/.state/last-progress

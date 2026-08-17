@@ -146,3 +146,13 @@
   -process passes (dump+create, naming). 0044deca misread corrected - see
   docs/RE-EXW-GAMETHREAD.md. One doc edit self-inflicted (DECISIONS D12 tail
   briefly clobbered) - caught and restored before commit.
+- 2026-08-17 18:2x (collision-watch run): DUPLICATE-SPAWN INCIDENT #2, no
+  damage. The tick2 run never died - it was in a long NON-shell phase
+  (writing the big RE-EXW-TICK.md edit), heartbeat went stale >7min mid-edit,
+  nudge spawned a second agent (18:17:55). Second agent (this run) detected
+  the concurrent writer (doc commit 07ce819 landed during its verification),
+  stood down from shared-state writes, waited, verified the tick2 unit fully
+  completed (doc+STATE+queue committed & pushed through 87a74cc). LESSON
+  (extends AGENTS.md): touch heartbeat ALSO around long pure-edit phases
+  (big doc rewrites), not just long shell commands - editing time counts.
+  Minor cleanup: .state/last-progress gitignored (nudge runtime marker).
