@@ -84,15 +84,17 @@ multimedia timer; rendering/sim cadence hangs off them:
   game thread signals readiness, then `timeBeginPeriod(period@00456ec4)`
   and `timeSetEvent(period, 0, 0044de58, 0, TIME_PERIODIC)` -> id `004ef69c`.
 - `TimerCallback` (0044de58), runs every 10ms (100Hz) [high]:
-  1. `FUN_0041bfb6()` — called EVERY tick unconditionally [hyp: the frame
-     driver / master update; top of NEXT pass]
+  1. `FUN_0041bfb6()` (named TickWorker) — called EVERY tick; it is a SERVICE
+     step (counters + 50Hz gate, scroll clamp, palette cycle), NOT the
+     sim/render loop [high — see docs/RE-EXW-TICK.md]
   2. if active (`004ee9d6` hiword==1) && not paused (`004eee5a` hiword==0):
      `_DAT_004ef708 = 0`; `GetCursorPos` -> `FUN_0044b4fc(x, y)` mouse sample.
 
 **Determinism (P3/P5 impact):** timing entropy slots on the EXW side are exactly
 ( a ) the `timeSetEvent` period (u16 at 00456ec4) driving tick cadence,
 ( b ) `GetCursorPos` sampled inside the tick, ( c ) keyboard/mouse WndProc bridge
-below. The frame body `FUN_0041bfb6` decides what a tick advances — catalog next.
+below. The tick advances counters/scroll/palette only; the sim/render frame
+lives on the worker thread spawned at 0044dea0 (docs/RE-EXW-TICK.md).
 
 ## 6. BedlamWndProc (0044dacc) — input bridge [high]
 
@@ -104,8 +106,9 @@ below. The frame body `FUN_0041bfb6` decides what a tick advances — catalog ne
   in windowed mode unless wParam==1.
 - WM_SETCURSOR(0x20): hide cursor when hit-test==1 and DD-active; else arrow.
 - WM_KEYDOWN(0x100)/WM_SYSKEYDOWN(0x101): vkey := hiword(lParam)&0xFF ->
-  `FUN_0041be05(vkey, down)`; 'F'(0x46) special-cased to `FUN_0044ceb0` [med:
-  fullscreen toggle]; WM_SYSCOMMAND 0xF100 filtered, 0xF140 eaten.
+  `FUN_0041be05(vkey, down)`; 'F'(0x46) special-cased to `FUN_0044ceb0`
+  (FKeyHandler) = screenshot to numbered BMP [high — see RE-EXW-TICK.md];
+  WM_SYSCOMMAND 0xF100 filtered, 0xF140 eaten.
 - Mouse: WM_LBUTTON*(0x201..0x206) -> `FUN_0041bf35(button, state)` with
   (button 0/1, state 0/1/2 = down/up/double [med]) and keyState bits pushed.
 
@@ -148,8 +151,10 @@ sinks — the input/control map task should start there.
 
 ## 9. Open / next
 
-1. Walk `FUN_0041bfb6` (called every 10ms tick by TimerCallback 0044de58;
-   already located+named) callee tree = frame body.
-2. `FUN_00450242` thread body arg (register-passed) — identify game thread proc.
+1. DONE — TickWorker@0041bfb6 cataloged in docs/RE-EXW-TICK.md (service tick:
+   5 counters, 50Hz sub-gate, scroll clamp, 8-frame palette cycle @12.5Hz).
+2. ANSWERED — GameThreadStart passes start address 0x0044dea0 (stack 0x1000,
+   id -> 004ef694, handle -> 004ef698); region 0044dea0..0044dfec is not yet
+   a function = TOP next target (docs/RE-EXW-TICK.md).
 3. `FUN_0044b4fc`, `FUN_0041be05`, `FUN_0041bf35` input sinks -> control map.
 4. mciSendCommandA trio in teardown -> CDDA control path (audio cross-check).

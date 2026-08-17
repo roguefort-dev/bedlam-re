@@ -74,3 +74,16 @@ smooth options; hi-res world composite + extended widescreen viewport are allowe
 as later opt-in non-parity modes (gameplay-affecting, UI-flagged). Recorded in
 PLAN.md P3 (render contract) + P6 (modernization). Smacker video: decode native,
 present scaled. No changes to sim/timing (100Hz/20fps untouched).
+
+## D10 - EXW tick architecture resolved; sim/render loop located (2026-08-17)
+100Hz TimerCallback@0044de58 = SERVICE tick (mouse poll via GetCursorPos +
+clamp+store, 5 free-running counters, 50Hz sub-gate, input-driven scroll
+clamp 9..631/9..463, 8-frame palette cycle 0x90..0x97 @12.5Hz). The sim/render
+game loop is the WORKER THREAD started by GameThreadStart@0044d9c0
+(CreateThread-style via .data slot 00457874, start 0x0044dea0, stack 0x1000,
+handle 004ef698, id 004ef694) - the 8street 20fps claim stays unanchored
+until 0044dea0..0044dfec is decompiled (top P2 task). F key = screenshot to
+numbered BMP (FKeyHandler@0044ceb0), NOT fullscreen toggle. AppActivate@
+0044b1c0 = system-palette management, not pause. Names applied in project:
+TickWorker / MousePosHandler / ThreadSpawnThunk / FKeyHandler / AppActivate.
+Write-up: docs/RE-EXW-TICK.md (script: tools/ghidra-scripts/ExwTickFollowup.java).
