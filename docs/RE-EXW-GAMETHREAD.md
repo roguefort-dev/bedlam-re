@@ -59,8 +59,14 @@ void GameThread(void)                    // 0044dea0: PUSH EBX/ECX/EDX (Watcom)
 
 Nothing inside 0044dea0..0044dfec writes it; neither does GameMain,
 TimerCallback, or TickWorker (checked in their decompiles) [verified].
-**Who calls GoFlagSet remains unresolved** [open] - it must fire early on the
-worker path or TimerInit would spin for the whole game [inferred].
+**RESOLVED 2026-08-17 (tick2 run, ghidra-project/exw-tick2.txt)**: GoFlagSet
+is called by FUN_0041e19d [verified xref + decompile], which GameMain calls
+right after LoadFile(LANGUAGE.*) at boot. FUN_0041e19d = the release-the-timer
+routine: zeroes divider 004edbc8 + counters 004edb54/58/5c, applies base
+palette (SetPaletteIndex 0x5d), resets scroll copies 004eddf8..004ede04 = -1,
+sets 004dc6c8=1 / 004dc6e4=0, arms 004ede10/004ede14 from its EDX arg (fade),
+then GoFlagSet(). The TimerInit spin therefore ends during GameMain init, as
+inferred.
 
 ## GoFlagSet @0044d9b4 [verified - full listing, 10 bytes]
 
@@ -83,24 +89,27 @@ Evidence:
    built from those [verified - full decompile of GameMain + callee name
    scan; only wait-like import seen on this thread is SendMessageA, which is
    a send, not a sleep].
-3. The only rate mechanism reachable from the game thread is the timer-service
-   gate chain (RE-EXW-TICK.md, verified there): 100Hz timeSetEvent ->
-   TickWorker -> counter@004edbc8, `(ctr & 1) && dword@004ede10` -> FUN_00425901
-   = **100 / 2 = 50Hz** gated update.
+3. The only rate mechanism visible from the game thread first hop is the
+   timer-service chain (RE-EXW-TICK.md): 100Hz timeSetEvent -> TickWorker ->
+   counter@004edbc8, `(ctr & 1) && dword@004ede10` -> FUN_00425901.
+   **CORRECTED 2026-08-17 (tick2 run)**: FUN_00425901 = FadeStep and
+   004ede10 = **palette-fade step countdown**, NOT a frame gate (see D15 and
+   the tick doc). The 50Hz figure is the palette-fade rate only.
 4. The in-game advance loop inside GameMain (below) calls FUN_0043d00b, which
-   READS gate 004ede10 (xref at 0043d5e6) [verified xref] - i.e. the gameplay
-   step is gated by the same 50Hz flag [inferred].
+   READS 004ede10 (xref at 0043d5e6) [verified xref]. CORRECTED: 004ede10 is
+   the fade countdown, so this read is a fade-status check [inferred]; it is
+   NOT evidence that the gameplay step runs at 50Hz.
 
-**Verdict**: the 8street "20fps sim/render" claim is REFUTED for EXW at this
-level: no 50ms sleep and no /5 divider exists on the game thread; the pacing
-architecture is interrupt-driven - a 100Hz service tick dividing to a 50Hz
-gate that the gameplay loop consumes. Effective sim/render rate = **50Hz max**
-(12.5Hz palette phase from bits 0..2 unchanged, see tick doc). Caveat:
-FUN_0043d00b and FUN_00440e45 bodies are second-hop (not decompiled this run);
-a further subdivision inside them (e.g. counting 2 or 5 gate hits) could lower
-the *render* rate, but it can only be derived from the 50Hz gate, and no
-power-of-2 bit of 004edbc8 yields 20. Parity budget should assume 50Hz logic
-until the second hop proves otherwise [inferred/decision D13].
+**Verdict (as of the gamethread run, PARTIALLY SUPERSEDED by D15)**: the
+8street "20fps sim/render" claim was refuted at this level - no 50ms sleep and
+no /5 divider exists on the game thread. The further claim "effective
+sim/render rate = 50Hz max via gate 004ede10" is **WRONG**: the tick2 run
+showed 004ede10 is the palette-fade countdown and FUN_00425901 is FadeStep
+(see D15 + RE-EXW-TICK.md). Verified rates today: 100Hz service tick, 50Hz
+palette fade while fading, 12.5Hz palette cycle. **The sim/render pacing
+mechanism is UNKNOWN** - reopen via FUN_0043d00b / FUN_00440e45 bodies (second
+hop) and the divider consumers (004edbc8 etc., e.g. FUN_00448ef1). Parity
+budget: no committed logic rate until then (D13 demoted by D15).
 
 ## GameMain @0041c050 - annotated structure [verified unless tagged]
 
@@ -112,7 +121,7 @@ void GameMain(void)                       // returns 16-bit code in AX
 {
   // ---- global init block ----
   _DAT_004eddc4 = 0x140; _DAT_004eddc8 = 0xf0;   // 0041c19x: scroll x/y = (320,240) = screen center
-  _DAT_004ede10 = 0;                              // 0041c193: RESET the 50Hz gate at boot
+  _DAT_004ede10 = 0;                              // 0041c193: clear fade countdown at boot (CORRECTED: not a frame gate)
   _DAT_004ede48 = 0x1e240;                        // = 123456  RNG seed A
   _DAT_004ede4c = 0x39447;                        // = 234567  RNG seed B
   ... (~30 more global zero/one inits: 004edeb2=1, 004edec0=1, 004ede4c, ...)
@@ -222,7 +231,7 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
       if (zone == 6) FUN_0043c87c(&DAT_0046bfdc, ..., 0x104, 0x82);
       FUN_00425a03();
       ... copy 24 dwords + tail bytes from pcStack_24+2 into buf+0x2a2 ...  // font row blit
-      FUN_0041cbf0(_DAT_004edbf8, 10);            // writes gate 004ede10 twice (see xrefs)
+      FUN_0041cbf0(_DAT_004edbf8, 10);            // FadeSetup(pal,10): arm 10-step 50Hz fade (004ede10 = steps left)
       episode++;                                  // iStack_20
       _DAT_004edd8c++;                            // zone++
     }
@@ -283,26 +292,32 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
 
 ### New xref leads (second-hop candidates, NOT decompiled this run)
 
-- **FUN_0043d00b** reads gate 004ede10 (0043d5e6) - prime candidate for the
-  per-frame sim/render step [inferred].
+- **FUN_0043d00b** reads 004ede10 (0043d5e6) - prime candidate for the
+  per-frame sim/render step [inferred]. NOTE (tick2): 004ede10 = fade
+  countdown, so that read is fade-status, not a rate gate; the sim/render
+  rate mechanism inside FUN_0043d00b is the open question (D15).
 - **FUN_00440e45** - zone/level manager returning quit status [inferred].
 - **FUN_00448ef1** reads divider 004edbc8 four times (0044936b/004493eb/
   004495ae/00449797) - another rate consumer, candidate render/anim pacer
   [hypothesis].
-- Gate 004ede10 writers besides GameMain(=0): FUN_0041cbf0 (2x),
-  FUN_0041e19d (0041e1d8, also resets divider 004edbc8 at 0041e1a2),
-  FUN_00420100 (00420135); readers: FUN_00402b0c, FUN_0041fa3f, FUN_0043d00b
-  [verified xrefs] - screens enabling/disabling the 50Hz gate.
+- 004ede10 (= fade countdown) writer set: GameMain (=0 at boot),
+  FadeSetup@0041cbf0 (arm: =ticks, 2 writes incl. clear),
+  FUN_0041e19d (arm at 0041e1d8; also resets divider 004edbc8 at 0041e1a2),
+  FUN_00420100 (cancel: =0 at 00420135 when 004dc6c8), FadeStep itself
+  (decrement); readers: FUN_00402b0c (fire condition), FUN_0041fa3f,
+  FUN_0043d00b [verified xrefs - CORRECTED semantics: fade engine, not
+  screen gates].
 
 ## Settled / still open
 
 **Settled this run:**
 1. Worker-thread body 0044dea0 = trampoline; real loop = GameMain@0041c050
    [verified].
-2. No Sleep/timeGetTime pacing on the game thread; pacing = 100Hz timer ->
-   50Hz gate (004ede10). **8street 20fps sim/render claim: REFUTED at this
-   depth** (no /5 divider or 50ms wait exists here; max gated rate 50Hz)
-   [verified absence + verified gate chain].
+2. No Sleep/timeGetTime pacing on the game thread. **8street 20fps sim/render
+   claim: REFUTED at this depth** (no /5 divider or 50ms wait exists here).
+   CORRECTED 2026-08-17 (tick2/D15): 004ede10 is NOT a 50Hz frame gate but
+   the palette-fade countdown; sim/render rate mechanism unknown until the
+   FUN_0043d00b/FUN_00440e45 bodies are read.
 3. Go flag 004ef674 writer set is exactly {GameThreadStart=0, GoFlagSet=1};
    0044deca misread corrected [verified].
 4. RNG seeds planted here: 123456 / 234567 at 004ede48/004ede4c [verified].
@@ -311,14 +326,14 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
 6. US/UK asset fork via DAT_0046ae64 [verified].
 
 **Still open:**
-1. Who calls GoFlagSet@0044d9b4 (releases TimerInit's spin) - no caller in
-   anything decompiled so far.
+1. DONE 2026-08-17 (tick2 run): GoFlagSet caller = FUN_0041e19d (see above).
 2. Bodies of FUN_0043d00b (gate-consuming gameplay advance) and FUN_00440e45
    (level manager) - the real per-frame sim/render, and whether the 50Hz gate
    is further subdivided (25Hz? 20Hz?) there. This is the last place the
    8street claim could still hold partially.
 3. RNG function/constants consuming 004ede48/004ede4c; reader of exit code
    004ef676.
-4. FUN_0041e19d's divider reset (0041e1a2) - when/why the tick divider is
-   re-zeroed.
+4. DONE 2026-08-17 (tick2 run): FUN_0041e19d decompiled - divider 004edbc8
+   re-zeroed when the boot sequence releases the timer (prevents a mid-phase
+   first fade/palette-cycle tick); see above.
 5. FUN_00448ef1 - the four-read divider consumer.
