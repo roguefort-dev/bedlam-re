@@ -120,8 +120,10 @@ See "Palette fade engine" below.
 - DirectDraw surface vtable calls [offsets verified, semantics verified via
   DDERR_SURFACELOST 0x887601C2 handling]: +0x60 IsLost, +0x6C Restore,
   +0x14 Blt - on objects at *004ee9bc, *004ee9c8, *004ee9cc; helper
-  FUN_0044b7b0 repeats IsLost/Restore and sets word@00457396 hi = 0xFFFF
-  (cursor validity window [hyp]). NOTE (tick2): these surface offsets are
+  FUN_0044b7b0 = CursorBlt (tick-sat run): restores both surfaces + blits
+  the cursor sprite, then PARKS g_cursor_x@00457398 = 0xFFFF; the hi word of
+  00457396 is a READ gate (skip when 0xFFFF), not a write [verified]. NOTE (tick2): these surface
+  offsets are
   **+8 vs the stock IDirectDrawSurface layout for everything past GetCaps**
   (Lock@+0x64, SetPalette@+0x7c, Unlock@+0x80, SetClipper@+0x70 - the
   last confirmed by the windowed-mode clipper attach in DDInitSurfaces),
@@ -188,7 +190,7 @@ File I/O layer identified (usage-verified, exact libc mapping [inferred]):
 FUN_0044e729=fopen(path,mode), FUN_0044e815=fwrite(buf,1,n,f),
 FUN_0044f34b=buffered putc (flush thresholds 0x400/0x600),
 FUN_0044e30b=ftell, FUN_0044e217=fseek, FUN_0044ea0b=fclose.
-Also confirmed here: FUN_0044ac5c=Lock primary surface (sets
+Also confirmed here: FUN_0044ac5c=LockStaging (restores primary, locks STAGING 004ee9c0; sets
 dword@004ee9e8=pitch, @004ee9f0=pitch/4, @004ee9ec=pitch-0x280) and
 FUN_0044acf4=Unlock (vtable +0x80) [verified].
 
@@ -226,7 +228,7 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004eddf8..004ede04 | direction-filtered scroll copies | verified |
 | 004edd7c | palette table base pointer | verified use |
 | 004ee9b8 | g_dd_obj: IDirectDraw object (stock vtable) | verified |
-| 004ee9bc/c0/c8/cc | g_dd surfaces 1..4 (roles not yet distinguished; +4-shifted vtable, ONE extra slot @0x0c - D16/pacer correction) | verified slots / inferred roles |
+| 004ee9bc/c0/c8/cc | g_dd_surf_primary/staging/palbank/cursor - roles DISTINGUISHED (tick-sat run, see that section; +4-shifted vtable per D16) | verified slots + usage-verified roles |
 | 004ee9d0 | g_dd_palette: IDirectDrawPalette (stock vtable; +0x18 SetEntries) | verified |
 | 004ee9d4 | g_dd_clipper: IDirectDrawClipper (stock vtable; +0x20 SetHWnd) | verified |
 | 004edc38 | g_fade_state_16_16: 768 x (cur,step) 16.16 fade accumulators | verified |
@@ -239,6 +241,11 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004eee5a | state gate: hi word == 0 allows mouse poll | inferred |
 | 004ef66c | screenshot filename counter | inferred |
 | 004ef708 | word zeroed on each mouse-poll tick | verified use |
+| 004eee60 | g_pal6_snap: 768B 6-bit current-palette snapshot (GetPalette6bit dest) | verified (tick-sat) |
+| 004eedfc | g_cursor_size (24; CursorSizeSet arg target, Blt clip cap) | verified (tick-sat) |
+| 004ee9d8 | g_cursor_active (CursorSizeSet cycle guard) | verified (tick-sat) |
+| 004ede14 | g_scroll_btn_latch: mouse-button (re)press latch (ScrollUpdate) | verified (tick-sat) |
+| 004edb48 | g_scroll_btn_armed: all-buttons-released arm flag (ScrollUpdate) | verified (tick-sat) |
 
 ## tick2 findings (2026-08-17, dumps exw-tick2.txt / exw-tick2-names.txt)
 
@@ -302,14 +309,134 @@ KERNEL32 CreateThread (via IAT thunk 00452f36) with start routine
 **0x00451fbc** (the Watcom CRT per-thread init trampoline that eventually
 reaches GameThread@0044dea0). Chain: GameThreadStart -> ThreadSpawnThunk
 00450242 -> [00457874] -> ThreadSpawnImpl 0045204b -> CreateThread(00451fbc).
-Note: LAB_00451fbc is not yet a function in the project (future run could
-create + decompile it to close the trampoline).
+Note: LAB_00451fbc is now a function: created + decompiled by the 2026-08-18
+tick-sat run = CrtThreadTrampoline (see that section).
 
 ### Bonus: GoFlagSet caller found [verified]
 
 FUN_0041e19d (called by GameMain right after LoadFile(LANGUAGE.*) at boot)
 is the release-the-timer routine and ends with GoFlagSet() - this closes
 gamethread doc open item 1. It also zeroes divider 004edbc8 there.
+
+## tick-satellite naming pass (2026-08-18)
+
+Provenance: two `-process BEDLAM.EXW -noanalysis` headless passes over the
+single BedlamWatcom import (never re-imported): `ExwTickSats.java` (dump;
+predecessor WIP from the 00:04 storm, repaired one API bug - getScriptArgs -
+then run; CREATED FUN_00451fbc) and `ExwTickSatNames.java` (renames + plate
+comments + labels; Save succeeded). Dumps:
+ghidra-project/exw-tick-sats.txt + exw-tick-sat-names.txt (gitignored).
+All 19 in-scope callees decompiled + named:
+
+| VA | name | semantics (verified vs decompile+listing unless tagged) |
+|---|---|---|
+| 00402b0c | TickCounters | ++five counters, PlayClockTick every tick, FadeStep at 50Hz while g_fade_ticks_left |
+| 00425ab9 | ScrollUpdate | scroll/camera step (detail below) |
+| 0041d714 | SetPaletteIndex | palette-bank apply (detail below) |
+| 0044b040 | GetPalette6bit | 004ee9f4 PALETTEENTRY array (stride 4) >>2 -> 768B 6-bit snapshot at 004eee60; returns 0x4eee60 |
+| 0044b7b0 | CursorBlt | cursor-sprite blit (detail below) |
+| 0044bbac | CursorSizeSet | AX -> g_cursor_size@004eedfc; if g_cursor_active@004ee9d8: CursorBlt + park cursor |
+| 0044bb84 | PalSurfPrep | one +0x74 vtable call on 004ee9c8, args (this, 8, &8B {AX,AX}) - SetColorKey-shaped [hypothesis: method unresolved] |
+| 0044bc90 | PalSurfLock | fullscreen-gated IsLost/Restore+Lock(DDLOCK_WAIT) on 004ee9c8 -> base ptr or 0 |
+| 0044bcf4 | PalSurfUnlock | fullscreen-gated Unlock(+0x80) on 004ee9c8 |
+| 0044d1f2 | BmpNameBuild | screenshot filename builder: 0044f40e format engine + NUL |
+| 0044e729 | Fopen | CRT fopen -> 0044e6f0(path, mode, 0) |
+| 0044e815 | Fwrite | CRT buffered fwrite (detail below) |
+| 0044f34b | Putc | CRT putc with text CRLF translation (detail below) |
+| 0044e30b | Ftell | CRT ftell: lseek(cur) via 004504c8 adjusted by buffered fill level |
+| 0044e217 | Fseek | CRT fseek(stream, off, whence 0/1/2) then lseek 0045048e |
+| 0044ea0b | Fclose | CRT fclose: open-file list walk @004ef788, close via 0044ea4a |
+| 0044ac5c | LockStaging | restores primary, Lock(DDLOCK_WAIT) on staging 004ee9c0 (detail below) |
+| 0044f237 | Malloc | CRT malloc: round-4 min 0xc, free lists from 004577d8, heap grow, errno slot 004ef78c |
+| 00451fbc | CrtThreadTrampoline | Watcom CRT thread start (detail below) |
+
+Labels: g_pal6_snap (004eee60), g_cursor_size (004eedfc = 24),
+g_cursor_active (004ee9d8), g_scroll_btn_latch (004ede14),
+g_scroll_btn_armed (004edb48), and the four surface roles
+g_dd_surf_{primary,staging,palbank,cursor} on 004ee9bc/c0/c8/cc.
+
+### ScrollUpdate detail (new vs the tick2 reading)
+
+- Mouse-button EDGE LATCH before the coordinate work: while no button is
+  held (flags & 3 == 0) g_scroll_btn_armed@004edb48 is set to 1; on the
+  next tick with any button held and armed: g_scroll_btn_latch@004ede14
+  = 1 + disarm. Holding bit1 additionally sets the pre-existing
+  g_drag_active@004ede60. The direction-filtered scroll copies therefore
+  fire on HELD buttons; the latch signals a fresh (re)press.
+- The rest matches tick2: CursorToGame, +9 margins, clamps 9..631/9..463,
+  region palette 0x5d at x >= 0x1e0 when 004edb80.
+
+### SetPaletteIndex chain resolved
+
+- Order: guards (idx != last-applied 004dc9f4; reentrant 004ededa hi) ->
+  CursorSizeSet(0x18) -> PalSurfPrep -> PalSurfLock -> FUN_00402965
+  (EDI = lock ptr, ECX = 0x400 [inferred: clears the 0x400-byte surface
+  window]) -> copy 24 rows x 0x18 bytes, read stride 0x18 / write stride
+  0x20, from table 004edd7c + idx*4 -> PalSurfUnlock -> record idx into
+  004dc9f4 + 004edb7c.
+- LOCK POLICY: for idx 0x90..0x97 (the 12.5Hz cycle range) exactly ONE
+  lock attempt - on failure the whole apply ABORTS for this tick; for any
+  other idx the lock RETRIES until success. Parity note: the palette
+  cycle can legitimately skip ticks under surface contention.
+- Hence 004ee9c8 is a PALETTE BANK SURFACE (24 banks x 24 B, stride 32).
+
+### CursorBlt + cursor housekeeping
+
+- CursorBlt@0044b7b0: gate = primary present AND hi word of 00457396 !=
+  0xFFFF (READ - corrects the MousePosHandler note above); restores
+  004ee9bc + 004ee9cc (IsLost/Restore); Blt(+0x14, flags 0x1000000 =
+  DDBLT_WAIT) from cursor sprite 004ee9cc onto primary 004ee9bc with the
+  destination clipped to the window edges (rect cache 004ef6a4..aa) and
+  capped at g_cursor_size (24); afterwards parks g_cursor_x@00457398 =
+  0xFFFF.
+- CursorSizeSet@0044bbac runs an erase/redraw cycle around palette
+  changes when the cursor is active.
+- GetPalette6bit@0044b040 is the current-palette feeder used by FadeSetup
+  (closes the earlier [inferred from use] tag).
+
+### stdio layer pinned
+
+- Putc@0044f34b: 0x0A expands to 0x0D 0x0A unless FILE flag 0x40 (binary
+  mode); flush threshold 0x400 bytes, 0x600 for a newline, via 0045036c.
+- Fwrite@0044e815 does NO translation (REP MOVSD into the FILE buffer +
+  direct-write path when the buffer is empty and the chunk >= bufsize),
+  so BMP screenshot output via Fwrite/Ftell/Fseek/Fclose stays binary.
+- FILE struct map: [0]=buf ptr, [4]=fill level, [8]=buf2, [0xc]/[0xd]=
+  flags, [0x10]=handle, [0x14]=buffer size; lock slots 00457830/34.
+
+### LockStaging body (pacer-doc name, now persisted and precise)
+
+Gates: dword@004ef670 != 0 AND fullscreen (004ef676 hi == 1). Restores
+the PRIMARY 004ee9bc, then Lock(+0x64, DDLOCK_WAIT) on STAGING 004ee9c0;
+caches pitch 004ee9e8, pitch>>2 004ee9f0, pitch-0x280 004ee9ec; returns
+the base ptr (0 on gate or lock failure).
+
+### CrtThreadTrampoline@00451fbc
+
+Watcom CRT thread start (the CreateThread target chosen by
+ThreadSpawnImpl): reads the 16-byte TIB allocated there ([0] = start
+routine, [4] = arg, [0xc] = stack bytes); the first-ever thread also
+initializes the multithread runtime (guard 004ef77c; failure -> return
+0); computes the page-rounded stack base and stores it through the
+0045782c slot; registers the thread (00450260 / 00451852 / 0045786c);
+CALLs the start routine with its arg pushed; then 00450259 thread-exit;
+RET 4. Full chain now verified end to end: GameThreadStart ->
+ThreadSpawnThunk 00450242 -> [g_thread_spawn_slot 00457874] ->
+ThreadSpawnImpl 0045204b -> CreateThread(CrtThreadTrampoline 00451fbc)
+-> GameThread 0044dea0.
+
+### DD surface roles (usage-verified; supersedes roles-not-distinguished)
+
+| slot | label | evidence |
+|---|---|---|
+| 004ee9bc | primary | clipper attach (DDInitSurfaces), CursorBlt destination, restored by LockStaging/SetPaletteRGB |
+| 004ee9c0 | staging | locked for render writes by LockStaging; screenshot reads it; SetPaletteRGB windowed Unlock target |
+| 004ee9c8 | palbank | palette-bank store written by SetPaletteIndex (lock/copy/unlock) |
+| 004ee9cc | cursor | cursor-sprite Blt source in CursorBlt |
+
+Roles are usage-verified; a CreateSurface creation-order confirmation
+pass remains an optional cosmetic follow-up.
+
 
 ## Open questions / next steps
 
