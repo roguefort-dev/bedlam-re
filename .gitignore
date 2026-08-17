@@ -10,3 +10,6 @@
 
 # Local Ghidra project (large binaries)
 /ghidra-project/
+
+# Third-party clones (references, not ours)
+/tools/ghidra-ext/
