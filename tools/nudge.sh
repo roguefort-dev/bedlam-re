@@ -195,7 +195,10 @@ claimed = {f.split("-")[0] for f in os.listdir(".state/claims") if f.endswith(".
 print(" ".join(i for i in items if i not in claimed))
 PY
 )
-[ -z "$free_items" ] && free_items="1"
+if [ -z "$free_items" ]; then
+  echo "$(date -Is) all Now queue items are claimed - standing down" >> "$STATE/nudge.log"
+  exit 0
+fi
 item=$(echo "$free_items" | awk "{print \$1}")
 
 slotid=$(date +%s)

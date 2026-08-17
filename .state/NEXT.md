@@ -1,10 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] Tick satellite naming pass: continue labeling 0044xxxx service-tick
-   callees in RE-EXW-TICK.md open list (FUN_00402bac gated pump chan 3,
-   .data slot 00457874 consumers) - decompile + name + commit incrementally.
-2. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
+1. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
    (build from source preferred: gradle -PGHIDRA_INSTALL_DIR=/home/kato/
    ghidra-12.1.2-watcom, no Ghidra source tree needed; force-install v12.0.1
    as plan B), scratch-project smoke test in /tmp/opencode, then import
@@ -29,6 +26,7 @@
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 6f22968+e02b80b+39f4fac [P2] Tick satellite naming pass CLOSED: repaired census script; 19 callees decompiled+named; 10 labels persisted; 4 DirectDraw surface roles distinguished; CRT thread trampoline chain closed.
 - 2026-08-18 f15eb60+7396491+889cbef [P3] bedlam-core crate skeleton CLOSED
   (D17). engine/bedlam-core: hermetic deterministic sim skeleton per PLAN
   sec 7 + D16/D17. fx.rs Q16.16 saturating fixed; rng.rs PCG32 XSH-RR +
