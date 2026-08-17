@@ -51,7 +51,7 @@ public class B2SmokeVerify extends GhidraScript {
 		println("NOFIX_LABELS " + nofixLabels);
 		println("PAGE_LABELS " + pageLabels);
 		println("IMG_LABELS " + imgLabels);
-		Address entry = toAddr(Long.parseLong(args.length > 0 ? args[0] : "0x66a60", 16));
+		Address entry = toAddr(0x66a60L);
 		Function f = getFunctionAt(entry);
 		println("ENTRY_FUNC " + (f == null ? "NONE" : f.getName() + " body " + f.getBody()));
 		if (f != null) {
