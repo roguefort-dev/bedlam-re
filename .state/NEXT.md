@@ -2,8 +2,16 @@
 
 ## Now
 1. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
-   per PLAN sec 7).
-
+   per PLAN sec 7) - TIMING DESIGN per D17 (hybrid: fixed 60Hz sim
+   accumulator, per-frame input/UI at refresh, satellite clocks as integer
+   substeps; determinism test at 15/60/240Hz).
+2. [P2] Tick satellite naming pass: continue labeling 0044xxxx service-tick
+   callees in RE-EXW-TICK.md open list (FUN_00402bac gated pump chan 3,
+   .data slot 00457874 consumers) - decompile + name + commit incrementally.
+3. [P2] B2 prep: DOS4GW LE loader research for Ghidra (how to import
+   BEDLAM.EXE LE format - loader options, scripts, prior art); document a
+   concrete import plan in docs/RESEARCH-BEDLAM2-CENSUS.md. Read-only
+   research + doc work, no Ghidra project changes.
 ## Backlog (not yet started)
 - B2: import BEDLAM.EXE (LE/DOS4GW) into Ghidra (needs LE loader handling);
   compare boot/init with EXW findings.
