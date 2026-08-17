@@ -5,7 +5,13 @@ Primary sources: official repos/releases, crates.io/docs.rs. Status: verified ex
 - Ghidra 12.1.2 (2026-06-05) — PE32 i386 + MZ loaders built-in; scriptable; PRIMARY.
   https://github.com/NationalSecurityAgency/ghidra/releases
 - yetmorecode/ghidra-lx-loader v12.0.1 (Jan 2026) — LE/LX loader (DOS/4GW, DOS32A, OS/2 LX).
-  UNCERTAIN: built for Ghidra 12.0 — verify under 12.1.2. https://github.com/yetmorecode/ghidra-lx-loader
+  RESOLVED 2026-08-18 (B2 prep run): still latest release, no 12.1.x yet; CAN be built
+  from source against our installed Ghidra (build.gradle -> support/buildExtension.gradle,
+  needs no Ghidra source tree, Gradle >= 8.5) -> version risk removable; force-install of
+  v12.0.1 + scratch-project smoke test also viable. Stock Ghidra 12.1.2 (incl. our -watcom
+  build) has NO LE loader - Base.jar LinearExecutable is a NotYetImplementedException stub.
+  Concrete import runbook + verified BEDLAM.EXE/EXD LE header facts:
+  docs/RESEARCH-BEDLAM2-CENSUS.md sec "B2 Ghidra import plan". https://github.com/yetmorecode/ghidra-lx-loader
 - Watcom watcall calling convention NOT in upstream Ghidra (issue #156, open since 2019):
   args EAX/EDX/EBX/ECX, >4 on stack, callee cleans (RETN n). Community cspecs in #156
   (ghidrawatcall.zip), 0xBEEEF/GhiOWat. Wart: cspec is global — Win32 cdecl/stdcall imports
