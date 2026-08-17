@@ -22,8 +22,35 @@ Chain (SFX path shown for completeness):
   `FUN_0044c64c(buf, loadedSize, 0x2b11, 8, 1)` creates a DirectSound voice
   (0x2b11 = 11025 Hz little-endian rate word, 8-bit, mono) and primes 4 sub-voices
   via FUN_0044c828. RAW SFX = 11025 Hz 8-bit mono.
+- `FUN_0044c2cc(base, song)` = **mrw_load** (load_midi tail, decompiled in
+  exw-music-followup.txt): if DirectSound active (`_DAT_004ee9b0 != -1`) calls
+  `FUN_004038c6(base,...)` = load_mrw, then for each instrument i < MRW word0:
+  assigns DS voice slot `*(u16*)(i*2 + song*0x40 + 0x4ef4e0) = _DAT_004ef4d8`
+  (global next-voice counter) and `FUN_0044c64c(mrw+2+rec.off, rec.size, 0x2b11, 8, 1)`
+  creates the voice. `FUN_0044c64c` = DirectSound CreateSoundBuffer wrapper:
+  DSBUFFERDESC dwSize 0x14 / flags 0xe2, WAVEFORMATEX PCM 11025 Hz 8-bit mono,
+  then memcpy (FUN_0044f326) + SetCurrentPosition-family vtable call. Voices are
+  released via FUN_0044c480 (Release).
+- `FUN_004033d4(song)` = music start/reset: zeroes chunk position counters
+  (0045ca60), resets per-chunk state via FUN_00402e74, sets play flag 0045b010[song]=1.
+- `FUN_00402bac` = **sequencer pump** (called from the 100 Hz tick, channel 3 =
+  music only; the "gated pump, chan 3, 20x38B records" of RE-EXW-TICK): per chunk,
+  per 0x26-stride state - bit 0x80 of the state word = idle gate; state word 0xff =
+  unconditional chunk jump `FUN_004032a5(song, target)`; 0xfe = conditional jump
+  (only if song flag 0045cdbe == 1, i.e. loop mode); FUN_00402e74 = advance/read
+  next event into state; FUN_00402e46 = trigger note (4 params from state fields);
+  FUN_00402db9 = allocate one of the 4 sub-voices. FUN_004032a5 = chunk event
+  interpreter entry (= 8street sub_4032A5). DAT_0046ae78 = music-active flag.
+  [EXW, high confidence on structure; opcode semantics partial]
+- `FUN_00402975` = 16-bit-pair RNG over 004ede48/004ede4a (carry-mixed adds
+  0x62e9 / 0x3619, compare 0x9d16) - the consumer of seed dword 004ede48
+  (=123456, cf. RE-EXW-GAMETHREAD); .MRK loader uses it for per-robot spawn
+  direction (`rand() & 3`).
 - `FUN_00403642(base, song)` = **load_midi** [VERIFIED by structure]: stops current
-  music (`FUN_004034ef(3)`, frees voices `FUN_0043a48d`, `FUN_004035f5`), then
+  music (`FUN_004034ef(song)` = per-chunk release of 4 sub-voices each;
+  `FUN_0043a48d` free voices; `FUN_004035f5` = voice-table wipe - confirms table
+  shape 8 songs x 20 chunks x 4 sub-voices, strides 0x2f8 per song / 0x26 per
+  chunk, voice ids at 0045b020, init -1), then
   `FUN_00403827(base, &DAT_0045cdd0)` = **load_mrs**: builds "<base>.MRS" (literal
   ".MRS" @00457a1c), arena-allocs (`FUN_0041db89` bump allocator) and calls
   `FUN_0041cc7f(name, dest)` = **LoadFile** - the game-universal file loader (also
@@ -68,7 +95,28 @@ chunks 0/1 look like fixed setup chunks.) [DATA]
 Confidence: header + size-array layout VERIFIED; table A/B/C semantics INFERRED
 (consumer = sequencer pump, below) - event-word opcodes still open.
 
-## 3. CONFIG.BDL (root, 61 B) [DATA + EXW negative evidence, high confidence]
+## 3. .MRW container layout [DATA, VERIFIED byte-exact, all 5 files]
+
+    +0x00 u16 n_inst (instrument count)
+    +0x02 n_inst x { u32 rel_offset (relative to file start + 2), u32 size }
+    +0x02+8*n_inst: waveform data, 11025 Hz 8-bit mono
+    (records may share offsets - waveforms are deduplicated)
+
+Validation: max(off+size) == file_size exactly, all records in range:
+
+| file | n_inst | distinct waves | file size |
+|---|---|---|---|
+| BRIEF    | 9  | 2 | 5032 |
+| OPTIONS         | 14 | 9 | 153103 |
+| SELECT          | 11 | 8 | 199159 |
+| SHOP            | 9  | 3 | 13422 |
+| DEBRIEF         | 11 | 6 | 162667 |
+
+(BRIEF chain check: rec0 {0x4a, 0x84d}, rec1 {0x897, 0xb11}, 0x897 = 0x4a+0x84d,
+max end 0x897+0xb11 = 5032 = size.) Voice slots land in the 0x40-stride-per-song
+table at 0x4ef4e0; global voice counter 004ef4d8.
+
+## 4. CONFIG.BDL (root, 61 B) [DATA + EXW negative evidence, high confidence]
 
 Layout (no EXW code reads it - see below, so decoded from bytes only):
 
@@ -89,7 +137,7 @@ installer / sound-setup artifact (likely written by the DOS setup program),
 NOT game state. RESEARCH-8STREET open question 7 answered (also explains why the
 8street reconstruction never reads it).
 
-## 4. .MRK (adjacent finding)
+## 5. .MRK (adjacent finding)
 
 FUN_0040cca0 opens "<something>.MRK" (literal @00457a34, name built from
 DAT_004dca0c) and reads 12 records of 3 dwords into 004e6430/34/38, then builds
@@ -97,15 +145,13 @@ the 0xa8-stride per-robot state at 0x4c69e4 (weapon table 0x4de664 stride 0x62,
 0x4deafc stride 0x1c). Robot/mission marker data, not music. [EXW, medium -
 record semantics not decoded]
 
-## 5. Open (next unit)
+## 6. Open (next unit)
 
 - .MRS event-word opcodes: decompile the consumers - FUN_0044c2cc (load_midi
   tail: MRW load + sequencer start), the 100Hz-driven sequencer pump
   (FUN_00402bac "gated pump, chan 3" per RE-EXW-TICK open list, 20x38B records),
   FUN_004034ef/004035f5/004033d4 (stop/reset/start).
-- .MRW internal layout: BRIEF.MRW header u16 9 (matches BRIEF W0=3? no),
-  then dwords whose sum exceeds file size - entries are not plain sizes;
-  likely per-instrument {size, rate} or dedup/shared waveforms. Needs the
-  load_mrw consumer.
 - Table A/B/C + W1 semantics (all shipped files W1=1, so multi-channel paths
   are untested by data).
+- RNG: relationship of 004ede4c (=234567) to FUN_00402975 (which mixes only
+  004ede48/004ede4a) - second generator or second half of one wide state.
