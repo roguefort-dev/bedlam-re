@@ -210,16 +210,27 @@ injected at sim construction; test surface = the purist toggles, not 2^features.
 - Bug triage rubric (per catalog entry): crash/data-loss → fix everywhere;
   gameplay-coupled → classic preserves / modern fixes; cosmetic → fix in modern.
   Fixed = deviation from the catalog, decided by rubric, signed off — not vibes.
-- Resolution independence (USER REQUIREMENT 2026-08-17, elevated from QoL): any
-  window/borderless/fullscreen resolution incl. 1920x1080. Internal render stays
-  canonical 640x480; presentation scales it. Default: integer nearest-neighbor
-  (crisp) with 4:3 pillarboxing in non-4:3 windows; options: fit (letterbox),
-  fill (crop), smooth (linear). Optional later, explicitly non-parity and off by
-  default: hi-res world composite (2x/4x tile/sprite sampling — assets are 32px
-  tiles, amenable) and extended-viewport widescreen (shows more map = gameplay
-  change; flagged in UI when active). Smacker (35 files): decode native, scale
-  in presentation. Goldens compare the internal fb, so parity testing is
-  resolution-agnostic by construction.
+- Resolution independence + GPU rendering (D9/D20/D21): wgpu presents at any
+  window/borderless/fullscreen resolution. PARITY mode keeps the canonical
+  640x480 indexed frame + palette and GPU-scales it (nearest/integer default;
+  fit/fill/smooth options). ENHANCED mode is explicitly non-parity and renders
+  supported world/UI passes natively; bespoke responsive layouts target 16:9
+  and 16:10 (16:10 authoring master with 16:9 safe region), while other aspect
+  ratios fit/letterbox/pillarbox. Extended viewport may show more map and is a
+  separately flagged gameplay change. Smacker decodes native and GPU-scales.
+  Goldens remain canonical-frame based and resolution-agnostic.
+- Optional HD asset pipeline (D21; external pack, never bundled originals or
+  derivatives in git): reproducible ComfyUI workflow presets + repo CLI batch
+  wrapper for (a) 4:3 -> 16:9/16:10 background outpainting/generative fill,
+  (b) alpha-aware sprite/sprite-sheet upscale, (c) seamless tile/texture
+  upscale, and (d) portraits/UI art. Git contains only workflow JSON, recipes,
+  masks, model/tool/version hashes, seeds/prompts, manifests and provenance;
+  generated images live in a user-selected external HD-pack directory. Every
+  output requires human approval; runtime resolves replacements by stable
+  asset ID and falls back to originals. Text, controls, click targets and
+  gameplay information are rendered/layouted by the engine, never hallucinated
+  into generated backgrounds. Setup must be isolated and hardware-profiled;
+  exact package/model pins come from docs/RESEARCH-HD-ASSET-PIPELINE.md.
 - QoL: window modes, vsync control, volume mixers, save slots + metadata + opt-in
   autosave. Game-feel proxies: input-to-present ≤ 1 original frame; animation cadence
   matches at the active display refresh (validated 60–240Hz+); no stutter under
