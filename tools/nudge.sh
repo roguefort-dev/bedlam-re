@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bedlam-re autonomy nudge v4 - parallel agents
 # v4: up to MAXAGENTS concurrent opencode2 sessions (account limit 10;
-# MAXAGENTS=5 leaves 5 headroom). Slot accounting = claim files in
+# CONC_MAX=3 is the adaptive ceiling). Slot accounting = claim files in
 # .state/claims/ (written by agents at start, removed at end) - counts
 # GHOST sessions too. Claims older than CLAIM_TTL are reaped. Each agent
 # claims a DIFFERENT numbered queue item; claim file prevents duplicates.
@@ -210,16 +210,13 @@ done
 OPENC=opencode2
 command -v opencode2 >/dev/null 2>&1 || OPENC=/home/kato/.local/share/fnm/node-versions/v24.19.0/installation/lib/node_modules/@opencode-ai/cli/bin/opencode2.exe
 
-PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. FIRST ACTIONS: (1) touch .state/heartbeat; (2) create your claim file by running: echo task line > .state/claims/@ITEM@-claim and DELETE the placeholder .state/claims/@ITEM@-*.claim left by the spawner (same item number, different suffix) so the slot is counted exactly once - this reserves queue item @ITEM@ from the Now section of .state/NEXT.md and one of 5 concurrency slots. Work ONLY that queue item; if its claim file already exists, pick the next unclaimed number instead. Commit EARLY and OFTEN in small increments. AT THE END: update NEXT.md (remove your finished item, renumber), DELETE your claim file, git push. If you hit a transport error, stop cleanly and record progress in NEXT.md; your claim is reaped after 70 minutes and the item re-queued. Never start an analyzeHeadless import that is already running or already succeeded. Do not ask questions. Do not wait for input."
-PROMPT="${PROMPT//@ITEM@/$item}"
-
 date +%s > "$STATE/last-spawn-ts"
-# reserve the item NOW (agent claim lands later; without this, back-to-back
-# ticks duplicate-spawn the same item during agent startup latency)
 echo "reserved $(date -Is)" > "$CLAIMS/$item-$slotid.claim"
-echo "$(date -Is) spawning agent for queue item $item ($((ncl+1))/$MAXAGENTS slots)" >> "$STATE/nudge.log"
+echo "$(date -Is) spawning agent for queue item $item ($((ncl+1))/$cur_conc slots)" >> "$STATE/nudge.log"
 
-RUNLINE="cd \"$PLAN_DIR\" && touch \"$HB\" && timeout 3900 \"$OPENC\" run --auto --title \"bedlam-nudge-item$item\" \"$PROMPT\" >> \"$STATE/nudge-run.log\" 2>&1"
-systemd-run --user --collect bash -c "$RUNLINE" >> "$STATE/nudge.log" 2>&1
+# Worker owns the API call and reports its exact per-run result back to the
+# adaptive controller under the same flock. Per-agent logs prevent error
+# attribution across concurrent sessions.
+systemd-run --user --collect "$PLAN_DIR/tools/nudge-agent.sh" "$item" "$slotid"   >> "$STATE/nudge.log" 2>&1
 
 exit 0
