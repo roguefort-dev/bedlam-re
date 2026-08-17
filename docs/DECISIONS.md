@@ -107,6 +107,10 @@ Frame pacing at 240Hz added to game-feel proxies. Historical note: Bedlam 2
 itself shipped VESA modes up to 1440p — the devs were already moving this way.
 
 ## D13 — EXW pacing verdict: 50Hz gate, not 20fps (2026-08-17)
+> SUPERSEDED in part by D15 (2026-08-17 tick2 run): 004ede10 turned out to be
+> the palette-fade countdown, not a frame gate. 20fps stays refuted; the
+> 50Hz parity assumption is withdrawn pending the FUN_0043d00b body.
+
 GameThread@0044dea0 (worker thread) decompiled: 59-byte trampoline around
 GameMain@0041c050. Neither contains Sleep/timeGetTime/WaitForSingleObject —
 the 8street "20fps sim/render" claim is REFUTED for EXW at this depth. Pacing
@@ -117,6 +121,29 @@ assumes 50Hz fixed logic tick (with 12.5Hz palette phase) until the second
 hop (FUN_0043d00b / FUN_00440e45 bodies) proves a further subdivision — any
 such rate must derive from the 50Hz gate. Write-up:
 docs/RE-EXW-GAMETHREAD.md (script: tools/ghidra-scripts/ExwGameThread.java).
+
+## D15 - 004ede10 = palette-fade countdown; sim/render rate UNKNOWN again (2026-08-17)
+The tick2 run (ghidra-project/exw-tick2.txt) decompiled FUN_00425901 =
+FadeStep: 768-channel 16.16 fade accumulator -> 6-bit palette upload
+(SetPaletteRGB@0044aed4) -> decrement 004ede10. FUN_0041cbf0 = FadeSetup
+(arms 004ede10 = step count; GameMain uses 10-step = 200 ms fades);
+FUN_00420100 cancels; GameMain clears at boot. CONSEQUENCES: (1) the D13
+claim "pacing = 100Hz tick -> 50Hz gate 004ede10; parity budget 50Hz" is
+WITHDRAWN - 004ede10 is nonzero only during fades, so it cannot pace the
+sim/render loop. Verified rates today: 100Hz service tick, 50Hz fade
+advance while fading, 12.5Hz palette cycle. (2) FUN_0043d00b reading
+004ede10 is a fade-status check, not a rate gate. (3) The sim/render pacing
+mechanism is UNKNOWN - the GameMain second hop (FUN_0043d00b / FUN_00440e45
+bodies, divider consumers like FUN_00448ef1 reading 004edbc8) must establish
+it before any parity rate is committed. The 8street 20fps claim stays
+refuted at this depth (no sleep /5 divider on the game thread). Also
+resolved this run (facts, recorded in RE-EXW-TICK.md): GoFlagSet caller =
+FUN_0041e19d (release-the-timer at boot); 00457874 slot ->
+ThreadSpawnImpl@0045204b = Watcom CRT _beginthread-style wrapper -> real
+CreateThread with CRT trampoline 00451fbc; AppActivate +0x18 =
+IDirectDrawPalette::SetEntries on 004ee9d0 (stock layout); surface vtables
++8-shifted past GetCaps vs stock IDirectDrawSurface (game ddraw.h has 2
+extra slots there; cosmetic for RE).
 
 ## D14 — Decoder home: engine/bedlam-assets; inspect is a thin CLI (2026-08-17)
 tools/inspect's format decoders promoted into workspace crate

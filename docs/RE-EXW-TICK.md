@@ -13,6 +13,17 @@ ThreadSpawnThunk@00450242, FKeyHandler@0044ceb0, AppActivate@0044b1c0
 Tags: [verified] read in decompile/listing; [inferred] strong deduction;
 [hypothesis] plausible, needs confirmation. Addresses are EXW VAs (base 00400000).
 
+Follow-up pass 2026-08-17 (tick2 run): scripts ExwTickFollowup2.java +
+ExwTickNames.java, dumps ghidra-project/exw-tick2.txt + exw-tick2-names.txt
+(logs process-exw-tick2*.log). It resolved open items 2-5 below and CORRECTED
+the 50Hz-gate reading of 004ede10 (see D15). Names applied + persisted:
+FadeStep@00425901, CursorToGame@0044b428, SetPaletteRGB@0044aed4,
+FadeSetup@0041cbf0, DDCreate@0044a5f0, DDInitSurfaces@0044a660,
+DDShutdown@0044ab54, ThreadSpawnImpl@0045204b; labels g_fade_ticks_left
+(004ede10), g_fade_state_16_16 (004edc38), g_fade_palette_6bit (004edc3c),
+g_dd_obj (004ee9b8), g_dd_palette (004ee9d0), g_dd_clipper (004ee9d4),
+g_thread_spawn_slot (00457874).
+
 ## Headline: the tick is a SERVICE routine, not the game loop
 
 The 100Hz `timeSetEvent` callback (TimerCallback@0044de58) does per-tick
@@ -64,18 +75,27 @@ if (((0x8f < dword@004edb7c) && (dword@004edb7c < 0x98))
 }
 ```
 
-### FUN_00402b0c: tick counters and the 50Hz gate [verified structure]
+### FUN_00402b0c: tick counters + fade fire condition [verified]
 Increments five free-running counters each tick: @004edb84, @004edbc8,
 @004edbcc, @004edba4, @004edba8. Calls FUN_00402b48 every tick. When
-`(ctr@004edbc8 & 1) && dword@004ede10` -> calls FUN_00425901: a
-**50Hz-gated update** (every other 100Hz tick) [inferred rate; body of
-FUN_00425901 not yet decompiled]. Counter @004edbc8 doubles as divider:
-bit0 -> 50Hz gate, bits0..2 -> palette cycle phase (12.5Hz) [inferred].
+`(ctr@004edbc8 & 1) && dword@004ede10` -> calls FadeStep@00425901
+[verified]. **CORRECTED (tick2 run, D15)**: 004ede10 is NOT a frame-rate
+gate - it is the **palette-fade step countdown** (nonzero only while a fade
+is running). FadeStep runs at 50Hz (bit0 of the 100Hz counter) *while
+fading*, decrements 004ede10, and stops at 0. Counter @004edbc8: bit0 ->
+50Hz fade phase, bits0..2 -> palette cycle phase (12.5Hz) [verified/impl].
+See "Palette fade engine" below.
 
 ### FUN_00425ab9: scroll/camera update [verified structure]
 - snapshot: dword@004eddcc = dword@004dc6e4 (live input direction flags
   [inferred]); bit0/bit1 drive x/y handling.
-- FUN_0044b428(&x,&y) [hyp: accumulated scroll deltas from key/mouse input].
+- FUN_0044b428(&x,&y) = CursorToGame@0044b428 [verified, tick2]: GetCursorPos
+  then (640*(cx-win_x0))/win_w, (480*(cy-win_y0))/win_h using the WM_MOVE/
+  WM_SIZE window-rect cache (004ef6a4/a8/a6/aa) and the canonical screen
+  dims word@00456ec6=640 / word@00456ec8=480 (same dims the BMP screenshot
+  writer uses); clamps to [0,win_w-1]x[0,win_h-1]. So the scroll source is
+  the **cursor mapped into the 640x480 game space** (edge/drag camera
+  control), NOT accumulated key deltas.
 - clamp x to [9, 0x277=631], y to [9, 0x1cf=463] (640x480 minus margins),
   store to dword@004eddc4 (x) / @004eddc8 (y); copies to @004eddf8/fc when
   bit0 and @004ede00/04 when bit1.
@@ -97,11 +117,18 @@ bit0 -> 50Hz gate, bits0..2 -> palette cycle phase (12.5Hz) [inferred].
 - Gated by dword@004ee9bc (DirectDraw surface object ptr != 0) and a busy
   word @004eedf8 (skips if lo==1 or hi==1; sets lo=1 during work, clears at
   end).
-- DirectDraw surface vtable calls with standard IDirectDrawSurface offsets
-  [mapping inferred, offsets verified]: +0x60 IsLost, +0x6C Restore when
-  result == 0x887601C2 (DDERR_SURFACELOST), +0x14 Blt - on objects at
-  *004ee9bc, *004ee9c8, *004ee9cc; helper FUN_0044b7b0 repeats IsLost/Restore
-  and sets word@00457396 hi = 0xFFFF (cursor validity window [hyp]).
+- DirectDraw surface vtable calls [offsets verified, semantics verified via
+  DDERR_SURFACELOST 0x887601C2 handling]: +0x60 IsLost, +0x6C Restore,
+  +0x14 Blt - on objects at *004ee9bc, *004ee9c8, *004ee9cc; helper
+  FUN_0044b7b0 repeats IsLost/Restore and sets word@00457396 hi = 0xFFFF
+  (cursor validity window [hyp]). NOTE (tick2): these surface offsets are
+  **+8 vs the stock IDirectDrawSurface layout for everything past GetCaps**
+  (Lock@+0x64, SetPalette@+0x7c, Unlock@+0x80, SetClipper@+0x70 - the
+  last confirmed by the windowed-mode clipper attach in DDInitSurfaces),
+  while Blt@+0x14 and GetCaps@+0x30 are stock; i.e. the ddraw.h this game
+  compiled against carries 2 extra slots in the GetClipper..Initialize
+  region. DD/palette/clipper objects (004ee9b8/d0/d4) are fully stock -
+  see the DDRAW init section below.
 - Stores the clamped cursor: short@00457398 = x, short@004eedf6 = y.
 - Net effect [inferred]: hardware-cursor-style tracking + surface recovery at
   100Hz, decoupled from the (slower) sim/render on the worker thread.
@@ -166,8 +193,13 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
   SetSystemPaletteUse(hdc, ...) - classic 256-color activation handling
   (activate -> SYSPAL_NOSTATIC when currently static, deactivate ->
   SYSPAL_STATIC) [enum values standard Win32].
-- On activate (arg==1) with DD object present: surface vtable +0x6C
-  (Restore), +0x18, +0x7C (SetPalette) [verified calls; +0x18 mapping open].
+- On activate (arg==1) with DD object present [verified, listing]: surface
+  004ee9bc +0x6C (Restore), then **004ee9d0 +0x18 = IDirectDrawPalette::
+  SetEntries** - the listing pushes exactly (this, 0, 0, 0xFE, 0x4ee9f8) =
+  SetEntries(flags=0, first=0, count=254, &entries[1]) - then surface
+  +0x7C (SetPalette). Classic palette-app focus-regain sequence. RESOLVED
+  (tick2): +0x18 on the PALETTE object is stock SetEntries; it had been
+  misfiled as a surface call.
 - NOT a pause function. WM_DESTROY calls AppActivate(0) to hand the system
   palette back on exit.
 
@@ -182,12 +214,18 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004edb7c | palette cycle index, operating range 0x90..0x97 | verified |
 | 004edb80 | enables region palette select (0x5d vs 0) | inferred |
 | 004edb84/edba4/edba8/edbcc/edbc8 | five free-running 100Hz tick counters; 004edbc8 = divider (50Hz + palette phase) | verified |
-| 004edbe0 | gates FUN_00402bac subsystem pump | verified use |
-| 004ede10 | gates the 50Hz FUN_00425901 update | verified use |
+| 004edbe0 | gates MusicPump (FUN_00402bac, song 3 only - see RE-EXW-MUSIC.md 2b); set =1 at config load (FUN_004252c0) | verified |
+| 004ede10 | g_fade_ticks_left: palette-fade step countdown (NOT a frame gate; D15) | verified |
 | 004eddc4/c8 | scroll x/y (clamped 9..631 / 9..463) | verified |
 | 004eddf8..004ede04 | direction-filtered scroll copies | verified |
 | 004edd7c | palette table base pointer | verified use |
-| 004ee9b0..004ee9d0 | DirectDraw surface/palette object pointer array (vtables used at +0x14/+0x18/+0x60/+0x64/+0x6c/+0x7c/+0x80) | inferred mapping |
+| 004ee9b8 | g_dd_obj: IDirectDraw object (stock vtable) | verified |
+| 004ee9bc/c0/c8/cc | g_dd surfaces 1..4 (roles not yet distinguished; +8-shifted vtable past GetCaps) | verified slots / inferred roles |
+| 004ee9d0 | g_dd_palette: IDirectDrawPalette (stock vtable; +0x18 SetEntries) | verified |
+| 004ee9d4 | g_dd_clipper: IDirectDrawClipper (stock vtable; +0x20 SetHWnd) | verified |
+| 004edc38 | g_fade_state_16_16: 768 x (cur,step) 16.16 fade accumulators | verified |
+| 004edc3c | g_fade_palette_6bit: 768-byte 6-bit RGB destination of FadeStep | verified |
+| 004ee9f4/004ee9f8 | PALETTEENTRY array (r,g,b,flags stride 4; flags=1) / entries[1] ptr used by AppActivate SetEntries | verified |
 | 004ee9d6 | state gate: hi word == 1 enables mouse poll | inferred |
 | 004ee9e8/ec/f0 | surface pitch / pitch-0x280 / pitch>>2 | verified |
 | 004ee9f4 | current palette RGB source (screenshot) | inferred |
@@ -196,19 +234,97 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004ef66c | screenshot filename counter | inferred |
 | 004ef708 | word zeroed on each mouse-poll tick | verified use |
 
+## tick2 findings (2026-08-17, dumps exw-tick2.txt / exw-tick2-names.txt)
+
+### Palette fade engine [all verified]
+
+```
+FadeSetup@0041cbf0(target_pal_ptr, steps):
+    reads 768 target bytes (from ptr+2) + current palette (FUN_0044b040);
+    per channel: state[i].cur = current << 8 (16.16 fixed point),
+                 state[i].step = signed (target-current)*256 / steps;
+    g_fade_ticks_left (004ede10) = steps   [also clears it first]
+FadeStep@00425901:                        // fired by FUN_00402b0c at 50Hz
+    for i in 0..0x2FF: state.cur += state.step; out[i] = cur >> 8
+    SetPaletteRGB(out, 0, 0x100)          // upload all 256 entries
+    g_fade_ticks_left--
+SetPaletteRGB@0044aed4(bytes, start, count):
+    entries[j] = {r<<2, g<<2, b<<2, flags} into 004ee9f4 array;
+    surface IsLost/Restore(+0x6c) then SetPalette(+0x7c) if lost;
+    windowed: Unlock(+0x80) on backbuffer-ish 004ee9c0;
+    palette SetEntries(+0x18 on 004ee9d0), retry once if it failed;
+    re-check IsLost, restore again if lost.
+```
+- Call sites: GameMain FadeSetup(pal@004edbf8, 10) after zone/level
+  transitions (200 ms fades); FUN_0041e19d arms it from an EDX arg when
+  releasing the timer at boot; FUN_00420100 cancels (=0) on screen change.
+- The 768-byte palette buffer 004edbf8 (0x302 bytes total: header + rgb) is
+  also the file image of .PAL files (header 2 bytes + 0x300 rgb) [inferred
+  from FadeSetup reading target at +2].
+- FUN_0044b040 = get-current-palette helper [inferred from use].
+
+### DDRAW init/shutdown chain [verified]
+
+- DDCreate@0044a5f0: DirectDrawCreate -> 004ee9b8 (g_dd_obj); error codes
+  0x3e9/0x3f2; then SetCooperativeLevel check via +0x50 (stock layout).
+- DDInitSurfaces@0044a660(w,h): fullscreen vs windowed (_004ef6a0 flag):
+  SetDisplayMode(+0x54) / GetDisplayMode(+0x30); releases old surfaces;
+  CreateSurface(+0x18) -> 004ee9bc/c0/c8/cc; windowed: CreatePalette(+0x14)
+  -> 004ee9d0, clipper CreateClipper(+0x10) -> 004ee9d4, SetHWnd(+0x20 on
+  clipper), SetClipper(+0x70 on surface 004ee9bc); builds the initial
+  256-entry palette at 004ee9f4 (black/flags=1 fullscreen, white entry 0 +
+  flags=1 windowed); RC_PALETTE handling mirrors AppActivate.
+- DDShutdown@0044ab54: RestoreDisplayMode(+0x4c), FlipToGDISurface(+0x28),
+  Sleep(500), Release(+8) on all seven object slots, clear 004ef676 hi.
+- Object slots: 004ee9b8=dd obj, 004ee9bc/c0/c8/cc=surfaces (roles of the
+  four not yet distinguished), 004ee9d0=palette, 004ee9d4=clipper.
+- Vtable layouts: dd obj / palette / clipper = stock COM; surfaces = stock
+  up to GetCaps(+0x30) then +8 shifted (2 extra slots in the game ddraw.h,
+  see MousePosHandler note above). Irrelevant for reimplementation (we use
+  real ddraw semantics); matters only for RE reading.
+
+### Thread spawn slot resolved [verified]
+
+00457874 (g_thread_spawn_slot) initial value = **0x0045204b =
+ThreadSpawnImpl** - the statically linked **Watcom CRT thread-start helper**
+(a _beginthread-style wrapper, not an IAT import): allocates a 16-byte
+thread info block (FUN_0044f237(0x10)), stores args + GetCurrentThread
+handle + page-rounded stack ((stack+0xfff)&~0xfff), then calls the REAL
+KERNEL32 CreateThread (via IAT thunk 00452f36) with start routine
+**0x00451fbc** (the Watcom CRT per-thread init trampoline that eventually
+reaches GameThread@0044dea0). Chain: GameThreadStart -> ThreadSpawnThunk
+00450242 -> [00457874] -> ThreadSpawnImpl 0045204b -> CreateThread(00451fbc).
+Note: LAB_00451fbc is not yet a function in the project (future run could
+create + decompile it to close the trampoline).
+
+### Bonus: GoFlagSet caller found [verified]
+
+FUN_0041e19d (called by GameMain right after LoadFile(LANGUAGE.*) at boot)
+is the release-the-timer routine and ends with GoFlagSet() - this closes
+gamethread doc open item 1. It also zeroes divider 004edbc8 there.
+
 ## Open questions / next steps
 
 1. DONE 2026-08-17 (gamethread run, see docs/RE-EXW-GAMETHREAD.md): 0044dea0
    decompiled + named GameThread - a trampoline; the loop is GameMain@0041c050
    (also decompiled + named). Settled: no Sleep pacing (20fps refuted at this
-   depth; 50Hz gate chain is the pacer), zone/level strides (7x5, mission
-   1..26 via (zone-2)*5+level-1), RNG seeds 004ede48=123456/004ede4c=234567,
-   go-flag writer set {GameThreadStart, GoFlagSet}. Open remainder moved to
-   that doc: GoFlagSet caller, FUN_0043d00b/FUN_00440e45 bodies (per-frame
-   sim/render, possible sub-division of the 50Hz gate).
-2. FUN_00402bac: gated pump over 20 slots x 38-byte records (base ~0x45b020),
-   channel 3 only, FUN_0044c480(id) fires entries; DAT_0046ae78 flag.
-   [hyp: sound/event scheduler]
-3. FUN_00425901 (50Hz update) + FUN_0044b428 (scroll delta source).
-4. Resolve the .data slot 00457874 (CreateThread vs Watcom _beginthread).
-5. IDirectDrawSurface vtable +0x18 in AppActivate.
+   depth), zone/level strides (7x5, mission 1..26 via (zone-2)*5+level-1),
+   RNG seeds 004ede48=123456/004ede4c=234567, go-flag writer set
+   {GameThreadStart, GoFlagSet}. GoFlagSet CALLER found in the tick2 run:
+   FUN_0041e19d (see above). Open remainder moved to that doc:
+   FUN_0043d00b/FUN_00440e45 bodies (per-frame sim/render; NOTE the pacing
+   question REOPENED by D15 - 004ede10 is a fade countdown, so the actual
+   sim/render rate mechanism is unknown).
+2. DONE 2026-08-17 (music run, see docs/RE-EXW-MUSIC.md 2b): FUN_00402bac =
+   MusicPump, song slot 3 only.
+3. DONE 2026-08-17 (tick2 run): FUN_00425901 = FadeStep (palette fade
+   stepper, 50Hz while fading); FUN_0044b428 = CursorToGame (cursor ->
+   640x480 game coords; scroll source is the mapped cursor).
+4. DONE 2026-08-17 (tick2 run): 00457874 -> ThreadSpawnImpl@0045204b =
+   Watcom CRT _beginthread-style helper wrapping the real CreateThread
+   (CRT trampoline 00451fbc).
+5. DONE 2026-08-17 (tick2 run): +0x18 in AppActivate is on the PALETTE
+   object (004ee9d0) = stock IDirectDrawPalette::SetEntries (5-arg call:
+   0, 0, 0xFE, &entries[1]). Residual: the +8 surface-vtable shift past
+   GetCaps is documented empirically above (2 extra slots in the game
+   ddraw.h); naming them is cosmetic - not blocking anything.
