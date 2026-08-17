@@ -42,3 +42,15 @@ radare2 6.1.4, wine 11.15 + wine-mono + winetricks, dosbox 0.74-3, ffmpeg n9.0.1
 sox 14.8, gdb 17.2, python-capstone 5.0.7, python-unicorn 2.1.4, flatpak 1.18.1.
 Pending: dosbox-staging/-x (flathub/AppImage, no sudo needed), lib32-sdl2 (only for a
 native comparator build; Wine fallback exists).
+
+## D8 — Autonomy loop (2026-08-17)
+Mechanism: systemd user timer bedlam-nudge.timer (60s, linger on, survives reboot;
+crontab binary absent on host - cronie not installed - timer chosen instead).
+tools/nudge.sh: exits on PLAN-COMPLETE / PAUSE / fresh heartbeat (<7 min) / flock held;
+else spawns: opencode2 run --auto continuation agent bound to AGENTS.md contract
+(one bounded work unit per run, NEXT.md queue, manifest checks, small commits, push).
+Compaction config (global opencode.jsonc): auto=true, keep=15000, buffer=60000
+(triggers preflight compaction when ~30% of a 200k-token context remains; earlier
+than the 20k default). Human controls: touch .state/PAUSE to suspend;
+touch .state/PLAN-COMPLETE to stop forever (agents create it themselves when
+PLAN.md P0-P7 all pass).
