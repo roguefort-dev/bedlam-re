@@ -13,3 +13,7 @@
 
 # Third-party clones (references, not ours)
 /tools/ghidra-ext/
+
+# autonomy runtime state (NEXT.md/STATE.md ARE tracked)
+/.state/heartbeat
+/.state/*.log
