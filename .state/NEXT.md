@@ -1,18 +1,25 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] RE the .MRS loader in EXW (open questions in RESEARCH-8STREET.md) to close
-   the last mission-format gap; likewise CONFIG.BDL (61B).
-2. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00402bac gated
-   pump (20x38B records, chan 3), FUN_00425901 50Hz update, FUN_0044b428 scroll
-   delta source, resolve .data slot 00457874, DDRAW vtable +0x18 mapping.
+1. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00425901 50Hz
+   update, FUN_0044b428 scroll delta source, resolve .data slot 00457874,
+   DDRAW vtable +0x18 mapping. NOTE: FUN_00402bac gated pump is DONE (it is
+   MusicPump, song 3 only - see RE-EXW-MUSIC.md 2b).
+2. [P2] Music small tails (one -process pass, no import): decompile
+   FUN_0044c4a8 (sub-voice start: presumed SetFrequency 16.16 ratio + volume
+   applier consuming 0045b03e/0045b042); xref census for header table C
+   (0045cda8) reads, loop-flag writer 0045cdc0[song]=1, restart-word writer
+   004543d4. Optional: plate comments for MusicPump/MrsChunkStart semantics.
 3. [P2] GameMain second hop (from docs/RE-EXW-GAMETHREAD.md open list):
    decompile FUN_0043d00b (reads 50Hz gate 004ede10 - the per-frame sim/render
    step; settle whether the 50Hz gate is further subdivided) + FUN_00440e45
    (zone/level manager) + find GoFlagSet@0044d9b4 caller (releases TimerInit
-   spin). RNG function consuming seeds 004ede48/004ede4c.
+   spin). RNG seed consumers ANSWERED (RandA@00402975 / RandB@004029b6).
 
 ## Backlog (not yet started)
+- P3: Rust .MRS/.MRW decoders + stream-parse corpus test in engine/bedlam-assets
+  (grammar: docs/RE-EXW-MUSIC.md sections 2/2b/3; also decode-song tool =>
+  duration/instrument table). Natural follow-on to the existing codec tests.
 - B2: run inspect over game-data-2 again after any decoder change (second fuzz
   corpus; decoders now live in engine/bedlam-assets - the corpus test pattern
   in engine/bedlam-assets/tests/corpus.rs is the model); document any B2-only
@@ -28,6 +35,18 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 17b8311 (+f7be649) [P2] .MRS event grammar FULLY DECODED +
+  byte-validated all 5 files: event = u16 delta (10ms ticks) + opcode byte
+  (<0x7F note [variant 0: byte=inst / variant 1: inst=variant+7, ratio =
+  16.16 table @00454174[byte], tag=byte-0x54] + volume byte [0xFF=note-off];
+  0x7F song-end; 0x80-0xFD rest; 0xFE/0xFF pattern RESTART on channel byte -
+  not chunk jumps). Header tables resolved: +4+2W0 variant, +4+4W0 start-offset
+  (0xffff=disabled; chunk 0 disabled in every file), +4+4W0+2W0W1 tick delay
+  (chunk 1 = loop timer == song length exactly: 331/400/1476/1600/3388 ticks),
+  table C never read. MusicPump 00402bac = song slot 3 only. 28/28 melody
+  streams parse to the exact byte. Ratio table @00454174 extracted from EXW
+  (1.0 @ byte 0x54, +18 st ceiling @ 0x66). Closes RESEARCH-8STREET Q4 (last
+  music gap). CONFIG.BDL (Q7) was already closed prior run.
 - 2026-08-17 a6697e6 [P1->P3] tools/inspect decoders promoted to workspace
   crate engine/bedlam-assets (pure buffer-in/out, thiserror, no-panic on user
   bytes; 70 unit tests + corpus integration test over a deterministic 80-file
@@ -61,6 +80,18 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+- 2026-08-17 17:5x (mrs-grammar run): clean run, no Ghidra needed (prior run
+  left complete dumps exw-music-events*.txt). Found prior run died ~15:58 with
+  docs/RE-EXW-MUSIC.md modified but uncommitted - verified its claims against
+  the dumps and committed it first (f7be649), then finished the decode.
+  Validator methodology: python reimplementation of the MrsChunkStart /
+  MrsNextEvent walk (scratch in /tmp, not committed; the grammar is fully
+  specified in docs/RE-EXW-MUSIC.md 2b - port to Rust via the P3 backlog
+  item). Two gotchas solved en route: (1) the three header table roles come
+  from load_midi pointer math (variant @+4+2W0, start @+4+4W0, ticks
+  @+4+4W0+2W0W1); (2) the >30000 delta check is SIGNED (0xFFxx words = freeze
+  = natural end-of-stream, NOT a wrap). Manifest checked before+after
+  game-data reads: OK.
 - 2026-08-17 07:2x (assets-promotion run): found the prior run's refactor
   UNCOMMITTED mid-flight (engine/ + tools/inspect edits, build already green).
   Verified rather than redid: cargo build/test/fmt/clippy clean; corpus test

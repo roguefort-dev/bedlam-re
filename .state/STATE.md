@@ -20,7 +20,12 @@
   bin/cue on Desktop. Offsite: NOT YET (user to arrange).
 - Known open: GameMain second hop - FUN_0043d00b (per-frame sim/render, reads
   50Hz gate 004ede10; possible gate subdivision) + FUN_00440e45 (zone/level
-  manager) + GoFlagSet@0044d9b4 caller + RNG function (seeds at
-  004ede48/004ede4c); .MRS event encoding, CONFIG.BDL layout, .BLD/.CTG
-  (editor-only), PAL variant renderers, EXD import (needs LE loader ext),
-  goldens pipeline (P4). Parity budget: 50Hz logic (D13).
+  manager) + GoFlagSet@0044d9b4 caller; music small tails (FUN_0044c4a8
+  ratio/vol applier, table C consumer, loop-flag 0045cdc0 writer);
+  .BLD/.CTG (editor-only), PAL variant renderers, EXD import (needs LE loader
+  ext), goldens pipeline (P4). Parity budget: 50Hz logic (D13).
+- CLOSED 2026-08-17: music format chain fully RE-d + byte-validated
+  (.MRW layout, .MRS container + complete event grammar, MusicPump=song 3,
+  ratio table @00454174; CONFIG.BDL = installer SB-setup record, EXW never
+  reads it; RNG seeds consumed by RandA@00402975 / RandB@004029b6) - see
+  docs/RE-EXW-MUSIC.md.
