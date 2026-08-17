@@ -19,12 +19,33 @@
    function DB + first boot/init comparison vs EXW.
 
 ## Backlog (not yet started)
-- P4 prep: DOSBox-X AppImage download (user-level, no sudo), pinned Wine prefix for EXW.
+- P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
+  (needs desktop + DirectDraw - do NOT run unattended); flathub sandbox
+  filesystem override for game-data + DOSBox-X harness config (cycles pinned,
+  debugger watch scripting) when the P4 harness work starts.
 - Cosmetic RE: create+decompile LAB_00451fbc (Watcom CRT thread trampoline,
   see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 84390d4 [P4 prep] pinned runtimes CLOSED (slot 5 - taken because
+  3-claim existed from a dead session; spawner placeholder 3-1787004415.claim
+  deleted as instructed). DOSBox-X = flathub com.dosbox_x.DOSBox-X 2026.08.02
+  @ commit fa89039c... user install with XDG_DATA_HOME INSIDE the repo
+  (gitignored runtime/xdg, ~sudo-free); upstream GitHub has NO Linux release
+  binaries (verified last 6 tags: only win/mac/hx-dos assets) so the queue
+  item AppImage channel no longer exists - flathub is the official Linux
+  channel, decision D19. Debugger confirmed in binary (INT3 auto-BP strings);
+  --version headless smoke ok. Wine = system wine 11.15 wow64 mode (win32
+  WINEARCH rejected - 32-bit PEs via syswow64, 890 dlls), prefix
+  runtime/wine-exw via wineboot with mono/gecko/menubuilder disabled; reg
+  query + cmd smoke ok; BEDLAM.EXW = PE32 i386 GUI 5 sections (side note for
+  B2: file(1) also calls BEDLAM.EXE PE32 - LE images get misread, do not
+  trust file(1) for the LE image). Wrappers tools/runtime/{dosbox-x,wine-
+  exw}.sh both smoke-tested; docs/RUNTIME.md has pins, provenance, upgrade
+  policy (never blind update; re-baseline goldens on pin change). Manifest
+  checked before+after: OK (game-data only read). Next steps queued in
+  backlog above.
 - 2026-08-18 976f19f [P2] B2 prep: DOS4GW LE loader research CLOSED (this
   run = the 00:06:55 item-3 respawn after the client-death storm; re-derived
   every fact from scratch per the spawn-storm note, trusting nothing from the
