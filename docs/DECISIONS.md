@@ -87,3 +87,13 @@ numbered BMP (FKeyHandler@0044ceb0), NOT fullscreen toggle. AppActivate@
 0044b1c0 = system-palette management, not pause. Names applied in project:
 TickWorker / MousePosHandler / ThreadSpawnThunk / FKeyHandler / AppActivate.
 Write-up: docs/RE-EXW-TICK.md (script: tools/ghidra-scripts/ExwTickFollowup.java).
+
+## D11 — Bedlam 2 support scope (2026-08-17, user requirement)
+User wants Bedlam 2: Absolute Bedlam (1997) supported in the same engine. Evidence
+acquired same day: IA rip (complete vs code refs, provenance in RESEARCH-BEDLAM2-CENSUS.md);
+data layer confirmed format-identical (89% first-pass parse with unmodified tools).
+Decision: ONE engine, parameterized content. bedlam-assets serves both corpora;
+bedlam-game grows per-game content packs (B1/B2) with shared systems code; parity
+work continues B1-first (canon EXW), B2 gets its own RE target (DOS BEDLAM.EXE)
+and its own goldens. B2-specific divergences (zones A-F, no MRS music, VESA modes)
+are tracked in the census doc until a B2 plan phase is cut (post-P5 gate).

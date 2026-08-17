@@ -220,6 +220,15 @@ Linux native + Flatpak; Windows installer; macOS universal2 (best-effort per own
 CI artifacts per push. CDDA: user-supplied original tracks (WAV/CD), optional local
 lossy cache generated on first run — never redistributed. SteamDeck defaults stretch.
 
+### P8 — Bedlam 2: Absolute Bedlam support (post-P5, user requirement D11)
+Same engine, parameterized content: bedlam-assets already parses 89% of the B2
+corpus unmodified (see RESEARCH-BEDLAM2-CENSUS.md). Deliverables: B2 content pack
+(zones A-F, units, missions incl. missing-level handling), B2 RE pass on DOS
+BEDLAM.EXE (Watcom LE + HMI, second oracle), B2 goldens via DOSBox, shared
+modernization (B2 native VESA resolutions inform D9 presentation). Gate: P5 B1
+parity substantially complete first; B2 work may run opportunistically earlier
+(data archaeology only — already done).
+
 ## 7. Determinism Charter (bedlam-core invariants)
 - Integer/fixed-point math or bit-specified soft-float; no ambient libm, no
   transcendentals. NOTE: this is for OUR cross-OS determinism, not to mirror Watcom

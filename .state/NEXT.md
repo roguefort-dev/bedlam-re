@@ -20,6 +20,10 @@
    delta source, resolve .data slot 00457874, DDRAW vtable +0x18 mapping.
 
 ## Backlog (not yet started)
+- B2: run inspect over game-data-2 again after any decoder change (second fuzz
+  corpus); document any B2-only format quirks in RESEARCH-BEDLAM2-CENSUS.md.
+- B2: import BEDLAM.EXE (LE/DOS4GW) into Ghidra (needs LE loader handling);
+  compare boot/init with EXW findings.
 - P4 prep: DOSBox-X AppImage download (user-level, no sudo), pinned Wine prefix for EXW.
 - Spec doc: input/control map - anchors: FUN_0041be05(vk,down) kb,
   FUN_0041bf35(btn,state) mouse, FUN_0044b4fc(x,y) cursor-per-tick
