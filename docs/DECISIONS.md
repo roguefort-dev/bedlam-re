@@ -242,3 +242,17 @@ and D12; it does not remove the canonical frame used by goldens and regression
 tests. Initial implementation target: wgpu upload/palette-expand/fullscreen
 triangle scaler, then native-resolution enhanced passes incrementally.
 
+## D21 — Enhanced-layout aspect scope: 16:9 + 16:10 (user decision, 2026-08-18)
+
+wgpu presentation continues to accept any output resolution, but purpose-built
+ENHANCED layouts and AI-assisted background extensions are guaranteed only for
+16:9 and 16:10. Author enhanced menu/background masters at 16:10 with a 16:9
+safe region: controls, text, and gameplay-critical information must remain in
+the shared safe region; the additional 16:10 height is optional decorative/UI
+buffer. Gameplay supports both aspect ratios with resolution-independent
+cursor/world mapping; any increased visible world remains an explicit
+non-parity option per D9/D20. Parity mode remains canonical 4:3. Other aspect
+ratios use fit/letterbox/pillarbox rather than bespoke layouts. AI-generated
+asset derivatives live in external HD packs; git tracks only tooling, recipes,
+manifests, masks, provenance, and hashes.
+

@@ -171,6 +171,12 @@ Input: (&Frame, PresentMode). Presentation:
 - Extended widescreen viewport (shows more map = gameplay change) remains an
   additional explicit option, separate from merely rendering at high DPI.
 - Sprite sub-pixel interpolation remains explicit and off by default.
+- Enhanced layout targets are 16:9 and 16:10 only (D21). Author at 16:10
+  with a 16:9 safe region; other ratios use fit/letterbox/pillarbox. Controls
+  and gameplay-critical information never depend on the extra 16:10 height.
+- AI-upscaled/generative-fill derivatives are optional external HD packs;
+  repository content is limited to tooling, recipes, masks, provenance,
+  manifests, and hashes.
 
 ## 10. Goldens and testing [design, per PLAN P4]
 

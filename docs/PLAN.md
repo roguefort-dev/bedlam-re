@@ -147,7 +147,8 @@ hash + time base from day one); bedlam-render (dual-mode contract per D20: parit
 640x480 indexed fb + palette; enhanced path may render supported world/UI
 passes at native output resolution, always non-parity/UI-flagged); bedlam-platform
 uses wgpu for GPU presentation (Vulkan/DX12/Metal selected by wgpu), scaling,
-pillarboxing and refresh; resolution/backend never feed sim or hashed state;
+pillarboxing and refresh; enhanced layouts target 16:9 + 16:10 (16:10 master,
+16:9 safe region; other ratios fitted); resolution/backend never feed sim or hashed state;
 bedlam-audio (thin mix graph/device); bedlam-platform (thin window/input/
 gamepad); bedlam-game (scene FSM, config, save; no per-mission code — mission quirks
 are data — stated as a hypothesis to verify in P2d, with code-defined quirk hooks
