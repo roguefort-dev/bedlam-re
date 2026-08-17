@@ -105,14 +105,18 @@ lives on the worker thread spawned at 0044dea0 (docs/RE-EXW-TICK.md).
 - WM_ACTIVATEAPP(0x1C): gate `004ef670` = wParam, `FUN_0044b1c0(wParam)`; blocked
   in windowed mode unless wParam==1.
 - WM_SETCURSOR(0x20): hide cursor when hit-test==1 and DD-active; else arrow.
-- WM_KEYDOWN(0x100)/WM_SYSKEYDOWN(0x101): vkey := hiword(lParam)&0xFF ->
-  `FUN_0041be05(vkey, down)`; 'F'(0x46) special-cased to `FUN_0044ceb0`
+- WM_KEYDOWN(0x100)/WM_KEYUP(0x101) (CORRECTED 2026-08-17 input run: 0x101 is
+  KEYUP not SYSKEYDOWN; WM_SYSKEYDOWN 0x104 is unhandled): scan :=
+  hiword(lParam)&0xFF -> `FUN_0041be05(scan, down)` — a BIOS/OEM SCAN code,
+  not a vkey (arrows remapped +0x80 inside the sink); 'F'(0x46) scan
+  special-cased to `FUN_0044ceb0`
   (FKeyHandler) = screenshot to numbered BMP [high — see RE-EXW-TICK.md];
   WM_SYSCOMMAND 0xF100 filtered, 0xF140 eaten.
 - Mouse: WM_LBUTTON*(0x201..0x206) -> `FUN_0041bf35(button, state)` with
   (button 0/1, state 0/1/2 = down/up/double [med]) and keyState bits pushed.
 
-`FUN_0041be05` (keyboard) / `FUN_0041bf35` (mouse) are the game-side input
+Full control map now in docs/RE-EXW-INPUT.md (sinks `FUN_0041be05`/`FUN_0041bf35`
+fully decoded). They are the game-side input
 sinks — the input/control map task should start there.
 
 ## 7. Globals (EXW .data) referenced above [high unless noted]
