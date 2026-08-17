@@ -256,3 +256,23 @@ ratios use fit/letterbox/pillarbox rather than bespoke layouts. AI-generated
 asset derivatives live in external HD packs; git tracks only tooling, recipes,
 manifests, masks, provenance, and hashes.
 
+
+
+## D22 - B2 (DOS) timing architecture = same two-clock design as EXW; parity budget carries unchanged (2026-08-18)
+
+RE verdict from the B2 entry/tick naming run (RESEARCH-BEDLAM2-CENSUS.md sec
+6.2): Bedlam 2 DOS installs a 100.01 Hz PIT INT-8 hardware ISR on demand
+(divisor 0x2e9b, DOS INT 21h AH=25h vector set, NOT DPMI; immediate EOI,
+drop-not-queue reentrancy lock) driving seven counters, the 12.5 Hz palette
+bank cycle over 0x90..0x97 (byte-identical behavior to the EXW
+TimerCallback), 50 Hz mouse polling + clamping, and the play-clock divider;
+presentation is vblank-locked (double-poll of 0x3da bit 3). That is the same
+architecture the EXW analysis found (100 Hz Win timer + present-paced
+render), so the reimplementation parity model of D16 (fixed-rate sim,
+present-paced frames, hashed satellites keyed to the 100 Hz service clock)
+applies to BOTH builds with no new timing concept. B2-specific deltas the
+engine must parameterize: game-coordinate space 320x240 (EXW 640x480 - the
+mouse clamp globals prove it; canonical-frame policy D9 keeps EXW 640x480 as
+the parity anchor, B2 coordinate handling is an open engine question), and
+zone/mission progression via lookup tables (6 zones x {4 regular + 2 alt},
+27 linear missions) instead of the EXW 7x5 arithmetic.

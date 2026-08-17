@@ -262,7 +262,9 @@ FIRST BOOT/INIT COMPARISON vs EXW (b2-boot-compare.txt):
 - RNG SEEDS IDENTICAL ACROSS BUILDS: B2 sets EBX=0x39447 (234567) @0x2f812 +
   ECX=0x1e240 (123456) @0x2f817 inside FUN_0002f731 (2882 B game-init fn,
   called from CRT init FUN_0006b1bc which passes DAT_001280d4/DAT_001280d8 -
-  candidate B2 rng globals); EXW pins the same pair as data 004ede48/004ede4c.
+  CORRECTED 2026-08-18 by sec 6: those two are argc/argv, the true seed
+  globals are 0x11ef1c/0x11ef1c-adjacent pairs, see below); EXW pins the
+  same pair as data 004ede48/004ede4c.
   A reseed site MOV [0x11ef1c],0x1e240 lives in FUN_0005eaf9 (5664 B).
   [confidence: high - exact constants + init-chain position]
 - Entry chain B2: 0x66a60 _entry -> 6b1bc (CRT init: 2f731 game init,
@@ -271,14 +273,110 @@ FIRST BOOT/INIT COMPARISON vs EXW (b2-boot-compare.txt):
   BEDLAM.LOG @0x841d1, SOUND\SFX\*.RAW + GAMEGFX\*.PAL families from
   0x8465b onward - matches the B2 corpus census (second config dir, RAW-only
   audio).
-Next B2 RE hooks (queued): name _entry chain + FUN_0002f731; find the B2
-tick source (EXW = 100Hz Win timer -> B2 should show PIT/INT 8 hook or
-INT 28h idle); zone/level stride table vs EXW 7x5 @004decb2.
+Next B2 RE hooks: ALL THREE CLOSED 2026-08-18 by the naming run -> sec 6
+(entry chain named; tick source = 100.01 Hz PIT INT-8 ISR; zone/mission
+lookup tables located at 0x81dba/0x81dda/0x81e46).
 
 [provenance: import + probes = this run (logs /tmp/opencode/b2-smoke.log,
 b2-import.log, dumps in ghidra-project/); loader options mechanism = Options
 prefs read path; manifest-2 verified OK before + mid + after. confidence:
 high - every gate observed directly.]
+
+
+## 6. Entry chain, tick source, zone/mission stride (2026-08-18 naming run)
+
+[provenance: three -process BEDLAM.EXE -noanalysis passes, no re-import
+(B2EntryTick, B2EntryNames, B2TblDump; commits 2df7664 + c3b1552 + this);
+dumps ghidra-project/b2-entry-tick.txt, b2-decomp-all.txt (671 fns, zero
+decompile failures), b2-entry-names.txt, b2-tbl-dump.txt. confidence: high -
+every claim below read directly from decompile, listing, or program memory.]
+
+### 6.1 Entry chain (named)
+- _entry@0x66a60: Watcom DOS4GW CRT stub (INT 21h AH=30h, DX-marker 0x4458,
+  PSP cmdline @0x81) -> CrtInitChain@0x6b1bc (stashes argc -> g_argc@0x1280d4,
+  argv -> g_argv@0x1280d8 - CORRECTS the sec 5 candidate-rng guess) ->
+  GameInit@0x2f731 (2882 B): OPTIONS.BDL presence check (spawns SETUP.EXE
+  path when missing), mouse-driver check, LANGUAGE.{ENG,GER,SPA,FRE,ITL,DCH}
+  select+load, seeds BOTH RNGs as code constants
+  _DAT_0x11ef18 = 0x39447 (234567) and _DAT_0x11ef1c = 0x1e240 (123456) -
+  the same two constants EXW plants at 004ede4c/004ede48 - then TickInstall,
+  a 0x302-byte palette alloc, and the EPISODE LOOP. GameInit IS the B2
+  GameMain-analog shell (boot + campaign loop in one function).
+- RNG steppers: RngStepA@0x1220e walks the coupled 16-bit pair
+  0x11ef1c/0x11ef1e (>>8 / <<7 | carry mixing, additives 0x3619 / 0x62e9),
+  RngStepB@0x1224f the same over 0x11ef18/0x11ef1a; 177 and 21 call sites.
+  RngReseedSite@0x5eaf9 (5664 B) re-pins [0x11ef1c] = 123456.
+
+### 6.2 Tick source (headline)
+NO INT 28h idle loop, NO DPMI (INT 31h) vector hook for timing, and the PIT
+is NOT reprogrammed at boot. B2 installs a hardware-timer ISR on demand:
+- TickInstall@0x32546: zeroes clock counters, DosGetVector@0x1270a (INT 21h
+  AH=35h) saves the old INT-8 owner, PitProgram@0x325f9 writes OUT 0x43,0x34
+  then OUT 0x40 lo/hi of divisor 0x2e9b (11931 -> 1193182/11931 = 100.01 Hz;
+  variable divisor, which is why the constant-divisor census probe missed it),
+  DosSetVector@0x12727 (INT 21h AH=25h) points vector 8 at the handler.
+- Int8TickHandler@0x12734 (created + named this run): CLI, PUSHFD, EOI
+  (OUT 0x20,0x20) sent IMMEDIATELY, reentrancy lock via XCHG [0x11ef2c],1
+  (in-progress ticks are dropped, not queued), a flag-gated background call
+  FUN_000136e0, then increments SEVEN counters (0x801a6, 0x80010, 0x11f158,
+  0x11f0c8, 0x11f0c4, 0x11f0b4, 0x11f0b0), calls ClockDivider100Hz@0x1287b
+  (hundredths -> 99 -> seconds -> 59 -> minutes -> 59 -> hours; feeds the
+  %02i:%02i:%02i play-clock), runs the PALETTE BANK CYCLE: while
+  [0x11f138] is inside [0x90,0x98) it advances on (0x11f0c8 & 7) == 0, i.e.
+  12.5 Hz, wrapping 0x97 -> 0x90 - byte-identical behavior to the EXW
+  TimerCallback bank animation - and services the MOUSE on odd ticks
+  ((0x11f0c8 & 1) != 0 -> every other tick = 50 Hz): FUN_0001259f poll,
+  FUN_00012a8d / FUN_000128df / FUN_00012960 clamp+store chain, clamping
+  against 0x11efd8 / 0x11efd4 = 0xf0 / 0x140 -> a 320x240 game-coordinate
+  space (EXW clamps the same pattern at 640x480).
+- TickShutdown@0x32507: DosSetVector(8, 0) + PitProgram(0xffff) -> back to
+  the stock 18.2 Hz. SystemShutdown@0x34d90 calls it in teardown.
+- Present path: WaitVRetrace@0x10856 double-polls 0x3da bit 3 (wait
+  deassert, then assert), gated by g_wait_vsync@0x11f130; sole caller
+  FUN_0001066b (339 B blit/present helper, 9 call sites across GameInit and
+  the screen functions).
+- VERDICT: B2 (DOS) and EXW (Win95) share the SAME two-clock architecture -
+  a ~100 Hz service interrupt (counters, 12.5 Hz palette banks, ~50 Hz mouse
+  polling, play-clock divider) plus a vblank-locked present. The EXW-derived
+  parity budget (D16 fixed-rate sim + present-paced frames) therefore carries
+  to the DOS build unchanged; see D22.
+
+### 6.3 Zone / mission stride (EXW 7x5 @004decb2 analog)
+Decode lives in the GameInit episode loop (linear progress DAT_0012576c
+exits when > 0x1a -> 27 linear missions, 0..26):
+- order[8] dwords @0x81dba = {3,0,1,5,9,13,17,21} (flat start per campaign
+  slot; slot = DAT_00126848, set from the save block);
+- zone letters @0x81dda, 27 dwords (byte value + @ renders A.. for 1..6;
+  values 7/8 = special screens; first dword 0x19 = 25 - intro/endgame
+  semantics not fully pinned, raw dump in b2-tbl-dump.txt);
+- mission[27] dwords @0x81e46 = {1,1,1,2,3,1,4,3,2,1,1,2,1,1,2,1,3,2,2,4,
+  3,2,4,3,3,4,3} (values 1..4);
+- formula: zone = zonetable[order[slot] + sub], mission = missiontable[same
+  index], sub = DAT_00126858 advances per completed level inside the slot;
+- path builder FUN_0005cc66 (and siblings 0x5d409/0x5cea7/0x5d4ef/0x5da22 -
+  the save/load/hi-score family): "EDITOR\ZONE" + (zone + @) + "\MISSION"
+  + itoa(mission), and when mode flag DAT_0011f11c == 2 the mission number
+  is mission + 5 -> files 6/7.
+- CROSS-CHECK vs corpus: every EDITOR/ZONE{A..F} dir ships MISSION{1,2,3,4}
+  regular files plus MISSION{6,7} mode-2 files and NEVER 5 - exactly what
+  the +5 rule predicts; 6 zones A..F (no G/H dirs, so zone 7/8 entries are
+  menu/endgame screens, matching the DB_MAIN/GAMEOVER asset families).
+- DIVERGENCE vs EXW: EXW = 7 zones x 5 levels, arithmetic
+  clamp((zone-2)*5 + level - 1, 1, 26); B2 = 6 zones x (4 regular + 2 alt)
+  via explicit lookup tables. Implication #3 (engine parameterizes content,
+  never hardcodes B1 counts) now has the concrete B2 shape.
+
+### 6.4 Names persisted this run
+BedlamWatcom:/BEDLAM.EXE: CrtInitChain, GameInit, RngReseedSite, RngStepA,
+RngStepB, TickInstall, TickShutdown, PitProgram, PortOut, DosGetVector,
+DosSetVector, WaitVRetrace, ClockDivider100Hz, SystemShutdown,
+Int8TickHandler@0x12734 + labels g_rng_a_seed, g_rng_b_seed, g_pit_divisor,
+g_int8_ctr0, g_clock_hundredths/seconds/minutes/hours, g_clock_enabled,
+g_tick_installed, g_wait_vsync, g_int8_old_cs, g_argc, g_argv,
+g_screen_w_320, g_screen_h_240. Scripts: B2EntryTick.java, B2EntryNames.java,
+B2TblDump.java (all javac-precompiled against the Ghidra jars after the
+getMnemonic vs getMnemonicString API slip - OSGi again surfaced it only as
+ClassNotFoundException; precompile is now the rule for new B2 scripts).
 
 ## Divergences vs Bedlam 1 (data layer)
 - 6 zones (A-F) vs 7; missions per zone differ; MISSION5 mostly absent
