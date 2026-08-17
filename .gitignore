@@ -26,3 +26,5 @@
 /.state/fails
 /.state/spawns
 /.state/last-progress
+/.state/STATUS.md
+/.state/notified

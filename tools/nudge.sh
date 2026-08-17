@@ -22,8 +22,56 @@ if [ -f "$STATE/cooldown-until" ]; then
   rm -f "$STATE/cooldown-until"
 fi
 
+
+# --- status report (every run; cheap) ---
+write_status() {
+  local hb_age last_h n_new stalled
+  hb_age=$(( $(date +%s) - $(stat -c %Y "$HB" 2>/dev/null || date +%s) ))
+  last_h=$(git -C "$PLAN_DIR" log -1 --format="%h %ad %s" --date=format:"%H:%M" 2>/dev/null || echo "none")
+  n_new=$(git -C "$PLAN_DIR" log --oneline --since="75 minutes ago" 2>/dev/null | wc -l)
+  {
+    echo "# bedlam-re status - $(date +"%H:%M") $(date +%F)"
+    echo
+    echo "- last commit: $last_h"
+    echo "- commits in last ~75min: $n_new"
+    if [ -f "$STATE/fails" ]; then
+      echo "- loop: FAILING (fails=$(cat "$STATE/fails")) cooldown until $(date -d @$(cat "$STATE/cooldown-until" 2>/dev/null || echo 0) +%H:%M 2>/dev/null)"
+    else
+      echo "- loop: healthy, no cooldown"
+    fi
+    if pgrep -f "opencode2 run" >/dev/null 2>&1; then
+      echo "- agent: RUNNING (client or ghost)"
+    else
+      echo "- agent: idle"
+    fi
+    echo
+    echo "## last 5 commits"
+    git -C "$PLAN_DIR" log --oneline --format="- %h %ad %s" --date=format:"%H:%M" -5 2>/dev/null
+    echo
+    echo "## queue top"
+    sed -n "3,8p" "$STATE/NEXT.md" 2>/dev/null
+  } > "$STATE/STATUS.md"
+  # hourly desktop notification: new work landed -> tell the user
+  local nh ncount
+  nh=$(( $(date +%s) / 3600 )); ncount=0
+  if [ -f "$STATE/notified" ]; then read -r nh ncount < "$STATE/notified" 2>/dev/null || true; fi
+  local ch; ch=$(( $(date +%s) / 3600 ))
+  if [ "$ch" -ne "$nh" ]; then
+    if command -v notify-send >/dev/null 2>&1; then
+      if [ "$n_new" -gt 0 ]; then
+        notify-send -u normal "bedlam-re progress" "$n_new commit(s) in the last hour. Last: $last_h" 2>/dev/null || true
+      elif [ -f "$STATE/fails" ] && [ "$(cat "$STATE/fails")" -ge 3 ]; then
+        notify-send -u critical "bedlam-re STALLED" "No progress ~75min, fails=$(cat "$STATE/fails"). Check .state/STATUS.md" 2>/dev/null || true
+      fi
+    fi
+    echo "$ch 1" > "$STATE/notified"
+  fi
+}
+
 exec 9>/tmp/bedlam-nudge.lock
 flock -n 9 || exit 0
+
+write_status
 
 # --- progress probe (reusable) ---
 cd "$PLAN_DIR" || exit 1
