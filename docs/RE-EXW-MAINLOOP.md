@@ -1,156 +1,155 @@
-# RE: BEDLAM.EXW — startup, window, message pump, main loop
+# BEDLAM.EXW — Startup Chain, Message Pump, and Game-Loop Architecture
 
-Provenance: all facts below from Ghidra headless analysis of the single imported
-program `BedlamWatcom:/BEDLAM.EXW` (x86:LE:32:default + `openwatcomcpp` cspec,
-import verified 2026-08-17 03:33). Scripts: `tools/ghidra-scripts/ExportExwMainLoop.java`,
-`tools/ghidra-scripts/ExportExwFollowup.java`. Raw dumps (gitignored):
-`ghidra-project/analysis/exw-functions.txt` (672 functions),
-`exw-mainloop.txt`, `exw-followup.txt`.
+Verified 2026-08-17 by Ghidra 12.1.2 headless analysis (project `BedlamWatcom`,
+language `x86:LE:32:default`, compiler spec `openwatcomcpp` = GhiOWat watcall).
+Provenance: every address/claim below was read from decompiler output exported by
+`tools/ghidra-scripts/{ExportExwMainLoop,ExportExwFollowup,ExwLoopFollowup,ExwNameAndExport}.java`
+(artifacts in gitignored `ghidra-project/*.txt`; raw dumps local-only, facts re-stated here).
+Image base 00400000; all addresses are EXW virtual addresses. Function inventory:
+`docs/exw-functions.txt` (675 functions after this pass).
 
-Tags: [verified] = read in decompile + listing; [inferred] = strong deduction
-from verified facts; [hypothesis] = plausible, needs confirmation.
-Addresses are EXW VAs (imageBase 00400000).
+Confidence: [high] = read directly in decompilation/listing; [med] = interpreted
+(meaning inferred from usage); [hyp] = hypothesis for next pass.
 
-## Boot chain [verified]
-
-```
-entry 004502ee      : _DAT_004ef8fc = &LAB_0044d6e8; jmp/call FUN_004520ed
-  FUN_004520ed      : Watcom C++ startup (heap init, GetCommandLineA parse,
-                      GetModuleHandleA, then call (*_DAT_004ef8fc)() @004521cc)
-    LAB_0044d6e8    : "BedlamShutdown" (renamed in project) — this is main().
-                      (Created as function by follow-up script; also reached
-                      directly at 0044d6e8..)
-```
-
-`main()` flow @0044d6e8 [verified]:
+## 1. Startup chain [high]
 
 ```
-FUN_0044bdd0(); FUN_0044ef50();            // pre-init (unknown detail)
-_DAT_004ef678 = 1; _DAT_004ef6b4 = 1;      // state flags
-r = FUN_0044d320(hInst, nCmdShow, cmdline);// window + DirectDraw + Smacker init
-if (r == 0) {
-  r2 = FUN_0044d9c0();                     // thread/etc; nonzero -> err 4
-  if (r2 == 0) {
-    r3 = FUN_0044da64();                   // wait-for-go, arm 100Hz timer
-    if (r3 == 0) {
-      ret = FUN_0044d93c();                // BLOCKING message pump until WM_QUIT
-      timeKillEvent(_DAT_004ef69c);        // @0044d756
-      timeEndPeriod(10);                   // @0044d75e
-    }
-    FUN_0044da1c();                        // post-run teardown
-  } else err = 4 ("Error starting thread")
-  FUN_0044c20c(); FUN_0044ab54();          // cleanup (DDraw/etc release)
-  if windowed-mode-latched: mciSendCommandA(x3)  // CD-audio close
-}
-FUN_0044de10(<error text>) on nonzero r    // error display (its own ShowWindow)
+PE entry 004502ee  : MOV [0x004ef8fc], offset 0044d6e8 ; call 004520ed
+WatcomCrtStartup 004520ed : Watcom CLIB init (argc/argv from GetCommandLineA,
+                            GetModuleHandleA) then  CALL [0x004ef8fc]  -> WinMain
+WinMain 0044d6e8   : pre-init -> InitInstance -> GameThreadStart -> TimerInit
+                     -> MsgPump -> teardown
 ```
 
-Error strings resolved in listing: "Class error", "DDInit error",
-"SetVideoMode error", "Error starting thread", "Please install DirectX",
-"DirectX is already in use by another application", "DirectDraw can not
-initialise a colour", "DirectDraw initialization failed", "Unknown error".
-[verified]
+The pointer-at-global indirection (`004ef8fc` <- WinMain) is how this Watcom build
+links the CRT startup to the app entry — there is no exported `WinMain` symbol.
 
-## Init: FUN_0044d320 (WinMain-equivalent) [verified]
+## 2. WinMain (0044d6e8) [high; was misnamed "BedlamShutdown" — corrected]
 
-- Command line scanned for `-f` (toggles windowed flag, high word of dword
-  @004ef69e) and `-v` (sets byte @004ef6a2). [verified]
-- If fullscreen intended: `GetDeviceCaps(hdc, RASTERCAPS)` without RC_PALETTE
-  (0x100) -> MessageBoxA "256 colour mode needed" then force windowed. [verified]
-- WNDCLASSEX: cbSize 0x30, style 3 (CS_VREDRAW|CS_HREDRAW) or 0xb (+CS_DBLCLKS)
-  when dword@004edece high word == 1; lpfnWndProc = 0044dacc. [verified]
-- Window: class "Bedlam", title "Bedlam for Windows 95", default size from
-  word@00456ec6 = 0x0280 (640) x word@00456ec8 = 0x01e0 (480). Fullscreen:
-  WS_VISIBLE|WS_POPUP (0x90000000) at 640x480. Windowed: 0xca0000
-  (caption/sysmenu/minimizebox), client+2 / +0x15 borders, centered. HWND stored
-  @004ef68c. [verified]
-- DirectDraw: FUN_0044a5f0() primary path; on failure FUN_0044a660(640,480)
-  fallback + FUN_0044ab54(); success path also FUN_0044a9ac() +
-  _SmackSoundUseDirectSound() when flag high-word @004ef676 set. [verified,
-  flag semantics partially unclear — see open questions]
+Call order: `FUN_0044bdd0`, `FUN_0044ef50` (pre-init), then:
+1. `InitInstance` (0044d320) — returns 16-bit error code
+2. `GameThreadStart` (0044d9c0) — nonzero => "Error starting thread"
+3. `TimerInit` (0044da64)
+4. `MsgPump` (0044d93c) — returns wParam (exit code)
+5. Teardown: `timeKillEvent(_DAT_004ef69c)`, `timeEndPeriod(period)`,
+   `FUN_0044da1c`, `FUN_0044c20c`, `FUN_0044ab54`; if windowed mode was active,
+   3x `mciSendCommandA(wDev, 0x808/0x804, 2, 0)` (CDDA close/pause).
+Error dispatch maps codes to strings at 00459d5b..00459e6f:
+1="Class error" 2="DDInit error" 3="SetVideoMode error" 4="Error starting thread"
+1000..1003 = "Please install DirectX" / "DirectX is already in use by another program"
+0x3eb..0x3ed = DirectDraw init failures; 0x3f2 silent.
 
-## Message pump: FUN_0044d93c [verified]
+## 3. InitInstance (0044d320) [high]
 
-```c
-while ((word @004ef692) == 0) {
+- Command-line flags parsed manually: `-f` toggles bit 0x10000 of mode flags
+  `004ef69e` [med: force windowed/fullscreen], `-v` sets `004ef6a2`=1 [med].
+- 256-colour capability check: `GetDeviceCaps(hdc, RASTERCAPS)` bit 0x100 else
+  MessageBox "256 colour mode needed. Click OK." -> abort path.
+- `RegisterClassExA` with WNDPROC = `BedlamWndProc` (0044dacc), icons 0x7d0/0x7d1,
+  arrow cursor 0x7f00, hbrBackground = GetStockObject(4).
+- Window: class "Bedlam", title "Bedlam for Windows 95" (strings 00456e00/08);
+  size from `DAT_00456ec6` (w,h pair [med: 640x480 game mode]); windowed
+  style 0xca0000 vs popup 0x90000000; centered on GetSystemMetrics(0/1).
+- DirectDraw bring-up: `FUN_0044a5f0` (probe), `FUN_0044a660` (mode set),
+  `FUN_0044ab54`, `FUN_0044a9ac` (surface canary 0x12345678 + full clear loop —
+  verifies lockable primary/back buffers, clears both).
+- `_SmackSoundUseDirectSound` hooked before returning (Smacker audio routing).
+
+## 4. MsgPump (0044d93c) [high] — hybrid Peek/Get pump
+
+```
+while (hiword(_DAT_004ef690) == 0) {
     if (PeekMessageA(&msg,0,0,0,0)) {
-        if (GetMessageA(&msg,0,0,0) == 0)   // WM_QUIT
-            word @004ef692 = 1;              // -> loop exit, returns msg.wParam
-        else if (!(msg.message==WM_ACTIVATEAPP(0x1c) && msg.wParam==0
-                  && windowed))
-            DispatchMessageA(&msg);
+        if (GetMessageA(&msg,0,0,0) == 0) hiword(_DAT_004ef690) = 1;   // WM_QUIT
+        else if (!(msg.message==WM_ACTIVATEAPP(0x1C) && msg.wParam==0
+                  && hiword(_DAT_004ef69e)==1))
+            DispatchMessageA(&msg);                                     // filtered
     }
 }
+return msg.wParam;
 ```
-Calls via import pointer table .idata (@004f024c Peek, @004f0230 GetMessage,
-@004f0224 Dispatch). Quirk: in windowed mode, deactivation WM_ACTIVATEAPP is
-not dispatched [verified].
+The filter swallows deactivation WM_ACTIVATEAPP while in windowed mode
+[med: prevents pause-on-deactivate confusion]. Quit flag: hiword of 004ef690;
+also set by InitInstance failure path (0044d640).
 
-## Timer thread + game tick [verified]
+## 5. Game thread + periodic timer = the actual "main loop" [high]
 
-FUN_0044da64 (called from main before the pump):
+The pump thread is NOT the game loop. WinMain starts a second thread and a
+multimedia timer; rendering/sim cadence hangs off them:
 
-```c
-while (_DAT_004ef674 == 0) ;               // wait for go flag
-timeBeginPeriod(word @00456ec4);            // = 0x000a = 10 ms
-_DAT_004ef69c = timeSetEvent(word @00456ec4, 0, LAB_0044de58, 0, TIME_PERIODIC);
-```
+- `GameThreadStart` (0044d9c0): `_DAT_004ef674 = 0; handle = FUN_00450242()`
+  -> `FUN_00450242` is a Watcom `_beginthread`-style wrapper [med]; thread handle
+  stored `004ef698`, id `004ef694` (WndProc WM_DESTROY suspends this handle).
+- `TimerInit` (0044da64): `while (_DAT_004ef674 == 0);` — spin-waits until the
+  game thread signals readiness, then `timeBeginPeriod(period@00456ec4)`
+  and `timeSetEvent(period, 0, 0044de58, 0, TIME_PERIODIC)` -> id `004ef69c`.
+- `TimerCallback` (0044de58), runs every 10ms (100Hz) [high]:
+  1. `FUN_0041bfb6()` — called EVERY tick unconditionally [hyp: the frame
+     driver / master update; top of NEXT pass]
+  2. if active (`004ee9d6` hiword==1) && not paused (`004eee5a` hiword==0):
+     `_DAT_004ef708 = 0`; `GetCursorPos` -> `FUN_0044b4fc(x, y)` mouse sample.
 
-- Period word @00456ec4 = 10 => **100 Hz tick, anchored [EXW .data @00456ec4]**.
-  This independently confirms the 8street claim of a 100Hz timer (8street
-  citation non-normative; now anchored).
-- **Game main loop = periodic multimedia-timer callback LAB_0044de58** (runs on
-  a winmm worker thread, not the GUI thread). Pump keeps the window alive on
-  the main thread. NOT YET DECOMPILED — top follow-up.
-- WM_DESTROY handler suspends thread handle @004ef698 (id @004ef694) before
-  quit [verified].
+**Determinism (P3/P5 impact):** timing entropy slots on the EXW side are exactly
+( a ) the `timeSetEvent` period (u16 at 00456ec4) driving tick cadence,
+( b ) `GetCursorPos` sampled inside the tick, ( c ) keyboard/mouse WndProc bridge
+below. The frame body `FUN_0041bfb6` decides what a tick advances — catalog next.
 
-## WndProc @0044dacc ("BedlamWndProc", created+decompiled by follow-up) [verified]
+## 6. BedlamWndProc (0044dacc) — input bridge [high]
 
-| msg | handling |
+- WM_DESTROY(2): `SuspendThread(game thread)` (if id != -1), `FUN_0044b1c0(0)`,
+  `004ef692`=1, `PostQuitMessage(0)`.
+- WM_MOVE(3)/WM_SIZE(5): update window bounds globals + InvalidateRect (windowed
+  mode only, guarded by hiword(004ef69e)).
+- WM_ACTIVATEAPP(0x1C): gate `004ef670` = wParam, `FUN_0044b1c0(wParam)`; blocked
+  in windowed mode unless wParam==1.
+- WM_SETCURSOR(0x20): hide cursor when hit-test==1 and DD-active; else arrow.
+- WM_KEYDOWN(0x100)/WM_SYSKEYDOWN(0x101): vkey := hiword(lParam)&0xFF ->
+  `FUN_0041be05(vkey, down)`; 'F'(0x46) special-cased to `FUN_0044ceb0` [med:
+  fullscreen toggle]; WM_SYSCOMMAND 0xF100 filtered, 0xF140 eaten.
+- Mouse: WM_LBUTTON*(0x201..0x206) -> `FUN_0041bf35(button, state)` with
+  (button 0/1, state 0/1/2 = down/up/double [med]) and keyState bits pushed.
+
+`FUN_0041be05` (keyboard) / `FUN_0041bf35` (mouse) are the game-side input
+sinks — the input/control map task should start there.
+
+## 7. Globals (EXW .data) referenced above [high unless noted]
+
+| Addr | Role |
 |---|---|
-| WM_DESTROY (2) | SuspendThread(@004ef698) if != -1; FUN_0044b1c0(0); word@004ef692=exit; PostQuitMessage(0) |
-| WM_MOVE (3) | windowed only: store x/y @004ef6a4/6a6; InvalidateRect |
-| WM_SIZE (5) | windowed only: store w/h @004ef6a8/6aa (+@004ef682/684); InvalidateRect |
-| WM_ACTIVATEAPP (0x1c) | windowed && deactivate -> swallow (ret 1); else @004ef670=fActive, FUN_0044b1c0(fActive) |
-| WM_SETCURSOR (0x20) | hide cursor in fullscreen (hit-test 1), else arrow; blocks when iconic |
-| WM_KEYDOWN (0x100) | vk 0x46 `F` -> FUN_0044ceb0 [hypothesis: fullscreen toggle]; else FUN_0041be05(vk, 0) |
-| WM_KEYUP (0x101) | FUN_0041be05(vk, 1) |
-| WM_SYSCOMMAND (0x112) | wParam 0xf000-0xf100 -> FUN_0041be05(0x44,0); SC_SCREENSAVE(0xf140) -> blocked (ret 1) |
-| WM_LBUTTONDOWN/UP/DBLCLK (0x201/2/3) | FUN_0041bf35(0, 0/1/2) |
-| WM_RBUTTONDOWN/UP/DBLCLK (0x204/5/6) | FUN_0041bf35(1, 0/1/2) |
-
-Input entry points (for the future input subsystem spec):
-- **FUN_0041be05(keyCode, isRelease)** — keyboard events. [verified]
-- **FUN_0041bf35(button{0=L,1=R}, event{0=down,1=up,2=dblclk})** — mouse
-  buttons. No WM_MOUSEMOVE handling: mouse position must be polled
-  (GetCursorPos is imported). [verified/verified-inferred]
-
-## Globals map (this pass) [verified unless noted]
-
-| VA | meaning |
-|---|---|
-| 00456ec4 | word: timer period ms (=10) |
-| 00456ec6/8 | word pair: default window client 640x480 |
-| 004ef670 | fActive (WM_ACTIVATEAPP) |
-| 004ef674 | go flag the timer-arming waits on |
-| 004ef676 | dword; high word gates DirectDraw/Smacker path |
-| 004ef682/4 | window x/y (WM_SIZE path) |
-| 004ef68c | HWND |
-| 004ef690 | dword; high word @004ef692 = quit flag |
-| 004ef694/98 | worker thread id / handle |
+| 004ef674 | game-thread ready flag (spin-wait) |
+| 004ef670 | active flag (WM_ACTIVATEAPP wParam) |
+| 004ef676 | DD/Smacker state flags (hiword: DD active) |
+| 004ef682/84 | last window pos; 004ef6a4/a6 current pos |
+| 004ef688 | hInstance (InitInstance) |
+| 004ef68c | HWND main |
+| 004ef690 | quit flag (hiword) |
+| 004ef692 | quit reason (set 1 on WM_DESTROY / pump WM_QUIT) |
+| 004ef694/98 | game-thread id / handle |
 | 004ef69c | timeSetEvent id |
-| 004ef69e | dword; high word @004ef6a0 = windowed-mode flag |
-| 004ef6a0..b2 | window geometry cache |
-| 004ef8fc | function pointer to main() (set by entry, called by Watcom startup) |
+| 004ef69e | mode flags (hiword bit0: windowed) |
+| 004ef6a2 | `-v` flag [med] |
+| 004ef6a8/aa | client size; 004ef6b0/b2 screen metrics |
+| 004ef708 | per-tick counter reset in TimerCallback [med: skip/idle counter] |
+| 004ef8fc | WinMain function pointer (CRT->app link) |
+| 00456ec4 | timer period u16 (10ms = 100Hz [high]); mode dims at 00456ec6 |
 
-## Open questions / next steps
+## 8. Watcall notes for future passes [high]
 
-1. Decompile LAB_0044de58 (100Hz tick): expected to contain the 20fps
-   sim/render pacing (8street claim, unanchored), input polling, RNG chain,
-   and state strides. This is the next RE target.
-2. FUN_0044d9c0 — what thread it starts ("Error starting thread" path);
-   relation to FUN_0044da64 (is 0044da64 that thread body? then who sets
-   004ef674?). [open]
-3. FUN_0044ceb0 — confirm F-key = fullscreen toggle. [hypothesis]
-4. FUN_0041be05 / FUN_0041bf35 internals -> input map spec (backlog task).
+- Compiler spec `openwatcomcpp` (GhiOWat): args in EAX,EDX,EBX,ECX then stack;
+  decompiler shows them as `unaff_EAX/EDX/ECX` / `in_stack_*`; callee cleans
+  (`RET n`; WndProc `RET 0x10` matches its 4 stack params).
+- Win32 imports are cdecl/stdcall and reached through IAT thunks
+  (`CALL CS:[0x004f0xxx]`); the global watcall default proto does NOT model
+  their params — per-function overrides still needed when decompiling
+  import-heavy wrappers.
+- CRT pieces identified: `FUN_00451f22` (init), `FUN_004501bc`/`FUN_0045283c`
+  (stack/argv setup), `FUN_00451edd` (argv parse), `FUN_00450242`
+  (_beginthread wrapper [med]), `FUN_0044d2da` (exit/return-to-CRT).
+
+## 9. Open / next
+
+1. Walk `FUN_0041bfb6` (called every 10ms tick by TimerCallback 0044de58;
+   already located+named) callee tree = frame body.
+2. `FUN_00450242` thread body arg (register-passed) — identify game thread proc.
+3. `FUN_0044b4fc`, `FUN_0041be05`, `FUN_0041bf35` input sinks -> control map.
+4. mciSendCommandA trio in teardown -> CDDA control path (audio cross-check).

@@ -54,3 +54,12 @@ Compaction config (global opencode.jsonc): auto=true, keep=15000, buffer=60000
 than the 20k default). Human controls: touch .state/PAUSE to suspend;
 touch .state/PLAN-COMPLETE to stop forever (agents create it themselves when
 PLAN.md P0-P7 all pass).
+
+## D9 — EXW startup/loop architecture resolved (2026-08-17)
+Via Ghidra BedlamWatcom project (watcall cspec): game loop = game thread +
+periodic timeSetEvent callback (FUN_0041bfb6 = frame driver candidate); the
+message pump is UI-only. Semantic names applied in project: WinMain /
+InitInstance / MsgPump / TimerInit / TimerCallback / WatcomCrtStartup /
+BedlamWndProc. Analysis scripts tracked in tools/ghidra-scripts/; raw dumps
+stay local (gitignored). docs/exw-functions.txt = function DB snapshot
+(675 fns). Full write-up: docs/RE-EXW-MAINLOOP.md.

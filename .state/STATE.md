@@ -1,11 +1,8 @@
 # STATE — project snapshot (update when phase changes)
 
-- Phase: P1 essentially complete (asset formats solved, 961+/1069 parsed, rest
-  classified or editor-only). P2 active: BedlamWatcom project has the single
-  watcom-correct EXW import (never re-import); headless -process passes work.
-  EXW outer architecture SOLVED (boot chain, main@0044d6e8, init FUN_0044d320,
-  pump FUN_0044d93c, WndProc@0044dacc, 100Hz timeSetEvent tick callback
-  LAB_0044de58 = next RE target). See docs/RE-EXW-MAINLOOP.md.
+- Phase: P1 essentially complete; P2 well underway (EXW: watcall import clean, startup
+  chain + pump + WndProc + 100Hz timer tick mapped, names applied in BedlamWatcom;
+  next: tick frame body FUN_0041bfb6. EXD import still pending.)
 - Repo: github.com/roguefort-dev/bedlam-re (main). Local: ~/Documents/bedlam-re
 - Autonomy: tools/nudge.sh + systemd user timer bedlam-nudge.timer (60s) + crontab
   fallback. Heartbeat: .state/heartbeat (stale > 7 min => spawn continuation run).
