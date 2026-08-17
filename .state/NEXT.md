@@ -1,10 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4 prep] Input/control map spec doc (anchors: FUN_0041be05(vk,down) kb,
-   FUN_0041bf35(btn,state) mouse, FUN_0044b4fc(x,y) cursor-per-tick,
-   FUN_0044b428=CursorToGame; see RE-EXW-MAINLOOP.md + RE-EXW-TICK.md).
-2. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
+1. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
    per PLAN sec 7).
 
 ## Backlog (not yet started)
@@ -18,6 +15,29 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 fe14416 [P4 prep] EXW input/control map CLOSED (docs/RE-EXW-INPUT.md,
+  new). Pass A ExwInputSinks.java: KeySink@0041be05(scan,down) = 256B
+  scan-code keystore @004edc44 (1=held; arrows 0x48/4b/4d/50 remapped +0x80
+  -> 0xc8/cb/cd/d0) + 12 level-sampled edge-latch dwords (ESC/1-7/P/M|Space/
+  F1-F3); MouseSink@0041bf35(btn,state) = g_mouse_flags@004dc6e4 bit0=left
+  bit1=right, double-click events verified NO-OP; Alt(SC_KEYMENU)
+  synthesized as scan 0x44. Pass B ExwInputReaders.java: listing+refs
+  census, 17 readers decompiled (226 hits). Semantics: Up/Down arrows =
+  music volume +/-5 clamp 0..100 via FUN_0044c630(vol>>1), repeat gate
+  DAT_0046ae88; P latch = pause toggle (MissionShell@0044771c busy-waits
+  for P again, clears all latches); FUN_0043a5fc = name entry (AnyKeyWait
+  -> ScanToChar@0041fa02, Backspace 0xe, 8-char buf @004e444c); camera =
+  cursor + mouse-drag only. HEADLINE: Left/Right arrow bytes (0x4edd0f/11)
+  have ZERO readers - proven 3 ways (listing census, raw-image pointer
+  probe, no Get*KeyState imports) => keyboard is hotkeys/volume/pause/
+  any-key only, gameplay pointing is all mouse. MAINLOOP sec 6 corrected
+  (0x101 = WM_KEYUP not SYSKEYDOWN; scan codes not vkeys). 26 names
+  persisted (ExwInputNames.java). Manifests OK after run. OSGi LESSON:
+  a script compile error inside analyzeHeadless surfaces ONLY as
+  "class could not be found / Failed to get OSGi bundle" - if a new .java
+  fails to load, javac it against the Ghidra jars first (CP = all lib jars)
+  to see the real error (bit twice: bogus import, then Set<String>.add(
+  Address)).
 - 2026-08-17 cb45cf5 [P3->B2] B2 re-census with real mrs/mrw arms CLOSED
   (prior run died before queue rewrite; this run verified + pushed). Re-ran
   tools/inspect over game-data-2 -> derived-2: BYTE-IDENTICAL vs stub-era
@@ -150,6 +170,14 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+
+- 2026-08-17 23:5x (input-map run): clean unit, 4 headless -process passes
+  (no import), 3 incremental commits. Volume-control discovery links the
+  input map to the music path (g_music_volume@004ddb2c, master vol =
+  vol>>1 -> the 0..50 range seen in RE-EXW-MUSIC now explained: master
+  vol setter takes 0..50). Left/Right-dead proof method (displacement
+  census + pointer probe + import census) is reusable for other DEAD
+  claims.
 
 - 2026-08-17 23:2x (queue-verify run): found queue stale AGAIN (4th time) -
   prior run committed cb45cf5 (B2 re-census) at 23:12 but died before

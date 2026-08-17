@@ -9,6 +9,11 @@ Raw dumps: `ghidra-project/exw-input-sinks.txt`, `exw-input-readers{,2,3}.txt`,
 logs `process-exw-input-*.log` (all gitignored). Plus a raw-image pointer
 probe (python, /tmp scratch) for 0x4edc44-family addresses.
 
+Names persisted in BedlamWatcom this run (ExwInputNames.java, 26 labels):
+KeySink/MouseSink/AnyKeyWait/ScanToChar/InputReset/NameEntryScreen/
+MissionShell + g_keystore/g_mouse_flags/g_scroll_flags/g_music_volume/
+g_drag_active/g_cursor_x/g_cursor_y + the 12 g_latch_* dwords.
+
 Tags: [verified] = read in decompile/listing/disasm; [inferred] = strong
 deduction; [hypothesis] = plausible, unconfirmed. Addresses are EXW VAs.
 

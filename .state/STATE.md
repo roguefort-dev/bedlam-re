@@ -26,6 +26,10 @@
   second agent gets spawned mid-run (happened 2026-08-17, see NEXT.md run notes).
 - Backups: game-data copy at ~/Backups/bedlam-re/game-data (1069 files). Original
   bin/cue on Desktop. Offsite: NOT YET (user to arrange).
+- CLOSED 2026-08-17 (input-map run): EXW input/control map - scan-code
+  keystore @004edc44 (arrows +0x80 remap), 12 edge latches, mouse flags
+  @004dc6e4 (dbl-click dead), Up/Down=volume P=pause, Left/Right arrows
+  DEAD (3-way proof), camera=cursor+drag only - docs/RE-EXW-INPUT.md.
 - Known open: GameMain second hop - FUN_0043d00b (per-frame sim/render; its
   004ede10 read = fade-status, real rate mechanism unknown - D15) +
   FUN_00440e45 (zone/level manager) + divider consumers (FUN_00448ef1,
