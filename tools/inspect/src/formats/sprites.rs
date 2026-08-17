@@ -137,3 +137,97 @@ pub fn dump(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         )
     }
 }
+
+pub fn cgr_directory(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
+    let data = match fs::read(path) {
+        Ok(d) => d,
+        Err(e) => return (String::from("error"), format!("read failed: {}", e)),
+    };
+    if data.len() < 6 {
+        return (String::from("heuristic-failed"), format!("{}B", data.len()));
+    }
+    let count = u16::from_le_bytes([data[0], data[1]]) as usize;
+    if count == 0 || data.len() < 2 + count * 4 {
+        return (
+            String::from("heuristic-failed"),
+            format!("count {} vs {}B", count, data.len()),
+        );
+    }
+    let dir_end = 2 + count * 4;
+    let mut offs: Vec<u32> = Vec::with_capacity(count);
+    for i in 0..count {
+        let b = 2 + i * 4;
+        offs.push(u32::from_le_bytes([
+            data[b],
+            data[b + 1],
+            data[b + 2],
+            data[b + 3],
+        ]));
+    }
+    let mut monotonic = true;
+    for w in offs.windows(2) {
+        if w[0] >= w[1] {
+            monotonic = false;
+        }
+    }
+    let candidates: [usize; 3] = [0, 2, dir_end];
+    let mut chosen: Option<usize> = None;
+    for base in candidates {
+        let minv = offs[0] as usize + base;
+        let maxv = offs[count - 1] as usize + base;
+        if minv >= dir_end && maxv <= data.len() {
+            chosen = Some(base);
+            break;
+        }
+    }
+    let base = match chosen {
+        Some(b) => b,
+        None => {
+            return (
+                String::from("heuristic-failed"),
+                format!(
+                    "no offset base fits (count {} first {} last {} len {})",
+                    count,
+                    offs[0],
+                    offs[count - 1],
+                    data.len()
+                ),
+            )
+        }
+    };
+    let mut entries: Vec<serde_json::Value> = Vec::new();
+    for i in 0..count {
+        let start = base + offs[i] as usize;
+        let end = if i + 1 < count {
+            base + offs[i + 1] as usize
+        } else {
+            data.len()
+        };
+        let len = end.saturating_sub(start);
+        entries.push(serde_json::json!({
+            "i": i, "off": offs[i], "len": len,
+            "head": if start + 8 <= data.len() { hex_head(&data[start..start + 8], 8) } else { String::new() },
+        }));
+    }
+    let doc = serde_json::json!({
+        "file": rel, "count": count, "offset_base": base, "dir_end": dir_end,
+        "monotonic": monotonic, "entries": entries,
+    });
+    let _ = fs::create_dir_all(out_dir);
+    let ok = fs::write(
+        out_dir.join(format!("{}.cgr.json", stem_of(rel))),
+        serde_json::to_string_pretty(&doc).unwrap_or_default(),
+    )
+    .is_ok();
+    (
+        if ok {
+            String::from("directory-parsed")
+        } else {
+            String::from("error")
+        },
+        format!(
+            "count={} base={} monotonic={} (pixel codec open)",
+            count, base, monotonic
+        ),
+    )
+}
