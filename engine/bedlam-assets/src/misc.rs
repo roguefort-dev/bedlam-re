@@ -1,8 +1,8 @@
-//! Miscellaneous bank formats: .min tile colors, .lnk/.lng remaps, .mrw
-//! instrument chunks, .nme name tables, .bdg badge/badge-art records, and the
-//! ascii-percentage helper for text files.
+//! Miscellaneous bank formats: .min tile colors, .lnk/.lng remaps, .nme
+//! name tables, .bdg badge/badge-art records, and the ascii-percentage
+//! helper for text files. (.MRW lives in music.rs with .MRS.)
 
-use crate::{hex_head, i16le, u16le, u32le, AssetsError};
+use crate::{hex_head, i16le, u16le, AssetsError};
 
 /// .min file: `n*16` bytes of per-tile color data. Kept raw (the only parsed
 /// fact is the size divisibility and the tile count).
@@ -66,45 +66,6 @@ pub fn parse_lnk_lng(data: &[u8]) -> Result<LnkRemap, AssetsError> {
         entries.push(u16le(data, i * 2));
     }
     Ok(LnkRemap { entries })
-}
-
-/// One .mrw chunk directory entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MrwChunk {
-    pub off: u32,
-    pub size: u32,
-    /// `off + size` lies within the file.
-    pub fits: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Mrw {
-    pub count: usize,
-    pub chunks: Vec<MrwChunk>,
-}
-
-/// Parse an .mrw chunk table: `u16` count then `count` `(off u32, size u32)`
-/// pairs. Chunk payloads stay in the source buffer (the CLI wraps them).
-pub fn parse_mrw(data: &[u8]) -> Result<Mrw, AssetsError> {
-    if data.len() < 10 {
-        return Err(AssetsError::TooSmall { len: data.len() });
-    }
-    let count = u16le(data, 0) as usize;
-    if 2 + count * 8 > data.len() {
-        return Err(AssetsError::CountOverruns {
-            count,
-            len: data.len(),
-        });
-    }
-    let mut chunks = Vec::with_capacity(count);
-    for i in 0..count {
-        let b = 2 + i * 8;
-        let off = u32le(data, b);
-        let size = u32le(data, b + 4);
-        let fits = off as usize + size as usize <= data.len();
-        chunks.push(MrwChunk { off, size, fits });
-    }
-    Ok(Mrw { count, chunks })
 }
 
 /// One walked .nme section.
@@ -296,28 +257,6 @@ mod tests {
     }
 
     #[test]
-    fn mrw_directory() {
-        let mut d = 2u16.to_le_bytes().to_vec();
-        d.extend_from_slice(&2u32.to_le_bytes()); // off 2
-        d.extend_from_slice(&4u32.to_le_bytes()); // size 4
-        d.extend_from_slice(&[0xAA; 4]); // payload at 2..6
-        d.extend_from_slice(&100u32.to_le_bytes()); // off 100 (outside)
-        d.extend_from_slice(&8u32.to_le_bytes());
-        let m = parse_mrw(&d).unwrap();
-        assert_eq!(m.count, 2);
-        assert!(m.chunks[0].fits);
-        assert_eq!((m.chunks[0].off, m.chunks[0].size), (2, 4));
-        assert!(!m.chunks[1].fits);
-        assert_eq!(parse_mrw(&[0u8; 9]), Err(AssetsError::TooSmall { len: 9 }));
-        let mut big = 5u16.to_le_bytes().to_vec();
-        big.resize(20, 0); // count 5 needs 42B
-        assert_eq!(
-            parse_mrw(&big),
-            Err(AssetsError::CountOverruns { count: 5, len: 20 })
-        );
-    }
-
-    #[test]
     fn nme_walks_rec10_then_zero() {
         // section: count=1, 10-byte record, then zero count at exact end
         let mut d = 1u16.to_le_bytes().to_vec();
@@ -406,7 +345,6 @@ mod tests {
             let d: Vec<u8> = (0..len).map(|_| next()).collect();
             let _ = parse_min(&d);
             let _ = parse_lnk_lng(&d);
-            let _ = parse_mrw(&d);
             let _ = parse_nme(&d);
             let _ = parse_bdg(&d);
             let _ = ascii_pct(&d);

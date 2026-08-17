@@ -13,6 +13,7 @@ pub mod bdl;
 pub mod codecs;
 pub mod misc;
 pub mod mission;
+pub mod music;
 pub mod pal;
 pub mod smk;
 pub mod sprites;
@@ -74,6 +75,10 @@ pub enum AssetsError {
     /// Magic / signature mismatch.
     #[error("bad magic")]
     BadMagic,
+    /// .MRS size disagrees with the header-table layout formula
+    /// (data_off + sum(sizes)). True for all shipped files.
+    #[error("mrs layout: {len}B != data_off+sizes {expected}B")]
+    MrsLayout { len: usize, expected: usize },
     #[error(transparent)]
     Codec(#[from] CodecError),
 }

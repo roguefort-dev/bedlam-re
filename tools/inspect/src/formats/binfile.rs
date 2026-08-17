@@ -257,7 +257,7 @@ pub fn mrw(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    let m = match assets::misc::parse_mrw(&data) {
+    let m = match assets::music::parse_mrw(&data) {
         Ok(m) => m,
         Err(AssetsError::TooSmall { len }) => {
             return (String::from("heuristic-failed"), format!("{}B", len))
