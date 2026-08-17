@@ -182,3 +182,16 @@ byte-identical to the pre-refactor HEAD when invoked identically;
 engine/bedlam-assets/tests/corpus.rs locks that in (deterministic 80-file /
 21-family sample: parse no-panic, 13 byte-exact format rebuilds, 20 rle16 +
 20 byterle codec round-trips, free-fuzz across 22 buffer sizes).
+
+## D17 — bedlam-core timing model: hybrid fixed-sim / per-frame polling (user direction, 2026-08-17)
+
+User decision recorded after D16. bedlam-core uses a hybrid: (a) sim/physics
+= FIXED 60Hz timestep accumulator (never dt) so replay + state hash stay
+exact per PLAN sec 7; (b) input polling, UI hit-tests, cooldowns, cursor,
+audio/video = per-frame at host refresh (dt acceptable) - mirrors the
+original architecture (per-frame poll in the present-paced loop + 100Hz
+service satellites); (c) satellite clocks as integer substeps of the sim
+tick (100Hz service = 5 per 3 ticks, 50Hz fade while fading, 12.5Hz palette
+cycle). Determinism test: same input script -> identical SIM state hash at
+15/60/240Hz host; frame-rate-driven systems are excluded from the hash.
+Spec is pinned on the queue task (.state/NEXT.md) as well.
