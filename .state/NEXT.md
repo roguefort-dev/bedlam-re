@@ -19,10 +19,9 @@
 - Cosmetic RE: create+decompile LAB_00451fbc (Watcom CRT thread trampoline,
   see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
-- bedlam-render/P3 design note (D9): renderer emits canonical 640x480 indexed fb;
-  ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-18 a3ad066 [P3] bedlam-render DESIGN NOTE CLOSED (docs/DESIGN-RENDER.md, new - docs-only run, no code, no Ghidra). Canonical Frame = 640x480 x 8-bit indices + 256 x 6-bit VGA palette; parity/goldens anchor there; everything above is presentation (D9/D12). Contents: RE-fact table with anchors (present chain + vsync verdict D16, palette upload r<<2 @SetPaletteRGB, banks SetPaletteIndex + 0x90..0x97 12.5Hz cycle + region bank 0x5d, fade engine 16.16 + 10-step = 200ms, palette-dirty handshake 004ee9b6, entry-0 quirks, composition order base->sprites->row blits->overlays->entities, camera clamps 9..631/9..463); palette policy: 6-bit canon everywhere, expansion at presentation ONLY (Original v<<2 default vs Full (v<<2)|(v>>4)); bedlam-assets pal.rs Palette = tooling repr, NOT render canon (flagged for a later Vga6 type); D17 concretized: 300Hz microstep scheduler (5 per 60Hz sim tick; service event %3 = 100Hz, fade %6 = 50Hz while fading, bank cycle %24 = 12.5Hz; counter zeroed at boot release mirroring FUN_0041e19d) -> deterministic satellites, hashed; ownership/hash boundary table (interpolation alpha + present timing shape frames, never state; goldens at tick boundaries with interpolation off); 7 open questions each naming its answer source. Manifest verified OK (run was docs-only).
 - 2026-08-17 fe14416 [P4 prep] EXW input/control map CLOSED (docs/RE-EXW-INPUT.md,
   new). Pass A ExwInputSinks.java: KeySink@0041be05(scan,down) = 256B
   scan-code keystore @004edc44 (1=held; arrows 0x48/4b/4d/50 remapped +0x80
@@ -178,6 +177,7 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+- 2026-08-18 00:0x (render-design run): arrived with all 3 Now items claimed -> claim protocol slot 4 = first unblocked BACKLOG item. Skip reasons recorded: B2 import blocked by in-flight item-3 LE-loader research; P4 prep DOSBox-X/Wine needs DURABLE writes outside the repo (AGENTS hard-rule violation for unattended runs - needs an owner decision on tool storage first); cosmetic RE (LAB_00451fbc + surface roles) would take the BedlamWatcom Ghidra -process lock concurrently with the live item-2 naming pass. FISH GOTCHA (new, same family as the apostrophe rule): a Rust lifetime annotation containing a single-quote char inside a bash -c SINGLE-QUOTED heredoc body closes the fish string early -> the whole command dies as a FISH parse error before bash runs (no partial file - verify with ls). Recipe that worked: write the heredoc body apostrophe-free to /tmp/opencode, verify wc/head, then cp into the repo. Also: commit with explicit paths (git add docs/DESIGN-RENDER.md) when siblings have uncommitted WIP in the tree (bedlam-core/* and ExwTickSats.java were live); push carried the prior local-only queue commit 22ca126 along.
 
 - 2026-08-18 00:0x (spawn-storm watch run; stood down, NO work files
   touched): DUPLICATE-SPAWN #4 + CLIENT-DEATH STORM, contained, no damage.
