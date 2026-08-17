@@ -29,14 +29,6 @@ pub fn parent_dir_of(rel: &str) -> String {
     }
 }
 
-pub fn hex_head(data: &[u8], n: usize) -> String {
-    data.iter()
-        .take(n)
-        .map(|b| format!("{:02x}", b))
-        .collect::<Vec<_>>()
-        .join("")
-}
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     let root = PathBuf::from(if args.len() > 1 {

@@ -1,20 +1,7 @@
-use crate::{hex_head, stem_of};
+use crate::stem_of;
+use bedlam_assets as assets;
 use std::fs;
 use std::path::Path;
-
-pub fn parse_vga770(data: &[u8]) -> Option<[[u8; 3]; 256]> {
-    if data.len() < 770 {
-        return None;
-    }
-    let mut p = [[0u8; 3]; 256];
-    for i in 0..256 {
-        for c in 0..3 {
-            let v6 = data[2 + i * 3 + c] & 0x3F;
-            p[i][c] = (v6 << 2) | (v6 >> 4);
-        }
-    }
-    Some(p)
-}
 
 pub fn sibling_vga770(path: &Path) -> Option<[[u8; 3]; 256]> {
     let dir = path.parent()?;
@@ -32,7 +19,7 @@ pub fn sibling_vga770(path: &Path) -> Option<[[u8; 3]; 256]> {
     for c in cands {
         if let Ok(d) = fs::read(&c) {
             if d.len() == 770 {
-                return parse_vga770(&d);
+                return assets::pal::parse_vga770(&d).ok().map(|p| p.0);
             }
         }
     }
@@ -45,12 +32,16 @@ pub fn dump(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
     if data.len() == 770 {
-        let pal = parse_vga770(&data).unwrap();
+        let pal = match assets::pal::parse_vga770(&data) {
+            Ok(p) => p.0,
+            // unreachable for a 770-byte buffer; kept total anyway
+            Err(e) => return (String::from("error"), e.to_string()),
+        };
         let mut img = image::RgbImage::new(256, 256);
-        for idx in 0..256usize {
+        for (idx, c) in pal.iter().enumerate() {
             let cx = ((idx % 16) * 16) as u32;
             let cy = ((idx / 16) * 16) as u32;
-            let rgb = image::Rgb([pal[idx][0], pal[idx][1], pal[idx][2]]);
+            let rgb = image::Rgb([c[0], c[1], c[2]]);
             for y in 0..16u32 {
                 for x in 0..16u32 {
                     img.put_pixel(cx + x, cy + y, rgb);
@@ -72,7 +63,7 @@ pub fn dump(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
     } else {
         (
             format!("unknown-variant-{}B", data.len()),
-            format!("head: {}", hex_head(&data, 16)),
+            format!("head: {}", assets::hex_head(&data, 16)),
         )
     }
 }

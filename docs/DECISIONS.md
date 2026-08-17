@@ -117,3 +117,16 @@ assumes 50Hz fixed logic tick (with 12.5Hz palette phase) until the second
 hop (FUN_0043d00b / FUN_00440e45 bodies) proves a further subdivision — any
 such rate must derive from the 50Hz gate. Write-up:
 docs/RE-EXW-GAMETHREAD.md (script: tools/ghidra-scripts/ExwGameThread.java).
+
+## D14 — Decoder home: engine/bedlam-assets; inspect is a thin CLI (2026-08-17)
+tools/inspect's format decoders promoted into workspace crate
+engine/bedlam-assets per PLAN P3: pure buffer-in/out (no fs/env/wall-clock),
+thiserror-typed errors (AssetsError/CodecError) whose Display strings are a
+STABLE CONTRACT (inspect embeds them verbatim in its status/detail fields),
+and never panic on user-supplied bytes (panic = engine bug). tools/inspect
+keeps only walking/I/O/JSON/PNG serialization. Promotion proven
+behavior-preserving: inspect output over the full 1069-file corpus is
+byte-identical to the pre-refactor HEAD when invoked identically;
+engine/bedlam-assets/tests/corpus.rs locks that in (deterministic 80-file /
+21-family sample: parse no-panic, 13 byte-exact format rebuilds, 20 rle16 +
+20 byterle codec round-trips, free-fuzz across 22 buffer sizes).

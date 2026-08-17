@@ -1,4 +1,5 @@
 use crate::stem_of;
+use bedlam_assets as assets;
 use std::fs;
 use std::path::Path;
 
@@ -8,21 +9,7 @@ pub fn dump(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
     let rate: u32 = 11025;
-    let mut wav: Vec<u8> = Vec::with_capacity(44 + data.len());
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&((36 + data.len()) as u32).to_le_bytes());
-    wav.extend_from_slice(b"WAVE");
-    wav.extend_from_slice(b"fmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&rate.to_le_bytes());
-    wav.extend_from_slice(&rate.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&8u16.to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&(data.len() as u32).to_le_bytes());
-    wav.extend_from_slice(&data);
+    let wav = assets::audio::wav_wrap(&data, rate);
     let _ = fs::create_dir_all(out_dir);
     let p = out_dir.join(format!("{}.wav", stem_of(rel)));
     match fs::write(&p, &wav) {

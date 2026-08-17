@@ -1,9 +1,15 @@
+//! CLI dump shims for mission-layer formats (parsing lives in bedlam-assets).
+
 use crate::formats::pal;
-use crate::{hex_head, stem_of};
+use crate::stem_of;
+use bedlam_assets as assets;
+use bedlam_assets::AssetsError;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+/// Same field order as the legacy PlaneStat so the emitted JSON is identical.
 #[derive(Serialize)]
 struct PlaneStat {
     plane: usize,
@@ -13,15 +19,17 @@ struct PlaneStat {
     top: Vec<(u16, usize)>,
 }
 
-fn top_values(vals: &[u16], n: usize) -> Vec<(u16, usize)> {
-    let mut counts: std::collections::BTreeMap<u16, usize> = std::collections::BTreeMap::new();
-    for v in vals {
-        *counts.entry(*v).or_insert(0) += 1;
-    }
-    let mut list: Vec<(u16, usize)> = counts.into_iter().collect();
-    list.sort_by(|a, b| b.1.cmp(&a.1));
-    list.truncate(n);
-    list
+fn cli_stats(g: &assets::mission::Grid) -> Vec<PlaneStat> {
+    g.plane_stats()
+        .into_iter()
+        .map(|s| PlaneStat {
+            plane: s.plane,
+            min: s.min,
+            max: s.max,
+            uniq: s.uniq,
+            top: s.top,
+        })
+        .collect()
 }
 
 fn write_json(out_dir: &Path, name: &str, doc: &serde_json::Value) -> bool {
@@ -47,49 +55,43 @@ fn plane_png(path: &Path, out_dir: &Path, rel: &str, w: u32, h: u32, plane: &[u1
     }
 }
 
+fn grid_err(e: AssetsError) -> (String, String) {
+    match e {
+        AssetsError::TooSmall { len } => (String::from("heuristic-failed"), format!("{}B", len)),
+        AssetsError::SizeFormula {
+            len,
+            expected,
+            w,
+            h,
+        } => (
+            String::from("heuristic-failed"),
+            format!("size {} != formula {} (w={} h={})", len, expected, w, h),
+        ),
+        other => (String::from("heuristic-failed"), other.to_string()),
+    }
+}
+
 pub fn grid16(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
     let data = match fs::read(path) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() < 4 {
-        return (String::from("heuristic-failed"), format!("{}B", data.len()));
-    }
-    let w = u16::from_le_bytes([data[0], data[1]]) as usize;
-    let h = u16::from_le_bytes([data[2], data[3]]) as usize;
-    let need = 4 + w * h * 16;
-    if data.len() != need {
-        return (
-            String::from("heuristic-failed"),
-            format!("size {} != formula {} (w={} h={})", data.len(), need, w, h),
-        );
-    }
-    let mut stats: Vec<PlaneStat> = Vec::new();
-    let mut plane0: Vec<u16> = Vec::with_capacity(w * h);
-    for p in 0..8 {
-        let mut plane = Vec::with_capacity(w * h);
-        for i in 0..w * h {
-            let o = 4 + p * w * h * 2 + i * 2;
-            plane.push(u16::from_le_bytes([data[o], data[o + 1]]));
-        }
-        let stat = PlaneStat {
-            plane: p,
-            min: *plane.iter().min().unwrap(),
-            max: *plane.iter().max().unwrap(),
-            uniq: plane
-                .iter()
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-            top: top_values(&plane, 6),
-        };
-        if p == 0 {
-            plane0 = plane.clone();
-        }
-        stats.push(stat);
-    }
-    plane_png(path, out_dir, rel, w as u32, h as u32, &plane0, "plane0");
+    let g = match assets::mission::parse_grid16(&data) {
+        Ok(g) => g,
+        Err(e) => return grid_err(e),
+    };
+    let stats = cli_stats(&g);
+    plane_png(
+        path,
+        out_dir,
+        rel,
+        g.w as u32,
+        g.h as u32,
+        &g.planes[0],
+        "plane0",
+    );
     let doc = serde_json::json!({
-        "file": rel, "kind": "grid16", "w": w, "h": h, "planes": 8, "planes_stat": stats,
+        "file": rel, "kind": "grid16", "w": g.w, "h": g.h, "planes": 8, "planes_stat": stats,
     });
     let ok = write_json(out_dir, &format!("{}.grid16.json", stem_of(rel)), &doc);
     let nz: Vec<String> = stats
@@ -102,7 +104,12 @@ pub fn grid16(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         } else {
             String::from("error")
         },
-        format!("{}x{} 8 u16 planes; uniq counts {}", w, h, nz.join(", ")),
+        format!(
+            "{}x{} 8 u16 planes; uniq counts {}",
+            g.w,
+            g.h,
+            nz.join(", ")
+        ),
     )
 }
 
@@ -111,43 +118,22 @@ pub fn grid8(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() < 4 {
-        return (String::from("heuristic-failed"), format!("{}B", data.len()));
-    }
-    let w = u16::from_le_bytes([data[0], data[1]]) as usize;
-    let h = u16::from_le_bytes([data[2], data[3]]) as usize;
-    let need = 4 + w * h * 8;
-    if data.len() != need {
-        return (
-            String::from("heuristic-failed"),
-            format!("size {} != formula {} (w={} h={})", data.len(), need, w, h),
-        );
-    }
-    let mut stats: Vec<PlaneStat> = Vec::new();
-    let mut plane0: Vec<u16> = Vec::new();
-    for p in 0..8 {
-        let mut plane = Vec::with_capacity(w * h);
-        for i in 0..w * h {
-            plane.push(data[4 + p * w * h + i] as u16);
-        }
-        let stat = PlaneStat {
-            plane: p,
-            min: *plane.iter().min().unwrap(),
-            max: *plane.iter().max().unwrap(),
-            uniq: plane
-                .iter()
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-            top: top_values(&plane, 6),
-        };
-        if p == 0 {
-            plane0 = plane.clone();
-        }
-        stats.push(stat);
-    }
-    plane_png(path, out_dir, rel, w as u32, h as u32, &plane0, "plane0");
+    let g = match assets::mission::parse_grid8(&data) {
+        Ok(g) => g,
+        Err(e) => return grid_err(e),
+    };
+    let stats = cli_stats(&g);
+    plane_png(
+        path,
+        out_dir,
+        rel,
+        g.w as u32,
+        g.h as u32,
+        &g.planes[0],
+        "plane0",
+    );
     let doc = serde_json::json!({
-        "file": rel, "kind": "grid8", "w": w, "h": h, "planes": 8, "planes_stat": stats,
+        "file": rel, "kind": "grid8", "w": g.w, "h": g.h, "planes": 8, "planes_stat": stats,
     });
     let ok = write_json(out_dir, &format!("{}.grid8.json", stem_of(rel)), &doc);
     (
@@ -156,12 +142,8 @@ pub fn grid8(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         } else {
             String::from("error")
         },
-        format!("{}x{} 8 u8 planes", w, h),
+        format!("{}x{} 8 u8 planes", g.w, g.h),
     )
-}
-
-fn u16le(d: &[u8], o: usize) -> u16 {
-    u16::from_le_bytes([d[o], d[o + 1]])
 }
 
 pub fn trt(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
@@ -169,33 +151,33 @@ pub fn trt(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() < 2 || (data.len() - 2) % 12 != 0 {
-        return (
-            String::from("heuristic-failed"),
-            format!("len {} not 2+12n", data.len()),
-        );
-    }
-    let n = u16le(&data, 0) as usize;
-    if n * 12 + 2 != data.len() {
-        return (
-            String::from("heuristic-failed"),
-            format!("count {} mismatch", n),
-        );
-    }
+    let t = match assets::mission::parse_trt(&data) {
+        Ok(t) => t,
+        Err(AssetsError::NotMultiple { len }) => {
+            return (
+                String::from("heuristic-failed"),
+                format!("len {} not 2+12n", len),
+            )
+        }
+        Err(AssetsError::CountMismatch { count }) => {
+            return (
+                String::from("heuristic-failed"),
+                format!("count {} mismatch", count),
+            )
+        }
+        Err(e) => return (String::from("heuristic-failed"), e.to_string()),
+    };
     let mut recs: Vec<serde_json::Value> = Vec::new();
-    let mut types: std::collections::BTreeMap<u16, usize> = std::collections::BTreeMap::new();
-    for i in 0..n {
-        let b = 2 + i * 12;
-        let x = u16le(&data, b);
-        let y = u16le(&data, b + 2);
-        let t = u16le(&data, b + 4);
-        *types.entry(t).or_insert(0) += 1;
+    let mut types: BTreeMap<u16, usize> = BTreeMap::new();
+    for (i, r) in t.records.iter().enumerate() {
+        *types.entry(r.kind).or_insert(0) += 1;
         recs.push(serde_json::json!({
-            "i": i, "x": x, "y": y, "type": t,
-            "rest": hex_head(&data[b + 6..b + 12], 6),
+            "i": i, "x": r.x, "y": r.y, "type": r.kind,
+            "rest": assets::hex_head(&r.rest, 6),
         }));
     }
-    let doc = serde_json::json!({ "file": rel, "count": n, "records": recs, "type_counts": types });
+    let doc =
+        serde_json::json!({ "file": rel, "count": t.count, "records": recs, "type_counts": types });
     let ok = write_json(out_dir, &format!("{}.trt.json", stem_of(rel)), &doc);
     (
         if ok {
@@ -203,7 +185,7 @@ pub fn trt(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         } else {
             String::from("error")
         },
-        format!("{} records (x,y,type); type counts {:?}", n, types),
+        format!("{} records (x,y,type); type counts {:?}", t.count, types),
     )
 }
 
@@ -212,27 +194,26 @@ pub fn mrk(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() % 16 != 0 {
-        return (
-            String::from("heuristic-failed"),
-            format!("len {} not 16n", data.len()),
-        );
-    }
-    let n = data.len() / 16;
+    let m = match assets::mission::parse_mrk(&data) {
+        Ok(m) => m,
+        Err(AssetsError::NotMultiple { len }) => {
+            return (
+                String::from("heuristic-failed"),
+                format!("len {} not 16n", len),
+            )
+        }
+        Err(e) => return (String::from("heuristic-failed"), e.to_string()),
+    };
     let mut recs: Vec<serde_json::Value> = Vec::new();
-    let mut types: std::collections::BTreeMap<u16, usize> = std::collections::BTreeMap::new();
-    for i in 0..n {
-        let b = i * 16;
-        let flag = u16le(&data, b);
-        let x = u16le(&data, b + 2);
-        let y = u16le(&data, b + 4);
-        let t = u16le(&data, b + 6);
-        *types.entry(t).or_insert(0) += 1;
+    let mut types: BTreeMap<u16, usize> = BTreeMap::new();
+    for (i, r) in m.records.iter().enumerate() {
+        *types.entry(r.kind).or_insert(0) += 1;
         recs.push(serde_json::json!({
-            "i": i, "flag": flag, "x": x, "y": y, "type": t,
-            "rest": hex_head(&data[b + 8..b + 16], 8),
+            "i": i, "flag": r.flag, "x": r.x, "y": r.y, "type": r.kind,
+            "rest": assets::hex_head(&r.rest, 8),
         }));
     }
+    let n = m.records.len();
     let doc = serde_json::json!({ "file": rel, "count": n, "records": recs, "type_counts": types });
     let ok = write_json(out_dir, &format!("{}.mrk.json", stem_of(rel)), &doc);
     (
@@ -250,28 +231,30 @@ pub fn pos(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() % 16 != 0 {
-        return (
-            String::from("heuristic-failed"),
-            format!("len {} not 16n", data.len()),
-        );
-    }
-    let n = data.len() / 16;
+    let p = match assets::mission::parse_pos(&data) {
+        Ok(p) => p,
+        Err(AssetsError::NotMultiple { len }) => {
+            return (
+                String::from("heuristic-failed"),
+                format!("len {} not 16n", len),
+            )
+        }
+        Err(e) => return (String::from("heuristic-failed"), e.to_string()),
+    };
+    let n = p.slots.len();
     let mut used = 0usize;
     let mut sample: Vec<serde_json::Value> = Vec::new();
-    for i in 0..n {
-        let b = i * 16;
-        let empty = data[b..b + 16].iter().all(|x| *x == 0xFF);
-        if empty {
+    for (i, s) in p.slots.iter().enumerate() {
+        if s.empty {
             continue;
         }
         used += 1;
         if sample.len() < 16 {
             sample.push(serde_json::json!({
                 "i": i,
-                "u16x4": [u16le(&data, b), u16le(&data, b+2), u16le(&data, b+4), u16le(&data, b+6)],
-                "u16x4b": [u16le(&data, b+8), u16le(&data, b+10), u16le(&data, b+12), u16le(&data, b+14)],
-                "head": hex_head(&data[b..b + 16], 16),
+                "u16x4": s.u16x4,
+                "u16x4b": s.u16x4b,
+                "head": assets::hex_head(&s.raw, 16),
             }));
         }
     }
@@ -292,26 +275,27 @@ pub fn pad(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    if data.len() % 6 != 0 {
-        return (
-            String::from("heuristic-failed"),
-            format!("len {} not 6n", data.len()),
-        );
-    }
-    let n = data.len() / 6;
+    let p = match assets::mission::parse_pad(&data) {
+        Ok(p) => p,
+        Err(AssetsError::NotMultiple { len }) => {
+            return (
+                String::from("heuristic-failed"),
+                format!("len {} not 6n", len),
+            )
+        }
+        Err(e) => return (String::from("heuristic-failed"), e.to_string()),
+    };
     let mut recs: Vec<serde_json::Value> = Vec::new();
     let mut fill = 0usize;
-    for i in 0..n {
-        let b = i * 6;
-        let is_fill = data[b..b + 6].iter().all(|x| *x == 0xFF);
-        if is_fill {
-            fill += 1;
-            continue;
+    for (i, slot) in p.slots.iter().enumerate() {
+        match slot {
+            None => fill += 1,
+            Some(r) => recs.push(serde_json::json!({
+                "i": i, "x": r.x, "y": r.y, "type": r.kind,
+            })),
         }
-        recs.push(serde_json::json!({
-            "i": i, "x": u16le(&data, b), "y": u16le(&data, b+2), "type": u16le(&data, b+4),
-        }));
     }
+    let n = p.slots.len();
     let doc = serde_json::json!({ "file": rel, "slots": n, "records": recs, "fill_slots": fill });
     let ok = write_json(out_dir, &format!("{}.pad.json", stem_of(rel)), &doc);
     (
@@ -329,8 +313,8 @@ pub fn pth(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         Ok(d) => d,
         Err(e) => return (String::from("error"), format!("read failed: {}", e)),
     };
-    let count = if data.len() >= 2 { u16le(&data, 0) } else { 0 };
-    let doc = serde_json::json!({ "file": rel, "size": data.len(), "count": count, "head": hex_head(&data, 16) });
+    let p = assets::mission::parse_pth(&data);
+    let doc = serde_json::json!({ "file": rel, "size": data.len(), "count": p.count, "head": assets::hex_head(&p.head, 16) });
     let ok = write_json(out_dir, &format!("{}.pth.json", stem_of(rel)), &doc);
     (
         if ok {
@@ -338,6 +322,6 @@ pub fn pth(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
         } else {
             String::from("error")
         },
-        format!("{}B count={}", data.len(), count),
+        format!("{}B count={}", data.len(), p.count),
     )
 }
