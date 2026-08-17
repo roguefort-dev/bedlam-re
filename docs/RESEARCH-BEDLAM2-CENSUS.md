@@ -214,6 +214,72 @@ ghidra-12.1.2-watcom; case study = alexbevi.com 2026-03-14. confidence: high
 for file facts (structurally cross-checked 3 ways), moderate for 12.0.1-on-12.1.2
 compat until the smoke test runs.]
 
+### 5. Import EXECUTION record (2026-08-18, run d09e41f..this)
+
+DONE end-to-end. Loader path (a) from sec 3 was used: built from source
+(yetmorecode/ghidra-lx-loader master, clone 2026-08-18) with
+gradle 8.14.3 -PGHIDRA_INSTALL_DIR=/home/kato/ghidra-12.1.2-watcom -> 12.1.2-
+stamped extension zip (build clean in 18s, no API drift). Three gotchas fixed
+the research gaps, all now proven:
+1. EXTENSION INSTALL DIR for headless discovery is
+   ~/.config/ghidra/ghidra_12.1.2_DEV/Extensions/ (userSettings/Extensions -
+   verified in GhidraApplicationLayout.findExtensionInstallationDirectories
+   bytecode; NO Ghidra component). The <install>/Extensions/Ghidra dir is only
+   the GUI archive source. [confidence: high, probed]
+2. -loader CLI matches the loader CLASS SIMPLE NAME, not the display name:
+   -loader LeLoader (HeadlessOptions.setLoader -> LoaderService matches
+   Class.getSimpleName()). "Linear Executable (LE-Style DOS)" is rejected.
+3. MzLoader CLAIMS an LE file with MZ stub at higher priority than LeLoader
+   when the loader is not forced (sec 2 fall-through-to-Raw-Binary claim was
+   wrong); it then dies with "Selected Language must have a segmented address
+   space" under x86:LE:32:default. Force -loader LeLoader always.
+Working import command (also the one for any future LE binary):
+  ~/ghidra-12.1.2-watcom/support/analyzeHeadless <projdir> <proj>     -import <file> -loader LeLoader -processor x86:LE:32:default     -cspec openwatcomcpp
+Loader options were set via Java prefs (B2SetLxPrefs.java; the loader reads
+Preferences.userRoot() node yetmorecode.ghidra.lx.Options for defaults because
+the headless -loader-* flag surface is undocumented): fixup labels ON, page
+labels ON, map-extra ON, fixup stats ON.
+
+SMOKE TEST (scratch /tmp/opencode/ghidra-smoke, disposable): ALL 5 gates PASS.
+ i  .object1 0x10000-0x7696f (420208 B) + .object2 0x80000-0x1304ed
+    (722158 B - spans to 0x1304ee exactly, implicit zero-fill present).
+ ii ENTRY 0x66a60 = base 0x10000 + eip 0x56a60 - loader log line confirms the
+    object-relative eip reading of sec 1.
+iii 24041 relocations applied (23939 = sel16:1 + off32:23938, then 102 off32),
+    24023 fix_ labels.
+ iv  Decompile at _entry = sane Watcom DOS4GW CRT startup (int 21h version
+    probe, 0x4458 DX-marker, PSP cmdline @0x81) - exactly right for DOS extender.
+ v  .image overlay 0x0-0xa428e with IMG_ header labels (23990).
+
+REAL IMPORT: game-data-2/BEDLAM.EXE -> BedlamWatcom:/BEDLAM.EXE, full
+auto-analysis green (Decompiler Switch Analysis 15.2s etc). Program list
+checked before (no BEDLAM.EXE) and after (exactly one). Post-import -process
+BEDLAM.EXE -noanalysis pipeline verified working (B2BootCompare pass).
+Dumps: ghidra-project/b2-functions.txt (671 fns vs EXW 675 - same scale),
+b2-strings.txt (414 strings, 216 file-ish), b2-boot-compare.txt.
+
+FIRST BOOT/INIT COMPARISON vs EXW (b2-boot-compare.txt):
+- RNG SEEDS IDENTICAL ACROSS BUILDS: B2 sets EBX=0x39447 (234567) @0x2f812 +
+  ECX=0x1e240 (123456) @0x2f817 inside FUN_0002f731 (2882 B game-init fn,
+  called from CRT init FUN_0006b1bc which passes DAT_001280d4/DAT_001280d8 -
+  candidate B2 rng globals); EXW pins the same pair as data 004ede48/004ede4c.
+  A reseed site MOV [0x11ef1c],0x1e240 lives in FUN_0005eaf9 (5664 B).
+  [confidence: high - exact constants + init-chain position]
+- Entry chain B2: 0x66a60 _entry -> 6b1bc (CRT init: 2f731 game init,
+  6d96e -> 71736 chain) - DOS CRT shape, no Win32 message pump (expected).
+- Strings confirm corpus wiring: C:\MIRAGE\AB_BED\OPTIONS.BDL @0x8418e,
+  BEDLAM.LOG @0x841d1, SOUND\SFX\*.RAW + GAMEGFX\*.PAL families from
+  0x8465b onward - matches the B2 corpus census (second config dir, RAW-only
+  audio).
+Next B2 RE hooks (queued): name _entry chain + FUN_0002f731; find the B2
+tick source (EXW = 100Hz Win timer -> B2 should show PIT/INT 8 hook or
+INT 28h idle); zone/level stride table vs EXW 7x5 @004decb2.
+
+[provenance: import + probes = this run (logs /tmp/opencode/b2-smoke.log,
+b2-import.log, dumps in ghidra-project/); loader options mechanism = Options
+prefs read path; manifest-2 verified OK before + mid + after. confidence:
+high - every gate observed directly.]
+
 ## Divergences vs Bedlam 1 (data layer)
 - 6 zones (A-F) vs 7; missions per zone differ; MISSION5 mostly absent
 - No MRW/MRS music scores (SOUND/MIDI/ present but EMPTY); audio = 106
