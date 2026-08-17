@@ -1,15 +1,10 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3->B2] Re-run tools/inspect over game-data-2 (second corpus) now that
-   the mrs arm is a real dumper (was a partial stub) + decode-song over any
-   B2 MRS/MRW pairs; diff statuses vs the game-data census; document any
-   B2-only quirks in RESEARCH-BEDLAM2-CENSUS.md. Manifest equivalent for
-   game-data-2 if absent (sha256 list only, never content commits).
-2. [P4 prep] Input/control map spec doc (anchors: FUN_0041be05(vk,down) kb,
+1. [P4 prep] Input/control map spec doc (anchors: FUN_0041be05(vk,down) kb,
    FUN_0041bf35(btn,state) mouse, FUN_0044b4fc(x,y) cursor-per-tick,
    FUN_0044b428=CursorToGame; see RE-EXW-MAINLOOP.md + RE-EXW-TICK.md).
-3. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
+2. [P3] bedlam-core crate skeleton (deterministic sim, replay, state hash
    per PLAN sec 7).
 
 ## Backlog (not yet started)
@@ -23,6 +18,22 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 cb45cf5 [P3->B2] B2 re-census with real mrs/mrw arms CLOSED
+  (prior run died before queue rewrite; this run verified + pushed). Re-ran
+  tools/inspect over game-data-2 -> derived-2: BYTE-IDENTICAL vs stub-era
+  summary (989 files, 0 status diffs); decode-song has no B2 input (corpus
+  has ZERO .MRS/.MRW; SOUND/MIDI/ exists but EMPTY - re-verified: 0 files,
+  0 manifest entries). B1 census refreshed same run: derived/ now mrs:parsed
+  5/5 + mrw:parsed 5/5 with loop ticks 331/400/1476/1600/3388 (re-verified
+  in summary.json breakdown). B1 88.9% vs B2 90.0% parsed. B2 quirks
+  documented in RESEARCH-BEDLAM2-CENSUS.md re-census section: MIRAGE/AB_BED
+  second config dir (CONFIG.BDL 61B x2 different sha), PAL variant set
+  B2-only DARKPALT/BRF_TX, pending:queued 3 scene/util files. MANIFEST
+  verification re-run by this run: B1 OK 1069 entries (repo-root paths),
+  B2 OK 989 entries (corpus-relative paths - run sha256sum -c from inside
+  game-data-2). Note: MANIFEST-2.sha256 is deliberately gitignored
+  (3994fb4 acquisition, corpus backed up) while B1 MANIFEST.sha256 is
+  committed - asymmetry left as-is, flagged for a future decision.
 - 2026-08-17 7325d23 + 3530a1b + 0af337f (+66601cf reverted) [P3] Rust
   .MRS/.MRW decoders + stream-parse corpus test + decode-song tool CLOSED.
   (a) engine/bedlam-assets/src/music.rs (commit 7325d23, concurrent
@@ -139,6 +150,17 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+
+- 2026-08-17 23:2x (queue-verify run): found queue stale AGAIN (4th time) -
+  prior run committed cb45cf5 (B2 re-census) at 23:12 but died before
+  NEXT.md rewrite. This run verified every claim against artifacts before
+  marking done: derived-2/summary.json (23:06) populated, 0 mrs/mrw kinds;
+  derived/summary.json (23:08) mrs/mrw 5/5 parsed; both manifests verified.
+  GOTCHA learned: MANIFEST.sha256 paths are repo-relative (check from repo
+  root) but MANIFEST-2.sha256 paths are corpus-relative (check from inside
+  game-data-2) - running from the wrong cwd spews 1000 FAILED lines that
+  TRUNCATE the shell output and can swallow subsequent command results.
+  Keep manifest checks in separate small commands.
 
 - 2026-08-17 22:3x-23:0x (mrs-rust run): DUPLICATE-SPAWN INCIDENT #3, no
   damage, resolved same run. This run started on the P3 MRS/MRW task and
