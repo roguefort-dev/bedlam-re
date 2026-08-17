@@ -69,3 +69,16 @@ differences are pure address shifts (+3 / -4 bytes) from data-length padding. Ve
 the three DIRECTX launchers are one program with trivial data changes (likely version
 strings). RE the launcher once; treat as a single target. Toolchain warm-up passed:
 rizin batch analysis + programmatic diff works.
+
+## Asset decoders complete (tools/inspect, 2026-08-17 session 2)
+Verified by implementation + render (all provenance in RESEARCH-8STREET.md):
+- .BIN image banks: dir u16 count + per-slot-relative u32 offsets; header flags(bit1=hotspot hx,hy)
+  w h; bit0 = RLE16 (bit15=skip cnt&0xFFF, bit14=EOL, EOL rides on skip OR literal words;
+  literal = cnt&0xFFF bytes); raw variant = rows, 0=transparent; w=0/h=0 = empty slot.
+  124/124 banks decode; ~9.3k PNGs rendered incl. 640x480 full-screens (BETWEEN/TITLE/BOXART).
+- .CGR tile banks: 128 tiles; w0>=4 => 10B subhdr + byte-RLE(32,rows); w0<4 => 6B subhdr
+  [0,w,h] + raw w*h bytes (stride 1030 = 6+1024 verified). 44/44 decode; ~5.6k tiles rendered.
+- .NME/.BDG/.POS/.PAD/.TRT/.MRK/.MIN/.LNK/.LNG/.MRW/.SAVED/.HISCORE/.OPTIONS all structurally parsed.
+- Still open: .MRS event encoding, .BLD/.CTG (no runtime loader anywhere - editor-only),
+  CONFIG.BDL, PAL 256B/98B/65536B renderers (semantics known from 8street: darkpal
+  translation, small font palettes, TXPAL 256x256 fire/text xlat tables).

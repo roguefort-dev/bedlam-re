@@ -1,5 +1,5 @@
-use crate::{hex_head, stem_of};
 use crate::formats::pal;
+use crate::{hex_head, stem_of};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;

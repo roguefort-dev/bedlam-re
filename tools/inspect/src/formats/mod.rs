@@ -1,3 +1,4 @@
+pub mod binfile;
 pub mod mission;
 pub mod pal;
 pub mod raw;
