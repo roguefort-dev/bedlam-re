@@ -46,7 +46,7 @@ Chain (SFX path shown for completeness):
   next event; after the while, delta decrements once per tick. FUN_00402db9 =
   VoiceAlloc: variant-1 chunks round-robin 4 sub-voice slots (0x45b020..2c),
   variant-0 always slot 0. A word@004543d4+song*2 != 0xffff pending-restart flag
-  also triggers 004032a5 + play flag. [EXW + DATA, high confidence - full event
+  also triggers 004032a5 + play flag. (DEAD mechanism: word is initialized 0xffff for all 8 songs in the shipped image and nothing but MusicPump ever touches it - see sec 6) [EXW + DATA, high confidence - full event
   grammar VERIFIED against all 5 shipped files, see section 2b]
 - `FUN_00402975` = 16-bit-pair RNG over 004ede48/004ede4a (carry-mixed adds
   0x62e9 / 0x3619, compare 0x9d16) - the consumer of seed dword 004ede48
@@ -127,7 +127,7 @@ checks in the original). One event = u16 LE delta (tick countdown; 1 tick =
 | 0x00..0x7E | NOTE-ON. variant 0: instrument = b, param = 0x10000 (ratio 1.0). variant 1: instrument = variant+7, resample ratio = dword table @00454174[b] (16.16 fixed point; 1.0 at b=0x54, +18 semitone ceiling at 0x66 = 0x2d410, clamped above, 0 below b=0x18), note tag (0045b044) = b-0x54 | +1 byte: volume (observed 9..42); 0xFF = NOTE-OFF: releases the sub-voice whose note tag matches |
 | 0x7F | SONG END: discards 1 byte, copies every chunk (pos,ptr) to shadow song slot song+4, resets shadow state, play flag 0045b010[song]=0, end flag 0045b018[song]=1. UNUSED by shipped data | +1 discarded |
 | 0x80..0xFD | REST / idle gate (state keeps bit7 so the pump skips). UNUSED by shipped data (no occurrence in any stream) | +1 consumed |
-| 0xFE | pattern restart on channel c, ONLY in loop mode (word@0045cdc0[song]==1; MusicStart zeroes it) else fall-through rest. UNUSED by shipped data | +1: channel c |
+| 0xFE | pattern restart on channel c, ONLY in loop mode (word@0045cdc0[song]==1; MusicStart zeroes it) else fall-through rest. UNUSED by shipped data; the loop flag has NO writer of 1 anywhere in EXW (full listing census) - DEAD code path (sec 6) | +1: channel c |
 | 0xFF | unconditional pattern restart on channel c (MrsChunkStart(song,c) re-inits all chunks from the header tables; sets music-active 0046ae78=1) | +1: channel c |
 
 Special MrsNextEvent cases: delta word SIGNED > 30000 (30001..32767) = backward
@@ -209,16 +209,63 @@ the 0xa8-stride per-robot state at 0x4c69e4 (weapon table 0x4de664 stride 0x62,
 0x4deafc stride 0x1c). Robot/mission marker data, not music. [EXW, medium -
 record semantics not decoded]
 
-## 6. Open (next unit)
+## 6. Sub-voice start path + small tails [EXW, CLOSED 2026-08-17]
 
-- .MRS event opcodes: ANSWERED 2026-08-17 (section 2b; byte-validated all 5
-  files). Remaining small tails: (a) FUN_0044c4a8 (called by FUN_0044c3a4 when a
-  free sub-voice is found) - presumed SetFrequency/ratio+volume applier, not yet
-  decompiled; (b) header table C (0045cda8) written but never read by the
-  decompiled chain - dead data or consumed elsewhere; (c) writer of the loop
-  flag 0045cdc0[song]=1 (MusicStart zeroes it; without a writer all music plays
-  as 0xFF-restart loops anyway) and of the pending-restart word 004543d4;
-  (d) W1>1 multi-channel layout untested (all shipped files W1=1).
-- Table C + W1 semantics (all shipped files W1=1, so multi-channel paths
-  are untested by data).
-- RNG 004ede4c: ANSWERED - RandB@004029b6 consumes it (see section 1).
+Closed by three -process passes (tools/ghidra-scripts/ExwMusicTails{,2,3}.java,
+dumps ghidra-project/exw-music-tails{,2,3}.txt; names + plate comments persisted
+in BedlamWatcom). METHOD NOTE: Ghidra reference census MISSES scaled-index
+operands ([EAX*2+0x45cdbe] creates no reference) - global censuses in this
+binary need a raw instruction-text scan (pass 3), not getReferencesTo.
+
+(a) FUN_0044c4a8 = **SubVoiceStart** (named). Guards DS active + voice slot
+in range + buffer ptr non-null + master word nonzero, then on the
+DirectSoundBuffer at voice-table _DAT_004ef4c8[id] five STOCK-vtable calls
+(NO shift, unlike the +4-shifted ddraw surfaces): SetCurrentPosition@+0x34
+(arg 0), SetFrequency@+0x44 = (ratio * 0x2b11) >> 16 = 16.16 ratio x 11025 Hz
+native rate (ratio 1.0 -> 11025; +18st 0x2d410 -> ~31.1 kHz), SetVolume@+0x3c
+= ((master@004ee9b4 * volume) / 0x30 - 0x7f) * 0x7d0 >> 7 (signed hundredths
+of dB; volume byte 9..42 observed, master 0..127 scale), SetPan@+0x40 (arg 0
+= center), Play@+0x30 (0,0,0). Master word 004ee9b4 (named g_music_master_vol)
+is written ONLY by FUN_0044c630(ax) - called from FUN_0043a144 and FUN_0044771c
+(UI volume paths). [EXW, high confidence - formulas straight from the listing]
+
+Call chain (register flow resolved via the MrsTriggerNote shim listing):
+MusicPump -> MrsTriggerNote(EAX = event byte = instrument, EDX = song&3
+(word 0045b03c), EBX = ratio dword 0045b03e, ECX = volume byte (word
+0045b042, read from the stream by MrsNextEvent), stack: note tag 0045b044, 1)
+-> SubVoiceFind@0044c3a4(EAX = inst, EDX = vol<<8, EBX = song, ECX = ratio):
+- guard hiword(004ef690) == 0 (audio mute) and DS active;
+- bound inst < word@004ef5e0[song] (named g_song_inst_count; written by
+  mrw_load@0044c30d = MRW n_inst);
+- base voice id = word@004ef4e0[song*0x40/2 + inst] (mrw_load-assigned,
+  read via the 004ef4de dword-hiword trick);
+- slot 0..3: SubVoiceProbe@0044c5ac = GetStatus@stock+0x24, returns 0 iff
+  DSBSTATUS_PLAYING(1) -> first free slot calls SubVoiceStart(base+slot,
+  SetPan arg 0 pushed by SubVoiceFind). Returns the BASE id (not base+slot).
+QUIRK (faithful-impl note): MusicPump stores the returned BASE id per slot,
+and a volume-0xFF note-off releases DSReleaseVoice(base) - always the
+instrument base buffer, whichever sub-slot is sounding. Notes on slots 1..3
+are never individually stopped (ring out until probed busy). SFX also calls
+SubVoiceStart directly via FUN_0044c8c4. [EXW, high confidence]
+
+(b) header table C (0045cda8, named g_tableC_ptrs): written by load_midi
+ONLY; ZERO readers in the whole program (full listing census, both the
+pointer array and the alias base 0045cda6). Dead data - write-only pointer
+in EXW. [EXW, high confidence]
+
+(c) loop flag word@0045cdc0[song] (named g_music_loopflag): the ONLY writers
+are MusicStart@00403416 and load_midi@00403683, BOTH store 0; reader is
+MusicPump (via alias base 0045cdbe). Nothing ever writes 1 -> the 0xFE
+conditional pattern-restart opcode is DEAD in the shipped EXW; all looping
+is 0xFF unconditional restart. (Matches data: no 0xFE events in any file.)
+pending-restart word@004543d4[song] (named g_music_pending_restart):
+initialized to 0xffff for all 8 slots in the shipped image (DGROUP bytes at
+file offset 0x529d4 are all FF) and only MusicPump touches it (test != 0xffff
+then clear back to 0xffff) -> never fires. Dead mechanism. [EXW + binary
+image, high confidence]
+
+Bonus (cross-ref RE-EXW-PACER.md): SetPaletteRGB sets word@004ee9b6
+(palette-dirty flag); DDFlipOrBlt re-applies SetPalette@+0x7c on the primary
+surface when it is 1, then clears it - the fade -> present handshake.
+
+Still open: (d) W1>1 multi-channel layout untested (all shipped files W1=1).

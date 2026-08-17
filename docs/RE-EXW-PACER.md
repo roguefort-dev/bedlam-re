@@ -52,7 +52,10 @@ bounds the loop bounds the frames.
 - DDFlipOrBlt@0044ad18 [verified]: fullscreen -> surf->vt[0x2c] Flip;
   windowed -> surf->vt[0x14] Blt; hw-cursor handshake (spin on word
   004eedf8 lo==1, set 004eedfa) + GetCursorPos/MousePosHandler re-anchor;
-  SetPalette vt[0x7c] when pending; guarded by g_presenting (004eee5c).
+  SetPalette vt[0x7c] when pending: palette-dirty word 004ee9b6 is set by
+  SetPaletteRGB and re-applied here (then cleared) - fade -> present handshake
+  (music-tails run 2026-08-17, dump exw-music-tails3.txt); guarded by
+  g_presenting (004eee5c).
 
 ## 3. Rate verdict [verified census + inference -> D16]
 
