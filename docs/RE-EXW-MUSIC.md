@@ -33,15 +33,21 @@ Chain (SFX path shown for completeness):
   released via FUN_0044c480 (Release).
 - `FUN_004033d4(song)` = music start/reset: zeroes chunk position counters
   (0045ca60), resets per-chunk state via FUN_00402e74, sets play flag 0045b010[song]=1.
-- `FUN_00402bac` = **sequencer pump** (called from the 100 Hz tick, channel 3 =
-  music only; the "gated pump, chan 3, 20x38B records" of RE-EXW-TICK): per chunk,
-  per 0x26-stride state - bit 0x80 of the state word = idle gate; state word 0xff =
-  unconditional chunk jump `FUN_004032a5(song, target)`; 0xfe = conditional jump
-  (only if song flag 0045cdbe == 1, i.e. loop mode); FUN_00402e74 = advance/read
-  next event into state; FUN_00402e46 = trigger note (4 params from state fields);
-  FUN_00402db9 = allocate one of the 4 sub-voices. FUN_004032a5 = chunk event
-  interpreter entry (= 8street sub_4032A5). DAT_0046ae78 = music-active flag.
-  [EXW, high confidence on structure; opcode semantics partial]
+- `FUN_00402bac` = **MusicPump** (called from the 100 Hz tick; iterates song
+  slot 3 ONLY - `for (song = 3; song < 4; ...)` - exactly one music song is ever
+  sequenced; the "gated pump, chan 3" of RE-EXW-TICK is this song-3 loop).
+  Per tick, per chunk (0x26-stride state): while delta word 0045b038 == 0,
+  dispatch the pending event (0045b03a): note-on/off via FUN_00402e46 (params
+  from state fields), rest (bit7, <0xfe) = skip, 0xfe/0xff = PATTERN RESTART
+  `FUN_004032a5(song, chanbyte)` (NOT a chunk jump: 004032a5 re-inits ALL chunks
+  for channel chanbyte from the header tables; 0xfe only when loop flag
+  word@0045cdc0[song] == 1, else falls through; 0xff always; both set
+  music-active flag DAT_0046ae78 = 1). Then FUN_00402e74 = MrsNextEvent reads the
+  next event; after the while, delta decrements once per tick. FUN_00402db9 =
+  VoiceAlloc: variant-1 chunks round-robin 4 sub-voice slots (0x45b020..2c),
+  variant-0 always slot 0. A word@004543d4+song*2 != 0xffff pending-restart flag
+  also triggers 004032a5 + play flag. [EXW + DATA, high confidence - full event
+  grammar VERIFIED against all 5 shipped files, see section 2b]
 - `FUN_00402975` = 16-bit-pair RNG over 004ede48/004ede4a (carry-mixed adds
   0x62e9 / 0x3619, compare 0x9d16) - the consumer of seed dword 004ede48
   (=123456, cf. RE-EXW-GAMETHREAD); .MRK loader uses it for per-robot spawn
@@ -96,8 +102,62 @@ Validation: file_size == data_off + sum(sizes) holds EXACTLY for all five files:
 (e.g. OPTIONS sizes = 2,6,1442,34,98,194,98,194,866,10; every file starts 2,6 -
 chunks 0/1 look like fixed setup chunks.) [DATA]
 
-Confidence: header + size-array layout VERIFIED; table A/B/C semantics INFERRED
-(consumer = sequencer pump, below) - event-word opcodes still open.
+Header table roles RESOLVED (VERIFIED via load_midi pointer math + the
+MrsChunkStart/MrsNextEvent consumers; the earlier A/B/C labels were only
+guessed):
+
+    +0x04+2*W0   W0 x u16  per-chunk VARIANT word (copied to 0045cce8+song*0x28+i*2):
+                        0 = variant-0 chunks (event byte = instrument id),
+                        else variant-1 (instrument = value+7, byte = note selector)
+    +0x04+4*W0   W0*W1 x u16  START-OFFSET table (ptr 0045cd88): byte offset of
+                        the chunk first event; 0xffff = chunk DISABLED
+    +0x04+4*W0+2*W0*W1  W0*W1 x u16  INITIAL-TICK-DELAY table (ptr 0045cd98):
+                        overrides the first event delta (chunk 1 = song length!)
+    +0x04+4*W0+4*W0*W1  W0*W1 x u16  table C (ptr 0045cda8): set by load_midi,
+                        read by NOTHING in the decompiled chain [open]
+
+## 2b. .MRS event-stream grammar [EXW decompile + DATA, VERIFIED byte-exact, all 5 files]
+
+Per chunk, a flat event stream (chunk data = contiguous arena blocks, no bounds
+checks in the original). One event = u16 LE delta (tick countdown; 1 tick =
+10 ms at the 100 Hz pump), then an event byte b:
+
+| b | meaning | extra bytes |
+|---|---|---|
+| 0x00..0x7E | NOTE-ON. variant 0: instrument = b, param = 0x10000 (ratio 1.0). variant 1: instrument = variant+7, resample ratio = dword table @00454174[b] (16.16 fixed point; 1.0 at b=0x54, +18 semitone ceiling at 0x66 = 0x2d410, clamped above, 0 below b=0x18), note tag (0045b044) = b-0x54 | +1 byte: volume (observed 9..42); 0xFF = NOTE-OFF: releases the sub-voice whose note tag matches |
+| 0x7F | SONG END: discards 1 byte, copies every chunk (pos,ptr) to shadow song slot song+4, resets shadow state, play flag 0045b010[song]=0, end flag 0045b018[song]=1. UNUSED by shipped data | +1 discarded |
+| 0x80..0xFD | REST / idle gate (state keeps bit7 so the pump skips). UNUSED by shipped data (no occurrence in any stream) | +1 consumed |
+| 0xFE | pattern restart on channel c, ONLY in loop mode (word@0045cdc0[song]==1; MusicStart zeroes it) else fall-through rest. UNUSED by shipped data | +1: channel c |
+| 0xFF | unconditional pattern restart on channel c (MrsChunkStart(song,c) re-inits all chunks from the header tables; sets music-active 0046ae78=1) | +1: channel c |
+
+Special MrsNextEvent cases: delta word SIGNED > 30000 (30001..32767) = backward
+stream reposition pos -= delta*4 - 0x1d4be, then re-read delta (loop-back
+encoding; UNUSED by shipped data). Signed < 0 (0xFFxx words) = freeze (pump
+never decrements; the chunk stalls forever = natural stop). A note with
+instrument 0x0E while word@0045b03c in {1,2} = alternate stop path (dead code
+for the song-3 pump, which always has 0045b03c = song&3 = 3).
+
+Structure VERIFIED against all 5 shipped files (script logic reimplements
+MrsChunkStart/MrsNextEvent exactly; see commit):
+
+- chunk 0 = DISABLED in every file (start-offset 0xffff): the 2-byte setup
+  chunk is dead padding. chunk 1 (6 bytes) = the LOOP/TIMING chunk: one event
+  (delta, 0xFF, channel 0) whose initial-tick-delay == the stream first delta ==
+  the SONG LENGTH in 10 ms ticks: BRIEF 331 (3.31 s), SHOP 400, SELECT 1476,
+  DEBRIEF 1600, OPTIONS 3388 - EXACT equality in all 5.
+- every melody chunk stream is consumed to EXACTLY its last byte by whole
+  events (28/28 streams, zero trailing bytes), and each chunk delta sum <=
+  the song length (e.g. OPTIONS c2 = 3388 = song length): the 0xFF restart
+  fires before any stream can run past its end. Songs loop forever via chunk 1.
+- instruments: variant-1 chunks use instrument variant+7 (8..13 observed), all
+  < the matching .MRW n_inst (11 or 14); variant-0 chunks use raw bytes 0..6.
+- variant-1 note bytes observed in 0x4F..0x5E (i.e. -5..+10 table steps);
+  bytes < 0x54 give ratio 0 (silent/rest notes: SELECT c2 = 4, OPTIONS c2 = 36,
+  OPTIONS c6 = 2 events).
+- NOTE-OFF (volume byte 0xFF) only ever appears in variant-1 chunks (e.g.
+  OPTIONS c2: 180 of 360 events) - variant-0 notes play to natural sample end.
+- No 0x7F / 0x80..0xFD / 0xFE events and no >30000 wrap deltas exist anywhere
+  in the shipped corpus (all interpreter-supported but data-unused paths).
 
 ## 3. .MRW container layout [DATA, VERIFIED byte-exact, all 5 files]
 
@@ -151,26 +211,14 @@ record semantics not decoded]
 
 ## 6. Open (next unit)
 
-- .MRS event-word opcodes: IN FLIGHT from the concurrent run (dumps
-  ghidra-project/exw-music-events*.txt; names MrsChunkStart=004032a5,
-  MrsNextEvent=00402e74, MrsTriggerNote=00402e46, VoiceAlloc=00402db9,
-  DSCreateVoice=0044c64c, DSPrimeSubVoice=0044c828, DSReleaseVoice=0044c480,
-  VoiceTableWipe=004035f5, VoicesFree=0043a48d already applied to the Ghidra
-  project, script commit dce31e9). Decoded so far [EXW, medium confidence,
-  from the MrsNextEvent decompile]: per event = u16 delta (loop-wrap when the
-  running state word > 30000: pos -= n*4 - 0x1d4be, re-read) then event byte:
-  0x80 = idle gate; 0x7f = SONG END (all chunk positions reset to chunk
-  starts, play flag 0045b010=0, end flag 0045b018=1); otherwise NOTE-ON with
-  per-chunk encoding variant selected by the MRS header init-state word
-  (0045cce6): variant 0 = byte is the instrument id (state 0045b03a);
-  variant 1 = note = byte-0x54, instrument = init+7, param dword from table
-  00454174[byte]; then ONE more byte -> 0045b042 (volume?). REMAINING:
-  MrsNextEvent tail (special case 0xe sub 1/2 + _DAT_004edb4c),
-  MrsTriggerNote 4-param decode, byte-validate against BRIEF.MRS.
-  Original plan text kept: consumers - FUN_0044c2cc (load_midi
-  tail: MRW load + sequencer start), the 100Hz-driven sequencer pump
-  (FUN_00402bac "gated pump, chan 3" per RE-EXW-TICK open list, 20x38B records),
-  FUN_004034ef/004035f5/004033d4 (stop/reset/start).
-- Table A/B/C + W1 semantics (all shipped files W1=1, so multi-channel paths
+- .MRS event opcodes: ANSWERED 2026-08-17 (section 2b; byte-validated all 5
+  files). Remaining small tails: (a) FUN_0044c4a8 (called by FUN_0044c3a4 when a
+  free sub-voice is found) - presumed SetFrequency/ratio+volume applier, not yet
+  decompiled; (b) header table C (0045cda8) written but never read by the
+  decompiled chain - dead data or consumed elsewhere; (c) writer of the loop
+  flag 0045cdc0[song]=1 (MusicStart zeroes it; without a writer all music plays
+  as 0xFF-restart loops anyway) and of the pending-restart word 004543d4;
+  (d) W1>1 multi-channel layout untested (all shipped files W1=1).
+- Table C + W1 semantics (all shipped files W1=1, so multi-channel paths
   are untested by data).
 - RNG 004ede4c: ANSWERED - RandB@004029b6 consumes it (see section 1).
