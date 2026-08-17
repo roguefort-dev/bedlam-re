@@ -1,15 +1,15 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] B2 import EXECUTION (unblocked by 976f19f): install ghidra-lx-loader
-   (build from source preferred: gradle -PGHIDRA_INSTALL_DIR=/home/kato/
-   ghidra-12.1.2-watcom, no Ghidra source tree needed; force-install v12.0.1
-   as plan B), scratch-project smoke test in /tmp/opencode, then import
-   game-data-2/BEDLAM.EXE into BedlamWatcom per the 5-step runbook in
-   RESEARCH-BEDLAM2-CENSUS.md (B2 Ghidra import plan) sec 4; verify blocks
-   0x10000/0x80000 (span to 0x1304ee), entry 0x66a60 (object-relative eip
-   0x56a60 + base), fixup labels; seed
-   function DB + first boot/init comparison vs EXW.
+1. [P2] B2 entry-chain naming + tick-source hunt (needs BedlamWatcom
+   -process BEDLAM.EXE -noanalysis passes only - NEVER a second import):
+   name _entry@0x66a60, CRT init 6b1bc, game-init FUN_0002f731 (seeds both
+   RNGs 123456/234567; args DAT_001280d4/d8 = candidate rng globals);
+   find the B2 tick source (EXW = 100Hz Win timer + worker thread; B2 DOS
+   should show a PIT/INT 8 hook, INT 28h idle, or polled PIT read - probe
+   for int 8/1Ch vectors, ports 0x40-0x43, INT 28h); locate zone/level
+   stride table (EXW 7x5 @004decb2, mission clamp formula; B2 census says
+   6 zones x ? levels). Anchor facts in RESEARCH-BEDLAM2-CENSUS.md sec 5.
 
 ## Backlog (not yet started)
 - P3: bedlam-render + bedlam-platform wgpu skeleton per D20 and
@@ -27,6 +27,22 @@
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
 ## Done (append)
+- 2026-08-18 dcf43d2+d09e41f+a36b15f+75c1474 [P2] B2 import EXECUTION CLOSED.
+  ghidra-lx-loader built from source (master clone, gradle 8.14.3 vs our
+  12.1.2 DEV install; clean 18s build = zero version risk) and installed.
+  THREE gotchas fixed + documented (census doc sec 5): headless extension
+  dir is userSettings/Extensions (NOT install/Extensions/Ghidra), -loader
+  matches class simple name (LeLoader, not display name), MzLoader claims
+  LE files at higher priority unless -loader LeLoader forced (research
+  fall-through claim corrected). Loader options set via Java prefs
+  (B2SetLxPrefs.java; B2SmokeVerify/B2Census/B2ListLoaders/B2BootCompare
+  scripts). Smoke test 5/5 gates PASS on scratch project; real import into
+  BedlamWatcom with full auto-analysis green; census 671 fns (EXW 675),
+  414 strings / 216 fileish (MIRAGE AB_BED + SFX RAW + GAMEGFX PAL all
+  confirmed in-binary). FIRST BOOT COMPARISON vs EXW: RNG seed constants
+  123456/234567 IDENTICAL (B2 FUN_0002f731 game-init via CRT 6b1bc; reseed
+  [0x11ef1c]<-123456 in FUN_0005eaf9) - strongest cross-build parity fact
+  yet. Manifests OK before+mid+after (both corpora only read).
 - 2026-08-18 6f22968+e02b80b+39f4fac [P2] Tick satellite naming pass CLOSED: repaired census script; 19 callees decompiled+named; 10 labels persisted; 4 DirectDraw surface roles distinguished; CRT thread trampoline chain closed.
 - 2026-08-18 f15eb60+7396491+889cbef [P3] bedlam-core crate skeleton CLOSED
   (D17). engine/bedlam-core: hermetic deterministic sim skeleton per PLAN

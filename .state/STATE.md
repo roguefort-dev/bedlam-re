@@ -18,6 +18,15 @@
   AppActivate, TickWorker.., GameThread/GoFlagSet/GameMain - see
   docs/RE-EXW-MAINLOOP.md, docs/RE-EXW-TICK.md, docs/RE-EXW-GAMETHREAD.md).
   EXD import still pending.
+- CLOSED 2026-08-18 (b2-import run): B2 DOS IMPORT DONE - ghidra-lx-loader
+  built from source vs our exact 12.1.2 install (zero version risk),
+  installed to userSettings/Extensions; import command + 3 gotchas in
+  RESEARCH-BEDLAM2-CENSUS.md sec 5 (-loader LeLoader forced; MzLoader
+  otherwise claims LE first). BedlamWatcom:/BEDLAM.EXE analyzed: 671 fns,
+  blocks 0x10000/0x80000-0x1304ee, entry 0x66a60, 24041 applied fixups.
+  First cross-build parity fact: RNG seeds 123456/234567 identical in B2
+  (FUN_0002f731 game-init) and EXW (004ede48/4c). B2 pipeline = -process
+  BEDLAM.EXE -noanalysis from here on (NEVER re-import).
 - Repo: github.com/roguefort-dev/bedlam-re (main). Local: ~/Documents/bedlam-re
 - Autonomy: tools/nudge.sh + systemd user timer bedlam-nudge.timer (60s) + crontab
   fallback. Heartbeat: .state/heartbeat (stale > 7 min => spawn continuation run).
