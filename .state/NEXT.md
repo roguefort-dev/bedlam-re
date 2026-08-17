@@ -1,23 +1,19 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] Decompile the game worker-thread body 0044dea0..0044dfec (THE sim/render
-   loop; start address proven from GameThreadStart listing in
-   docs/RE-EXW-TICK.md). Region is disassembled but not a function yet:
-   create it, decompile, walk callees. Expect: 20fps sim/render pacing
-   (8street claim, still unanchored), main state machine strides, RNG chain
-   entry, and confirmation of who sets go flag 004ef674 (instruction at
-   0044deca writes it; FUN_0044d9b4 also writes it). Extend
-   docs/RE-EXW-TICK.md or start docs/RE-EXW-GAMETHREAD.md. Ghidra discipline:
-   -process BEDLAM.EXW -noanalysis postScript, NEVER re-import.
-2. [P1->P3] Promote the tools/inspect decoders into a proper workspace crate
+1. [P1->P3] Promote the tools/inspect decoders into a proper workspace crate
    engine/bedlam-assets (lib + unit tests + round-trip test over a sample of
    game-data, manifest-checked). Keep tools/inspect as a thin CLI over the crate.
-3. [P2] RE the .MRS loader in EXW (open questions in RESEARCH-8STREET.md) to close
+2. [P2] RE the .MRS loader in EXW (open questions in RESEARCH-8STREET.md) to close
    the last mission-format gap; likewise CONFIG.BDL (61B).
-4. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00402bac gated
+3. [P2] Tick follow-ups from docs/RE-EXW-TICK.md open list: FUN_00402bac gated
    pump (20x38B records, chan 3), FUN_00425901 50Hz update, FUN_0044b428 scroll
    delta source, resolve .data slot 00457874, DDRAW vtable +0x18 mapping.
+4. [P2] GameMain second hop (from docs/RE-EXW-GAMETHREAD.md open list):
+   decompile FUN_0043d00b (reads 50Hz gate 004ede10 - the per-frame sim/render
+   step; settle whether the 50Hz gate is further subdivided) + FUN_00440e45
+   (zone/level manager) + find GoFlagSet@0044d9b4 caller (releases TimerInit
+   spin). RNG function consuming seeds 004ede48/004ede4c.
 
 ## Backlog (not yet started)
 - B2: run inspect over game-data-2 again after any decoder change (second fuzz
@@ -33,6 +29,16 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 9bb6793 [P2] EXW game worker-thread 0044dea0 decompiled: it is a
+  59-byte trampoline -> GameMain@0041c050 (the real game shell/loop, decompiled
+  + named). 8street 20fps claim REFUTED at this depth: no Sleep/timeGetTime on
+  the game thread; pacing = 100Hz tick -> 50Hz gate 004ede10 (parity budget
+  50Hz, D13). Zone/level strides: 7 zones x 5 levels, mission =
+  clamp((zone-2)*5+level-1,1,26), completion table 17x12 @004decb2. RNG seeds
+  004ede48=123456 / 004ede4c=234567. Go-flag 004ef674 writer set =
+  {GameThreadStart=0, GoFlagSet=1}; 0044deca misread corrected (writes thread
+  id 004ef694=-1). Names: GameThread, GoFlagSet, GameMain. Docs:
+  RE-EXW-GAMETHREAD.md (new), RE-EXW-TICK.md corrections, DECISIONS D13.
 - 2026-08-17 19cfb6f [P2] EXW 100Hz tick RE done: TimerCallback=service routine
   (100Hz mouse poll+clamp+store, 5 counters, 50Hz sub-gate, scroll clamp
   9..631/9..463, 8-frame palette cycle 0x90-0x97 @12.5Hz); sim/render loop
@@ -57,3 +63,8 @@
   live continuation run before rewriting shared state files.
 - Raw Ghidra dumps live in ghidra-project/ ROOT (exw-*.txt), not
   ghidra-project/analysis/ as older docs say.
+- 2026-08-17 04:5x (gamethread run): clean run, both manifests OK, two headless
+  -process passes (dump+create, naming). Prior-run misread corrected: 0044deca
+  writes thread id 004ef694 (=-1), NOT go flag 004ef674 - see
+  docs/RE-EXW-GAMETHREAD.md. One doc edit self-inflicted (DECISIONS D12 tail
+  briefly clobbered) - caught and restored before commit.
