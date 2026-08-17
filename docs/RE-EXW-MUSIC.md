@@ -45,7 +45,11 @@ Chain (SFX path shown for completeness):
 - `FUN_00402975` = 16-bit-pair RNG over 004ede48/004ede4a (carry-mixed adds
   0x62e9 / 0x3619, compare 0x9d16) - the consumer of seed dword 004ede48
   (=123456, cf. RE-EXW-GAMETHREAD); .MRK loader uses it for per-robot spawn
-  direction (`rand() & 3`).
+  direction (`rand() & 3`). Now named **RandA** in the Ghidra project;
+  concurrent run also found twin **RandB@004029b6** consuming 004ede4c/004ede4e
+  (= 234567 halves) - CLOSES the second-seed question. 00402965 renamed
+  MemZero (rep-stos zero-fill), fixing the earlier Rand16 misname. [names:
+  script commit ee6089e, verified vs decompils]
 - `FUN_00403642(base, song)` = **load_midi** [VERIFIED by structure]: stops current
   music (`FUN_004034ef(song)` = per-chunk release of 4 sub-voices each;
   `FUN_0043a48d` free voices; `FUN_004035f5` = voice-table wipe - confirms table
@@ -147,11 +151,26 @@ record semantics not decoded]
 
 ## 6. Open (next unit)
 
-- .MRS event-word opcodes: decompile the consumers - FUN_0044c2cc (load_midi
+- .MRS event-word opcodes: IN FLIGHT from the concurrent run (dumps
+  ghidra-project/exw-music-events*.txt; names MrsChunkStart=004032a5,
+  MrsNextEvent=00402e74, MrsTriggerNote=00402e46, VoiceAlloc=00402db9,
+  DSCreateVoice=0044c64c, DSPrimeSubVoice=0044c828, DSReleaseVoice=0044c480,
+  VoiceTableWipe=004035f5, VoicesFree=0043a48d already applied to the Ghidra
+  project, script commit dce31e9). Decoded so far [EXW, medium confidence,
+  from the MrsNextEvent decompile]: per event = u16 delta (loop-wrap when the
+  running state word > 30000: pos -= n*4 - 0x1d4be, re-read) then event byte:
+  0x80 = idle gate; 0x7f = SONG END (all chunk positions reset to chunk
+  starts, play flag 0045b010=0, end flag 0045b018=1); otherwise NOTE-ON with
+  per-chunk encoding variant selected by the MRS header init-state word
+  (0045cce6): variant 0 = byte is the instrument id (state 0045b03a);
+  variant 1 = note = byte-0x54, instrument = init+7, param dword from table
+  00454174[byte]; then ONE more byte -> 0045b042 (volume?). REMAINING:
+  MrsNextEvent tail (special case 0xe sub 1/2 + _DAT_004edb4c),
+  MrsTriggerNote 4-param decode, byte-validate against BRIEF.MRS.
+  Original plan text kept: consumers - FUN_0044c2cc (load_midi
   tail: MRW load + sequencer start), the 100Hz-driven sequencer pump
   (FUN_00402bac "gated pump, chan 3" per RE-EXW-TICK open list, 20x38B records),
   FUN_004034ef/004035f5/004033d4 (stop/reset/start).
 - Table A/B/C + W1 semantics (all shipped files W1=1, so multi-channel paths
   are untested by data).
-- RNG: relationship of 004ede4c (=234567) to FUN_00402975 (which mixes only
-  004ede48/004ede4a) - second generator or second half of one wide state.
+- RNG 004ede4c: ANSWERED - RandB@004029b6 consumes it (see section 1).
