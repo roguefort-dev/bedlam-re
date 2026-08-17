@@ -198,6 +198,7 @@ PY
 [ -z "$free_items" ] && free_items="1"
 item=$(echo "$free_items" | awk "{print \$1}")
 
+slotid=$(date +%s)
 echo "$nowh $((c+1))" > "$STATE/spawns"
 
 for f in "$STATE/nudge.log" "$STATE/nudge-run.log"; do
@@ -209,10 +210,13 @@ done
 OPENC=opencode2
 command -v opencode2 >/dev/null 2>&1 || OPENC=/home/kato/.local/share/fnm/node-versions/v24.19.0/installation/lib/node_modules/@opencode-ai/cli/bin/opencode2.exe
 
-PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. FIRST ACTIONS: (1) touch .state/heartbeat; (2) create your claim file by running: echo task line > .state/claims/@ITEM@-claim - this reserves queue item @ITEM@ from the Now section of .state/NEXT.md and one of 5 concurrency slots. Work ONLY that queue item; if its claim file already exists, pick the next unclaimed number instead. Commit EARLY and OFTEN in small increments. AT THE END: update NEXT.md (remove your finished item, renumber), DELETE your claim file, git push. If you hit a transport error, stop cleanly and record progress in NEXT.md; your claim is reaped after 70 minutes and the item re-queued. Never start an analyzeHeadless import that is already running or already succeeded. Do not ask questions. Do not wait for input."
+PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. FIRST ACTIONS: (1) touch .state/heartbeat; (2) create your claim file by running: echo task line > .state/claims/@ITEM@-claim and DELETE the placeholder .state/claims/@ITEM@-*.claim left by the spawner (same item number, different suffix) so the slot is counted exactly once - this reserves queue item @ITEM@ from the Now section of .state/NEXT.md and one of 5 concurrency slots. Work ONLY that queue item; if its claim file already exists, pick the next unclaimed number instead. Commit EARLY and OFTEN in small increments. AT THE END: update NEXT.md (remove your finished item, renumber), DELETE your claim file, git push. If you hit a transport error, stop cleanly and record progress in NEXT.md; your claim is reaped after 70 minutes and the item re-queued. Never start an analyzeHeadless import that is already running or already succeeded. Do not ask questions. Do not wait for input."
 PROMPT="${PROMPT//@ITEM@/$item}"
 
 date +%s > "$STATE/last-spawn-ts"
+# reserve the item NOW (agent claim lands later; without this, back-to-back
+# ticks duplicate-spawn the same item during agent startup latency)
+echo "reserved $(date -Is)" > "$CLAIMS/$item-$slotid.claim"
 echo "$(date -Is) spawning agent for queue item $item ($((ncl+1))/$MAXAGENTS slots)" >> "$STATE/nudge.log"
 
 RUNLINE="cd \"$PLAN_DIR\" && touch \"$HB\" && timeout 3900 \"$OPENC\" run --auto --title \"bedlam-nudge-item$item\" \"$PROMPT\" >> \"$STATE/nudge-run.log\" 2>&1"
