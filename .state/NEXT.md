@@ -1,22 +1,12 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] GameMain second hop - PROMOTED (pacing question reopened by D15):
-   decompile FUN_0043d00b (per-frame sim/render; its 004ede10 read is now
-   known to be a FADE-STATUS check, not a rate gate - find the real rate
-   mechanism) + FUN_00440e45 (zone/level manager). Second-hop candidates
-   from the gamethread/tick2 xref lists: FUN_00448ef1 (reads divider
-   004edbc8 4x - render/anim pacer?), FUN_00402b48 (called every 100Hz
-   tick), FUN_00402965 (called everywhere - yield/commit?). Goal: settle
-   the sim/render rate (D15 left it UNKNOWN; 20fps refuted, 50Hz unproven).
-   NOTE: GoFlagSet caller is DONE (= FUN_0041e19d, tick2 run); RNG seed
-   consumers DONE (RandA/RandB).
-2. [P2] Music small tails (one -process pass, no import): decompile
+1. [P2] Music small tails (one -process pass, no import): decompile
    FUN_0044c4a8 (sub-voice start: presumed SetFrequency 16.16 ratio + volume
    applier consuming 0045b03e/0045b042); xref census for header table C
    (0045cda8) reads, loop-flag writer 0045cdc0[song]=1, restart-word writer
    004543d4. Optional: plate comments for MusicPump/MrsChunkStart semantics.
-3. [P3] Rust .MRS/.MRW decoders + stream-parse corpus test in
+2. [P3] Rust .MRS/.MRW decoders + stream-parse corpus test in
    engine/bedlam-assets (grammar: docs/RE-EXW-MUSIC.md sections 2/2b/3; also
    decode-song tool => duration/instrument table). Natural follow-on to the
    existing codec tests. The .PAL/.BIN fade-path findings (RE-EXW-TICK.md
@@ -42,6 +32,22 @@
   ALL resolution/scaling is presentation-layer only.
 
 ## Done (append)
+- 2026-08-17 7406875 [P2] GameMain second hop + pacer CLOSED (pacer run,
+  died before queue rewrite; follow-up run verified commit vs task text):
+  mission loop FUN_0043d00b = poll -> sim/render -> PresentCopy ->
+  g_frame_count++ -> PresentEnd, no software rate gate; Sleep and
+  WaitForSingleObject each have exactly 1 non-loop caller (shutdown path /
+  Watcom CRT recursive mutex); 0044ac5c = LockStaging (IsLost/Restore/Lock
+  on staging surf, ptr cache 004ee9e8); 0044ad18 = DDFlipOrBlt (Flip/Blt +
+  hw-cursor handshake); 00448ef1 = HEREIAM menu/high-score screen (divider
+  reads = change-detection snapshots, not a rate gate). => D16: one
+  sim/render frame per completed DD present = vsync-locked; parity = fixed
+  60Hz sim timestep (D9/D12 split). Surface vtables uniform +4 (ONE extra
+  slot @0x0c, 9 anchors) - supersedes tick2 +8/2-slot reading. Names:
+  MemCopy/SurfaceLock/PresentCopy/PresentEnd/DDFlipOrBlt/AnimSprites/
+  AnimEntities/DrawOverlays/PlayClockTick/GameGoRelease + g_frame_count
+  etc. Docs: RE-EXW-PACER.md (new), DECISIONS D16, RE-EXW-TICK.md vtable
+  corrections. Script: ExwPacerNames.java.
 - 2026-08-17 07ce819+3bd9c22+1f05c37+8bc4cf1 [P2] EXW tick follow-ups ALL
   CLOSED (tick2 run, 2x -process passes, no import): FUN_00425901=FadeStep
   (50Hz palette-fade stepper over 768ch 16.16 accumulators @004edc38 ->
@@ -104,6 +110,11 @@
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
 
 ## Run notes
+- 2026-08-17 20:2x (queue-housekeeping + music-tails run): found queue
+  stale - pacer run committed 7406875 (D16) at 19:58 but died before
+  rewriting NEXT.md. This run verified the commit contents against the task
+  text, marked task 1 done, promoted music tails to top. Tree clean,
+  manifest OK (1069 files) before work started.
 - 2026-08-17 18:xx (tick2 run): clean run, 2 headless -process passes (no
   import), manifests OK. LESSON: pgrep -f analyzeHeadless FALSE-POSITIVES on
   the continuation agent own cmdline (the nudge prompt text contains the word
