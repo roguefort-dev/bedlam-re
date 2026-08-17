@@ -195,3 +195,19 @@ tick (100Hz service = 5 per 3 ticks, 50Hz fade while fading, 12.5Hz palette
 cycle). Determinism test: same input script -> identical SIM state hash at
 15/60/240Hz host; frame-rate-driven systems are excluded from the hash.
 Spec is pinned on the queue task (.state/NEXT.md) as well.
+
+## D18 — B2 LE import strategy: yetmorecode lx-loader into the watcom Ghidra build, raw-binary postScript as final fallback (2026-08-18)
+
+BEDLAM.EXE (game-data-2) is a Watcom LE/DOS4GW image; stock Ghidra has no
+LE/LX loader (issue #532 open since 2019, verified against local 12.1.2
+Base.jar). Plan of record for the B2 import task: PRIMARY = yetmorecode/
+ghidra-lx-loader (Apache-2.0, DOS/4 LE support, full fixups) installed
+into ~/ghidra-12.1.2-watcom/Ghidra/Extensions (user-writable install that
+carries x86openwatcom.cspec; /opt is root-owned), smoke-tested on a
+throwaway project first, source-rebuilt against 12.1.2 if the prebuilt
+v12.0.1 zip is version-rejected. FALLBACK = oshogbo 1.7 (no license: run
+only, never copy). LAST RESORT = raw binary + -process postScript
+building the two blocks from the verified anatomy table (CODE 0x10000
+size 0x66970; DATA 0x80000 vsize 0xb04ee, 0x648f file-backed). One
+import into BedlamWatcom ever, then -process only. Full anatomy + plan:
+docs/RESEARCH-BEDLAM2-CENSUS.md (B2 import prep section).

@@ -191,6 +191,122 @@ compat until the smoke test runs.]
   B1) + B2-only DARKPALT.PAL and BRF_TX.PAL; the 65536B (TXPAL1-3) and
   98B (CONSPAL/FULLPAL) variant sets are identical by name
 
+## B2 import prep: DOS4GW LE loader research + concrete import plan (2026-08-18)
+
+Task: how to get game-data-2/BEDLAM.EXE (Watcom LE + DOS4GW) into Ghidra
+for the B2 RE pass. Read-only research; no Ghidra project changes this run.
+
+### BEDLAM.EXE anatomy - verified by direct parse this run
+[provenance: byte-level parse of game-data-2/BEDLAM.EXE vs Open Watcom
+exeflat.h field layout; self-consistency gates below; confidence: high]
+
+- 672,399 B (0xa428f). MZ stub (DOS4GW banner string at file 0x4485 inside
+  the stub), LE header at e_lfanew = 0x4a90. file(1): "MS-DOS executable,
+  LE for unknown OS 0x1" (os_type=1, the OS/2-style value Watcom emits).
+- LE header fields that matter (offsets from 0x4a90): cpu=386, page_size
+  0x1000 @+0x28, mpages=110 @+0x14, EIP = obj 1 + 0x56a60 @+0x18/1c,
+  ESP = obj 2 + 0xb04ee @+0x20/24, LE last-page byte count 0x48f @+0x2c
+  (LX would be page_shift here - key LE/LX divergence), objtab @+0x40
+  value 0xc4 with n=2 @+0x44, object page map @+0x48 value 0xf4,
+  resident names @+0x58 value 0x2ac ("BEDLAM"), fixup page table @+0x68
+  value 0x2b7, fixup records @+0x6c value 0x473, import tables region
+  ends 0x322d0 (@+0x70/+0x78), data pages @+0x80 value 0x36e00.
+- Object table (24 B entries, content-decoded):
+  - obj1 CODE: base 0x00010000, vsize 0x66970 (420,720 B), pages 1..103,
+    flags 0x2045; bits 0x1 R + 0x2 W + 0x4 X (X only on this object) +
+    0x2000 32-bit/big; role of 0x40 not pinned [confidence: low, raw kept].
+  - obj2 DATA: base 0x00080000, vsize 0xb04ee (722,158 B), pages 104..110
+    only, flags 0x2043 (R+W+big). 7 file-backed pages = 0x648f B mapped,
+    remainder is zero-fill BSS.
+- Page map is the identity permutation (pte i = i+1, flags 0), no
+  iterated/invalid pages -> the image is one contiguous run.
+- Self-consistency gates ALL passed: 103+7 = 110 = mpages; page map
+  (0xf4..0x2ac, 110x4 B) ends exactly where resident names begin; data
+  pages 0x36e00 + 109x0x1000 + 0x48f == 0xa428f == exact file size; EIP
+  linear 0x10000+0x56a60 = 0x66a60 lands inside CODE; ESP linear
+  0x80000+0xb04ee = 0x1304ee = DATA base + vsize (top-of-object stack).
+- Fixup records @0x4a90+0x473 observed with ptr16:32 sources and
+  import-style target flag bytes; full entry-bundle / MODREF decode NOT
+  done this run [confidence: medium for presence, low for detail].
+- Linear-address anchor for later cross-checks: file 0xa20f7 (runtime
+  "DOS4GW" string, second hit) is logical page 108 -> DATA + 0x42f7 ->
+  linear 0x842f7 [derived, unverified against a listing].
+
+### Ghidra LE/LX support status
+[provenance: local Base.jar listing + github.com/NationalSecurityAgency/ghidra
+issue #532 + loader repos; confidence: high]
+
+- Stock Ghidra 12.1.2 has NO LE/LX loader: Base.jar ghidra/app/util/opinion/
+  contains 30 loaders (Mz, Ne, Pe, Coff, Omf, Pef, ...) - no Linear
+  anything. Official position: issue #532 "DOS MZ LE loader support",
+  open since 2019-04-29, maintainer answer states Ghidra does not support
+  the LE format; still open, no stock plan.
+- Why a bound LE confuses stock tooling: MzLoader only treats a file as
+  MZ when e_lfanew == 0; with e_lfanew -> LE header it falls through to
+  Raw Binary (per #532 triage).
+- PRIMARY community loader: yetmorecode/ghidra-lx-loader, Apache-2.0,
+  last push 2026-07-02, release v12.0.1 (2026-01-29). Explicitly supports
+  "MSDOS DOS/4 LE-Style" (the DOS4GW-bound arrangement this file has),
+  full page-map + fixup/relocation processing, tested on DOS/4GW Watcom
+  games (F1 Manager Professional, Redguard RGFX, X-Com Apocalypse) and
+  DOS32A builds. Manual object-base/selector override option exists for
+  syncing with the DOSBox debugger later.
+- FALLBACK loader: oshogbo/ghidra-lx-loader 1.7 (2026-04-20, built for
+  Ghidra 12.0.4). NO license file - fine to run, never copy its code.
+  Known crash pattern in its fixup table (issue #37, 2026-07-04).
+- Version sensitivity is the main risk: prebuilt extension zips pin a
+  Ghidra minor version; oshogbo 12.0.4 zip on 12.1.2 crashes (#37). Local
+  installs are 12.1.2 -> expect to need a source rebuild of the extension
+  (Gradle + JDK) rather than the prebuilt zip.
+- Tooling side notes: IDA supports LE/LX natively (commercial baseline
+  only). Open Watcom wdis is an OBJECT-file disassembler - useless on a
+  linked LE. objconv and radare2/rizin LE support UNVERIFIED - do not
+  build on them. Canonical spec anchors: open-watcom exeflat.h (the
+  producing toolchain - most trustworthy for the Watcom LE variant), the
+  1992 LX format description (textfiles.com/programming/FORMATS/lxexe.txt),
+  moddingwiki.shikadi.net Linear Executable page (LE/LX divergences).
+
+### Concrete import plan (for the B2 backlog item; do NOT execute in this unit)
+Target install: ~/ghidra-12.1.2-watcom - it is user-writable and carries
+the x86openwatcom.cspec the BedlamWatcom project was built with.
+/opt/ghidra is root-owned (sudo forbidden) and lacks that cspec.
+
+0. Gates: sha256sum -c both manifests before AND after; no corpus writes;
+   check no analyzeHeadless running (filter opencode/fish false positives).
+1. Fetch yetmorecode/ghidra-lx-loader (v12.0.1 zip or source clone) into
+   /tmp/opencode scratch.
+2. Smoke test WITHOUT touching the real project: unzip into
+   ~/ghidra-12.1.2-watcom/Ghidra/Extensions/, then analyzeHeadless on a
+   THROWAWAY project in /tmp/opencode importing game-data-2/BEDLAM.EXE.
+   Verify against the anatomy table: program created, memory blocks
+   CODE@0x10000 (size 0x66970) and DATA@0x80000, entry 0x66a60, fixups
+   applied. A version-check rejection or crash here -> step 3.
+3. If the prebuilt zip is rejected by 12.1.2: rebuild the extension from
+   source against ~/ghidra-12.1.2-watcom (GHIDRA_INSTALL_DIR gradle
+   property). Verify JDK/Gradle availability first; this is the expected
+   path given #37-style version pinning.
+4. Real import (ONE time, never re-import): ~/ghidra-12.1.2-watcom/
+   support/analyzeHeadless ghidra-project BedlamWatcom -import
+   game-data-2/BEDLAM.EXE -processor x86:LE:32:default -cspec openwatcomcpp
+   (match EXW conventions; the loader claims the bound LE via e_lfanew).
+   Confirm the program list before and after so no duplicate lands.
+5. Post-import verification gates (any fail = stop + document, no re-import):
+   blocks match the anatomy table byte-for-byte in extent; entry point
+   0x66a60; decompiler output near entry is plausible 386 code; imports/
+   fixups do not leave dangling garbage pointers at call sites.
+6. Fallback ladder if BOTH loaders fail: raw-binary import + a -process
+   postScript that creates the two blocks from the anatomy table above
+   (the repo is already fluent in -process postScripts; imports stay
+   unresolved initially). Zero external code needed; fully specified here.
+7. After landing, all B2 RE work goes through -process BEDLAM.EXE
+   -noanalysis + postScripts exactly like the EXW pipeline; scripts as
+   tools/ghidra-scripts/B2*.java, dumps to ghidra-project/ root.
+
+Risks: extension/Ghidra version mismatch (primary); unlicensed fallback
+(run only, never copy); ~EXW-scale analysis time for the 420 KB code
+object; DOS/4 import semantics may still need manual entry-bundle work
+even with fixups applied.
+
 ## Implications
 1. bedlam-assets transfers nearly 1:1 — same formats, second corpus for fuzz/coverage
 2. Second RE target: BEDLAM.EXE (DOS canon, same HMI stack) for logic divergence
