@@ -18,6 +18,8 @@ start_next=$(stat -c %Y "$STATE/NEXT.md" 2>/dev/null || echo 0)
 start_state=$(stat -c %Y "$STATE/STATE.md" 2>/dev/null || echo 0)
 touch "$STATE/heartbeat"
 
+placeholder="$CLAIMS/$item-$slotid.claim"
+own="$CLAIMS/$item-claim"
 # Convert the spawner reservation into exactly one owned claim before the
 # model starts. This removes startup races and does not rely on model cleanup.
 if [ -e "$own" ]; then
@@ -69,8 +71,6 @@ else
   echo "$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress)" >> "$STATE/nudge.log"
 fi
 
-placeholder="$CLAIMS/$item-$slotid.claim"
-own="$CLAIMS/$item-claim"
 if [ "$kind" = transport ]; then
   if [ -f "$own" ]; then rm -f "$placeholder"; else touch "$placeholder"; fi
 elif [ "$kind" = rate-limit ] || [ "$kind" = client-error ]; then
