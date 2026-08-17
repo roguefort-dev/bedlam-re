@@ -179,6 +179,35 @@
 
 ## Run notes
 
+- 2026-08-18 00:0x (spawn-storm watch run; stood down, NO work files
+  touched): DUPLICATE-SPAWN #4 + CLIENT-DEATH STORM, contained, no damage.
+  Sequence: v4.4 deploy raced in-flight v4.3 spawns - this run (item 3, v4.4
+  prompt, placeholder 00:02:51) found the 00:01 v4.3 sibling already holding
+  3-claim (00:02:48, live) -> stood down + deleted own placeholder per prompt.
+  ~00:04: ALL THREE 00:01 clients died rc=1 (transport storm). Casualties:
+  item-2 WIP = untracked tools/ghidra-scripts/ExwTickSats.java (written
+  00:00:28, never run - free for the item-2 respawn); item-3 research lost
+  with its session EXCEPT its transcript survives in .state/nudge-run.log
+  (~00:03-00:04 tail): Ghidra ships NO LE loader - the LE stub class throws
+  NotYetImplementedException (knows LE only to reject it); BEDLAM.EXE header
+  verified MZ stub + e_lfanew=0x4a90 + LE sig; LX-offset probe +0x18/+0x1c/
+  +0x20/+0x24/+0x28 reads coherent eipobj=1 eip=0x56a60 espobj=2 esp=0xb04ee
+  pagesize=0x1000 (respawned item-3 agent: mine that log tail, then RE-DERIVE
+  everything yourself before trusting it - objtab offsets in that probe were
+  still wrong/unpinned). Controller respawned item 3 at 00:06:55 (fresh
+  client + placeholder 3-1787004415.claim) = new owner; this run exited the
+  lane for good. Separately, an item-1 worker is LIVE on engine/bedlam-core
+  (M lib.rs/sim.rs/replay.rs + new frame.rs, mtimes advancing 00:07-00:09,
+  uncommitted at time of note). STALE STATE at exit: 1-claim + 2-claim have
+  dead owners (70-min reaper requeues); orphan placeholders 1-1787004232 +
+  2-1787004060 (owners dead/redirected - left for TTL reap, do not count as
+  live slots). LESSONS: (1) a stood-down agent that deletes its placeholder
+  but writes no claim is INVISIBLE to the respawn logic - if adopting an item
+  whose owner died, immediately rewrite the claim file (fresh mtime) BEFORE
+  starting work, else you race the controller respawn; (2) on death-storm
+  nights check claims mtimes + pgrep BEFORE any shared-file write; (3) nudge
+  client rc=1 killed its server session tonight (unlike incident #3) - the
+  00:01 trio left nothing running server-side.
 - 2026-08-17 23:5x (input-map run): clean unit, 4 headless -process passes
   (no import), 3 incremental commits. Volume-control discovery links the
   input map to the music path (g_music_volume@004ddb2c, master vol =
