@@ -42,3 +42,15 @@ stops the autonomous loop permanently.
 - cargo build --release / cargo run --release -q -- game-data derived  (tools/inspect)
 - cargo fmt, cargo clippy before committing Rust
 - Manifest check after any corpus-touching run
+
+## Ghidra discipline (added after 2026-08-17 03:25 incident)
+- NEVER launch `analyzeHeadless -import` if `pgrep -f analyzeHeadless` shows one
+  running, or if the target log already contains `Import succeeded` for that
+  binary. Duplicate imports stack programs in the project and waste 15 minutes.
+- To work on an already-imported binary, use `-process <programname>` with
+  `-noanalysis` and a postScript; do not re-import.
+- BedlamWatcom project status: BEDLAM.EXW imported ONCE under
+  x86:LE:32:default + openwatcomcpp cspec, single program, verified 03:33.
+- If a model/transport/API error interrupts you mid-task: stop, record exactly
+  what you finished and the blocker in .state/NEXT.md, commit that much, stop.
+  Never leave silent partial state for the next agent to trip over.
