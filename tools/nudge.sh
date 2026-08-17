@@ -15,6 +15,10 @@ STALE=300
 MAXSPAWN=16
 MAXAGENTS=3          # adaptive concurrency: target ceiling
 CLAIM_TTL=4200
+CONC_MIN=1
+CONC_MAX=3
+CONC_FILE="$STATE/concurrency"
+CONC_DOWN_TS="$STATE/conc-degraded-at"
 
 mkdir -p "$STATE" "$CLAIMS"
 [ -f "$STATE/PLAN-COMPLETE" ] && exit 0
@@ -145,16 +149,20 @@ if credit_if_progress; then
   conc_up
 fi
 
-# staleness gate
+# staleness gate: heartbeat freshness matters only when no agent holds a
+# claim (sibling spawning is driven by claim count, not heartbeat - an
+# already-running agent touching the heartbeat must not block its siblings)
+ncl_early=$(ls "$CLAIMS"/*.claim 2>/dev/null | wc -l)
 age=-1
-if [ -f "$HB" ]; then
+if [ "$ncl_early" -eq 0 ] && [ -f "$HB" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$HB") ))
   [ "$age" -lt "$STALE" ] && exit 0
 fi
 
 # failure signal for the controller: heartbeat stale AND no live claims
 # means agents are dying before even claiming (provider-level rejection).
-if [ "$(ls "$CLAIMS"/*.claim 2>/dev/null | wc -l)" -eq 0 ]; then
+lastspawn=$(cat "$STATE/last-spawn-ts" 2>/dev/null || echo 0)
+if [ "$(ls "$CLAIMS"/*.claim 2>/dev/null | wc -l)" -eq 0 ]    && [ $(( $(date +%s) - lastspawn )) -gt 420 ]    && [ ! -f "$STATE/fails" ]; then
   conc_down
 fi
 
@@ -204,6 +212,7 @@ command -v opencode2 >/dev/null 2>&1 || OPENC=/home/kato/.local/share/fnm/node-v
 PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. FIRST ACTIONS: (1) touch .state/heartbeat; (2) create your claim file by running: echo task line > .state/claims/@ITEM@-claim - this reserves queue item @ITEM@ from the Now section of .state/NEXT.md and one of 5 concurrency slots. Work ONLY that queue item; if its claim file already exists, pick the next unclaimed number instead. Commit EARLY and OFTEN in small increments. AT THE END: update NEXT.md (remove your finished item, renumber), DELETE your claim file, git push. If you hit a transport error, stop cleanly and record progress in NEXT.md; your claim is reaped after 70 minutes and the item re-queued. Never start an analyzeHeadless import that is already running or already succeeded. Do not ask questions. Do not wait for input."
 PROMPT="${PROMPT//@ITEM@/$item}"
 
+date +%s > "$STATE/last-spawn-ts"
 echo "$(date -Is) spawning agent for queue item $item ($((ncl+1))/$MAXAGENTS slots)" >> "$STATE/nudge.log"
 
 RUNLINE="cd \"$PLAN_DIR\" && touch \"$HB\" && timeout 3900 \"$OPENC\" run --auto --title \"bedlam-nudge-item$item\" \"$PROMPT\" >> \"$STATE/nudge-run.log\" 2>&1"

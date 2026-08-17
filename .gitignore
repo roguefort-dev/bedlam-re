@@ -31,3 +31,4 @@
 /.state/claims/
 /.state/concurrency
 /.state/conc-degraded-at
+/.state/last-spawn-ts
