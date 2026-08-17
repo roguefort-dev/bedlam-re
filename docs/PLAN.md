@@ -193,9 +193,15 @@ purist toggle set covering feel-contested items only (timing lock, control schem
 selected catalog entries the owner marks preserve). Mode is one immutable ModeConfig
 injected at sim construction; test surface = the purist toggles, not 2^features.
 - Time-based simulation: accumulator decouples tick rate from render; optional uncapped
-  FPS. Interpolation scoped to camera/scroll only — grid-quantized 1996 sprites had no
-  sub-pixel positions; interpolating them manufactures motion the original never showed
-  (sub-pixel blitter may come later as an explicit option with a feel tolerance).
+  FPS. High-refresh displays (USER REQ 2026-08-17: 240Hz+) are a first-class present
+  mode: vsync-locked present at any refresh (60/120/144/240/360Hz+) or uncapped, while
+  logic stays fixed at the original tick rate — display rate NEVER enters the sim
+  (Determinism Charter). Most high-refresh frames carry zero new logic ticks; the
+  frame is composed from latest state + camera/scroll interpolation. Interpolation
+  scoped to camera/scroll only — grid-quantized 1996 sprites had no sub-pixel
+  positions; interpolating them manufactures motion the original never showed
+  (sub-pixel blitter may come later as an explicit option with a feel tolerance;
+  high refresh raises its value but it stays default-off).
 - Modern controls: WASD, 1-4 hotkeys, full remap, wheel zoom, gamepad; original scheme
   selectable.
 - Bug triage rubric (per catalog entry): crash/data-loss → fix everywhere;
@@ -213,7 +219,9 @@ injected at sim construction; test surface = the purist toggles, not 2^features.
   resolution-agnostic by construction.
 - QoL: window modes, vsync control, volume mixers, save slots + metadata + opt-in
   autosave. Game-feel proxies: input-to-present ≤ 1 original frame; animation cadence
-  matches at 60Hz; no stutter under p95 frame-time budget.
+  matches at the active display refresh (validated 60–240Hz+); no stutter under
+  p95 frame-time budget at that refresh (240Hz frame-pacing check in the
+  CI-manual set).
 
 ### P7 — Ports and packaging
 Linux native + Flatpak; Windows installer; macOS universal2 (best-effort per owner);

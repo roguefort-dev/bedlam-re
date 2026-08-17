@@ -97,3 +97,11 @@ bedlam-game grows per-game content packs (B1/B2) with shared systems code; parit
 work continues B1-first (canon EXW), B2 gets its own RE target (DOS BEDLAM.EXE)
 and its own goldens. B2-specific divergences (zones A-F, no MRS music, VESA modes)
 are tracked in the census doc until a B2 plan phase is cut (post-P5 gate).
+
+## D12 — High refresh rate support, 240Hz+ (2026-08-17, user requirement)
+Same split as D9: sim untouched, presentation free. Accumulator loop presents
+vsync-locked at any refresh or uncapped; logic remains fixed-timestep at the
+original rate (charter-safe). Camera/scroll interpolation makes high refresh
+visibly worth it; sprite sub-pixel interpolation stays an off-by-default option.
+Frame pacing at 240Hz added to game-feel proxies. Historical note: Bedlam 2
+itself shipped VESA modes up to 1440p — the devs were already moving this way.
