@@ -27,6 +27,7 @@ echo "# NEXT" > "$PLAN/.state/NEXT.md"
 echo "# STATE" > "$PLAN/.state/STATE.md"
 cat > "$TMP/mock-client" <<EOF
 #!/usr/bin/env bash
+printf "%s\n" "\$*" > "$TMP/mock-client.args"
 sleep 1
 EOF
 chmod +x "$TMP/mock-client"
@@ -43,6 +44,7 @@ if flock -n "$PLAN/.state/claims/4-owner.claim" true; then
   exit 1
 fi
 wait "$agent"
+grep -q -- "--standalone" "$TMP/mock-client.args"
 [ ! -e "$PLAN/.state/claims/4-owner.claim" ]
 
 # An abandoned startup reservation expires quickly.

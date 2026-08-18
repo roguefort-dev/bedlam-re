@@ -78,6 +78,16 @@ flock -n 9 || exit 0
 
 write_status
 
+# The existing minute timer also acts as the connectivity watchdog. Offline
+# passes stop here; the first restored pass repairs OpenCode and resumes below.
+"$PLAN_DIR/tools/network-watchdog.sh"
+watchdog_rc=$?
+if [ "$watchdog_rc" -eq 75 ]; then exit 0; fi
+if [ "$watchdog_rc" -ne 0 ]; then
+  echo "$(date -Is) network watchdog failed (rc=$watchdog_rc) - standing down" >> "$STATE/nudge.log"
+  exit 0
+fi
+
 # Reap unlocked reservations and dead-worker claims after five minutes.
 # Live workers hold an advisory lock, so their claim age is unbounded.
 "$PLAN_DIR/tools/nudge-reap-claims.sh" "$CLAIMS" "$STATE/nudge.log"
