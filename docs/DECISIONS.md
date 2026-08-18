@@ -276,3 +276,24 @@ mouse clamp globals prove it; canonical-frame policy D9 keeps EXW 640x480 as
 the parity anchor, B2 coordinate handling is an open engine question), and
 zone/mission progression via lookup tables (6 zones x {4 regular + 2 alt},
 27 linear missions) instead of the EXW 7x5 arithmetic.
+
+## D23 - B2 mission-loop pacing verified present-paced (vblank); INT8 counters are services/timeouts only (2026-08-18)
+
+Episode-loop run (RESEARCH-BEDLAM2-CENSUS.md sec 7): the B2 (DOS) mission
+loop iterates exactly once per PresentFlip, and PresentFlip is a VESA page
+flip that waits vblank (0x3da double-poll via WaitVRetrace, gated by
+g_wait_vsync) - with ZERO reads of any of the seven INT8 counters inside the
+loop. Counter roles are now fully classified: audio tick/position bases
+(0x801a6, 0x80010), ISR-internal phases (0x11f0c8), 100 Hz screen-timeout
+base (0x11f0c4), a 50 ms micro-delay (0x11f0b0), and two dead counters
+(0x11f158, 0x11f0b4). This is the concrete DOS-side confirmation of D16:
+fixed-rate sim + present-paced frames, 100 Hz service clock for satellites.
+Implication for bedlam-core: the existing hashed-60Hz Sim + present-paced
+presentation split is the right shape for BOTH builds; nothing in the B2
+timing fabric argues for a different architecture. New engine-relevant B2
+facts to parameterize: 640x480x8 physical framebuffer (VESA 0x101, 640-byte
+stride, double-buffered pages bank {0,5}) with a 320x240 logical/mouse
+space (2x pixel scale) - vs EXW native 640x480 logical; and audio at 11025
+Hz sharing IRQ0 with the game tick in the DOS build (HMI-style PIT
+reprogramming) - a PC-specific detail the reimplementation abstracts behind
+the fixed-rate service clock.

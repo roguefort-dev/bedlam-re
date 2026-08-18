@@ -378,6 +378,131 @@ B2TblDump.java (all javac-precompiled against the Ghidra jars after the
 getMnemonic vs getMnemonicString API slip - OSGi again surfaced it only as
 ClassNotFoundException; precompile is now the rule for new B2 scripts).
 
+
+## 7. Episode-loop progression, INT8-counter verdicts, mission pacing (2026-08-18 episode-loop run)
+
+[provenance: two more -process BEDLAM.EXE -noanalysis passes (B2EpisDump from
+the transport-killed 02:0x run, adopted + verified; B2EpisClose, B2EpisNames -
+this run), dumps ghidra-project/b2-epis.txt + b2-epis-close.txt + prior
+b2-decomp-all.txt; confidence: high - every claim below read from decompile or
+listing; the dead-run intermediate notes were re-derived from artifacts, not
+trusted.]
+
+### 7.1 The seven INT8 counters - final verdict (task a)
+ISR body decompiled in full this run (327 B). Order of service: read
+reentrancy flag -> EOI (OUT 20h,20h) -> if not re-entered: lock -> optional
+PcmMixerService -> increment all 7 -> ClockDivider100Hz -> palette-bank
+advance (while [0x11f138] in [0x90,0x98): on (g_isr_phase & 7)==0, wrap
+0x97->0x90) -> odd-tick (50 Hz) mouse block -> unlock. The mixer call is
+gated by g_snd_drv_active@0x11ef50 && g_snd_enabled@0x11ef24 &&
+g_snd_service_arm@0x11f0e0 (NOT by the flip lock - that gates the mouse
+block). Counter roles:
+- 0x801a6 g_ctr_snd_a: AUDIO TICK BASE. Stub pair SndStubResetTicks@0x12ecf
+  (zeroes 0x801a6 + 0x801aa) / SndStubElapsedMs@0x12ee4 (returns ticks * 10
+  = ms); both installed by SoundStubInstall@0x12eb0 into the runtime pointer
+  table 0x81f98/0x81fa0 + ISR patch slot 0x1279b4 when sound init fails.
+- 0x80010 g_ctr_snd_b: AUDIO POSITION base, set via SndSetPos80010@0x607b0
+  (8-byte orphan, EDX param). 0x801a6/0x80010 live in the low driver-data
+  region - sound-system bookkeeping, not game timing.
+- 0x11f158 g_ctr_dead1: DEAD. Zero readers anywhere (listing census,
+  getReferencesTo, full 671-fn sweep all agree).
+- 0x11f0c8 g_isr_phase (prev g_int8_ctr0): ISR-INTERNAL ONLY - palette-bank
+  phase (& 7) and mouse phase (& 1); TickInstall save/restore aside.
+- 0x11f0c4 g_ctr_timeout: the 100.01 Hz TIMEOUT base. WaitTicks100Hz@0x3264b
+  = zero + spin CMP/JG (the sweep decompile dropped the 2-instr loop; listing
+  in b2-epis-close.txt pins it). 10 wait sites: MapRoomSelect x7 (2000 ticks
+  = 20 s screens, click-escapable), FUN_0005dbad @750, FUN_0005e4cf x2 @500.
+- 0x11f0b4 g_ctr_dead2: DEAD (same 3-way proof).
+- 0x11f0b0 g_ctr_delay5: 5-tick (50 ms) micro-delay in FUN_0005eaf9.
+NO counter gates sim or render. The 50 Hz odd-tick mouse block also draws the
+software cursor into the visible page (gated additionally by g_banked_video,
+g_flip_lock == 0, and a cursor-shape/320x240 mismatch check against the page
+block at g_page_ptr_b) - that is what g_flip_lock@0x8008e protects during
+page flips, correcting the earlier suspicion it gated the mixer.
+
+### 7.2 B2 audio = IRQ0-shared PCM driver (bonus architecture)
+SoundInit@0x50033 (NO SOUND FX branch -> SoundStubInstall; success ->
+SoundDriverInstall@0x685f0): driver struct @0x1276dc, rate 0x2b11 = 11025 Hz
+(the SAME native rate EXW feeds DirectSound), PIT divisor 1193181/rate ->
+0x1280b8. Real callbacks: SndDrvArmPit@0x68740 reprograms PIT ch0 (0x43/0x40,
+divisor @0x82594) when armed - the audio sample clock and the 100.01 Hz game
+tick SHARE IRQ0 HMI-style; SndDrvElapsedMsHiRes@0x686d0 = tick count * 1000 /
+rate + (divisor - current PIT count) * 1000 / 1193181, monotonic-clamped -
+vs the stub flat ticks*10. PcmMixerService@0x136e0 walks 20 channel records
+(stride 0x26, bank 0x86a98 x 0x2f8) spawning/freeing sub-voices
+(MixVoiceAlloc/MixVoiceFree/MixEventFeFf). g_snd_handles@0x8abf8 (176 B) is
+RUNTIME-FILLED with sound handles - the earlier endgame-dispatch guess is
+corrected; MissionRun tail compares them against the two music-loop handles.
+
+### 7.3 Episode-loop progression (task b)
+GameInit campaign loop (fresh: zone=1 mission=1 linear=0; boot call to
+MapRoomSelect loads saves -> restore linear/slot/mask from record). Per
+iteration: briefing (BriefingScreen@0x5498b, mode-2 BriefingMode2@0x5deb3)
+-> MissionRun@0x57651 returns outcome (0 = completed) -> FUN_0005eaf9
+post-mission hub (re-pins RNG 123456, stats, 5-tick waits) -> case-1
+advance: g_campaign_linear++ ; g_campaign_mask |= 1 << (sub-1) ; if mask ==
+full-mask[slot] (dwords @0x81d9a = {0, 1, 0xf x6}) then stage-slot++ and the
+ZONE-COMPLETE cutscene (FULLFONT/FULLPAL + LOAD_UK|US.BIN + LOADPAL, the
+200/100-tick fade loops seen in the dump tail); slot != 9 draws the next
+stage title. Exit: linear > 0x1a (27 missions) or quit flag. IMPORTANT: sub
+(g_sub_mission) does NOT auto-advance - the PLAYER picks it in MapRoomSelect
+(mission select gated by the completed mask; slot1 -> sub=1, slot8+mission3
+-> sub=2 hardcoded). Save records = 5 x 61 B @g_save_records 0x8b1d4:
+{+0 mask, +4 stage-slot, +8 linear (word), +10 DAT_00125df4, +14 money
+DAT_00126810, +18 word, +20 stats blocks copied from 0x91a54/0x918a4};
+written by the 5-row save dialog in the MissionRun tail. MapRoomSelect also
+loads BRF_{APPL,BANA,CAKE,DONU,EGG,FRYU,GRAV}.BIN per stage slot 2..8 +
+SAVEICON + MAPROOM1/2.RAW loops - the per-stage map-room backdrops.
+RESIDUAL (open): only 25 zone-letter indices are reachable by the formula
+(order[slot] + sub for the mask sizes) yet linear runs to 27; slot-0 role and
+the exact 27-step accounting need a save-file + playthrough check.
+
+### 7.4 Zone-letter dword[0] = 0x19 sentinel (task d)
+Value 25 is NEVER produced: the minimum formula index is order[1] + 1 = 1.
+The boot plants zone=1/mission=1 as code constants, and every consumer
+indexes zone-param tables (0x80be4/0x80c04/0x80c24/0x80c44/0x80c64) by
+DAT_0011f024 with values 1..8. Values 7/8 = special screens (code branches
+on DAT_0011f024 < 3 / == 3 / != 7). Index 0 = padding/sentinel, not
+intro/endgame state.
+
+### 7.5 Mission pacing = present-paced, counters do not gate (task e) -> D23
+MissionRun main loop LAB_00057947: 9 octile sensor distances to fixed points
+(DistOctile@0x330e6 = max + half-min), unit hit-tests, mouse-region UI
+cascade, unit purchase/dispatch against money DAT_00126810 (RandBelowB@
+0x33147 = bounded RNG over RngStepB for enemy spawns), then PresentFlip ->
+loop. PresentFlip@0x1066b = VESA page flip: bank pair {0,5}, display start
+0 <-> 0x11ef38 (0x200), ISR lock + flip lock held across bank ops
+(VesaSetWindow@0x12ac8 wraps 4f05 with the lock), WaitVRetrace@0x10856
+double-poll of 0x3da bit 3 gated by g_wait_vsync, then a 0x96-dword cursor
+block copy g_page_ptr_a -> g_page_ptr_b. VESA-off fallback = plain
+WaitVRetrace. ZERO INT8-counter reads inside the mission loop. VERDICT: the
+B2 sim/render iteration is vblank-locked exactly like EXW (D16); the 100 Hz
+ISR is services-only. Video = VESA mode 0x101 640x480x8 requested
+(g_vesa_mode_req@0x801ce), 64 KB window at A000 validated, granularity
+shift recorded, LFB pointer captured @0x11f148, 640-byte row stride in the
+blitters vs 320x240 mouse/logical space = 2x pixel scale; BankWrite64K@
+0x12572 moves 64 KB through the A000 window. RESIDUAL: whether 4f02 sets the
+LFB variant (0x4101) is not statically resolvable in this decompile; 0x200
+display-start units unverified.
+
+### 7.6 Names persisted this run
+BedlamWatcom:/BEDLAM.EXE: PresentFlip, PcmMixerService, MixVoiceAlloc,
+MixChannelFind, MixEventFeFf, MixVoiceFree, SoundStubInstall,
+SoundDriverInstall, SoundInit, RawSoundLoad, RawSoundPlay, WaitTicks100Hz,
+SelectDrawBank, BankWrite64K, VesaSetWindow, VesaModeInit, MapRoomSelect,
+MissionRun, DebriefScreen, BriefingScreen, BriefingMode2, DistOctile,
+RandBelowB, SndStubResetTicks, SndStubElapsedMs, SndStubNop, SndSetPos80010,
+SndDrvIrqTail, SndDrvElapsedMsHiRes, SndDrvArmPit (30 fns) + labels
+g_ctr_snd_a/b, g_ctr_dead1/2, g_isr_phase, g_ctr_timeout, g_ctr_delay5,
+g_campaign_linear/mask, g_stage_slot, g_sub_mission, g_save_slot/mask/
+linear, g_money, g_save_records, g_zone, g_mission, g_mission_end,
+g_page_state, g_page_bank_b, g_display_start_b, g_page_ptr_a/b, g_lfb_ptr,
+g_vesa_gran_shift, g_vesa_mode_req, g_banked_video, g_flip_lock,
+g_snd_drv_active/enabled, g_snd_service_arm, g_snd_handles (33 labels);
+created functions at 0x12ecf/0x12ee4/0x12eef/0x607b0/0x686b0/0x686d0/0x68740.
+Scripts: B2EpisDump.java (interrupted run, adopted), B2EpisClose.java,
+B2EpisNames.java.
+
 ## Divergences vs Bedlam 1 (data layer)
 - 6 zones (A-F) vs 7; missions per zone differ; MISSION5 mostly absent
 - No MRW/MRS music scores (SOUND/MIDI/ present but EMPTY); audio = 106
