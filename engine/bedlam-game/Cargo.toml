@@ -1,0 +1,11 @@
+[package]
+name = "bedlam-game"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bedlam-assets = { path = "../bedlam-assets" }
+bedlam-audio = { path = "../bedlam-audio" }
+bedlam-core = { path = "../bedlam-core" }
+bedlam-render = { path = "../bedlam-render" }
+thiserror = "1"

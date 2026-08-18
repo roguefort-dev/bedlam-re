@@ -316,3 +316,35 @@ fn odd_buffer_length_is_an_error() {
         Err(AudioError::OddBufferLength { .. })
     ));
 }
+
+#[test]
+fn script_attach_mid_stream_anchors_at_the_cursor() {
+    // DESIGN-GAME sec 5: a script swapped in mid-stream (every scene
+    // change) must play from its top, relative to the ATTACH frame -
+    // not against the absolute cursor, which would fire the entire
+    // past at once and mute the track.
+    let mut m = Mixer::new();
+    m.load_wave(0, &[255u8; 20000]).unwrap();
+    m.set_master_volume(127);
+    let mut pre = vec![0i16; 2 * 500];
+    m.render(&mut pre).unwrap();
+    assert!(pre.iter().all(|&x| x == 0), "no script yet: silence");
+    let mut s = MusicScript::new();
+    s.push(
+        4,
+        MusicCommand::NoteOn {
+            instrument: 0,
+            ratio: 0x10000,
+            volume: 48,
+        },
+    )
+    .unwrap();
+    m.load_script(s); // tick 4 = exactly 441 frames after the attach
+    let mut buf = vec![0i16; 2 * 900];
+    m.render(&mut buf).unwrap();
+    assert!(
+        buf[..2 * 441].iter().all(|&x| x == 0),
+        "attach-relative lead-in silence"
+    );
+    assert_eq!(buf[2 * 441], 32512, "event lands 441 frames after attach");
+}

@@ -120,6 +120,11 @@ pub struct Mixer {
     master: u8,
     script: Option<MusicScript>,
     script_next: usize,
+    /// Cursor anchor captured at load_script time: the script tick 0
+    /// aligns with the frame where the script ATTACHED, so a script
+    /// swapped in mid-stream (every scene change, DESIGN-GAME sec 5)
+    /// plays from its top instead of dumping every past event at once.
+    script_base_q16: u64,
     /// Absolute output position in Q16 samples since construction.
     cursor_q16: u64,
 }
@@ -138,6 +143,7 @@ impl Mixer {
             master: MASTER_MAX as u8,
             script: None,
             script_next: 0,
+            script_base_q16: 0,
             cursor_q16: 0,
         }
     }
@@ -164,12 +170,16 @@ impl Mixer {
         self.master = master.min(MASTER_MAX as u8);
     }
 
-    /// Install the music script (the walked .MRS stream). Dispatch starts
-    /// from the first event; events whose tick positions already lie in the
-    /// past fire on the next rendered sample (deterministic, documented).
+    /// Install the music script (the walked .MRS stream). Dispatch is
+    /// ANCHORED at the current cursor: tick 0 = the frame where the script
+    /// attaches, so a script swapped in mid-stream (every scene change,
+    /// DESIGN-GAME sec 5) plays from its top; absolute-cursor dispatch
+    /// would fire its whole past at once. Chunking-invariant via the Q16
+    /// grid (the anchor is always a whole frame).
     pub fn load_script(&mut self, script: MusicScript) {
         self.script = Some(script);
         self.script_next = 0;
+        self.script_base_q16 = self.cursor_q16;
     }
 
     /// Trigger one note on the lowest free sub-voice of the instrument:
@@ -281,7 +291,7 @@ impl Mixer {
                 .as_ref()
                 .and_then(|s| s.events().get(self.script_next))
             {
-                Some(&(tick, _)) => tick_pos_q16(tick) <= self.cursor_q16,
+                Some(&(tick, _)) => self.script_base_q16 + tick_pos_q16(tick) <= self.cursor_q16,
                 None => false,
             };
             if !fire {

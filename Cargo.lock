@@ -153,6 +153,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bedlam-game"
+version = "0.1.0"
+dependencies = [
+ "bedlam-assets",
+ "bedlam-audio",
+ "bedlam-core",
+ "bedlam-render",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "bedlam-platform"
 version = "0.1.0"
 dependencies = [
