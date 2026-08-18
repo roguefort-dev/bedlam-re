@@ -1,165 +1,169 @@
-# DESIGN-GAME - bedlam-game crate design note (P3; implements D17, D9, D12)
+# DESIGN-GAME - bedlam-game crate design note (P3; elaborates D16/D17, adds D26)
 
-Status: DESIGN PINNED by this note; the crate skeleton implementing secs 3-8
-lands in the same unit (the LAST P3 charter crate). Mirrors the DESIGN-RENDER
-/ DESIGN-AUDIO flow (note first, code second).
+Status: DESIGN PINNED by this note; the crate skeleton implementing secs
+3-9 lands in the same unit. Mirrors the DESIGN-RENDER / DESIGN-AUDIO flow
+(short note first, code second). This is the LAST P3 charter crate.
 
 ## 1. The contract
 
-`GameHost` is the composition root of the engine: per host frame it quantizes
-dt, advances the deterministic sim + scene FSM (hashed bucket a), converts
-scene intent into render frames (pure, via bedlam-render) and drives the music
-mixer from the .MRS event stream (un-hashed bucket b). It holds no clock, no
-I/O, no threads, no floats; all file bytes enter through injected
-byte-source/sink traits (sec 8). Gameplay content is P4; this skeleton pins
-the FSM topology, the pump wiring and the determinism boundary.
+bedlam-game is the composition layer: the scene state machine plus the
+per-frame host pump that wires the sibling crates (core, render, audio,
+assets) together. It owns NO per-mission game logic (PLAN P3: mission
+quirks are data, a P5 hypothesis). The FSM itself is pure and hermetic:
+all file I/O hides behind injected byte-source/sink traits, so the
+machine replays and hashes from tests unchanged.
 
 ## 2. RE basis (what the original does, with anchors)
 
 | # | Fact | Anchor | Tag |
 |---|------|--------|-----|
-| 1 | EXW shell: GameThread@0044dea0 trampolines into GameMain@0041c050 = boot init, first-run intro movies (GTLOG_US/UK.SMK, LOGO_US/UK.SMK), name entry (FUN_0043a5fc), then the EPISODE LOOP (7 zones x 5 levels) | RE-EXW-GAMETHREAD | verified |
-| 2 | EXW episode loop body: menu/modal runner FUN_0043e7d4 then mission loop FUN_0043d00b (poll, sim/render, PresentCopy@00425a1e, PresentEnd@00425a03) then outcome switch via FUN_0044771c (advance / restart-checkpoint / quit / retry) then zone-complete (ZONEDONE.SMK, END.SMK for zone 7, FadeSetup 10-step) | RE-EXW-GAMETHREAD | verified structure |
-| 3 | Linear mission stride: clamp((zone-2)*5 + level-1, 1, 26); zone 7 = endgame | RE-EXW-GAMETHREAD | verified |
-| 4 | B2 shell: GameInit@0x2f731 = OPTIONS.BDL presence check (spawns SETUP.EXE when missing), LANGUAGE select, RNG seeds 123456/234567, tick install, palette alloc, EPISODE LOOP: briefing (BriefingScreen@0x5498b), MissionRun@0x57651, post-mission hub, MapRoomSelect@0x50a87 (player picks the sub-mission; gated by completed mask), zone-complete cutscene; exit linear > 27 | RESEARCH-BEDLAM2-CENSUS sec 6.1/7.3 | verified |
-| 5 | B2 campaign state: g_campaign_linear/mask, stage slot, g_money; save records 5 x 61 B @0x8b1d4 {mask, stage-slot, linear, ..., money, stats}; sub-mission does NOT auto-advance | RESEARCH-BEDLAM2-CENSUS sec 7.3 | verified |
-| 6 | Scene music is per-screen .MRS: BRIEF / DEBRIEF / OPTIONS / SELECT / SHOP .MRS in SOUND/MIDI (song slot 3 = the one MusicPump@00402bac sequences; load_midi FUN_00403642 builds base+".MRS") | RE-EXW-MUSIC sec 1 | verified |
-| 7 | MusicPump semantics: every 100Hz tick, per enabled chunk (0x26-stride state): while delta==0 dispatch event (note-on/off, rest = skip, 0xFE conditional restart gated by loop flag word@0045cdc0[song], 0xFF unconditional restart = re-init all chunks of the channel), then delta--; table-B delay seeds the first countdown; shipped streams end in a freeze word = natural stop | RE-EXW-MUSIC sec 1/2 | verified |
-| 8 | CONFIG.BDL (root, 61 B) is an installer/SB artifact EXW never reads; EXW persistence = SAVED.BDL + HISCORES only. OPTIONS.BDL (41 B, B2 SETUP-owned): backbuffer/actionpan/language/cd_audio/playername[8]/volume/code_no_title/midi/sound/installdrive (bedlam-assets bdl.rs, byte-verified round-trip) | RE-EXW-MUSIC sec 4, GROUNDWORK | verified |
-| 9 | Pause: P latch toggles pause; MissionShell@0044771c busy-waits for P again, clears all latches | RE-EXW-INPUT | verified |
+| 1 | EXW: GameThread@0044dea0 is a 59-byte trampoline into GameMain@0041c050 = the game shell; the in-game advance loop FUN_0043d00b = poll -> sim/render -> PresentCopy (MemCopy 0x4b000) -> PresentEnd -> frame count++ | RE-EXW-GAMETHREAD sec 1, RE-EXW-PACER sec 1, D16 | verified |
+| 2 | B2: GameInit@0x2f731 = boot shell AND episode-loop host; reads OPTIONS.BDL at boot; the player selects the sub-mission in MapRoomSelect@0x50a87 (BRF_* backdrops per stage slot 2..8) | RESEARCH-BEDLAM2-CENSUS sec 6/7 | verified |
+| 3 | Episode progression: linear counter 0..26, +1 per completed mission; mask = one bit per completed sub; stage-slot advances when mask == full-mask table {0, 1, 0xf x6} @0x81d9a; zone-complete cutscene = LOAD_UK/US.BIN; boot plants stage=1 / sub=1 as constants | census sec 7 | verified |
+| 4 | Screen set: title/menu (HEREIAM menu + high-score screen FUN_00448ef1), OPTIONS screens, brief / debrief / shop / select (one .MRS music track EACH: BRIEF / DEBRIEF / OPTIONS / SELECT / SHOP.MRS), mission, cutscene | game-data SOUND/MIDI corpus + census sec 6/7 | verified 5/5 |
+| 5 | OPTIONS.BDL is read by the game but WRITTEN by SETUP.EXE (SETUP-owned); root CONFIG.BDL (61 B) = installer SB record, NEVER read by EXW | RE-EXW-MUSIC sec 4 | verified |
+| 6 | B2 saves: 5 slots x 61 B {mask, slot(stage), linear, money, stats} @0x8b1d4; EXW persists SAVED.BDL 5x180 B + HISCORES (both parsed in bedlam-assets bdl.rs) | census sec 7, bedlam-assets bdl.rs | verified |
+| 7 | Volume: UI 0..100 -> >>1 -> master 0..50 (FUN_0044c630); keyboard = hotkeys/volume/pause/any-key ONLY, gameplay pointing = mouse; key/mouse state is LEVEL-SAMPLED with edge latches (KeySink@0041be05 12 dwords, MouseSink@0041bf35 bit0/bit1) | RE-EXW-INPUT, DESIGN-AUDIO fact 3 | verified |
+| 8 | Per-scene music rides the MusicPump analog: Mrs::walk -> MusicScript (absolute ticks) -> Mixer; SFX bypass the script (host-event-timed) | DESIGN-AUDIO sec 7 | pinned |
 
-## 3. Scene FSM topology [design; shapes from facts 1-5]
+## 3. Scene FSM topology
 
-    Boot -> Intro(first run only) -> Title
-      Title -> NameEntry -> Briefing -> Mission
-      Title -> Options (return -> Title)
-    Hub = Select/MapRoom (+ Shop): the B2 episode-loop residence
-      Briefing -> Mission; Mission outcome switch (fact 2):
-        advance   -> next level -> Briefing (zone complete -> Cutscene -> Hub)
-        restart   -> Briefing (checkpoint restore)
-        retry     -> Briefing
-        quit      -> Title
-      Mission ~ Pause (modal, fact 9; returns to Mission)
-    Cutscene(zone/end) -> Hub (zone+1) / End (linear > last) -> Title
+    Boot -(boot ticks elapse)-> Title
+    Title   -Advance-> Brief     Title -Options-> Options    Title -Quit-> Quit
+    Options -Back->    Title
+    Brief   -Advance-> Select    Brief -Back-> Title
+    Select  -Advance-> Mission
+    Mission -MissionComplete-> Debrief (episode progress applied)
+    Mission -MissionFail-> Debrief (no progress)
+    Debrief -Advance-> (zone complete pending ? Cutscene : Shop)
+    Cutscene -Advance-> Select
+    Shop    -Advance-> Select
+    Quit = terminal
 
-The FSM is a SceneId + explicit transition set, not a call-stack: EXW
-implements these as nested loops in GameMain, B2 as loops in GameInit; the
-REIMPL flattens them into one state machine (the canonical skeleton
-transition set; per-mission content is P4). Campaign progress (facts 3/5)
-rides the FSM state, never the sim.
+- SCENE SET (fact 4): Boot, Title, Options, Brief, Select, Mission,
+  Debrief, Shop, Cutscene, Quit. No per-mission code (PLAN P3).
+- EPISODE MODEL (hashed; deliberately mirrors the B2 save shape of
+  fact 6 so a later save/load is a field copy): stage 1..=8 (slot),
+  mask (subs done in this stage), linear 0..=26, zone_complete_pending.
+  money/stats stay sim-side (P4+) and are NOT modelled here. Sub
+  selection inside a stage = lowest-unset-mask-bit [design, open Q5]
+  until the Select-screen RE lands.
+- ACTIONS: Advance/Back derive from per-TICK edge detection on mouse
+  buttons bit0/bit1 (fact 7 level-sampled latch analog); Options/Quit
+  are UI intents, MissionComplete/MissionFail are sim outcomes - all
+  four applied explicitly by the host (fsm.apply).
+- BOOT: a fixed 12-tick (200 ms at 60 Hz) hold [design], then Title;
+  input edges during Boot are ignored (the GameGoRelease latch clear,
+  RE-EXW-INPUT). Scene changes clear the edge-latch state (the P-latch
+  clear analog, RE-EXW-INPUT).
 
-## 4. Host pump composition (per frame)
+## 4. Composition (the per-frame host pump)
 
-    input -> SimDriver::advance(dt_subticks)   [bedlam-core, bucket a]
-          -> SceneFsm::step(input events)      [this crate, bucket a]
-          -> Frame emit via bedlam-render      [pure; stub content]
-          -> music pump: service-tick deltas -> Mixer::render [bucket b]
+pump_frame mirrors the FUN_0043d00b order poll -> sim -> render ->
+present:
 
-The host NEVER lets scene changes touch the sim clocks mid-tick; a scene
-transition takes effect at the next tick boundary (the original re-enters
-its loops at present boundaries the same way).
+1. poll: the caller hands this frame InputFrame + dt (sub-ticks);
+2. sim: SimDriver::advance quantizes dt and executes whole 60 Hz ticks;
+3. scene: SceneFsm::tick once per EXECUTED tick with the same pending
+   input (same grid and same pending semantics as the sim);
+4. render: bedlam_render::render -> canonical 640x480 indexed Frame
+   (parity configuration: prev_sim = None, alpha ignored);
+5. present: the Frame is handed back to the caller (PresentCopy
+   analog). bedlam-platform consumes it; bedlam-game takes NO
+   dependency on bedlam-platform;
+6. audio: Mixer::render at HOST pace (D17 bucket b, never hashed); the
+   music script attaches per scene (sec 5) at scene-change boundaries.
 
-## 5. Music bridge (the MusicPump analog; DESIGN-AUDIO sec 7)
+Dependency direction: bedlam-game -> {bedlam-core, bedlam-assets,
+bedlam-audio, bedlam-render}. It is the only crate allowed to see all
+four; the MusicPump bridge lives here per DESIGN-AUDIO sec 7.
 
-`music.rs`: Mrs -> MusicScript for the one song slot the pump sequences.
+## 5. Music bridge (MusicPump)
 
-- Walk every ENABLED chunk (start table != 0xffff; fact 7 - the pump runs all
-  chunks of the song in parallel), accumulate each chunk delta stream into
-  ABSOLUTE ticks seeded from its table-B delay, interleave by absolute tick
-  (stable: chunk order, then walk order), map Note{volume != 0xFF} ->
-  NoteOn{instrument, ratio, volume}, volume == 0xFF -> NoteOff{instrument}
-  (the base-only release quirk lives in the mixer, not here).
-- Rest events vanish (they only advance time). SongEnd terminates the walk
-  (script stops). Restart: unconditional 0xFF (or 0xFE with loop flag) means
-  the HOST re-inits the script (loop); the bridge itself emits a one-pass
-  script and reports the restart so the host can loop. Every shipped stream
-  ends in Freeze (natural stop), so the corpus scripts are one-shot.
-- SFX bypass the script (host-event note_on, per DESIGN-AUDIO sec 7).
+build_script(mrs, chunk) -> (MusicScript, ScriptMeta): walk the chunk,
+accumulate deltas into ABSOLUTE ticks, then per DESIGN-AUDIO sec 7:
 
-## 6. Config and save model [facts 5/8]
+    Note volume != 0xFF  -> NoteOn  { instrument, ratio, volume }
+    Note volume == 0xFF  -> NoteOff { instrument }
+    Rest                 -> advance only
+    SongEnd / Restart    -> terminal (meta records the kind; the HOST
+                            re-inits the walk = the loop)
 
-- `GameConfig`: typed view of OPTIONS.BDL via bedlam-assets::bdl
-  (language, player name, volume, midi/sound toggles, cd_audio, drive) plus
-  `Default` for missing-file boot (B2 spawns SETUP; the skeleton just boots
-  with defaults and flags config_present: false).
-- `Campaign` (in-FSM): linear 0..=26, zone 1..=7, level 1..=5, completed
-  mask, stage slot, money (facts 3/5). Save RECORDS (5 x 61 B) are P4
-  persistence; this crate only defines the sink trait (sec 8).
+Track-per-scene table (fact 4): Options -> OPTIONS.MRS, Brief ->
+BRIEF.MRS, Select -> SELECT.MRS, Debrief -> DEBRIEF.MRS, Shop ->
+SHOP.MRS; all other scenes None (title = TITLE.SMK video; mission
+music = open question Q2). The MusicPump pre-builds the script once
+per loaded file; scene changes swap Mixer scripts; restarts rebuild.
 
-## 7. Determinism boundary (D17)
+## 6. Config and save model
 
-- HASHED (bucket a): sim state (bedlam-core Sim::state_hash) AND scene FSM
-  state (SceneFsm::state_hash: scene id, tick-in-scene, campaign fields,
-  outcome latch, quit flag) - scene state is canonical sim-visible state.
-- UNHASHED (bucket b): render frame artifacts, cursor/presentation, the
-  music mixer and its pump. The music pump advances by SERVICE TICKS (the
-  sim 100Hz satellite, integer), never by host dt, so replaying a session
-  reproduces the same mix stream bit-for-bit without it being hashed.
+- OPTIONS.BDL is the ONLY config file the engine reads (fact 5).
+  config.rs wraps bedlam-assets parse_options_bdl into a typed
+  GameConfig: volume validated 0..=100, player name 8 sanitized graphic
+  chars, flag fields as bools (nonzero), language kept as the raw u32
+  code (open Q3). A 41-byte writer round-trips the typed view.
+  music_master() = volume >> 1 (fact 7, the 0..50 master domain).
+- CONFIG.BDL is NOT modelled anywhere (fact 5: never read by EXW).
+- Saves: EXW SAVED.BDL + HISCORES via bedlam-assets; the B2 5x61 B
+  shape is documented (fact 6) and mirrored by the episode fields. All
+  persistence crosses the injected traits ONLY.
+
+## 7. Determinism boundary (D17 + D26)
+
+- HASHED (the scene bucket): scene id, per-scene tick counter, episode
+  progression (stage/mask/linear/zone_complete_pending), boot countdown,
+  and the per-tick edge-latch state. Hash = FNV-1a 64 (bedlam-core
+  hash crate reused) over canonical LE fields with the tag BDLG.
+- UNHASHED (D17 bucket b): the SimDriver accumulator, FrameState, the
+  Mixer and audio pump, the rendered Frame bytes.
+- D26 (the non-obvious call): EXW input polling is per-frame (bucket
+  b), but the SCENE ACTIONS here derive per tick by level-sampling the
+  consumed tick input - mirroring the 100 Hz-sampled KeySink latches -
+  so action derivation sits INSIDE the hash. This is what makes the
+  15/60/240 Hz host test exact; per-frame edge detection could never
+  be hashed.
 
 ## 8. Hermetic rule
 
-`#![forbid(unsafe_code)]`; no file I/O anywhere. Bytes cross the boundary
-through two traits the P4 platform injects:
+forbid(unsafe_code); no fs / clock / threads anywhere in the crate;
+every byte crossing the boundary passes through the injected
+ByteSource / ByteSink traits (host.rs). thiserror only; NO new
+dependencies.
 
-    pub trait ByteSource { fn read(&self, name: &str) -> Result<Vec<u8>, GameError>; }
-    pub trait ByteSink   { fn write(&self, name: &str, bytes: &[u8]) -> Result<(), GameError>; }
+## 9. Testing and goldens
 
-Asset parsing stays in bedlam-assets; this crate composes parsed types only.
+- FSM unit: transition table, episode progression incl. mask fill ->
+  stage advance -> cutscene, linear cap, Quit terminal.
+- tests/determinism.rs: same WALL-TIME input script (phases aligned to
+  16-sub-tick boundaries so a 15 Hz host can represent them exactly)
+  -> identical scene hash at 15/60/240 Hz; pure-FSM replay determinism
+  + divergence on a different script.
+- tests/music_corpus.rs: walk-vs-script equivalence over the 5 shipped
+  .MRS files (every enabled chunk): same note sequence at the same
+  absolute ticks, non-decreasing, terminal Freeze everywhere, note
+  volumes inside the observed band, chunk 0 disabled in every file.
+  Skips when game-data is absent (CI).
+- Gates: cargo fmt, cargo clippy -D warnings, workspace tests 177+.
 
-## 9. Type sketch (API as implemented by the skeleton)
+## 10. Open questions (each names its answer source)
 
-    pub enum SceneId { Boot, Intro, Title, NameEntry, Options, Briefing,
-                       Mission, MissionOutcome, Hub, Cutscene, End }
-    pub struct SceneFsm { /* current, tick_in_scene, campaign, latches */ }
-    impl SceneFsm {
-        pub fn new() -> SceneFsm;
-        pub fn step(&mut self, input: &InputFrame) -> SceneStep;  // transitions
-        pub fn scene(&self) -> SceneId;
-        pub fn campaign(&self) -> &Campaign;
-        pub fn state_hash(&self) -> StateHash;                    // bucket a
-    }
-    pub struct GameHost { /* sim_driver, fsm, mixer, music clock */ }
-    impl GameHost {
-        pub fn new(config: &GameConfig) -> GameHost;
-        pub fn advance(&mut self, dt_subticks: u32, input: &InputFrame) -> HostFrame;
-        pub fn sim(&self) -> &Sim;  pub fn scene(&self) -> &SceneFsm;
-        pub fn state_hash(&self) -> StateHash;  // sim hash + scene hash layout
-    }
-    pub fn mrs_to_script(mrs: &Mrs) -> Result<BridgedMusic, GameError>;
-    pub struct GameConfig { /* typed OPTIONS.BDL + present flag */ }
-    impl GameConfig { pub fn from_options_bdl(bytes: &[u8]) -> Result<GameConfig, GameError>; }
-
-Errors: thiserror only; no new dependencies beyond the sibling crates.
-
-## 10. Testing
-
-- Unit: FSM topology walk (scripted inputs drive Boot through End along every
-  RE-anchored edge incl. pause modal + outcome switch), campaign stride
-  (linear/zone/level round-trip over 1..=26), config parse on the real
-  41-B layout + defaults.
-- Integration tests/determinism.rs: same scripted input -> identical
-  GameHost::state_hash at 15/60/240Hz host frame rates (dt 16/4/1 subticks).
-- Integration tests/music_bridge.rs: for each of the 5 corpus .MRS:
-  bridge == walk (event-for-event, absolute ticks = cumulative deltas + B
-  seed), NoteOn/NoteOff split correct, script pushes into the mixer, and the
-  rendered mix is byte-identical under 1/7/64-frame chunking.
-- cargo fmt + clippy -D warnings; workspace suite stays green.
-
-## 11. Open questions (each names its answer source)
-
-- Q1: EXW Title/menu structure below GameMain (FUN_0043e7d4 modal set, shop,
-  debrief screens) is only structurally known -> P2e/P4 Ghidra pass over
-  FUN_0043a48d/FUN_0043e7d4/FUN_0044745e; FSM edges marked [skeleton] until then.
-- Q2: scene music START moments (which screen arms which .MRS base name) -
-  the 5 base names are the scene set (fact 6) but the arm points are mostly
-  B2-side -> follow-up census pass; host exposes music_for_scene as data.
-- Q3: save-record writer (5 x 61 B) semantics -> P4 with the harness.
-- Q4: mission seeds per level (RNG planting is boot-global 123456/234567 in
-  both builds) -> P4 parity harness.
+- Q1: OPTIONS.BDL flag semantics (backbuffer/actionpan/cd_audio/midi/
+  sound/code_no_title values) -> P2g UI RE pass.
+- Q2: mission-scene music source (no MISSION*.MRS ships) -> P2 audio
+  inventory; the track table gains a mission row then.
+- Q3: language code space (B2 LANGUAGE.* select in GameInit) -> same
+  P2g pass.
+- Q4: B2 61 B slot layout (money/stats field offsets) -> P2g save RE;
+  the EXW 180 B SAVED.BDL already parses.
+- Q5: Select-screen sub selection (replaces the lowest-unset
+  placeholder) -> P5 gameplay RE.
 
 ## Provenance
 
-Written 2026-08-18 by the item-1 worker from RE-EXW-GAMETHREAD, RE-EXW-MUSIC
-sec 1/2/4, RE-EXW-INPUT, RESEARCH-BEDLAM2-CENSUS sec 6/7, DESIGN-RENDER
-sec 5/6, DESIGN-AUDIO sec 4/7, DECISIONS D9/D12/D17, PLAN sec 6 P3. RE facts
-carry anchors; FSM flattening and pump wiring are [design].
+Written 2026-08-18 by the item-1 worker (claim lock-v1 1787044723) from
+RE-EXW-PACER sec 1, RE-EXW-GAMETHREAD, RE-EXW-INPUT, RE-EXW-MUSIC
+sec 4, RESEARCH-BEDLAM2-CENSUS secs 6/7, DESIGN-AUDIO sec 7, DECISIONS
+D16/D17, PLAN secs 6 P3 / 7. RE facts carry anchors; [design] and D26
+marks are reimplementation choices, not RE claims. Confidence: high on
+facts 1-8 (all verified in prior runs), high on the API shape
+(mirrors the DESIGN-RENDER / DESIGN-AUDIO acceptance flow).
