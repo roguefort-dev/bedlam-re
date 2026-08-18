@@ -1,18 +1,20 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] bedlam-render + bedlam-platform wgpu skeleton per D20 and
-   docs/DESIGN-RENDER.md (parity path = canonical indexed 640x480 frame
-   scaled on GPU; enhanced path = native-resolution world/UI passes,
-   non-parity; resolution/backend never feed simulation). Promote the
-   matching backlog item; keep the crate hermetic-deterministic per D17
-   boundary rules (interpolation alpha + present timing = presentation
-   only, never sim state). Cargo fmt + clippy -D warnings before commit;
-   workspace tests must stay 132+ green.
+1. [P3] Miri pass over bedlam-core + per-tick hash CI job (PLAN sec 7
+   charter item, promoted from backlog; determinism from first playable
+   tick onward). ci.yml already runs fmt/clippy/test/build on
+   ubuntu+windows per push (now 153 tests). Deliverables: (a) cargo miri
+   test -p bedlam-core clean on this host (rustup component add miri if
+   missing; record invocation + result in STATE), (b) a committed
+   per-tick hash fixture test (run a fixed script N ticks, assert the
+   hash sequence against committed expected values) so cross-OS hash
+   equality fails loud in the existing matrix, (c) wire it into ci.yml.
+   Keep bedlam-render compose math in scope ONLY if miri flags it.
+   Cargo fmt + clippy -D warnings before commit; workspace tests must
+   stay 153+ green.
 
 ## Backlog (not yet started)
-- P3: Miri pass over bedlam-core + cross-OS per-tick hash CI job (PLAN sec 7
-  charter item, from first playable tick onward).
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
   (needs desktop + DirectDraw - do NOT run unattended); flathub sandbox
   filesystem override for game-data + DOSBox-X harness config (cycles pinned,
@@ -27,6 +29,30 @@
   display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
 
 ## Done (append)
+- 2026-08-18 ff8fb17+d2b7fb8+f86a100 [P3] bedlam-render + bedlam-platform
+   wgpu skeleton CLOSED (per D20 + DESIGN-RENDER; code landed by the 03:00
+   worker session that outlived its rc=1 client - commits 03:07/03:17 -
+   then died before the queue rewrite; this 03:32 respawn VERIFIED rather
+   than redid: workspace 153 tests green incl. a REAL offscreen GPU
+   round-trip, fmt + clippy -D warnings clean, manifests OK x2, source
+   read line by line against D20/DESIGN-RENDER secs 1-9/D17). (a)
+   bedlam-render: canonical Frame 640x480x8 + [Vga6;256] + palette_dirty;
+   parity_hash = FNV-1a(indices || 6-bit palette); VgaExpand Original
+   v<<2 (SetPaletteRGB-identical) / Full; render() fixed pass order
+   world->sprites->rows->overlays->entities; camera clamp 9..631/9..463;
+   alpha = presentation hint, IGNORED with prev_sim=None (golden config);
+   hermetic (forbid unsafe, no I/O/clock/threads, only float is alpha);
+   12 tests. (b) bedlam-platform: pure scale.rs (Integer default with
+   pillar/letterbox, Fit, Fill with centered uv crop; zero-rect skip) +
+   gpu.rs wgpu 27.0.1 ParityGpu (headless, None => skip) + ParityPipeline
+   (R8Uint index tex per frame, R32Uint packed 6-bit palette tex ONLY on
+   palette_dirty - 004ee9b6 analog - fullscreen-triangle WGSL
+   palette-expand + scale, nearest default / bilinear-over-expanded-RGB,
+   indices never interpolated); PresentConfig parity defaults
+   Integer+Nearest+Original; consumes bedlam-render Frames only, never
+   bedlam-core, no clock; 9 tests. D24 records the wgpu pin + P4-spike
+   deferral of the final version call. DESIGN-RENDER status flipped to
+   IMPLEMENTED AS SKELETON (f86a100).
 - 2026-08-18 928748d+7bfac4b+aff1ae8 [P2] B2 episode-loop progression +
    INT8-counter readers CLOSED (2x -process BEDLAM.EXE -noanalysis passes
    this run + B2EpisDump adopted from the transport-killed 02:0x run and
@@ -344,6 +370,22 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 03:3x (render-verify run): arrived as the 03:32 respawn for
+  item 1 and found BOTH crates already committed (ff8fb17 03:07, d2b7fb8
+  03:17) with no queue rewrite - the 03:00 worker client died transport
+  rc=1 at 03:05 (nudge.log) but its server session finished the unit
+  commits invisibly, then died too (unit gone from systemd, no opencode2
+  run process, 15 min commit silence before my spawn). Per the
+  queue-verify precedent: verified instead of redid - full workspace 153
+  green (the GPU round-trip REALLY ran, 1.35s with a live adapter), fmt +
+  clippy -D warnings clean, manifests OK x2, source read in full against
+  D20 + DESIGN-RENDER secs 1-9 + D17 boundary (grep: no HashMap/fs/time/
+  thread in either src; forbid(unsafe_code) in both). Completed the unit
+  tail: DESIGN-RENDER status flip + D24 (wgpu 27.0.1 pin rationale) +
+  STATE + this queue rewrite + backlog promotion to the Miri/CI item.
+  LESSON: ghost survivors now also finish CODE units, not just docs - a
+  stale queue item may already be DONE; check git log + systemd units +
+  pgrep before planning any redo.
 - 2026-08-18 00:1x-00:2x (item3-dup watch run; stood down, NO work files
   touched): DUPLICATE-SPAWN #5, contained, no damage. This run = the 00:12
   nudge-item3 spawn. Protocol followed: found 3-claim stale (00:02, owner
