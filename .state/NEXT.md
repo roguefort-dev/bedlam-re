@@ -1,7 +1,26 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [INTERACTIVE] P4 RUNTIME HALF - desktop-gated, do NOT run unattended. Two gated items, checklists ready:
+1. [P4] Headless Smacker decoder spike + TITLE.SMK asset gate (unattended-safe;
+   smallest next vertical-slice seam per PLAN sec 6 P4). Work only this bounded
+   unit: (a) decide and record the P4 decoder dependency in DECISIONS.md using
+   the already-researched default (pure-Rust smk fork) versus libsmacker-sys;
+   preserve bedlam-assets as buffer-in/out, deterministic, no filesystem/clock,
+   and forbid unsafe in our crate; (b) replace the header-only seam in
+   engine/bedlam-assets/src/smk.rs with a codec-neutral decoded stream API for
+   metadata/frame interval, indexed frame pixels + palette, and decoded audio
+   packet metadata/data; do NOT integrate GameHost/render/platform yet; (c)
+   tests: malformed/truncated inputs return stable errors without panic,
+   repeated synthetic decode is identical, and a corpus-skipping TITLE.SMK gate
+   verifies 640x320, declared frame count, stable decoded pixel+palette hashes
+   and stable audio metadata/packet counts across two runs. Commit fingerprints
+   only, never media. Bracket every game-data read with MANIFEST.sha256 checks.
+   Run fmt, clippy -D warnings, focused tests, then workspace tests. If the
+   candidate decoder cannot meet these gates in one unit, commit the evidence +
+   codec-neutral API/tests and queue the exact follow-up rather than faking a
+   completed decoder.
+
+2. [INTERACTIVE] P4 RUNTIME HALF - desktop-gated, do NOT run unattended. Two gated items, checklists ready:
    (a) DOSBox-X golden run per tools/runtime/dosbox-watch.skeleton.txt:
    game-mode launch (tools/runtime/dosbox-harness.sh game) at the D29 pins,
    calibrate cycles=fixed 60000 (audio dropouts -> deliberate re-pin per
