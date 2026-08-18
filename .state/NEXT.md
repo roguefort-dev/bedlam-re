@@ -19,7 +19,7 @@
 
 
 ## Done (append)
-- 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6 [P2 cosmetic tail] B2
+- 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6+75b17a8 [P2 cosmetic tail] B2
     census sec-7 residuals CLOSED (census doc sec 7.7a-e; lane survived a
     5-restart storm - the 15:5x predecessor committed the dump scripts then
     died, the 16:2x + 16:3x respawns died in recon, this 16:4x/16:5x run
@@ -43,8 +43,11 @@
     verbatim passthrough, 0x4101 zero hits in 671 fns, g_lfb_ptr +
     g_vesa_mode_req write-only dead). 0x200 display start = SCANLINE
     units 2-way (bank 5 = 0x50000 = 0x200 x 640B; 4f07 DX form). B2 fade
-    chain = 100.01Hz-integrated vs EXW 50Hz (divergence recorded, D17
-    keeps fade presentation-side). Corpus filenames cross-checked
+    chain = 50 Hz in the ISR &1 sub-block = EXW-identical 200 ms fade
+    (RATE CORRECTED post-close-out by 75b17a8: the 4ace8a6 draft read
+    the step at the bare tick rate; the call is nested inside
+    (g_int8_ctr0 & 1) - divergence WITHDRAWN, D17 keeps fade
+    presentation-side). Corpus filenames cross-checked
     (ZONEA..F missions {1,2,3,4,6,7}, A missing 3 = campaign never
     requests it; MISSION5 never produced in any mode). 1x -process
     BEDLAM.EXE -noanalysis total this run (no import); manifests OK x2
@@ -574,7 +577,23 @@
     (3) the GHIDRA classpath on this host is
     find /home/kato/ghidra-12.1.2-watcom/Ghidra -name *.jar (the
     top-level lib/ form from older notes is stale).
-
+    ADDENDUM (17:0x verify pass, 75b17a8): a post-close-out re-verify of
+    the 4ace8a6 doc against the raw dumps caught ONE error in 7.7e - the
+    fade-rate claim. The FUN_000126c8 call is nested inside the ISR
+    (g_int8_ctr0 & 1) sub-block (b2-epis-close.txt lines 47-71), i.e. 50
+    Hz sharing the cursor-draw cadence, NOT the bare 100.01 Hz tick rate
+    - so the B2 fade is EXW-IDENTICAL (10 steps = 200 ms; corroborated by
+    every B2FadeSetup call site passing 10, matching the EXW 10-step
+    engine). Doc 7.7e + STATE corrected (75b17a8); the done entry above
+    was updated to match. Also re-verified this pass: campaign tables vs
+    the hex dumps (order/zone/mission byte-exact, step list 1..26),
+    corpus claims (no ZONEG directory; ZONEA = MISSION{1,2,4,6,7}),
+    manifests OK x2, and the sibling close-out commits 63b9b2c (queue
+    rewrite + claim deletion) interleaved cleanly with this correction -
+    the 75b17a8 STATE hunk applied on top with zero clobber. LESSON:
+    close-out verification is not optional even when a ghost survivor
+    finishes the unit - the ghost drafted 7.7e from the same dumps but
+    read the ISR nesting one level too shallow.
 - 2026-08-18 15:33-16:0x (surf-confirm unit, double-restart lane): item-1
   lane incarnations: 15:33 worker (died transport, progress=0 per nudge)
   -> BUT its analyzeHeadless survived server-side as an OS ORPHAN and
