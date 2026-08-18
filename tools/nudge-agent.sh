@@ -11,6 +11,7 @@ item=${1:?queue item required}
 slotid=${2:?slot id required}
 LOG="$STATE/agent-$slotid.log"
 OPENC=${OPENC_OVERRIDE:-opencode2}
+MODEL=zai-coding-plan/glm-5.3
 
 cd "$PLAN_DIR" || exit 1
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
@@ -44,7 +45,7 @@ echo "lock-v1 worker $slotid owns queue item $item" >&8
 PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. HARD CONCURRENCY RULE: do NOT spawn, delegate to, or invoke any subagent; no nesting is allowed. You personally perform one bounded work unit only. Your queue item $item claim is already owned by this worker; do not create, replace, or select another claim. Work ONLY item $item in the Now section of .state/NEXT.md. If item $item is already owned, stop and release your placeholder; do not choose another item. Commit EARLY and OFTEN. AT END: update NEXT.md, delete your claim, and push. On model, transport, or API error, record completed work in NEXT.md and commit if possible; leave the claim for ghost accounting. Never start an analyzeHeadless import already running or succeeded. Do not ask questions or wait for input."
 
 set +e
-timeout 3900 "$OPENC" run --standalone --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1
+timeout 3900 "$OPENC" run --standalone --model "$MODEL" --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1
 rc=$?
 set -e
 cat "$LOG" >> "$STATE/nudge-run.log" 2>/dev/null || true

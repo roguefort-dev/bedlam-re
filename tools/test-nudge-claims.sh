@@ -45,6 +45,7 @@ if flock -n "$PLAN/.state/claims/4-owner.claim" true; then
 fi
 wait "$agent"
 grep -q -- "--standalone" "$TMP/mock-client.args"
+grep -q -- "--model zai-coding-plan/glm-5.3" "$TMP/mock-client.args"
 [ ! -e "$PLAN/.state/claims/4-owner.claim" ]
 
 # An abandoned startup reservation expires quickly.
