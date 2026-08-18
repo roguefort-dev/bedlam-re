@@ -1,24 +1,66 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4 RUNTIME HALF - promoted from backlog; INTERACTIVE-GATED] wine/DOSBox
-   runtime comparison against the parity harness CPU baseline (reproduce
-   the D28 anchors with: cargo run --release --example parity_harness
-   -p bedlam-game -- --out report.json; anchors scene 0xcae25cd08d7cbc08,
-   sim 0x72979d5d9dedc832, frame 0x87263f149564ad25, audio
-   0xc862e45d2e95ad29). The interactive EXW smoke launch under
-   tools/runtime/wine-exw.sh NEEDS desktop + DirectDraw - do NOT run it
-   unattended; STOP if the unit reduces to that. Unattended-safe subparts
-   if taken in a bounded unit: flathub sandbox filesystem override for
-   game-data + DOSBox-X harness config (cycles pinned, debugger watch
-   scripting) per the RUNTIME.md pins (D19 - never blind-update, re-baseline
-   goldens on pin change).
+1. [P4 RUNTIME HALF - INTERACTIVE REMAINDER; desktop-gated, do NOT run
+   unattended] Two gated items, checklists ready:
+   (a) DOSBox-X golden run per tools/runtime/dosbox-watch.skeleton.txt:
+   game-mode launch (tools/runtime/dosbox-harness.sh game) at the D29 pins,
+   calibrate cycles=fixed 60000 (audio dropouts -> deliberate re-pin per
+   D19/D29), verify debugger command names (BPINT/BPLM/D forms + linear
+   conversion via INT3 at _entry 0x66a60), then first per-frame watch dumps
+   of the census-verified set vs the D28 CPU anchors (scene
+   0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame 0x87263f149564ad25,
+   audio 0xc862e45d2e95ad29).
+   (b) wine EXW smoke under tools/runtime/wine-exw.sh (desktop + DirectDraw).
+   Unattended-safe regression for the harness stack: tools/runtime/
+   dosbox-harness.sh smoke (gate = SMOKETST.TXT lists both EXEs).
 
 ## Backlog (not yet started)
-- (empty - P4 runtime half promoted to Now)
+- (empty)
 
 
 ## Done (append)
+- 2026-08-18 79227e5+11c8d9c+b951e7c [P4 runtime unit, unattended subparts
+    CLOSED] the lane survived THREE server restarts + two invisible
+    siblings (see run notes). (a) D28 anchors REPRODUCED: parity_harness
+    run x2, reports cmp-identical, all four hashes exact (scene chain
+    0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame
+    0x87263f149564ad25, audio 0xc862e45d2e95ad29, 176994 nonzero
+    samples / 142600 mixed). (b) FLATPAK OVERRIDE executed and then
+    SUPERSEDED: flatpak info exposed the static finish arg filesystems=home
+    (whole home rw) - per-dir :ro grants are illusory under the permission
+    union; corrected posture = --reset + --nofilesystem=home +
+    --filesystem=<repo>/runtime (verified: effective filesystems = runtime
+    only). Corpus reaches the emulator via rsync scratch copy
+    runtime/harness-corpus (writable C: for saves; canon corpus never
+    mounted); runtime/harness-out = D: for dumps/captures/saves/logs.
+    (c) HARNESS CONFIG pinned (tools/runtime/dosbox-x-harness.conf, D29):
+    machine=svga_s3 (VBE banked 0x101; UNIVBE must NOT run), core=normal +
+    cputype=pentium (debugger accuracy + reproducibility), cycles=fixed
+    60000 STARTING PIN (calibration interactive), memsize=16, vmemsize=2
+    in [video] (canonical section in 2026.08.02 - [dosbox] placement logs
+    a Redirect notice), render scaler=none aspect=false (raw framebuffer
+    goldens), mixer sample accurate=true rate=48000, sblaster sb16
+    220/7/1/5 (HMI driver class), log debuggerrun=watch. Every option name
+    verified against the reference conf inside the pinned flatpak.
+    (d) DRIVER tools/runtime/dosbox-harness.sh {prepare|smoke|shell|game}
+    deploys run.conf to harness-out (sandbox cannot see tools/) with mounts
+    appended; smoke = headless dummy-A/V boot + FILE gate. GATE PASSED
+    first-hand (exit 0; SMOKETST.TXT lists BEDLAM.EXE 672399 + DOS4GW.EXE
+    265396) and independently by the dead 17:34 sibling using the same
+    driver. (e) WATCH SKELETON tools/runtime/dosbox-watch.skeleton.txt:
+    census-verified watch set with line refs (RNG pairs 0x11ef18/1a +
+    0x11ef1c/1e per census L301/307 - fixes the draft 0x11ef20 guess;
+    fade 0x11ef88, palette bank 0x11f138, display start 0x11ef38, flip
+    lock 0x8008e, campaign linear 0x12576c, mode 0x11f11c, timeout
+    0x11f0c4, ISR phase 0x11f0c8, saves 0x8b1d4), PresentFlip@0x1066b
+    frame trigger, PcmMixerService@0x136e0 audio dump, BPINT/BPLM/D + O
+    startup.js routes marked UNCERTAIN, calibration checklist. THREE
+    addresses from the dead sibling draft (0x11ef7c/0x11f0c0/0x11efc4)
+    had ZERO census/STATE backing despite [verified] tags - DROPPED
+    (75b17a8 lesson, 2nd occurrence). (f) Manifests OK x2; no game launch
+    (interactive gate honored); fmt/clippy not needed (no Rust touched).
+
 - 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6+75b17a8 [P2 cosmetic tail] B2
     census sec-7 residuals CLOSED (census doc sec 7.7a-e; lane survived a
     5-restart storm - the 15:5x predecessor committed the dump scripts then
@@ -946,3 +988,35 @@
   appeared untracked at 00:00:28, still uncommitted WIP matching new queue
   item 1 - whoever claims it should inspect it before rewriting. 132 tests
   verified green twice by this run on top of slice reports; manifest OK.
+
+## Run notes
+- 2026-08-18 17:15-17:45 (P4 runtime unit, triple-restart + invisible-sibling
+  lane): THIS session = the ORIGINAL interactive conversation continued
+  through three server restarts. Restart 1 + 2: tool calls interrupted pre-
+  result; recovery per the verify-then-continue pattern cost only
+  re-verification (all reads idempotent). The interesting part: restart 3
+  (17:34) - the nudge reaper declared the claim stale (my worker id dead
+  transport-side) and spawned a NEW agent (1787067253) that re-reserved the
+  claim, READ my committed 79227e5 + my updated working tree, and RAN MY
+  DRIVER (prepare+smoke at 17:38:46-17:39 - harness-corpus + harness-out
+  appeared under my feet mid-verification; process-lineage check settled
+  identity: my shells descend from the 24h-old session server, the spawn
+  pid was already GONE). Its smoke run PASSED the gate with my exact
+  design - adopted as corroborating evidence, then re-proven first-hand.
+  Also present: an EARLIER invisible sibling (17:26-17:31, the OS-orphan
+  pattern from 15:33) that wrote 6 untracked parallel files
+  (bedlam-dosbox.conf, dosboxx-harness.conf, flatpak-override.sh,
+  harness-prepare.sh, b2-watch.txt, bedlam-dosbox-watch.txt) - its UNIQUE
+  REAL finding was the static-home finish arg (folded into D29 + the
+  canonical rewrite); its watch table carried 3 FABRICATED addresses
+  tagged verified (dropped, census-grepped). LESSONS: (1) process-lineage
+  via /proc PPID walk beats guessing which spawn you are; (2) flatpak :ro
+  per-path grants are cosmetic under a static home finish arg - ALWAYS
+  check flatpak info --show-permissions before trusting sandbox isolation;
+  (3) ghost-survivor artifacts need census-level verification even when
+  tagged [verified] - 3 of 10 addresses were fabricated (2nd occurrence
+  of the 75b17a8 lesson); (4) the fish heredoc through bash -c still
+  expands $VARS when the heredoc is unquoted - printf-list remains the
+  safe transport for scripts with dollars; (5) SMOKETST.TXT evidence
+  gates beat console-log grepping for headless DOS runs (-silent nulls
+  DOS output; -exit does not).

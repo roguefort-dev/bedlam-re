@@ -54,6 +54,21 @@
   = dependency/version spike + runtime smoke, needs interactive desktop
   for wine-exw (do NOT run unattended).
 
+- CLOSED 2026-08-18 (P4 runtime unit, unattended subparts, 79227e5+11c8d9c+b951e7c):
+  D28 anchors REPRODUCED byte-identically x2 runs (scene
+  0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame 0x87263f149564ad25,
+  audio 0xc862e45d2e95ad29; reports cmp-identical). DOSBox-X harness
+  LANDED: flatpak static-home finish arg DISCOVERED (per-dir :ro grants
+  illusory) -> sandbox hardened (home revoked, runtime-only, verified via
+  flatpak info), corpus via rsync scratch copy, pinned conf (svga_s3/
+  core=normal/cputype=pentium/cycles=fixed 60000/vmemsize=2/scaler=none/
+  sample-accurate sb16), driver prepare/smoke/shell/game, watch skeleton
+  (census-verified watch set; PresentFlip frame trigger; 3 ghost addresses
+  dropped), HEADLESS SMOKE GATE PASS first-hand (SMOKETST.TXT lists both
+  EXEs). D29. Interactive half still gated: wine EXW launch + DOSBox-X
+  golden-run calibration/checklist (RUNTIME.md follow-ups).
+
+- Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
 - Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
   promoted to workspace crate engine/bedlam-assets (pure, inspect CLI output
   byte-identical, D14); MUSIC FORMATS DECODED IN RUST 2026-08-17: music.rs
