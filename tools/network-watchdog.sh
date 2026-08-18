@@ -6,7 +6,6 @@ PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
 STATE="$PLAN_DIR/.state"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CURL_BIN=${CURL_BIN:-curl}
-OPENC_BIN=${OPENC_BIN:-opencode2}
 OFFLINE="$STATE/network-offline"
 LAST_RECOVERY="$STATE/network-last-recovery"
 LOG="$STATE/network-watchdog.log"
@@ -49,13 +48,9 @@ fi
 echo "$now $reason" > "$LAST_RECOVERY"
 echo "$(date -Is) recovery started: $reason" >> "$LOG"
 
-# A connectivity loss can leave the otherwise healthy shared service with a
-# poisoned provider response. Restart it once per observed recovery event.
-if "$OPENC_BIN" service restart >> "$LOG" 2>&1; then
-  echo "$(date -Is) OpenCode service restarted" >> "$LOG"
-else
-  echo "$(date -Is) OpenCode service restart failed; nudge will still retry standalone" >> "$LOG"
-fi
+# Workers run with --standalone, so recovery is a fresh private connection.
+# Never restart the shared OpenCode service here: doing so interrupts unrelated
+# interactive sessions and is unnecessary for autonomous retries.
 
 # A failed worker is gone, so an unlocked lock-v1 claim can be released now
 # rather than waiting for the normal five-minute grace. Locked live claims are

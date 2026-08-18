@@ -186,18 +186,9 @@ if [ "$ncl" -ge "$cur_conc" ]; then
 fi
 
 # free queue item numbers = Now-section entries not claimed
-free_items=$(python3 - << "PY"
-import re, os
-try: q = open(".state/NEXT.md").read()
-except: q = ""
-now = q.split("## Now",1)[1].split("## Backlog",1)[0] if "## Now" in q else ""
-items = re.findall(r"^\s*(\d+)\.\s+\[", now, re.M)
-claimed = {f.split("-")[0] for f in os.listdir(".state/claims") if f.endswith(".claim")}
-print(" ".join(i for i in items if i not in claimed))
-PY
-)
+free_items=$("$PLAN_DIR/tools/nudge-free-items.py" "$STATE/NEXT.md" "$CLAIMS")
 if [ -z "$free_items" ]; then
-  echo "$(date -Is) all Now queue items are claimed - standing down" >> "$STATE/nudge.log"
+  echo "$(date -Is) no unattended Now items are available - standing down" >> "$STATE/nudge.log"
   exit 0
 fi
 item=$(echo "$free_items" | awk "{print \$1}")

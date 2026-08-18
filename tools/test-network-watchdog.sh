@@ -21,14 +21,10 @@ cat > "$BIN/curl" <<"EOF"
 #!/usr/bin/env bash
 [ "$(cat "$MOCK_STATE/network")" = up ]
 EOF
-cat > "$BIN/opencode2" <<"EOF"
-#!/usr/bin/env bash
-echo "$*" >> "$MOCK_STATE/opencode.calls"
-EOF
-chmod +x "$BIN/curl" "$BIN/opencode2"
+chmod +x "$BIN/curl"
 
 watch() {
-  BEDLAM_PLAN_DIR="$PLAN" CURL_BIN="$BIN/curl" OPENC_BIN="$BIN/opencode2"     NETWORK_WATCHDOG_LOCK="$TMP/watchdog.lock" "$WATCHDOG"
+  BEDLAM_PLAN_DIR="$PLAN" CURL_BIN="$BIN/curl"     NETWORK_WATCHDOG_LOCK="$TMP/watchdog.lock" "$WATCHDOG"
 }
 
 # Offline checks mark state but do not restart OpenCode.
@@ -39,7 +35,6 @@ rc=$?
 set -e
 [ "$rc" -eq 75 ]
 [ -f "$PLAN/.state/network-offline" ]
-[ ! -e "$MOCK_STATE/opencode.calls" ]
 set +e
 watch
 rc=$?
@@ -63,10 +58,10 @@ echo up > "$MOCK_STATE/network"
 watch
 [ -e "$PLAN/.state/claims/9-owner.claim" ]
 [ ! -e "$PLAN/.state/network-offline" ]
-[ "$(grep -c "service restart" "$MOCK_STATE/opencode.calls")" -eq 1 ]
+[ "$(grep -c "recovery started" "$PLAN/.state/network-watchdog.log")" -eq 1 ]
 [ "$(stat -c %Y "$PLAN/.state/heartbeat")" -eq 0 ]
 watch
-[ "$(grep -c "service restart" "$MOCK_STATE/opencode.calls")" -eq 1 ]
+[ "$(grep -c "recovery started" "$PLAN/.state/network-watchdog.log")" -eq 1 ]
 
 kill "$locker"
 wait "$locker" 2>/dev/null || true
@@ -76,9 +71,9 @@ touch -d "2 seconds ago" "$PLAN/.state/claims/9-owner.claim"
 touch -d "2 seconds ago" "$PLAN/.state/network-last-recovery"
 echo "Error: UnsupportedContentType" > "$PLAN/.state/agent-test.log"
 watch
-[ "$(grep -c "service restart" "$MOCK_STATE/opencode.calls")" -eq 2 ]
+[ "$(grep -c "recovery started" "$PLAN/.state/network-watchdog.log")" -eq 2 ]
 [ ! -e "$PLAN/.state/claims/9-owner.claim" ]
 watch
-[ "$(grep -c "service restart" "$MOCK_STATE/opencode.calls")" -eq 2 ]
+[ "$(grep -c "recovery started" "$PLAN/.state/network-watchdog.log")" -eq 2 ]
 
 echo "network watchdog tests: PASS"

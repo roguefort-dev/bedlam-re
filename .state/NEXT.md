@@ -1,8 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4 RUNTIME HALF - INTERACTIVE REMAINDER; desktop-gated, do NOT run
-   unattended] Two gated items, checklists ready:
+1. [INTERACTIVE] P4 RUNTIME HALF - desktop-gated, do NOT run unattended. Two gated items, checklists ready:
    (a) DOSBox-X golden run per tools/runtime/dosbox-watch.skeleton.txt:
    game-mode launch (tools/runtime/dosbox-harness.sh game) at the D29 pins,
    calibrate cycles=fixed 60000 (audio dropouts -> deliberate re-pin per
