@@ -1,5 +1,25 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-18 (P2 cosmetic tail, 119ba2d+b6620c0+007fbe5+4ace8a6):
+  B2 census sec-7 residuals ALL CLOSED (census sec 7.7a-e). Campaign
+  tables byte-pinned (order[8] = {3,0,1,5,9,13,17,21}; full 27-step
+  idx list; 25 distinct indices = union over stages 1..7). 25-vs-27
+  RESOLVED by static arithmetic - no playthrough needed: linear counts
+  completions (27), formula indices are distinct table slots (25); the
+  gap = two endgame completions at stage-slot 8 via the OOB order[8] =
+  zone[0] sentinel hop (0x81dba + 8*4 = 0x81dda exactly). 4f02 =
+  BANKED 0x101 (BX verbatim caller passthrough at 0x12439, zero 0x4101
+  constructions in the 671-fn sweep, g_lfb_ptr + g_vesa_mode_req
+  write-only dead). Display start 0x200 = SCANLINE units (page-B bank 5
+  = 0x50000 = 0x200 x 640-byte pitch; 4f07 DX-scanline form). B2 fade
+  chain named + documented (B2FadeStep@0x126c8 8.8-fixed 768ch serviced
+  EVERY 100.01Hz tick vs EXW 50Hz - divergence recorded for the parity
+  budget; setup/cancel/dacread/dacupload/fadewait + 3 labels persisted;
+  B2LblFix repaired 2 mislabels, primaries restored). Persistence
+  re-verified 14/14 (B2ResidVerify). No import (1x -process
+  -noanalysis); manifests OK x2. P2 cosmetic queue EMPTY; P4 runtime
+  half remains, interactive-gated.
+
 - CLOSED 2026-08-18 (P2 cosmetic, 8f5f18f+94a65da): EXW DD surface
   creation-order CONFIRMED (RE-EXW-TICK new section): 004ee9bc =
   flip-chain head/primary; 004ee9c0 = implicit backbuffer (fullscreen

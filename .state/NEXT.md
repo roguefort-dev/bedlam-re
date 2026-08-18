@@ -1,26 +1,55 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2 cosmetic follow-up, census sec 7 residuals] [IN FLIGHT - live
-   claim 2-owner.claim, agent running B2Residuals ghidra pass as of
-   ~15:5x; do NOT double-claim - verify pgrep/git-log first] B2 campaign index
-   accounting (25 reachable zone-letter indices vs 27 linear steps -
-   needs save-file/playthrough check), 4f02 LFB-vs-banked variant +
-   0x200 display-start units, FUN_000126c8 satellite + its 0x11ef88
-   gate. Ghidra -process BEDLAM.EXE -noanalysis ONLY. If the
-   playthrough check needs a live game run, STOP - that is interactive.
+1. [P4 RUNTIME HALF - promoted from backlog; INTERACTIVE-GATED] wine/DOSBox
+   runtime comparison against the parity harness CPU baseline (reproduce
+   the D28 anchors with: cargo run --release --example parity_harness
+   -p bedlam-game -- --out report.json; anchors scene 0xcae25cd08d7cbc08,
+   sim 0x72979d5d9dedc832, frame 0x87263f149564ad25, audio
+   0xc862e45d2e95ad29). The interactive EXW smoke launch under
+   tools/runtime/wine-exw.sh NEEDS desktop + DirectDraw - do NOT run it
+   unattended; STOP if the unit reduces to that. Unattended-safe subparts
+   if taken in a bounded unit: flathub sandbox filesystem override for
+   game-data + DOSBox-X harness config (cycles pinned, debugger watch
+   scripting) per the RUNTIME.md pins (D19 - never blind-update, re-baseline
+   goldens on pin change).
 
 ## Backlog (not yet started)
-- P4 RUNTIME HALF (next after the cosmetic items): interactive EXW smoke
-  launch under tools/runtime/wine-exw.sh (needs desktop + DirectDraw - do
-  NOT run unattended); then the wine/DOSBox runtime comparison against the
-  parity harness CPU baseline (report + hashes recorded in the D28 queue
-  entry below; reproduce with: cargo run --release --example parity_harness
-  -p bedlam-game -- --out report.json). Plus flathub sandbox filesystem
-  override for game-data + DOSBox-X harness config (cycles pinned,
-  debugger watch scripting) when that work starts.
+- (empty - P4 runtime half promoted to Now)
+
 
 ## Done (append)
+- 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6 [P2 cosmetic tail] B2
+    census sec-7 residuals CLOSED (census doc sec 7.7a-e; lane survived a
+    5-restart storm - the 15:5x predecessor committed the dump scripts then
+    died, the 16:2x + 16:3x respawns died in recon, this 16:4x/16:5x run
+    adopted + finished per the ghost-survivor protocol). (a) B2Residuals
+    dump (15:49): PresentFlip full listing, campaign block 336B +
+    mission-tail 160B, fade-chain decompiles. (b) B2Vesa4f02 micro-pass
+    (15:58) + B2LblFix (16:00, removed the 2 mislabels, restored
+    g_tick_installed/g_vesa_mode_req primaries). (c) B2ResidVerify
+    read-only pass (this run, 16:4x): persistence 14/14, zone-letter
+    string dump 0x8412c (BootCamp/Apple/Banana/Cake/Donut/Egg/Fryup/Gravy
+    + ALPHA..GOPHER), MapRoomSelect + full VesaModeInit decompile,
+    campaign-table xrefs (readers = GameInit + BriefingScreen +
+    FUN_00060119). (d) FINDINGS: order[8]={3,0,1,5,9,13,17,21} byte-pinned;
+    formula g_zone=zone[order[slot]+sub] reachable idx = {1..25} exactly;
+    25-vs-27 RESOLVED as different counters (linear counts completions:
+    25 campaign + 2 endgame at slot 8 via OOB order[8] = zone[0]=25
+    sentinel -> idx 26 = sp8-3; slot hits 9 = finale, loop exits at
+    linear 27) - static arithmetic, playthrough NOT needed; residual
+    save-file questions (stage-0 reachability, menu-pick off-by-one)
+    recorded as non-blocking in 7.7b. 4f02 = BANKED 0x101 3-way (BX
+    verbatim passthrough, 0x4101 zero hits in 671 fns, g_lfb_ptr +
+    g_vesa_mode_req write-only dead). 0x200 display start = SCANLINE
+    units 2-way (bank 5 = 0x50000 = 0x200 x 640B; 4f07 DX form). B2 fade
+    chain = 100.01Hz-integrated vs EXW 50Hz (divergence recorded, D17
+    keeps fade presentation-side). Corpus filenames cross-checked
+    (ZONEA..F missions {1,2,3,4,6,7}, A missing 3 = campaign never
+    requests it; MISSION5 never produced in any mode). 1x -process
+    BEDLAM.EXE -noanalysis total this run (no import); manifests OK x2
+    before + after.
+
 - 2026-08-18 8f5f18f+94a65da [P2 cosmetic RE] EXW DD surface
    creation-order CONFIRMATION CLOSED (the re-queued trampoline+roles
    confirmation unit; lane survived TWO server restarts - the 15:33
@@ -526,6 +555,26 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 16:1x-17:0x (B2 residuals close-out, 5-restart lane):
+    this unit rode FIVE server restarts (16:07 predecessor death after
+    committing scripts 119ba2d+b6620c0; 16:13 + 16:22 + 16:40 + 16:50
+    respawns = this session). Every restart mid-analysis with file state
+    intact - the verify-then-continue pattern (claim / tree / pgrep /
+    git-log / scratch-dir check on wake) recovered cleanly every time
+    with ZERO redo: static analysis reads are idempotent, so a restart
+    costs only the re-verification. The COMMIT-EARLY rule carried the
+    unit: the script commit (007fbe5) landed between restart 3 and 4,
+    so the expensive artifact was never at risk; the doc patch was
+    committed within a minute of being verified (4ace8a6) and survived
+    restart 5 untouched. LESSONS: (1) after ANY doc/python patch,
+    grep-verify the anchors landed BEFORE the next long command - the
+    verification output is the proof a restart cannot erase; (2) the
+    apostrophe-free python-patch recipe worked through every transport
+    (0 apostrophes, 0 backslashes in the patch body - repr-verified);
+    (3) the GHIDRA classpath on this host is
+    find /home/kato/ghidra-12.1.2-watcom/Ghidra -name *.jar (the
+    top-level lib/ form from older notes is stale).
+
 - 2026-08-18 15:33-16:0x (surf-confirm unit, double-restart lane): item-1
   lane incarnations: 15:33 worker (died transport, progress=0 per nudge)
   -> BUT its analyzeHeadless survived server-side as an OS ORPHAN and
