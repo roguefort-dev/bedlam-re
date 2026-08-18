@@ -17,3 +17,16 @@ jobs:
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
       - run: cargo build --release --workspace
+
+  # PLAN sec 7 charter: Miri on bedlam-core, from the first playable
+  # tick. Ubuntu-only (miri has no Windows support). The per-tick hash
+  # fixture itself runs in the ordinary matrix above - this job adds
+  # undefined-behavior detection over the whole bedlam-core test suite.
+  miri:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - run: cargo +nightly miri test -p bedlam-core
