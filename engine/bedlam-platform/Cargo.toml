@@ -1,0 +1,9 @@
+[package]
+name = "bedlam-platform"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bedlam-render = { path = "../bedlam-render" }
+pollster = "0.4"
+wgpu = "27"
