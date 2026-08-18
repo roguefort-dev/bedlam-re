@@ -1,0 +1,52 @@
+DOSBox-X integrated-debugger WATCH SCRIPT SKELETON (P4 differential harness)
+=============================================================================
+STATUS: pinned watch SET + trigger plan, NOT runnable yet. The command
+syntax gets verified in the first interactive debugger session; every
+UNCERTAIN tag below marks a fact to confirm there before it becomes a
+golden procedure. Kept beside the harness so the interactive run starts
+from a plan instead of a blank console.
+
+PROVENANCE: all addresses are B2 DOS4GW linear image addresses already
+pinned in docs/RESEARCH-BEDLAM2-CENSUS.md sec 6-7 + D22/D23.
+
+STATE WATCH SET (the fields the CPU baseline hashes, census/D23):
+  0x0011ef1c  dword  RNG seed/state A (reseed writes 123456, FUN_0005eaf9)
+  0x0011ef20  dword  RNG B state (seed 234567) [UNCERTAIN: exact slot -
+                       seeds sit adjacent as code constants 0x11ef1c/18;
+                       confirm the live B pair at RngStepB 0x1224f]
+  0x0011f0c4  dword  100Hz timeout base (WaitTicks100Hz consumers)
+  0x0011f0c8  byte   ISR counter (palette &7, mouse &1 phases)
+  0x0008b1d4  5x61B  save records {mask, slot, linear, money, stats}
+  campaign statics (do NOT watch, read once): order[8]@0x81dba,
+                       zone letters@0x81dda, mission[27]@0x81e46,
+                       full-mask table@0x81d9a
+  live zone/mission holders: the MapRoomSelect@0x50a87 formula
+                       inputs [UNCERTAIN: register/global holding the
+                       current stage-slot + sub at flip time - locate in
+                       the first session via a write-watch on the save
+                       record at 0x8b1d4]
+
+FRAME TRIGGER (the original-side analog of one parity_harness frame):
+  PresentFlip@0x1066b - VESA page flip + WaitVRetrace (D16/D23 verdict:
+  one frame per completed present). Break on entry, dump the watch set,
+  continue. One dump per hit = per-frame comparison grain.
+
+AUDIO SIDE (audio diff anchor, D17b: byte-identity gate):
+  PcmMixerService@0x136e0 walker over driver struct 0x1276dc (20 voice
+  slots, 11025 Hz native). Dump the voice slot array per PresentFlip hit.
+
+DEBUGGER COMMAND CANDIDATES (verify syntax in-session, watch mode):
+  help                          full command list first
+  BP 1066B                      breakpoint on PresentFlip [UNCERTAIN:
+                                linear-vs-segmented form under DOS4GW]
+  watchpoint variants + a log/dump-to-file command for the per-hit
+  state dump [UNCERTAIN: exact names - candidates in the help output]
+
+CALIBRATION CHECKLIST for the first interactive run:
+  1. smoke mode green (done unattended if it passes)
+  2. boot to shell, confirm mount is read-only at the sandbox layer
+  3. game mode launch, cycles=fixed 60000: audio dropouts? lower the
+     pin DELIBERATELY and re-baseline (D19/D29)
+  4. verify watch syntax, then record the exact command list here
+  5. first golden watch dump = the runtime-side anchor set vs the CPU
+     baseline (scene/sim/frame/audio hashes from parity_harness)
