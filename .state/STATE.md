@@ -13,8 +13,9 @@
   write-only dead). Display start 0x200 = SCANLINE units (page-B bank 5
   = 0x50000 = 0x200 x 640-byte pitch; 4f07 DX-scanline form). B2 fade
   chain named + documented (B2FadeStep@0x126c8 8.8-fixed 768ch serviced
-  EVERY 100.01Hz tick vs EXW 50Hz - divergence recorded for the parity
-  budget; setup/cancel/dacread/dacupload/fadewait + 3 labels persisted;
+  at 50 Hz in the ISR &1 sub-block - RATE CORRECTED on close-out verify,
+  identical to EXW 200 ms fade, no divergence; setup/cancel/dacread/
+  dacupload/fadewait + 3 labels persisted;
   B2LblFix repaired 2 mislabels, primaries restored). Persistence
   re-verified 14/14 (B2ResidVerify). No import (1x -process
   -noanalysis); manifests OK x2. P2 cosmetic queue EMPTY; P4 runtime

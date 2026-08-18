@@ -585,11 +585,13 @@ before the first flip. Sec 7.5 residual CLOSED.
 B2FadeStep@0x126c8: 768-channel stepper, 8.8 fixed acc += step pairs at
 0x9f05c (short pairs), DAC record bytes = acc>>8 with byte 0 forced to 0,
 then B2DacUpload@0x1082c (out 0x3c8/0x3c9 from the 0x9f058 record), then
-g_b2_fade_ticks_left@0x11ef88--. Serviced by Int8TickHandler EVERY
-100.01 Hz tick while the countdown is nonzero - vs EXW FadeStep@00425901
-at 50 Hz (EXW 10-step fade = 200 ms, B2 10-tick fade = about 100 ms).
-Cross-build divergence recorded for the parity budget; fade is
-presentation (D17 boundary), no engine change. B2FadeSetup@0x3046c
+g_b2_fade_ticks_left@0x11ef88--. Serviced by Int8TickHandler every
+OTHER tick - the call sits inside the (g_int8_ctr0 & 1) sub-block shared
+with the 50 Hz cursor redraw (ISR decompile in b2-epis-close.txt;
+corrects the first 7.7e draft, which read the rate at the bare 100.01 Hz
+tick) = 50 Hz, IDENTICAL to EXW FadeStep@00425901: both builds fade 10
+steps in 200 ms (every B2FadeSetup call site passes 10). No cross-build
+divergence; fade is presentation (D17 boundary), no engine change. B2FadeSetup@0x3046c
 (target EAX over EDX ticks; instant path via B2FadeCancel when
 g_tick_installed == 0 - the fade-enable gate IS the tick-installed flag,
 which is why the 0x125e18 mislabel mattered); B2FadeCancel@0x1081a (CLI /
