@@ -617,6 +617,16 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 18:0x (5th-restart spawn, worker 1787069151): arrived to a
+  CLEAN terminal state - 569ff6c pushed (post-restart regression pass,
+  manifests OK x2, skeleton checklist annotated), tree clean, gate
+  artifacts intact (SMOKETST.TXT 17:57: BEDLAM.EXE 672399 + DOS4GW.EXE
+  265396). Item 1 unattended-safe subpart DONE and stable per the addendum
+  above -> STOOD DOWN per the queue instruction (no smoke re-run, no new
+  work chosen; item 1 waits for the interactive desktop session).
+  Claim released. Read-only session: zero corpus/Ghidra/Rust touching,
+  no manifest re-check needed. (Note: NEXT.md carries three duplicate
+  Run-notes headers from lane history - cosmetic, left as-is.)
 - 2026-08-18 16:1x-17:0x (B2 residuals close-out, 5-restart lane):
     this unit rode FIVE server restarts (16:07 predecessor death after
     committing scripts 119ba2d+b6620c0; 16:13 + 16:22 + 16:40 + 16:50
