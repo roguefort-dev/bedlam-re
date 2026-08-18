@@ -258,11 +258,16 @@ impl Mixer {
         }
         let frames = out.len() / 2;
         for f in 0..frames {
-            self.cursor_q16 += Q16_ONE;
+            // Dispatch with the cursor AT the position of the frame about
+            // to mix: an event on an exact sample boundary s contributes to
+            // frame s, a fractional position at the first frame past it
+            // (DESIGN-AUDIO sec 5 - the cursor reaches the event). The
+            // cursor advances after mixing, never before.
             self.dispatch_due();
             let (l, r) = self.mix_one();
             out[2 * f] = l;
             out[2 * f + 1] = r;
+            self.cursor_q16 += Q16_ONE;
         }
         Ok(frames)
     }
@@ -324,6 +329,9 @@ impl Mixer {
             l += (s * v.left_q8 as i32) >> 8;
             r += (s * v.right_q8 as i32) >> 8;
             v.phase_q16 += v.step_q16 as u64;
+            if (v.phase_q16 >> 16) as usize >= wave.len() {
+                v.active = false; // played out: free right after the last sample
+            }
         }
         (clamp_i16(l), clamp_i16(r))
     }
