@@ -18,10 +18,10 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --release --workspace
 
-  # PLAN sec 7 charter: Miri on bedlam-core, from the first playable
+  # PLAN sec 7 charter: Miri on bedlam-core + bedlam-audio, from the first
   # tick. Ubuntu-only (miri has no Windows support). The per-tick hash
   # fixture itself runs in the ordinary matrix above - this job adds
-  # undefined-behavior detection over the whole bedlam-core test suite.
+  # undefined-behavior detection over both crates test suites.
   miri:
     runs-on: ubuntu-latest
     steps:
@@ -29,4 +29,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
-      - run: cargo +nightly miri test -p bedlam-core
+      - run: cargo +nightly miri test -p bedlam-core -p bedlam-audio

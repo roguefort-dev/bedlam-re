@@ -319,3 +319,23 @@ bedlam-core), no clock in either crate, forbid(unsafe_code), the only
 float in render is the presentation alpha. Workspace 153 tests green,
 fmt + clippy -D warnings clean; the GPU test skips gracefully without an
 adapter so the ubuntu/windows CI matrix stays deterministic.
+
+## D25 - bedlam-audio volume domain: linear Q8 gains over the EXW product; dB curve stays documented, not reproduced (2026-08-18)
+
+The shipped EXW delivers per-note volume to DirectSound as hundredths of
+decibels: SetVolume = ((master * vol) / 0x30 - 0x7f) * 0x7d0 >> 7 (RE-EXW-
+MUSIC sec 6, formulas straight from the listing). The reimplementation mix
+graph keeps the INTEGER PRODUCT (master * vol) / 48 as the gain domain -
+master 0..=127, raw stream volume byte - but linearizes it to a Q8 gain
+min(256, (master * vol * 256) / (127 * 48)) instead of walking the dB curve.
+Rationale: the dB-to-linear conversion has no exact integer form worth
+faking, the DirectSound internal conversion is not part of the binary we
+are matching, and PLAN P4 pins audio parity to a correlation band on the
+downsampled mix (never exact bytes), which does not require the dB curve.
+The linear map is monotone in the same product and clamps at unity because
+the DS domain is attenuation-only. Same-unit companions: pitch keeps
+RATIO_TABLE 16.16 values verbatim as the per-sample phase step (unity
+0x10000 replays at 11025 Hz = the SetFrequency (ratio * 0x2b11) >> 16 fact),
+and pan is a linear balance with the shipped game pinned to center.
+DESIGN-AUDIO.md sec 6 carries the full semantics; bedlam-audio implements
+them with 23 tests (9 unit + 14 determinism gates, miri-clean).
