@@ -453,9 +453,7 @@ DAT_00126810, +18 word, +20 stats blocks copied from 0x91a54/0x918a4};
 written by the 5-row save dialog in the MissionRun tail. MapRoomSelect also
 loads BRF_{APPL,BANA,CAKE,DONU,EGG,FRYU,GRAV}.BIN per stage slot 2..8 +
 SAVEICON + MAPROOM1/2.RAW loops - the per-stage map-room backdrops.
-RESIDUAL (open): only 25 zone-letter indices are reachable by the formula
-(order[slot] + sub for the mask sizes) yet linear runs to 27; slot-0 role and
-the exact 27-step accounting need a save-file + playthrough check.
+RESIDUAL: CLOSED in 7.7b (static arithmetic, playthrough NOT needed) - 25 distinct table indices and 27 completed missions are different counters; the gap = the two endgame completions at stage-slot 8.
 
 ### 7.4 Zone-letter dword[0] = 0x19 sentinel (task d)
 Value 25 is NEVER produced: the minimum formula index is order[1] + 1 = 1.
@@ -481,9 +479,7 @@ ISR is services-only. Video = VESA mode 0x101 640x480x8 requested
 (g_vesa_mode_req@0x801ce), 64 KB window at A000 validated, granularity
 shift recorded, LFB pointer captured @0x11f148, 640-byte row stride in the
 blitters vs 320x240 mouse/logical space = 2x pixel scale; BankWrite64K@
-0x12572 moves 64 KB through the A000 window. RESIDUAL: whether 4f02 sets the
-LFB variant (0x4101) is not statically resolvable in this decompile; 0x200
-display-start units unverified.
+0x12572 moves 64 KB through the A000 window. RESIDUAL: CLOSED in 7.7c/d - 4f02 sets BANKED 0x101 (LFB bit never constructed anywhere, BX = caller passthrough, g_lfb_ptr write-only dead); display start 0x200 = SCANLINE units.
 
 ### 7.6 Names persisted this run
 BedlamWatcom:/BEDLAM.EXE: PresentFlip, PcmMixerService, MixVoiceAlloc,
@@ -502,6 +498,108 @@ g_snd_drv_active/enabled, g_snd_service_arm, g_snd_handles (33 labels);
 created functions at 0x12ecf/0x12ee4/0x12eef/0x607b0/0x686b0/0x686d0/0x68740.
 Scripts: B2EpisDump.java (interrupted run, adopted), B2EpisClose.java,
 B2EpisNames.java.
+### 7.7 Residuals closed: campaign 25-vs-27, 4f02 banked-not-LFB, 0x200 scanline units, B2 fade chain (2026-08-18 residuals lane)
+
+Scripts B2Residuals/B2Vesa4f02/B2LblFix/B2ResidVerify (all -process
+BEDLAM.EXE -noanalysis, never re-imported); dumps b2-residuals.txt,
+b2-vesa-4f02.txt, b2-resid-verify.txt (persistence re-check pass=14
+fail=0). Provenance: [verified] = byte-dumped or decompiled this lane;
+[inferred] = arithmetic forced by byte layout, marked per claim.
+
+#### 7.7a Campaign tables, byte-pinned [verified]
+@0x81d9a fullmask[8] = {0, 1, 0xf x6}; @0x81dba order[8] = {3, 0, 1, 5,
+9, 13, 17, 21}; @0x81dda zone[27] = {25, 1,2,4,2,4,2,4,2,5,3,5,6,8,3,7,6,
+6,7,6,5,8,3,7,3,7,8,8}; @0x81e46 mission[27] = {1,1,1,2,3,1,4,3,2,1,1,2,
+1,1,2,1,3,2,2,4,3,2,4,3,3,4,3} (idx 0 of both = padding/sentinel). Name
+pointer tables directly after mission: @0x81eb2 stage names {BootCamp,
+Apple, Banana, Cake, Donut, Egg, Fryup, Gravy} (strings @0x8412c.., match
+BRF_APPL..GRAV); @0x81ed2 zone names {BootCamp, ALPHA, BRAVO, CHARLIE,
+DELTA, ECHO, FOXTROT, GOPHER} (strings @0x8415d..0x84183). Zone value 7
+renders G, 8 = the special-screen family (no name entry); zone[0] = 25.
+
+Stage i (0-based; fullmask/order/nameptr share the index domain) covers
+formula idx order[i]+sub with sub = 1..4 player-picked and mask-gated:
+stage 0 BootCamp (order 3, fullmask 0) idx 4..7; stage 1 Apple (order 0,
+fullmask 1) idx 1..4; stage 2 Banana (order 1, fullmask 0xf) idx 2..5;
+stage 3 Cake (order 5) idx 6..9; stage 4 Donut (order 9) idx 10..13;
+stage 5 Egg (order 13) idx 14..17; stage 6 Fryup (order 17) idx 18..21;
+stage 7 Gravy (order 21) idx 22..25. Union over stages 1..7 = exactly
+{1..25} (only the Apple/Banana boundary overlaps, {2,3,4}); 28 slot/sub
+selections map onto 25 distinct indices.
+
+Campaign step list idx:zone.mission [verified, from the two tables]:
+1:A1 2:B1 3:D2 4:B3 5:D1 6:B4 7:D3 8:B2 9:E1 10:C1 11:E2 12:F1 13:sp8-1
+14:C2 15:G1 16:F3 17:F2 18:G2 19:F4 20:E3 21:sp8-2 22:C4 23:G3 24:C3
+25:G4 (26:sp8-3 sits past the reachable set). Playable-file spread: A x1,
+B x4 (missions 1,3,4,2), C x4, D x3, E x3, F x4, G x4, sp8 x2 in range.
+The G steps (zone 7) have NO ZONEG directory in the corpus and the code
+branches on zone != 7 - special-screen steps, not file-loaded missions.
+Corpus consistency: ZONEA ships {1,2,4}+{6,7} and lacks MISSION3 exactly
+because the campaign requests zone A only at idx 1 (mission 1); every
+zone ships alt {6,7} = mode-2 (+5) of missions 1,2 and mission-table
+values never exceed 4, so MISSION8/9 are never requested in any mode.
+
+#### 7.7b The 25-vs-27 residual RESOLVED [verified + inferred hop]
+Different counters: 25 counts DISTINCT formula indices (stages 1..7);
+linear counts COMPLETED missions. GameInit loop head: continue while
+linear <= 0x1a, i.e. exit after the 27th completion. Stage-clear path:
+fullmask {1, 4 x6} = 25 completions carries stage_slot to 8; at slot 8
+the formula reads order[8] OOB = zone[0] = the 25 sentinel [inferred -
+0x81dba + 8*4 = 0x81dda exactly, and the decompiled formula has no
+bounds check], giving idx 25+sub = 26..29 (idx 26 = sp8-3). Two
+completions there make mask = 0b11 = 3 = fullmask[8] read OOB = order[0]
+= 3 [inferred, same layout argument] AND linear = 27: slot reaches 9 (the
+slot != 9 stage-title branch goes quiet = finale) and the loop-head
+exits. Minimum full game = 25 + 2 = 27 completions. No contradiction with
+25 distinct indices: the Apple/Banana shared indices {2,3,4} are
+completable once per stage and count linear each time. REMAINING
+(save-file, non-blocking): whether stage 0 BootCamp (fullmask 0 - advance
+needs mask==0, which any completed bit makes impossible) is reachable in
+a fresh campaign, and the menu-pick semantics (MapRoomSelect case 2
+plants stage_slot = 2 with fresh money 1500 + mode 2; the off-by-one vs
+0-based table indexing needs a save record to settle).
+
+#### 7.7c 4f02 = BANKED 0x101, LFB never enabled [verified 3-way]
+(1) The 4f02 site (0x12439, inside VesaModeInit@0x12290) passes caller BX
+through verbatim: PUSH EBX / MOV AX,0x4f02 / INT 10 / POP EBX - no mode
+construction, no OR 0x4000. (2) 0x4101 appears NOWHERE: zero hits across
+the 671-function decompile sweep and every listing dump. (3) g_vesa_mode_
+req@0x801ce (planted 0x101) and g_lfb_ptr@0x11f148 (captured from the
+4f01 info block) are write-only - zero readers (xref + decompile census);
+the LFB pointer is captured-but-dead diagnostic data. All render/copy
+paths run through the A0000 64K window with 4f05 bank switches
+(VesaSetWindow@0x12ac8 wraps bank reg 0x80034; page mappers 0x128df/
+0x12960/0x129f2 wrap every 64K boundary: CMP reg,0xb0000 / CALL 12bc0 /
+SUB reg,0x10000). Sec 7.5 residual CLOSED.
+
+#### 7.7d Display start 0x200 = SCANLINE units [verified 2-way]
+PresentFlip alternates display start 0 <-> 0x11ef38 (=0x200) while
+alternating draw page {0,5}: page B = bank 5 = byte 5 x 0x10000 = 0x50000,
+and 0x200 x 640 B/scanline (mode 0x101 pitch) = 0x50000 exactly. The 4f07
+call form (AX=4f07, BX=0, CX=0, DX=start) is set-display-start with DX in
+scanlines; only the scanline reading satisfies both facts simultaneously.
+VesaModeInit plants g_display_start_b=0x200 together with g_page_bank_b=5
+before the first flip. Sec 7.5 residual CLOSED.
+
+#### 7.7e B2 fade chain (the 0x126c8 satellite + 0x11ef88 gate) [verified]
+B2FadeStep@0x126c8: 768-channel stepper, 8.8 fixed acc += step pairs at
+0x9f05c (short pairs), DAC record bytes = acc>>8 with byte 0 forced to 0,
+then B2DacUpload@0x1082c (out 0x3c8/0x3c9 from the 0x9f058 record), then
+g_b2_fade_ticks_left@0x11ef88--. Serviced by Int8TickHandler EVERY
+100.01 Hz tick while the countdown is nonzero - vs EXW FadeStep@00425901
+at 50 Hz (EXW 10-step fade = 200 ms, B2 10-tick fade = about 100 ms).
+Cross-build divergence recorded for the parity budget; fade is
+presentation (D17 boundary), no engine change. B2FadeSetup@0x3046c
+(target EAX over EDX ticks; instant path via B2FadeCancel when
+g_tick_installed == 0 - the fade-enable gate IS the tick-installed flag,
+which is why the 0x125e18 mislabel mattered); B2FadeCancel@0x1081a (CLI /
+countdown=0 / DAC upload / STI); B2DacRead@0x10802 (in 0x3c7/0x3c9 - fades
+interpolate from the LIVE hardware palette); B2FadeWait@0x3439b (spin
+while countdown > EAX). Labels g_b2_fade_ticks_left@0x11ef88,
+g_b2_fade_state_ptr@0x11f05c, g_b2_dac_record_ptr@0x11f058 persisted;
+B2LblFix removed the two mislabels (0x125e18 g_tick_installed and 0x801ce
+g_vesa_mode_req primaries restored). B2ResidVerify re-check: 14/14.
+
 
 ## Divergences vs Bedlam 1 (data layer)
 - 6 zones (A-F) vs 7; missions per zone differ; MISSION5 mostly absent
