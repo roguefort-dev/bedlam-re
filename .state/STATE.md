@@ -67,6 +67,13 @@
   dropped), HEADLESS SMOKE GATE PASS first-hand (SMOKETST.TXT lists both
   EXEs). D29. Interactive half still gated: wine EXW launch + DOSBox-X
   golden-run calibration/checklist (RUNTIME.md follow-ups).
+  Post-restart re-verification 17:56-18:0x (worker 1787068533):
+  smoke gate re-run FIRST-HAND - PASS (rc=0, both EXEs at pinned
+  sizes), sandbox posture verified via override file + flatpak
+  override --show --user (!home + runtime only; note: without
+  --user the CLI prints empty under env-based XDG_DATA_HOME),
+  manifests OK x2 bracketing - harness stack stable across the
+  4th restart of this lane.
 
 - Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
 - Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders

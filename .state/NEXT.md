@@ -14,12 +14,29 @@
    (b) wine EXW smoke under tools/runtime/wine-exw.sh (desktop + DirectDraw).
    Unattended-safe regression for the harness stack: tools/runtime/
    dosbox-harness.sh smoke (gate = SMOKETST.TXT lists both EXEs).
+    SMOKE regression RE-VERIFIED PASS post-restart (17:56, worker
+    1787068533): rc=0, both EXE sizes exact, manifests OK x2 before
+    and x2 after the corpus rsync read. UNATTENDED WORKERS: the only
+    unattended-safe subpart of this item is DONE and stable - verify
+    nothing here, stand down (unless the gate FAILS, then debug).
 
 ## Backlog (not yet started)
 - (empty)
 
 
 ## Done (append)
+- 2026-08-18 17:55-18:0x (post-restart regression unit, worker 1787068533):
+    continuation after the 17:55 server restart. Claim 1-owner.claim held
+    by this session; tree clean; ps sweep found ZERO orphan dosbox/wine/
+    analyzeHeadless processes; predecessor close-out 73467eb already
+    pushed - nothing to adopt, nothing redone. Unattended-safe subpart of
+    item 1 re-run FIRST-HAND: tools/runtime/dosbox-harness.sh smoke ->
+    exit 0; GATE PASS (SMOKETST.TXT lists BEDLAM.EXE 672399 + DOS4GW.EXE
+    265396); manifests OK x2 BEFORE + x2 AFTER the corpus read (B1 at
+    repo root, B2 from inside game-data-2 per the documented gotcha).
+    No game launch, no Ghidra, no Rust touched; desktop-gated halves
+    (a) golden run + (b) wine EXW smoke REMAIN for the interactive
+    session per the queue text. Claim released at close-out.
 - 2026-08-18 79227e5+11c8d9c+b951e7c [P4 runtime unit, unattended subparts
     CLOSED] the lane survived THREE server restarts + two invisible
     siblings (see run notes). (a) D28 anchors REPRODUCED: parity_harness

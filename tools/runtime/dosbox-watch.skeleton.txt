@@ -52,7 +52,15 @@ AUTOMATION ROUTES in this pin (2026.08.02):
 
 CALIBRATION CHECKLIST for the first interactive run:
   1. smoke gate green (unattended, this unit)
-  2. sandbox perms verified: flatpak info shows home revoked, runtime only
+     [PASS x3: canonical 17:41 (11c8d9c), 17:34 sibling, post-
+     restart re-run 18:0x worker 1787068533 - rc=0, SMOKETST.TXT
+     lists BEDLAM.EXE 672399 + DOS4GW.EXE 265396 = pinned sizes]
+  2. sandbox perms verified [VERIFIED 18:0x: override file + CLI;
+     CLI form = env XDG_DATA_HOME=<repo>/runtime/xdg flatpak
+     override --show --user com.dosbox_x.DOSBox-X ->
+     filesystems=!home;<repo>/runtime; GOTCHA: without --user the
+     CLI prints empty (user install); static finish arg
+     filesystems=home remains in the app metadata]
   3. game mode launch at cycles=fixed 60000: audio dropouts? lower the pin
      DELIBERATELY + re-baseline (D19/D29)
   4. verify debugger command names + the linear conversion (INT3 _entry)
