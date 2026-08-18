@@ -25,6 +25,28 @@
 
 
 ## Done (append)
+- 2026-08-18 19:05-19:1x (stand-down unit, worker 1787072742, post-restart
+    continuation): claim 1-owner.claim held by this session (reserved
+    19:05:42, restart hit right after - pre-restart log = recon only,
+    heartbeat + queue/claims reads, ZERO own mutations, nothing to
+    adopt from own thread). One UNCOMMITTED mutation found on arrival:
+    NEXT.md vs e2b30da deletes the duplicate /tmp-full OPS NOTE from
+    the P4 runtime Done entry (3 lines) - verified BENIGN and ADOPTED
+    this run: the identical note is preserved verbatim in the 1787072197
+    Done entry below, dedupe only; /tmp still 100 pct full (16G/16G,
+    0 avail) confirmed first-hand, so the note content stays accurate.
+    Recon FIRST-HAND this run, all read-only: branch in sync with origin
+    at e2b30da, zero orphan dosbox/wine/analyzeHeadless processes
+    (self-filtered sweep), SMOKETST.TXT 18:07 intact (BEDLAM EXE
+    672,399 + DOS4GW EXE 265,396 = gate evidence valid), manifests OK
+    x2 (B1 at repo root; B2 via cd game-data-2 + ../MANIFEST-2.sha256
+    per the relative-path gotcha). Gate has NOT failed -> NO smoke
+    re-run per the item-1 addendum (unattended subpart DONE and
+    stable), no other item chosen (backlog empty), zero corpus/Ghidra/
+    Rust writes. Interactive halves (a) DOSBox-X golden run + (b) wine
+    EXW smoke remain desktop-gated for the interactive session. Claim
+    released at close-out.
+
 - 2026-08-18 19:0x (stand-down unit, worker 1787072742, post-restart
     continuation): claim 1-owner.claim held by this session (reserved
     19:05:42; restart hit during recon); own pre-restart log = recon
