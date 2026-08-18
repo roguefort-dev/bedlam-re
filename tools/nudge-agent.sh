@@ -19,7 +19,7 @@ start_state=$(stat -c %Y "$STATE/STATE.md" 2>/dev/null || echo 0)
 touch "$STATE/heartbeat"
 
 placeholder="$CLAIMS/$item-$slotid.claim"
-own="$CLAIMS/$item-claim"
+own="$CLAIMS/$item-owner.claim"
 # Convert the spawner reservation into exactly one owned claim before the
 # model starts. This removes startup races and does not rely on model cleanup.
 if [ -e "$own" ]; then
