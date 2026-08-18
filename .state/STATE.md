@@ -1,5 +1,18 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-18 (P2 cosmetic, 8f5f18f+94a65da): EXW DD surface
+  creation-order CONFIRMED (RE-EXW-TICK new section): 004ee9bc =
+  flip-chain head/primary; 004ee9c0 = implicit backbuffer (fullscreen
+  GetAttachedSurface) / offscreen staging (windowed) - g_dd_surf_staging
+  correct in both modes; FUN_0044a9ac = DDStagingProbe (sentinel
+  survive-a-flip readback -> g_staging_persistent 004ee9e4); 004ee9b4
+  dual-use corrected (lo = master vol, hi = palette re-attach flag;
+  RE-EXW-MUSIC addendum). Trampoline CrtThreadTrampoline@00451fbc +
+  usage roles were already persisted by the tick-sat run; this pass
+  added the creation-order proof + names. No import; manifests OK x2.
+  P2 cosmetic queue now: only the B2 census sec-7 residuals item (in
+  flight). P3 charter complete; P4 runtime half still interactive-gated.
+
 - CLOSED 2026-08-18 (P4 kickoff code half, c61d7f7): headless parity
   harness v0 example landed (engine/bedlam-game/examples/parity_harness.rs,
   D28): GameHost driven end-to-end over a recorded input script, JSON

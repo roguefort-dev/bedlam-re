@@ -1,16 +1,9 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2 cosmetic RE, unattended-safe] LAB_00451fbc + the 4 ddraw surface
-   slot roles: create + decompile the Watcom CRT thread trampoline at
-   LAB_00451fbc (see RE-EXW-TICK.md tick2 section) and name the surface
-   slots via FUN_0044a9ac / FUN_0044ad18 (back/front/...). Ghidra
-   -process BEDLAM.EXW -noanalysis passes ONLY (pgrep guard first;
-   NEVER re-import - single program verified 03:33). Update
-   RE-EXW-TICK.md + persist names. Small unit: 1-2 passes, one docs
-   commit, one queue commit.
-
-2. [P2 cosmetic follow-up, census sec 7 residuals] B2 campaign index
+1. [P2 cosmetic follow-up, census sec 7 residuals] [IN FLIGHT - live
+   claim 2-owner.claim, agent running B2Residuals ghidra pass as of
+   ~15:5x; do NOT double-claim - verify pgrep/git-log first] B2 campaign index
    accounting (25 reachable zone-letter indices vs 27 linear steps -
    needs save-file/playthrough check), 4f02 LFB-vs-banked variant +
    0x200 display-start units, FUN_000126c8 satellite + its 0x11ef88
@@ -28,6 +21,47 @@
   debugger watch scripting) when that work starts.
 
 ## Done (append)
+- 2026-08-18 8f5f18f+94a65da [P2 cosmetic RE] EXW DD surface
+   creation-order CONFIRMATION CLOSED (the re-queued trampoline+roles
+   confirmation unit; lane survived TWO server restarts - the 15:33
+   worker died progress=0 BUT its analyzeHeadless dump pass survived as
+   an OS orphan and finished the dump at 15:36; the 15:48 respawn
+   verified + adopted it per the queue-verify precedent, then ran the
+   persist pass itself). (a) Persisted-state re-verification (dump
+   header): CrtThreadTrampoline@00451fbc + all four g_dd_surf_* labels
+   from the tick-sat run still in place - trampoline half of the item
+   was already done, only the roles confirmation remained. (b)
+   DDInitSurfaces creation order [verified vs listing]: FULLSCREEN
+   CreateSurface dwSize 0x6c flags 0x21 caps 0x4218
+   (COMPLEX|FLIP|PRIMARYSURFACE|MODEX; retry clears exactly bit 0x4000
+   via desc+0x69 AND 0xbf -> 0x218, MODEX inoperative at 640x480)
+   backbuffercount 1 -> 004ee9bc = FLIP-CHAIN HEAD/primary, then
+   +0x30 GetAttachedSurface(DDSCAPS_BACKBUFFER 4) -> 004ee9c0 = the
+   implicit BACKBUFFER; WINDOWED CreateSurface(caps 0x200) -> 004ee9bc
+   then CreateSurface(flags 0x7 caps 0x40 OFFSCREENPLAIN w x h) ->
+   004ee9c0 = offscreen staging; palbank 004ee9c8 / cursor 004ee9cc
+   creators = tail calls FUN_0044b9c4/FUN_0044ba3c [inferred, not
+   decompiled - usage roles from tick-sat stand]. g_dd_surf_staging
+   label CONFIRMED correct in both modes. (c) FUN_0044a9ac renamed
+   DDStagingProbe (2 callers = DD-init chain after DDInitSurfaces +
+   DDShutdown): sentinel 0x12345678 written via LockStaging (retry 20),
+   Unlock+FlipOrBlt, relock+readback -> word 004ee9e4 = 1 when staging
+   memory SURVIVES the present (g_staging_persistent), then double
+   full-surface clear (480 rows x 160 dwords, stride pitch/4). (d)
+   DDFlipOrBlt dump-confirmed: Flip@+0x2c (D16 authority) fullscreen,
+   Blt@+0x14 staging 004ee9c0 -> primary windowed w/ window-rect cache
+   + DDBLT_WAIT; 004ee9b4 DUAL-USE correction: lo word = master volume
+   (setter FUN_0044c630 writes AX only), hi word = palette re-attach
+   request masked off after SetPalette (RE-EXW-MUSIC sec 6 addendum -
+   SubVoiceStart passes the full dword so the SetVolume product is only
+   clean while the flag is clear). (e) Persist pass ExwSurfNames: rename
+   + DDInitSurfaces plate comment + labels g_staging_persistent
+   (004ee9e4) + g_pal_dirty (004ee9b6), Save succeeded. Docs:
+   RE-EXW-TICK.md new section + 4 globals-table rows; RE-EXW-MUSIC.md
+   addendum. Scripts ExwSurfConfirm/ExwSurfNames committed (8f5f18f),
+   docs 94a65da, both pushed. Manifests OK x2 before+after; NO import
+   (2x -process BEDLAM.EXW -noanalysis total).
+
 - 2026-08-18 c61d7f7 [P4 kickoff, code-only half] headless parity
    harness v0 CLOSED (engine/bedlam-game/examples/parity_harness.rs;
    D28; the 14:27 respawn after FIVE transport deaths this hour - all
@@ -492,6 +526,27 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 15:33-16:0x (surf-confirm unit, double-restart lane): item-1
+  lane incarnations: 15:33 worker (died transport, progress=0 per nudge)
+  -> BUT its analyzeHeadless survived server-side as an OS ORPHAN and
+  finished the dump (4th ghost-survivor case, first one observed
+  mid-flight by the respawn: the respawn guard tripped on the LIVE
+  process, then its own -process attempt died cleanly on the project
+  LockException - which is exactly the designed collision behavior, zero
+  damage) -> 15:48 respawn (this run) verified the dump + closed the
+  unit. LESSONS: (1) pgrep GUARD GOTCHA: the analyzeHeadless process is
+  a BASH wrapper whose cmdline has no java token, and the agent own
+  bash -c transport string CONTAINS the pattern text - working guard =
+  ps -eo pid,cmd + filter out grep/opencode2/fish/bash -c self markers;
+  a bare pgrep -f "java.*analyzeHeadless" is BOTH self-matching AND
+  misses real runs. (2) A LockException from a headless -process attempt
+  while another run holds the project = clean no-op, safe to just wait
+  out (the orphan finished in ~3 min). (3) The fish-heredoc recipe
+  (write apostrophe-free body to /tmp/opencode via bash -c, wc/head
+  verify, then cp into the repo) held for both Java scripts + both
+  python patches across two restarts - zero transport corruption this
+  unit.
+
 - 2026-08-18 14:27-15:0x (harness run, sixth spawn of the lane): items
   1 had FIVE transport-killed incarnations this hour (13:56, 14:03,
   14:12, 14:23 + one pre-restart), every one dying during READ-ONLY
