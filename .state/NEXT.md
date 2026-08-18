@@ -25,6 +25,28 @@
 
 
 ## Done (append)
+- 2026-08-18 19:0x (stand-down unit, worker 1787072742, post-restart
+    continuation): claim 1-owner.claim held by this session (reserved
+    19:05:42; restart hit during recon); own pre-restart log = recon
+    only (heartbeat, PAUSE check, queue + claims read, ZERO mutations)
+    - nothing to adopt from self, nothing redone. FOUND uncommitted
+    working-tree mutation post-e2b30da: NEXT.md mtime 19:01, diff =
+    the 3-line OPS NOTE /tmp-full block deleted from the P4-runtime
+    Done entry (a dedupe - content preserved verbatim in the 1787072197
+    close-out entry); /tmp re-verified STILL 100% full this run so the
+    note stays accurate; benign mutation ADOPTED + committed here so
+    the tree is not left silently partial. Recon FIRST-HAND this run:
+    zero orphan dosbox/wine/analyzeHeadless processes (ps sweep hits =
+    this worker own nudge launcher + own grep, self-filtered),
+    SMOKETST.TXT 18:07 intact (BEDLAM EXE 672,399 + DOS4GW EXE
+    265,396 = gate evidence valid), manifests OK x2 (B1 at repo root;
+    B2 via cd game-data-2 + ../MANIFEST-2.sha256). Gate has NOT
+    failed -> NO smoke re-run per the item-1 addendum (unattended
+    subpart DONE and stable), no corpus/Ghidra/Rust writes, no other
+    item chosen. Interactive halves (a) DOSBox-X golden run + (b) wine
+    EXW smoke remain desktop-gated for the interactive session. Claim
+    released at close-out.
+
 - 2026-08-18 18:56-19:0x (stand-down unit, worker 1787072197, post-restart
     continuation): claim 1-owner.claim held by this session (nudge reaped the
     stale 18:51 dead-worker claim, age 308s); own pre-restart log = recon
@@ -95,9 +117,6 @@
     had ZERO census/STATE backing despite [verified] tags - DROPPED
     (75b17a8 lesson, 2nd occurrence). (f) Manifests OK x2; no game launch
     (interactive gate honored); fmt/clippy not needed (no Rust touched).
-    OPS NOTE: /tmp tmpfs is 100%% FULL (16G/16G, 0 free) at 18:58 - any
-    run needing /tmp scratch (incl. java/ghidra temp dirs) will fail until
-    the interactive session clears it; this run used .state/ staging.
 
 - 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6+75b17a8 [P2 cosmetic tail] B2
     census sec-7 residuals CLOSED (census doc sec 7.7a-e; lane survived a
