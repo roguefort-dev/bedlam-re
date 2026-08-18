@@ -11,9 +11,7 @@ use bedlam_audio::{
 /// Deterministic pseudo-wave (no RNG needed): a 37-step triangular-ish ramp
 /// wrapped, as centered 8-bit unsigned PCM.
 fn ramp_wave(n: usize) -> Vec<u8> {
-    (0..n)
-        .map(|i| (128 + ((i % 37) as u32 * 2) as u8))
-        .collect()
+    (0..n).map(|i| 128 + ((i % 37) as u32 * 2) as u8).collect()
 }
 
 /// The i16 the mixer converts a u8 sample into.
@@ -217,8 +215,8 @@ fn one_shot_frees_voice_for_reuse() {
 fn saturation_clamps_at_the_bus() {
     // Two max-amplitude voices: 2 x 32512 must clamp to 32767, not wrap.
     let mut m = Mixer::new();
-    m.load_wave(0, &vec![255u8; 300]).unwrap();
-    m.load_wave(1, &vec![255u8; 300]).unwrap();
+    m.load_wave(0, &[255u8; 300]).unwrap();
+    m.load_wave(1, &[255u8; 300]).unwrap();
     m.set_master_volume(127);
     m.note_on(0, 0x10000, 48).unwrap();
     m.note_on(1, 0x10000, 48).unwrap();
@@ -230,7 +228,7 @@ fn saturation_clamps_at_the_bus() {
 #[test]
 fn pan_hard_right_leaves_a_quiet_left() {
     let mut m = Mixer::new();
-    m.load_wave(0, &vec![255u8; 64]).unwrap();
+    m.load_wave(0, &[255u8; 64]).unwrap();
     m.set_master_volume(127);
     m.note_on_pan(0, 0x10000, 48, 63).unwrap();
     let mut buf = vec![0i16; 8];
@@ -268,7 +266,7 @@ fn script_events_fire_on_the_tick_grid() {
     // tick 4 = sample 441 exactly: the first non-silent frame after an
     // empty prefix is frame 441, not a host-chunk boundary.
     let mut m = Mixer::new();
-    m.load_wave(0, &vec![255u8; 20000]).unwrap();
+    m.load_wave(0, &[255u8; 20000]).unwrap();
     m.set_master_volume(127);
     let mut s = MusicScript::new();
     s.push(
@@ -287,7 +285,7 @@ fn script_events_fire_on_the_tick_grid() {
     assert_eq!(buf[2 * 441], 32512, "event lands on the exact sample");
     // chunking that boundary differently must not move it
     let mut m2 = Mixer::new();
-    m2.load_wave(0, &vec![255u8; 20000]).unwrap();
+    m2.load_wave(0, &[255u8; 20000]).unwrap();
     m2.set_master_volume(127);
     let mut s2 = MusicScript::new();
     s2.push(

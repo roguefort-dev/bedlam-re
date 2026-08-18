@@ -192,7 +192,7 @@ impl Mixer {
         if self
             .waves
             .get(instrument as usize)
-            .map_or(true, |w| w.is_empty())
+            .is_none_or(|w| w.is_empty())
         {
             return None; // no buffer: the EXW ptr-non-null guard analog
         }
@@ -253,7 +253,7 @@ impl Mixer {
     /// positions (quantized down onto a sample boundary - chunking-
     /// invariant), and returning the number of frames mixed.
     pub fn render(&mut self, out: &mut [i16]) -> Result<usize, AudioError> {
-        if out.len() % 2 != 0 {
+        if !out.len().is_multiple_of(2) {
             return Err(AudioError::OddBufferLength { len: out.len() });
         }
         let frames = out.len() / 2;
@@ -370,7 +370,7 @@ mod tests {
     fn master_volume_clamps_into_domain() {
         let mut m = Mixer::new();
         m.set_master_volume(200);
-        assert_eq!(volume_gain_q8(200u8.min(127), 48), 256);
+        assert_eq!(volume_gain_q8(127, 48), 256); // set_master_volume(200) clamps here
         let mut m2 = Mixer::new();
         m2.load_wave(0, &[128, 200, 128, 56]).unwrap();
         m2.set_master_volume(0);
