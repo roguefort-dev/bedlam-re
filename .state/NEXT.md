@@ -1,30 +1,35 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] bedlam-audio thin mix-graph skeleton (PLAN P3 charter crate;
-   LAST P3 crates remaining after this: bedlam-game). Deliverables:
-   (a) SHORT design note docs/DESIGN-AUDIO.md FIRST (mirroring the
-   DESIGN-RENDER flow; keep it 1-2 pages): mix-graph topology (voices ->
-   master bus -> device), determinism boundary (mix graph PURE hermetic
-   integer math, no I/O/clock; the DEVICE half = platform-side cpal-or-
-   similar, deferred to P4 - name it as an open question), sample-rate
-   policy (native 11025 Hz EXW/B2-confirmed: SubVoiceStart SetFrequency
-   (ratio*11025)>>16 + B2 IRQ0-shared 11025 Hz PCM driver, 20-channel
-   voice walker PcmMixerService@0x136e0), pitch/pan/volume semantics
-   from RE-EXW-MUSIC sec 6 (SetVolume ((master*vol)/48-127)*2000>>7,
-   note-off-releases-BASE quirk), MRS-event-driven triggering via
-   bedlam-assets music.rs walk, saturation/clipping policy, hash policy
-   (audio state NOT hashed per D17 b - per-frame bucket; pin that in the
-   note). (b) engine/bedlam-audio crate skeleton implementing the note:
-   hermetic Mixer (11025 Hz, fixed voice count, integer math only,
-   forbid(unsafe_code), no floats in mix state), voice spawn/free/
-   pitch/volume/pan API mirroring the RE semantics, S16 stereo output
-   buffer; driven per-frame by host with dt NEVER entering mix math.
-   thiserror only, no new deps. (c) tests: determinism (same event
-   script => byte-identical mix buffer), clippy -D warnings + fmt clean,
-   cargo +nightly miri test -p bedlam-audio green (add to ci.yml miri
-   job ONLY if clean and fast, else record why). Workspace tests must
-   stay 154+ green. DECISIONS.md entry if any call is non-obvious.
+1. [P3] bedlam-game scene-FSM skeleton (LAST P3 charter crate after
+   bedlam-assets/core/render/platform/audio). Deliverables: (a) SHORT
+   design note docs/DESIGN-GAME.md FIRST (mirroring DESIGN-RENDER/
+   DESIGN-AUDIO flow, 1-2 pages): scene FSM topology anchored to the RE
+   (EXW GameMain@0041c050 boot shell + mission loop FUN_0043d00b =
+   poll -> sim/render -> PresentCopy -> PresentEnd; B2 GameInit@0x2f731
+   boot shell AND episode-loop host with player-selected sub in
+   MapRoomSelect@0x50a87 - scene list: title/menu/OPTIONS screens,
+   brief/debrief/shop/select, mission, cutscene = state machine
+   skeleton, no per-mission code per PLAN P3), composition of sibling
+   crates (per-frame host pump: SimDriver -> render -> present + the
+   MusicPump analog = Mrs::walk -> MusicScript mapping per
+   DESIGN-AUDIO sec 7 lives HERE as the bedlam-assets->bedlam-audio
+   bridge), config/save model (OPTIONS.BDL is SETUP-owned, CONFIG.BDL
+   = installer SB record never read by EXW - RE-EXW-MUSIC sec 4; B2
+   saves 5x61B {mask,slot,linear,money,stats} @0x8b1d4 = the recorded
+   shape), determinism boundary (scene state HASHED in the core
+   bucket; per-frame bucket + audio host pump un-hashed per D17 b),
+   hermetic rule (forbid unsafe; file I/O ONLY behind injected
+   byte-source/sink traits so the FSM itself stays pure). (b)
+   engine/bedlam-game crate skeleton implementing the note: Scene
+   enum + fsm.rs transition skeleton, host.rs frame pump wiring
+   core+render+audio, music.rs Mrs::walk -> MusicScript bridge
+   (corpus-testable against the 5 real .MRS files), config.rs typed
+   OPTIONS.BDL parse. thiserror only, no new deps. (c) tests: FSM
+   determinism (same input script -> same scene-state hash at
+   15/60/240Hz host), music bridge walk-vs-script equivalence over
+   the corpus, clippy -D warnings + fmt clean; workspace tests stay
+   177+ green. DECISIONS.md entry if any call is non-obvious.
 
 ## Backlog (not yet started)
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
@@ -41,6 +46,42 @@
   display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
 
 ## Done (append)
+- 2026-08-18 846ebab+b684bee+00c2260+b950b44+a8f26f8 [P3] bedlam-audio
+   thin mix-graph skeleton CLOSED (PLAN P3 charter crate; design note
+   first per DESIGN-RENDER flow; see run notes - triple-agent night,
+   suite regenerated after lane cleanup). (a) docs/DESIGN-AUDIO.md:
+   mix-graph topology voices -> master bus -> device (device half =
+   P4 open Q1, cpal-or-similar deferred); mix graph PURE hermetic
+   integer math (no I/O/clock/floats/unsafe), byte-identical output
+   under ANY host chunking; native 11025 Hz both builds (EXW
+   SubVoiceStart SetFrequency (ratio*0x2b11)>>16 + WAVEFORMATEX; B2
+   IRQ0-shared PCM driver @0x1276dc, PcmMixerService@0x136e0 20ch
+   walker); .MRS 10ms tick = 441/4 samples exact in Q16 (tick grid
+   never rounds); pitch/pan/volume per RE-EXW-MUSIC sec 6 + D25 (Q8
+   linear gain over the (master*vol)/48 product, dB curve documented
+   not reproduced, unity ceiling = DS attenuation-only); note-off-
+   releases-BASE quirk kept; saturation = symmetric clamp (driver
+   shape = open Q4); audio NEVER hashed per D17 b - byte-identity of
+   the mix stream IS the gate. (b) engine/bedlam-audio: hermetic
+   Mixer (flat 20-voice pool tagged (instrument, sub 0..3), 16.16
+   phase step = RATIO_TABLE verbatim, Q8 gains snapshotted at spawn
+   mirroring EXW master-read-at-SubVoiceStart-only, i32 stereo bus +
+   symmetric clamp, S16 interleaved out), spawn/free/pitch/volume/pan
+   API mirroring RE semantics, MusicScript absolute-tick NoteOn/
+   NoteOff (NO bedlam-assets dep - coupling lands in bedlam-game),
+   render() host-driven, dt never enters. thiserror only,
+   forbid(unsafe_code). (c) tests: 9 unit + 14 determinism gates
+   (same script => byte-identical across 1/7/64/512/4096 chunk
+   patterns, unity passthrough sample-exact, doubled-pitch skip,
+   base-only note-off, drop-when-sub-voices-full + pool-full,
+   one-shot immediate free + slot reuse, saturation clamp, pan law,
+   ratio-0 mute-occupies, tick-grid exactness at frame 441,
+   odd-buffer + out-of-order-script errors); workspace 177 green
+   (+23), fmt + clippy -D warnings clean, cargo +nightly miri test
+   -p bedlam-audio CLEAN (23 tests, zero UB; determinism suite 425s
+   under miri - ci.yml miri job extended to -p bedlam-audio, noted
+   CI cost). DECISIONS D25. Manifests OK x2 (run was code-only).
+
 - 2026-08-18 1501ab9+014597b [P3] Miri + per-tick hash CI unit CLOSED
    (PLAN sec 7 charter gate: determinism CI from the first playable tick,
    applied from skeleton tick 0). (a) cargo +nightly miri test -p
@@ -405,6 +446,35 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 04:3x-05:2x (audio unit, ghost-survivor run): item-1
+  owner via claim 0711 end to end (with one orphan-window mid-run).
+  FOUR agents touched item 1 tonight: 0162 (claimed 04:29, went
+  silent, committed NOTHING - the 8b314b7 note cites a draft commit
+  39305a7 that does not exist in the repo; attribution correction:
+  846ebab design note + b684bee skeleton are THIS run commits),
+  0711 = this run, 1260 (controller respawn 04:47:40 that adopted the
+  claim, committed the containment note 8b314b7 + addendum 5675813,
+  died transport rc=1 04:52:40), and the 05:00 interloper (b6b6920
+  own 12-gate suite after concluding determinism.rs lost, then
+  8fc476e self-revert declaring 00c2260 canonical - net zero, correct
+  call). This run: re-adopted the orphaned claim atomically after
+  pgrep/git-log/claim-staleness checks, regenerated determinism.rs
+  from the surviving /tmp/opencode generator, fixed the two REAL
+  boundary bugs the restored suite exposed (one-shot voice freed one
+  frame late; script dispatch pre-incremented the cursor so exact-
+  boundary events fired one frame early), then closed the unit.
+  The reaper deleted the live claim at 05:01:54 (dead-client
+  heuristic vs ghost-survivor session) - re-planted with fresh mtime
+  before close-out. LESSONS: (1) heartbeat BETWEEN heredoc/generation
+  blocks - third strike for this exact failure mode; (2) after any
+  long silent phase, re-check claims/ BEFORE the next shared write
+  (the reaper may have eaten yours); (3) keep /tmp/opencode
+  generators until the unit is fully committed - the generator was
+  the only recovery path for the deleted test file; (4) containment
+  notes written under time pressure misattribute commits - verify
+  hashes against git log before trusting a sibling note (8b314b7
+  phantom 39305a7).
+
 - 2026-08-18 04:5x (audio-dup watch run; stood down, contamination
   cleaned, ONE file possibly lost - VERIFY your determinism tests):
   DUPLICATE-SPAWN #6, item 1 (bedlam-audio). This run claimed item 1 at

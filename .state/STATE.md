@@ -128,3 +128,32 @@
   the 03:32 respawn verified the work (153 green incl. real GPU test,
   fmt/clippy clean, manifests OK x2) instead of redoing it and closed the
   unit. Next P3: Miri over bedlam-core + per-tick hash CI job.
+- CLOSED 2026-08-18 (audio unit, triple-agent night): P3 AUDIO MIX-GRAPH
+  SKELETON DONE in engine/bedlam-audio (846ebab + b684bee + 00c2260 +
+  b950b44 + a8f26f8). DESIGN-AUDIO.md pinned first (mix topology voices ->
+  master bus -> device; 11025 Hz native both builds; Q16 tick grid 441/4
+  samples = exact; D25 linear-Q8 volume over the EXW (master*vol)/48
+  product, dB curve documented not reproduced; note-off-releases-BASE
+  quirk kept; audio NOT hashed per D17 b - byte-identity of the mix stream
+  is the gate). Crate: hermetic integer Mixer (forbid unsafe, no floats,
+  no I/O/clock), flat 20-voice pool (B2 walker) tagged (instrument, sub
+  0..3) (EXW mrw 4 sub-voices), 16.16 phase step = RATIO_TABLE verbatim,
+  Q8 volume x pan gains snapshotted at spawn (EXW reads master per
+  SubVoiceStart only), i32 bus + symmetric clamp, S16 stereo interleaved
+  out; MusicScript = absolute-tick NoteOn/NoteOff list with
+  no-bedlam-assets coupling (mapping lands in bedlam-game); render
+  dispatches events at exact Q16 positions chunking-invariantly.
+  9 unit + 14 determinism tests (same script => byte-identical buffer
+  across 1/7/64/512-frame chunkings, base-only note-off, drop-when-full,
+  one-shot recycling, saturation clamp, tick-grid exactness at frame 441),
+  workspace 177 green (+23), fmt + clippy -D warnings clean, miri CLEAN
+  (9+12 tests, zero UB; integration suite ~292s under miri - ci.yml miri
+  job extended to -p bedlam-audio, acceptable CI cost). DECISIONS D25.
+  Deliverable survived a duplicate-spawn storm (three agents on item 1:
+  0162 silent death, 0711 = this run, 1260 transport death mid-verify; a
+  watch run contaminated then cleaned the lane and deleted the uncommitted
+  test file - regenerated from the /tmp/opencode generator; boundary bugs
+  it would have caught were caught by the restored suite: immediate
+  one-shot free + event-on-exact-boundary ordering). Next P3: bedlam-game
+  scene-FSM skeleton (LAST charter crate).
+
