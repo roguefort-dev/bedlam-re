@@ -617,6 +617,27 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 18:06-18:1x (post-restart continuation, worker 1787069151,
+    same slot - FORK NOTE): the server restart split this slot into two
+    live threads. The pre-restart thread stood down read-only and closed
+    out as 70c9c57 (18:07:26, run note above, claim released); THIS
+    thread continued and re-verified the unattended-safe subpart
+    first-hand before noticing that commit: ps sweep ZERO orphan
+    dosbox/wine/analyzeHeadless processes; manifests OK x2 BEFORE
+    (B1 repo root; B2 ../MANIFEST-2.sha256 run from INSIDE game-data-2
+    - relative-path gotcha: a bare MANIFEST-2.sha256 404s from there);
+    tools/runtime/dosbox-harness.sh smoke x2 -> exit 0 both; GATE PASS
+    (SMOKETST.TXT 18:07: 'BEDLAM   EXE 672,399' + 'DOS4GW   EXE
+    265,396' exact pinned sizes - DOS dir 8.3 format, so a literal
+    'BEDLAM.EXE' grep rc=1 is NOT a gate failure; working pattern:
+    'BEDLAM +EXE +672,399'); manifests OK x2 AFTER. No contradiction
+    with 70c9c57 - it stood down on the 17:57 artifacts, this run
+    refreshed them to 18:07. No game launch, no Ghidra, no Rust touched.
+    Interactive halves (a) golden run + (b) wine EXW smoke unchanged,
+    desktop-gated. Claim file already released by the sibling thread;
+    not recreated (ghost accounting: this is the second thread of
+    worker 1787069151, bounded unit = the regression re-verification
+    above).
 - 2026-08-18 18:0x (5th-restart spawn, worker 1787069151): arrived to a
   CLEAN terminal state - 569ff6c pushed (post-restart regression pass,
   manifests OK x2, skeleton checklist annotated), tree clean, gate
