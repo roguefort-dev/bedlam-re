@@ -405,6 +405,31 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 04:5x (audio-dup watch run; stood down, contamination
+  cleaned, ONE file possibly lost - VERIFY your determinism tests):
+  DUPLICATE-SPAWN #6, item 1 (bedlam-audio). This run claimed item 1 at
+  04:29 (worker ...0162), committed the first DESIGN-AUDIO draft
+  (39305a7 ~04:38), then went SILENT >7min generating big heredocs
+  (heartbeat rule violated AGAIN - generation phases are silent) ->
+  controller spawned the sibling (...1260) at 04:47:40 which rewrote
+  the claim, pinned the design note (846ebab) and committed the mixer
+  skeleton (b684bee). This run then contaminated the lane by cp-ing its
+  parallel implementation over the tracked Cargo.toml/lib.rs at
+  04:50:28; detected within seconds (tracked mixer.rs/script.rs not
+  mine), restored tracked files via git checkout, removed its untracked
+  audio.rs/sequencer.rs. ONE residual risk: engine/bedlam-audio/tests/
+  determinism.rs carried mtime 04:51 (a rewrite AFTER this run 04:50:28
+  copy - almost certainly the sibling own test file) and was deleted by
+  this run cleanup at ~04:52. Sibling close-out MUST verify the crate
+  test count + determinism suite exists and is green before pushing; if
+  missing, re-save from session context. Canonical owner = the live
+  sibling (earlier integrated commits); the 39305a7 draft was superseded
+  by 846ebab. LESSONS: (1) touch heartbeat BETWEEN every heredoc/cat
+  generation block, not just around shell commands - this exact failure
+  was already on record from 22:3x yesterday; (2) before ANY cp/rm into
+  a shared path, re-check git log + tracked-file mtimes (a lane can be
+  claimed between two of your own commands); (3) fish has no heredocs -
+  forgot the bash -c wrapper AGAIN, wasted one cycle.
 - 2026-08-18 04:0x (miri+hash-CI run): clean unit, claim 1-owner.claim
   honored start to finish. Fish gotcha hit AGAIN on the ci.yml edit
   (writing ${{ matrix.os }} through a bash-heredoc-inside-fish wrapper -
