@@ -339,3 +339,39 @@ RATIO_TABLE 16.16 values verbatim as the per-sample phase step (unity
 and pan is a linear balance with the shipped game pinned to center.
 DESIGN-AUDIO.md sec 6 carries the full semantics; bedlam-audio implements
 them with 23 tests (9 unit + 14 determinism gates, miri-clean).
+
+
+## D26 - bedlam-game scene actions are HASHED per-tick edge derivations, not per-frame input events (2026-08-18)
+
+The EXW polls input per frame (KeySink@0041be05 latches sampled at
+100 Hz; MouseSink@0041bf35 bit0/bit1) - per-frame business, i.e. D17
+bucket b, unhashable. The scene FSM in bedlam-game nevertheless needs
+deterministic scene ACTIONS, so SceneFsm::tick level-samples the SAME
+consumed per-tick InputFrame the sim consumed (mouse bits 0/1, edge =
+rising transition against the previous consumed tick) and derives
+Advance/Back INSIDE the hashed bucket; the latch byte (prev_mouse)
+is itself hashed state. This mirrors the 100 Hz KeySink latch shape
+while keeping the whole scene machine a pure function of the tick
+input sequence - which is what makes the 15/60/240 Hz host-hash
+identity test exact (per-frame edge detection could never be hashed).
+A held button across a scene boundary does not re-fire (the P-latch
+clear analog, RE-EXW-INPUT); UI intents (Options/Quit) and sim
+outcomes (MissionComplete/MissionFail) stay host-applied via
+fsm.apply. DESIGN-GAME sec 7 carries the boundary table.
+
+## D27 - MusicPump selects the MELODY chunk, never the chunk-1 loop timer (2026-08-18)
+
+Every shipped .MRS has chunk 0 disabled and chunk 1 = the LOOP TIMER:
+a single unconditional pattern RESTART whose delta equals its table-B
+entry equals the song length (RE-EXW-MUSIC sec 2, assets corpus test).
+Walking "the first enabled chunk" would therefore sequence a one-event
+timer and stay silent. MusicPump::new picks the first enabled chunk
+whose walk yields at least one Note event (melody streams start at
+chunk 2 in the shipped corpus); restart() rebuilds the script from the
+same bytes as the loop analog. The terminal-kind corpus gate accepts
+Freeze | Restart for enabled chunks, mirroring validate_mrs_song
+(the chunk-1 restart IS the loop mechanism, not an anomaly).
+Companion bedlam-audio fix: Mixer::load_script anchors dispatch at
+the ATTACH cursor (script tick 0 = the attach frame), because the
+scene pump swaps scripts mid-stream on every scene change and
+absolute-cursor dispatch would fire the entire past at once.

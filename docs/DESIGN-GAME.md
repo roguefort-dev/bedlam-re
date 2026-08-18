@@ -1,8 +1,10 @@
 # DESIGN-GAME - bedlam-game crate design note (P3; elaborates D16/D17, adds D26)
 
-Status: DESIGN PINNED by this note; the crate skeleton implementing secs
-3-9 lands in the same unit. Mirrors the DESIGN-RENDER / DESIGN-AUDIO flow
-(short note first, code second). This is the LAST P3 charter crate.
+Status: IMPLEMENTED AS SKELETON (4ab051c; WIP from the 13:2x transport-
+killed predecessors adopted + verified, three test-harness bugs fixed by
+the close-out run). DECISIONS D26/D27 record the two non-obvious calls.
+Mirrors the DESIGN-RENDER / DESIGN-AUDIO flow. This was the LAST P3
+charter crate - the P3 charter set is complete.
 
 ## 1. The contract
 
