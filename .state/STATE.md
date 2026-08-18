@@ -41,6 +41,25 @@
   mission[27]@0x81e46; +5 when mode==2 -> MISSION{6,7} corpus files; 6
   zones x {4 regular + 2 alt}, 27 linear missions). 15 fns + 16 labels
   persisted in BedlamWatcom:/BEDLAM.EXE.
+- CLOSED 2026-08-18 (miri+hash-CI run): PLAN sec 7 DETERMINISM CI GATE DONE
+  (1501ab9 + 014597b). (a) Miri CLEAN on this host: rustup component add
+  --toolchain nightly-x86_64-unknown-linux-gnu miri (miri 0.1.0
+  771916f902 2026-08-08, on the existing nightly; rustc 1.99.0-nightly
+  b07e5a086 2026-08-07), then cargo +nightly miri test -p bedlam-core =>
+  41 unit + 12 determinism tests green, ZERO UB findings (111.5s + 40.9s;
+  re-run with the new fixture green too). (b) Committed per-tick hash
+  fixture: engine/bedlam-core/tests/hash_fixture.rs - 600-tick fixed
+  integer script (seed 123456, fade window armed ticks 101..200) pins 13
+  milestone StateHash values + FNV-1a chain over all 601 hashes
+  (EXPECTED_CHAIN 0x760d221bec3b3b99); runs in the ordinary cargo test
+  matrix => cross-OS/toolchain hash drift fails loud per tick; ignored
+  print_fixture is the ONLY documented regeneration path (intentional
+  hashed-state changes + FORMAT_VERSION bump). (c) ci.yml miri job:
+  ubuntu-latest, dtolnay/rust-toolchain@nightly + miri component,
+  cargo +nightly miri test -p bedlam-core per push/PR. Workspace now 154
+  tests green (fixture +1), fmt + clippy -D warnings clean, manifests OK
+  x2. Next P3: bedlam-audio mix-graph skeleton (design note first), then
+  bedlam-game scene-FSM skeleton.
 - Repo: github.com/roguefort-dev/bedlam-re (main). Local: ~/Documents/bedlam-re
 - Autonomy: tools/nudge.sh + systemd user timer bedlam-nudge.timer (60s) + crontab
   fallback. Heartbeat: .state/heartbeat (stale > 7 min => spawn continuation run).

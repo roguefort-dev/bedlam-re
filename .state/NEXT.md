@@ -1,18 +1,30 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] Miri pass over bedlam-core + per-tick hash CI job (PLAN sec 7
-   charter item, promoted from backlog; determinism from first playable
-   tick onward). ci.yml already runs fmt/clippy/test/build on
-   ubuntu+windows per push (now 153 tests). Deliverables: (a) cargo miri
-   test -p bedlam-core clean on this host (rustup component add miri if
-   missing; record invocation + result in STATE), (b) a committed
-   per-tick hash fixture test (run a fixed script N ticks, assert the
-   hash sequence against committed expected values) so cross-OS hash
-   equality fails loud in the existing matrix, (c) wire it into ci.yml.
-   Keep bedlam-render compose math in scope ONLY if miri flags it.
-   Cargo fmt + clippy -D warnings before commit; workspace tests must
-   stay 153+ green.
+1. [P3] bedlam-audio thin mix-graph skeleton (PLAN P3 charter crate;
+   LAST P3 crates remaining after this: bedlam-game). Deliverables:
+   (a) SHORT design note docs/DESIGN-AUDIO.md FIRST (mirroring the
+   DESIGN-RENDER flow; keep it 1-2 pages): mix-graph topology (voices ->
+   master bus -> device), determinism boundary (mix graph PURE hermetic
+   integer math, no I/O/clock; the DEVICE half = platform-side cpal-or-
+   similar, deferred to P4 - name it as an open question), sample-rate
+   policy (native 11025 Hz EXW/B2-confirmed: SubVoiceStart SetFrequency
+   (ratio*11025)>>16 + B2 IRQ0-shared 11025 Hz PCM driver, 20-channel
+   voice walker PcmMixerService@0x136e0), pitch/pan/volume semantics
+   from RE-EXW-MUSIC sec 6 (SetVolume ((master*vol)/48-127)*2000>>7,
+   note-off-releases-BASE quirk), MRS-event-driven triggering via
+   bedlam-assets music.rs walk, saturation/clipping policy, hash policy
+   (audio state NOT hashed per D17 b - per-frame bucket; pin that in the
+   note). (b) engine/bedlam-audio crate skeleton implementing the note:
+   hermetic Mixer (11025 Hz, fixed voice count, integer math only,
+   forbid(unsafe_code), no floats in mix state), voice spawn/free/
+   pitch/volume/pan API mirroring the RE semantics, S16 stereo output
+   buffer; driven per-frame by host with dt NEVER entering mix math.
+   thiserror only, no new deps. (c) tests: determinism (same event
+   script => byte-identical mix buffer), clippy -D warnings + fmt clean,
+   cargo +nightly miri test -p bedlam-audio green (add to ci.yml miri
+   job ONLY if clean and fast, else record why). Workspace tests must
+   stay 154+ green. DECISIONS.md entry if any call is non-obvious.
 
 ## Backlog (not yet started)
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
@@ -29,6 +41,29 @@
   display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
 
 ## Done (append)
+- 2026-08-18 1501ab9+014597b [P3] Miri + per-tick hash CI unit CLOSED
+   (PLAN sec 7 charter gate: determinism CI from the first playable tick,
+   applied from skeleton tick 0). (a) cargo +nightly miri test -p
+   bedlam-core CLEAN on this host - miri 0.1.0 (771916f902 2026-08-08)
+   via rustup component add on the existing nightly (rustc 1.99.0-nightly
+   b07e5a086 2026-08-07); 41 unit + 12 determinism tests green, ZERO UB
+   findings; re-run after adding the fixture also green. Invocation +
+   result recorded in STATE. (b) engine/bedlam-core/tests/hash_fixture.rs
+   COMMITTED per-tick hash fixture: 600-tick fixed integer input script
+   (seed 123456 - EXW/B2 RNG seed provenance nod, fade window armed
+   ticks 101..200 so the 300Hz satellites are inside the pin), 13
+   milestone StateHash constants + FNV-1a chain over all 601 hashes
+   (EXPECTED_CHAIN 0x760d221bec3b3b99); runs in the ordinary cargo test
+   matrix so ubuntu+windows CI fails loud per tick on any cross-OS/
+   toolchain hash drift; #[ignore] print_fixture = documented
+   regeneration path (intentional hashed-state changes only, with
+   FORMAT_VERSION bump - unintended changes must FAIL, never be
+   papered over). (c) ci.yml: new miri job (ubuntu-latest, dtolnay/
+   rust-toolchain@nightly + miri component, cargo +nightly miri test -p
+   bedlam-core on push/PR; miri has no Windows support - noted in the
+   job comment). Workspace 154 green (+1), fmt + clippy -D warnings
+   clean, manifests OK x2. Run was corpus-untouched (engine/ + .github/
+   + .state/ only).
 - 2026-08-18 ff8fb17+d2b7fb8+f86a100 [P3] bedlam-render + bedlam-platform
    wgpu skeleton CLOSED (per D20 + DESIGN-RENDER; code landed by the 03:00
    worker session that outlived its rc=1 client - commits 03:07/03:17 -
@@ -370,6 +405,23 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 04:0x (miri+hash-CI run): clean unit, claim 1-owner.claim
+  honored start to finish. Fish gotcha hit AGAIN on the ci.yml edit
+  (writing ${{ matrix.os }} through a bash-heredoc-inside-fish wrapper -
+  fish parses the braces even inside the single-quoted command string):
+  solved by python-append instead of heredoc-rewrite, leaving the
+  existing matrix lines untouched. Miri install path note: component add
+  --toolchain nightly works offline-ish and fast IF a nightly toolchain
+  already exists (this host had one; no rust-toolchain.toml pin in repo
+  - CI uses dtolnay/rust-toolchain@nightly action, local uses the host
+  nightly; if the host nightly drifts, miri results are still valid for
+  UB detection purposes). First miri run needs ~3min sysroot setup (ran
+  in background while writing the fixture - good overlap pattern).
+  Fixture generation flow: committed placeholder-zero constants first,
+  generated via cargo test -- --ignored --nocapture, pasted with
+  assert-guarded python replace, then verified the real test passes
+  from a clean cargo test run (not just miri).
+
 - 2026-08-18 03:3x (render-verify run): arrived as the 03:32 respawn for
   item 1 and found BOTH crates already committed (ff8fb17 03:07, d2b7fb8
   03:17) with no queue rewrite - the 03:00 worker client died transport
