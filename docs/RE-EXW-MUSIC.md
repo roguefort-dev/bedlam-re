@@ -245,6 +245,13 @@ of dB; volume byte 9..42 observed, master 0..127 scale), SetPan@+0x40 (arg 0
 = center), Play@+0x30 (0,0,0). Master word 004ee9b4 (named g_music_master_vol)
 is written ONLY by FUN_0044c630(ax) - called from FUN_0043a144 and FUN_0044771c
 (UI volume paths). [EXW, high confidence - formulas straight from the listing]
+ADDENDUM (surf-confirm pass 2026-08-18, RE-EXW-TICK): the HI word of
+dword 004ee9b4 is NOT volume - it is the palette re-attach request flag
+(read + masked off in DDFlipOrBlt after SetPalette on the primary
+surface; setter inferred = the SetPaletteRGB path). SubVoiceStart gates
+on and passes the FULL dword into SubVoiceProbe, so the SetVolume
+product is only clean while that flag is clear (transient palette
+windows).
 
 Call chain (register flow resolved via the MrsTriggerNote shim listing):
 MusicPump -> MrsTriggerNote(EAX = event byte = instrument, EDX = song&3

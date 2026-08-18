@@ -241,6 +241,10 @@ FUN_0044acf4=Unlock (vtable +0x80) [verified].
 | 004eee5a | state gate: hi word == 0 allows mouse poll | inferred |
 | 004ef66c | screenshot filename counter | inferred |
 | 004ef708 | word zeroed on each mouse-poll tick | verified use |
+| 004ee9b4 | g_music_master_vol dword: lo word = master volume (FUN_0044c630 writes AX only), hi word = palette re-attach request (masked off in DDFlipOrBlt) | verified (surf-confirm) |
+| 004ee9b6 | g_pal_dirty: palette-dirty word, cleared by DDFlipOrBlt at present end | verified |
+| 004ee9e4 | g_staging_persistent: word set by DDStagingProbe when staging memory survives the present | verified |
+| 004eee5c | g_presenting: present-in-progress word set/cleared around DDFlipOrBlt | verified |
 | 004eee60 | g_pal6_snap: 768B 6-bit current-palette snapshot (GetPalette6bit dest) | verified (tick-sat) |
 | 004eedfc | g_cursor_size (24; CursorSizeSet arg target, Blt clip cap) | verified (tick-sat) |
 | 004ee9d8 | g_cursor_active (CursorSizeSet cycle guard) | verified (tick-sat) |
@@ -434,9 +438,72 @@ ThreadSpawnImpl 0045204b -> CreateThread(CrtThreadTrampoline 00451fbc)
 | 004ee9c8 | palbank | palette-bank store written by SetPaletteIndex (lock/copy/unlock) |
 | 004ee9cc | cursor | cursor-sprite Blt source in CursorBlt |
 
-Roles are usage-verified; a CreateSurface creation-order confirmation
-pass remains an optional cosmetic follow-up.
+Roles are usage-verified; the CreateSurface creation-order confirmation
+pass ran 2026-08-18 (next section): 004ee9bc / 004ee9c0 CONFIRMED from
+creation in BOTH display modes; 004ee9c8 / 004ee9cc remain usage-verified.
 
+
+## DD surface creation-order confirmation (2026-08-18)
+
+Provenance: two -process BEDLAM.EXW -noanalysis passes (no import, single
+BedlamWatcom program): ExwSurfConfirm.java (dump; ghidra-project/
+exw-surf-confirm.txt, gitignored) + ExwSurfNames.java (rename + plate
+comments + labels; Save succeeded). NOTE: the dump pass was launched by
+this lane pre-restart server session and survived a server restart as an
+OS orphan; the respawn verified the dump end to end and adopted it
+(queue-verify precedent). The dump header persisted-state block also
+re-verifies CrtThreadTrampoline@00451fbc and all four g_dd_surf_* labels
+from the tick-sat run - all green.
+
+- DDInitSurfaces@0044a660 creation order [verified vs listing]:
+  - FULLSCREEN: CreateSurface(desc dwSize 0x6c, dwFlags 0x21 =
+    DDSD_CAPS | DDSD_BACKBUFFERCOUNT, ddsCaps 0x4218 = DDSCAPS_COMPLEX
+    0x8 | DDSCAPS_FLIP 0x10 | DDSCAPS_PRIMARYSURFACE 0x200 | 0x4000
+    DDSCAPS_MODEX per ddraw.h - Mode X is a 320x2xx family, inoperative
+    at 640x480; the retry path clears exactly bit 0x4000 (desc+0x69 byte
+    AND 0xbf) leaving 0x218 = the real config], dwBackBufferCount 1) -> **004ee9bc = flip-chain head
+    (primary)**; then surface vtable +0x30 GetAttachedSurface(caps
+    DDSCAPS_BACKBUFFER 0x4, out -> 004ee9c0) -> **004ee9c0 = the implicit
+    backbuffer of the chain**.
+  - WINDOWED: CreateSurface(caps DDSCAPS_PRIMARYSURFACE 0x200) ->
+    004ee9bc; then CreateSurface(dwFlags 0x7 = CAPS | HEIGHT | WIDTH,
+    ddsCaps 0x40 = DDSCAPS_OFFSCREENPLAIN, w x h register args) ->
+    004ee9c0 = offscreen staging.
+  - Tail calls FUN_0044b9c4 + FUN_0044ba3c [inferred: the palbank
+    004ee9c8 / cursor 004ee9cc surface creators - not decompiled this
+    pass; their usage roles from the tick-sat run stand]. Word
+    g_staging_persistent@004ee9e4 is cleared 0 here, before the probe.
+- DDFlipOrBlt@0044ad18 (pacer-run name) confirmed by this dump:
+  fullscreen = primary +0x2c Flip(NULL, DDFLIP_WAIT 1) (offset authority
+  = D16 / RE-EXW-PACER sec 4); windowed = primary +0x14 Blt(dest rect =
+  window client area from the 004ef6a2..a8 cache, source = **staging
+  004ee9c0**, flags DDBLT_WAIT 0x1000000); hw-cursor handshake around
+  the flip (spin on 004eedf8 lo, set 004eedfa, FUN_0044b6d4) +
+  GetCursorPos + MousePosHandler after; when dword 004ee9b4 hi == 1:
+  SetPalette(+0x7c, g_dd_palette) on the primary then mask the hi word
+  off; clears g_pal_dirty@004ee9b6 at the end (confirms the music-tails
+  handshake reading on the primary surface).
+- FUN_0044a9ac renamed **DDStagingProbe** (422B; 2 callers = the DD-init
+  chain right after DDInitSurfaces - the CreateWindowExA InitGraphics
+  function - and DDShutdown before release): saves the present gate
+  004ef670 (sets 1, restores at end); Unlock + FlipOrBlt; sentinel
+  0x12345678 written through LockStaging (retry max 20), Unlock +
+  FlipOrBlt, relock + readback -> word 004ee9e4 = 1 when staging memory
+  SURVIVES the present (persistent video-memory backbuffer); then two
+  full clears of staging (480 rows x 160 dwords, row stride pitch/4
+  004ee9f0), each followed by Unlock + FlipOrBlt.
+- VERDICT: creation order CONFIRMS the usage-derived roles for 004ee9bc
+  (primary / chain head) and 004ee9c0 (fullscreen backbuffer, windowed
+  offscreen staging - the g_dd_surf_staging label stands). New labels:
+  g_staging_persistent (004ee9e4) + g_pal_dirty (004ee9b6); plate
+  comment on DDInitSurfaces + the DDStagingProbe rename persisted (Save
+  succeeded).
+- 004ee9b4 dual use correction: the lo WORD is the master volume (setter
+  FUN_0044c630 writes AX only); the HI WORD is the palette re-attach
+  request flag (read + masked off in DDFlipOrBlt; setter [inferred:
+  SetPaletteRGB path]). SubVoiceStart gates on and passes the FULL dword
+  into SubVoiceProbe (music-tails dump), so the SetVolume product is
+  only clean while that flag is clear - addendum in RE-EXW-MUSIC sec 6.
 
 ## Open questions / next steps
 
