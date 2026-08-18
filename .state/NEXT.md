@@ -1,35 +1,19 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P3] bedlam-game scene-FSM skeleton (LAST P3 charter crate after
-   bedlam-assets/core/render/platform/audio). Deliverables: (a) SHORT
-   design note docs/DESIGN-GAME.md FIRST (mirroring DESIGN-RENDER/
-   DESIGN-AUDIO flow, 1-2 pages): scene FSM topology anchored to the RE
-   (EXW GameMain@0041c050 boot shell + mission loop FUN_0043d00b =
-   poll -> sim/render -> PresentCopy -> PresentEnd; B2 GameInit@0x2f731
-   boot shell AND episode-loop host with player-selected sub in
-   MapRoomSelect@0x50a87 - scene list: title/menu/OPTIONS screens,
-   brief/debrief/shop/select, mission, cutscene = state machine
-   skeleton, no per-mission code per PLAN P3), composition of sibling
-   crates (per-frame host pump: SimDriver -> render -> present + the
-   MusicPump analog = Mrs::walk -> MusicScript mapping per
-   DESIGN-AUDIO sec 7 lives HERE as the bedlam-assets->bedlam-audio
-   bridge), config/save model (OPTIONS.BDL is SETUP-owned, CONFIG.BDL
-   = installer SB record never read by EXW - RE-EXW-MUSIC sec 4; B2
-   saves 5x61B {mask,slot,linear,money,stats} @0x8b1d4 = the recorded
-   shape), determinism boundary (scene state HASHED in the core
-   bucket; per-frame bucket + audio host pump un-hashed per D17 b),
-   hermetic rule (forbid unsafe; file I/O ONLY behind injected
-   byte-source/sink traits so the FSM itself stays pure). (b)
-   engine/bedlam-game crate skeleton implementing the note: Scene
-   enum + fsm.rs transition skeleton, host.rs frame pump wiring
-   core+render+audio, music.rs Mrs::walk -> MusicScript bridge
-   (corpus-testable against the 5 real .MRS files), config.rs typed
-   OPTIONS.BDL parse. thiserror only, no new deps. (c) tests: FSM
-   determinism (same input script -> same scene-state hash at
-   15/60/240Hz host), music bridge walk-vs-script equivalence over
-   the corpus, clippy -D warnings + fmt clean; workspace tests stay
-   177+ green. DECISIONS.md entry if any call is non-obvious.
+1. [P4 kickoff, code-only half] headless parity harness v0: a small
+   bin target (engine/bedlam-game examples/ or tools/inspect arm) that
+   drives GameHost end-to-end over a recorded input script - load
+   OPTIONS.BDL + the 5 .MRS via a filesystem ByteSource (test/arg
+   gated, the crate itself stays hermetic), pump N frames at a fixed
+   dt, dump per-tick scene_hash chain + the final canonical Frame
+   parity_hash + the audio mix stream hash to a JSON report. Purpose:
+   give the P4 wine/DOSBox runtime comparisons a deterministic CPU
+   baseline to diff against (PLAN sec 6 P4, D24 defers the GPU/device
+   half). Keep it SMALL: no wgpu, no cpal, no new deps; if the runtime
+   half (desktop DirectDraw launch) is reached, STOP - that item needs
+   an interactive session per the backlog note. Gates: clippy -D
+   warnings + fmt + workspace 204 green unchanged.
 
 ## Backlog (not yet started)
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
@@ -46,6 +30,44 @@
   display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
 
 ## Done (append)
+- 2026-08-18 efd270e+58e3f75+4ab051c+7e3e472 [P3] bedlam-game scene-FSM
+   skeleton CLOSED - THE LAST P3 CHARTER CRATE (P3 charter set now
+   complete: assets/core/render/platform/audio/game). Quad-session
+   lane: 11:19 claimant pinned DESIGN-GAME (a: FSM topology anchored
+   GameMain@0041c050/FUN_0043d00b + B2 GameInit@0x2f731/MapRoomSelect@
+   0x50a87, host pump, music bridge, config model, D17 boundary);
+   13:16 + 13:20 respawns wrote the crate WIP and died on transport
+   (twice); this 13:43/13:51 run ADOPTED the WIP per the ghost-survivor
+   protocol - verified line-by-line vs the note, deleted the scratch
+   zz_debug.rs, fixed the three REAL test bugs (harness sampling
+   duplicating checkpoints on 0-tick banking frames; corpus terminal
+   assert missing the chunk-1 Restart loop-timer fact vs
+   validate_mrs_song; chunking-invariance comparing untruncated
+   overshoot buffers) + one clippy nit. (b) engine/bedlam-game:
+   fsm.rs Scene enum (10 scenes) + transitions + Episode {stage,mask,
+   linear} with FULL_MASK@0x81d9a verbatim + zone-complete gating +
+   scene_hash FNV-1a tag BDLG; host.rs GameHost::pump_frame in
+   FUN_0043d00b order (SimDriver -> per-executed-tick SceneFsm ->
+   render -> Frame; music sync per scene) + ByteSource/ByteSink
+   injection; music.rs MusicPump bridge (D27 melody chunk) +
+   build_script Mrs->MusicScript + track table OPTIONS/BRIEF/SELECT/
+   DEBRIEF/SHOP.MRS; config.rs typed OPTIONS.BDL (volume 0..=100,
+   music_master = vol>>1 = FUN_0044c630, 41B round-trip; CONFIG.BDL
+   never modelled). thiserror only, forbid(unsafe), no fs/clock/
+   threads. CROSS-CRATE FIX in bedlam-audio: load_script anchors
+   dispatch at the ATTACH cursor (scene swaps are mid-stream; old
+   absolute-cursor semantics would fire the whole past at once) +
+   15th determinism gate. (c) tests: 20 unit + 4 determinism (same
+   wall-time script -> identical scene-hash chain at 15/30/60/120/240
+   Hz, pure-FSM replay, salt divergence) + 2 corpus (walk-vs-script
+   event equivalence over the 5 real .MRS files, chunk-0 disabled,
+   Freeze|Restart terminals, chunking-invariant mixes). Workspace 204
+   green (+27), fmt + clippy -D warnings clean, manifests OK x2.
+   DECISIONS D26 (hashed per-tick edge derivation of scene actions -
+   what makes the host-rate hash identity exact) + D27 (melody-chunk
+   selection + attach-anchored dispatch); DESIGN-GAME status =
+   IMPLEMENTED AS SKELETON.
+
 - 2026-08-18 846ebab+b684bee+00c2260+b950b44+a8f26f8 [P3] bedlam-audio
    thin mix-graph skeleton CLOSED (PLAN P3 charter crate; design note
    first per DESIGN-RENDER flow; see run notes - triple-agent night,
@@ -446,6 +468,25 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 13:43-14:3x (game unit, triple-respawn close-out): the
+  lane survived THREE transport deaths in 90 min (11:33 crate start,
+  13:16 mid-test iteration with 6 lib failures, 13:25 lib-green but
+  integration tests unwritten) before this run. Server restarts hit
+  TWICE mid-run; both times file state persisted and the adopted-WIP
+  protocol worked cleanly. LESSONS: (1) the two corpus-test bugs were
+  SEMANTIC anchors already resolved elsewhere in the repo - when a new
+  test contradicts a pinned corpus fact (assets validate_mrs_song
+  accepts Freeze|Restart), the NEW test is wrong, check the canon
+  first; (2) comparing chunked render buffers requires truncating to
+  the common bound - whole-buffer assert_eq fails on LENGTH for any
+  chunk size that does not divide the total (bedlam-audio suite
+  already knew this; the new test reinvented it wrong); (3) 0-tick
+  banking frames make any cursor-is_multiple_of-N sampling loop
+  double-push - gate on executed>0. Contamination watch: the 13:36-
+  13:43 tools/nudge* + network-watchdog edits in the tree were
+  CONTROLLER infrastructure, committed by the controller itself as
+  9227681 mid-run - correctly left untouched by this lane.
+
 - 2026-08-18 04:3x-05:2x (audio unit, ghost-survivor run): item-1
   owner via claim 0711 end to end (with one orphan-window mid-run).
   FOUR agents touched item 1 tonight: 0162 (claimed 04:29, went

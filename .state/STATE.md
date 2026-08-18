@@ -1,5 +1,16 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-18 (game unit, 4ab051c+7e3e472): P3 CHARTER SET COMPLETE.
+  bedlam-game = the LAST charter crate (assets/core/render/platform/audio/
+  game all landed as skeletons). Scene FSM (10 scenes, B2 episode shape
+  {stage,mask,linear} + FULL_MASK@0x81d9a, D26 hashed per-tick edge
+  latches), host pump in FUN_0043d00b order, MusicPump bridge (D27
+  melody-chunk + attach-anchored mixer dispatch), typed OPTIONS.BDL.
+  Workspace 204 tests green, fmt + clippy -D warnings clean, manifests
+  OK x2. Next phase per PLAN sec 6: P4 (harness/playable) - first item
+  = dependency/version spike + runtime smoke, needs interactive desktop
+  for wine-exw (do NOT run unattended).
+
 - Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
   promoted to workspace crate engine/bedlam-assets (pure, inspect CLI output
   byte-identical, D14); MUSIC FORMATS DECODED IN RUST 2026-08-17: music.rs
