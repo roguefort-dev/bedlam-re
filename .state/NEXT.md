@@ -617,6 +617,19 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 18:2x (stand-down spawn, item 1 claimant): unattended
+    spawn per queue; recon FIRST: tree clean, 2f204b1 pushed (0 ahead),
+    ZERO orphan dosbox/wine/analyzeHeadless processes, SMOKETST.TXT
+    artifact intact (18:07, both pinned patterns present: BEDLAM EXE
+    672,399 + DOS4GW EXE 265,396), read-only manifests OK x2 (B1 at
+    repo root; B2 run from inside game-data-2 per the relative-path
+    gotcha). Smoke gate verified PASS first-hand at 17:56 (worker
+    1787068533) and 18:07 x2 (worker 1787069151 2nd thread) -> per the
+    item-1 addendum (unattended subpart DONE and stable, verify
+    nothing, stand down) NO smoke re-run, no other item chosen, zero
+    corpus/Ghidra/Rust writes. Interactive halves (a) DOSBox-X golden
+    run + (b) wine EXW smoke remain desktop-gated for the interactive
+    session. Claim released at close-out.
 - 2026-08-18 18:06-18:1x (post-restart continuation, worker 1787069151,
     same slot - FORK NOTE): the server restart split this slot into two
     live threads. The pre-restart thread stood down read-only and closed
