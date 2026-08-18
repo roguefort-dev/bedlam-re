@@ -139,6 +139,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bedlam-audio"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "bedlam-core"
 version = "0.1.0"
 dependencies = [
