@@ -25,6 +25,27 @@
 
 
 ## Done (append)
+- 2026-08-18 19:18-19:2x (stand-down unit, worker 1787073539, post-restart
+    continuation): claim 1-owner.claim held by this session (reserved
+    19:18:59; server restart hit during recon - pre-restart log = heartbeat
+    + PAUSE/claims/queue reads only, ZERO own mutations, nothing to adopt
+    from own thread). Predecessor residue FOUND and CLEANED: e7ded0c (the
+    1787072742 third-incarnation adoption commit, NEXT.md-only +22 lines)
+    was committed but UNPUSHED - content verified against the queue read
+    first-hand this run, then PUSHED by this run. Recon FIRST-HAND this
+    run, all read-only: tree clean at e7ded0c, zero orphan dosbox/wine/
+    analyzeHeadless processes (ps sweep, self-filtered), SMOKETST.TXT
+    18:07 intact (BEDLAM EXE 672,399 + DOS4GW EXE 265,396 = gate
+    evidence valid), manifests OK x2 (B1 at repo root; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha).
+    /tmp STILL 100 pct full (16G/16G, 0 avail) re-confirmed first-hand -
+    keep staging scratch repo-local until cleared. Gate has NOT failed
+    -> NO smoke re-run per the item-1 addendum (unattended subpart DONE
+    and stable), no other item chosen (backlog empty), zero corpus/
+    Ghidra/Rust writes. Interactive halves (a) DOSBox-X golden run +
+    (b) wine EXW smoke remain desktop-gated for the interactive session.
+    Claim released at close-out.
+
 - 2026-08-18 19:05-19:1x (stand-down unit, worker 1787072742, post-restart
     continuation): claim 1-owner.claim held by this session (reserved
     19:05:42, restart hit right after - pre-restart log = recon only,
