@@ -1,35 +1,59 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4 kickoff, code-only half] headless parity harness v0: a small
-   bin target (engine/bedlam-game examples/ or tools/inspect arm) that
-   drives GameHost end-to-end over a recorded input script - load
-   OPTIONS.BDL + the 5 .MRS via a filesystem ByteSource (test/arg
-   gated, the crate itself stays hermetic), pump N frames at a fixed
-   dt, dump per-tick scene_hash chain + the final canonical Frame
-   parity_hash + the audio mix stream hash to a JSON report. Purpose:
-   give the P4 wine/DOSBox runtime comparisons a deterministic CPU
-   baseline to diff against (PLAN sec 6 P4, D24 defers the GPU/device
-   half). Keep it SMALL: no wgpu, no cpal, no new deps; if the runtime
-   half (desktop DirectDraw launch) is reached, STOP - that item needs
-   an interactive session per the backlog note. Gates: clippy -D
-   warnings + fmt + workspace 204 green unchanged.
+1. [P2 cosmetic RE, unattended-safe] LAB_00451fbc + the 4 ddraw surface
+   slot roles: create + decompile the Watcom CRT thread trampoline at
+   LAB_00451fbc (see RE-EXW-TICK.md tick2 section) and name the surface
+   slots via FUN_0044a9ac / FUN_0044ad18 (back/front/...). Ghidra
+   -process BEDLAM.EXW -noanalysis passes ONLY (pgrep guard first;
+   NEVER re-import - single program verified 03:33). Update
+   RE-EXW-TICK.md + persist names. Small unit: 1-2 passes, one docs
+   commit, one queue commit.
+
+2. [P2 cosmetic follow-up, census sec 7 residuals] B2 campaign index
+   accounting (25 reachable zone-letter indices vs 27 linear steps -
+   needs save-file/playthrough check), 4f02 LFB-vs-banked variant +
+   0x200 display-start units, FUN_000126c8 satellite + its 0x11ef88
+   gate. Ghidra -process BEDLAM.EXE -noanalysis ONLY. If the
+   playthrough check needs a live game run, STOP - that is interactive.
 
 ## Backlog (not yet started)
-- P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
-  (needs desktop + DirectDraw - do NOT run unattended); flathub sandbox
-  filesystem override for game-data + DOSBox-X harness config (cycles pinned,
-  debugger watch scripting) when the P4 harness work starts.
-- Cosmetic RE: create+decompile LAB_00451fbc (Watcom CRT thread trampoline,
-  see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
-  (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
-
-- P2 cosmetic follow-up (from census sec 7 residuals): campaign index
-  accounting (25 reachable zone-letter indices vs 27 linear steps - needs
-  save-file/playthrough check), 4f02 LFB-vs-banked variant + 0x200
-  display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
+- P4 RUNTIME HALF (next after the cosmetic items): interactive EXW smoke
+  launch under tools/runtime/wine-exw.sh (needs desktop + DirectDraw - do
+  NOT run unattended); then the wine/DOSBox runtime comparison against the
+  parity harness CPU baseline (report + hashes recorded in the D28 queue
+  entry below; reproduce with: cargo run --release --example parity_harness
+  -p bedlam-game -- --out report.json). Plus flathub sandbox filesystem
+  override for game-data + DOSBox-X harness config (cycles pinned,
+  debugger watch scripting) when that work starts.
 
 ## Done (append)
+- 2026-08-18 c61d7f7 [P4 kickoff, code-only half] headless parity
+   harness v0 CLOSED (engine/bedlam-game/examples/parity_harness.rs;
+   D28; the 14:27 respawn after FIVE transport deaths this hour - all
+   five predecessors died during read-only recon, nothing was adopted,
+   this run wrote the unit fresh). (a) FsSource ByteSource rooted at
+   game-data/BEDLAM (top-level then SOUND/MIDI); the crate stays
+   hermetic - fs lives ONLY in the example. (b) text input script
+   grammar (step/act/music; every numeric hex-aware; embedded default
+   walk) + --root/--script/--out/--dt args. (c) pump: fixed dt (4
+   subticks = 60 Hz), per-tick scene_hash chain + FNV chain, final
+   Frame parity_hash, sim state hash, 184-sample/frame audio pull +
+   full-stream FNV. (d) sibling .MRW bank loaded per track (54 waves,
+   5 tracks) so the audio baseline is AUDIBLE - without banks the
+   stream is all-zero and degenerate (D28 pin 3). (e) embedded walk:
+   boot, Options/Brief (REAL mouse click, D26 edge path)/Select/
+   Mission/Debrief/Cutscene + a stage-2 lap landing in Shop so ALL 5
+   tracks get audible windows; transitions recorded per frame. Gates:
+   fmt + clippy -D warnings clean, workspace 204 green UNCHANGED,
+   report byte-identical across runs, manifests OK x2. BASELINE (seed
+   0, dt 4, 775 frames = 775 ticks): scene chain 0xcae25cd08d7cbc08,
+   sim 0x72979d5d9dedc832, frame parity 0x87263f149564ad25, audio
+   stream 0xc862e45d2e95ad29 (176994 nonzero samples, 142600 frames
+   mixed). These are the P4 diff anchor - drift with unchanged inputs
+   = engine determinism bug.
+
+
 - 2026-08-18 efd270e+58e3f75+4ab051c+7e3e472 [P3] bedlam-game scene-FSM
    skeleton CLOSED - THE LAST P3 CHARTER CRATE (P3 charter set now
    complete: assets/core/render/platform/audio/game). Quad-session
@@ -466,6 +490,28 @@
   pays). Fish gotcha again: $? in a compound command aborts the whole line
   at parse time BEFORE anything runs (pgrep guard included) - use plain
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
+
+## Run notes
+- 2026-08-18 14:27-15:0x (harness run, sixth spawn of the lane): items
+  1 had FIVE transport-killed incarnations this hour (13:56, 14:03,
+  14:12, 14:23 + one pre-restart), every one dying during READ-ONLY
+  recon (agent logs end mid grep of mixer/fsm APIs; zero files
+  written; tree clean at every check). This run did the unit start to
+  finish. LESSONS: (1) NEW FISH GOTCHA VARIANT - a Rust char literal
+  holding a quote or backslash (single-quote-delimited) inside the
+  fish-wrapped bash heredoc breaks the outer string; ALSO fish collapses
+  doubled backslashes inside single-quoted transport (only backslash-
+  backslash and backslash-quote survive), so written bytes must be
+  repr-verified after every heredoc - the json_escape function hit BOTH
+  and was repaired by chr()-built python patches, never by re-running
+  the heredoc blind. (2) An audible parity baseline REQUIRES loading
+  the sibling .MRW bank per track; script-only runs mix 100 percent
+  silence and hash identically for any implementation (D28 pin 3).
+  (3) SceneFsm::apply consumes a boot tick even mid-boot (act Options
+  during Boot advances the countdown one frame early vs pure stepping)
+  - recorded crate behavior, the harness just logs transitions; do not
+  file as a harness bug. (4) Manifest checks before AND after really
+  do bracket the corpus read cleanly: OK x2.
 
 ## Run notes
 - 2026-08-18 13:43-14:3x (game unit, triple-respawn close-out): the

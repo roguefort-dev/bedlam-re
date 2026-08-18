@@ -1,5 +1,14 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-18 (P4 kickoff code half, c61d7f7): headless parity
+  harness v0 example landed (engine/bedlam-game/examples/parity_harness.rs,
+  D28): GameHost driven end-to-end over a recorded input script, JSON
+  report with per-tick scene-hash chain + frame parity + sim hash + audio
+  stream hash; .MRW banks loaded per track (audible baseline); verified
+  byte-identical across runs; fmt + clippy -D warnings clean; workspace
+  204 green unchanged; manifests OK x2. P4 runtime half (wine/DOSBox
+  comparisons vs this CPU baseline) = next, needs interactive desktop.
+
 - CLOSED 2026-08-18 (game unit, 4ab051c+7e3e472): P3 CHARTER SET COMPLETE.
   bedlam-game = the LAST charter crate (assets/core/render/platform/audio/
   game all landed as skeletons). Scene FSM (10 scenes, B2 episode shape

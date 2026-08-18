@@ -375,3 +375,34 @@ Companion bedlam-audio fix: Mixer::load_script anchors dispatch at
 the ATTACH cursor (script tick 0 = the attach frame), because the
 scene pump swaps scripts mid-stream on every scene change and
 absolute-cursor dispatch would fire the entire past at once.
+
+## D28 - Parity harness v0 pins: example-not-crate, 184-sample audio pull, sibling .MRW banks for a non-degenerate audio baseline (2026-08-18)
+
+c61d7f7 adds engine/bedlam-game/examples/parity_harness.rs (P4 kickoff,
+CPU half only; D24 defers the GPU/device half). Four pins:
+
+1. LOCATION: an example, not crate code and not a tools/inspect arm.
+   The bedlam-game hermetic rule (no fs) holds; std::fs on the game
+   tree exists ONLY inside the example, behind FsSource (ByteSource
+   resolving top-level names then SOUND/MIDI, mirroring the install
+   tree). cargo run --example is also the cheapest possible arm - no
+   workspace membership, no new deps, no CI change.
+2. AUDIO PULL: 184 samples/frame = ceil(11025/60), even length. Mixer
+   output is chunking-invariant on its Q16 grid (D25), so the pull rate
+   only decides how much stream lands per frame - the harness PINS it
+   so the audio stream FNV is reproducible across runs, machines and
+   toolchains. Pin, never derive: 183.75 is not integral and the drift
+   would make per-frame comparisons meaningless.
+3. MRW BANKS: a .MRS script without its sibling .MRW bank loads zero
+   waves and the audio stream is all-zero - byte-identical for ANY
+   implementation, worthless as a parity anchor. The harness loads the
+   sibling bank for every track (54 waves across the 5 shipped tracks),
+   mirroring the EXW mrw_load/load_midi pairing (RE-EXW-MUSIC sec 6).
+4. BASELINE ANCHOR: report format bedlam-parity-harness/0; the embedded
+   walk (775 frames = 775 ticks, seed 0, dt 4 subticks) yields scene
+   chain 0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame parity
+   0x87263f149564ad25, audio stream 0xc862e45d2e95ad29 (176994 nonzero
+   samples). Same script + same corpus MUST reproduce these on any
+   OS/toolchain before a wine/DOSBox runtime diff means anything; drift
+   in these values with unchanged inputs = an engine determinism bug,
+   never a harness bug to paper over.
