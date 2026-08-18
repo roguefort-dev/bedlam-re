@@ -25,6 +25,24 @@
 
 
 ## Done (append)
+- 2026-08-18 18:56-19:0x (stand-down unit, worker 1787072197, post-restart
+    continuation): claim 1-owner.claim held by this session (nudge reaped the
+    stale 18:51 dead-worker claim, age 308s); own pre-restart log = recon
+    only (heartbeat + queue/claims read, ZERO mutations) - nothing to adopt,
+    nothing redone; predecessors e0456f8..70c9c57 all pushed, tree clean.
+    Recon FIRST-HAND this run: zero orphan dosbox/wine/analyzeHeadless
+    processes (pgrep hits = this worker own prompt text, self-filtered),
+    SMOKETST.TXT 18:07 intact (BEDLAM EXE 672,399 + DOS4GW EXE 265,396 =
+    gate evidence valid), manifests OK x2 (B1 at repo root; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha).
+    Gate has NOT failed -> NO smoke re-run per the item-1 addendum
+    (unattended subpart DONE and stable), no corpus/Ghidra/Rust writes, no
+    other item chosen. Interactive halves (a) DOSBox-X golden run + (b) wine
+    EXW smoke remain desktop-gated for the interactive session. Claim
+    released at close-out. NOTE: /tmp is 100% FULL (16G tmpfs, 0 avail) -
+    scratch writes to /tmp/opencode fail with ENOSPC (hit twice this
+    run); /home has 3.5T free, stage scratch under .state/ or repo-local
+    until cleared.
 - 2026-08-18 17:55-18:0x (post-restart regression unit, worker 1787068533):
     continuation after the 17:55 server restart. Claim 1-owner.claim held
     by this session; tree clean; ps sweep found ZERO orphan dosbox/wine/
@@ -77,6 +95,9 @@
     had ZERO census/STATE backing despite [verified] tags - DROPPED
     (75b17a8 lesson, 2nd occurrence). (f) Manifests OK x2; no game launch
     (interactive gate honored); fmt/clippy not needed (no Rust touched).
+    OPS NOTE: /tmp tmpfs is 100%% FULL (16G/16G, 0 free) at 18:58 - any
+    run needing /tmp scratch (incl. java/ghidra temp dirs) will fail until
+    the interactive session clears it; this run used .state/ staging.
 
 - 2026-08-18 119ba2d+b6620c0+007fbe5+4ace8a6+75b17a8 [P2 cosmetic tail] B2
     census sec-7 residuals CLOSED (census doc sec 7.7a-e; lane survived a
