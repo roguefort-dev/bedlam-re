@@ -26,6 +26,30 @@
 
 ## Done (append)
 
+- 2026-08-18 19:54-19:5x (stand-down unit, worker 1787075793, post-restart
+    continuation, two restarts survived): claim 1-owner.claim held by this
+    session (reserved 19:56:33; earlier incarnation 1787075674 claim 19:54:34;
+    both incarnations = heartbeat + PAUSE/claims/queue reads + read-only recon
+    only, ZERO own mutations before this close-out; one harmless fish bash
+    for-loop syntax failure rc=127, no side effects). LIVE SIBLING OVERLAP
+    OBSERVED mid-recon: the 1787075306 close-out commit ce07e82 (NEXT.md-only
+    +20 lines) landed while this run was reading the tree - its NEXT.md write
+    at 19:53:04 briefly appeared as an uncommitted M, then the commit arrived
+    at 19:55:35; message + content verified consistent with the queue entry
+    already present; benign, nothing to adopt. Recon FIRST-HAND this run, all
+    read-only: branch in sync with origin at ce07e82 (0 ahead / 0 behind),
+    zero orphan dosbox/wine/analyzeHeadless processes (ps sweep,
+    self-filtered), SMOKETST.TXT 18:07 intact (BEDLAM EXE 672,399 + DOS4GW
+    EXE 265,396 = gate evidence valid), manifests OK x2 (B1 = MANIFEST.sha256
+    at repo root; B2 via cd game-data-2 + ../MANIFEST-2.sha256 per the
+    relative-path gotcha). /tmp STILL 100 pct full (16G/16G, 0 avail)
+    re-confirmed first-hand - keep staging scratch repo-local until cleared.
+    Gate has NOT failed -> NO smoke re-run per the item-1 addendum
+    (unattended subpart DONE and stable), no other item chosen (backlog
+    empty), zero corpus/Ghidra/Rust writes. Interactive halves (a) DOSBox-X
+    golden run + (b) wine EXW smoke remain desktop-gated for the interactive
+    session. Claim released at close-out.
+
 - 2026-08-18 19:48-19:5x (stand-down unit, worker 1787075306, post-restart
     continuation, two restarts survived): claim 1-owner.claim held by this
     session (reserved 19:48:26; restarts hit during initial reads and again
