@@ -1,52 +1,62 @@
-DOSBox-X integrated-debugger WATCH SCRIPT SKELETON (P4 differential harness)
-=============================================================================
-STATUS: pinned watch SET + trigger plan, NOT runnable yet. The command
-syntax gets verified in the first interactive debugger session; every
-UNCERTAIN tag below marks a fact to confirm there before it becomes a
-golden procedure. Kept beside the harness so the interactive run starts
-from a plan instead of a blank console.
+DOSBox-X integrated-debugger WATCH SKELETON (P4 differential harness)
+=========================================================================
+STATUS: pinned watch SET + trigger plan, NOT runnable yet. Debugger command
+names are plausible for this pin but get verified in the first interactive
+session; every UNCERTAIN tag marks a fact to confirm there before this
+becomes a golden procedure.
 
-PROVENANCE: all addresses are B2 DOS4GW linear image addresses already
-pinned in docs/RESEARCH-BEDLAM2-CENSUS.md sec 6-7 + D22/D23.
+PROVENANCE: B2 DOS4GW linear addresses, census-pinned with line refs into
+docs/RESEARCH-BEDLAM2-CENSUS.md (2026-08-18 edition). DOS4GW flat mapping:
+code object at 0x10000, data at 0x80000 - guest offset = linear - obj
+base. VERIFY the conversion at the first session with an INT3 break at
+_entry 0x66a60 before trusting any diff [UNCERTAIN: exact debugger form].
 
-STATE WATCH SET (the fields the CPU baseline hashes, census/D23):
-  0x0011ef1c  dword  RNG seed/state A (reseed writes 123456, FUN_0005eaf9)
-  0x0011ef20  dword  RNG B state (seed 234567) [UNCERTAIN: exact slot -
-                       seeds sit adjacent as code constants 0x11ef1c/18;
-                       confirm the live B pair at RngStepB 0x1224f]
-  0x0011f0c4  dword  100Hz timeout base (WaitTicks100Hz consumers)
-  0x0011f0c8  byte   ISR counter (palette &7, mouse &1 phases)
-  0x0008b1d4  5x61B  save records {mask, slot, linear, money, stats}
-  campaign statics (do NOT watch, read once): order[8]@0x81dba,
-                       zone letters@0x81dda, mission[27]@0x81e46,
-                       full-mask table@0x81d9a
-  live zone/mission holders: the MapRoomSelect@0x50a87 formula
-                       inputs [UNCERTAIN: register/global holding the
-                       current stage-slot + sub at flip time - locate in
-                       the first session via a write-watch on the save
-                       record at 0x8b1d4]
+STATE WATCH SET (fields the CPU baseline hashes; census line refs):
+  0x0011ef18  2x16   RNG B pair (0x11ef18/1a, seed 234567)  [census L301/307]
+  0x0011ef1c  2x16   RNG A pair (0x11ef1c/1e, seed 123456; reseed writes
+                       123456 at FUN_0005eaf9)                [census L301]
+  0x0011f0c4  dword  100Hz timeout base (WaitTicks100Hz)     [census sec 7]
+  0x0011f0c8  byte   ISR counter (palette &7, cursor/fade &1) [census sec 7]
+  0x0011ef88  word   g_b2_fade_ticks_left (50Hz fade)        [census L584-600]
+  0x0011f138  byte   palette bank index (0x90..0x97 cycle)    [census L325/395]
+  0x0011ef38  word   page-B display start (0x200 scanlines)  [census L472/576]
+  0x0008008e  byte   g_flip_lock (50Hz ISR cursor-draw guard)[census L420]
+  0x0012576c  word   g_campaign_linear (0..26 completions)   [census sec 7]
+  0x0011f11c  word   mode flag (==2 -> mission numbering +5)  [census sec 6]
+  0x0008b1d4  5x61B  save records {mask,slot,linear,money,stats} [sec 7]
+  statics (read once, never watch): order[8]@0x81dba, zone letters
+                       @0x81dda, mission[27]@0x81e46, full-mask@0x81d9a
 
-FRAME TRIGGER (the original-side analog of one parity_harness frame):
-  PresentFlip@0x1066b - VESA page flip + WaitVRetrace (D16/D23 verdict:
-  one frame per completed present). Break on entry, dump the watch set,
-  continue. One dump per hit = per-frame comparison grain.
+DROPPED (ghost-fabrication lesson): 0x11ef7c / 0x11f0c0 / 0x11efc4 arrived
+tagged verified from a dead sibling session but have ZERO census/STATE
+backing - if real page-state vars are needed, re-derive from the PresentFlip
+decompile instead of resurrecting those numbers.
 
-AUDIO SIDE (audio diff anchor, D17b: byte-identity gate):
+FRAME TRIGGER (original-side analog of one parity_harness frame):
+  PresentFlip@0x1066b - VESA page flip + WaitVRetrace (D16/D23: one frame
+  per completed present). Break on entry, dump the watch set, continue.
+
+AUDIO SIDE (D17b byte-identity gate):
   PcmMixerService@0x136e0 walker over driver struct 0x1276dc (20 voice
   slots, 11025 Hz native). Dump the voice slot array per PresentFlip hit.
 
-DEBUGGER COMMAND CANDIDATES (verify syntax in-session, watch mode):
-  help                          full command list first
-  BP 1066B                      breakpoint on PresentFlip [UNCERTAIN:
-                                linear-vs-segmented form under DOS4GW]
-  watchpoint variants + a log/dump-to-file command for the per-hit
-  state dump [UNCERTAIN: exact names - candidates in the help output]
+AUTOMATION ROUTES in this pin (2026.08.02):
+  1. Integrated debugger commands, seedable via -c:
+     BPINT 08  break on the IRQ0 tick        [UNCERTAIN: exact name]
+     BPLM <linear>  linear-memory breakpoint [UNCERTAIN: exact name]
+     D <linear>     dump memory              [UNCERTAIN: exact name]
+  2. [script] startup.js hook (reference conf section [script]): runs a
+     JS file at startup. API surface NOT validated - do not guess; write
+     and prove watch callbacks during the interactive baselining run,
+     then bake a committed startup.js.
 
 CALIBRATION CHECKLIST for the first interactive run:
-  1. smoke mode green (done unattended if it passes)
-  2. boot to shell, confirm mount is read-only at the sandbox layer
-  3. game mode launch, cycles=fixed 60000: audio dropouts? lower the
-     pin DELIBERATELY and re-baseline (D19/D29)
-  4. verify watch syntax, then record the exact command list here
-  5. first golden watch dump = the runtime-side anchor set vs the CPU
-     baseline (scene/sim/frame/audio hashes from parity_harness)
+  1. smoke gate green (unattended, this unit)
+  2. sandbox perms verified: flatpak info shows home revoked, runtime only
+  3. game mode launch at cycles=fixed 60000: audio dropouts? lower the pin
+     DELIBERATELY + re-baseline (D19/D29)
+  4. verify debugger command names + the linear conversion (INT3 _entry)
+  5. record the exact verified command list HERE, replacing UNCERTAIN tags
+  6. first golden watch dump = runtime-side anchors to diff against the
+     CPU baseline (D28: scene 0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832,
+     frame 0x87263f149564ad25, audio 0xc862e45d2e95ad29)
