@@ -1,0 +1,7 @@
+[package]
+name = "bedlam-render"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bedlam-core = { path = "../bedlam-core" }
