@@ -14,7 +14,6 @@ CLAIMS="$STATE/claims"
 STALE=300
 MAXSPAWN=16
 MAXAGENTS=3          # adaptive concurrency: target ceiling
-CLAIM_TTL=4200
 CONC_MIN=1
 CONC_MAX=3
 CONC_FILE="$STATE/concurrency"
@@ -79,17 +78,9 @@ flock -n 9 || exit 0
 
 write_status
 
-# reap stale claims (ghost died without releasing)
-now=$(date +%s)
-for c in "$CLAIMS"/*.claim; do
-  [ -e "$c" ] || continue
-  ts=$(stat -c %Y "$c" 2>/dev/null || echo 0)
-  if [ $(( now - ts )) -gt "$CLAIM_TTL" ]; then
-    echo "$(date -Is) reaped stale claim $(basename "$c") (age $((now-ts))s)" >> "$STATE/nudge.log"
-    rm -f "$c"
-  fi
-done
-
+# Reap unlocked reservations and dead-worker claims after five minutes.
+# Live workers hold an advisory lock, so their claim age is unbounded.
+"$PLAN_DIR/tools/nudge-reap-claims.sh" "$CLAIMS" "$STATE/nudge.log"
 
 # --- adaptive concurrency controller ---
 # state: $CONC_FILE holds current limit. On a failed run (no progress +
