@@ -430,6 +430,28 @@
   a shared path, re-check git log + tracked-file mtimes (a lane can be
   claimed between two of your own commands); (3) fish has no heredocs -
   forgot the bash -c wrapper AGAIN, wasted one cycle.
+  ADDENDUM (same run, 04:55): the sibling DIED at 04:52:40
+  (nudge.log: agent item 1 failed, transport rc=1, progress=1) while in
+  WATCH MODE - its transcript tail shows it had detected this run
+  contamination at 04:52:09 and correctly stood down ("no writes from
+  me") before dying. Its last durable artifacts = 846ebab + b684bee
+  (skeleton: lib.rs + mixer.rs + script.rs + Cargo.toml + workspace
+  member + Cargo.lock, all committed and clean). The lost
+  tests/determinism.rs content is NOT recoverable: nudge-run.log
+  records only orchestrator text + command outputs, never heredoc
+  payloads (grep-verified, zero content markers from EITHER session).
+  Respawn plan of record: adopt the stale claim per protocol, write the
+  determinism suite fresh against the COMMITTED b684bee public API
+  (20-voice pool, script.rs sequencer semantics, DESIGN-AUDIO as pinned
+  by 846ebab incl. D25), run the full gate (fmt + clippy -D warnings +
+  workspace tests 155+ + miri consideration + ci.yml miri-job decision
+  per the item text), then DECISIONS/STATE check + queue rewrite +
+  delete claim + push (4 commits currently unpushed: 39305a7, 846ebab,
+  b684bee, 8b314b7). Do NOT blend implementations: this run parallel
+  draft (different API: 32-inst x 4 sub-voice pool, GAIN_Q8 dB ladder)
+  sits ONLY in /tmp/opencode/audio-src/ as reference - superseded, do
+  not copy in. Manifests were never touched by any party this unit
+  (docs + engine only).
 - 2026-08-18 04:0x (miri+hash-CI run): clean unit, claim 1-owner.claim
   honored start to finish. Fish gotcha hit AGAIN on the ci.yml edit
   (writing ${{ matrix.os }} through a bash-heredoc-inside-fish wrapper -
