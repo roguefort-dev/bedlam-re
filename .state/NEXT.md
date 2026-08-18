@@ -617,6 +617,20 @@
   echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
+- 2026-08-18 18:39-18:4x (stand-down spawn, worker 1787071156, post-restart
+  continuation): item-1 claim reserved 18:39:16; the server restart hit right
+  after claiming, this continuation thread re-established state per the
+  verify-then-continue pattern. Recon FIRST-HAND, all read-only: tree clean,
+  1c7d4a6 pushed (0 ahead / 0 behind), ZERO orphan dosbox/wine/analyzeHeadless
+  processes (ps sweep with grep/opencode2/fish/bash-c self filtering),
+  SMOKETST.TXT artifact intact (18:07; working patterns BEDLAM +EXE +672,399
+  and DOS4GW +EXE +265,396 both present = gate evidence valid), manifests OK
+  x2 (B1 at repo root, B2 run from inside game-data-2 per the relative-path
+  gotcha). Gate has NOT failed -> per the item-1 addendum (unattended subpart
+  DONE and stable) NO smoke re-run, no other item chosen, zero
+  corpus/Ghidra/Rust writes. Interactive halves (a) DOSBox-X golden run +
+  (b) wine EXW smoke remain desktop-gated for the interactive session.
+  Claim released at close-out.
 - 2026-08-18 18:26-18:3x (stand-down spawn, worker 1787070363, double
     restart): item-1 claim reserved 18:26:03 and held through TWO server
     restarts (client died right after claiming; continuation thread
