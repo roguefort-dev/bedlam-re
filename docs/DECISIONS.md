@@ -406,3 +406,51 @@ CPU half only; D24 defers the GPU/device half). Four pins:
    OS/toolchain before a wine/DOSBox runtime diff means anything; drift
    in these values with unchanged inputs = an engine determinism bug,
    never a harness bug to paper over.
+
+## D29 - DOSBox-X differential-harness sandbox + config pins (2026-08-18)
+
+Context: P4 runtime half, unattended-safe subparts (the interactive launch
+stays gated). The harness compares the original B2 DOS build under the
+pinned DOSBox-X against the D28 CPU baseline of parity_harness.
+
+1. SANDBOX: the flathub app carries a STATIC FINISH ARG filesystems=home
+   (whole home rw). Per-path :ro override grants are illusory - the
+   permission union takes the most permissive grant. Verified empirically
+   via flatpak info --show-permissions. Correct posture: --reset, then
+   --nofilesystem=home + --filesystem=<repo>/runtime. game-data becomes
+   invisible to the emulator (write isolation by construction) and the
+   corpus is reached via an rsync scratch copy runtime/harness-corpus
+   (writable C: for saves); output goes to runtime/harness-out as D:.
+2. CORE PIN: core=normal (interpreter) - watchpoint/debugger accuracy and
+   the most reproducible core across hosts; dynamic recompilation caches
+   are not a stable baseline for watch diffs. cputype=pentium pinned
+   explicitly (auto = a 486 tolerating Pentium insns, a vaguer target).
+3. CYCLES: fixed 60000 (approx Pentium-100 class) as the STARTING PIN -
+   chosen, not calibrated: the value is frozen until the first interactive
+   calibration run; any change is a pin change + golden re-baseline (D19
+   discipline). fixed (not auto/max) so the per-frame cycle budget is
+   host-independent.
+4. MACHINE/VIDEO: svga_s3 for VESA VBE banked mode 0x101 (B2 pages {0,5},
+   census 7.7d; UNIVBE must NOT run - svga_s3 supplies VBE natively);
+   vmemsize=2 MB (dual 300KB pages + cursor block) in the [video] section
+   (its canonical home in 2026.08.02); memsize=16.
+5. GOLDEN-PATH PURITY: render scaler=none + aspect=false (raw framebuffer);
+   mixer sample accurate=true rate=48000 + sbtype=sb16 220/7/1/5 (the HMI
+   driver class the B2 corpus probes) so the 11025 Hz native stream is
+   host-resampled exactly once, reproducibly.
+6. HEADLESS SMOKE GATE: driver smoke mode boots DOS on dummy A/V, mounts the
+   scratch corpus + D:, dirs the corpus root into D:SMOKETST.TXT and exits;
+   GATE = the file lists BEDLAM.EXE (672399 B) and DOS4GW.EXE (265396 B).
+   This is the unattended-safe regression test for the whole sandbox+
+   conf+driver stack; it passed first-hand 2026-08-18.
+7. WATCH SET: census-verified addresses only (RNG pairs 0x11ef18/1a +
+   0x11ef1c/1e per census L301/307, fade 0x11ef88, palette bank 0x11f138,
+   display start 0x11ef38, flip lock 0x8008e, campaign linear 0x12576c,
+   mode flag 0x11f11c, timeout 0x11f0c4, ISR phase 0x11f0c8, saves
+   0x8b1d4) + PresentFlip@0x1066b as the frame trigger + PcmMixerService@
+   0x136e0 for the audio side. Debugger command names and the startup.js
+   route are UNCERTAIN until verified in-session (checklist in the
+   skeleton). Three addresses from a dead sibling draft (0x11ef7c, 0x11f0c0,
+   0x11efc4) had zero census/STATE backing despite verified tags and were
+   DROPPED - close-out verification is not optional even for ghost
+   survivors (75b17a8 lesson, second occurrence).
