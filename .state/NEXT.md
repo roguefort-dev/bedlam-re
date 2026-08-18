@@ -1,25 +1,16 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2] B2 episode-loop progression + INT8-counter readers (BedlamWatcom
-   -process BEDLAM.EXE -noanalysis passes only - NEVER a second import;
-   javac-precompile new scripts vs the Ghidra jars first - getMnemonic-
-   String not getMnemonic). From census sec 6: (a) readers of the seven
-   Int8TickHandler counters (0x801a6, 0x80010, 0x11f158, 0x11f0c8,
-   0x11f0c4, 0x11f0b4, 0x11f0b0) - which gate sim/render vs satellites;
-   (b) DAT_0012576c / DAT_00126848 / DAT_00126858 progression writers
-   (how a completed level advances slot+sub; save-file FUN_00050a87
-   block); (c) decompile FUN_0001066b present helper + FUN_000136e0
-   background service; (d) resolve zone-letter dword[0]=25 semantics
-   (intro/endgame?) around 0x81dda; (e) B2 game-loop pacing: where does
-   the sim wait (vretrace only, or counter gate) - the D16-equivalent
-   question for the DOS build.
+1. [P3] bedlam-render + bedlam-platform wgpu skeleton per D20 and
+   docs/DESIGN-RENDER.md (parity path = canonical indexed 640x480 frame
+   scaled on GPU; enhanced path = native-resolution world/UI passes,
+   non-parity; resolution/backend never feed simulation). Promote the
+   matching backlog item; keep the crate hermetic-deterministic per D17
+   boundary rules (interpolation alpha + present timing = presentation
+   only, never sim state). Cargo fmt + clippy -D warnings before commit;
+   workspace tests must stay 132+ green.
 
 ## Backlog (not yet started)
-- P3: bedlam-render + bedlam-platform wgpu skeleton per D20 and
-  docs/DESIGN-RENDER.md: parity path = canonical indexed 640x480 frame scaled
-  on GPU; enhanced path = native-resolution world/UI passes, non-parity;
-  resolution/backend never feed simulation.
 - P3: Miri pass over bedlam-core + cross-OS per-tick hash CI job (PLAN sec 7
   charter item, from first playable tick onward).
 - P4 follow-up: interactive EXW smoke launch under tools/runtime/wine-exw.sh
@@ -30,7 +21,41 @@
   see RE-EXW-TICK.md tick2 section); name the 4 ddraw surface slots roles
   (back/front/...) via FUN_0044a9ac/FUN_0044ad18.
 
+- P2 cosmetic follow-up (from census sec 7 residuals): campaign index
+  accounting (25 reachable zone-letter indices vs 27 linear steps - needs
+  save-file/playthrough check), 4f02 LFB-vs-banked variant + 0x200
+  display-start units, FUN_000126c8 satellite + its 0x11ef88 gate.
+
 ## Done (append)
+- 2026-08-18 928748d+7bfac4b+aff1ae8 [P2] B2 episode-loop progression +
+   INT8-counter readers CLOSED (2x -process BEDLAM.EXE -noanalysis passes
+   this run + B2EpisDump adopted from the transport-killed 02:0x run and
+   fully re-derived; see census sec 7 + D23). (a) ALL SEVEN counters
+   classified - NONE gate sim/render: 0x801a6/0x80010 = audio tick/position
+   bases (stub reset + ms=x10 vs real driver hi-res tick+PIT-phase clock),
+   0x11f158/0x11f0b4 = DEAD (3-way proof), 0x11f0c8 = ISR-internal phases
+   (palette &7, mouse &1), 0x11f0c4 = 100Hz timeout base (WaitTicks100Hz
+   zero+spin; 10 sites: 7x 2000-tick screens + 750 + 2x 500), 0x11f0b0 =
+   50ms micro-delay. (b) Episode loop decoded: linear 0..26 +1 per completed
+   mission; mask |= 1<<(sub-1); stage-slot++ when mask == full-mask[0x81d9a]
+   {0,1,0xf x6} + zone-complete cutscene (LOAD_UK/US.BIN); SUB =
+   PLAYER-selected in MapRoomSelect@0x50a87 (BRF_* backdrops per slot 2..8,
+   mission formula re-derived there); saves 5x61B @0x8b1d4 {mask,slot,linear
+   word,money,stats}. (c) PresentFlip@0x1066b = VESA page flip (bank pair
+   {0,5}, display start 0<->0x200, ISR+flip locks, WaitVRetrace, 0x96-dword
+   cursor block copy) + PcmMixerService@0x136e0 = 20-channel PCM voice
+   walker (spawn/free sub-voices) gated by triple flag 0x11ef50/24/0x11f0e0.
+   (d) zone dword[0]=25 = SENTINEL (min formula index = 1; boot plants
+   zone=1/mission=1 as constants; values 7/8 = special screens). (e) VERDICT:
+   mission loop = present-paced vblank, ZERO counter reads in loop -> D16
+   confirmed on DOS, D23. Bonus: B2 audio = IRQ0-shared 11025Hz PCM driver
+   (PIT reprogram on arm, driver struct 0x1276dc, same native rate as EXW);
+   video = VESA 0x101 640x480x8 dual-page vs 320x240 logical = 2x scale;
+   g_flip_lock@0x8008e guards the 50Hz ISR cursor draw (corrects the
+   gates-the-mixer guess); g_snd_handles@0x8abf8 = runtime-filled sound
+   handles (corrects endgame-dispatch guess). 30 fns + 33 labels persisted;
+   orphan stub/driver callbacks (0x12ecf/ee4/eef, 0x607b0, 0x686b0/d0/740)
+   created as functions. Manifests OK x2 (Ghidra passes read .rep only).
 - 2026-08-18 2df7664+c3b1552+9b4d119 [P2] B2 entry-chain naming +
   tick-source hunt + zone/stride CLOSED (3x -process BEDLAM.EXE
   -noanalysis, no import; full 671-fn decompile sweep dumped as
@@ -304,6 +329,19 @@
   TimerCallback promoted+decompiled, 675-fn DB at docs/exw-functions.txt, D9).
 - 2026-08-17 32cdd7b [P2] EXW main-loop RE done (boot chain, main@0044d6e8,
   init/pump/WndProc/timer anchored). Docs: docs/RE-EXW-MAINLOOP.md.
+
+- 2026-08-18 02:3x-03:xx (episode-loop run): clean unit from the adopted
+  claim. Arrived to find untracked B2EpisDump.java + complete b2-epis.txt
+  (122KB) from the 02:07 transport-killed predecessor (agent-1787010999
+  died mid-(e)-analysis; its log tail carried two counter findings which I
+  re-derived independently - both held). Per the ExwTickSats lesson:
+  inspected + adopted the WIP instead of rewriting. 3 commits (scripts,
+  names, docs) + this queue rewrite; no re-import (2x -process -noanalysis
+  only, pre-checked pgrep each time); javac precompile caught an
+  AddLabelCmd.applyTo arity slip before it became an OSGi ghost (rule
+  pays). Fish gotcha again: $? in a compound command aborts the whole line
+  at parse time BEFORE anything runs (pgrep guard included) - use plain
+  echo separators. Manifests OK after (B1 repo-root, B2 from game-data-2).
 
 ## Run notes
 - 2026-08-18 00:1x-00:2x (item3-dup watch run; stood down, NO work files

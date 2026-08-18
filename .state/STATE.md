@@ -75,3 +75,22 @@
   fx, in-crate FNV-1a state hash, versioned b"BDLR" replay + b"BDLS"
   snapshot; 132 tests green, clippy clean, manifest OK. Next P3: render
   crate skeleton (design note a3ad066), Miri + cross-OS hash CI.
+
+- CLOSED 2026-08-18 (episode-loop run, 928748d+7bfac4b+aff1ae8 + adopted dead-run
+  B2EpisDump): B2 EPISODE LOOP + COUNTER VERDICTS DONE (census sec 7, D23).
+  All 7 INT8 counters classified - NONE gate sim/render (2 audio bases
+  0x801a6/0x80010, 2 DEAD 0x11f158/0x11f0b4, ISR phases 0x11f0c8, 100Hz
+  timeout base 0x11f0c4 w/ WaitTicks100Hz, 50ms delay 0x11f0b0). Mission loop
+  = present-paced VESA page flip + vblank (D16 architecture CONFIRMED on
+  DOS, D23). Episode progression: linear 0..26 + per-stage-slot completed
+  mask (full-mask table 0x81d9a) + stage-slot advance w/ zone-complete
+  cutscene; sub = PLAYER-selected in MapRoomSelect (mission-select UI, BRF_*
+  backdrops); saves = 5 x 61B records {mask,slot,linear,money,stats}.
+  B2 audio = IRQ0-shared 11025 Hz PCM driver (PIT reprogram on arm; stub
+  ms-clock x10 vs hi-res tick+PIT-phase) - same native rate as EXW.
+  Video = VESA 0x101 640x480x8, dual pages bank {0,5} display-start {0,
+  0x200}, 640-byte stride + 320x240 logical space = 2x scale. Zone letters
+  dword[0]=25 = sentinel (unreachable index). 30 fns + 33 labels persisted;
+  orphan stub/driver callbacks created as functions. Open residuals queued:
+  27-vs-25 step accounting, LFB-vs-banked 4f02 variant, 0x200 units,
+  FUN_000126c8 satellite.
