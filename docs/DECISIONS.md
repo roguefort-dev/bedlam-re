@@ -297,3 +297,25 @@ space (2x pixel scale) - vs EXW native 640x480 logical; and audio at 11025
 Hz sharing IRQ0 with the game tick in the DOS build (HMI-style PIT
 reprogramming) - a PC-specific detail the reimplementation abstracts behind
 the fixed-rate service clock.
+
+## D24 - P3 presentation skeletons landed; wgpu pinned at 27.0.1 for the skeleton (2026-08-18)
+
+D20 initial target implemented (ff8fb17 bedlam-render + d2b7fb8
+bedlam-platform). bedlam-render: pure state -> canonical Frame (640x480x8
+indices + 256x6-bit palette + palette_dirty), parity_hash = FNV-1a over
+indices then 6-bit palette, fixed pass order, camera clamp 9..631/9..463,
+alpha ignored with prev_sim = None (golden config). bedlam-platform: pure
+Integer/Fit/Fill + nearest/linear presentation geometry, wgpu parity
+pipeline (R8Uint index texture per frame, R32Uint packed 6-bit palette
+uploaded only on palette_dirty - the 004ee9b6 handshake analog,
+fullscreen-triangle WGSL expands Original v<<2 default / Full then scales;
+indices never interpolated). Dependency pin: wgpu 27.0.1 + pollster 0.4.0
+(Cargo.lock) - a mature line rather than 30.x latest; the FINAL version
+call stays with the P4 dependency spike (PLAN sec 6 P4 item 1) and a later
+major bump is presentation-only surgery because goldens and the parity
+hash never touch the GPU path (CPU-side over the canonical frame).
+Boundary verified: platform consumes bedlam-render Frames only (never
+bedlam-core), no clock in either crate, forbid(unsafe_code), the only
+float in render is the presentation alpha. Workspace 153 tests green,
+fmt + clippy -D warnings clean; the GPU test skips gracefully without an
+adapter so the ubuntu/windows CI matrix stays deterministic.

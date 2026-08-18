@@ -1,10 +1,17 @@
 # DESIGN-RENDER - bedlam-render crate design note (P3; elaborates D9/D12/D16/D17)
 
-Status: DESIGN NOTE ONLY - no crate code in this run (2026-08-18). The crate
-lands in a later P3 unit once the bedlam-core skeleton exists. Every RE claim
-below carries an address anchor + confidence tag per PLAN sec 9; design
-choices are tagged [design]. Where this note proposes something the RE has
-not settled, it says so in sec 11 instead of guessing.
+Status: IMPLEMENTED AS SKELETON 2026-08-18 (ff8fb17 + d2b7fb8): engine/
+bedlam-render (secs 1-7; 12 tests) and engine/bedlam-platform (secs 8-9
+parity path; 9 tests incl. a real offscreen GPU round-trip that SKIPS,
+never fails, on hosts without an adapter). Pinned in code: the Frame/
+palette/parity-hash contract, VgaExpand policy, fixed pass ORDER, camera
+clamp + interpolation-off golden config, palette_dirty derivation, pure
+scale/uv geometry, and the wgpu upload/palette-expand/fullscreen-triangle
+scaler (D20 initial target). Pass CONTENT remains stub until the P4
+map/sprite/text passes land. Every RE claim below carries an address
+anchor + confidence tag per PLAN sec 9; design choices are tagged
+[design]. Where this note proposes something the RE has not settled, it
+says so in sec 11 instead of guessing.
 
 ## 1. The contract (D9, restated mechanically)
 

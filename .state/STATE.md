@@ -94,3 +94,18 @@
   orphan stub/driver callbacks created as functions. Open residuals queued:
   27-vs-25 step accounting, LFB-vs-banked 4f02 variant, 0x200 units,
   FUN_000126c8 satellite.
+- CLOSED 2026-08-18 (render+platform unit): P3 PRESENTATION SKELETONS DONE
+  (ff8fb17 + d2b7fb8, D24). engine/bedlam-render = pure state->canonical
+  640x480x8 Frame + 6-bit palette + FNV parity hash, fixed pass order
+  (world->sprites->rows->overlays->entities), camera clamp, palette_dirty
+  derivation, 12 tests. engine/bedlam-platform = pure scale/uv geometry
+  (Integer default/Fit/Fill) + wgpu 27.0.1 parity pipeline (index tex per
+  frame + packed palette tex on dirty + fullscreen-triangle WGSL
+  palette-expand/scale, Original v<<2 default), offscreen GPU round-trip
+  test that skips without an adapter, 9 tests. Workspace 153 green, clippy
+  -D warnings + fmt clean. Provenance: code landed by the 03:00 worker
+  whose client died transport rc=1 at 03:05 while its server session
+  finished both commits (03:07, 03:17) then died before the queue rewrite;
+  the 03:32 respawn verified the work (153 green incl. real GPU test,
+  fmt/clippy clean, manifests OK x2) instead of redoing it and closed the
+  unit. Next P3: Miri over bedlam-core + per-tick hash CI job.
