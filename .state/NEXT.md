@@ -26,6 +26,26 @@
 
 ## Done (append)
 
+- 2026-08-18 19:48-19:5x (stand-down unit, worker 1787075306, post-restart
+    continuation, two restarts survived): claim 1-owner.claim held by this
+    session (reserved 19:48:26; restarts hit during initial reads and again
+    after recon completed but before the NEXT.md write - pre-write log =
+    heartbeat + PAUSE/claims/queue reads + read-only recon, ZERO own
+    mutations; the only own mutation ever made is this NEXT.md Done entry
+    itself). Recon FIRST-HAND this run, all read-only: branch in sync with
+    origin at d9fb40a (0 ahead / 0 behind), zero orphan dosbox/wine/
+    analyzeHeadless processes (ps sweep hits = this worker own nudge
+    launcher only, self-filtered), SMOKETST.TXT 18:07 intact (BEDLAM EXE
+    672,399 + DOS4GW EXE 265,396 = gate evidence valid), manifests OK x2
+    (B1 = MANIFEST.sha256 at repo root, run from repo root; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha).
+    /tmp STILL 100 pct full (16G/16G, 0 avail) re-confirmed first-hand -
+    keep staging scratch repo-local until cleared. Gate has NOT failed ->
+    NO smoke re-run per the item-1 addendum (unattended subpart DONE and
+    stable), no other item chosen (backlog empty), zero corpus/Ghidra/
+    Rust writes. Interactive halves (a) DOSBox-X golden run + (b) wine
+    EXW smoke remain desktop-gated for the interactive session. Claim
+    released at close-out.
 - 2026-08-18 19:41-19:4x (stand-down unit, worker 1787074882, post-restart
     continuation, multiple restarts survived): claim 1-owner.claim held
     by this session (reserved 19:41:22; restarts hit during initial reads,
