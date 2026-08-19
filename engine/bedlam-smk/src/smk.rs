@@ -704,9 +704,7 @@ mod tests {
         }
 
         // Frame types
-        for _ in 0..total_frames {
-            out.push(0u8);
-        }
+        out.resize(out.len() + total_frames as usize, 0u8);
 
         // Huffman tree chunk
         out.extend_from_slice(&tree_chunk);

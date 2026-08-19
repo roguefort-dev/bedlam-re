@@ -52,7 +52,15 @@ impl AudioTrack {
         }
 
         let unpack_size = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-        self.buffer_size = unpack_size;
+        // PATCH (bedlam-re 2026-08-19): upstream trusted the stream-declared
+        // unpacked size, which (a) indexes past `buffer` on malformed data
+        // and (b) leaves buffer_size > buffer.len(), making
+        // Smk::audio_data slice-panic afterwards. Clamp to the allocated
+        // buffer; well-formed streams always declare unpacked sizes <= the
+        // header max-buffer size, so decoded output is unchanged for valid
+        // files.
+        let buf_size = (unpack_size as usize).min(self.buffer.len());
+        self.buffer_size = buf_size as u32;
 
         let mut bs = BitStream::new(&data[4..]);
 
@@ -94,8 +102,21 @@ impl AudioTrack {
             None
         };
 
+        // PATCH (bedlam-re 2026-08-19): the initial-sample writes below are
+        // unconditional upstream; reject streams whose track buffer cannot
+        // even hold them instead of panicking.
+        let need = if is_16bit {
+            if is_stereo { 4 } else { 2 }
+        } else if is_stereo {
+            2
+        } else {
+            1
+        };
+        if self.buffer.len() < need {
+            return Err(SmkError::InvalidData("DPCM: track buffer too small"));
+        }
+
         let buf = &mut self.buffer;
-        let buf_size = unpack_size as usize;
 
         if is_16bit {
             // 16-bit DPCM: work with i16 samples via the byte buffer.
@@ -264,6 +285,43 @@ mod tests {
         t.render(&data).unwrap();
         assert_eq!(t.buffer_size, 3);
         assert_eq!(&t.buffer[..3], &[0x80, 0x80, 0x80]);
+    }
+
+    // PATCH (bedlam-re) regression tests: malformed DPCM must produce typed
+    // errors (or clamped output), never panics.
+    #[test]
+    fn dpcm_unpack_size_clamped_to_buffer() {
+        let mut t = make_track(1, 8);
+        t.compress = AudioCompress::Dpcm;
+        t.buffer = vec![0u8; 4];
+
+        // marker, mono, 8-bit, tree0: empty (always decodes 0)
+        let mut bits: Vec<u8> = vec![1, 0, 0, 0, 0];
+        for i in 0..8 {
+            bits.push((0x80u8 >> i) & 1); // initial sample 0x80
+        }
+        let bs_bytes = bits_to_bytes(&bits);
+
+        let mut data = Vec::new();
+        data.extend_from_slice(&0xFFFF_0000u32.to_le_bytes()); // huge declared size
+        data.extend_from_slice(&bs_bytes);
+
+        t.render(&data).unwrap();
+        assert_eq!(t.buffer_size, 4); // clamped to buffer.len()
+        assert_eq!(&t.buffer[..4], &[0x80, 0x80, 0x80, 0x80]);
+    }
+
+    #[test]
+    fn dpcm_buffer_too_small_is_error() {
+        let mut t = make_track(1, 8);
+        t.compress = AudioCompress::Dpcm;
+        t.buffer = vec![0u8; 0];
+
+        // bits: marker(1), mono(0), 8-bit(0), empty tree0(0,0) => 0x07
+        let mut data = Vec::new();
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.extend_from_slice(&[0x07]);
+        assert!(t.render(&data).is_err());
     }
 
     #[test]

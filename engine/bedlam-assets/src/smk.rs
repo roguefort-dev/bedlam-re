@@ -1,7 +1,26 @@
-//! SMK2/SMK4 video header (the first 104 bytes). Full frame decoding is a
-//! separate future task; this captures the header fields the tool reports.
+//! SMK2/SMK4 container: raw header facts (first 104 bytes) plus the
+//! codec-neutral SmkStream decode seam (D30). The vendored pure-Rust
+//! decoder behind the seam is an implementation detail: engine code sees
+//! only the types below, so a future backend swap rewrites this one module
+//! and nothing else.
+//!
+//! Header layout (verified three ways in DECISIONS.md D30: vendored-crate
+//! parse order, libsmacker, and physical bytes of TITLE.SMK):
+//! magic@0, width@4, height@8, frames@12, rate@16, flags@20,
+//! audio_sizes[7]@24..52, tree_chunk_size@52, tree_size[4]@56..72,
+//! audio_rate[7]@72..100, dummy@100..104, frame table@104.
 
 use crate::{u32le, AssetsError};
+use smk::{FrameStatus, Smk, SmkError};
+
+/// Allocation caps applied before the backend sees any bytes: hostile
+/// input must produce a typed error, never a panic or an unbounded
+/// allocation. Calibrated against the shipped corpus (largest is
+/// TITLE.SMK: 640x320, 1227 frames, tree chunk 145697B, audio max-buffer
+/// 11764B) with at least 16x headroom everywhere.
+const MAX_PIXELS: u64 = 16 * 1024 * 1024;
+const MAX_FRAMES: u32 = 1_000_000;
+const MAX_TREE_BYTES: u32 = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmkHeader {
@@ -39,13 +58,12 @@ pub fn parse_smk_header(data: &[u8]) -> Result<SmkHeader, AssetsError> {
         return Err(AssetsError::BadMagic);
     }
     let audio_sizes: Vec<u32> = (0..7).map(|i| u32le(data, 24 + i * 4)).collect();
-    let tree_sizes: Vec<u32> = vec![
-        u32le(data, 52),
-        u32le(data, 56),
-        u32le(data, 60),
-        u32le(data, 64),
-    ];
-    let audio_rates: Vec<u32> = (0..7).map(|i| u32le(data, 68 + i * 4)).collect();
+    // D30-corrected offsets: tree_chunk_size@52 (not part of this schema),
+    // tree_size[4]@56..72, audio_rate[7]@72..100. The P1-era code read trees
+    // from [52,56,60,64] and rates from 68, which shifted tree_chunk_size
+    // into tree_sizes[0] and rate dword 0 into tree_sizes[3].
+    let tree_sizes: Vec<u32> = (0..4).map(|i| u32le(data, 56 + i * 4)).collect();
+    let audio_rates: Vec<u32> = (0..7).map(|i| u32le(data, 72 + i * 4)).collect();
     Ok(SmkHeader {
         magic: String::from_utf8_lossy(&data[0..4]).to_string(),
         width: u32le(data, 4),
@@ -56,6 +74,244 @@ pub fn parse_smk_header(data: &[u8]) -> Result<SmkHeader, AssetsError> {
         audio_sizes,
         tree_sizes,
         audio_rates,
+    })
+}
+
+/// Vertical scaling declared by the container flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkYScale {
+    None,
+    Double,
+    Interlace,
+}
+
+/// Audio codec of a track, derived from the container rate dword
+/// (bits 0x0C000000 = Bink, else bit 0x80000000 = DPCM, else raw PCM).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkAudioCodec {
+    Raw,
+    Dpcm,
+    Bink,
+}
+
+/// Facts about one audio track, derived from the container rate dword.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmkAudioTrackMeta {
+    pub codec: SmkAudioCodec,
+    pub channels: u8,
+    pub bitdepth: u8,
+    pub rate_hz: u32,
+}
+
+/// Container facts, derived once at open from the raw header. Exact
+/// integers only: the backend microsecond value is an f64 and never
+/// crosses this seam.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmkStreamInfo {
+    pub width: u32,
+    pub height: u32,
+    pub frames: u32,
+    /// Microseconds per frame (raw field > 0: ms * 1000; < 0: -raw * 10;
+    /// 0: the format default 100000).
+    pub us_per_frame: u64,
+    pub ring_frame: bool,
+    pub y_scale: SmkYScale,
+    pub audio: [Option<SmkAudioTrackMeta>; 7],
+}
+
+/// Frame-advance status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkFrameStatus {
+    /// More frames follow.
+    More,
+    /// Last frame of the stream (or of a ring pass).
+    Last,
+    /// Stream finished; further advances keep returning Done.
+    Done,
+}
+
+/// Codec-neutral decode seam over an in-memory SMK stream. The stream is
+/// fully validated at open (see [`SmkStream::open`]), so decode methods
+/// only fail with typed [`AssetsError`]s on malformed data.
+pub struct SmkStream {
+    inner: Smk,
+    info: SmkStreamInfo,
+}
+
+impl SmkStream {
+    /// Open a full in-memory SMK stream. The buffer is checked against the
+    /// structural invariants and allocation caps of the format before the
+    /// backend ever sees it, so hostile input can only produce typed
+    /// errors, never panics or unbounded allocation.
+    pub fn open(data: &[u8]) -> Result<SmkStream, AssetsError> {
+        let info = validate(data)?;
+        let mut inner = Smk::open_memory(data).map_err(map_err)?;
+        // Deterministic decode configuration: video plus every declared
+        // audio track. The backend ships with tracks disabled; keeping that
+        // choice inside the seam means callers cannot forget it.
+        inner.enable_all(0xFF);
+        Ok(SmkStream { inner, info })
+    }
+
+    /// Container facts, frozen at open.
+    pub fn info(&self) -> &SmkStreamInfo {
+        &self.info
+    }
+
+    /// Decode frame 0 (a fresh open sits before it).
+    pub fn first_frame(&mut self) -> Result<SmkFrameStatus, AssetsError> {
+        self.inner.first_frame().map(status).map_err(map_err)
+    }
+
+    /// Advance one frame. After the end of a non-ring stream this keeps
+    /// returning [`SmkFrameStatus::Done`] without decoding.
+    pub fn next_frame(&mut self) -> Result<SmkFrameStatus, AssetsError> {
+        self.inner.next_frame().map(status).map_err(map_err)
+    }
+
+    /// Zero-based index of the frame decoded last.
+    pub fn frame_index(&self) -> u32 {
+        self.inner.info().current_frame
+    }
+
+    /// Current raster: width * height palette indices, row-major.
+    pub fn pixels(&self) -> &[u8] {
+        self.inner.video_data()
+    }
+
+    /// Current palette (256 RGB entries, 6-bit values already expanded).
+    pub fn palette(&self) -> &[[u8; 3]; 256] {
+        self.inner.palette()
+    }
+
+    /// Bytes decoded for the chunk of `track` on the current frame (empty
+    /// when this frame carries no chunk for that track, None for a track
+    /// index outside 0..7).
+    pub fn audio_packet(&self, track: usize) -> Option<&[u8]> {
+        if track > 6 {
+            return None;
+        }
+        self.inner.audio_data(track as u8)
+    }
+}
+
+/// The vendored decoder is not Debug; expose the frozen container facts
+/// instead so Result::unwrap_err and friends work on the seam.
+impl std::fmt::Debug for SmkStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("SmkStream")
+            .field("info", &self.info)
+            .finish_non_exhaustive()
+    }
+}
+
+fn status(s: FrameStatus) -> SmkFrameStatus {
+    match s {
+        FrameStatus::More => SmkFrameStatus::More,
+        FrameStatus::Last => SmkFrameStatus::Last,
+        FrameStatus::Done => SmkFrameStatus::Done,
+    }
+}
+
+fn map_err(e: SmkError) -> AssetsError {
+    match e {
+        SmkError::InvalidSignature => AssetsError::BadMagic,
+        SmkError::BitstreamExhausted | SmkError::Io(_) => AssetsError::SmkTruncated,
+        SmkError::TreeBuildFailed(m) | SmkError::InvalidData(m) => AssetsError::SmkDecode(m),
+    }
+}
+
+/// Structural validation plus info derivation. Everything the backend
+/// reads after the 104-byte header (frame table, tree chunk, frame data)
+/// is proven present, and every size it would allocate is capped, so a
+/// passing buffer leaves the backend able to fail only with mapped
+/// decode errors.
+fn validate(data: &[u8]) -> Result<SmkStreamInfo, AssetsError> {
+    let h = parse_smk_header(data)?;
+
+    // Smacker rasters decode as 4x4 blocks written unguarded; a
+    // non-4-aligned raster would index out of bounds, so reject it here.
+    if h.width % 4 != 0 || h.height % 4 != 0 {
+        return Err(AssetsError::SmkInvalid);
+    }
+    if u64::from(h.width) * u64::from(h.height) > MAX_PIXELS {
+        return Err(AssetsError::SmkInvalid);
+    }
+    if h.frames == 0 || h.frames > MAX_FRAMES {
+        return Err(AssetsError::SmkInvalid);
+    }
+    if h.tree_sizes.iter().any(|t| *t > MAX_TREE_BYTES) {
+        return Err(AssetsError::SmkInvalid);
+    }
+    let ring = h.flags & 0x01 != 0;
+    let total = h.frames + u32::from(ring);
+
+    let trees_off = 104 + total as usize * 5;
+    if data.len() < trees_off {
+        return Err(AssetsError::SmkTruncated);
+    }
+    let tree_chunk = u32le(data, 52);
+    if u64::from(tree_chunk) > (data.len() - trees_off) as u64 {
+        return Err(AssetsError::SmkTruncated);
+    }
+    let data_off = trees_off + tree_chunk as usize;
+    let mut chunk_sum = 0u64;
+    for i in 0..total as usize {
+        chunk_sum += u64::from(u32le(data, 104 + i * 4) & 0xFFFF_FFFC);
+    }
+    if chunk_sum > (data.len() - data_off) as u64 {
+        return Err(AssetsError::SmkTruncated);
+    }
+
+    let mut audio: [Option<SmkAudioTrackMeta>; 7] = Default::default();
+    for (i, meta) in audio.iter_mut().enumerate() {
+        let dword = h.audio_rates[i];
+        if dword & 0x4000_0000 == 0 {
+            continue;
+        }
+        // The backend allocates the declared max buffer verbatim; a decode
+        // buffer larger than its own stream is never legitimate.
+        if h.audio_sizes[i] as usize > data.len() {
+            return Err(AssetsError::SmkInvalid);
+        }
+        let codec = if dword & 0x0C00_0000 != 0 {
+            SmkAudioCodec::Bink
+        } else if dword & 0x8000_0000 != 0 {
+            SmkAudioCodec::Dpcm
+        } else {
+            SmkAudioCodec::Raw
+        };
+        *meta = Some(SmkAudioTrackMeta {
+            codec,
+            channels: if dword & 0x1000_0000 != 0 { 2 } else { 1 },
+            bitdepth: if dword & 0x2000_0000 != 0 { 16 } else { 8 },
+            rate_hz: dword & 0x00FF_FFFF,
+        });
+    }
+
+    let us_per_frame = if h.ms_per_frame_raw > 0 {
+        h.ms_per_frame_raw as u64 * 1000
+    } else if h.ms_per_frame_raw < 0 {
+        (-(h.ms_per_frame_raw as i64)) as u64 * 10
+    } else {
+        100_000
+    };
+    let y_scale = if h.flags & 0x04 != 0 {
+        SmkYScale::Interlace
+    } else if h.flags & 0x02 != 0 {
+        SmkYScale::Double
+    } else {
+        SmkYScale::None
+    };
+
+    Ok(SmkStreamInfo {
+        width: h.width,
+        height: h.height,
+        frames: h.frames,
+        us_per_frame,
+        ring_frame: ring,
+        y_scale,
+        audio,
     })
 }
 
@@ -73,10 +329,12 @@ mod tests {
         d[20..24].copy_from_slice(&0xABCDu32.to_le_bytes());
         for i in 0..7 {
             d[24 + i * 4..28 + i * 4].copy_from_slice(&((i as u32) * 100).to_le_bytes());
-            d[68 + i * 4..72 + i * 4].copy_from_slice(&((i as u32) * 7).to_le_bytes());
+            d[72 + i * 4..76 + i * 4].copy_from_slice(&((i as u32) * 7).to_le_bytes());
         }
-        for (i, off) in [52usize, 56, 60, 64].iter().enumerate() {
-            d[*off..*off + 4].copy_from_slice(&((i as u32) * 11).to_le_bytes());
+        // tree_chunk_size@52 (kept out of this schema), tree_size[4]@56..72
+        d[52..56].copy_from_slice(&0u32.to_le_bytes());
+        for i in 0..4 {
+            d[56 + i * 4..60 + i * 4].copy_from_slice(&((i as u32) * 11).to_le_bytes());
         }
         d
     }
@@ -133,5 +391,470 @@ mod tests {
             let d: Vec<u8> = (0..len).map(|_| next()).collect();
             let _ = parse_smk_header(&d);
         }
+    }
+
+    // ---- SmkStream seam ----
+
+    /// Minimal structurally valid stream: 4-aligned raster, declared frames
+    /// of size zero, one empty-tree byte. Frames decode to all-zero output.
+    fn minimal_smk(frames: u32, w: u32, h: u32, ring: bool) -> Vec<u8> {
+        let mut d = vec![0u8; 104];
+        d[0..4].copy_from_slice(b"SMK4");
+        d[4..8].copy_from_slice(&w.to_le_bytes());
+        d[8..12].copy_from_slice(&h.to_le_bytes());
+        d[12..16].copy_from_slice(&frames.to_le_bytes());
+        d[16..20].copy_from_slice(&(-6666i32).to_le_bytes());
+        d[20..24].copy_from_slice(&u32::from(ring).to_le_bytes());
+        d[52..56].copy_from_slice(&1u32.to_le_bytes()); // tree chunk: 1 byte
+        for i in 0..4 {
+            d[56 + i * 4..60 + i * 4].copy_from_slice(&16u32.to_le_bytes());
+        }
+        let total = frames + u32::from(ring);
+        d.resize(d.len() + total as usize * 5, 0);
+        d.push(0); // empty trees: 4 x (no-tree bit + terminator bit)
+        d
+    }
+
+    #[test]
+    fn stream_info_from_minimal() {
+        let s = SmkStream::open(&minimal_smk(3, 8, 8, false)).unwrap();
+        let info = s.info();
+        assert_eq!((info.width, info.height), (8, 8));
+        assert_eq!(info.frames, 3);
+        assert_eq!(info.us_per_frame, 66_660);
+        assert!(!info.ring_frame);
+        assert_eq!(info.y_scale, SmkYScale::None);
+        assert!(info.audio.iter().all(|t| t.is_none()));
+    }
+
+    #[test]
+    fn stream_frame_status_sequence() {
+        let mut s = SmkStream::open(&minimal_smk(3, 8, 8, false)).unwrap();
+        assert_eq!(s.first_frame().unwrap(), SmkFrameStatus::More);
+        assert_eq!(s.frame_index(), 0);
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::More);
+        assert_eq!(s.frame_index(), 1);
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Last);
+        assert_eq!(s.frame_index(), 2);
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Done);
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Done);
+        assert_eq!(s.pixels().len(), 64);
+        assert_eq!(s.audio_packet(0).map(|p| p.len()), Some(0));
+        assert!(s.audio_packet(7).is_none());
+    }
+
+    #[test]
+    fn stream_single_frame_is_last_immediately() {
+        let mut s = SmkStream::open(&minimal_smk(1, 8, 8, false)).unwrap();
+        assert_eq!(s.first_frame().unwrap(), SmkFrameStatus::Last);
+    }
+
+    #[test]
+    fn stream_ring_wraps_instead_of_done() {
+        let mut s = SmkStream::open(&minimal_smk(2, 8, 8, true)).unwrap();
+        assert!(s.info().ring_frame);
+        assert_eq!(s.first_frame().unwrap(), SmkFrameStatus::More); // frame 0
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::More); // frame 1
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Last); // frame 2
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::More); // wrapped
+        assert_eq!(s.frame_index(), 1);
+    }
+
+    #[test]
+    fn stream_us_per_frame_encodings() {
+        let mut d = minimal_smk(1, 8, 8, false);
+        d[16..20].copy_from_slice(&40i32.to_le_bytes());
+        assert_eq!(SmkStream::open(&d).unwrap().info().us_per_frame, 40_000);
+        let mut d = minimal_smk(1, 8, 8, false);
+        d[16..20].copy_from_slice(&0u32.to_le_bytes());
+        assert_eq!(SmkStream::open(&d).unwrap().info().us_per_frame, 100_000);
+    }
+
+    #[test]
+    fn stream_audio_meta_from_rate_dwords() {
+        // track 0 exactly as TITLE.SMK declares it (D30: dword 0xC0002B11)
+        let mut d = minimal_smk(1, 8, 8, false);
+        d[72..76].copy_from_slice(&0xC000_2B11u32.to_le_bytes());
+        d[24..28].copy_from_slice(&16u32.to_le_bytes());
+        let info = SmkStream::open(&d).unwrap().info().clone();
+        let t0 = info.audio[0].unwrap();
+        assert_eq!(t0.codec, SmkAudioCodec::Dpcm);
+        assert_eq!((t0.channels, t0.bitdepth, t0.rate_hz), (1, 8, 11_025));
+
+        // exists | 16-bit | stereo, no compression bit: raw 44100 Hz stereo
+        let mut d = minimal_smk(1, 8, 8, false);
+        d[72..76].copy_from_slice(&0x7000_AC44u32.to_le_bytes());
+        d[24..28].copy_from_slice(&16u32.to_le_bytes());
+        let s = SmkStream::open(&d).unwrap();
+        let t0 = s.info().audio[0].unwrap();
+        assert_eq!(t0.codec, SmkAudioCodec::Raw);
+        assert_eq!((t0.channels, t0.bitdepth, t0.rate_hz), (2, 16, 44_100));
+
+        // Bink-compressed tracks are described but never decoded
+        let mut d = minimal_smk(1, 8, 8, false);
+        d[72..76].copy_from_slice(&0x4C00_2B11u32.to_le_bytes());
+        d[24..28].copy_from_slice(&16u32.to_le_bytes());
+        let s = SmkStream::open(&d).unwrap();
+        let t0 = s.info().audio[0].unwrap();
+        assert_eq!(t0.codec, SmkAudioCodec::Bink);
+    }
+
+    #[test]
+    fn stream_rejects_structural_violations() {
+        let bad_tree = {
+            let mut d = minimal_smk(1, 8, 8, false);
+            d[56..60].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+            d
+        };
+        let oversized_tree_chunk = {
+            let mut d = minimal_smk(1, 8, 8, false);
+            d[52..56].copy_from_slice(&1000u32.to_le_bytes());
+            d
+        };
+        let chunk_beyond_data = {
+            let mut d = minimal_smk(1, 8, 8, false);
+            d[104..108].copy_from_slice(&0x1000u32.to_le_bytes());
+            d
+        };
+        let oversized_audio_buffer = {
+            let mut d = minimal_smk(1, 8, 8, false);
+            d[72..76].copy_from_slice(&0x4000_2B11u32.to_le_bytes());
+            d[24..28].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+            d
+        };
+        let cases: Vec<(Vec<u8>, AssetsError)> = vec![
+            (vec![], AssetsError::BadMagic),
+            (b"SMK2".to_vec(), AssetsError::BadMagic),
+            (minimal_smk(3, 6, 8, false), AssetsError::SmkInvalid),
+            (minimal_smk(3, 8, 6, false), AssetsError::SmkInvalid),
+            (minimal_smk(0, 8, 8, false), AssetsError::SmkInvalid),
+            (minimal_smk(1_000_001, 8, 8, false), AssetsError::SmkInvalid),
+            (minimal_smk(1, 8192, 8192, false), AssetsError::SmkInvalid),
+            (bad_tree, AssetsError::SmkInvalid),
+            (oversized_audio_buffer, AssetsError::SmkInvalid),
+            (
+                minimal_smk(1, 8, 8, false)[..105].to_vec(),
+                AssetsError::SmkTruncated,
+            ),
+            (
+                minimal_smk(1, 8, 8, false)[..100].to_vec(),
+                AssetsError::BadMagic,
+            ),
+            (oversized_tree_chunk, AssetsError::SmkTruncated),
+            (chunk_beyond_data, AssetsError::SmkTruncated),
+        ];
+        for (data, want) in cases {
+            assert_eq!(SmkStream::open(&data).unwrap_err(), want);
+        }
+    }
+
+    #[test]
+    fn stream_determinism_two_passes() {
+        let d = minimal_smk(4, 8, 8, false);
+        let walk = || -> Vec<(u32, Vec<u8>, [[u8; 3]; 256])> {
+            let mut s = SmkStream::open(&d).unwrap();
+            let mut out = Vec::new();
+            let mut st = s.first_frame().unwrap();
+            loop {
+                out.push((s.frame_index(), s.pixels().to_vec(), *s.palette()));
+                if st != SmkFrameStatus::More {
+                    break;
+                }
+                st = s.next_frame().unwrap();
+            }
+            out
+        };
+        assert_eq!(walk(), walk());
+    }
+
+    #[test]
+    fn stream_no_panic_on_randomish_input() {
+        let mut s = 0xDEAD_BEEFu64;
+        let mut next = || {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (s >> 33) as u8
+        };
+        for len in [0usize, 4, 103, 104, 110, 4096] {
+            let d: Vec<u8> = (0..len).map(|_| next()).collect();
+            if let Ok(mut stream) = SmkStream::open(&d) {
+                let _ = stream.first_frame();
+                let _ = stream.next_frame();
+            }
+        }
+    }
+
+    // ---- synthetic full-stream builders (adopted from the interrupted
+    // predecessor draft, ported to this API; original archived under
+    // .state/scratch/smk-predecessor-tail-20260819.rs) ----
+
+    fn synth_header(
+        w: u32,
+        h: u32,
+        frames: u32,
+        ms: i32,
+        flags: u32,
+        sizes: [u32; 7],
+        rates: [u32; 7],
+    ) -> Vec<u8> {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"SMK2");
+        d.extend_from_slice(&w.to_le_bytes());
+        d.extend_from_slice(&h.to_le_bytes());
+        d.extend_from_slice(&frames.to_le_bytes());
+        d.extend_from_slice(&(ms as u32).to_le_bytes());
+        d.extend_from_slice(&flags.to_le_bytes());
+        for s in sizes {
+            d.extend_from_slice(&s.to_le_bytes());
+        }
+        d.extend_from_slice(&1u32.to_le_bytes()); // tree chunk: 1 zero byte
+        for _ in 0..4 {
+            d.extend_from_slice(&0u32.to_le_bytes()); // tree maxima: unused
+        }
+        for r in rates {
+            d.extend_from_slice(&r.to_le_bytes());
+        }
+        d.extend_from_slice(&0u32.to_le_bytes()); // dummy
+        d
+    }
+
+    /// 4x4, 2 frames, 25 fps, one raw-PCM 8-bit mono 11025 Hz audio track.
+    /// Trees: four absent Huff16 trees (8 zero bits). Frame 0 carries a
+    /// palette (entry 0 = PALMAP[1,2,3], rest zero) + audio + trailing
+    /// video pad; frame 1 carries audio + pad (video re-runs, stays zero).
+    fn synth_stream() -> Vec<u8> {
+        let mut d = synth_header(
+            4,
+            4,
+            2,
+            40,
+            0,
+            [16, 0, 0, 0, 0, 0, 0],
+            [0x4000_0000 | 11_025, 0, 0, 0, 0, 0, 0],
+        );
+        d.extend_from_slice(&17u32.to_le_bytes()); // frame0: 16B + keyframe bit
+        d.extend_from_slice(&8u32.to_le_bytes()); // frame1: 8B
+        d.push(0x03); // frame0 type: palette + audio track 0
+        d.push(0x02); // frame1 type: audio track 0
+        d.push(0x00); // tree chunk: four absent trees
+                      // frame 0 chunk (16B): palette subchunk (2*4=8), audio (4+2), pad
+        d.extend_from_slice(&[0x02, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0x00, 0x00]);
+        d.extend_from_slice(&[0x06, 0x00, 0x00, 0x00, 0xAA, 0x55]);
+        d.extend_from_slice(&[0x00, 0x00]);
+        // frame 1 chunk (8B): audio (4+3) + pad
+        d.extend_from_slice(&[0x07, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33, 0x00]);
+        d
+    }
+
+    /// Same as synth_stream but ring-flagged with a third (wrap) frame.
+    fn synth_ring_stream() -> Vec<u8> {
+        let mut d = synth_header(
+            4,
+            4,
+            2,
+            40,
+            0x01,
+            [16, 0, 0, 0, 0, 0, 0],
+            [0x4000_0000 | 11_025, 0, 0, 0, 0, 0, 0],
+        );
+        d.extend_from_slice(&17u32.to_le_bytes());
+        d.extend_from_slice(&8u32.to_le_bytes());
+        d.extend_from_slice(&8u32.to_le_bytes()); // ring wrap frame
+        d.push(0x03);
+        d.push(0x02);
+        d.push(0x02);
+        d.push(0x00);
+        d.extend_from_slice(&[0x02, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0x00, 0x00]);
+        d.extend_from_slice(&[0x06, 0x00, 0x00, 0x00, 0xAA, 0x55]);
+        d.extend_from_slice(&[0x00, 0x00]);
+        d.extend_from_slice(&[0x07, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33, 0x00]);
+        d.extend_from_slice(&[0x06, 0x00, 0x00, 0x00, 0x44, 0x55, 0x00, 0x00]);
+        d
+    }
+
+    #[test]
+    fn decode_synthetic_content() {
+        let data = synth_stream();
+        let mut s = SmkStream::open(&data).expect("open synthetic");
+        let m = s.info().clone();
+        assert_eq!((m.width, m.height), (4, 4));
+        assert_eq!(m.frames, 2);
+        assert_eq!(m.us_per_frame, 40_000);
+        assert!(!m.ring_frame);
+        assert_eq!(m.y_scale, SmkYScale::None);
+        assert_eq!(
+            m.audio[0],
+            Some(SmkAudioTrackMeta {
+                codec: SmkAudioCodec::Raw,
+                channels: 1,
+                bitdepth: 8,
+                rate_hz: 11_025,
+            })
+        );
+        for t in 1..7 {
+            assert!(m.audio[t].is_none(), "track {t} absent");
+        }
+        assert_eq!(s.first_frame().unwrap(), SmkFrameStatus::More);
+        assert_eq!(s.frame_index(), 0);
+        assert_eq!(s.pixels(), vec![0u8; 16]);
+        assert_eq!(s.palette()[0], [0x04, 0x08, 0x0C]);
+        assert_eq!(s.palette()[1], [0, 0, 0]);
+        assert_eq!(s.palette().len(), 256);
+        assert_eq!(s.audio_packet(0), Some(&[0xAAu8, 0x55][..]));
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Last);
+        assert_eq!(s.frame_index(), 1);
+        assert_eq!(s.audio_packet(0), Some(&[0x11u8, 0x22, 0x33][..]));
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Done);
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Done);
+        assert_eq!(s.audio_packet(7), None);
+    }
+
+    #[test]
+    fn decode_twice_is_identical() {
+        let data = synth_stream();
+        let run = || {
+            let mut s = SmkStream::open(&data).unwrap();
+            let mut acc = Vec::new();
+            let mut status = s.first_frame().unwrap();
+            loop {
+                acc.extend_from_slice(&s.frame_index().to_le_bytes());
+                acc.extend_from_slice(s.pixels());
+                for e in s.palette() {
+                    acc.extend_from_slice(e);
+                }
+                if let Some(p) = s.audio_packet(0) {
+                    acc.extend_from_slice(p);
+                }
+                match status {
+                    SmkFrameStatus::Last | SmkFrameStatus::Done => break,
+                    SmkFrameStatus::More => status = s.next_frame().unwrap(),
+                }
+            }
+            acc
+        };
+        assert_eq!(run(), run());
+    }
+
+    #[test]
+    fn ring_stream_walks_the_wrap_entry_then_wraps() {
+        let data = synth_ring_stream();
+        let mut s = SmkStream::open(&data).unwrap();
+        assert!(s.info().ring_frame);
+        // declared frames + the wrap entry all decode, then the pass loops
+        assert_eq!(s.first_frame().unwrap(), SmkFrameStatus::More); // 0
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::More); // 1
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::Last); // 2 (wrap)
+        assert_eq!(s.frame_index(), 2);
+        assert_eq!(s.audio_packet(0), Some(&[0x44u8, 0x55][..]));
+        assert_eq!(s.next_frame().unwrap(), SmkFrameStatus::More); // back to 1
+        assert_eq!(s.frame_index(), 1);
+    }
+
+    #[test]
+    fn truncation_sweep_stable_and_no_panic() {
+        let data = synth_stream();
+        let drain = |d: &[u8]| -> String {
+            let mut s = match SmkStream::open(d) {
+                Err(e) => return format!("open-err/{e}"),
+                Ok(s) => s,
+            };
+            let mut n = 0u32;
+            let status = match s.first_frame() {
+                Err(e) => return format!("first-err/{e}"),
+                Ok(st) => st,
+            };
+            n += 1;
+            let mut status = status;
+            loop {
+                match status {
+                    SmkFrameStatus::Last | SmkFrameStatus::Done => return format!("ok/{n}"),
+                    SmkFrameStatus::More => match s.next_frame() {
+                        Err(e) => return format!("next-err/{n}/{e}"),
+                        Ok(st) => {
+                            if st != SmkFrameStatus::Done {
+                                n += 1;
+                            }
+                            status = st;
+                        }
+                    },
+                }
+            }
+        };
+        let pass1: Vec<String> = (0..=data.len()).map(|l| drain(&data[..l])).collect();
+        let pass2: Vec<String> = (0..=data.len()).map(|l| drain(&data[..l])).collect();
+        assert_eq!(pass1, pass2);
+        assert_eq!(pass1.last().unwrap(), "ok/2");
+    }
+
+    #[test]
+    fn garbage_with_magic_prefix_never_panics() {
+        let mut s = 987_654_321u64;
+        let mut next = move || {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (s >> 33) as u8
+        };
+        for len in [0usize, 1, 10, 104, 105, 141, 300] {
+            let mut d: Vec<u8> = b"SMK2".to_vec();
+            d.extend((0..len).map(|_| next()));
+            if let Ok(mut st) = SmkStream::open(&d) {
+                let _ = st.first_frame();
+                let _ = st.next_frame();
+            }
+        }
+    }
+
+    #[test]
+    fn frame_table_allocation_bombs_rejected() {
+        // declared chunk sizes far beyond the input
+        let mut d = synth_header(4, 4, 2, 40, 0, [0; 7], [0; 7]);
+        d.extend_from_slice(&0xFFFF_FFFCu32.to_le_bytes());
+        d.extend_from_slice(&0xFFFF_FFFCu32.to_le_bytes());
+        d.push(0x00);
+        d.push(0x00);
+        d.push(0x00);
+        assert!(matches!(
+            SmkStream::open(&d),
+            Err(AssetsError::SmkTruncated)
+        ));
+        // frame tables themselves truncated (declared frames without table bytes)
+        let d = synth_header(4, 4, 100, 40, 0, [0; 7], [0; 7]);
+        assert!(matches!(
+            SmkStream::open(&d),
+            Err(AssetsError::SmkTruncated)
+        ));
+    }
+
+    #[test]
+    fn lying_dpcm_unpack_size_clamps_deterministically() {
+        // A DPCM track claiming a 16 MiB unpack size into a 16-byte buffer:
+        // the vendored patch clamps instead of panicking, so the frame
+        // decodes deterministically to a full 16-byte packet.
+        let build = || {
+            let mut d = synth_header(
+                4,
+                4,
+                1,
+                40,
+                0,
+                [16, 0, 0, 0, 0, 0, 0],
+                [0xC000_0000 | 11_025, 0, 0, 0, 0, 0, 0],
+            );
+            d.extend_from_slice(&21u32.to_le_bytes()); // frame0: 20B + keyframe bit
+            d.push(0x03); // palette + audio track 0
+            d.push(0x00); // tree chunk: four absent trees
+            d.extend_from_slice(&[0x02, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0x00, 0x00]); // palette
+            d.extend_from_slice(&[0x0C, 0x00, 0x00, 0x00]); // audio subchunk size 12
+                                                            // unpack size 0x00FFFFFF, initial bit 1, mono/8-bit flags 0, then
+                                                            // absent Huff8 trees + terminators + zero payload
+            d.extend_from_slice(&[0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x00, 0x00]);
+            d
+        };
+        let decode = || -> (u32, usize) {
+            let mut s = SmkStream::open(&build()).unwrap();
+            let st = s.first_frame().unwrap();
+            let p = s.audio_packet(0).unwrap();
+            (st as u32, p.len())
+        };
+        assert_eq!(decode(), (SmkFrameStatus::Last as u32, 16));
+        assert_eq!(decode(), decode());
     }
 }

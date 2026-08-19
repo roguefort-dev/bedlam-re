@@ -494,3 +494,42 @@ libsmacker-sys; decided unattended per the queued unit.
    decode passes produce identical SHA-256 chains over pixels+palette
    and identical audio packet counts/bytes. Fingerprints recorded in
    NEXT.md only - decoded media never enters git.
+
+
+### D30 follow-up - seam implemented, vendored patch, gate passed (2026-08-19)
+
+1. SmkStream seam implemented exactly per the lib.rs/tests contract:
+   SmkStreamInfo (integer us_per_frame re-derived from the raw rate field),
+   SmkFrameStatus, SmkYScale, SmkAudioTrackMeta (Copy) and SmkAudioCodec
+   {Raw,Dpcm,Bink} derived from the container rate dwords. enable_all(0xFF)
+   happens inside open(); the forbid(unsafe_code) lib.rs WIP was adopted.
+2. PANIC/OOM POLICY: SmkStream::open pre-validates structure and caps every
+   allocation the backend would make: raster <= 16 MiB and 4-aligned in
+   both axes (the backend writes whole 4x4 blocks unguarded), frames in
+   1..=1_000_000, per-tree size <= 4 MiB, per-track max-buffer <= input
+   size, and frame table + tree chunk + sum(chunk sizes) proven inside the
+   buffer (-> SmkTruncated). After validation the backend can only fail
+   with mapped typed errors (SmkDecode/SmkTruncated/BadMagic).
+3. VENDORED PATCH (NOTICE.md): render_dpcm clamps the stream-declared
+   unpacked size to the track buffer (upstream indexed out of bounds on
+   malformed data and left buffer_size > buffer, which made audio_data
+   slice-panic) and errors when the buffer cannot even hold the initial
+   samples. Clamp chosen over reject: behavior on well-formed streams is
+   unchanged and TITLE.SMK output is byte-identical; reject would also be
+   defensible if playback ever needs strictness.
+4. HEADER-LAYOUT FIX implemented: parse_smk_header now reads
+   tree_size[4]@56..72 and audio_rate[7]@72..100 per D30; inspect CLI
+   schema unchanged, field values corrected.
+5. GATE PASSED (TITLE.SMK, corpus-skipping, two identical full passes):
+   frames=1227 video_sha256=6aa75c55a68ab877429fea4216e730f62c281b46f75b3d27f2437fb8cd82cdd1
+   audio_sha256=73fdee8e95328c4733e3b0f135bc26af975cbd335081e79590a8c1929940c6e3
+   packets=1212 audio_bytes=901752 (duration-consistent with 81.8 s at
+   11025 Hz mono). Fingerprints only; decoded media never enters git.
+6. Mid-run incident, recorded for provenance: at 13:37 an unattributed
+   writer appended the interrupted predecessor smk.rs draft (438 lines,
+   self-inconsistent, and with one invariant that would reject TITLE.SMK:
+   requiring unpacked tree sizes to fit inside the compressed tree chunk)
+   onto the freshly written module. No process held the file afterward and
+   it did not recur (45 s canary plus the full test window). Usable test
+   ideas were ported to the contract API; the raw fragment is archived at
+   .state/scratch/smk-predecessor-tail-20260819.rs.

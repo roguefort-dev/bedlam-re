@@ -266,6 +266,10 @@ fn corpus_parses_rebuilds_and_round_trips() {
             }
             "smk" => {
                 let _ = assets::smk::parse_smk_header(&data);
+                // structural validator + backend open across the corpus
+                if let Ok(mut s) = assets::smk::SmkStream::open(&data) {
+                    let _ = s.first_frame();
+                }
                 ok += 1;
             }
             "bdl" => match stem.as_str() {
@@ -451,6 +455,7 @@ fn corpus_free_fuzz_no_panics() {
         let _ = assets::misc::parse_nme(&d);
         let _ = assets::misc::parse_bdg(&d);
         let _ = assets::smk::parse_smk_header(&d);
+        let _ = assets::smk::SmkStream::open(&d);
         let _ = assets::bdl::parse_saved_bdl(&d);
         let _ = assets::bdl::parse_hiscore_bdl(&d);
         let _ = assets::bdl::parse_options_bdl(&d);

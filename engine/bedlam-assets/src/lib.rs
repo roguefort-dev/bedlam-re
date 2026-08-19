@@ -7,9 +7,11 @@
 //!   checked; a panic here is an engine bug.
 //! - status classification ("parsed" / "heuristic-failed" / ...) is a CLI
 //!   concern; this crate returns typed `Ok(struct)` / `Err(AssetsError)`.
+#![forbid(unsafe_code)]
 
 pub mod audio;
 pub mod bdl;
+
 pub mod codecs;
 pub mod misc;
 pub mod mission;
@@ -79,6 +81,16 @@ pub enum AssetsError {
     /// (data_off + sum(sizes)). True for all shipped files.
     #[error("mrs layout: {len}B != data_off+sizes {expected}B")]
     MrsLayout { len: usize, expected: usize },
+    /// SMK container/codec decode failure (vendored decoder rejected
+    /// the data; message text is stable).
+    #[error("smk decode: {0}")]
+    SmkDecode(&'static str),
+    /// SMK byte stream ended before the structure it declares.
+    #[error("smk stream truncated")]
+    SmkTruncated,
+    /// SMK structure violates the format (bad tree, bad record sizes).
+    #[error("smk stream invalid")]
+    SmkInvalid,
     #[error(transparent)]
     Codec(#[from] CodecError),
 }

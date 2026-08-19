@@ -360,16 +360,8 @@ mod tests {
     #[test]
     fn huff16_single_leaf() {
         // Build bitstream programmatically
-        let mut bits: Vec<u8> = Vec::new();
-
-        // bit=1: tree present
-        bits.push(1);
-        // low8: bit=0 (no tree), bit=0 (term)
-        bits.push(0);
-        bits.push(0);
-        // hi8: bit=0 (no tree), bit=0 (term)
-        bits.push(0);
-        bits.push(0);
+        // bit=1: tree present; low8: no tree + term; hi8: no tree + term
+        let mut bits: Vec<u8> = vec![1, 0, 0, 0, 0];
         // cache[0]: lo=0x01 (8 bits LSB first), hi=0x00 (8 bits)
         for b in lsb_bits(0x01) {
             bits.push(b);
@@ -415,14 +407,8 @@ mod tests {
         // Set cache[0] = 0x0000 so the leaf becomes a cache escape.
         // Then at lookup time, mutate cache[0] and verify the escape resolves.
 
-        let mut bits: Vec<u8> = Vec::new();
-
-        bits.push(1); // tree present
-        // low8 empty, hi8 empty
-        bits.push(0);
-        bits.push(0);
-        bits.push(0);
-        bits.push(0);
+        // tree present; low8 empty; hi8 empty (each: no tree + term)
+        let mut bits: Vec<u8> = vec![1, 0, 0, 0, 0];
         // cache[0] = 0x0000
         for b in lsb_bits(0x00) {
             bits.push(b);
@@ -491,8 +477,8 @@ mod tests {
     /// Convert a byte value to 8 bits in LSB-first order.
     fn lsb_bits(byte: u8) -> [u8; 8] {
         let mut out = [0u8; 8];
-        for i in 0..8 {
-            out[i] = (byte >> i) & 1;
+        for (i, slot) in out.iter_mut().enumerate() {
+            *slot = (byte >> i) & 1;
         }
         out
     }
