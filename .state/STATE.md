@@ -1,5 +1,17 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-19 (P5 title-movie playback, D31): TITLE.SMK plays
+  through GameHost end-to-end - MoviePlayer fixed-step x240-us clock,
+  compose-level MovieFrame (scene pipeline replaced while a movie
+  plays, centered letterbox, palette fold PALMAP>>2 lossless), mixer
+  PCM stream bus (native u8 mono 11025 Hz FIFO under voices, loud
+  16 MiB cap), inert-until-scene host lifecycle with scene-hash
+  isolation pinned. Full-playback gate green (pacing exact vs the
+  accumulator math, composite byte-identical to an independent
+  SmkStream walk, two playbacks identical). Workspace 280 green,
+  fmt/clippy clean, manifests OK x2. Next per PLAN sec 6 P5: extend to
+  cutscene movies + per-zone parity gates.
+
 - CLOSED 2026-08-19 (P4 SMK decode gate, smk-stream unit): headless TITLE.SMK
   decode gate green via the codec-neutral SmkStream seam (D30) over vendored
   smk 0.1.0 - 640x320, 1227 frames, 66660us/frame, DPCM mono 8-bit 11025 Hz

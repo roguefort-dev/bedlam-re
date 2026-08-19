@@ -10,8 +10,16 @@
 //! always fully recomposes, which sec 7 designates the correctness
 //! reference (output-identity would be the gate for any later row-dirty
 //! fast path).
+//!
+//! Movie plane (P5, D31): when RenderInput carries a decoded
+//! full-frame movie raster, the pipeline is REPLACED, not extended -
+//! render() emits the movie blit plus its own palette, exactly like the
+//! original title screen where TITLE.SMK owns the whole DAC. Scene
+//! composition resumes the moment the plane is absent.
 
 use bedlam_core::sim::Sim;
+
+use crate::blit::center_in_canonical;
 
 use crate::clamp_camera;
 use crate::frame::{sanitize_palette, Frame, Vga6};
@@ -33,14 +41,44 @@ const SPRITE_SIZE: u32 = 8;
 /// Entity-pass placeholder block size (px).
 const ENTITY_SIZE: u32 = 4;
 
+/// A decoded movie frame presented as the whole canonical output
+/// (P5/D31): an indexed raster of width x height plus the 256-entry
+/// 6-bit palette the movie owns while it plays.
+///
+/// Built by the host movie player from its decoder state; render()
+/// never decodes anything. The raster may be smaller than the canon in
+/// either dimension (TITLE.SMK is 640x320 on the 640x480 canon) or
+/// larger; either way it is CENTERED and clipped, never scaled, and the
+/// exposed canon area outside the raster keeps index 0 (the first
+/// palette entry of the same movie palette) [design, D31: exact EXW
+/// title placement pending title-screen RE; centered letterbox is the
+/// documented choice until then].
+#[derive(Debug, Clone, Copy)]
+pub struct MovieFrame<'a> {
+    pub width: u32,
+    pub height: u32,
+    /// width * height palette indices, row-major, row 0 = top.
+    pub pixels: &'a [u8],
+    /// The palette the movie uploads to the DAC for this frame
+    /// (6-bit canonical; hosts fold the decoder PALMAP-expanded
+    /// 8-bit components back with >> 2, which is exact because the
+    /// vendored table satisfies PALMAP[v] == (v << 2) | (v >> 4) for
+    /// every 6-bit v - see bedlam-smk video.rs and D31).
+    pub palette: [Vga6; 256],
+}
+
 /// Input to render(): the current sim, optionally the previous-tick sim
-/// for camera interpolation, the interpolation alpha, and the canonical
-/// 6-bit palette for this frame.
+/// for camera interpolation, the interpolation alpha, the canonical
+/// 6-bit palette for this frame, and an optional movie plane that
+/// replaces the scene pipeline while present.
 ///
 /// D17 boundary: prev_sim + alpha are PRESENTATION inputs. They shape
 /// the interpolated camera (quantized to the integer grid) and nothing
 /// else; with prev_sim = None (the parity/golden configuration) alpha
 /// is ignored entirely and the output depends only on sim + palette.
+/// The movie plane is presentation-side state by construction (a
+/// decode driven by the host clock, D17 bucket b) and never touches
+/// hashed sim or scene state.
 pub struct RenderInput<'a> {
     /// Current simulation state (only hashed-bucket accessors are read).
     pub sim: &'a Sim,
@@ -55,11 +93,23 @@ pub struct RenderInput<'a> {
     /// 0..=63 by render()). The skeleton takes it as an argument; the
     /// P4 palette-bank pass will derive bank rotation and fades from
     /// hashed sim state instead (DESIGN-RENDER sec 11 open items 2/6).
+    /// IGNORED when a movie plane is present: the movie owns the DAC.
     pub palette: [Vga6; 256],
+    /// Decoded movie raster replacing the scene pipeline (D31). None =
+    /// normal scene composition.
+    pub movie: Option<MovieFrame<'a>>,
 }
 
 /// Render one canonical frame. Pure: same input, same output bytes.
 pub fn render(input: &RenderInput) -> Frame {
+    match input.movie.as_ref() {
+        Some(mv) => render_movie(mv),
+        None => render_scene(input),
+    }
+}
+
+/// Scene composition (the fixed pass pipeline).
+fn render_scene(input: &RenderInput) -> Frame {
     let alpha = input.alpha.clamp(0.0, 1.0);
     let camera = camera_for(input, alpha);
     let mut frame = Frame::new(sanitize_palette(input.palette));
@@ -69,6 +119,21 @@ pub fn render(input: &RenderInput) -> Frame {
     pass_overlays(&mut frame);
     pass_entities(&mut frame, camera, input.sim);
     frame.palette_dirty = palette_dirty(input);
+    frame
+}
+
+/// Movie composition (D31): centered clipped blit, movie palette,
+/// palette_dirty EVERY frame (the decoder swaps palettes at frame
+/// granularity; presentation re-uploads per frame - a dirty-tracking
+/// optimization would have to prove output identity, same rule as the
+/// row-dirty fast path). The blit itself is the one tested
+/// implementation, [`Frame::blit_indexed`], at the
+/// [`center_in_canonical`] placement.
+fn render_movie(mv: &MovieFrame) -> Frame {
+    let mut frame = Frame::new(sanitize_palette(mv.palette));
+    let (x0, y0) = center_in_canonical(mv.width, mv.height);
+    frame.blit_indexed(mv.pixels, mv.width, mv.height, x0, y0);
+    frame.palette_dirty = true;
     frame
 }
 
@@ -104,7 +169,8 @@ fn camera_for(input: &RenderInput, alpha: f32) -> (i32, i32) {
 /// SetPaletteRGB on all 256 entries every step). Limitation by design:
 /// a stateless render cannot see caller-side palette CONTENT swaps;
 /// hosts that swap palettes between frames compare Frame.palette
-/// themselves (one array compare).
+/// themselves (one array compare). Movie planes bypass this: they are
+/// dirty every frame (see render_movie).
 fn palette_dirty(input: &RenderInput) -> bool {
     match input.prev_sim {
         None => true,

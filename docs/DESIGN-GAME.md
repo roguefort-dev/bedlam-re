@@ -93,7 +93,9 @@ accumulate deltas into ABSOLUTE ticks, then per DESIGN-AUDIO sec 7:
 
 Track-per-scene table (fact 4): Options -> OPTIONS.MRS, Brief ->
 BRIEF.MRS, Select -> SELECT.MRS, Debrief -> DEBRIEF.MRS, Shop ->
-SHOP.MRS; all other scenes None (title = TITLE.SMK video; mission
+SHOP.MRS; all other scenes None (title = TITLE.SMK video, played by
+the host MoviePlayer through RenderInput.movie per DECISIONS D31;
+mission
 music = open question Q2). The MusicPump pre-builds the script once
 per loaded file; scene changes swap Mixer scripts; restarts rebuild.
 

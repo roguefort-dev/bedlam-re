@@ -20,10 +20,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod blit;
 pub mod compose;
 pub mod frame;
 
-pub use compose::{render, RenderInput};
+pub use blit::{blit_indexed, center_in_canonical};
+pub use compose::{render, MovieFrame, RenderInput};
 pub use frame::{sanitize_palette, Frame, Vga6, VgaExpand};
 
 /// Canonical framebuffer width in pixels (EXW 640x480 words

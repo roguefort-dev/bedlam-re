@@ -6,6 +6,13 @@
 //! inside converts time (dt never enters mix math, D17 bucket b), and the
 //! script dispatch grid is Q16-exact so any host buffer chunking yields the
 //! identical byte stream.
+//!
+//! One queued BYTE-STREAM channel exists alongside the voice pool (D31):
+//! native-format PCM (11025 Hz 8-bit unsigned mono, the format the .SMK
+//! audio tracks decode to and the .RAW SFX files store, RE-EXW-MUSIC sec
+//! 3) appended in order and mixed at the cursor. It exists for movie
+//! playback and host-timed SFX - the one audio source the original drives
+//! as a continuous buffer rather than pitched sub-voices.
 
 use crate::script::{tick_pos_q16, MusicCommand, MusicScript};
 use crate::AudioError;
@@ -34,6 +41,11 @@ const PAN_GAIN_STEP: i32 = 4;
 
 /// Q16 one output sample.
 const Q16_ONE: u64 = 1 << 16;
+
+/// Upper bound on queued stream bytes: 16 MiB is roughly 24 minutes of
+/// 11025 Hz 8-bit mono - 16x headroom over the whole TITLE.SMK audio
+/// track (901752 B). Exceeding it fails loud (StreamOverflow).
+pub const STREAM_CAP_BYTES: usize = 16 * 1024 * 1024;
 
 /// Identifies a sounding sub-voice the way the EXW voice table does:
 /// instrument id plus sub-voice index, where sub 0 is the BASE buffer a
@@ -127,6 +139,14 @@ pub struct Mixer {
     script_base_q16: u64,
     /// Absolute output position in Q16 samples since construction.
     cursor_q16: u64,
+    /// Queued byte-stream PCM in native format (u8), consumed at one
+    /// byte per output frame. Host-paced (D17 bucket b): bytes enter
+    /// via queue_pcm_u8 in decode order and mix at the cursor, so the
+    /// mix depends only on the queue-vs-render SEQUENCE, not on host
+    /// chunking.
+    pcm: Vec<u8>,
+    /// Read cursor into `pcm`.
+    pcm_pos: usize,
 }
 
 impl Default for Mixer {
@@ -145,6 +165,8 @@ impl Mixer {
             script_next: 0,
             script_base_q16: 0,
             cursor_q16: 0,
+            pcm: Vec::new(),
+            pcm_pos: 0,
         }
     }
 
@@ -168,6 +190,41 @@ impl Mixer {
     /// only - the EXW semantic, see Voice field docs.
     pub fn set_master_volume(&mut self, master: u8) {
         self.master = master.min(MASTER_MAX as u8);
+    }
+
+    /// Queue decoded stream PCM on the movie bus: raw 8-bit unsigned
+    /// mono at the native 11025 Hz rate (the Smacker DPCM/Raw track
+    /// decode output, already byte-decoded by bedlam-assets; the
+    /// decoded output of TITLE.SMK track 0 is exactly this - D30 gate).
+    /// Bytes mix strictly in queue order, one byte per output frame,
+    /// at the master-volume gain of the sample being mixed (a stream
+    /// has no spawn point to snapshot, so the gain follows the knob -
+    /// D31). Returns the queued byte count; exceeding
+    /// STREAM_CAP_BYTES is a typed error, not a silent drop: the cap
+    /// carries 16x headroom over the whole TITLE.SMK audio track, so
+    /// only a host that decodes ahead without ever draining can hit
+    /// it (host wiring bug, not gameplay).
+    pub fn queue_pcm_u8(&mut self, pcm: &[u8]) -> Result<usize, AudioError> {
+        let pending = self.pcm.len() - self.pcm_pos;
+        if pending + pcm.len() > STREAM_CAP_BYTES {
+            return Err(AudioError::StreamOverflow {
+                len: pending + pcm.len(),
+            });
+        }
+        self.pcm.extend_from_slice(pcm);
+        Ok(pcm.len())
+    }
+
+    /// Bytes queued but not yet mixed.
+    pub fn pcm_pending(&self) -> usize {
+        self.pcm.len() - self.pcm_pos
+    }
+
+    /// Drop the queued stream (movie stop / scene change). Sounding
+    /// voices are untouched; only the byte stream silences.
+    pub fn clear_pcm_stream(&mut self) {
+        self.pcm.clear();
+        self.pcm_pos = 0;
     }
 
     /// Install the music script (the walked .MRS stream). Dispatch is
@@ -319,6 +376,22 @@ impl Mixer {
     fn mix_one(&mut self) -> (i16, i16) {
         let mut l: i32 = 0;
         let mut r: i32 = 0;
+        // Queued stream first: one native byte per output frame, gain
+        // read at mix time (no spawn point exists to snapshot, D31).
+        // Master-gain domain: volume 48 = unity on the 127 master scale.
+        if self.pcm_pos < self.pcm.len() {
+            let s = (i32::from(self.pcm[self.pcm_pos]) - 128) << 8;
+            let g = volume_gain_q8(self.master, 48) as i32;
+            l += (s * g) >> 8;
+            r += (s * g) >> 8;
+            self.pcm_pos += 1;
+            if self.pcm_pos == self.pcm.len() {
+                // Compacted on drain so a finished movie does not pin
+                // its bytes; an immediately re-queued packet starts at 0.
+                self.pcm.clear();
+                self.pcm_pos = 0;
+            }
+        }
         for v in self.voices.iter_mut() {
             if !v.active {
                 continue;
@@ -405,6 +478,139 @@ mod tests {
             m.render(&mut out),
             Err(AudioError::OddBufferLength { len: 7 })
         ));
+    }
+
+    #[test]
+    fn pcm_stream_mixes_native_bytes_at_unity_when_master_max() {
+        let mut m = Mixer::new(); // master 127 => volume 48 = unity
+        m.queue_pcm_u8(&[128, 255, 0, 128]).unwrap();
+        let mut out = [1i16; 8];
+        m.render(&mut out).unwrap();
+        // (b - 128) << 8 exactly, on both channels, one byte per frame.
+        assert_eq!(out, [0, 0, 32512, 32512, -32768, -32768, 0, 0]);
+        assert_eq!(m.pcm_pending(), 0, "drained");
+    }
+
+    #[test]
+    fn pcm_stream_gain_follows_master_at_mix_time() {
+        let mut quiet = Mixer::new();
+        quiet.set_master_volume(0);
+        quiet.queue_pcm_u8(&[255, 255, 255, 255]).unwrap();
+        let mut out = [1i16; 4];
+        quiet.render(&mut out).unwrap();
+        assert!(out.iter().all(|&s| s == 0), "muted master silences stream");
+    }
+
+    #[test]
+    fn pcm_stream_is_chunking_invariant() {
+        let bytes: Vec<u8> = (0..100u32).map(|i| (i * 7 + 13) as u8).collect();
+        let run = |frames_per_call: usize| -> Vec<i16> {
+            let mut m = Mixer::new();
+            m.queue_pcm_u8(&bytes).unwrap();
+            let mut acc = Vec::new();
+            while m.pcm_pending() > 0 {
+                let n = m.pcm_pending().min(frames_per_call);
+                let mut buf = vec![0i16; n * 2];
+                m.render(&mut buf).unwrap();
+                acc.extend_from_slice(&buf);
+            }
+            acc
+        };
+        let a = run(1);
+        let b = run(7);
+        let c = run(64);
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+        assert_eq!(a.len(), 200);
+    }
+
+    #[test]
+    fn pcm_stream_mixes_under_a_sounding_voice() {
+        let mut m = Mixer::new();
+        m.load_wave(0, &[128, 128, 128, 128]).unwrap(); // silent wave
+        m.note_on(0, 0x10000, 48).unwrap();
+        m.queue_pcm_u8(&[255]).unwrap();
+        let mut out = [0i16; 2];
+        m.render(&mut out).unwrap();
+        assert_eq!(
+            out,
+            [32512, 32512],
+            "voice contributes zeros, stream passes"
+        );
+    }
+
+    #[test]
+    fn clear_pcm_stream_silences_and_frees() {
+        let mut m = Mixer::new();
+        m.queue_pcm_u8(&[200, 200, 200, 200]).unwrap();
+        m.clear_pcm_stream();
+        assert_eq!(m.pcm_pending(), 0);
+        let mut out = [1i16; 8];
+        m.render(&mut out).unwrap();
+        assert!(out.iter().all(|&s| s == 0));
+        // Re-queue after clear starts from the top.
+        m.queue_pcm_u8(&[128, 255]).unwrap();
+        let mut out = [0i16; 4];
+        m.render(&mut out).unwrap();
+        assert_eq!(out[2], 32512, "second byte of the new queue");
+    }
+
+    #[test]
+    fn pcm_stream_requeue_after_drain_appends_fresh() {
+        let mut m = Mixer::new();
+        m.queue_pcm_u8(&[10, 20]).unwrap();
+        let mut out = [0i16; 4];
+        m.render(&mut out).unwrap();
+        assert!(m.pcm_pending() == 0);
+        // Drain compaction must not lose a subsequently queued packet.
+        m.queue_pcm_u8(&[30]).unwrap();
+        let mut out = [0i16; 2];
+        m.render(&mut out).unwrap();
+        let want = ((30i32 - 128) << 8) as i16;
+        assert_eq!(out, [want, want]);
+    }
+
+    #[test]
+    fn stream_bus_underruns_to_exact_silence() {
+        let mut m = Mixer::new();
+        let mut out = [0i16; 8];
+        // underrun is exact silence
+        m.render(&mut out).unwrap();
+        assert!(out.iter().all(|&s| s == 0));
+        // 3 queued bytes over 4 output frames: the 4th is exact silence
+        m.queue_pcm_u8(&[200, 128, 100]).unwrap();
+        m.render(&mut out).unwrap();
+        assert_eq!(&out[..8], &[18432, 18432, 0, 0, -7168, -7168, 0, 0]);
+        assert_eq!(m.pcm_pending(), 0);
+    }
+
+    #[test]
+    fn stream_bus_saturates_against_a_voice() {
+        let mut m = Mixer::new();
+        m.load_wave(0, &[255]).unwrap(); // voice sample 0 is full-scale
+        m.note_on(0, 0x10000, 48); // unity voice gain at master 127
+        m.queue_pcm_u8(&[255]).unwrap(); // both sources at +32512
+        let mut out = [0i16; 2];
+        m.render(&mut out).unwrap();
+        assert_eq!(out, [i16::MAX, i16::MAX], "sum saturates");
+    }
+
+    #[test]
+    fn stream_bus_overflow_fails_loud() {
+        let mut m = Mixer::new();
+        let big = vec![128u8; STREAM_CAP_BYTES];
+        assert_eq!(m.queue_pcm_u8(&big).unwrap(), STREAM_CAP_BYTES);
+        assert_eq!(m.pcm_pending(), STREAM_CAP_BYTES);
+        assert!(matches!(
+            m.queue_pcm_u8(&[1]),
+            Err(AudioError::StreamOverflow { len }) if len == STREAM_CAP_BYTES + 1
+        ));
+        // the failed push changed nothing
+        assert_eq!(m.pcm_pending(), STREAM_CAP_BYTES);
+        // clear restores a working bus
+        m.clear_pcm_stream();
+        assert_eq!(m.pcm_pending(), 0);
+        assert_eq!(m.queue_pcm_u8(&[200]).unwrap(), 1);
     }
 
     #[test]

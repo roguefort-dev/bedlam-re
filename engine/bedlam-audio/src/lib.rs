@@ -22,7 +22,7 @@
 pub mod mixer;
 pub mod script;
 
-pub use mixer::{Mixer, VoiceRef, MAX_VOICES, SAMPLE_RATE, SUB_VOICES_PER_INST};
+pub use mixer::{Mixer, VoiceRef, MAX_VOICES, SAMPLE_RATE, STREAM_CAP_BYTES, SUB_VOICES_PER_INST};
 pub use script::{tick_pos_q16, MusicCommand, MusicScript, TICKS_PER_SECOND, TICK_Q16};
 
 use thiserror::Error;
@@ -41,4 +41,9 @@ pub enum AudioError {
     /// A wave must contain at least one sample.
     #[error("wave for instrument {instrument} is empty")]
     EmptyWave { instrument: u16 },
+    /// The raw stream buffer is full (host decodes ahead without ever
+    /// draining audio). The cap has 16x headroom over the whole TITLE.SMK
+    /// audio track, so this is host wiring bug, not gameplay.
+    #[error("raw stream overflow: {len} queued bytes exceeds the cap")]
+    StreamOverflow { len: usize },
 }

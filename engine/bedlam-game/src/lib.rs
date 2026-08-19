@@ -22,6 +22,7 @@
 pub mod config;
 pub mod fsm;
 pub mod host;
+pub mod movie;
 pub mod music;
 
 pub use config::{GameConfig, OPTIONS_LEN, OPTIONS_NAME, VOLUME_MAX};
@@ -29,6 +30,7 @@ pub use fsm::{
     Episode, Scene, SceneAction, SceneFsm, BOOT_TICKS, FULL_MASK, MAX_LINEAR, MAX_STAGE,
 };
 pub use host::{ByteSink, ByteSource, GameHost};
+pub use movie::MoviePlayer;
 pub use music::{build_script, track_name, MusicPump, ScriptMeta, ScriptTerminal};
 
 /// Serialization tag of the hashed scene-state view (DESIGN-GAME sec 7).

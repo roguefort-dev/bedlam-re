@@ -37,6 +37,7 @@ fn idle() -> InputFrame {
 
 fn frame_of(sim: &Sim) -> bedlam_render::Frame {
     render(&RenderInput {
+        movie: None,
         sim,
         prev_sim: None,
         alpha: 0.0,
@@ -52,6 +53,7 @@ fn alpha_ignored_when_interpolation_off() {
     let sim = sim_after(7, 10, &idle());
     let a = frame_of(&sim);
     let b = render(&RenderInput {
+        movie: None,
         sim: &sim,
         prev_sim: None,
         alpha: 0.99,
@@ -99,18 +101,21 @@ fn interpolation_endpoints() {
     let prev = sim_after(9, 40, &input);
     let cur = sim_after(9, 41, &input);
     let at0 = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 0.0,
         palette: palette(),
     });
     let at1 = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 1.0,
         palette: palette(),
     });
     let half = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 0.5,
@@ -127,24 +132,28 @@ fn alpha_saturates() {
     let prev = sim_after(3, 5, &idle());
     let cur = sim_after(3, 6, &idle());
     let lo = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: -2.0,
         palette: palette(),
     });
     let hi = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 9.0,
         palette: palette(),
     });
     let zero = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 0.0,
         palette: palette(),
     });
     let one = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 1.0,
@@ -164,6 +173,7 @@ fn palette_dirty_follows_satellites() {
 
     // Tick 1: no pal fire (24 lands in tick 5), fade disarmed.
     let f1 = render(&RenderInput {
+        movie: None,
         sim: &sim_after(0, 1, &idle()),
         prev_sim: Some(&sim_after(0, 0, &idle())),
         alpha: 0.0,
@@ -173,6 +183,7 @@ fn palette_dirty_follows_satellites() {
 
     // Tick 3 (microsteps 11..15): still nothing.
     let f3 = render(&RenderInput {
+        movie: None,
         sim: &sim_after(0, 3, &idle()),
         prev_sim: Some(&sim_after(0, 2, &idle())),
         alpha: 0.0,
@@ -182,6 +193,7 @@ fn palette_dirty_follows_satellites() {
 
     // Tick 5 contains microstep 24: the 12.5 Hz bank cycle fires.
     let f5 = render(&RenderInput {
+        movie: None,
         sim: &sim_after(0, 5, &idle()),
         prev_sim: Some(&sim_after(0, 4, &idle())),
         alpha: 0.0,
@@ -195,6 +207,7 @@ fn palette_dirty_follows_satellites() {
     cur.set_fading(true);
     cur.tick(&idle());
     let ff = render(&RenderInput {
+        movie: None,
         sim: &cur,
         prev_sim: Some(&prev),
         alpha: 0.0,

@@ -18,3 +18,10 @@ docs/DECISIONS.md D30. Local patches, if any, MUST be listed here.
 - Test-module clippy cleanups (2026-08-19, bedlam-re item-1): behavior-
   identical rewrites in src/huff.rs and src/smk.rs test helpers (vec!
   initializers, iter_mut, resize) to satisfy cargo clippy -D warnings.
+
+## Export patch (2026-08-19, P5 playback unit)
+
+`video.rs`: `const PALMAP` made `pub` (re-exported from the crate root).
+Rationale: bedlam-assets needs the exact ramp to invert the decoder's
+6-to-8-bit palette expansion back to the canonical 6-bit form losslessly
+(DECISIONS D31). No behavior change; decode output is byte-identical.

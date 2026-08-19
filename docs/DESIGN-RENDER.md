@@ -159,10 +159,16 @@ Input: (&Frame, PresentMode). Presentation:
 3. Presents vsync-locked at any refresh or uncapped (D12); frame pacing at
    240 Hz is a CI-manual game-feel proxy; input-to-present <= 1 original
    frame (PLAN P6).
-4. Smacker: decode native frames (bedlam-assets smk), scale in presentation;
-   NOT composited into the indexed fb. Bit depth + palette sharing of movie
-   frames is an open question (sec 11) - the contract just requires movies
-   to bypass the indexed path.
+4. Smacker: decode native frames (bedlam-assets smk), scale in
+   presentation. AMENDED by DECISIONS D31 (2026-08-19, per the
+   provenance-section deviation clause): in the headless-first
+   architecture the canonical Frame IS the presentation seam, so
+   movies compose INTO the indexed fb via RenderInput.movie
+   (MovieFrame) - centered, clipped, unscaled, movie palette installed
+   per frame, scene passes replaced while present. Palette sharing is
+   settled by D31 (lossless PALMAP >>2 fold); frame bit depth stays an
+   8-bit indexed fact. Native-output scaling/filtering of the composed
+   frame remains presentation-side as before.
 5. The 1996 desktop-palette dance (AppActivate SYSPAL_NOSTATIC handling,
    windowed white entry 0, SetEntries skipping entry 0) is NOT replicated -
    T3 free divergence, recorded here for archaeology only.

@@ -8,4 +8,4 @@ mod video;
 pub use audio::AudioInfo;
 pub use error::{Result, SmkError};
 pub use smk::{FrameStatus, Smk, SmkInfo, VideoInfo};
-pub use video::YScaleMode;
+pub use video::{PALMAP, YScaleMode};

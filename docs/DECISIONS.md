@@ -533,3 +533,70 @@ libsmacker-sys; decided unattended per the queued unit.
    it did not recur (45 s canary plus the full test window). Usable test
    ideas were ported to the contract API; the raw fragment is archived at
    .state/scratch/smk-predecessor-tail-20260819.rs.
+
+## D31 - P5 title-movie playback integration: compose-level MovieFrame, x240-us fixed-step MoviePlayer, mixer PCM stream bus (2026-08-19)
+
+Context: NEXT item 1 - integrate decoded TITLE.SMK playback into
+GameHost/presentation. Restart-lineage overlap: TWO unattended workers
+(1787165989 stopped 22:57, 1787172789 stopped ~22:58) left interleaved
+WIP on the same unit; claim holder 1787161109 reconciled both slices
+per the AGENTS.md adoption rules (all fragments archived under
+.state/scratch/collision2-20260819T2256/ and the earlier
+mixer-collision snapshot). Both lineages independently converged on
+the same D31 shape below; the reconciliation unified them.
+
+1. COMPOSITING (amends DESIGN-RENDER sec 8.4 per its own deviation
+   clause): the canonical Frame IS the presentation seam in this
+   headless-first architecture, so a movie is NOT kept on a parallel
+   path - RenderInput carries an optional borrowed MovieFrame
+   (bedlam-render compose) and render() REPLACES the scene pipeline
+   with it while present: centered (letterbox, anchor y=80 for the
+   640x320 title raster), clipped, never scaled, palette_dirty every
+   frame (the decoder swaps palettes per frame; the row-dirty rule
+   applies). Placement [design]: exact centering until the EXW
+   title-screen RE (FUN_0044567c movie-runner body) lands. ONE blit
+   implementation: Frame::blit_indexed (frame.rs); blit.rs free fns
+   delegate; the superseded render/movie.rs owned-snapshot type was
+   dropped (archived).
+2. PALETTE FOLD: the vendored decoder expands 6-bit Smacker palette
+   components through PALMAP = (v << 2) | (v >> 4); since
+   PALMAP[v] >> 2 == v for v < 64, MoviePlayer folds decoded 8-bit
+   entries back with >> 2 to the canonical Vga6 form - lossless both
+   ways. bedlam-smk PALMAP made pub for the pinned proof
+   (NOTICE.md export patch).
+3. CLOCK: MoviePlayer (bedlam-game movie.rs) drives the SmkStream seam
+   on the host fixed-step grid in x240-us integer units (1 sub-tick =
+   1_000_000; frame period = us_per_frame * 240): no dt division, no
+   floats, no wall clock; fractional periods bank (TITLE = 15.9984
+   sub-ticks per frame at 15 fps). Ring streams wrap; non-ring latch
+   finished and hold the last frame; a 4096-frame runaway guard drops
+   the accumulator.
+4. AUDIO STREAM BUS (bedlam-audio mixer): queue_pcm_u8 queues decoded
+   native-format PCM (u8 mono 11025 Hz - exactly the DPCM track 0
+   decode of TITLE.SMK) on a FIFO byte channel consumed one byte per
+   stereo output frame UNDER the voices; gain follows the master knob
+   at mix time (a stream has no spawn point to snapshot). Cap
+   STREAM_CAP_BYTES = 16 MiB (16x headroom over the whole 901752-B
+   TITLE track) fails loud (AudioError::StreamOverflow) instead of
+   dropping; the host treats overflow as stop-movie (deterministic
+   self-termination, never a pump error). Chunking-invariance
+   unit-pinned alongside the existing determinism suite.
+5. HOST LIFECYCLE (D17 bucket b, provably hash-free): GameHost
+   load_movie(scene, bytes) is INERT until the FSM enters the target
+   scene (Title): entry starts playback and queues frame-0 audio;
+   leaving the scene drops the slot and clears the stream; mid-play
+   decode failure or audio overflow self-terminates identically. The
+   per-pump scene-hash chain with and without a movie is
+   byte-identical (unit + gate pinned).
+6. GATE: tests/title_playback_gate.rs (bedlam-game, corpus-skipping)
+   drives a FULL TITLE.SMK playback through GameHost at 60 Hz and pins
+   (a) exact pacing - frame k decodes on pump ceil(k*15_998_400/
+   4_000_000)-1 after the Boot->Title transition pump (playback starts
+   mid-pump on the transition), sampled k = 1,2,3,5,600,1226; (b) the
+   composite frame equals an independent SmkStream walk (full 640x320
+   raster + folded palette) at frames 1/600/1226; (c) two full
+   playbacks byte-identical (SHA-256 over per-pump frame parity hashes
+   + rendered audio); (d) scene-hash isolation vs a movieless host.
+   Workspace 280 tests green; the existing D30 double-decode gate is
+   untouched; manifests verified before/after the corpus-touching runs.
+
