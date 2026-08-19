@@ -2,8 +2,8 @@
 Description=Check Bedlam autonomous LLM health every ten minutes
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=10min
+OnActiveSec=10min
+OnUnitInactiveSec=10min
 AccuracySec=10s
 Persistent=true
 Unit=bedlam-llm-watchdog.service
