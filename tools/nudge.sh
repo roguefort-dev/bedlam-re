@@ -118,25 +118,26 @@ conc_up() {
 
 cd "$PLAN_DIR" || exit 1
 head_now=$(git rev-parse HEAD 2>/dev/null || echo none)
-next_mt=$(stat -c %Y "$STATE/NEXT.md" 2>/dev/null || echo 0)
-state_mt=$(stat -c %Y "$STATE/STATE.md" 2>/dev/null || echo 0)
 
 credit_if_progress() {
-  local lp_head lp_ts
-  lp_head="none"; lp_ts=0
+  local lp_head lp_ts substantive recent
+  lp_head="none"; lp_ts=0; substantive=0
   if [ -f "$LP" ]; then read -r lp_head lp_ts < "$LP" 2>/dev/null || true; fi
-  if [ "$head_now" != "$lp_head" ] || [ "$next_mt" -gt "$lp_ts" ] || [ "$state_mt" -gt "$lp_ts" ]; then
+  if [ "$head_now" != "$lp_head" ]; then
+    if git cat-file -e "$lp_head^{commit}" 2>/dev/null \
+        && git diff --name-only "$lp_head..$head_now" 2>/dev/null | grep -qv "^\.state/"; then
+      substantive=1
+    elif [ "$lp_head" = none ]; then
+      substantive=1
+    fi
+    # Advance even for state-only commits so an older substantive baseline
+    # cannot repeatedly credit later journal churn.
     echo "$head_now $(date +%s)" > "$LP"
-    return 0
   fi
-  local recent
-  recent=$(find . -path ./.git -prune -o -path "./game-data*" -prune -o -path "./derived*" -prune -o \
+  [ "$substantive" -eq 1 ] && return 0
+  recent=$(find . -path ./.git -prune -o -path "./.state" -prune -o \
+      -path "./game-data*" -prune -o -path "./derived*" -prune -o \
       -path "./target" -prune -o -path "./tools/inspect/target" -prune -o \
-      -not -path "./.state/heartbeat" -not -path "./.state/fails" -not -path "./.state/spawns" \
-      -not -path "./.state/cooldown-until" -not -path "./.state/last-progress" \
-      -not -path "./.state/nudge.log" -not -path "./.state/nudge-run.log" \
-      -not -path "./.state/STATUS.md" -not -path "./.state/notified" \
-      -not -path "./.state/claims/*" \
       -type f -newermt "-900 seconds" -print -quit 2>/dev/null)
   [ -n "$recent" ] && return 0
   return 1

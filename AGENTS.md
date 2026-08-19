@@ -21,11 +21,33 @@ runs. Read it fully before doing anything.
   .state/ logs, ghidra-project/, and /tmp scratch.
 - One bounded work unit per run. Small commits. Push when green.
 - Unattended nudge agents MUST NOT spawn or delegate to subagents. No nesting; each claimed slot is one glm-5.3 session.
+- Never make a commit whose only effect is a stand-down/status journal in `.state/`. A real blocker is recorded once by tagging the claimed Now item `[BLOCKED]`; that tag mechanically prevents respawn.
+
+## Ownership and shared-worktree rules
+- For an unattended run, the wrapper has already acquired the queue-item claim named
+  in its prompt. That claim belongs to the current worker. Do not interpret your own
+  owner claim as a sibling claim.
+- Process liveness is NEVER ownership evidence. The persistent Ghostty/cmux/operator
+  OpenCode TUI is supervisory only: its PID, age, open terminal, dirty files, prior
+  decision entries, and historical stand-down commits do not reserve queue work.
+  `.state/PAUSE` is the operator explicit global reservation and the only such
+  reservation currently supported.
+- Relevant pre-existing WIP without `.state/PAUSE` is interrupted predecessor work:
+  inspect and preserve it, then adopt, validate, and continue it. Before editing,
+  record `git status`/`git diff`; never reset, checkout, clean, or overwrite it.
+  Stage explicit task paths only--never `git add -A` or `git commit -a` in a dirty
+  shared tree. Leave unrelated WIP untouched. If overlap is genuinely ambiguous,
+  tag the claimed item `[BLOCKED]` with one concrete reason and stop.
+- Interactive operators must create `.state/PAUSE` before editing queue-relevant
+  files and remove it when handing the work back. Merely keeping this TUI open never
+  pauses or blocks autonomy.
+- The old `21cbdcb` process-liveness ownership inference and all stand-down journals
+  based on it are revoked. Do not recover that rule from git history.
 
 ## Workflow for every run
 1. touch .state/heartbeat  (do this again periodically during long shell work)
 2. If .state/PAUSE exists -> do nothing, exit.
-3. Read .state/NEXT.md. Take the top task. If it is blocked, note why in NEXT.md and take the next.
+3. Read .state/NEXT.md. An unattended worker works ONLY its wrapper-assigned item. If genuinely blocked, tag that item `[BLOCKED]`, record one concrete reason, and stop; never select another item. Interactive runs may select another unclaimed item.
 4. Do the work. Keep it small enough to finish and verify in this run.
 5. Update docs as you go (provenance + confidence tags for RE claims; DECISIONS.md for choices).
 6. git add (never game-data/derived), commit with a clear message, git push.

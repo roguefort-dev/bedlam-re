@@ -15,25 +15,23 @@ MODEL=zai-coding-plan/glm-5.3
 
 cd "$PLAN_DIR" || exit 1
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
-start_next=$(stat -c %Y "$STATE/NEXT.md" 2>/dev/null || echo 0)
-start_state=$(stat -c %Y "$STATE/STATE.md" 2>/dev/null || echo 0)
 touch "$STATE/heartbeat"
-
 placeholder="$CLAIMS/$item-$slotid.claim"
 own="$CLAIMS/$item-owner.claim"
-# Convert the spawner reservation into exactly one owned claim before the
-# model starts. This removes startup races and does not rely on model cleanup.
-if [ -e "$own" ]; then
+
+# A pause created after the timer reserved this slot still wins before launch.
+if [ -e "$STATE/PAUSE" ]; then
+  rm -f "$placeholder"
+  exit 0
+fi
+
+# Atomically publish the canonical owner name without replacing an existing owner.
+if ! ln "$placeholder" "$own" 2>/dev/null; then
   rm -f "$placeholder"
   echo "$(date -Is) item $item already owned; worker standing down" >> "$STATE/nudge.log"
   exit 75
 fi
-mv "$placeholder" "$own" 2>/dev/null || {
-  echo "$(date -Is) missing reservation for item $item; worker standing down" >> "$STATE/nudge.log"
-  exit 75
-}
-# The reaper treats this lock as authoritative liveness. The descriptor is
-# inherited by the client while this wrapper waits for the run to finish.
+rm -f "$placeholder"
 exec 8>>"$own"
 flock 8 || {
   rm -f "$own"
@@ -41,8 +39,9 @@ flock 8 || {
   exit 75
 }
 echo "lock-v1 worker $slotid owns queue item $item" >&8
+claim_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
 
-PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its workflow EXACTLY. HARD CONCURRENCY RULE: do NOT spawn, delegate to, or invoke any subagent; no nesting is allowed. You personally perform one bounded work unit only. Your queue item $item claim is already owned by this worker; do not create, replace, or select another claim. Work ONLY item $item in the Now section of .state/NEXT.md. If item $item is already owned, stop and release your placeholder; do not choose another item. Commit EARLY and OFTEN. AT END: update NEXT.md, delete your claim, and push. On model, transport, or API error, record completed work in NEXT.md and commit if possible; leave the claim for ghost accounting. Never start an analyzeHeadless import already running or succeeded. Do not ask questions or wait for input."
+PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow it EXACTLY. HARD CONCURRENCY RULE: do NOT spawn or invoke subagents. You personally perform one bounded unit. The wrapper atomically acquired queue item $item for slot $slotid before launching you; .state/claims/$item-owner.claim naming worker $slotid is YOUR claim, not another owner claim. NEVER infer ownership from Ghostty, cmux, an operator OpenCode TUI, editors, shells, process age, dirty files, prior decisions, or historical stand-down entries. The persistent operator TUI is supervisory and never blocks work; only .state/PAUSE does. Work ONLY item $item and never switch items. Inspect and adopt relevant interrupted WIP while preserving unrelated changes; stage explicit paths only. Do not create state-only stand-down commits. If genuinely blocked, rewrite item $item with a [BLOCKED] tag and one concrete reason, then stop. Commit and push substantive completed work. NEVER create, delete, rename, or modify claim files; the wrapper owns them. On model/transport/API error, commit recoverable substantive work if possible. Never start an analyzeHeadless import already running or succeeded. Do not ask questions or wait for input."
 
 set +e
 timeout 3900 "$OPENC" run --standalone --model "$MODEL" --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1
@@ -51,10 +50,10 @@ set -e
 cat "$LOG" >> "$STATE/nudge-run.log" 2>/dev/null || true
 
 end_head=$(git rev-parse HEAD 2>/dev/null || echo none)
-end_next=$(stat -c %Y "$STATE/NEXT.md" 2>/dev/null || echo 0)
-end_state=$(stat -c %Y "$STATE/STATE.md" 2>/dev/null || echo 0)
 progress=0
-if [ "$end_head" != "$start_head" ] || [ "$end_next" -gt "$start_next" ] || [ "$end_state" -gt "$start_state" ]; then progress=1; fi
+if [ "$end_head" != "$start_head" ] && git diff --name-only "$start_head..$end_head" 2>/dev/null | grep -qv "^\.state/"; then
+  progress=1
+fi
 
 kind=none
 if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
@@ -80,11 +79,22 @@ else
   echo "$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress)" >> "$STATE/nudge.log"
 fi
 
-if [ "$kind" = transport ]; then
-  if [ -f "$own" ]; then rm -f "$placeholder"; else touch "$placeholder"; fi
-elif [ "$kind" = rate-limit ] || [ "$kind" = client-error ]; then
-  rm -f "$placeholder" "$own"
-else
-  rm -f "$placeholder" "$own"
+# Drop only this wrapper lock, then inspect the same inode we acquired. A live
+# inherited descriptor is a real ghost and keeps the claim. Failed runs retain
+# an unlocked claim for DEAD_CLAIM_TTL as intentional retry backoff.
+exec 8>&-
+rm -f "$placeholder"
+current_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
+if [ "$current_identity" = "$claim_identity" ] && grep -q "^lock-v1 worker $slotid owns queue item $item$" "$own" 2>/dev/null; then
+  if flock -n "$own" true 2>/dev/null; then
+    if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
+      rm -f "$own"
+    else
+      touch "$own"
+      echo "$(date -Is) retaining failed item $item claim for retry backoff" >> "$STATE/nudge.log"
+    fi
+  else
+    echo "$(date -Is) retaining item $item claim held by a live descendant" >> "$STATE/nudge.log"
+  fi
 fi
 exit "$rc"
