@@ -44,6 +44,36 @@
 
 ## Done (append)
 
+- 2026-08-19 02:52-03:1x (stand-down unit, worker 1787100771 original
+    claimant, resumed post-restart; FOURTH stand-down in this slot, zero own
+    mutations beyond this entry): claimed item 1 at 02:52:51, transport death
+    02:57:54, wrapper reaped claim + respawned, resumed ~02:59 into the
+    sibling storm. All own work read-only; independently derived the same
+    facts the other ghosts recorded (smk 0.1.0: pure Rust, zero unsafe, lone
+    dep log, LGPL-2.1-or-later; DPCM unpack_size panic hole + non-multiple-
+    of-4-dims OOB in video blocks => seam must pre-validate bounds and
+    contain panics; header: treesize@52, tree_size[4]@56..72,
+    audio_rate[7]@72..100, dummy@100, frame-sizes@104; TITLE.SMK rate0
+    0xc0002b11 = exists|DPCM|mono|8bit|11025Hz, sizes0=11764, usf 66660).
+    Observed live during watch: 95a3859 (D30) + cc2f084 (smk vendoring) +
+    21cbdcb/c120967/ded276a stand-downs land; owner confirmed = operator
+    TUI 95872. ROOT-CAUSE NOTE for the owner: the P1-era parse_smk_header
+    off-by-one (audio rates read from 68) matches scratch/smk-spike/probe.py
+    reading d[68:96] - seam bug and probe share ONE wrong offset; the
+    3-way-verified layout above is the fix. Dirty-tree attribution digest:
+    src/lib.rs stray duplicate forbid line = c120967 thread (drop at
+    convenience); src/smk.rs = operator in-flight seam WIP (untouched by
+    every ghost); tests/corpus.rs + tests/smk_corpus.rs + tests/
+    smk_title_gate.rs = ded276a flagged residue (adopt or drop per its
+    entry). .state/scratch/smk-spike/* now duplicates vendored
+    engine/bedlam-smk and holds the bad-offset probe.py - safe to delete.
+    Manifest B1 OK first-hand ~03:00 (reads only); predecessors re-verified
+    OK x3/x2 after. No cargo run this resume (avoided target-dir collision
+    with the live operator; c120967 proved check passes on the collided
+    state). Item 1 stays with the operator; backlog empty; item 2
+    interactive-gated. Claim file was wrapper-reaped at 02:57; no claim
+    files touched per instructions.
+
 - 2026-08-19 02:06-03:1x (stand-down, worker 1787097963, third ghost of the
     storm, post-restart continuation): claim 1-owner.claim reserved 02:06:03,
     reaped in the 02:59 rate-limit reap (storm accounting per c120967);
