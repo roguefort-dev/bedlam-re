@@ -1,5 +1,13 @@
 # STATE - project snapshot (update when phase changes)
 
+- CLOSED 2026-08-19 (P4 SMK decode gate, smk-stream unit): headless TITLE.SMK
+  decode gate green via the codec-neutral SmkStream seam (D30) over vendored
+  smk 0.1.0 - 640x320, 1227 frames, 66660us/frame, DPCM mono 8-bit 11025 Hz
+  track 0; two full decode passes byte-identical (video/audio SHA-256 chains
+  in NEXT.md run notes); vendored backend DPCM panic patch documented in
+  bedlam-smk/NOTICE.md. fmt/clippy/tests green, manifests OK. Next phase per
+  PLAN sec 6: P5 playback integration (TITLE.SMK into GameHost/presentation).
+
 - CLOSED 2026-08-18 (P2 cosmetic tail, 119ba2d+b6620c0+007fbe5+4ace8a6):
   B2 census sec-7 residuals ALL CLOSED (census sec 7.7a-e). Campaign
   tables byte-pinned (order[8] = {3,0,1,5,9,13,17,21}; full 27-step
