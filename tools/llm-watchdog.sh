@@ -231,7 +231,7 @@ grep -E "^[[:space:]]*[0-9]+\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "
 SOL_PROMPT="You are the high-reasoning repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
 : > "$SOL_OUT"
 set +e
-timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --model "$SOL_MODEL" --auto --title bedlam-llm-watchdog-repair "$SOL_PROMPT" >> "$SOL_OUT" 2>&1
+timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --agent build --model "$SOL_MODEL" --auto --title bedlam-llm-watchdog-repair "$SOL_PROMPT" >> "$SOL_OUT" 2>&1
 sol_rc=$?
 set -e
 end_head=$(git rev-parse HEAD 2>/dev/null || echo none)
