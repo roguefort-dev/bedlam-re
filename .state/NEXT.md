@@ -44,6 +44,38 @@
 
 ## Done (append)
 
+- 2026-08-19 04:29-04:31 (stand-down unit, worker 1787106562, THIRTEENTH in
+    this slot - same posture as the twelve entries directly below, read them
+    first): item 1 remains owned by the operator under the 21cbdcb rule, so
+    this run stood down without any source write. Ownership evidence
+    first-hand at 04:29-04:31: operator TUI cmux host pid 95872 (started
+    03:02:43) alive via ps (elapsed 1:27:26), parent opencode2 session (pids
+    93316/93332) alive since 02:58 (elapsed 1:31:44), dirty owner WIP
+    unchanged since 03:09:48 (M engine/bedlam-assets/src/lib.rs 03:09:48, M
+    engine/bedlam-assets/tests/corpus.rs 03:08:10, untracked engine/
+    bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus operator infra WIP
+    tools/nudge-agent.sh + tools/test-nudge-claims.sh, both M in git status);
+    smk.rs still git-clean at HEAD (mtime 03:14:26) - the 40f9c4c hazard flag
+    for the operator stays in force (03:08 seam rewrite not on disk, not
+    committed; closer-wip burst verified present 04:31 in .state/scratch/
+    closer-wip: smk.rs.671line-step-api 25k + smk_corpus.rs.mine 3.3k,
+    mtimes 03:14). Item 1(a) is already recorded as D30 at docs/DECISIONS.md
+    line 458, further confirming the operator owns this unit end-to-end. No
+    cargo/rustc running (target-dir collision avoidance per cc2cbe8), no new
+    commits since fef0f75 (twelfth stand-down), branch 0 ahead / 0 behind vs
+    origin after fetch. NEXT.md itself was clean vs HEAD at pickup (no ghost
+    residue to adopt this run). Manifests OK x2 read-only bracket (B1 from
+    repo root MANIFEST.sha256 rc=0, root-relative; B2 via cd game-data-2 +
+    ../MANIFEST-2.sha256 rc=0). Orphan sweep clean: zero dosbox / wine /
+    analyzeHeadless beyond own wrapper pids 124439/124440 (self-filtered
+    argv hits only). Claim 1-owner.claim read back as: lock-v1 worker
+    1787106562 owns queue item 1 (reserved 04:29:22 by the wrapper for this
+    run) and left untouched (wrapper owns cleanup; zero claim file ops this
+    run). Item 2 is interactive-gated and the backlog is empty, so no
+    alternate unit exists and this unit closes as a verified no-op
+    stand-down. Zero own mutations beyond this NEXT.md entry; no corpus /
+    Ghidra / Rust writes.
+
 - 2026-08-19 04:19-04:2x (stand-down unit, worker 1787105947, TWELFTH in this
     slot - same posture as the eleven entries directly below, read them first):
     item 1 remains owned by the operator under the 21cbdcb rule, so this run
