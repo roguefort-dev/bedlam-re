@@ -64,7 +64,7 @@ resume_glm() {
         grep -q "^$identity " "$PRE_CLAIMS" 2>/dev/null && continue
         read -ra claim_words < "$claim"
         worker_id=${claim_words[2]:-}
-        if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$item[[:space:]].*slot $worker_id" >/dev/null 2>&1; then
+        if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$item[[:space:]].*slot $worker_id" >/dev/null 2>&1; then
           log "GLM-5.3 resumed item $item as new worker $worker_id with a fresh locked claim"
           return 0
         fi
@@ -136,7 +136,7 @@ rm -f "$COOLDOWN"
   done
   echo claims_end
   echo workers_begin
-  pgrep -af "^timeout 3900 opencode2 run.*bedlam-nudge-item|^opencode2 run.*bedlam-nudge-item" || true
+  pgrep -af "^timeout 3900 [^ ]*opencode2 run.*bedlam-nudge-item|^[^ ]*opencode2 run.*bedlam-nudge-item" || true
   echo workers_end
   echo recent_agent_logs_begin
   find "$STATE" -maxdepth 1 -name "agent-*.log" -printf "%T@ %p\n" 2>/dev/null | sort -nr | head -3
@@ -192,19 +192,19 @@ stop_glm_workers() {
   done < <("$SYSTEMCTL" --user list-units "run-p*.service" --state=running --no-legend --plain 2>/dev/null | awk "{print \$1}")
   sleep 2
   # Terminate only the exact unattended GLM command family if it lacked a unit.
-  if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
-    pkill -TERM -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
-    pkill -TERM -f "^timeout 3900 opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+  if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
+    pkill -TERM -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+    pkill -TERM -f "^timeout 3900 [^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
     sleep 2
   fi
   for _ in $(seq 1 5); do
-    pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1 || return 0
+    pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1 || return 0
     sleep 1
   done
-  pkill -KILL -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
-  pkill -KILL -f "^timeout 3900 opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+  pkill -KILL -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+  pkill -KILL -f "^timeout 3900 [^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
   sleep 1
-  if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
+  if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
     log "unable to stop all GLM workers; aborting Sol repair"
     return 1
   fi

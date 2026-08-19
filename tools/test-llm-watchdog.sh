@@ -41,6 +41,9 @@ case "\$*" in
 esac
 EOF
 chmod +x "$TMP/mock-opencode"
+# Process matchers must accept the absolute executable path used by systemd.
+grep -q "\^\[\^ \]\*opencode2 run" "$ROOT/tools/llm-watchdog.sh"
+! grep -q "\"^opencode2 run" "$ROOT/tools/llm-watchdog.sh"
 common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 CHECK_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60)
 
 # ANSI/CR final marker is accepted as healthy and does not invoke Sol.
