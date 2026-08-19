@@ -44,6 +44,52 @@
 
 ## Done (append)
 
+- 2026-08-19 01:04-03:2x (STAND-DOWN unit, thread = 1787094247 first
+    incarnation, resumed post-restart; SECOND stand-down in this slot,
+    complements the 1787097593 entry below - read both): claim lineage:
+    1-owner.claim reserved 01:04:07 by this thread; restart storm
+    01:09-02:59 killed it and 16 successor siblings (agent logs
+    1787094611..1787101132, one per ~6min, all transport/rate-limit
+    deaths; last spawn 1787101132 02:58:52 failed 02:59:31 rc=1
+    rate-limit progress=0). Claims dir EMPTY since; the new wrapper owns
+    claim files (operator rule in tools/nudge-agent.sh WIP) - workers
+    never touch them. WHO OWNS THE CODE: the 03:08 writer of the smk
+    seam is the OPERATOR TUI session started 02:58 on pts/1 (identified
+    by the 1787097593 continuation, commit 21cbdcb; my earlier orphan-
+    ghost hypothesis was wrong). OWN pre-restart log: reads only + one
+    fish rc=127, zero mutations. OWN post-restart mutations (03:08): two
+    sed insertions into engine/bedlam-assets/src/lib.rs - a duplicate
+    #![forbid(unsafe_code)] (still present around line 10, compiles
+    clean, harmless - drop at convenience) and three AssetsError
+    variants that the concurrent rewrite clobbered seconds later; net
+    own footprint = that one attribute line + this entry. cargo check -p
+    bedlam-assets PASS first-hand on the collided state (1 lifetime-
+    syntax warning in the new code). MID-RUN LANDINGS (not mine,
+    verified in git log, nothing adopted beyond reading): 95a3859 D30
+    decision + cc2f084 vendored fork engine/bedlam-smk (byte-identical
+    crates.io artifact, NOTICE provenance, workspace member, bedlam-
+    assets switched to path dep) + 21cbdcb stand-down by the 1787097593
+    continuation. WIP PROVENANCE (earlier, uncommitted then, now folded
+    into the above): .state/scratch/smk-spike/smk-0.1.0 + probe.py =
+    dead worker 1787094611 (01:11-01:14); Cargo.toml smk+sha2 +
+    Cargo.lock = dead worker 1787095645 (01:32). OPERATOR INFRA WIP
+    uncommitted (never stage as worker work): tools/nudge-agent.sh +
+    tools/test-nudge-claims.sh (01:34 batch). COLLISION 03:08: smk.rs
+    seam rewritten 03:08:08, lib.rs variants 03:08:19, new
+    tests/smk_title_gate.rs + corpus.rs + tools/inspect/src/formats/
+    smk.rs edits (design: SmkStream step() + SmkFrame + SmkDecodeError)
+    - THIS RUN STOOD DOWN from all further source writes. CHECKPOINT for
+    whoever closes item 1 (fact verified vs the smk crate reader + RAD
+    header order; UNVERIFIED in the new smk.rs): old parse_smk_header
+    read tree sizes at 52..68 + rates at 68..96; correct layout =
+    tree-chunk size @52, MST sizes @56..72, rates @72..100 - inspect
+    smk JSON has reported shifted tree/rate values until now; confirm
+    the rewrite fixes this. Crate facts for the record: smk 0.1.0 =
+    LGPL-2.1-or-later, pure Rust, zero unsafe, only dep log 0.4,
+    open_memory() is the hermetic entry (fs only in cfg(test)). Zero
+    corpus/Ghidra writes this run; no game-data bytes read (manifest
+    untouched).
+
 - 2026-08-19 03:00-03:1x (stand-down unit, worker 1787097593, LIVE OWNER
     OVERLAP on item 1 detected mid-flight): claim 1-owner.claim reserved
     01:59:53, later cleaned by the wrapper during the 02:5x restart churn
