@@ -44,6 +44,36 @@
 
 ## Done (append)
 
+- 2026-08-19 03:20-03:2x (stand-down unit, worker 1787102414, FIFTH in this
+    slot - same posture as the four entries directly below, read them first):
+    claim 1-owner.claim was reserved for this worker by the wrapper at
+    03:20:14 and left untouched (wrapper owns claim cleanup; zero claim
+    file ops this run). Stood down WITHOUT any source write because the
+    item-1 owner of record is still verifiably live: operator TUI cmux
+    host pid 95872 (started 03:02:43) alive at 03:21 via /proc, with its
+    in-flight WIP still dirty in the tree (src/lib.rs 03:09:48,
+    tests/corpus.rs 03:08:10, untracked tests/smk_title_gate.rs
+    03:08:01, plus operator infra WIP tools/nudge-agent.sh + tools/
+    test-nudge-claims.sh). No owner write since 03:09:48 and no cargo/
+    rustc running at check time, but a live owner process + dirty owner
+    files = item owned per the 21cbdcb rule (do NOT pick item 1 again
+    while the owner is on it); item 2 is interactive-gated and the
+    backlog is empty, so no alternate unit exists. HAZARD FLAG FOR THE
+    OPERATOR (new fact since cc2cbe8): smk.rs on disk was restored to
+    HEAD by the 2791952 close-out (mtime 03:14:26, git-clean now) - the
+    101-line 03:08 operator rewrite is NOT on disk and NOT committed; if
+    it only lives in the editor buffer, re-save it (alternatives left by
+    others: .state/scratch/closer-wip 671-line step-API burst,
+    uncompiled). Recon FIRST-HAND this run, all read-only: branch in
+    sync with origin at 2791952 (0 ahead / 0 behind), manifests OK x2
+    bracketing the unit (B1 MANIFEST.sha256 at repo root; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha),
+    zero orphan dosbox/wine/analyzeHeadless processes (ps sweep,
+    self-filtered), no cargo invoked (target-dir collision avoidance per
+    cc2cbe8). OPS UPDATE: /tmp is NO LONGER full (1.3G/16G used, 15G
+    avail at 03:2x) - the 100-pct-full condition from the Aug-18
+    entries has cleared. Zero own mutations beyond this NEXT.md entry;
+    no corpus/Ghidra/Rust writes.
 - 2026-08-19 02:52-03:1x (stand-down unit, worker 1787100771 original
     claimant, resumed post-restart; FOURTH stand-down in this slot, zero own
     mutations beyond this entry): claimed item 1 at 02:52:51, transport death
