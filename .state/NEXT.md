@@ -44,6 +44,55 @@
 
 ## Done (append)
 
+- 2026-08-19 02:06-03:1x (stand-down, worker 1787097963, third ghost of the
+    storm, post-restart continuation): claim 1-owner.claim reserved 02:06:03,
+    reaped in the 02:59 rate-limit reap (storm accounting per c120967);
+    server restart hit after full recon, mid-design. COMMITTED + PUSHED
+    95a3859: D30 (smk 0.1.0 codec-neutral seam decision + registry dep
+    pins); cc2f084 later superseded the registry pin with the
+    engine/bedlam-smk vendored fork (D30.1 deviation flag acknowledged -
+    vendoring matches the RESEARCH vendor/fork posture). First-hand facts
+    for the closer:
+    (a) TITLE.SMK header, manifests OK x2 bracketing: SMK2, 640x320,
+        1227 frames, ms raw = -6666 -> 66660 us/frame = 15 fps exactly,
+        flags 0 (no ring, no y-scale), ONE audio track index 0 = DPCM
+        8-bit mono 11025 Hz (rate dword 0xc0002b11 at 0x48; the 0x6c50
+        at 0x44 is tree_size[3], NOT a rate - the P1 parse_smk_header
+        layout is shifted one field for everything after audio_sizes;
+        TRUE layout = tree_chunk_size@52, tree_size[4]@56..72,
+        audio_rate[7]@72..100; independently confirmed by c120967).
+    (b) BACKEND PANIC HOLE (matters for the no-panic gate): smk
+        render_dpcm (audio.rs) indexes its output buffer by the
+        STREAM-DECLARED unpack size dword (buf[j] with j < unpack_size,
+        never bounded vs max_buffer), so a crafted packet panics the
+        backend unless validated first. Fix by a pre-walk validate pass
+        (my overwritten implementation validated every frame record +
+        DPCM unpack_size <= max_buffer before decode) or by a 2-line
+        bound patch inside the vendored engine/bedlam-smk fork. A DPCM
+        track with max_buffer < 4 also panics on initial-sample writes.
+    (c) MY UNCOMMITTED RESIDUE (left in place, owner decides): corpus.rs
+        smk + fuzz arms call assets::smk::SmkStream::open / first_frame
+        (keep only if the seam lands with those names); untracked
+        tests/smk_title_gate.rs = complete corpus-skipping TITLE gate
+        (pins the facts above + two independent full decode passes ->
+        identical SHA-256 chains over pixels+palette and audio packets +
+        per-frame packet-size log; sha2 dev-dep declared). Reuse or
+        delete; do not double-gate TITLE with both it and smk_corpus.rs.
+    (d) MY 662-line src/smk.rs (codec-neutral SmkStream + structural
+        pre-validator + 14 unit tests) was overwritten in-tree 03:08:59
+        by the operator TUI in-progress rewrite (101 lines at
+        inspection); design preserved in D30 + this entry; nothing to
+        restore, nothing adopted back.
+    (e) Operator TUI (cmux host 95872, 03:02:43) identified as tree
+        owner per 21cbdcb + c120967; LIVE and writing (smk_corpus.rs,
+        lib.rs, smk.rs through 03:1x) - yielded completely; zero further
+        writes by me.
+    (f) fish gotcha hit twice: heredocs inside sh -c single-quoted fish
+        command strings break on ASCII apostrophes in the content
+        (rc=127, no side effects); keep heredoc content apostrophe-free.
+    No corpus writes (read-only probes, manifests OK); no Ghidra; no
+    claim file ops (wrapper owns them).
+
 - 2026-08-19 01:04-03:2x (STAND-DOWN unit, thread = 1787094247 first
     incarnation, resumed post-restart; SECOND stand-down in this slot,
     complements the 1787097593 entry below - read both): claim lineage:
