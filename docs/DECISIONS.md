@@ -454,3 +454,43 @@ pinned DOSBox-X against the D28 CPU baseline of parity_harness.
    0x11efc4) had zero census/STATE backing despite verified tags and were
    DROPPED - close-out verification is not optional even for ghost
    survivors (75b17a8 lesson, second occurrence).
+
+## D30 - P4 SMK video decoder: `smk` 0.1.0 behind a codec-neutral seam (2026-08-19)
+
+Context: PLAN sec 4 P4 spike - pure-Rust smk fork (RESEARCH default) vs
+libsmacker-sys; decided unattended per the queued unit.
+
+1. CHOICE: `smk` 0.1.0 (crates.io, A. Rosetti, libsmacker 1.2.0 port) as
+   the decode backend, WRAPPED. bedlam-assets/src/smk.rs exposes a
+   codec-neutral `SmkStream` API (own info / frame-status / track-meta
+   types + AssetsError mapping); the smk crate is an implementation
+   detail the engine never names. Swapping to a vendored fork or
+   libsmacker-sys later = rewriting one wrapper module, no engine-wide
+   change. bedlam-assets stays buffer-in/buffer-out, deterministic, no
+   filesystem/clock in library code, forbid(unsafe) in OUR crate.
+2. BACKEND AUDIT (verified 2026-08-19 from the crate source): zero
+   `unsafe` in src, only dependency `log` (no-op without a logger, so no
+   nondeterminism), memory path (`open_memory`) touches no fs; error
+   surface is a small closed enum -> stable mapping to
+   AssetsError::SmkTruncated / SmkInvalid / BadMagic. Loud upstream
+   caveats: f64 in its SmkInfo (our API re-derives exact integer
+   us-per-frame from the raw header field), audio tracks ship DISABLED
+   by default (our wrapper enables video + all tracks deterministically).
+3. LICENSE CAVEAT: smk 0.1.0 is LGPL-2.1-or-later. Static Rust linking
+   means any DISTRIBUTED binary carries LGPL obligations (source
+   availability + relinkable objects, or backend swap). Current
+   personal-use posture: acceptable; recorded so it cannot be forgotten.
+   Vendored-fork follow-up queued only if the posture changes.
+4. HEADER-LAYOUT BUGFIX riding this unit: the P1-era `parse_smk_header`
+   read tree_sizes [52,56,60,64] + audio_rates from offset 68; the real
+   layout is tree_chunk_size@52, tree_size[4]@56..72, audio_rate[7]@72..
+   100. Evidence 3-way: smk-crate parse order, libsmacker header layout,
+   and TITLE.SMK physically (0x44 holds 0x6c50 = a tree size; 0x48 holds
+   0xc0002b11 = textbook exists|DPCM|mono|8bit|11025Hz rate dword).
+   Inspect CLI smk JSON keeps its schema; field VALUES corrected.
+5. GATE: corpus-skipping TITLE.SMK test (tests/smk_title_gate.rs) pins
+   640x320 / 1227 frames / 66660 us per frame (15 fps) / no ring / no
+   y-scale / track 0 = DPCM 8-bit mono 11025 Hz, and proves two full
+   decode passes produce identical SHA-256 chains over pixels+palette
+   and identical audio packet counts/bytes. Fingerprints recorded in
+   NEXT.md only - decoded media never enters git.

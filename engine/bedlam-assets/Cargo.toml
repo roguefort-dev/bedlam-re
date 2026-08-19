@@ -4,4 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+smk = "0.1.0"
 thiserror = "1"
+
+[dev-dependencies]
+sha2 = "0.10"
