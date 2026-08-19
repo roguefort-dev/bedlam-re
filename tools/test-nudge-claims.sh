@@ -10,6 +10,12 @@ cleanup() {
   rm -rf "$TMP"
 }
 trap cleanup EXIT
+cat > "$TMP/mock-notify-send" <<EOF
+#!/usr/bin/env bash
+printf "%s\n" "\$*" >> "$TMP/notifications"
+EOF
+chmod +x "$TMP/mock-notify-send"
+export NOTIFY_SEND="$TMP/mock-notify-send"
 CLAIMS="$TMP/claims"
 LOG="$TMP/nudge.log"
 mkdir -p "$CLAIMS"
@@ -127,6 +133,7 @@ set -e
 flock -n "$PLAN/.state/claims/8-owner.claim" true
 rm -f "$PLAN/.state/claims/8-owner.claim"
 grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
+grep -q "item 8 failed three consecutive observed runs" "$TMP/notifications"
 
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF

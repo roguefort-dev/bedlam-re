@@ -50,12 +50,12 @@ common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERR
 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/healthy.lock" "$ROOT/tools/llm-watchdog.sh"
 grep -q "openai/gpt-5.6-luna#max" "$TMP/calls"
 ! grep -q "openai/gpt-5.6-sol#high" "$TMP/calls"
-grep -q -- "--agent build" "$TMP/calls"
 [ ! -e "$PLAN/.state/PAUSE" ]
 
 # A valid repair runs Sol high, requires commit evidence, then releases pause.
 MOCK_LUNA=repair MOCK_SOL_COMMIT=1 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/repair.lock" "$ROOT/tools/llm-watchdog.sh"
 grep -q "openai/gpt-5.6-sol#high" "$TMP/calls"
+grep -q -- "--agent build" "$TMP/calls"
 [ ! -e "$PLAN/.state/PAUSE" ]
 [ ! -e "$PLAN/.state/llm-watchdog-pause" ]
 grep -q "Sol repair produced evidence" "$PLAN/.state/llm-watchdog.log"

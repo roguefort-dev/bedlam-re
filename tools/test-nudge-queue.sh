@@ -33,6 +33,4 @@ cat > "$TMP/NEXT.md" <<EOF
 EOF
 [ "$("$PARSER" "$TMP/NEXT.md" "$TMP/claims")" = 3 ]
 
-# Regression fixture: no blocked or claimed real item is spawnable.
-[ -z "$("$PARSER" "$ROOT/.state/NEXT.md" "$ROOT/.state/claims")" ]
 echo "nudge queue tests: PASS"

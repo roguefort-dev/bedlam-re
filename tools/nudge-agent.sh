@@ -18,6 +18,7 @@ else
   OPENC=/home/kato/.local/share/fnm/node-versions/v24.19.0/installation/bin/opencode2
 fi
 MODEL=zai-coding-plan/glm-5.3
+NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 
 cd "$PLAN_DIR" || exit 1
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
@@ -87,8 +88,8 @@ if [ "$kind" != none ]; then
   echo "$fail_count" > "$STATE/fails"
   if [ "$fail_count" -ge 3 ]; then
     echo $(( $(date +%s) + 900 )) > "$STATE/cooldown-until"
-    if [ "$fail_count" -eq 3 ] && command -v notify-send >/dev/null 2>&1; then
-      notify-send -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind); cooling down 15 minutes" 2>/dev/null || true
+    if [ "$fail_count" -eq 3 ] && [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
+      "$NOTIFY_SEND" -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind); cooling down 15 minutes" 2>/dev/null || true
     fi
   fi
   if [ "$cur" -gt "$CONC_MIN" ]; then
