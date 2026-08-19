@@ -44,6 +44,33 @@
 
 ## Done (append)
 
+- 2026-08-19 04:02-04:0x (stand-down unit, worker 1787104911, TENTH in this
+    slot - same posture as the nine entries directly below, read them first):
+    item 1 remains owned by the operator under the 21cbdcb rule, so this run
+    stood down without any source write. Ownership evidence first-hand at
+    04:02-04:04: operator TUI cmux host pid 95872 (started 03:02:43) alive
+    via ps, parent opencode2 session (pids 93316/93332) alive since 02:58,
+    dirty owner WIP unchanged since 03:09:48 (M engine/bedlam-assets/src/
+    lib.rs 03:09:48, M engine/bedlam-assets/tests/corpus.rs 03:08:10,
+    untracked engine/bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus
+    operator infra WIP tools/nudge-agent.sh + tools/test-nudge-claims.sh);
+    smk.rs still git-clean at HEAD (mtime 03:14:26) - the 40f9c4c hazard
+    flag for the operator stays in force (03:08 seam rewrite not on disk,
+    not committed; closer-wip burst still in .state/scratch, verified
+    present 04:03). No cargo/rustc running (target-dir collision avoidance
+    per cc2cbe8), no new commits since 7301e0f, branch 0 ahead / 0 behind
+    vs origin. Manifests OK x2 read-only bracket (B1 from repo root
+    MANIFEST.sha256, which is root-relative - running it from inside
+    game-data fails with manifest-not-found, use the repo root; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha).
+    Orphan sweep clean: zero dosbox / wine / analyzeHeadless beyond own
+    wrapper pids (self-filtered). Claim 1-owner.claim reserved by the
+    wrapper for this worker at 04:01:51 and left untouched (wrapper owns
+    cleanup; zero claim file ops this run). Item 2 is interactive-gated
+    and the backlog is empty, so no alternate unit exists and this unit
+    closes as a verified no-op stand-down. Zero own mutations beyond this
+    NEXT.md entry; no corpus / Ghidra / Rust writes.
+
 - 2026-08-19 03:54-03:5x (stand-down unit, worker 1787104424, NINTH in this
     slot - same posture as the eight entries directly below, read them first):
     item 1 remains owned by the operator under the 21cbdcb rule, so this run
