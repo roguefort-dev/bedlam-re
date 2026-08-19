@@ -12,9 +12,10 @@ claimed = {
     for path in claims_path.glob("*.claim")
 }
 spawnable = []
-for match in re.finditer(r"(?m)^\s*(\d+)\.\s+\[([^]]+)\]", now):
-    item, kind = match.groups()
-    if kind.strip().upper() in {"INTERACTIVE", "MANUAL", "BLOCKED"}:
+for match in re.finditer(r"(?m)^\s*(\d+)\.\s+((?:\[[^]]+\]\s*)+)", now):
+    item, raw_tags = match.groups()
+    tags = {tag.strip().upper() for tag in re.findall(r"\[([^]]+)\]", raw_tags)}
+    if tags & {"INTERACTIVE", "MANUAL", "BLOCKED"}:
         continue
     if item not in claimed:
         spawnable.append(item)

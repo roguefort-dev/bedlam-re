@@ -24,6 +24,15 @@ cat > "$TMP/NEXT.md" <<EOF
 EOF
 [ -z "$("$PARSER" "$TMP/NEXT.md" "$TMP/claims")" ]
 
-# Regression fixture: the real queue currently contains only an interactive item.
+cat > "$TMP/NEXT.md" <<EOF
+## Now
+1. [P4] [BLOCKED] phase-tagged blocked item
+2. [P4] [INTERACTIVE] phase-tagged manual item
+3. [P4] unattended item
+## Backlog
+EOF
+[ "$("$PARSER" "$TMP/NEXT.md" "$TMP/claims")" = 3 ]
+
+# Regression fixture: no blocked or claimed real item is spawnable.
 [ -z "$("$PARSER" "$ROOT/.state/NEXT.md" "$ROOT/.state/claims")" ]
 echo "nudge queue tests: PASS"

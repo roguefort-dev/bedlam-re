@@ -3,7 +3,13 @@
 set -u
 PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
 STATE="$PLAN_DIR/.state"
-OPENC=${OPENC_OVERRIDE:-opencode2}
+if [ -n "${OPENC_OVERRIDE:-}" ]; then
+  OPENC=$OPENC_OVERRIDE
+elif command -v opencode2 >/dev/null 2>&1; then
+  OPENC=$(command -v opencode2)
+else
+  OPENC=/home/kato/.local/share/fnm/node-versions/v24.19.0/installation/bin/opencode2
+fi
 SYSTEMCTL=${SYSTEMCTL_OVERRIDE:-systemctl}
 REAPER=${REAPER_OVERRIDE:-$PLAN_DIR/tools/nudge-reap-claims.sh}
 LUNA_MODEL=${LUNA_MODEL:-openai/gpt-5.6-luna#max}
@@ -19,6 +25,8 @@ SNAPSHOT="$STATE/llm-watchdog-snapshot"
 PAUSE="$STATE/PAUSE"
 MARKER="$STATE/llm-watchdog-pause"
 COOLDOWN="$STATE/llm-watchdog-cooldown-until"
+PRE_CLAIMS="$STATE/llm-watchdog-preclaims"
+BLOCKED_BEFORE="$STATE/llm-watchdog-blocked-before"
 LOCK=${LLM_WATCHDOG_LOCK:-/tmp/bedlam-llm-watchdog.lock}
 token=""
 pause_owned=0
@@ -52,8 +60,12 @@ resume_glm() {
       [ -e "$claim" ] || continue
       if grep -q "^lock-v1 worker .* owns queue item " "$claim" 2>/dev/null && ! flock -n "$claim" true 2>/dev/null; then
         item=$(basename "$claim" -owner.claim)
-        if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$item" >/dev/null 2>&1; then
-          log "GLM-5.3 resumed item $item with a live locked owner claim"
+        identity=$(stat -c "%d:%i" "$claim" 2>/dev/null || echo missing)
+        grep -q "^$identity " "$PRE_CLAIMS" 2>/dev/null && continue
+        read -ra claim_words < "$claim"
+        worker_id=${claim_words[2]:-}
+        if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$item[[:space:]].*slot $worker_id" >/dev/null 2>&1; then
+          log "GLM-5.3 resumed item $item as new worker $worker_id with a fresh locked claim"
           return 0
         fi
       fi
@@ -65,9 +77,10 @@ resume_glm() {
 }
 on_exit() {
   rc=$?
-  rm -f "$SNAPSHOT"
+  rm -f "$SNAPSHOT" "$BLOCKED_BEFORE"
   release_owned_pause
   resume_glm
+  rm -f "$PRE_CLAIMS"
   exit "$rc"
 }
 trap on_exit EXIT INT TERM HUP
@@ -110,6 +123,7 @@ rm -f "$COOLDOWN"
   echo "time=$(date -Is)"
   echo "head=$(git rev-parse HEAD 2>/dev/null || echo none)"
   echo "last_commit=$(git log -1 --format=\"%H %cI %s\" 2>/dev/null || echo none)"
+  echo "fails=$(cat "$STATE/fails" 2>/dev/null || echo 0)"
   echo status_begin
   git status --short --branch 2>/dev/null || true
   echo status_end
@@ -166,7 +180,8 @@ fi
 pause_owned=1
 
 stop_glm_workers() {
-  [ "$TEST_MODE" = 1 ] && { workers_stopped=1; return 0; }
+  workers_stopped=1
+  [ "$TEST_MODE" = 1 ] && return 0
   local unit props
   while read -r unit; do
     [ -n "$unit" ] || continue
@@ -182,25 +197,57 @@ stop_glm_workers() {
     pkill -TERM -f "^timeout 3900 opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
     sleep 2
   fi
-  workers_stopped=1
+  for _ in $(seq 1 5); do
+    pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1 || return 0
+    sleep 1
+  done
+  pkill -KILL -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+  pkill -KILL -f "^timeout 3900 opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
+  sleep 1
+  if pgrep -f "^opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
+    log "unable to stop all GLM workers; aborting Sol repair"
+    return 1
+  fi
+  while read -r old_identity old_name; do
+    [ -n "$old_name" ] || continue
+    old_claim="$STATE/claims/$old_name"
+    [ -e "$old_claim" ] || continue
+    current_identity=$(stat -c "%d:%i" "$old_claim" 2>/dev/null || echo missing)
+    if [ "$current_identity" = "$old_identity" ] && ! flock -n "$old_claim" true 2>/dev/null; then
+      log "pre-repair claim $old_name remains locked by a descendant; aborting Sol repair"
+      return 1
+    fi
+  done < "$PRE_CLAIMS"
 }
-stop_glm_workers
+: > "$PRE_CLAIMS"
+for claim in "$STATE"/claims/*-owner.claim; do
+  [ -e "$claim" ] || continue
+  printf "%s %s\n" "$(stat -c "%d:%i" "$claim" 2>/dev/null || echo missing)" "$(basename "$claim")" >> "$PRE_CLAIMS"
+done
+if ! stop_glm_workers; then exit 1; fi
 
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
-start_next=$(sha256sum "$STATE/NEXT.md" 2>/dev/null | awk "{print \$1}")
-SOL_PROMPT="You are the high-reasoning repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
+grep -E "^[[:space:]]*[0-9]+\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null | sort -u > "$BLOCKED_BEFORE" || true
+SOL_PROMPT="You are the high-reasoning repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
 : > "$SOL_OUT"
 set +e
 timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --model "$SOL_MODEL" --auto --title bedlam-llm-watchdog-repair "$SOL_PROMPT" >> "$SOL_OUT" 2>&1
 sol_rc=$?
 set -e
 end_head=$(git rev-parse HEAD 2>/dev/null || echo none)
-end_next=$(sha256sum "$STATE/NEXT.md" 2>/dev/null | awk "{print \$1}")
 repair_evidence=0
-if [ "$end_head" != "$start_head" ] && git diff --name-only "$start_head..$end_head" 2>/dev/null | grep -qv "^\.state/"; then
-  repair_evidence=1
-elif [ "$end_next" != "$start_next" ] && grep -qE "^[[:space:]]*[0-9]+\.[[:space:]]+\[BLOCKED\]" "$STATE/NEXT.md"; then
-  repair_evidence=1
+if [ "$end_head" != "$start_head" ] && git cat-file -e "$start_head^{commit}" 2>/dev/null; then
+  for commit in $(git rev-list "$start_head..$end_head" 2>/dev/null); do
+    if git log -1 --format=%B "$commit" | grep -qx "Watchdog-Repair: $token" \
+        && git diff-tree --no-commit-id --name-only -r "$commit" | grep -qv "^\.state/"; then
+      repair_evidence=1
+      break
+    fi
+  done
+fi
+if [ "$repair_evidence" -eq 0 ]; then
+  new_blocked=$(comm -13 "$BLOCKED_BEFORE" <(grep -E "^[[:space:]]*[0-9]+\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null | sort -u) || true)
+  [ -n "$new_blocked" ] && repair_evidence=1
 fi
 if [ "$repair_evidence" -eq 1 ]; then
   log "Sol repair produced evidence rc=$sol_rc head=$start_head..$end_head"

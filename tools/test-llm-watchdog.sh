@@ -31,9 +31,10 @@ case "\$*" in
   *gpt-5.6-sol*)
     if [ "\${MOCK_SOL_SLEEP:-0}" = 1 ]; then sleep 3; fi
     if [ "\${MOCK_SOL_COMMIT:-0}" = 1 ]; then
+      token=\$(cat "$PLAN/.state/PAUSE")
       echo repaired >> "$PLAN/code.txt"
       git -C "$PLAN" add code.txt
-      git -C "$PLAN" commit -qm repair
+      git -C "$PLAN" commit -qm repair -m "Watchdog-Repair: \$token"
     fi
     echo repair-complete
     ;;

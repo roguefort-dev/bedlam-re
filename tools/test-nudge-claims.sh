@@ -25,10 +25,16 @@ PLAN="$TMP/plan"
 mkdir -p "$PLAN/.state/claims"
 echo "# NEXT" > "$PLAN/.state/NEXT.md"
 echo "# STATE" > "$PLAN/.state/STATE.md"
+echo initial > "$PLAN/code.txt"
+git -C "$PLAN" init -q
+git -C "$PLAN" config user.email test@example.invalid
+git -C "$PLAN" config user.name test
+git -C "$PLAN" add .state/NEXT.md .state/STATE.md code.txt
+git -C "$PLAN" commit -qm init
 cat > "$TMP/mock-client" <<EOF
 #!/usr/bin/env bash
 printf "%s\n" "\$*" > "$TMP/mock-client.args"
-echo "4. [BLOCKED] mock completed" > "$PLAN/.state/NEXT.md"
+echo "4. [P4] [BLOCKED] mock completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-client"
@@ -104,6 +110,9 @@ DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 # A clean client with no substantive commit is a failed no-progress run.
 cat > "$TMP/mock-no-progress" <<EOF
 #!/usr/bin/env bash
+echo other-worker >> "$PLAN/code.txt"
+git -C "$PLAN" add code.txt
+git -C "$PLAN" commit -qm other-worker -m "Nudge-Worker: 999"
 exit 0
 EOF
 chmod +x "$TMP/mock-no-progress"
@@ -118,11 +127,24 @@ flock -n "$PLAN/.state/claims/8-owner.claim" true
 rm -f "$PLAN/.state/claims/8-owner.claim"
 grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
 
+# A substantive commit is credited only with this wrappers exact trailer.
+cat > "$TMP/mock-own-progress" <<EOF
+#!/usr/bin/env bash
+echo own-worker >> "$PLAN/code.txt"
+git -C "$PLAN" add code.txt
+git -C "$PLAN" commit -qm own-worker -m "Nudge-Worker: 804"
+EOF
+chmod +x "$TMP/mock-own-progress"
+echo reserved > "$PLAN/.state/claims/9-804.claim"
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-own-progress" "$AGENT" 9 804
+[ ! -e "$PLAN/.state/claims/9-owner.claim" ]
+grep -q "item 9 ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
+
 # Canonical owner publication is atomic: exactly one same-item client starts.
 cat > "$TMP/mock-race" <<EOF
 #!/usr/bin/env bash
 echo started >> "$TMP/race.starts"
-echo "7. [BLOCKED] mock race completed" > "$PLAN/.state/NEXT.md"
+echo "7. [P4] [BLOCKED] mock race completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-race"
@@ -181,7 +203,7 @@ reap
 
 # The real operating contract must not regress to TUI/process ownership.
 grep -q "Process liveness is NEVER ownership evidence" "$ROOT/AGENTS.md"
-grep -q "state-only stand-down commits forbidden" "$ROOT/.state/NEXT.md"
+grep -q "Never make a commit whose only effect is a stand-down/status journal" "$ROOT/AGENTS.md"
 ! grep -q "read them first" "$ROOT/.state/NEXT.md"
 ! grep -q "release your placeholder" "$AGENT"
 
