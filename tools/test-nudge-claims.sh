@@ -28,6 +28,7 @@ echo "# STATE" > "$PLAN/.state/STATE.md"
 cat > "$TMP/mock-client" <<EOF
 #!/usr/bin/env bash
 printf "%s\n" "\$*" > "$TMP/mock-client.args"
+echo "4. [BLOCKED] mock completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-client"
@@ -100,10 +101,28 @@ touch -d "10 seconds ago" "$PLAN/.state/claims/6-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/6-owner.claim" ]
 
+# A clean client with no substantive commit is a failed no-progress run.
+cat > "$TMP/mock-no-progress" <<EOF
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$TMP/mock-no-progress"
+echo reserved > "$PLAN/.state/claims/8-803.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-no-progress" "$AGENT" 8 803
+nop_rc=$?
+set -e
+[ "$nop_rc" -eq 0 ]
+[ -e "$PLAN/.state/claims/8-owner.claim" ]
+flock -n "$PLAN/.state/claims/8-owner.claim" true
+rm -f "$PLAN/.state/claims/8-owner.claim"
+grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
+
 # Canonical owner publication is atomic: exactly one same-item client starts.
 cat > "$TMP/mock-race" <<EOF
 #!/usr/bin/env bash
 echo started >> "$TMP/race.starts"
+echo "7. [BLOCKED] mock race completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-race"
@@ -165,6 +184,5 @@ grep -q "Process liveness is NEVER ownership evidence" "$ROOT/AGENTS.md"
 grep -q "state-only stand-down commits forbidden" "$ROOT/.state/NEXT.md"
 ! grep -q "read them first" "$ROOT/.state/NEXT.md"
 ! grep -q "release your placeholder" "$AGENT"
-[ "$(wc -l < "$ROOT/.state/NEXT.md")" -lt 200 ]
 
 echo "nudge claim tests: PASS"

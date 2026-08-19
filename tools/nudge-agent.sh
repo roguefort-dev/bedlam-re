@@ -62,6 +62,8 @@ elif grep -aqE "Decode error|Error:.*Transport|Error: Transport" "$LOG"; then
   kind=transport
 elif [ "$rc" -ne 0 ]; then
   kind=client-error
+elif [ "$progress" -eq 0 ] && ! grep -qE "^[[:space:]]*$item\.[[:space:]]+\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null; then
+  kind=no-progress
 fi
 
 exec 9>/tmp/bedlam-nudge.lock
