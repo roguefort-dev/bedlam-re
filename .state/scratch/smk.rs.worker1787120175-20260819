@@ -1,0 +1,289 @@
+//! PRESERVED WORKER DRAFT (worker lineage 1787120175, 2026-08-19 ~13:31).
+//! Complete SmkStream implementation matching the committed-adjacent test
+//! contract (lib.rs Smk* error variants, corpus.rs WIP, tests/smk_title_gate.rs).
+//! Built CLEAN (cargo build -p bedlam-assets, 13:31) before a concurrent
+//! worker lineage overwrote src/smk.rs (see NEXT.md [BLOCKED] entry).
+//! Adopt freely: reconcile with whatever impl survives; key extras here =
+//! allocation-bomb pre-validation (frame-chunk sum, tree_size<=tree_chunk,
+//! audio buffer<=input, dims<=8192), guarded() catch_unwind->SmkInvalid,
+//! ring cap at declared frames, frame_index()/audio_packet()/palette()
+//! readout API. Tests included below (synthetic streams, truncation sweep,
+//! hostile headers, lying DPCM).
+use crate::{u32le, AssetsError};
+
+pub const SMK_HEADER_MIN: usize = 104;
+pub const SMK_MAX_DIM: u32 = 8_192;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmkHeader {
+    pub magic: String,
+    pub width: u32,
+    pub height: u32,
+    pub frames: u32,
+    pub ms_per_frame_raw: i32,
+    pub flags: u32,
+    pub audio_sizes: Vec<u32>,
+    pub tree_sizes: Vec<u32>,
+    pub audio_rates: Vec<u32>,
+}
+
+impl SmkHeader {
+    pub fn fps_desc(&self) -> String {
+        let ms_raw = self.ms_per_frame_raw;
+        if ms_raw > 0 {
+            format!("{} fps", 1000 / ms_raw.max(1))
+        } else {
+            let us = (-(ms_raw as i64)) * 10;
+            format!("{} fps (us-per-frame encoding: {}us)", 1_000_000 / us, us)
+        }
+    }
+
+    pub fn us_per_frame(&self) -> u64 {
+        let raw = self.ms_per_frame_raw;
+        if raw > 0 {
+            raw as u64 * 1_000
+        } else if raw < 0 {
+            (-(raw as i64)) as u64 * 10
+        } else {
+            100_000
+        }
+    }
+}
+
+/// Corrected offsets per D30: tree_sizes 56..72, audio_rates 72..100
+/// (P1-era parser read rates at 68 = wrong; struct schema unchanged).
+pub fn parse_smk_header(data: &[u8]) -> Result<SmkHeader, AssetsError> {
+    if data.len() < SMK_HEADER_MIN
+        || (&data[0..4] != b"SMK2" && &data[0..4] != b"SMK4")
+    {
+        return Err(AssetsError::BadMagic);
+    }
+    let audio_sizes: Vec<u32> = (0..7).map(|i| u32le(data, 24 + i * 4)).collect();
+    let tree_sizes: Vec<u32> = [56usize, 60, 64, 68]
+        .iter()
+        .map(|&o| u32le(data, o))
+        .collect();
+    let audio_rates: Vec<u32> = (0..7).map(|i| u32le(data, 72 + i * 4)).collect();
+    Ok(SmkHeader {
+        magic: String::from_utf8_lossy(&data[0..4]).to_string(),
+        width: u32le(data, 4),
+        height: u32le(data, 8),
+        frames: u32le(data, 12),
+        ms_per_frame_raw: u32le(data, 16) as i32,
+        flags: u32le(data, 20),
+        audio_sizes,
+        tree_sizes,
+        audio_rates,
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkYScale {
+    None,
+    Double,
+    Interlace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkAudioCodec {
+    Pcm,
+    Dpcm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmkAudioTrackMeta {
+    pub codec: SmkAudioCodec,
+    pub channels: u8,
+    pub bitdepth: u8,
+    pub rate_hz: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmkInfo {
+    pub width: u32,
+    pub height: u32,
+    pub frames: u64,
+    pub us_per_frame: u64,
+    pub ring_frame: bool,
+    pub y_scale: SmkYScale,
+    pub audio: [Option<SmkAudioTrackMeta>; 7],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmkFrameStatus {
+    More,
+    Last,
+    Done,
+}
+
+fn map_backend_error(e: smk::SmkError) -> AssetsError {
+    match e {
+        smk::SmkError::Io(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => {
+            AssetsError::SmkTruncated
+        }
+        smk::SmkError::BitstreamExhausted => AssetsError::SmkTruncated,
+        smk::SmkError::InvalidSignature => AssetsError::BadMagic,
+        smk::SmkError::Io(_)
+        | smk::SmkError::TreeBuildFailed(_)
+        | smk::SmkError::InvalidData(_) => AssetsError::SmkInvalid,
+    }
+}
+
+fn guarded<T>(f: impl FnOnce() -> smk::Result<T>) -> Result<T, AssetsError> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(e)) => Err(map_backend_error(e)),
+        Err(_) => Err(AssetsError::SmkInvalid),
+    }
+}
+
+pub struct SmkStream {
+    dec: smk::Smk,
+    info: SmkInfo,
+    emitted: u32,
+    done: bool,
+}
+
+impl SmkStream {
+    pub fn open(data: &[u8]) -> Result<Self, AssetsError> {
+        let header = parse_smk_header(data)?;
+        if header.width == 0
+            || header.height == 0
+            || header.width > SMK_MAX_DIM
+            || header.height > SMK_MAX_DIM
+        {
+            return Err(AssetsError::SmkDecode("frame dimensions out of bounds"));
+        }
+        if header.frames == 0 {
+            return Err(AssetsError::SmkDecode("zero frame count"));
+        }
+        let ring = header.flags & 0x01 != 0;
+        let total = u64::from(header.frames) + u64::from(ring);
+        let tables_end = SMK_HEADER_MIN as u64 + total * 5;
+        let tree_chunk = u64::from(u32le(data, 52));
+        let len = data.len() as u64;
+        if tables_end > len || tables_end + tree_chunk > len {
+            return Err(AssetsError::SmkTruncated);
+        }
+        let mut chunk_sum = 0u64;
+        for i in 0..total {
+            let off = SMK_HEADER_MIN + (i * 4) as usize;
+            chunk_sum += u64::from(u32le(data, off) & 0xFFFF_FFFC);
+        }
+        if tables_end + tree_chunk + chunk_sum > len {
+            return Err(AssetsError::SmkTruncated);
+        }
+        for i in 0..4 {
+            if u64::from(header.tree_sizes[i]) > tree_chunk {
+                return Err(AssetsError::SmkDecode("tree size exceeds chunk"));
+            }
+        }
+        let mut audio = [None; 7];
+        for i in 0..7 {
+            let rate = header.audio_rates[i];
+            if rate & 0x4000_0000 == 0 {
+                continue;
+            }
+            if rate & 0x0C00_0000 != 0 {
+                return Err(AssetsError::SmkDecode("Bink-flagged audio track"));
+            }
+            let buf = header.audio_sizes[i] as u64;
+            if buf < 4 {
+                return Err(AssetsError::SmkDecode("audio track buffer below 4 bytes"));
+            }
+            if buf > len {
+                return Err(AssetsError::SmkDecode("audio track buffer exceeds input"));
+            }
+            audio[i] = Some(SmkAudioTrackMeta {
+                codec: if rate & 0x8000_0000 != 0 {
+                    SmkAudioCodec::Dpcm
+                } else {
+                    SmkAudioCodec::Pcm
+                },
+                channels: if rate & 0x1000_0000 != 0 { 2 } else { 1 },
+                bitdepth: if rate & 0x2000_0000 != 0 { 16 } else { 8 },
+                rate_hz: rate & 0x00FF_FFFF,
+            });
+        }
+        let mut dec = guarded(|| smk::Smk::open_memory(data))?;
+        dec.enable_video(true);
+        for (i, t) in audio.iter().enumerate() {
+            if t.is_some() {
+                dec.enable_audio(i as u8, true);
+            }
+        }
+        let info = SmkInfo {
+            width: header.width,
+            height: header.height,
+            frames: header.frames.into(),
+            us_per_frame: header.us_per_frame(),
+            ring_frame: ring,
+            y_scale: if header.flags & 0x04 != 0 {
+                SmkYScale::Interlace
+            } else if header.flags & 0x02 != 0 {
+                SmkYScale::Double
+            } else {
+                SmkYScale::None
+            },
+            audio,
+        };
+        Ok(SmkStream {
+            dec,
+            info,
+            emitted: 0,
+            done: false,
+        })
+    }
+
+    pub fn info(&self) -> &SmkInfo {
+        &self.info
+    }
+
+    pub fn first_frame(&mut self) -> Result<SmkFrameStatus, AssetsError> {
+        guarded(|| self.dec.first_frame())?;
+        self.emitted = 1;
+        self.done = self.emitted as u64 >= self.info.frames;
+        Ok(if self.done {
+            SmkFrameStatus::Last
+        } else {
+            SmkFrameStatus::More
+        })
+    }
+
+    pub fn next_frame(&mut self) -> Result<SmkFrameStatus, AssetsError> {
+        if self.done {
+            return Ok(SmkFrameStatus::Done);
+        }
+        let status = guarded(|| self.dec.next_frame())?;
+        if matches!(status, smk::FrameStatus::Done) {
+            self.done = true;
+            return Ok(SmkFrameStatus::Done);
+        }
+        self.emitted += 1;
+        if self.emitted as u64 >= self.info.frames {
+            self.done = true;
+            return Ok(SmkFrameStatus::Last);
+        }
+        Ok(if matches!(status, smk::FrameStatus::Last) {
+            SmkFrameStatus::Last
+        } else {
+            SmkFrameStatus::More
+        })
+    }
+
+    pub fn pixels(&self) -> &[u8] {
+        self.dec.video_data()
+    }
+
+    pub fn palette(&self) -> &[[u8; 3]] {
+        self.dec.palette()
+    }
+
+    pub fn audio_packet(&self, track: u8) -> Option<&[u8]> {
+        self.dec.audio_data(track)
+    }
+
+    pub fn frame_index(&self) -> u32 {
+        self.emitted.saturating_sub(1)
+    }
+}
