@@ -43,6 +43,145 @@
 
 
 ## Done (append)
+- 2026-08-19 05:53-06:0x (stand-down unit, worker 1787111615, TWENTIETH in
+    this slot - same posture as the nineteen entries directly below, read
+    them first): item 1 remains owned by the operator under the 21cbdcb
+    rule, so this run stood down without any source write.
+    Ownership evidence first-hand at 05:54-05:56: operator TUI cmux host
+    pid 95872 (started 03:02:43) alive via ps (elapsed 02:51:41), parent
+    opencode2 session (pids 93316/93332) alive since 02:58 (elapsed
+    02:55:59), dirty owner WIP unchanged since 03:09:48 (M
+    engine/bedlam-assets/src/lib.rs 03:09:48, M
+    engine/bedlam-assets/tests/corpus.rs 03:08:10, untracked engine/
+    bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus operator infra
+    WIP tools/nudge-agent.sh + tools/test-nudge-claims.sh, both M in git
+    status, mtime 01:34:14); smk.rs still content-clean at HEAD (mtime
+    03:14:26, git diff vs HEAD empty, 0 lines) - the 40f9c4c hazard flag
+    for the operator stays in force (03:08 seam rewrite not on disk, not
+    committed; closer-wip burst verified present 05:55 in
+    .state/scratch/closer-wip: smk.rs.671line-step-api 25k +
+    smk_corpus.rs.mine 3.3k, mtimes 03:14:26). Item 1(a) is already
+    recorded as D30 (docs/DECISIONS.md line 458, verified first-hand this
+    run), further confirming the operator owns this unit end-to-end. No
+    cargo or rustc running (target-dir collision avoidance per cc2cbe8),
+    no new source commits since 4a0ba50 (HEAD was 0c59e2c, the
+    seventeenth stand-down state commit; 4a0ba50..HEAD = 3 state commits
+    only, verified via git log). GHOST RESIDUE ADOPTED x2 per the
+    ghost-survivor protocol: the uncommitted NEXT.md delta vs HEAD
+    (+91 lines, 0 deletions, verified first-hand) was exactly the
+    EIGHTEENTH (worker 1787109113) + NINETEENTH (worker 1787110641)
+    stand-down entries - the nineteenth entry claims it adopted and
+    committed the eighteenth, but that commit never landed (HEAD stayed
+    at 0c59e2c, the seventeenth); benign, content cross-checked against
+    the queue, committed together with this entry so the tree is not left
+    silently partial. Branch 0 ahead / 0 behind vs origin after fetch.
+    Manifests OK x2 read-only bracket (B1 from repo root MANIFEST.sha256
+    rc=0, root-relative; B2 via cd game-data-2 + ../MANIFEST-2.sha256
+    rc=0; zero corpus reads beyond the manifest check itself; B1+B2
+    re-verified after the commit as the closing bracket). Orphan sweep
+    clean: zero dosbox / wine / analyzeHeadless beyond own wrapper pids
+    156774/156775 (self-matched on the word analyzeHeadless inside the
+    prompt text of this wrapper run; argv-inspected via /proc cmdline
+    and self-filtered). Claim 1-owner.claim (at .state/claims/) read back
+    as: lock-v1 worker 1787111615 owns queue item 1 (reserved 05:53:35
+    by the wrapper for this run) and left untouched (wrapper owns
+    cleanup; zero claim file ops this run). Item 2 is interactive-gated
+    (its unattended-safe SMOKE subpart is DONE and stable - stand down
+    per its own instruction) and the backlog is empty, so no alternate
+    unit exists and this unit closes as a verified no-op stand-down.
+    Zero own mutations beyond this NEXT.md entry; no corpus / Ghidra /
+    Rust writes.
+
+- 2026-08-19 05:38-05:4x (stand-down unit, worker 1787110641, NINETEENTH in
+    this slot - same posture as the eighteen entries directly below, read
+    them first): item 1 remains owned by the operator under the 21cbdcb
+    rule (rule text verified first-hand this run via git log 21cbdcb:
+    worker 1787097593 yielded completely on live owner overlap of the
+    P4 SMK seam), so this run stood down without any source write.
+    Ownership evidence first-hand at 05:38-05:40: operator TUI cmux host
+    pid 95872 (started 03:02:43) alive via ps (elapsed 02:35:11), parent
+    opencode2 session (pids 93316/93332) alive since 02:58 (elapsed
+    02:39:29), dirty owner WIP unchanged since 03:09:48 (M
+    engine/bedlam-assets/src/lib.rs 03:09:48, M
+    engine/bedlam-assets/tests/corpus.rs 03:08:10, untracked engine/
+    bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus operator infra
+    WIP tools/nudge-agent.sh + tools/test-nudge-claims.sh, both M in git
+    status, mtime 01:34:14); smk.rs still content-clean at HEAD (mtime
+    03:14:26, git diff vs HEAD empty, 0 lines) - the 40f9c4c hazard flag
+    for the operator stays in force (03:08 seam rewrite not on disk, not
+    committed; closer-wip burst verified present 05:39 in
+    .state/scratch/closer-wip: smk.rs.671line-step-api 25k +
+    smk_corpus.rs.mine 3.3k, mtimes 03:14). Item 1(a) is already recorded
+    as D30 (docs/DECISIONS.md line 458, verified first-hand this run),
+    further confirming the operator owns this unit end-to-end. No cargo or
+    rustc running (target-dir collision avoidance per cc2cbe8), no new
+    source commits since 4a0ba50 (HEAD was 0c59e2c, the seventeenth
+    stand-down state commit; 4a0ba50..HEAD = 3 state commits only,
+    ancestor check YES; the eighteenth worker 1787109113 NEXT.md-only
+    entry never landed as a commit and was ADOPTED this run per the
+    ghost-survivor protocol: the uncommitted delta vs HEAD was verified
+    to be exactly that one benign entry, committed together with this
+    one so the tree is not left silently partial), branch 0 ahead / 0
+    behind vs origin after fetch. Manifests OK x2 read-only bracket (B1
+    from repo root MANIFEST.sha256 rc=0, root-relative; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 rc=0; zero corpus reads beyond the
+    manifest check itself; B1+B2 re-verified after the commit as the
+    closing bracket). Orphan sweep clean: zero dosbox / wine /
+    analyzeHeadless beyond own wrapper pids 150503/150504 (self-matched
+    on the word analyzeHeadless inside the prompt text of this wrapper
+    run; argv-inspected and self-filtered). Claim 1-owner.claim (at
+    .state/claims/) read back as: lock-v1 worker 1787110641 owns queue
+    item 1 (reserved 05:37:21 by the wrapper for this run) and left
+    untouched (wrapper owns cleanup; zero claim file ops this run). Item
+    2 is interactive-gated (its unattended-safe SMOKE subpart is DONE and
+    stable - stand down per its own instruction) and the backlog is
+    empty, so no alternate unit exists and this unit closes as a
+    verified no-op stand-down. Zero own mutations beyond this NEXT.md
+    entry; no corpus / Ghidra / Rust writes.
+
+
+- 2026-08-19 05:12-05:1x (stand-down unit, worker 1787109113, EIGHTEENTH in
+    this slot - same posture as the seventeen entries directly below, read
+    them first): item 1 remains owned by the operator under the 21cbdcb
+    rule (rule text verified first-hand this run via git show 21cbdcb:
+    worker 1787097593 "yielded completely" on live owner overlap of the
+    P4 SMK seam), so this run stood down without any source write.
+    Ownership evidence first-hand at 05:12-05:13: operator TUI cmux host
+    pid 95872 (started 03:02:43) alive via ps (elapsed 02:10:28), parent
+    opencode2 session (pids 93316/93332) alive since 02:58 (elapsed
+    02:14:46), dirty owner WIP unchanged since 03:09:48 (M
+    engine/bedlam-assets/src/lib.rs 03:09:48, M
+    engine/bedlam-assets/tests/corpus.rs 03:08:10, untracked engine/
+    bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus operator infra
+    WIP tools/nudge-agent.sh + tools/test-nudge-claims.sh, both M in git
+    status, mtime 01:34:14); smk.rs still content-clean at HEAD (mtime
+    03:14:26, git diff vs HEAD empty) - the 40f9c4c hazard flag for the
+    operator stays in force (03:08 seam rewrite not on disk, not
+    committed; closer-wip burst verified present 05:13 in
+    .state/scratch/closer-wip: smk.rs.671line-step-api 25k +
+    smk_corpus.rs.mine 3.3k, mtimes 03:14). Item 1(a) is already recorded
+    as D30 (docs/DECISIONS.md line 458, verified first-hand this run),
+    further confirming the operator owns this unit end-to-end. No cargo or
+    rustc running (target-dir collision avoidance per cc2cbe8), no new
+    source commits since 4a0ba50 (HEAD was 0c59e2c, the seventeenth
+    stand-down state commit; 4a0ba50..HEAD = 3 state commits only,
+    ancestor check YES), branch 0 ahead / 0 behind vs origin after fetch.
+    NEXT.md itself was clean vs HEAD at pickup (absent from git status;
+    no ghost residue to adopt this run). Manifests OK x2 read-only
+    bracket (B1 from repo root MANIFEST.sha256 rc=0, root-relative; B2
+    via cd game-data-2 + ../MANIFEST-2.sha256 rc=0; zero corpus reads
+    beyond the manifest check itself). Orphan sweep clean: zero dosbox /
+    wine / analyzeHeadless beyond own wrapper pids 140869/140870
+    (self-matched on the word analyzeHeadless inside the prompt text of
+    this wrapper run; argv-inspected and self-filtered). Claim
+    1-owner.claim (at .state/claims/) read back as: lock-v1 worker
+    1787109113 owns queue item 1 (reserved 05:11:53 by the wrapper for
+    this run) and left untouched (wrapper owns cleanup; zero claim file
+    ops this run). Item 2 is interactive-gated (its unattended-safe
+    SMOKE subpart is DONE/stable - stand down per its own instruction)
+    and the backlog is empty, so no alternate unit exists and this unit
+    closes as a verified no-op stand-down. Zero own mutations beyond
+    this NEXT.md entry; no corpus / Ghidra / Rust writes.
 
 - 2026-08-19 04:59-05:0x (stand-down unit, worker 1787108388, SEVENTEENTH in
     this slot - same posture as the sixteen entries directly below, read them
