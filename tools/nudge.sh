@@ -120,9 +120,10 @@ cd "$PLAN_DIR" || exit 1
 head_now=$(git rev-parse HEAD 2>/dev/null || echo none)
 
 credit_if_progress() {
-  local lp_head lp_ts substantive recent
+  local lp_head lp_ts substantive recent now
   lp_head="none"; lp_ts=0; substantive=0
   if [ -f "$LP" ]; then read -r lp_head lp_ts < "$LP" 2>/dev/null || true; fi
+  now=$(date +%s.%N)
   if [ "$head_now" != "$lp_head" ]; then
     if git cat-file -e "$lp_head^{commit}" 2>/dev/null \
         && git diff --name-only "$lp_head..$head_now" 2>/dev/null | grep -qv "^\.state/"; then
@@ -132,14 +133,19 @@ credit_if_progress() {
     fi
     # Advance even for state-only commits so an older substantive baseline
     # cannot repeatedly credit later journal churn.
-    echo "$head_now $(date +%s)" > "$LP"
+    echo "$head_now $now" > "$LP"
   fi
   [ "$substantive" -eq 1 ] && return 0
   recent=$(find . -path ./.git -prune -o -path "./.state" -prune -o \
       -path "./game-data*" -prune -o -path "./derived*" -prune -o \
       -path "./target" -prune -o -path "./tools/inspect/target" -prune -o \
-      -type f -newermt "-900 seconds" -print -quit 2>/dev/null)
-  [ -n "$recent" ] && return 0
+      -type f -newermt "@$lp_ts" -print -quit 2>/dev/null)
+  if [ -n "$recent" ]; then
+    # Credit each working-tree edit once. Using a rolling timestamp avoids
+    # treating one abandoned file as fresh progress on every timer pass.
+    echo "$head_now $now" > "$LP"
+    return 0
+  fi
   return 1
 }
 

@@ -61,7 +61,7 @@ grep -q -- "operator TUI is supervisory and never blocks work" "$TMP/mock-client
 # A normal transport failure has no live ghost and retains a retry-backoff claim.
 cat > "$TMP/mock-transport" <<EOF
 #!/usr/bin/env bash
-echo "Error: Transport"
+echo "Error: ECONNRESET: The socket connection was closed unexpectedly"
 exit 1
 EOF
 chmod +x "$TMP/mock-transport"
@@ -73,6 +73,7 @@ set -e
 [ "$rc" -eq 1 ]
 [ -e "$PLAN/.state/claims/5-owner.claim" ]
 flock -n "$PLAN/.state/claims/5-owner.claim" true
+grep -q "failed \[transport rc=1 progress=0\]" "$PLAN/.state/nudge.log"
 touch -d "10 seconds ago" "$PLAN/.state/claims/5-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/5-owner.claim" ]
@@ -206,5 +207,7 @@ grep -q "Process liveness is NEVER ownership evidence" "$ROOT/AGENTS.md"
 grep -q "Never make a commit whose only effect is a stand-down/status journal" "$ROOT/AGENTS.md"
 ! grep -q "read them first" "$ROOT/.state/NEXT.md"
 ! grep -q "release your placeholder" "$AGENT"
+grep -q -- '-newermt "@\$lp_ts"' "$ROOT/tools/nudge.sh"
+grep -q 'echo "\$head_now \$now" > "\$LP"' "$ROOT/tools/nudge.sh"
 
 echo "nudge claim tests: PASS"

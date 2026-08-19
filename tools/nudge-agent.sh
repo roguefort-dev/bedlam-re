@@ -70,7 +70,7 @@ fi
 kind=none
 if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
-elif grep -aqE "Decode error|Error:.*Transport|Error: Transport" "$LOG"; then
+elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed" "$LOG"; then
   kind=transport
 elif [ "$rc" -ne 0 ]; then
   kind=client-error
