@@ -44,6 +44,46 @@
 
 ## Done (append)
 
+- 2026-08-19 03:00-03:1x (stand-down unit, worker 1787097593, LIVE OWNER
+    OVERLAP on item 1 detected mid-flight): claim 1-owner.claim reserved
+    01:59:53, later cleaned by the wrapper during the 02:5x restart churn
+    (claims dir empty at 03:07; claim files untouched per the
+    wrapper-owns-cleanup rule). Completed before yielding, all first-hand:
+    (1) vendored smk 0.1.0 source audit (open_memory is buffer-in, zero
+    unsafe, log-only dep, AudioTrack.enable defaults false so a wrapper must
+    enable_all; header field order re-derived from its parser); (2)
+    manifest-bracketed TITLE.SMK probe (SMK2 640x320 1227 frames, rate_raw
+    -6666 -> 66660us = 15fps, flags 0, track0 word 0xc0002b11 = DPCM 8-bit
+    mono 11025 Hz, tree_chunk 145825 packed / unpacked [259248,118912,
+    131064,27728], ZERO keyframe bits, frame types 1211 audio-only + 15
+    plain + 1 palette) - independently confirms committed D30.4/D30.5;
+    (3) ONE committed unit: cc2f084 vendors the smk fork into
+    engine/bedlam-smk (byte-identical to the crates.io artifact, diff-
+    verified against the local registry extraction, NOTICE.md provenance),
+    workspace member, bedlam-assets path dep, build verified green.
+    DEVIATION FLAG FOR THE OWNER: committed D30.1 (95a3859) chose the
+    REGISTRY dep and defers vendoring; cc2f084 (03:04:07, after 95a3859)
+    pins the PATH dep - build-identical (same pkg name/version, byte-
+    identical source) but contrary to the recorded posture. If registry is
+    preferred: flip bedlam-assets/Cargo.toml back to smk = "0.1.0" and drop
+    engine/bedlam-smk (one small revert; NOTICE.md + the D30.3 LGPL note
+    stay valid either way). OVERLAP TIMELINE: owner TUI came up 02:58:24 on
+    pts/1, committed 95a3859 (dep pins + D30) 03:02:57, then wrote smk.rs/
+    lib.rs/corpus.rs/tests/smk_title_gate.rs live while this worker had the
+    same seam half-written; their wholesale rewrites (03:06-03:08) replaced
+    this worker s uncommitted smk.rs; this worker then reverted ONLY its
+    own contradicting inspect edit (D30.4 keeps the JSON schema) and left
+    everything of theirs untouched (the additive AssetsError::SmkDecode
+    variant this worker put in lib.rs survived into their tree - harmless,
+    Copy-compatible, theirs to keep or drop). YIELDED COMPLETELY at ~03:09:
+    remaining M files (lib.rs, smk.rs, corpus.rs, nudge-agent.sh,
+    test-nudge-claims.sh) + untracked tests/smk_title_gate.rs are the
+    owner s live in-flight work - NOT adopted, NOT reverted, NOT judged.
+    Item 1 stays IN PROGRESS under the owner. Unattended workers: do NOT
+    pick item 1 again while the owner is on it; this worker pushed
+    95a3859+cc2f084 (both verified) since origin lacked them. Manifest OK
+    x3 (before probe / after probe / close-out); zero corpus/Ghidra writes.
+
 - 2026-08-18 19:54-19:5x (stand-down unit, worker 1787075793, post-restart
     continuation, two restarts survived): claim 1-owner.claim held by this
     session (reserved 19:56:33; earlier incarnation 1787075674 claim 19:54:34;
