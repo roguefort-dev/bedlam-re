@@ -1461,3 +1461,41 @@
   safe transport for scripts with dollars; (5) SMOKETST.TXT evidence
   gates beat console-log grepping for headless DOS runs (-silent nulls
   DOS output; -exit does not).
+
+- 2026-08-19 03:0x-03:1x (stand-down unit, worker 1787096743, post-restart
+  continuation; claim reserved 01:45:43, REAPED 02:59 by the rate-limit
+  reap per c120967 - found gone, not recreated): THIRD stand-down for the
+  item-1 owner-overlap, this time with direct liveness proof. Owner TUI
+  (opencode2 on pts/1 since 02:58) wrote lib.rs 03:09:48, corpus.rs
+  03:08:10, tests/smk_title_gate.rs 03:08:01 (their API: info()/
+  first_frame()/pixels()/palette() methods, SmkAudioCodec, AssetsError
+  ::SmkDecode/SmkTruncated/SmkInvalid variants in lib.rs) and touched
+  NEXT.md 03:13:03 (content-identical to HEAD, no commit). c120967
+  attributed 03:03-03:08 smk.rs writes to the TUI - those were MINE:
+  this session wrote a complete 671-line smk.rs (step()/SmkFrame codec-
+  neutral API: dims/zero-frame/sub-4B-audio/Bink guards + catch_unwind
+  panic containment + ring cap; 15 unit tests incl. bit-level synthetic
+  SMK2 builders, truncation sweep x2, garbage sweep, lying-DPCM-must-
+  return-Err) + tests/smk_corpus.rs double-run TITLE gate, targeting the
+  vendored engine/bedlam-smk fork. ZERO cargo/build/test was run - no
+  green evidence claimed for it. RISK DISCLOSURE: my batch-1 write
+  truncated smk.rs at ~03:03; if the owner had saved an in-flight smk.rs
+  to disk between 02:58 and 03:03 it was overwritten (never committed;
+  their editor buffer may still hold it; disk had the 137-line HEAD
+  original at my post-restart read). STOOD DOWN per 21cbdcb/c120967
+  protocol: work preserved uncompiled at .state/scratch/closer-wip/
+  {smk.rs.671line-step-api,smk_corpus.rs.mine} for the owner to adopt
+  (guards, panic containment, synthetic builders, sweeps are API-
+  independent); smk.rs restored to HEAD; my untracked corpus test
+  removed; owner files (lib.rs/corpus.rs/title_gate) and wrapper-owned
+  nudge scripts left byte-identical to how they were found. Recon this
+  run, all first-hand, manifest-bracketed x4 (B/A around the 35-SMK
+  layout probe and the TITLE chunk probe, all OK, game-data read-only):
+  header rates live at 72..100 (bit30=exists bit31=DPCM bit29/28=16bit/
+  stereo, low24=Hz) - the 35-file consistency sweep confirms it and
+  matches the c120967 checkpoint; every audio-bearing SMK = track0
+  DPCM 8-bit mono 11025 Hz, max_buffer 11304 (SHOP) / 11764 (rest);
+  BRF_* have no audio; TITLE = SMK2 640x320 1227 frames, ms raw -6666 =
+  66660 us/frame = 15.0015 fps, chunk table 4-aligned with flag bits
+  {0,3}, filesize 17,897,036. No corpus writes, no Ghidra, no claim-file
+  operations. This NEXT.md entry is the only own mutation committed.
