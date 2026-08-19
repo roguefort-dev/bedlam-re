@@ -44,6 +44,31 @@
 
 ## Done (append)
 
+- 2026-08-19 03:44-03:5x (stand-down unit, worker 1787103878, EIGHTH in this
+    slot - same posture as the seven entries directly below, read them first):
+    item 1 remains owned by the operator under the 21cbdcb rule, so this run
+    stood down without any source write. Ownership evidence first-hand at
+    03:45-03:46: operator TUI cmux host pid 95872 (started 03:02:43) alive
+    via ps, parent opencode2 session (pids 93316/93332) alive since 02:58,
+    dirty owner WIP unchanged since 03:09:48 (M engine/bedlam-assets/src/
+    lib.rs 03:09:48, M engine/bedlam-assets/tests/corpus.rs 03:08:10,
+    untracked engine/bedlam-assets/tests/smk_title_gate.rs 03:08:01, plus
+    operator infra WIP tools/nudge-agent.sh + tools/test-nudge-claims.sh);
+    smk.rs still git-clean at HEAD (mtime 03:14:26) - the 40f9c4c hazard
+    flag for the operator stays in force (03:08 seam rewrite not on disk,
+    not committed; closer-wip burst still in .state/scratch per 2791952).
+    No cargo/rustc running (target-dir collision avoidance per cc2cbe8), no
+    new commits since 3fdacbc, branch 0 ahead / 0 behind vs origin.
+    Manifests OK x2 read-only bracket (B1 root MANIFEST.sha256; B2 via cd
+    game-data-2 + ../MANIFEST-2.sha256 per the relative-path gotcha).
+    Orphan sweep clean: zero dosbox / wine / analyzeHeadless processes.
+    Claim reserved by the wrapper and left untouched (wrapper owns cleanup;
+    zero claim file ops this run). Item 2 is interactive-gated and the
+    backlog is empty, so no alternate unit exists and this unit closes as a
+    verified no-op stand-down. Zero own mutations beyond this NEXT.md
+    entry; no corpus / Ghidra / Rust writes.
+
+
 - 2026-08-19 03:31-03:3x (stand-down unit, worker 1787103086, SEVENTH in this
     slot - same posture as the six entries directly below, read them first):
     item 1 remains owned by the operator under the 21cbdcb rule, so this run
