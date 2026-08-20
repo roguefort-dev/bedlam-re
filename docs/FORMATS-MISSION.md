@@ -101,8 +101,14 @@ Recurring engine constants seen across formats: **128** (CGR sprite count),
   doubled bytes 0x0101, 0x2525 — byte planes, not word planes).
 - **Values:** each plane ≤ 98; plane 0 is almost all 1 with 37-anomalies
   (ZONEA/M1: 1×1500, 37×355, 98×11); deeper planes mostly 0/1/2 with max ~10.
-- **What RE must confirm:** plane semantics; likely a compact flag/attribute
-  shadow of the MAP planes (one byte instead of one word per layer).
+- **Semantics — CONFIRMED by EXW RE (2026-08-21, docs/RE-EXW-SIM.md §7c):**
+  the DAT byte at `[z][y][x]` is the **tile TYPE consumed by walkability**
+  (get_from_dat_file@0041eb28 via the y-line/z-base tables the loader
+  builds): type 0/0x2A = empty (get_z_pos searches z, z+1, z−2), 0xFF reads
+  back as type 1, type 3 latches the trigger triple, everything else indexes
+  the CGR height sprites (slot = type−1). The loader sweeps planes 0..6
+  clearing bytes ≥0x80, then overwrites `DAT[kind][y][x] = 0xFF` for every
+  PAD record — the PAD "effect" is stored IN the DAT type grid.
 
 ## 5. LNK — u16[8192] rotation/permutation link table
 
@@ -153,10 +159,14 @@ What RE must confirm: everything beyond the layout.
   - flag ∈ {0 (×55), 1 (×389)} — likely "active/visible".
   - type ∈ 0…7 (1×204, 2×75, 3×51, 4×39, 5×10, 6×12, 7×1, 0×52).
   - All 37 files have distinct contents (each mission places its own markers).
-- **Interpretation (LIKELY):** 12 fixed marker slots (start points? objectives?
-  extraction zones?) per mission.
-- **What RE must confirm:** what the 8 marker types mean and how the engine
-  consumes flags.
+- **Interpretation (CONFIRMED for robot spawns, EXW RE 2026-08-21 —
+  docs/RE-EXW-SIM.md §7c.7):** load_markers@0040cca0 spawns robot i from
+  record i verbatim: `pos = (x<<13)+0xF00, (y<<13)+0xF00`,
+  `z = word3·0x20 − 1` — so **word 3 is the spawn Z LEVEL (1 = ground),
+  not a type**, and the flag word is DROPPED (all 12 records are staged;
+  only the first `robots_per_player` become robots: zone<3||7→1, 3→2,
+  else 3). Remaining open: what consumes word-3=0 records (z −1 seeds)
+  and the flag word elsewhere.
 
 ## 9. NME — enemy/„NME" placement script (partially decoded)
 
@@ -202,20 +212,17 @@ What RE must confirm: everything beyond the layout.
     `05 00 3D 00 00 00 05 00 35 00 01 00 …` = (5,61,0), (5,53,1), (10,46,1)…
   - Record counts across missions: 2 … 114. type tally: 0×310, 1×173, 2×51,
     3×50, 4×62, 5×47, 6×8 (7 pad types).
-- **Meaning (LIKELY, from designer notes):** ZONEC/MISSION7.TXT (see §15) is a
-  note titled *"All the pads and the location of their effects… PAD 000
-  (elevator#0) Located at 0/006/005 lowers section 2/006/002, 2x2area two
-  levels; PAD 002 (teleporter#0) Located at 2/066/002 takes you to 1/027/056"*.
-  So pads are interactive map pieces (elevators, teleporters) that raise/lower
-  map sections — the mechanism behind the changing TOT/MAP planes.
-- **Honest negative:** the TXT coordinates (e.g. `0/006/005`) do **not** match
-  PAD records under direct, swapped, or +25-offset transforms (0/20 matched) —
-  the TXT's `level/x/y` frame and the PAD `(x,y)` frame are related by a rule
-  we haven't found (the TXT `L` word is probably a section/level index into a
-  different coordinate space).
-- **What RE must confirm:** coordinate frame, type vocabulary, where pad
-  *effects* (destinations, lowered sections) are stored — the 6-byte record
-  carries no destination, so effects must live elsewhere (TOT? DAT planes?).
+- **Meaning (CONFIRMED storage, EXW RE 2026-08-21 — docs/RE-EXW-SIM.md
+  §7c.5):** after loading, the engine writes `DAT[plane=type][y·w+x] = 0xFF`
+  for every record (kind < 8 checked; x/y unchecked but in-bounds shipped).
+  get_from_dat_file reads 0xFF back as tile type 1 — a CGR slot-0
+  0x1F-height deck block at level `kind`. So **`type` is the z LEVEL the
+  pad materialises its tile at**, matching the TXT "lowers section two
+  levels" phrasing (a level change re-marks the DAT cell). Open: the
+  interactive side (when a pad fires) lives in TOT/NME consumers.
+- **Honest negative (kept):** the TXT coordinates (e.g. `0/006/005`) still
+  do not match PAD records under simple transforms; the TXT `L/x/y` frame
+  uses a section-local coordinate space we haven't mapped.
 
 ## 11. PAL — one shared 256-colour 6-bit VGA palette
 
@@ -336,14 +343,19 @@ What RE must confirm: everything beyond the layout.
   - offsets are monotonically increasing, last offset = 130814, and
     130814 ≤ 132354 — the final sprite runs to EOF.
 - **Sprites:** sizes 1026–1540 B. Sprite 0 (@512) begins
-  `01 00 00 00 20 00 20 00 …` = u32(1), u16(32), u16(32) → **32×32** tiles;
-  1026 B for 1024 pixels ⇒ light compression/RLE (HYPOTHESIS). The bulk of
-  sprite bytes are runs of a few values (e.g. `1F 1F 1F…`).
+  `01 00 00 00 20 00 20 00 …` = u32(1), u16(32), u16(32) → **32×32** tiles.
+- **Pixel codec — RESOLVED by EXW RE (2026-08-21, docs/RE-EXW-SIM.md §7c.6):
+  there is NO codec.** get_z_pos@0041e231 reads the height byte directly:
+  `CGR[2 + 4·(type−1) + dir[type−1] + 6 + (sy<<5) + sx]` — a 6-byte sprite
+  header then the RAW 1024-byte 32×32 **height map** (the walkability
+  floor field; slot 0 = type 1 is 0x1F everywhere, slot 36 = type 37 reads
+  0x01 at row starts). The 1026-B sprite size = 6 + 1024 exactly; larger
+  sizes pad (the single 1540-B tail sprite per file). The `01 00 00 00
+  20 00 20 00` header is the u32(1) + 32×32 dims the render side also
+  consumes (P4 render slice input).
 - **Contents:** 36 of 44 files are byte-identical; the 7 zone-level CGRs plus
   ZONEE/MISSION4.CGR differ **only in pixel data** — the 128-entry directory is
   identical in every file. VERIFIED
-- **What RE must confirm:** the pixel codec (RLE? planar?) and the header
-  words of each sprite.
 
 ---
 
@@ -382,13 +394,13 @@ Notable **negative** results (things that did NOT fit):
 | MAP | 4 + w·h·16; dims 25×75 / 100×25 / 100×100 | 8 u16 planes/tile; plane 0 terrain-IDs, rest overlays | layout VERIFIED; semantics HYPOTHESIS | per-plane meaning |
 | TOT | same as MAP | MAP superset + dynamic data; planes 6/7 sparse indices | layout VERIFIED; superset VERIFIED; meaning LIKELY | what TOT is for; plane 6/7 target table |
 | COL | same as MAP | per-tile class codes (≤102; 1 and 37 dominant) | layout VERIFIED; content LIKELY | code vocabulary |
-| DAT | 4 + w·h·8 | 8 u8 flag planes mirroring MAP | layout VERIFIED; content LIKELY | plane semantics |
+| DAT | 4 + w·h·8 | walkability TYPE grid (plane=z level); PAD writes 0xFF marks | layout VERIFIED; semantics VERIFIED (EXW 7c) | per-type behaviours |
 | LNK | 16384 = 8192×u16 (44 files) | orientation-link cycles over object space | layout VERIFIED; cycles VERIFIED; meaning LIKELY | index space + usage |
 | CTG | 16384 (44 files) | sparse category table, parallel to LNK | layout VERIFIED; meaning HYPOTHESIS | class vocabulary |
 | LNG | 16384 (7 zone files) | third permutation table, same space | layout VERIFIED; meaning HYPOTHESIS | everything |
-| MRK | 192 = 12×16 B | 12 markers: (flag, x, y, type 0–7) | VERIFIED (coords 444/444 in-bounds) | marker types |
+| MRK | 192 = 12×16 B | spawn markers: (flag, x, y, z-level) — record i spawns robot i | layout VERIFIED; spawn VERIFIED (EXW 7c) | word-3=0 / flag consumers |
 | NME | 16–1492 B | enemy placements: header (n1,n2), 10 B `(1,4,f,x,y)` run, then (count,type)+8 B sections | partial VERIFIED / grammar HYPOTHESIS | full grammar + field semantics |
-| PAD | 5994 = N×6 B + 0xFF fill (N≤999) | pads: elevators/teleporters (x, y, type 0–6) | layout VERIFIED; meaning LIKELY (TXT) | coord frame; where effects live |
+| PAD | 5994 = N×6 B + 0xFF fill (N≤999) | pads: (x, y, z-level) — loader writes DAT[type][y][x]=0xFF | layout + write VERIFIED (EXW 7c) | interactive trigger path |
 | PAL | 770 = 2 + 256×3 (40 files, all identical) | 6-bit VGA palette | VERIFIED | leading 2 bytes |
 | POS | 32000 = 2000×16 B | object placements (x, y, kind 0–5, BLD-index); empty = all-FF | layout VERIFIED; index link LIKELY | index/kind semantics |
 | PTH | 2 (`00 00`) everywhere | u16 count=0 path list | content VERIFIED; layout LIKELY | record format |
@@ -396,7 +408,7 @@ Notable **negative** results (things that did NOT fit):
 | TXT | 409×33, 1649×4 (CRLF ASCII) | designer notes: score codes; pad reference | VERIFIED | — |
 | BDG | 17100–43644, ≡0 mod 4 | per-building binary data, parallel to BLD | layout partial; BLD link LIKELY (r=.985) | field semantics |
 | BLD | 29964–96430 (+zone files) | scenery library: 12 B header + 201+64k B records, name@+96 | structure LIKELY | extension blocks; counts |
-| CGR | 132354 (44 files) | sprite bank: u16 128 + 128×u32 dir + sprites (32×32, 1026–1540 B) | directory VERIFIED 44/44 | pixel codec |
+| CGR | 132354 (44 files) | height-map bank: u16 128 + 128×u32 dir + 6 B hdr + raw 1024 B 32×32 maps | directory VERIFIED; codec RESOLVED (raw, EXW 7c) | render-side header use |
 
 ---
 

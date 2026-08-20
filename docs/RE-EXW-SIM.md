@@ -328,6 +328,84 @@ mission.rs seam green; corrects/refines §§3-4 and the spawn-settle gloss)
    The free-slot scan runs over the first `DAT_0046ccbc` (robot count)
    slots; slot > 0xB → no assignment (caller skips the pos write).
 
+## 7c. Amendment 2026-08-21 (worker d8c46c88, objdump re-read of the
+mission file-load + table-build pass — closes open item 1)
+
+**load_mission@0041dc5a** [verified full disasm 0x41dc5a..0x41df0b], called
+from MissionShell@0x447b3a immediately after the input-echo-array init
+(0x4e6ed8) and BEFORE the GAMEGFX staging family (0x447b3f onward) and
+load_markers@0x447b58. (Corrects §1's gloss that FUN_0041d954's arena pass
+was where the tables filled: 0x41d954 only allocates.)
+
+1. **Paths** [verified 0x41dc63 → build_mission_paths@0044670c, string VAs
+   resolved from the PE]: two path prefixes are built from the zone index
+   `0x4edd8c` (0..6) and mission number `0x4edd88`:
+   - path1 @0x4dca0c = `EDITOR\ZONE{chr(0x41+zone)}\MISSION{mission}`
+     (mission number +5 when `0x4edb88 == 2` [multiplayer/demo variant,
+     untested]) — used for `.TOT`, `.DAT`, `.PAD` (all appended by the
+     concat helper @0x41dbed, which returns the START of the full path);
+   - path2 @0x4dca8c = `EDITOR\ZONE{chr(0x41+zone)}\MISSION{chr(0x41+zone)}`
+     (the zone-level file) — used for `.CGR`, `.BIN`, `.MIN`, and
+     `.LNG` when `0x4eba1c == 1` else `.LNK` [verified 0x41dcf4].
+2. **Loads** [verified call order]: whole-file reads via read_file@0041cc7f
+   (open/seek-end/tell/rewind/read ≤0x80000-chunks/close) into the arena:
+   TOT→`DAT_004ede20`, DAT→`_DAT_004edd58`, CGR→`DAT_004edd60`,
+   BIN→`DAT_004ede1c`, MIN→`DAT_004edd9c`, LNK/LNG→`0x45cdda` (0x8000).
+3. **Table build** [verified 0x41dd1d..0x41dde3]:
+   - `0x302` bytes copied from `0x4edbf8` → `0x4ddb34`, and
+     `word[BIN_buf]` → `DAT_0046cdb8` [staged data, consumer unidentified];
+   - `w = s16[TOT]` → `DAT_004eddec`, `h = s16[TOT+2]` → `DAT_004eddf0`
+     (the TOT cursor advances 4; `DAT_004eddf4 = w*h`);
+   - **DAT cursor +4** (skips the on-disk w/h header — the payload IS the
+     plane-major u8 plane set);
+   - `y_line[y] = y*w` for y in 0..=h at `0x4ea900` (h+1 dwords; the
+     get_from_dat_file table);
+   - `z_base[z] = z*w*h` for z in 0..=7 at `0x4eaacc` (8 dwords).
+4. **Runtime sweep** [verified 0x41dde4..0x41de43]: every DAT byte ≥ 0x80
+   in planes 0..6 is set to 0 (plane 7 untouched). The shipped corpus has
+   0 such bytes in ZONEA (the 0xFF seen in-plane there is PAD-written
+   post-sweep), so this only matters for editor/padded data.
+5. **PAD staging** [verified 0x41de44..0x41df03]: PAD is read into
+   `0x4e44f8` (0x1f38 = 999×6 + 2 slack), then for i in 0..999:
+   `(x,y,kind) = rec[i]`; if `x != -1`: rec flag word set 1, and
+   **`DAT[plane=kind][y*w+x] = 0xFF`** when `kind < 8` (the only bound
+   checked — x/y are unchecked, in-bounds in the shipped corpus).
+   get_from_dat_file reads 0xFF back as type 1 → **a PAD marks its tile
+   as a type-1 (CGR slot 0, 0x1F-height deck block) cell at level `kind`**
+   — the concrete "pad effect" storage FORMATS-MISSION §10 was looking
+   for [inferred reading; the write itself is verified].
+6. **CGR height addressing** [verified 0x41e328..0x41e353, corrects
+   FORMATS-MISSION §18's "light compression/RLE" hypothesis]:
+   `height = CGR[2 + 4·(type−1) + dir[type−1] + 6 + (sy<<5) + sx]` —
+   i.e. the u32 directory entry plus a 6-byte per-sprite header, then the
+   RAW 1024-byte 32×32 height map. The 1026/1028/… sprite sizes are just
+   header (6 B) + 1024 B map (+ pad); there is no codec. CGR slot 0
+   (type 1) is 0x1F everywhere; slot 36 (type 37) reads 0x01 at its row
+   start [corpus bytes] — so ZONEA walls block not by being tall but by
+   being a LOWER floor than the type-1 deck the robots stand on (climb 4).
+7. **Markers → robots** [verified 0x40cca0..0x40d098]: load_markers stages
+   the 12×16 B MRK records into 12×12 B at `0x4e6430` (flag dropped),
+   clears 12×0xA8 robot records + targets, then robot i (i <
+   DAT_0046ccbc = robots_per_player: zone<3||zone==7 → 1, zone 3 → 2,
+   else 3; overridden to `0x46cbe0` when `0x4edb88 != 0` — network
+   player count) takes MRK record i VERBATIM:
+   `pos = (x<<13)+0xF00, (y<<13)+0xF00`, `z = word3<<5 − 1` — so **MRK
+   word 3 is the spawn Z LEVEL** (1 = ground), not a "type"; a word-3=0
+   marker seeds z −1 and only settles on a height-≤3 ground tile
+   (amendment 7b.4). The 0x62-stride stats copy, variant RandA()&3, the
+   probe seeding, and the one settle probe match §§3/7b exactly.
+8. **Order armer callers** [verified 0x433cfb]: the only call site of
+   FUN_004247b5 is the robot-sprite click family ~0x433cbc (sprite hit
+   test → arm at the clicked robot's tile, robot state 2 = selected
+   writers nearby at 0x433c7f/0x433cab). FUN_00424a6f (the nearby call
+   with small immediates 0..0xA) is a message/popup builder, NOT a move
+   producer [verified negative]. The verified move producer remains the
+   §5/§6 order-consumption path; on real shipped maps no two MRK spawn
+   markers sit within the 6-tile order radius (ZONEB's four are adjacent
+   but zone 1 spawns one robot), so a second walker on the real map must
+   be staged externally (host/test seam) — exactly what multiplayer's
+   0x46cbe0 override does in the original.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -349,13 +427,18 @@ mission.rs seam green; corrects/refines §§3-4 and the spawn-settle gloss)
 | robots per zone | <3|7→1, 3→2, else 3 | FUN_0040cca0 |
 | map size globals | DAT_004eddec (w) / DAT_004eddf0 (h) tiles | 0041e897 |
 | DAT tables | z-base@0x4eaacc, y-line@0x4ea900 | 0041eb28 |
+| loader | load_mission@0041dc5a; paths@0x44670c; sweep ≥0x80→0 planes 0..6; PAD→DAT 0xFF @ plane=kind | 7c |
+| CGR height byte | CGR[2+4(type−1)+dir[type−1]+6+(sy<<5)+sx] (no codec) | 0x41e328, 7c |
+| MRK word 3 | spawn z level (z = w3<<5 − 1) | 0x40d06d, 7c |
 | CGR/DB ptrs | DAT_004edd60 (CGR), DAT_004edd58 (DAT), 0x4796bc/cc (type DB 0x1E stride) | 0041e231, 00407e11 |
 
 ## 9. Open items (next slices)
 
-1. The mission file-load + table-build pass (fills 0x4ea900/0x4eaacc,
-   004eddec/df0; the ".TOT/.DAT/.CGR/.MIN/.PAD" loader) — required by the
-   P4 render slice anyway.
+1. ~~The mission file-load + table-build pass~~ — DECODED 2026-08-21,
+   amendment 7c: load_mission@0041dc5a (paths, TOT/DAT/CGR/BIN/MIN/LNK
+   loads, y-line/z-base tables, ≥0x80 sweep, PAD 0xFF marks) + markers →
+   robots (MRK word 3 = spawn z level). Engine seam: the P4 corpus gate
+   builds Terrain from raw DAT+PAD+CGR bytes with these rules.
 2. FUN_00440e45 (10661 B, GameMain call #2) identity — not the gameplay
    loop [verified negative]; likely the inter-mission shell (shop/map
    room) [hypothesis].
