@@ -957,3 +957,67 @@ needless borrows in the gate test).
 
 Not done here (queued): BRF_DROP play site, native executable shell,
 ZONEA/MISSION1 vertical slice.
+
+## D37 - 2026-08-20: BRF_DROP briefing intro pair + ring-Last fix (P5, item 1)
+
+Context: NEXT item 1 - the D33 not-done tail: BRF_DROP.SMK, the
+only BRF_* file with no briefing_name mapping. The RE prerequisite
+landed by the interrupted predecessor as 3a2981d
+(RE-EXW-GAMETHREAD.md D37 section), which died on a transport
+error after the docs commit, leaving the Rust unwired; this run
+adopted and completed it (commit bba01fe).
+
+1. RE [verified, docs 3a2981d, summarized]: FUN_0043d00b IS the
+   briefing screen (prior gameplay-advance gloss corrected); the
+   BRF_DROP play site is asm 0043d447..0043d490 - the literal at
+   0x4591f7 opens FIRST at every movie-enabled briefing (gate
+   DAT_0046cca4), full screen (dst height 0x1e0 = 480 rows), ONE
+   pass (handoff = frame index reaching count-1 -> count-1
+   renders), then hands off to the constructed BRF_{zone}{level}.SMK
+   ring (name builder 0043d1b7..0043d335, letter =
+   zone@004edd8c + 0x40, zones 2..=6 = B..=F - the D33 open note
+   resolved) which rings until the UI exit; both open failures are
+   FATAL; the GO button arms only after the handoff (unskippable).
+2. FLOW: brief.rs BriefIntro (Staged -> Drop -> Backdrop) on the
+   D31 clock. The drop pass is hard-capped by advance_limited
+   (frames-1 decoded frames - the same count as the modal runner);
+   the backdrop ring advances UNBOUNDED (the flow never reports an
+   end - the scene exit drops it); the entry-audio rule applies at
+   start and at the handoff (the corpus pair is silent).
+3. HOST: load_briefing(drop, backdrop) stages inert with the
+   sync_movie semantics (a staged flow waits on any scene; an
+   active one drops + clears the stream on leaving Brief);
+   pump_brief rides the D31 stream bus and self-terminates on
+   decode error / overflow; render precedence
+   loading > boot > brief > movie. Hash isolation unit-pinned.
+4. MOVIE FIX (found by the new corpus gate): the seam contract
+   says Last = the last frame of a stream OR OF A RING PASS - the
+   vendored ring decoder returns Last at the closing slot of every
+   cycle and wraps to frame 1 on the next call (frame 0 is the
+   setup frame, never replayed; ring total = frames + 1).
+   advance_limited latched finished on ring-Last, freezing ANY
+   ring at its first cycle end - latent since D31 (no consumer had
+   run a ring past one cycle: the boot attract caps at frames-1).
+   Ring-Last now continues; non-ring Last/Done unchanged. New
+   movie.rs ring unit pins the wrap + audio order; SHOP.SMK (D33,
+   ring) inherits the fix.
+5. CORPUS GATE (game tests/brief_gate.rs, skips when the corpus is
+   absent): BRF_DROP + BRF_B1 at the 60 Hz host pace - drop max
+   decoded frame 28 (29/30 rendered), handoff at the closed-form
+   pump 58 ((frames-1) * 7_999_200 units on the x240-us grid),
+   zero PCM bytes (the corpus pair is silent), the 512-frame ring
+   reaches its closing slot 512 and wraps exactly 512 -> 1 while
+   still playing (2+ full cycles driven), two independent runs
+   byte-identical (SHA-256 over the per-pump observation chain).
+6. TESTS: 5 brief.rs units (staged silence; one-pass bound + exact
+   handoff timing incl. the non-ring backdrop hold; starvation-
+   burst cap; 2-frame drop passes in one period; bad bytes reject
+   at construction) + 1 movie.rs ring unit + 2 host units
+   (lifecycle incl. entry audio + stream clear on exit; scene-hash
+   isolation) + the corpus gate. Workspace 343 tests green / 0
+   failed (recounted at D37 close-out on the bba01fe tree; the
+   bba01fe message said 342 - one short), fmt + clippy -D warnings
+   clean, MANIFEST.sha256 verified before AND after the
+   corpus-touching runs.
+Not done here (queued): native executable shell (P4 window/audio
+integration), ZONEA/MISSION1 vertical slice.

@@ -645,3 +645,11 @@ the rest of the scene), GameHost::load_briefing(drop, backdrop) staging
 it inert-until-Brief; corpus gate `tests/brief_gate.rs` (drop 29/30
 frames, exact switch pump, silent, ring continues, two runs
 byte-identical). See DECISIONS.md D37.
+
+Landed as bba01fe (2026-08-20). The gate run also exposed + fixed a
+latent D31 MoviePlayer bug: the seam reports Last at the closing
+slot of EVERY ring pass (ring total = frames + 1, wrap jumps to
+frame 1); advance_limited used to latch finished on ring-Last,
+freezing any ring stream at its first cycle end (no prior consumer
+had driven a ring that far). Ring-Last now continues (DECISIONS D37
+item 4); the gate pins the 512 -> 1 wrap of the corpus backdrop.
