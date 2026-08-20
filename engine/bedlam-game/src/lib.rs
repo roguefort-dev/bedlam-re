@@ -20,6 +20,7 @@
 #![forbid(unsafe_code)]
 
 pub mod config;
+mod font;
 pub mod fsm;
 pub mod host;
 pub mod loading;

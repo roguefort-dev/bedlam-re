@@ -282,13 +282,41 @@ impl GameHost {
     /// (D34). It owns the Select plane on the Cutscene -> Select
     /// transition, fading in from black over FadeSetup 10 steps at
     /// 50 Hz, and holds until Select is left. The palette folds to
-    /// 6-bit with entries 224..=255 forced to the EXW 0x3f tail.
+    /// 6-bit; the 224..=255 tail carries the staged FULLPAL ramp once
+    /// [`Self::load_loading_font`] ran (D35), else the folded file
+    /// values.
     pub fn load_loading_screen(&mut self, bin: &[u8], pal: &[u8]) -> Result<(), GameError> {
         let still = crate::loading::decode_entry0(bin)?;
         let target = crate::loading::loading_palette(pal)?;
         let flow = self.stage_loading_slot();
         flow.screen = Some(still);
         flow.target = Some(target);
+        Ok(())
+    }
+
+    /// Stage the loading-text pass (D35): FULLFONT.BIN bytes +
+    /// FULLPAL.PAL bytes + the LANGUAGE.* bytes (the caller fetches
+    /// whichever language file its EXW language index 004eba1c
+    /// selected - the host never reads game-data). Inert until the
+    /// flow enters Loading: the four FUN_0043c87c draws then land on
+    /// the loading-screen raster (rows 150/180/210, +260 for zone 6,
+    /// strings = table entries 0x45/0x46/zone+0x51/0x58) and the ramp
+    /// replaces the fade-target tail (EXW order: draws, then the ramp
+    /// copy, then FadeSetup). A bad font bank / ramp / language file
+    /// is a staging error; staging touches no hashed state.
+    pub fn load_loading_font(
+        &mut self,
+        font_bin: &[u8],
+        fullpal: &[u8],
+        language: &[u8],
+    ) -> Result<(), GameError> {
+        let font = crate::font::LoadingFont::from_bank(font_bin)?;
+        let ramp = bedlam_assets::pal::parse_font_ramp(fullpal)?;
+        let table = bedlam_assets::language::parse_menu_items(language)?;
+        let flow = self.stage_loading_slot();
+        flow.font = Some(font);
+        flow.ramp = Some(ramp);
+        flow.table = Some(table);
         Ok(())
     }
 
@@ -307,9 +335,10 @@ impl GameHost {
             .map(|flow| flow.fade_step)
     }
 
-    /// The pinned text row of the active loading screen (D34): the y
-    /// coordinate plus the zone-dependent x columns the FULLFONT
-    /// glyph pass will draw [geometry verified; glyphs queued].
+    /// The pinned text rows of the active loading screen (D35): the
+    /// zone-dependent draw rows of the four FUN_0043c87c text draws
+    /// (the draws themselves already ran onto the plane at Loading
+    /// entry through the staged font).
     pub fn loading_text_row(&self) -> Option<TextRow> {
         self.loading
             .as_ref()
@@ -1049,13 +1078,15 @@ mod tests {
         assert_eq!(host.loading_fade_step(), Some(0));
         assert!(host.frame().indices.iter().all(|&i| i == 0x10));
         assert_eq!(host.frame().palette, [[0u8; 3]; 256]);
-        // Zone 1 completed (stage 2): the 3-column text row.
+        // Zone 1 completed (stage 2): the 3-row text pass (D35: the
+        // draws ran at Loading entry; no font staged here - pristine).
         assert_eq!(
-            host.loading_text_row().map(|row| (row.y, row.xs)),
-            Some((130, &[150, 180, 210][..]))
+            host.loading_text_row().map(|row| row.rows),
+            Some(&[150, 180, 210][..])
         );
         // 11 more pumps = 48 sub-ticks total = 200 ms = the 10-step
-        // 50 Hz fade complete: folded palette, forced 0x3f tail.
+        // 50 Hz fade complete: folded palette. No staged ramp: the
+        // tail keeps the folded file values ([1,2,3] round-trips).
         for _ in 0..11 {
             host.pump_frame(4, &InputFrame::default());
         }
@@ -1063,14 +1094,78 @@ mod tests {
         let pal = host.frame().palette;
         assert_eq!(pal[0], [12, 34, 56], "file entry 0 folded back");
         assert_eq!(pal[223], [21, 22, 23], "pre-tail entry preserved");
-        assert_eq!(pal[224], [63, 63, 63], "tail start forced");
-        assert_eq!(pal[255], [63, 63, 63], "tail end forced");
+        assert_eq!(pal[224], [1, 2, 3], "no ramp: folded file tail stands");
+        assert_eq!(pal[255], [1, 2, 3], "no ramp: folded file tail stands");
         // Leaving Select drops the flow entirely.
         host.apply(SceneAction::Advance);
         host.pump_frame(4, &InputFrame::default());
         assert_eq!(host.scene(), Scene::Mission);
         assert_eq!(host.loading_phase(), None);
         assert_eq!(host.loading_fade_step(), None);
+    }
+
+    #[test]
+    fn loading_font_pass_draws_the_rows_and_tints_the_tail() {
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig::default(),
+            marker_palette(),
+        );
+        host.load_cutscene(&synth_smk()).unwrap();
+        host.load_interlude(&full_still_bin(0xB7)).unwrap();
+        host.load_loading_screen(&full_still_bin(0x10), &load_pal())
+            .unwrap();
+        // The D35 staging seam: FULLFONT bank + FULLPAL ramp + the
+        // LANGUAGE table, inert until the flow enters Loading.
+        host.load_loading_font(
+            &crate::font::synth::font_bin(),
+            &crate::font::synth::fullpal_bin(),
+            &crate::font::synth::language_bin(b"Congrats!"),
+        )
+        .unwrap();
+        walk_to_first_cutscene(&mut host);
+        for _ in 0..4 {
+            host.pump_frame(4, &InputFrame::default());
+        } // movie done -> Between
+        host.apply(SceneAction::Advance); // -> Select
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Loading));
+        assert_eq!(host.loading_fade_step(), Some(0));
+        // Zone 1 (stage 2): three rows drew through the staged font -
+        // entry 0x45 "Congrats!" carries the bang glyph (fill 0xF0) at
+        // row 150; 0x46 "Now move out to" and 0x52 "The Airport" carry
+        // lowercase glyphs (fill 0xF2) at rows 180/210.
+        let frame = host.frame();
+        for (row, fill) in [(150usize, 0xF0u8), (180, 0xF2), (210, 0xF2)] {
+            let band = &frame.indices[row * 640..(row + 2) * 640];
+            assert!(band.contains(&fill), "row {row}: glyph fill {fill:#x} drew");
+        }
+        // Well above the first row: the untouched still fill.
+        assert!(
+            frame.indices[100 * 640..110 * 640]
+                .iter()
+                .all(|&v| v == 0x10),
+            "above the text rows: pristine still"
+        );
+        // A bad font bank is a staging error (typed, no state change).
+        assert!(host
+            .load_loading_font(
+                &[1u8, 0],
+                &crate::font::synth::fullpal_bin(),
+                &crate::font::synth::language_bin(b"x")
+            )
+            .is_err());
+        // 11 more pumps = fade complete: the tail carries the staged
+        // ramp (entry 224 black, 233 white, 255 = (31*7)&0x3f), the
+        // pre-tail file values stand.
+        for _ in 0..11 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        let pal = host.frame().palette;
+        assert_eq!(pal[224], [0, 0, 0], "ramp entry 0 (black)");
+        assert_eq!(pal[233], [63, 63, 63], "ramp entry 9 (white)");
+        assert_eq!(pal[255], [25, 25, 25], "ramp end (31*7)&0x3f");
+        assert_eq!(pal[0], [12, 34, 56], "pre-tail file value stands");
     }
 
     #[test]
@@ -1125,6 +1220,12 @@ mod tests {
                 host.load_interlude(&full_still_bin(0xB7)).unwrap();
                 host.load_loading_screen(&full_still_bin(0x10), &load_pal())
                     .unwrap();
+                host.load_loading_font(
+                    &crate::font::synth::font_bin(),
+                    &crate::font::synth::fullpal_bin(),
+                    &crate::font::synth::language_bin(b"Congrats!"),
+                )
+                .unwrap();
                 host.apply(SceneAction::MissionComplete); // -> Debrief
                 host.apply(SceneAction::Advance); // -> Cutscene | Shop
                 if sub + 1 < subs {
@@ -1162,9 +1263,12 @@ mod tests {
             host.pump_frame(4, &InputFrame::default());
             if zone + 1 == 6 {
                 // Completing zone 6 (into the endgame zone): the
-                // zone-6 arm adds the fourth text column.
+                // zone-6 arm adds the fourth text row, and the
+                // staged font drew it (0xF2 = lowercase glyph fill).
                 let row = host.loading_text_row().unwrap();
-                assert_eq!(row.xs, &[150, 180, 210, 260][..]);
+                assert_eq!(row.rows, &[150, 180, 210, 260][..]);
+                let band = &host.frame().indices[260 * 640..262 * 640];
+                assert!(band.contains(&0xF2), "zone-6 fourth row drew");
             }
             if zone + 1 == 7 {
                 assert_eq!(host.loading_phase(), None, "stays dropped");

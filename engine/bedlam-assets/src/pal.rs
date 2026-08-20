@@ -1,4 +1,4 @@
-//! 770-byte VGA palette files (.pal).
+//! 770-byte VGA palette files (.pal) and the 98-byte FULLPAL font ramp.
 
 use crate::AssetsError;
 
@@ -23,6 +23,32 @@ pub fn parse_vga770(data: &[u8]) -> Result<Palette, AssetsError> {
         }
     }
     Ok(Palette(p))
+}
+
+/// Entries in the FULLPAL.PAL font ramp [verified: the LAB_0041c69e
+/// tail copies 0x60 bytes = 24 dwords + 0 tail from the FULLPAL load
+/// buffer +2 into DAC buffer +0x2a2 = entries 224..=255].
+pub const FONT_RAMP_ENTRIES: usize = 32;
+
+/// Parse a 98-byte FULLPAL.PAL: 2-byte lead-in (`e0 20` on the
+/// corpus = first entry 224, count 32) then 32 RGB triples in 6-bit
+/// components, masked like [`parse_vga770`] (EXW copies the bytes
+/// raw into the 6-bit DAC buffer; the mask is a no-op on 6-bit data).
+///
+/// The ramp replaces palette entries 224..=255 of the loading-screen
+/// fade target AFTER the pre-text 0x3f fill (bedlam-game loading).
+pub fn parse_font_ramp(data: &[u8]) -> Result<[[u8; 3]; FONT_RAMP_ENTRIES], AssetsError> {
+    let expected = 2 + FONT_RAMP_ENTRIES * 3;
+    if data.len() != expected {
+        return Err(AssetsError::WrongSize { len: data.len() });
+    }
+    let mut out = [[0u8; 3]; FONT_RAMP_ENTRIES];
+    for (i, entry) in out.iter_mut().enumerate() {
+        for c in 0..3 {
+            entry[c] = data[2 + i * 3 + c] & 0x3F;
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -66,6 +92,42 @@ mod tests {
     }
 
     #[test]
+    fn font_ramp_masks_six_bit_and_pins_size() {
+        let mut d = vec![0xE0u8, 0x20];
+        for i in 0..FONT_RAMP_ENTRIES {
+            for c in 0..3 {
+                d.push(((i * 3 + c) & 0x3F) as u8);
+            }
+        }
+        assert_eq!(d.len(), 98);
+        let ramp = parse_font_ramp(&d).unwrap();
+        assert_eq!(ramp[0], [0, 1, 2]);
+        assert_eq!(
+            ramp[31],
+            [
+                ((31 * 3) & 0x3F) as u8,
+                ((31 * 3 + 1) & 0x3F) as u8,
+                ((31 * 3 + 2) & 0x3F) as u8,
+            ],
+        );
+        // High bits masked like parse_vga770.
+        let mut d2 = d.clone();
+        d2[2] = 0xFF;
+        assert_eq!(parse_font_ramp(&d2).unwrap()[0][0], 0x3F);
+        // Exact size gate: 97 or 99 bytes rejected.
+        assert_eq!(
+            parse_font_ramp(&d[..97]),
+            Err(AssetsError::WrongSize { len: 97 })
+        );
+        let mut long = d.clone();
+        long.push(0);
+        assert_eq!(
+            parse_font_ramp(&long),
+            Err(AssetsError::WrongSize { len: 99 })
+        );
+    }
+
+    #[test]
     fn no_panic_on_randomish_input() {
         let mut s = 42u64;
         let mut next = move || {
@@ -75,6 +137,10 @@ mod tests {
         for len in [0usize, 1, 769, 770, 771, 2048] {
             let d: Vec<u8> = (0..len).map(|_| next()).collect();
             let _ = parse_vga770(&d);
+        }
+        for len in [0usize, 1, 97, 98, 99, 4096] {
+            let d: Vec<u8> = (0..len).map(|_| next()).collect();
+            let _ = parse_font_ramp(&d);
         }
     }
 }

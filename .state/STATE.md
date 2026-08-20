@@ -1,3 +1,43 @@
+- CLOSED 2026-08-20 (P5 FULLFONT loading-text glyph pass, D35, this
+  commit): the four LAB_0041c69e text draws + the FULLPAL font-ramp
+  copy run in GameHost. bedlam-game font.rs = FUN_0043c87c (measure/
+  draw passes, x0 = 0x140 - total/2, space +9 / glyph w+2, RLE16
+  transparent blit, hotspot dy->row dx->col baseline anchoring,
+  FUN_00410493 accent remap with the shipped e-/o-diaeresis dash
+  quirks, overlay glyphs at entry 0x82+0x6b+id = 238..=241);
+  bedlam-assets language.rs = the LANGUAGE.* [MENU_ITEMS] table
+  (strings = entries 0x45/0x46/zone+0x51/0x58; the DAT_0046bc4c/7c/
+  bfdc globals are table base + idx*0x30); pal.rs parse_font_ramp =
+  the 98B FULLPAL ramp (lead e0 20) that replaces fade-target
+  entries 224..=255 after the draws (EXW order: 0x3f transient ->
+  draws -> ramp -> FadeSetup). D34 row/y swap CORRECTED: 0x82 is the
+  glyph entry base; 150/180/210/260 are draw ROWS. Host
+  load_loading_font stages inert; corpus gate tests/font_gate.rs
+  (FULLFONT 390 entries / 333 glyphs, ASCII pixel set {0} U
+  {233..=244}, dy {0,5,10,15}; FULLPAL + 6 LANGUAGE files pinned;
+  independent width re-measures). 15 new units; 326 workspace tests
+  green, fmt + clippy -D warnings clean, manifest OK x2. WIP of
+  interrupted predecessors adopted + completed by run 315d2af1
+  (claim 1). Next per P5: boot attract LOGO/GTLOG sequence (queue
+  item 1).
+- CLOSED 2026-08-20 (P5 post-cutscene loading flow, D34, d834f08): the
+  EXW LAB_0041c69e zone-transition tail runs in GameHost as a
+  presentation-only flow (bedlam-game loading.rs, LoadingFlow
+  Staged->Between->Loading): BETWEEN.BIN entry 0 owns the Cutscene
+  plane after the cutscene movie ends (standing host palette); the
+  region-variant loading screen (LOAD_UK/US.BIN + LOADPAL/LOADPALU,
+  path-selection only) owns the Select plane with the 10-step 20 ms
+  50 Hz fade on the x240-us accumulator grid; DAC tail entries
+  224..=255 forced 0x3f (buf bytes 0x2a2..0x301); text row pinned
+  (y=0x82, x=150/180/210, zone-6 +260, stage-1 pre-increment
+  reconciliation) as TextRow state for the queued FULLFONT glyph
+  pass; endgame arm (MAX_STAGE) drops the flow; skip-advance still
+  runs the loading screen; scene-hash untouched (D17-b). 14 new
+  units; 311 workspace tests green, fmt + clippy clean, manifest OK
+  x2. WIP of interrupted predecessor 3977d55d adopted, doc fix + D34
+  DECISIONS entry + bookkeeping by run f807449c (claim 1). Next per
+  P5: FULLFONT.BIN glyph pass over the pinned text row (queue item
+  1).
 - CLOSED 2026-08-20 (P5 loading-screen asset path, this commit): the
   LAB_0041c69e zone-transition tail assets are decoded + PINNED
   (bedlam-assets tests/loading_gate.rs, 3 tests + ignored regen):

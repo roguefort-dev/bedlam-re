@@ -13,6 +13,7 @@ pub mod audio;
 pub mod bdl;
 
 pub mod codecs;
+pub mod language;
 pub mod misc;
 pub mod mission;
 pub mod music;
@@ -77,6 +78,9 @@ pub enum AssetsError {
     /// Magic / signature mismatch.
     #[error("bad magic")]
     BadMagic,
+    /// A text section heading the format requires is not in the buffer.
+    #[error("section heading not found")]
+    SectionNotFound,
     /// .MRS size disagrees with the header-table layout formula
     /// (data_off + sum(sizes)). True for all shipped files.
     #[error("mrs layout: {len}B != data_off+sizes {expected}B")]

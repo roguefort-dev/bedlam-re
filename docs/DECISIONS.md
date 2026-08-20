@@ -807,3 +807,80 @@ re-run green by the adopting run.
 Not done here (queued): the FULLFONT.BIN glyph pass over the pinned
 text row (FUN_0043c87c + the buf+0x2a2 font-ramp copy), BRF_DROP
 play site, boot LOGO/GTLOG attract sequence.
+
+## D35 - 2026-08-20: FULLFONT loading-text glyph pass (P5, item 1)
+
+Context: NEXT item 1 - the D34 follow-up: draw the loading-screen
+text through the pinned TextRow flow state from FULLFONT.BIN,
+reproducing the four FUN_0043c87c draws + the font-ramp copy into
+DAC buf+0x2a2 per the LAB_0041c69e tail. Engine WIP of interrupted
+predecessors (Ghidra RE artifacts 12:23-12:34 + font.rs/language.rs/
+font_gate.rs/pal ramp) adopted per AGENTS.md and completed by this
+run (host-test rename tail, host font staging test, doc corrections).
+
+1. RE CORRECTION (supersedes the D34 reading): the FUN_0043c87c args
+   are (EAX=str, EDX=FULLFONT bank, EBX=draw ROW, ECX=glyph entry
+   base 0x82) - the four values 0x96/0xb4/0xd2/0x104 are draw ROWS
+   150/180/210/260 and x0 is computed INSIDE the drawer as
+   0x140 - total/2 (each line centers on x 320). D34 recorded y=0x82
+   with x-columns; the pair was swapped [verified: full decompile,
+   exw-font-drawer.txt; FUN_00401ca2 dest = locked surface +
+   ECX(pitch-rows) + EBX(col) settles row vs col]. TextRow flow
+   state renamed to rows accordingly.
+2. DRAWER (game font.rs): two passes (measure, draw); c >= 0x80
+   remaps through FUN_00410493 (match table + 31-stub jumptable,
+   objdumped) to (base char, accent id); k = c - 0x21; k < 0 -> pen
+   += 9; else transparent RLE16 blit at entry 0x82 + k and pen += w
+   + 2 (w = u16@+6 via FUN_00402a12, flags-0x0003 layout). Hotspot
+   u16@+2 adds to dest ROW, u16@+4 to dest COLUMN (baseline anchoring
+   dy 0/5/10/15). Accent id 1..=4 blits overlay entry 0x82+0x6b+id
+   (238 diaeresis..241 circumflex) at the same pen. Two shipped
+   quirks kept verbatim: e-/o-diaeresis stubs default to the dash
+   base under the diaeresis; k > 0x78 -> dash + diaeresis
+   [verified: stub bodies 0x4104c0..0x410650]. Bounds-clipped blits
+   [deviation: Rust never writes out of bounds].
+3. STRINGS (assets language.rs): the four draws read LANGUAGE
+   [MENU_ITEMS] table entries 0x45 / 0x46 / zone+0x51 / 0x58 (the
+   DAT_0046bc4c/0046bc7c/0046bfdc globals = table base 0046af5c +
+   idx*0x30 - arithmetic identity). Parser reproduces the EXW scan
+   (heading seek, skip bytes < 0x21, entry copy bytes >= 0x20, tab/
+   CR/LF terminate, 96-entry cap) [verified: exw-font-strings.txt +
+   exw-menu-parse.txt; deviation: bounds by buffer end, typed Ok,
+   never panics - EXW trusts its 81000-byte alloc].
+4. FONT RAMP (assets pal.rs parse_font_ramp): FULLPAL.PAL = 98 B =
+   2-byte lead (e0 20 = first entry 224, count 32) + 32 6-bit RGB
+   triples. EXW order in the tail: fill DAC buf+0x2a2..0x301 with
+   0x3f + commit (TRANSIENT, pre-text), draw the four text rows,
+   THEN copy the ramp over the same entries and arm FadeSetup -
+   the fade TARGET carries the ramp; under the D34 from-black fade
+   design the transient 0x3f fill is never displayed, so the flow
+   applies the ramp to the target and drops the forced tail from
+   loading_palette (entries 224..=255 keep folded file values when
+   no ramp is staged) [verified copy; design where tagged].
+5. HOST: load_loading_font(font_bin, fullpal, language) stages all
+   three parts (staged-merge, inert until Loading entry; typed
+   staging errors; no hashed-state contact). enter_loading now runs
+   the four draws onto the loading raster in EXW order (still ->
+   0x3f transient -> draws -> ramp -> fade) with missing-part skip
+   [deviation: EXW always has all three].
+6. CORPUS GATE (assets tests/font_gate.rs): FULLFONT.BIN 390 entries
+   (333 RLE16|hotspot glyphs + 57 empty), 10 pinned glyphs (shape +
+   hotspot + pixel sha256), ASCII-run pixel set exactly {0} U
+   {233..=244}, baseline dy set {0,5,10,15}; FULLPAL lead bytes +
+   full ramp sha; all six LANGUAGE files pinned (file sha + entries
+   0x45/0x46/0x52..=0x58, incl. FRE/GER/SPA high-bit accent bytes
+   that exercise the remap); the drawer arithmetic re-measured
+   independently over the real bank widths (7 pinned totals +
+   x0). Ignored regen test = the only documented regen path.
+7. TESTS: 4 font.rs units (remap table incl. quirks; measure/pen
+   rules incl. empty-slot gap; transparent/clipped/overlaid draw;
+   bank rejections) + 3 language.rs + 2 pal.rs + 4 gate units +
+   loading.rs enter_loading unit (rows drew + ramp applied + bare
+   flow) + host: lifecycle updated, new loading_font_pass unit
+   (raster rows + ramp tail + staging error), campaign walk stages
+   the font and pins the zone-6 fourth-row raster draw. Workspace
+   green, fmt + clippy -D warnings clean, MANIFEST.sha256 verified
+   before AND after the corpus-touching runs.
+
+Not done here (queued): BRF_DROP play site, boot LOGO/GTLOG attract
+sequence, native executable shell, ZONEA/MISSION1 vertical slice.

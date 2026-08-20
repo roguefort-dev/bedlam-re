@@ -16,13 +16,22 @@
 //! FUN_0041cc7f("GAMEGFX\\LOAD_UK|US.BIN", ...);         // region variant
 //! FUN_0041cc7f("GAMEGFX\\LOADPAL|LOADPALU.PAL", _DAT_004edbf8);
 //! .. DAC buffer bytes 0x2a2..0x301 = 0x3f; FUN_004258d0(buf);
-//! FUN_0043c87c(.., 0x96, 0x82);                         // text row, y=130
-//! FUN_0043c87c(.., 0xb4, 0x82);
-//! FUN_0043c87c(&DAT_0046af5c + (zone+0x51)*0x30, 0xd2, 0x82);
-//! if (zone == 6) FUN_0043c87c(.., 0x104, 0x82);         // 4th column
-//! FUN_00425a03(); .. font ramp into buf+0x2a2 ..
+//! FUN_0043c87c(str[0x45], bank, 0x96, 0x82);            // text, row 150
+//! FUN_0043c87c(str[0x46], bank, 0xb4, 0x82);            // row 180
+//! FUN_0043c87c(table + (zone+0x51)*0x30, bank, 0xd2, 0x82); // row 210
+//! if (zone == 6) FUN_0043c87c(str[0x58], bank, 0x104, 0x82); // row 260
+//! FUN_00425a03(); 0x60 bytes FULLPAL buf+2 -> DAC buf+0x2a2; // font ramp
 //! FUN_0041cbf0(_DAT_004edbf8, 10);                      // FadeSetup 10 steps
 //! ```
+//!
+//! FUN_0043c87c argument semantics [verified D35 from the Ghidra
+//! listing ghidra-project/exw-font-drawer.txt + the FUN_00401ca2
+//! body]: EAX = string, EDX = the FULLFONT bank, EBX = the draw ROW,
+//! ECX = the glyph entry base (0x82 = entry 130 = char 0x21). x0 is
+//! computed INSIDE the drawer: pen = 0x140 - total_width/2 - each
+//! line centers on screen x 320. The four EBX values 0x96/0xb4/0xd2/
+//! 0x104 are four text ROWS (150/180/210/260), NOT x columns - D34
+//! recorded the pair swapped; corrected here (D35).
 //!
 //! Reproduction mapping [design where tagged]:
 //! - BETWEEN (the interlude still, entry 0) owns the Cutscene plane
@@ -42,15 +51,25 @@
 //!   steps land on whole elapsed periods, never rounded) [design:
 //!   from-black; the EXW FadeStep body is only partially RE-ed -
 //!   RE-EXW-TICK D15].
-//! - Palette tail: DAC commit-buffer bytes 0x2a2..=0x301 = palette
-//!   entries 224..=255 forced to 6-bit (0x3f, 0x3f, 0x3f) [verified
-//!   fill; the later font-ramp copy into the same region belongs to
-//!   the FULLFONT text pass, queued].
-//! - Text row: four possible draws at y = 0x82, x = 0x96/0xb4/0xd2
-//!   (+0x104 when the completed EXW zone == 6). The glyph pass needs
-//!   FULLFONT.BIN + FUN_0043c87c semantics (not yet RE-ed); this unit
-//!   pins the geometry as flow state (`text_row`) so the font pass
-//!   consumes it without re-deriving the zone logic [design].
+//! - Palette tail, D35 model: the EXW tail fills DAC commit-buffer
+//!   bytes 0x2a2..=0x301 = entries 224..=255 with 0x3f and commits
+//!   [verified fill + FUN_004258d0] - a TRANSIENT pre-text state -
+//!   then, after the four text draws, copies the FULLPAL.PAL ramp
+//!   (load buffer +2, 0x60 bytes) over the same region and arms the
+//!   fade [verified: MOVSD 24 dwords + 0 tail into buf+0x2a2, then
+//!   FUN_0041cbf0]. The fade TARGET therefore carries the ramp in
+//!   entries 224..=255, which is what this flow reproduces; under the
+//!   from-black fade design the transient 0x3f fill is never
+//!   displayed.
+//! - Text rows, D35: the four FUN_0043c87c draws (rows 150/180/210,
+//!   +260 when the completed EXW zone == 6) land on the
+//!   loading-screen raster at Loading entry, strings from the
+//!   LANGUAGE [MENU_ITEMS] table (entries 0x45, 0x46, zone+0x51, and
+//!   0x58 for zone 6), glyphs from FULLFONT.BIN entry 0x82 + (c -
+//!   0x21) with the FUN_00410493 accent remap (crate::font). The
+//!   geometry stays pinned as flow state (`text_row`) for
+//!   introspection; the draws themselves run through the staged
+//!   font.
 //! - The 310000/300000 FUN_0041db89 allocs are EXW decode scratch
 //!   (just under the 640x480 = 307200 rasters); the Rust analog is
 //!   the decoded Vec itself - internal representation, parity budget
@@ -94,29 +113,35 @@ pub const TAIL_FIRST_ENTRY: usize = 224;
 /// byte of entry 255 - the 0x302-byte commit buffer ends there).
 pub const TAIL_LAST_ENTRY: usize = 255;
 
-/// The forced tail value: 6-bit (0x3f, 0x3f, 0x3f).
+/// The transient tail fill: 6-bit (0x3f, 0x3f, 0x3f). The EXW tail
+/// commits this into DAC entries 224..=255 BEFORE the text draws; the
+/// ramp copy overwrites the same bytes in the fade target, so under
+/// the from-black fade design it is never displayed (kept as the
+/// verified RE fact, not applied to the target).
 pub const TAIL_COLOR: Vga6 = [0x3f, 0x3f, 0x3f];
 
-/// Loading-screen text row y coordinate [verified: FUN_0043c87c arg
-/// 0x82 on all four draws].
-pub const TEXT_Y: i32 = 0x82;
+/// Loading-text draw rows, draws 1..=3 [verified D35: the
+/// FUN_0043c87c EBX arg is the blit ROW via FUN_00401ca2 ECX; 0x96 /
+/// 0xb4 / 0xd2 = 150 / 180 / 210. D34 recorded these as x columns
+/// with y = 0x82; 0x82 is the GLYPH ENTRY BASE (the ECX arg) and x0
+/// is computed inside the drawer - the pair was swapped, corrected in
+/// D35].
+pub const TEXT_ROWS: [i32; 3] = [0x96, 0xb4, 0xd2];
 
-/// Text row x coordinates, draws 1..=3 [verified: 0x96 / 0xb4 / 0xd2].
-pub const TEXT_XS: [i32; 3] = [0x96, 0xb4, 0xd2];
+/// The zone-6-only fourth draw row [verified: `zone == 6` -> 0x104 =
+/// 260; the string is table entry 0x58].
+pub const TEXT_ROW_ZONE6: i32 = 0x104;
 
-/// The zone-6-only fourth draw [verified: `if (zone == 6)` -> 0x104].
-pub const TEXT_X_ZONE6: i32 = 0x104;
-
-/// Which x columns the loading text row draws for the just-completed
+/// Which text rows the loading screen draws for the just-completed
 /// EXW zone: three always, the fourth only for zone 6 (the transition
 /// INTO the endgame zone). Zone 7 never reaches this code (the
-/// endgame arm has no loading screen) - it folds onto the 3-column
+/// endgame arm has no loading screen) - it folds onto the 3-row
 /// baseline [design: defensive].
-pub fn text_x_columns(exw_zone: u8) -> &'static [i32] {
+pub fn text_rows(exw_zone: u8) -> &'static [i32] {
     if exw_zone == 6 {
-        &[TEXT_XS[0], TEXT_XS[1], TEXT_XS[2], TEXT_X_ZONE6]
+        &[TEXT_ROWS[0], TEXT_ROWS[1], TEXT_ROWS[2], TEXT_ROW_ZONE6]
     } else {
-        &TEXT_XS
+        &TEXT_ROWS
     }
 }
 
@@ -168,22 +193,19 @@ pub(crate) fn decode_entry0(bin: &[u8]) -> Result<Still, GameError> {
 }
 
 /// Fold a 770-byte LOADPAL/LOADPALU.PAL file to the canonical 6-bit
-/// palette and force the EXW tail. The validated parser expands 6-bit
-/// components to 8 bits via `(v << 2) | (v >> 4)`; folding back with
-/// `>> 2` is lossless for every 6-bit value (the identical argument
-/// MoviePlayer::palette makes for the Smacker PALMAP), so the round
-/// trip pins the file-owned 6-bit values exactly. Then entries
-/// TAIL_FIRST_ENTRY..=TAIL_LAST_ENTRY become the uniform 0x3f tail -
-/// the byte-range fill the EXW tail performs on the DAC commit buffer
-/// before FUN_004258d0 commits it.
+/// palette. The validated parser expands 6-bit components to 8 bits
+/// via `(v << 2) | (v >> 4)`; folding back with `>> 2` is lossless
+/// for every 6-bit value (the identical argument MoviePlayer::palette
+/// makes for the Smacker PALMAP), so the round trip pins the
+/// file-owned 6-bit values exactly. The EXW 0x3f tail fill does NOT
+/// reach the fade target (the FULLPAL ramp overwrites it - see
+/// `LoadingFlow::enter_loading`); without a staged ramp the tail
+/// keeps the folded file values.
 pub(crate) fn loading_palette(pal770: &[u8]) -> Result<[Vga6; 256], GameError> {
     let parsed = bedlam_assets::pal::parse_vga770(pal770)?;
     let mut out = [[0u8; 3]; 256];
     for (dst, src) in out.iter_mut().zip(parsed.0) {
         *dst = [src[0] >> 2, src[1] >> 2, src[2] >> 2];
-    }
-    for entry in &mut out[TAIL_FIRST_ENTRY..=TAIL_LAST_ENTRY] {
-        *entry = TAIL_COLOR;
     }
     Ok(out)
 }
@@ -219,12 +241,12 @@ pub enum LoadingPhase {
     Loading,
 }
 
-/// The loading-screen text row pinned into flow state for the future
-/// FULLFONT glyph pass: y coordinate plus the zone-dependent x columns.
+/// The loading-screen text rows pinned into flow state (D35): the
+/// zone-dependent draw rows. Introspection only - the draws themselves
+/// run at Loading entry through the staged font (crate::font).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextRow {
-    pub y: i32,
-    pub xs: &'static [i32],
+    pub rows: &'static [i32],
 }
 
 /// The whole post-cutscene flow: both stills, the fade engine, and the
@@ -245,8 +267,17 @@ pub(crate) struct LoadingFlow {
     /// Whether the flow has stood on its Cutscene (gates the Select
     /// arming: only a post-cutscene Select runs the loading screen).
     pub(crate) saw_cutscene: bool,
-    /// The text row for the loading screen (set on Loading entry).
+    /// The text rows for the loading screen (set on Loading entry).
     pub(crate) text_row: Option<TextRow>,
+    /// The staged loading font (FULLFONT.BIN through crate::font),
+    /// drawn onto the loading screen at Loading entry.
+    pub(crate) font: Option<crate::font::LoadingFont>,
+    /// The staged LANGUAGE [MENU_ITEMS] table (bedlam-assets
+    /// language parser).
+    pub(crate) table: Option<Vec<Vec<u8>>>,
+    /// The staged FULLPAL.PAL font ramp (entries 224..=255 of the
+    /// fade target).
+    pub(crate) ramp: Option<[[u8; 3]; 32]>,
 }
 
 impl LoadingFlow {
@@ -260,6 +291,9 @@ impl LoadingFlow {
             fade_acc: 0,
             saw_cutscene: false,
             text_row: None,
+            font: None,
+            table: None,
+            ramp: None,
         }
     }
 
@@ -270,16 +304,57 @@ impl LoadingFlow {
     }
 
     /// Enter the Loading phase (host: on the Cutscene -> Select
-    /// transition). Arms the fade and pins the text row for the
-    /// just-completed EXW zone (= stage - 1).
+    /// transition). Arms the fade, pins the text rows for the
+    /// just-completed EXW zone (= stage - 1), runs the four text
+    /// draws onto the loading-screen raster, and copies the staged
+    /// font ramp into the fade-target tail - the EXW order: still ->
+    /// 0x3f commit -> text draws -> ramp copy -> FadeSetup.
     pub(crate) fn enter_loading(&mut self, exw_zone: u8) {
         self.phase = LoadingPhase::Loading;
         self.fade_step = 0;
         self.fade_acc = 0;
-        self.text_row = Some(TextRow {
-            y: TEXT_Y,
-            xs: text_x_columns(exw_zone),
-        });
+        let rows = text_rows(exw_zone);
+        self.text_row = Some(TextRow { rows });
+        self.draw_loading_text(rows, exw_zone);
+        self.apply_font_ramp();
+    }
+
+    /// The four LAB_0041c69e text draws [verified D35]: table entries
+    /// 0x45, 0x46, zone+0x51 (0x52..=0x57 for zones 1..=6), and 0x58
+    /// for zone 6 only - each blitted through the staged font,
+    /// centered on x0 = 0x140 - total/2, at its row. Any missing part
+    /// (no staged font / table / screen) skips the draws [deviation:
+    /// EXW always has all three; a host that staged none has nothing
+    /// to draw]. A table shorter than an index skips that draw
+    /// [deviation: EXW reads its 0x30-stride slot regardless].
+    fn draw_loading_text(&mut self, rows: &'static [i32], exw_zone: u8) {
+        let font = self.font.as_ref();
+        let table = self.table.as_ref();
+        let Some(still) = self.screen.as_mut() else {
+            return;
+        };
+        let (Some(font), Some(table)) = (font, table) else {
+            return;
+        };
+        let indices = [0x45usize, 0x46, usize::from(exw_zone) + 0x51, 0x58];
+        // rows holds 4 entries only for zone 6; zip stops at 3
+        // otherwise, exactly the EXW `if (zone == 6)` guard.
+        for (&row, &idx) in rows.iter().zip(indices.iter()) {
+            if let Some(text) = table.get(idx) {
+                font.draw(&mut still.pixels, still.w as usize, text, row);
+            }
+        }
+    }
+
+    /// Copy the staged FULLPAL ramp over the fade-target tail (DAC
+    /// buffer +0x2a2 = entries 224..=255) [verified D35: 0x60 bytes
+    /// MOVSD from the FULLPAL load buffer +2, then FadeSetup]. The
+    /// transient 0x3f fill never reaches the target; without a staged
+    /// ramp the folded LOADPAL tail values stand.
+    fn apply_font_ramp(&mut self) {
+        if let (Some(ramp), Some(target)) = (self.ramp, self.target.as_mut()) {
+            target[TAIL_FIRST_ENTRY..=TAIL_LAST_ENTRY].copy_from_slice(&ramp);
+        }
     }
 
     /// Feed one host-frame dt (sub-ticks on the 240 Hz grid). Only the
@@ -415,29 +490,91 @@ mod tests {
     }
 
     #[test]
-    fn palette_folds_losslessly_and_forces_the_tail() {
+    fn palette_folds_losslessly_across_the_whole_range() {
         let pal = loading_palette(&synth_pal()).unwrap();
-        // Entries below the tail: the file-owned 6-bit values survive
-        // the expand-then-fold round trip exactly.
-        let expect_pre_tail = (0..TAIL_FIRST_ENTRY as u32).map(|i| {
+        // Every entry: the file-owned 6-bit values survive the
+        // expand-then-fold round trip exactly - including the tail
+        // range (the 0x3f fill is a transient EXW DAC state, not the
+        // fade target; the ramp overwrites the target tail).
+        let expect = (0..256u32).map(|i| {
             [
                 ((i * 3) & 0x3f) as u8,
                 ((i * 3 + 1) & 0x3f) as u8,
                 ((i * 3 + 2) & 0x3f) as u8,
             ]
         });
-        for (i, (got, want)) in pal.iter().zip(expect_pre_tail).enumerate() {
+        for (i, (got, want)) in pal.iter().zip(expect).enumerate() {
             assert_eq!(got, &want, "entry {i}");
         }
-        // The tail: forced 0x3f regardless of file content.
-        for entry in &pal[TAIL_FIRST_ENTRY..=TAIL_LAST_ENTRY] {
-            assert_eq!(entry, &TAIL_COLOR);
-        }
         // Boundary exactness: 0x2a2 = entry 224 byte 0, 0x301 = entry
-        // 255 byte 2 - the 32 forced entries span exactly the fill.
+        // 255 byte 2 - the 32 ramp-replaced entries span exactly the
+        // EXW fill/copy range.
         assert_eq!(TAIL_LAST_ENTRY - TAIL_FIRST_ENTRY + 1, 32);
         // Short palette file: typed rejection via the parser.
         assert!(loading_palette(&[0u8; 769]).is_err());
+    }
+
+    #[test]
+    fn enter_loading_draws_the_rows_and_applies_the_ramp() {
+        use crate::font::synth;
+        // Full-width still so the centered pens land on-plane: 640 x
+        // 300 (rows 150/180/210 + glyph extents fit; the zone-6 row
+        // 260 + 24-row glyph extents fits too).
+        let mut flow = LoadingFlow::staged();
+        flow.screen = Some(decode_entry0(&synth_bin(640, 300, 0x10)).unwrap());
+        flow.target = Some(loading_palette(&synth_pal()).unwrap());
+        flow.font = Some(crate::font::LoadingFont::from_bank(&synth::font_bin()).unwrap());
+        flow.table = Some(
+            bedlam_assets::language::parse_menu_items(&synth::language_bin(b"Congrats!")).unwrap(),
+        );
+        flow.ramp = Some(bedlam_assets::pal::parse_font_ramp(&synth::fullpal_bin()).unwrap());
+        let ramp = bedlam_assets::pal::parse_font_ramp(&synth::fullpal_bin()).unwrap();
+        flow.enter_loading(6);
+        // The fade target tail now carries the ramp, not the folded
+        // file values and not the 0x3f transient.
+        let target = flow.target.unwrap();
+        assert_eq!(&target[TAIL_FIRST_ENTRY..=TAIL_LAST_ENTRY], &ramp[..]);
+        assert_eq!(target[0], [0, 1, 2], "pre-tail entry 0 stays folded");
+        // The four rows drew: congrats (bang glyphs, fill 0xF0) at
+        // row 150, move-out (E..U glyphs, fills 0xF1/0xF2) at 180,
+        // the zone-6 table string at 210 and the 0x58 string at 260.
+        // 0x10 = the still fill; glyph fills are 0xF0..=0xF5.
+        let still = flow.screen.as_ref().unwrap();
+        let stride = still.w as usize;
+        for row in [150usize, 180, 210, 260] {
+            let band = &still.pixels[row * stride..(row + 2) * stride];
+            assert!(
+                band.iter().any(|&v| (0xF0..=0xF5).contains(&v)),
+                "row {row}: glyphs drew"
+            );
+        }
+        // Above the first row: untouched still fill.
+        let clean = &still.pixels[100 * stride..110 * stride];
+        assert!(clean.iter().all(|&v| v == 0x10));
+        // Without a staged font the raster stays pristine (a host
+        // that staged no font has nothing to draw) - fresh flow.
+        let mut bare = LoadingFlow::staged();
+        bare.screen = Some(decode_entry0(&synth_bin(640, 300, 0x10)).unwrap());
+        bare.target = Some(loading_palette(&synth_pal()).unwrap());
+        bare.enter_loading(3);
+        assert!(
+            bare.screen
+                .as_ref()
+                .unwrap()
+                .pixels
+                .iter()
+                .all(|&v| v == 0x10),
+            "no staged font: no draws"
+        );
+        // ...and without a ramp the folded tail stands.
+        assert_eq!(
+            bare.target.unwrap()[255],
+            [
+                ((255 * 3) & 0x3f) as u8,
+                ((255 * 3 + 1) & 0x3f) as u8,
+                ((255 * 3 + 2) & 0x3f) as u8
+            ]
+        );
     }
 
     #[test]
@@ -522,13 +659,12 @@ mod tests {
     }
 
     #[test]
-    fn text_columns_add_the_fourth_draw_only_for_zone_six() {
-        assert_eq!(text_x_columns(1), &[150, 180, 210]);
-        assert_eq!(text_x_columns(5), &[150, 180, 210]);
-        assert_eq!(text_x_columns(6), &[150, 180, 210, 260]);
+    fn text_rows_add_the_fourth_draw_only_for_zone_six() {
+        assert_eq!(text_rows(1), &[150, 180, 210]);
+        assert_eq!(text_rows(5), &[150, 180, 210]);
+        assert_eq!(text_rows(6), &[150, 180, 210, 260]);
         // Zone 7 = the endgame arm (never draws); defensive baseline.
-        assert_eq!(text_x_columns(7), &[150, 180, 210]);
-        assert_eq!(TEXT_Y, 130);
+        assert_eq!(text_rows(7), &[150, 180, 210]);
     }
 
     #[test]
@@ -573,8 +709,7 @@ mod tests {
         assert_eq!(
             flow.text_row,
             Some(TextRow {
-                y: 130,
-                xs: &[150, 180, 210, 260]
+                rows: &[150, 180, 210, 260]
             })
         );
         let plane = flow.plane(&host_pal).unwrap();

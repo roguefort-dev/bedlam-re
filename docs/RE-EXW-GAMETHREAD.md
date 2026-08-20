@@ -225,12 +225,22 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
       FUN_0041cc7f("GAMEGFX\\LOAD_UK.BIN"/"LOAD_US.BIN" per DAT_0046ae64);
       FUN_0041cc7f("GAMEGFX\\LOADPAL.PAL"/"LOADPALU.PAL", _DAT_004edbf8);
       ... palette buffer fill 0x2a2..0x301 = 0x3f; FUN_004258d0(buf);
-      FUN_0043c87c(&DAT_0046bc4c, ..., 0x96, 0x82);   // [hyp: text draws, coords 150/180/210]
-      FUN_0043c87c(&DAT_0046bc7c, ..., 0xb4, 0x82);
-      FUN_0043c87c(&DAT_0046af5c + (zone+0x51)*0x30, ..., 0xd2, 0x82);
-      if (zone == 6) FUN_0043c87c(&DAT_0046bfdc, ..., 0x104, 0x82);
+      // loading text, four draws [verified D35 - see the font-drawer
+      // note below]: DAT_0046bc4c/0046bc7c/0046bfdc = table entries
+      // 0x45/0x46/0x58 of the LANGUAGE string table at 0046af5c
+      // (base + idx*0x30); the third is entry zone+0x51. EBX args
+      // 0x96/0xb4/0xd2/0x104 = draw ROWS 150/180/210/260; 0x82 = the
+      // glyph entry base (ECX arg), NOT a y coordinate (D34 recorded
+      // the pair swapped - corrected D35).
+      FUN_0043c87c(&DAT_0046bc4c, bank, 0x96, 0x82);
+      FUN_0043c87c(&DAT_0046bc7c, bank, 0xb4, 0x82);
+      FUN_0043c87c(&DAT_0046af5c + (zone+0x51)*0x30, bank, 0xd2, 0x82);
+      if (zone == 6) FUN_0043c87c(&DAT_0046bfdc, bank, 0x104, 0x82);
       FUN_00425a03();
-      ... copy 24 dwords + tail bytes from pcStack_24+2 into buf+0x2a2 ...  // font row blit
+      // [verified D35] font ramp: 0x60 bytes (24 dwords + 0 tail)
+      // copied from the FULLPAL.PAL load buffer +2 into DAC commit
+      // buffer +0x2a2 = palette entries 224..=255 (the same range the
+      // pre-text fill had forced to 0x3f), THEN FadeSetup arms.
       FUN_0041cbf0(_DAT_004edbf8, 10);            // FadeSetup(pal,10): arm 10-step 50Hz fade (004ede10 = steps left)
       episode++;                                  // iStack_20
       _DAT_004edd8c++;                            // zone++
@@ -239,6 +249,43 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
   goto LAB_0041c454;                              // next episode
 }
 ```
+
+### Font drawer FUN_0043c87c (D35, 2026-08-20)
+
+Fully decompiled + cross-checked against the corpus (ghidra-project/
+exw-font-drawer.txt + exw-font-strings.txt + exw-menu-parse.txt;
+reimplemented in engine/bedlam-game/src/font.rs, corpus pinned in
+engine/bedlam-assets/tests/font_gate.rs):
+
+- Signature (register args): EAX = string ptr, EDX = the FULLFONT.BIN
+  bank, EBX = the draw ROW, ECX = the glyph entry base [verified].
+- Two passes over the NUL-terminated string: measure then draw;
+  x0 = 0x140 - total/2 (each line centers on screen x 320) [verified:
+  MOV EAX,0x140 / SAR EBP,1 / SUB EAX,EBP].
+- Per byte c: c >= 0x80 remaps through FUN_00410493 to (base char,
+  accent id) first; k = char - 0x21; k < 0 (space/control) advances
+  the pen 9 px; else glyph entry = ECX + k blits transparent
+  (FUN_00401ca2 EDX=1 path: skip runs advance without writing) and
+  the pen advances FUN_00402a12(entry) + 2 = slot width + 2 [verified].
+- Hotspot (flags bit 1, all corpus glyphs flags 0x0003): u16@+2 adds
+  to the dest ROW, u16@+4 to the dest COLUMN (FUN_00401ca2) - dy
+  anchors the baseline (x-height letters dy=5, mid punctuation dy=10,
+  low punctuation dy=15) [verified + corpus-pinned].
+- Accent id 1..=4 (set by the FUN_00410493 stub) additionally blits
+  the overlay glyph at ECX + 0x6b + id = entries 238..=241
+  (diaeresis / acute / grave / circumflex) at the same pen position
+  [verified].
+- FUN_00410493 quirks kept verbatim: e-diaeresis and o-diaeresis
+  stubs leave the prologue default base 0x2d (dash) under the
+  diaeresis; k > 0x78 falls to dash + diaeresis [verified stub
+  bodies, objdump 0x4104c0..0x410650].
+- The strings come from the LANGUAGE.* [MENU_ITEMS] table (96
+  entries x 0x30 at 0046af5c, filled by the boot language arm);
+  the loading row uses entries 0x45 / 0x46 / zone+0x51 / 0x58 [verified].
+- FULLFONT.BIN = 390-entry bank, 333 decodable RLE16|hotspot glyphs +
+  57 empty slots; drawer glyphs = entries 130..=241 (chars 0x21..=0x81
+  + overlays); ASCII glyph pixels are exactly {0} U {233..=244},
+  inside the FULLPAL ramp entries 224..=255 [corpus-pinned].
 
 ### What this settles
 
@@ -289,6 +336,9 @@ LAB_0041c69e:                                     // ===== ZONE COMPLETE =====
 | 004eae54 | end-of-level outcome latched flag (0 loop top, 1 after advance) | verified ops / hyp |
 | 004ddb2c | current music/ambience id, compared against FUN_0044771c result | verified use / hyp |
 | 004edbe8 / 004edbec | mode gates: pair conditions FUN_0044e06c and FUN_0044dfec | verified use |
+| 0046af5c | LANGUAGE [MENU_ITEMS] string table base: 96 entries x 0x30, filled at boot from LANGUAGE.<lang> | verified D35 |
+| 0046bc4c / 0046bc7c / 0046bfdc | table slots 0x45 / 0x46 / 0x58 (= base + idx*0x30) - loading-text draws 1/2/4 | verified D35 |
+| 0046ccd0 | accent id set by FUN_00410493 (default 1 = diaeresis); drawer blits overlay entry base+0x6b+id | verified D35 |
 
 ### New xref leads (second-hop candidates, NOT decompiled this run)
 
