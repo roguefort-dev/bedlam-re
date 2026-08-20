@@ -37,13 +37,14 @@ use crate::clock::SUBTICKS_PER_PUMP;
 
 /// fs-backed [`ByteSource`] over one install tree (the shipped
 /// BEDLAM directory): a name resolves `GAMEGFX/<name>` first, then
-/// `<root>/<name>` - the graphics corpus lives in GAMEGFX while the
-/// LANGUAGE.* files sit at the install root (EXW reads them from its
-/// working directory; the two-tier lookup keeps both the install
-/// root and the bare GAMEGFX dir usable as roots). Bare file names
-/// only - separators / parent hops are rejected, the host only ever
-/// emits corpus names and the source refuses to become a generic
-/// file reader.
+/// `SOUND/SFX/<name>`, then `<root>/<name>` - the graphics corpus
+/// lives in GAMEGFX, the menu SFX pair in SOUND/SFX (the EXW
+/// "SOUND\SFX\MENU1.RAW" path, D42.7), and the LANGUAGE.* files sit
+/// at the install root (EXW reads them from its working directory;
+/// the tiered lookup keeps both the install root and the bare
+/// GAMEGFX dir usable as roots). Bare file names only - separators
+/// / parent hops are rejected, the host only ever emits corpus
+/// names and the source refuses to become a generic file reader.
 #[derive(Debug)]
 pub struct GameGfxSource {
     root: PathBuf,
@@ -79,8 +80,11 @@ impl ByteSource for GameGfxSource {
             });
         }
         let gfx_path = self.root.join("GAMEGFX").join(name);
+        let sfx_path = self.root.join("SOUND").join("SFX").join(name);
         let path = if gfx_path.is_file() {
             gfx_path
+        } else if sfx_path.is_file() {
+            sfx_path
         } else {
             self.root.join(name)
         };

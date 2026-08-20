@@ -50,14 +50,24 @@ impl Default for ChainConfig {
 /// Pure name arithmetic over host-selected names - unit-pinned. The
 /// boot scene needs nothing per-transition: its pair is staged once
 /// at construction ([`stage_boot`]) because the host boots there.
+/// The Title fetch set is the D41 menu staging (D42.7): the movie,
+/// the language table, the FULLFONT bank, the FULLPAL ramp and the
+/// MENU1/MENU2 SFX pair.
 pub fn scene_assets(
     scene: Scene,
-    region: Region,
+    config: ChainConfig,
     cutscene: &str,
     briefing: Option<&str>,
 ) -> Vec<String> {
     match scene {
-        Scene::Title => vec![bedlam_game::movies::title_name().to_string()],
+        Scene::Title => {
+            let mut v = vec![bedlam_game::movies::title_name().to_string()];
+            v.push(config.language.to_string());
+            v.push(FULLFONT_NAME.to_string());
+            v.push(FULLPAL_NAME.to_string());
+            v.extend(bedlam_game::menu::MENU_SFX_NAMES.map(String::from));
+            v
+        }
         Scene::Brief => match briefing {
             Some(backdrop) => vec![BRIEFING_DROP_NAME.to_string(), backdrop.to_string()],
             None => Vec::new(),
@@ -65,10 +75,11 @@ pub fn scene_assets(
         Scene::Cutscene => vec![
             cutscene.to_string(),
             bedlam_game::movies::interlude_name().to_string(),
-            region.loading_bin().to_string(),
-            region.loading_pal().to_string(),
+            config.region.loading_bin().to_string(),
+            config.region.loading_pal().to_string(),
             FULLFONT_NAME.to_string(),
             FULLPAL_NAME.to_string(),
+            config.language.to_string(),
         ],
         Scene::Shop => vec![bedlam_game::movies::shop_name().to_string()],
         // Boot: staged at construction; the other scenes own no
@@ -99,8 +110,9 @@ pub fn stage_boot(
 /// Wire the scene the host just ENTERED: fetch the scene assets and
 /// stage them. Returns the fetched names (empty when the scene owns
 /// no D31-D37 assets - e.g. a boot-camp Brief has no lettered
-/// backdrop in the corpus). The language file joins the Cutscene
-/// fetch set (the D35 pass stages with the loading flow).
+/// backdrop in the corpus). The language file joins the Cutscene and
+/// Title fetch sets (the D35 pass stages with the loading flow; the
+/// D41 menu stages from it directly).
 pub fn stage_scene(
     host: &mut GameHost,
     source: &mut dyn ByteSource,
@@ -109,10 +121,7 @@ pub fn stage_scene(
     let scene = host.scene();
     let cutscene = host.cutscene_name().to_string();
     let briefing = host.briefing_name();
-    let mut names = scene_assets(scene, config.region, &cutscene, briefing.as_deref());
-    if scene == Scene::Cutscene {
-        names.push(config.language.to_string());
-    }
+    let names = scene_assets(scene, config, &cutscene, briefing.as_deref());
     if names.is_empty() {
         return Ok(names);
     }
@@ -121,7 +130,10 @@ pub fn stage_scene(
         .map(|n| source.load(n))
         .collect::<Result<_, _>>()?;
     match scene {
-        Scene::Title => host.load_movie(Scene::Title, &bytes[0])?,
+        Scene::Title => {
+            host.load_movie(Scene::Title, &bytes[0])?;
+            host.load_title_menu(&bytes[1], &bytes[2], &bytes[3], &bytes[4], &bytes[5])?;
+        }
         Scene::Brief => host.load_briefing(&bytes[0], &bytes[1])?,
         Scene::Cutscene => {
             host.load_cutscene(&bytes[0])?;
@@ -144,21 +156,28 @@ mod tests {
     fn scene_assets_pin_the_chain() {
         let uk = ChainConfig::default();
         assert_eq!(
-            scene_assets(Scene::Title, uk.region, "ZONEDONE.SMK", None),
-            vec!["TITLE.SMK".to_string()]
+            scene_assets(Scene::Title, uk, "ZONEDONE.SMK", None),
+            vec![
+                "TITLE.SMK".to_string(),
+                "LANGUAGE.ENG".to_string(),
+                "FULLFONT.BIN".to_string(),
+                "FULLPAL.PAL".to_string(),
+                "MENU1.RAW".to_string(),
+                "MENU2.RAW".to_string(),
+            ]
         );
         // A lettered briefing stage: drop first, then the backdrop.
         assert_eq!(
-            scene_assets(Scene::Brief, uk.region, "ZONEDONE.SMK", Some("BRF_B1.SMK")),
+            scene_assets(Scene::Brief, uk, "ZONEDONE.SMK", Some("BRF_B1.SMK")),
             vec!["BRF_DROP.SMK".to_string(), "BRF_B1.SMK".to_string()]
         );
         // Boot camp: no lettered backdrop in the corpus, nothing to
         // fetch (the host stages no pair).
-        assert!(scene_assets(Scene::Brief, uk.region, "ZONEDONE.SMK", None).is_empty());
+        assert!(scene_assets(Scene::Brief, uk, "ZONEDONE.SMK", None).is_empty());
         // The zone-transition chain: cutscene + interlude + region
         // loading screen + D35 font pass, in staging order.
         assert_eq!(
-            scene_assets(Scene::Cutscene, uk.region, "ZONEDONE.SMK", None),
+            scene_assets(Scene::Cutscene, uk, "ZONEDONE.SMK", None),
             vec![
                 "ZONEDONE.SMK".to_string(),
                 "BETWEEN.BIN".to_string(),
@@ -166,16 +185,17 @@ mod tests {
                 "LOADPAL.PAL".to_string(),
                 "FULLFONT.BIN".to_string(),
                 "FULLPAL.PAL".to_string(),
+                "LANGUAGE.ENG".to_string(),
             ]
         );
         let mut us = uk;
         us.region = Region::Us;
         assert_eq!(
-            scene_assets(Scene::Cutscene, us.region, "END.SMK", None)[2..4],
+            scene_assets(Scene::Cutscene, us, "END.SMK", None)[2..4],
             ["LOAD_US.BIN".to_string(), "LOADPALU.PAL".to_string()]
         );
         assert_eq!(
-            scene_assets(Scene::Shop, uk.region, "ZONEDONE.SMK", None),
+            scene_assets(Scene::Shop, uk, "ZONEDONE.SMK", None),
             vec!["SHOP.SMK".to_string()]
         );
         for scene in [
@@ -187,7 +207,7 @@ mod tests {
             Scene::Quit,
         ] {
             assert!(
-                scene_assets(scene, uk.region, "ZONEDONE.SMK", None).is_empty(),
+                scene_assets(scene, uk, "ZONEDONE.SMK", None).is_empty(),
                 "{scene:?}"
             );
         }
@@ -208,7 +228,7 @@ mod tests {
         );
         let cutscene = host.cutscene_name().to_string();
         let briefing = host.briefing_name();
-        assert!(scene_assets(host.scene(), cfg.region, &cutscene, briefing.as_deref()).is_empty());
+        assert!(scene_assets(host.scene(), cfg, &cutscene, briefing.as_deref()).is_empty());
         assert_eq!(cfg.language, "LANGUAGE.ENG");
         assert_eq!(DEFAULT_LANGUAGE, "LANGUAGE.ENG");
     }

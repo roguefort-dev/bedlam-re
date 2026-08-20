@@ -1036,8 +1036,8 @@ pub(crate) mod tests {
     #[test]
     fn plane_draws_bottom_anchored_rows_with_both_sets() {
         let mut m = menu();
-        let mut pal = [[0u8, 0, 0]; 256];
-        let plane = m.plane(&mut pal).unwrap();
+        let pal = [[0u8, 0, 0]; 256];
+        let plane = m.plane(&pal).unwrap();
         assert_eq!(plane.w, 640);
         assert_eq!(plane.h, 480);
         let px = plane.pixels;
@@ -1061,7 +1061,7 @@ pub(crate) mod tests {
             .collect();
         let mut m2 = menu();
         hover(&mut m2, 0);
-        let plane2 = m2.plane(&mut pal).unwrap();
+        let plane2 = m2.plane(&pal).unwrap();
         let selected: std::collections::HashSet<u8> = plane2.pixels[302 * 640..306 * 640]
             .iter()
             .copied()
@@ -1070,10 +1070,7 @@ pub(crate) mod tests {
         assert!(!unselected.is_empty() && !selected.is_empty());
         assert_ne!(unselected, selected, "green vs blue ramp sets");
         // The palette tail carries the staged FULLPAL ramp.
-        assert_eq!(
-            plane.palette[224..],
-            m2.plane(&mut pal).unwrap().palette[224..]
-        );
+        assert_eq!(plane.palette[224..], m2.plane(&pal).unwrap().palette[224..]);
         let ramp_entries: Vec<[u8; 3]> = plane.palette[224..].to_vec();
         assert!(
             ramp_entries.iter().any(|c| c != &[0, 0, 0]),

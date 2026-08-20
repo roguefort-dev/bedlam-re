@@ -56,10 +56,10 @@ pub struct GameHost {
     /// zone backdrop ring, presentation-only like the movie - on
     /// the Brief scene.
     brief: Option<BriefIntro>,
-    /// The title menu (D41/D42): the NameEntryScreen model + strip
-    /// + draw plane, presentation-only - on the Title scene, where
-    /// it also OWNS the input path (explicit intents replace the
-    /// generic click-advance, D42.1).
+    /// The title menu (D41/D42): the NameEntryScreen model, strip
+    /// and draw plane, presentation-only. On the Title scene it also
+    /// OWNS the input path (explicit intents replace the generic
+    /// click-advance, D42.1).
     menu: Option<TitleMenu>,
     /// Score seed of the menu's last Start action (survives the menu
     /// drop on the Title exit; D42.8).
