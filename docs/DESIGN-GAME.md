@@ -162,6 +162,61 @@ dependencies.
 - Q5: Select-screen sub selection (replaces the lowest-unset
   placeholder) -> P5 gameplay RE.
 
+## 11. Mission scene composition (P4, added 2026-08-21)
+
+The `Mission` scene state gets its presentation module
+(`src/mission.rs`, `MissionScene`) — the composition of the two
+corpus-verified halves: bedlam-core `MissionSim` (the sim slice) and
+bedlam-render `MissionView` (the isometric viewport). NO new RE: every
+behavior below is anchored to an already-decoded EXW fact, listed
+inline. Bounded unit: staged-inert lifecycle + per-frame drive + the
+robot-click order seam, hash-pinned headless; GAMEPAL/window/palette
+and sidebar work stay OUT (the following unit).
+
+- STAGING [RE-EXW-SIM sec 7c]: `load_mission(tot, dat, pad, cgr, mrk,
+  bin, lnk, sintable, dante, zone, robots_override, staged_markers)`
+  builds `Terrain::from_mission_bytes` + `AngleTable` (SINTABLE words
+  2..66), seeds `MissionSim::new(.., 0x1E240)` (the MissionShell
+  reseed, sec 1), spawns the first `robots_override.unwrap_or(
+  robots_per_player(zone))` MRK records verbatim (`robots_per_player`:
+  zone<3||zone==7 → 1, zone 3 → 2, else 3, sec 7c.7), then any
+  `staged_markers` (the host/test seam the 0x46cbe0 network override
+  fills in the original — sec 7c.8), builds
+  `MissionView::from_mission_bytes(tot, swept dat planes, bin, lnk)`
+  and stages DANTE via `set_entity_bank`. Malformed bytes →
+  `GameError::BadMissionAsset`, never a panic.
+- LIFECYCLE [movie/brief pattern, D31/D37]: a staged mission is INERT
+  until the FSM enters `Scene::Mission`; activation fixes the camera
+  at the first robot's Q5 position (the EXW cam pair DAT_004edde4/8
+  pointing at the spawn; scroll input out of scope — [design] fixed
+  for the slice). Leaving the scene drops the mission (the flow never
+  ends on its own, like the briefing backdrop).
+- PER FRAME [FUN_0043d00b order]: per EXECUTED 60 Hz tick — integrate
+  the cursor from mouse deltas (clamp 0..639/0..479, the menu D42
+  pattern), on a left-button EDGE at the tick grid run the robot
+  click seam, then `advance_frame` (the MissionShell frame). The
+  click seam [RE-EXW-SIM sec 6.4]: clicks land in the viewport
+  (x < 0x1E0 = 480; x >= 0x1E0 is the sidebar, out of scope →
+  no-op), hit-test every alive robot by the enqueue projection
+  (MISSIONVIEW sec 5d) inside a 0x20-px box [design: half the 64-px
+  sprite cell; the EXW walks the sprite outlines ~0x433cbc], nearest
+  octagonal screen distance wins, and arm the order AT that robot
+  (`arm_order_at_robot` — the EXW arms at the clicked robot's tile,
+  one pending order, spread-assign, state 3).
+- PRESENT [MISSIONVIEW sec 7]: every host frame while active —
+  `enqueue_robots` (RobotView per robot, camera Q5, shake 0, sim
+  frame), `draw_terrain` into the 0x64000 buffer (zone index =
+  staging zone; edge-variant stream `Pcg32::new(0x1E240, 0)`
+  [design: zone 0 = ZONEA consumes none]), `present_window`, blit the
+  480x480 window at canonical (0, 0) — the EXW mission screen is
+  viewport [0,480)x[0,480) + sidebar [480,640) (mouse_l_click
+  x >= 0x1E0 branch), NOT letterbox-centered. Palette = the host
+  palette (GAMEPAL is the NEXT unit).
+- DETERMINISM: the sim half is hashed (MissionSim::state_hash); the
+  LNK memo walk + edge stream are presentation state (D17 bucket b)
+  — one render per host frame advances the walk once, matching the
+  render corpus gate's one-draw-per-frame rhythm at 1 tick/frame.
+
 ## Provenance
 
 Written 2026-08-18 by the item-1 worker (claim lock-v1 1787044723) from
@@ -171,3 +226,7 @@ D16/D17, PLAN secs 6 P3 / 7. RE facts carry anchors; [design] and D26
 marks are reimplementation choices, not RE claims. Confidence: high on
 facts 1-8 (all verified in prior runs), high on the API shape
 (mirrors the DESIGN-RENDER / DESIGN-AUDIO acceptance flow).
+
+Section 11 added 2026-08-21 by the item-1 worker (a835cefc) — pure
+composition of RE-EXW-SIM secs 1/6/7c + RE-EXW-MISSIONVIEW secs 5d/7;
+no new binary decoding.
