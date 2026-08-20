@@ -1,3 +1,22 @@
+- CLOSED 2026-08-20 (P2d sim-tail slice, commits c33f615 + 6280857,
+  worker 778d091a claim 1): the mission-sim seam for the P4 vertical
+  slice. docs/RE-EXW-SIM.md amendment 7b re-verified the contested
+  facts from the binary (move_is_possible per-probe climb refs =
+  probe_z[i] sar-signed with 0xFFFF = -1, no writes on any probe
+  fail; dist_octagonal abs's BOTH args - always >= 0; armer snap =
+  tile ORIGIN tx<<13 with no +0xF00; spread table slots 0..8; spawn
+  settle best-effort - seeds L*0x20-1 can never settle a tall floor).
+  engine/bedlam-core mission.rs adopted from the interrupted e1eb0092
+  WIP and driven 6/9 -> 9/9: Terrain (DAT planes + CGR height
+  sprites, get_z_pos search/latch/0x1F rule), Robot record subset,
+  Order + spread claims, MissionSim 6-phase frames + order-window
+  tick, robot_move diagonal/slide/move_x_y_who, move_possible
+  per-probe, state hash over the sec-7 coverage list. 38 workspace
+  test binaries green, fmt/clippy -D warnings clean, release build
+  ok, MANIFEST verified x2, pushed. P4 slice inputs now complete
+  except the mission file-load/table-build pass (RE-EXW-SIM sec 9
+  item 1) - queued as the next Now item with the ZONEA/MISSION1
+  render + one squad move.
 - CLOSED 2026-08-20 (P4-menu engine step, D42, commits 57413b0 +
   0a10a54 + 7ff713e, worker 26ccbd31 claim 1): the D41 title-menu
   findings implemented. bedlam-game menu.rs = TitleMenu (builder
