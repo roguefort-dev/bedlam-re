@@ -131,8 +131,27 @@ impl MoviePlayer {
     /// never round). Ring streams wrap (More forever); non-ring streams
     /// latch finished on Last/Done and reset the accumulator.
     pub fn advance(&mut self, dt_subticks: u32) -> Result<(), GameError> {
-        if self.finished {
-            return Ok(());
+        self.advance_limited(dt_subticks, u32::MAX).map(|_| ())
+    }
+
+    /// [`Self::advance`] with a HARD decode cap: at most `max_frames`
+    /// movie frames decode from this one call (a starvation burst that
+    /// spans several periods still decodes at most the cap; leftover
+    /// accumulator time is kept warm rather than discarded). Returns
+    /// how many frames decoded.
+    ///
+    /// EXW parity anchor (D36, RE-EXW-GAMETHREAD "Boot attract arm RE"):
+    /// the runner FUN_0044567c bounds its frame loop by the header
+    /// frame count - `for (f = 1; f < frames; f++)` renders exactly
+    /// frames-1 frames no matter how starved the pacing is, so a ring
+    /// movie plays exactly ONE bounded pass and its final frame is
+    /// never decoded, rendered or audibly played. The boot attract
+    /// enforces that bound through this cap; ordinary scene movies
+    /// (TITLE and the cutscenes play whole files) keep the uncapped
+    /// [`Self::advance`].
+    pub fn advance_limited(&mut self, dt_subticks: u32, max_frames: u32) -> Result<u32, GameError> {
+        if self.finished || max_frames == 0 {
+            return Ok(0);
         }
         self.acc += u64::from(dt_subticks) * UNITS_PER_SUBTICK;
         let mut decoded = 0u32;
@@ -146,15 +165,21 @@ impl MoviePlayer {
                 SmkFrameStatus::Last | SmkFrameStatus::Done => {
                     self.finished = true;
                     self.acc = 0;
-                    return Ok(());
+                    return Ok(decoded);
                 }
             }
             if decoded >= MAX_FRAMES_PER_ADVANCE {
                 self.acc = 0;
                 break;
             }
+            if decoded >= max_frames {
+                // Cap hit mid-burst: stop decoding, keep the leftover
+                // accumulator time (the caller retires this movie at
+                // the cap - EXW drops the leftover wall time with it).
+                break;
+            }
         }
-        Ok(())
+        Ok(decoded)
     }
 
     /// Collect the audio packet of the first ELIGIBLE track: decoded

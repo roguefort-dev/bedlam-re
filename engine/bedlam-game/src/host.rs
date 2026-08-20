@@ -11,6 +11,7 @@ use bedlam_core::input::InputFrame;
 use bedlam_core::sim::SimConfig;
 use bedlam_render::{render, Frame, MovieFrame, RenderInput, Vga6};
 
+use crate::boot::{BootAttract, BootPhase};
 use crate::config::GameConfig;
 use crate::fsm::{Scene, SceneAction, SceneFsm};
 use crate::loading::{LoadingFlow, LoadingPhase, TextRow};
@@ -46,6 +47,9 @@ pub struct GameHost {
     /// The post-cutscene loading flow (D34): BETWEEN interlude +
     /// region-variant loading screen, presentation-only like the movie.
     loading: Option<LoadingFlow>,
+    /// The boot attract pair (D36): GTLOG then LOGO, presentation-only
+    /// like the movie - one EXW pass each on the Boot scene.
+    boot: Option<BootAttract>,
     frame: Frame,
     palette: [Vga6; 256],
 }
@@ -75,6 +79,7 @@ impl GameHost {
             music_scene: None,
             movie: None,
             loading: None,
+            boot: None,
             frame: Frame::new(palette),
             palette,
         };
@@ -98,9 +103,11 @@ impl GameHost {
             self.fsm.tick(input);
         }
         self.sync_movie();
+        self.sync_boot();
         self.sync_loading();
         self.sync_music();
         self.pump_movie(dt_subticks);
+        self.pump_boot(dt_subticks);
         self.pump_loading(dt_subticks);
         self.frame = self.render_now();
         executed
@@ -242,6 +249,34 @@ impl GameHost {
     /// leaving.
     pub fn load_shop(&mut self, data: &[u8]) -> Result<(), GameError> {
         self.load_movie(Scene::Shop, data)
+    }
+
+    /// Load the boot attract pair (GTLOG.SMK bytes then LOGO.SMK
+    /// bytes, the caller fetching per [`crate::movies::boot_pair`])
+    /// onto the Boot scene (D36): the D31 lifecycle applied to the
+    /// two-movie EXW sequence - inert until the FSM stands on Boot
+    /// (the host is constructed there, so the first pump starts it),
+    /// each movie exactly one EXW pass (frames-1 renders, ring movies
+    /// never wrap), GTLOG frame-0 audio queued at start and the LOGO
+    /// frame-0 audio at the switch; dropped + stream cleared when
+    /// Boot is left. The EXW pair is UNSKIPPABLE (skip gate 004edbc4
+    /// reads 0 until NameEntryScreen arms it), so no input path
+    /// exists. Staging touches no hashed state (unit-pinned).
+    pub fn load_boot_attract(&mut self, gtlog: &[u8], logo: &[u8]) -> Result<(), GameError> {
+        self.boot = Some(BootAttract::new(gtlog, logo)?);
+        Ok(())
+    }
+
+    /// The attract phase, if one is staged (D36 introspection:
+    /// Staged / Playing / Done / None when nothing is staged).
+    pub fn boot_attract_phase(&self) -> Option<BootPhase> {
+        self.boot.as_ref().map(|flow| flow.phase())
+    }
+
+    /// The staged attract flow, if any (introspection for hosts and
+    /// gates: movie index 0 = GTLOG / 1 = LOGO, frame index, phase).
+    pub fn boot_attract(&self) -> Option<&BootAttract> {
+        self.boot.as_ref()
     }
 
     /// Stage the zone-transition interlude still (BETWEEN.BIN entry-0
@@ -486,6 +521,57 @@ impl GameHost {
         }
     }
 
+    /// Boot-attract scene sync (D36): start on the Boot scene (the
+    /// GTLOG frame-0 audio queues HERE, one pump before any decode -
+    /// the D31 entry semantics), stop + drop on leaving it. The EXW
+    /// boot attract is unskippable, so there is no input abort path.
+    fn sync_boot(&mut self) {
+        let mut stop = false;
+        if let Some(flow) = self.boot.as_mut() {
+            match self.fsm.scene() {
+                Scene::Boot => {
+                    if flow.phase() == BootPhase::Staged {
+                        let first = flow.start();
+                        // Stream-bus overflow at start = the host
+                        // stopped draining audio (16x-headroom cap):
+                        // drop the flow, the D31 start pattern.
+                        if self.mixer.queue_pcm_u8(&first).is_err() {
+                            stop = true;
+                        }
+                    }
+                }
+                _ => stop = true,
+            }
+        }
+        if stop {
+            self.boot = None;
+            self.mixer.clear_pcm_stream();
+        }
+    }
+
+    /// Boot-attract time pump (D36): the same dt the sim consumed; the
+    /// decoded PCM rides the D31 stream bus. A decode failure or
+    /// stream overflow self-terminates the flow (the D31
+    /// movie-lifecycle pattern - presentation self-terminates, never a
+    /// pump error).
+    fn pump_boot(&mut self, dt_subticks: u32) {
+        let mut failed = false;
+        if let Some(flow) = self.boot.as_mut() {
+            match flow.advance(dt_subticks) {
+                Ok(packets) => {
+                    if self.mixer.queue_pcm_u8(&packets).is_err() {
+                        failed = true;
+                    }
+                }
+                Err(_) => failed = true,
+            }
+        }
+        if failed {
+            self.boot = None;
+            self.mixer.clear_pcm_stream();
+        }
+    }
+
     /// Parity render pass: canonical frame from the current sim. A
     /// started movie REPLACES the scene pipeline (D31): the plane is
     /// the decoded raster + the folded 6-bit movie palette, and render
@@ -504,6 +590,17 @@ impl GameHost {
                 height: p.h,
                 pixels: p.pixels,
                 palette: p.palette,
+            })
+            .or_else(|| {
+                self.boot
+                    .as_ref()
+                    .and_then(|flow| flow.plane())
+                    .map(|p| MovieFrame {
+                        width: p.w,
+                        height: p.h,
+                        pixels: p.pixels,
+                        palette: p.palette,
+                    })
             })
             .or_else(|| {
                 self.movie
@@ -990,6 +1087,75 @@ mod tests {
         host.pump_frame(4, &InputFrame::default());
         assert_eq!(host.scene(), Scene::Select);
         assert!(host.movie().is_none(), "slot dropped on Shop exit");
+    }
+
+    #[test]
+    fn boot_attract_lifecycle_on_the_boot_scene() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_boot_attract(&synth_smk(), &synth_smk()).unwrap();
+        // Staged until the first pump: the host is CONSTRUCTED on the
+        // Boot scene, so the very first pump starts it (the D31 entry
+        // semantics applied at scene standstill).
+        assert_eq!(host.boot_attract_phase(), Some(crate::BootPhase::Staged));
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.boot_attract_phase(), Some(crate::BootPhase::Playing));
+        assert_eq!(host.boot_attract().unwrap().movie_index(), 0);
+        // The composite frame carries the folded movie palette and the
+        // dirty flag (frame-0 palette entry = 6-bit [1,2,3]).
+        assert_eq!(host.frame().palette[0], [1, 2, 3]);
+        assert!(host.frame().palette_dirty);
+        // GTLOG frame-0 audio [AA 55] queued on the stream bus at the
+        // config master gain (the D31 title-movie shape).
+        let expect = |b: u8| (((i32::from(b) - 128) << 8) * 100) >> 8;
+        let mut buf = [0i16; 4];
+        host.render_audio(&mut buf).unwrap();
+        assert_eq!(
+            buf,
+            [
+                expect(0xAA) as i16,
+                expect(0xAA) as i16,
+                expect(0x55) as i16,
+                expect(0x55) as i16
+            ]
+        );
+        // The 2-frame synth pair (one EXW pass = 1 period = 40 ms per
+        // movie) completes inside the 200 ms Boot hold: GTLOG pass
+        // ends at pump 5 (20 sub-ticks >= 19.2), LOGO at pump 10.
+        for _ in 0..10 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(host.boot_attract_phase(), Some(crate::BootPhase::Done));
+        assert_eq!(host.boot_attract().unwrap().movie_index(), 1);
+        // Boot -> Title drops the flow and clears the stream.
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(host.scene(), Scene::Title);
+        assert_eq!(host.boot_attract_phase(), None);
+        let mut quiet = [1i16; 8];
+        host.render_audio(&mut quiet).unwrap();
+        assert!(quiet.iter().all(|&s| s == 0), "stream bus cleared");
+    }
+
+    #[test]
+    fn boot_attract_never_touches_the_scene_hash() {
+        // Same pump sequence with and without the staged attract: the
+        // scene-hash chain must be IDENTICAL (D17 bucket b - the boot
+        // attract is presentation, like the movie and the loading
+        // flow).
+        let walk = |with_attract: bool| -> Vec<u64> {
+            let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+            if with_attract {
+                host.load_boot_attract(&synth_smk(), &synth_smk()).unwrap();
+            }
+            let mut chain = Vec::new();
+            for _ in 0..(BOOT_TICKS + 4) {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            chain
+        };
+        assert_eq!(walk(false), walk(true));
     }
     /// Marker host palette: every entry distinct, 6-bit clean.
     fn marker_palette() -> [Vga6; 256] {

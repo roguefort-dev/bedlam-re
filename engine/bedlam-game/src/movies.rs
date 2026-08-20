@@ -51,13 +51,18 @@ impl Region {
     }
 }
 
-/// Title attract movie (D31 wired; 640x320 letterbox, non-ring).
+/// Title attract movie (D31 wired; 640x320 letterbox, non-ring - the
+/// letterbox placement is now EXW-verified: the replay site
+/// FUN_004459f7 plays it through FUN_0044567c with arg2 = 0x50, dst
+/// height 480 - 2*80 = 320 rows at y=80, RE-EXW-GAMETHREAD.md Boot
+/// attract arm RE).
 pub fn title_name() -> &'static str {
     "TITLE.SMK"
 }
 
-/// Publisher logo movie, region-variant [corpus: LOGO_UK/US.SMK exist as
-/// the only variant pair; the EXW playback site is not yet RE'd].
+/// Publisher logo movie, region-variant [verified play site: GameMain
+/// 0041c397, the SECOND of the first-run boot pair, full screen arg2 =
+/// 0; corpus: 71-frame 66_660-us ring].
 pub fn logo_name(region: Region) -> &'static str {
     match region {
         Region::Uk => "LOGO_UK.SMK",
@@ -65,13 +70,24 @@ pub fn logo_name(region: Region) -> &'static str {
     }
 }
 
-/// Gremlin-style studio card, region-variant [corpus: GTLOG_UK/US.SMK;
-/// playback site not yet RE'd].
+/// Gremlin-style studio card, region-variant [verified play site:
+/// GameMain 0041c37a, the FIRST of the first-run boot pair; corpus:
+/// 70-frame 66_660-us ring].
 pub fn gtlog_name(region: Region) -> &'static str {
     match region {
         Region::Uk => "GTLOG_UK.SMK",
         Region::Us => "GTLOG_US.SMK",
     }
+}
+
+/// The boot attract pair in EXW play order [verified: GameMain
+/// 0041c37a/0041c397 - GTLOG first, then LOGO, the region variant
+/// selected by DAT_0046ae64 both times, bracketed by the Smacker
+/// init/shutdown pair FUN_0042582a(0x400)/FUN_00425851]. The caller
+/// fetches both blobs through its ByteSource and hands them to
+/// [`crate::host::GameHost::load_boot_attract`] (GTLOG first).
+pub fn boot_pair(region: Region) -> [&'static str; 2] {
+    [gtlog_name(region), logo_name(region)]
 }
 
 /// Mission-failed movie [corpus: GAMEOVER.SMK; the EXW fail arm is the
@@ -183,6 +199,14 @@ mod tests {
         assert_eq!(gameover_name(), "GAMEOVER.SMK");
         assert_eq!(shop_name(), "SHOP.SMK");
         assert_eq!(interlude_name(), "BETWEEN.BIN");
+    }
+
+    #[test]
+    fn boot_pair_is_gtlog_then_logo_per_region() {
+        // EXW play order (GameMain 0041c37a/0041c397): GTLOG first,
+        // then LOGO, the region variant both times.
+        assert_eq!(boot_pair(Region::Uk), ["GTLOG_UK.SMK", "LOGO_UK.SMK"]);
+        assert_eq!(boot_pair(Region::Us), ["GTLOG_US.SMK", "LOGO_US.SMK"]);
     }
 
     #[test]

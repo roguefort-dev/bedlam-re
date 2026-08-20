@@ -884,3 +884,76 @@ run (host-test rename tail, host font staging test, doc corrections).
 
 Not done here (queued): BRF_DROP play site, boot LOGO/GTLOG attract
 sequence, native executable shell, ZONEA/MISSION1 vertical slice.
+
+## D36 - 2026-08-20: boot attract sequence GTLOG+LOGO (P5, item 1)
+
+Context: NEXT item 1 - the D32 not-done tail: play the region-variant
+publisher pair on the Boot scene. RE prerequisite landed by the
+predecessor as 4e9ccbb (RE-EXW-GAMETHREAD.md "Boot attract arm RE").
+Rust WIP of the same interrupted predecessor (died on transport error
+after the docs commit; boot.rs + boot_attract_gate.rs + host/lib/
+movie/movies diffs) adopted per AGENTS.md, independently re-validated
+and completed by this run (clippy tail: u64::from removal in boot.rs,
+needless borrows in the gate test).
+
+1. RE [verified decompile, docs 4e9ccbb]: runner FUN_0044567c(name,
+   arg2) - movies gate DAT_0046cca4; clears the 480x640 plane TWICE
+   at entry of EVERY call (the plane between the two movies and
+   before TITLE is black); frame loop `for (f=1; f<frames; f++)`
+   renders frames-1 frames - ring movies play EXACTLY ONE bounded
+   pass, final frame never decoded/rendered/played; dst height =
+   480-2*arg2 (boot pair arg2=0 = full-screen 640x480 1:1; TITLE
+   replay arg2=0x50 = 320 rows at y=80 - VERIFIES the D31 exact-
+   centering design note with EXW arithmetic); per-frame palette
+   apply of all 256 entries from the Smack struct (+0x6c) when the
+   frame changed it (+0x68) - the D31 per-frame palette_dirty shape;
+   skip gate 004edbc4 zeroed at GameMain entry, armed only inside
+   NameEntryScreen around the TITLE replay -> the BOOT pair is
+   UNSKIPPABLE in EXW (full one pass, no input abort).
+2. FLOW MODULE (game boot.rs, presentation-only, D17 bucket b):
+   BootAttract Staged -> Playing -> Done. Both MoviePlayers open +
+   decode frame 0 at construction (D31 contract); per-movie one-pass
+   target = frames-1; sequencing time-exact on the shared x240-us
+   grid - a movie switches when (frames-1)*period elapsed (final
+   frame shown its full period) or a non-ring stream latched
+   finished; entry-audio rule per movie (start() hands the GTLOG
+   frame-0 packet; the switch appends the LOGO frame-0 packet);
+   Done holds the last raster until the scene drops the flow.
+3. MoviePlayer::advance_limited(dt, max_frames): advance with a HARD
+   decode cap (the EXW loop bound made starvation-proof - a burst
+   spanning many periods still decodes at most the cap; leftover
+   accumulator kept warm, retired with the movie). Ordinary scene
+   movies (whole-file TITLE/cutscenes) keep uncapped advance().
+4. movies.rs: boot_pair(region) -> [GTLOG, LOGO] in EXW play order
+   (GameMain 0041c37a/0041c397, region DAT_0046ae64 both times,
+   bracketed by Smacker init/shutdown); provenance on title_name/
+   logo_name/gtlog_name upgraded from [corpus] to [verified play
+   site].
+5. HOST: load_boot_attract stages inert; sync_boot starts on the
+   Boot scene (frame-0 audio queued one pump before any decode),
+   drops the flow + clears the stream on leaving Boot; pump_boot
+   rides the D31 stream bus and self-terminates on decode error or
+   overflow (presentation self-terminates, never a pump error);
+   render_now plane precedence loading > boot > movie (mutually
+   exclusive by scene). No input path exists - EXW parity. Hash
+   isolation unit-pinned (chain identical with/without the attract).
+6. CORPUS GATE (game tests/boot_attract_gate.rs, skips when corpus
+   absent): both region pairs driven to Done at the 60 Hz host pace;
+   max decoded frame = frames-2 (GTLOG 68 / LOGO 69 of 70/71, D32
+   counts) - one pass, ring NEVER wraps; switch + Done pump counts
+   pinned by the closed formula ((frames-1) periods of 66_660 us);
+   continuous in-order DPCM audio (>100 kB per pair) with the LOGO
+   frame-0 packet exactly at the switch; two independent runs
+   byte-identical (SHA-256 over the per-pump observation chain).
+   No decoded media enters git - only hashes asserted.
+7. TESTS: 5 boot.rs units (staged silence; one-pass bound + exact
+   switch timing incl. Done-hold; starvation-burst cap; 2-frame
+   movies render exactly one frame; bad bytes reject at construction)
+   + 1 movies.rs unit (pair order per region) + 2 host units (Boot
+   lifecycle incl. stream clear on exit; scene-hash isolation) + the
+   corpus gate. Workspace 335 tests green / 0 failed, fmt + clippy
+   -D warnings clean, MANIFEST.sha256 verified before AND after the
+   corpus-touching runs.
+
+Not done here (queued): BRF_DROP play site, native executable shell,
+ZONEA/MISSION1 vertical slice.
