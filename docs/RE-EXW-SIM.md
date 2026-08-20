@@ -288,6 +288,46 @@ move_is_possible, move_is_possible2} on the robot record + globals:
   sidebar redraw flags, SFX queues) stays outside the hashed core per the
   D17 hybrid split.
 
+## 7b. Amendment 2026-08-20 (worker 778d091a, objdump re-read driving the
+mission.rs seam green; corrects/refines §§3-4 and the spawn-settle gloss)
+
+1. **FUN_0041ebf8 abs's BOTH arguments** [verified asm 0x41ebfc..0x41ec19]:
+   `cdq/xor/sub` runs on dx, then on dy, THEN max+min/2. The result is
+   therefore ALWAYS non-negative — `dist(-10,-4)` is +12, never -12.
+   (Sec 8's ledger line was right; recorded here because a stray test
+   expectation assumed signed output.)
+2. **move_is_possible per-probe climb reference is the probe's OWN cached
+   word** [verified asm 0x41e8ce + esi stride]: the loop keeps
+   `esi = idx*0xA8 + 2*i` and loads `edi = dword@(0x4c69fc + esi) >> 16`
+   = `word@(+0x1A + 2i)` = probe cache slot i, sign-extended (sar). That
+   same zref is BOTH the get_z_pos z input AND the climb-compare
+   reference: blocked iff `|floor_z - zref_i| > 4` (signed abs). Sec 3's
+   "+0x1A doubles as the climb-compare z" was probe 0's instance of the
+   general per-probe rule.
+3. **move_is_possible pass-side writes** [verified 0x41e928..0x41e996]:
+   on pass, `robot+0x08 = get_z_pos(center, min(robot_z, 0xFF))` (upper
+   clamp only at the call; get_z_pos clamps 0..0xFF internally), and the
+   8 probe floors are cached as u16 words at +0x1A..+0x28. On ANY probe
+   failure the loop aborts with NO writes — probe cache and +0x08 keep
+   their prior values.
+4. **Spawn settle is best-effort** [consequence of 2+3, verified seed
+   loop 0x40d031..0x40d098]: pos_z = mrk.z*0x20 - 1 seeds all 8 cache
+   words with its LOW word (level-0 marker → 0xFFFF → zref −1). The
+   settle move_is_possible then passes only if every probe floor is
+   within 4 of `L*0x20 - 1` — e.g. a ground tile with height byte ≤ 3 at
+   the marker level. A tall floor (height byte 8 at level 0: |8−(−1)|=9)
+   leaves the robot at z −1 with 0xFFFF probes, i.e. permanently
+   un-walkable until something else updates the cache — faithful EXW
+   behavior, not an error case.
+5. **Armer snap has NO center offset** [verified 0x42486a..0x424882]:
+   `robot.pos_x = tx << 13`, `pos_y = ty << 13` exactly (tile origin),
+   unlike the MRK spawn (+0xF00). Sec 6's pseudocode was already right.
+6. **FUN_004248c8 spread table slots 0..8** [verified jumptable bodies
+   0x4248c8..0x424990]: (0,0),(+1,0),(−1,0),(0,−1),(0,+1),(−1,−1),
+   (+1,−1),(−1,+1),(+1,+1) — matches the seam's SPREAD_OFFSETS order.
+   The free-slot scan runs over the first `DAT_0046ccbc` (robot count)
+   slots; slot > 0xB → no assignment (caller skips the pos write).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
