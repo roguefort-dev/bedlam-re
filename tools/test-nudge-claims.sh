@@ -135,6 +135,35 @@ rm -f "$PLAN/.state/claims/8-owner.claim"
 grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
 grep -q "item 8 failed three consecutive observed runs" "$TMP/notifications"
 
+# A step-cap truncation (opencode2 "Maximum steps" kill, rc=0, no
+# commit) is NOT a task failure: no taskfails bookkeeping, no
+# cooldown spiral, no "failed [" line - just the truncation note and
+# a retained retry-backoff claim (freed by the reaper after the
+# backoff TTL, like any failed run).
+cat > "$TMP/mock-step-cap" <<EOF
+#!/usr/bin/env bash
+echo "**Maximum steps for this agent reached - stopping with a text-only summary.**"
+exit 0
+EOF
+chmod +x "$TMP/mock-step-cap"
+echo "10. [P4] step-cap mock item" >> "$PLAN/.state/NEXT.md"
+stepcap_hash=$(sed -n "s/^[[:space:]]*10\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/10-805.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-step-cap" "$AGENT" 10 805
+stepcap_rc=$?
+set -e
+[ "$stepcap_rc" -eq 0 ]
+grep -q "item 10 hit the opencode2 step cap \[rc=0 progress=0\] task=$stepcap_hash; treating as truncation, not failure" "$PLAN/.state/nudge.log"
+! grep -q "agent item 10 failed \[" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$stepcap_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$stepcap_hash" ]
+[ -e "$PLAN/.state/claims/10-owner.claim" ]
+flock -n "$PLAN/.state/claims/10-owner.claim" true
+touch -d "10 seconds ago" "$PLAN/.state/claims/10-owner.claim"
+DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/claims/10-owner.claim" ]
+
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF
 #!/usr/bin/env bash
