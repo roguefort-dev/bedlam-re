@@ -137,6 +137,31 @@ impl ParityGpu {
         Some(ParityGpu { device, queue })
     }
 
+    /// The window-host half: request an adapter that can PRESENT to
+    /// `surface`, then open the same low-power / default-limits /
+    /// no-features device as the headless path so both hosts behave
+    /// alike. The adapter is returned alongside (the caller needs it
+    /// for surface capabilities). None when no present-capable
+    /// adapter exists. Blocks internally via pollster - window-host
+    /// only, never on the sim path.
+    pub fn new_for_surface(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'_>,
+    ) -> Option<(wgpu::Adapter, ParityGpu)> {
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: Some(surface),
+            force_fallback_adapter: false,
+        }))
+        .ok()?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("bedlam-platform parity device"),
+            ..Default::default()
+        }))
+        .ok()?;
+        Some((adapter, ParityGpu { device, queue }))
+    }
+
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }

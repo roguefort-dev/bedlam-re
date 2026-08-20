@@ -1021,3 +1021,82 @@ adopted and completed it (commit bba01fe).
    corpus-touching runs.
 Not done here (queued): native executable shell (P4 window/audio
 integration), ZONEA/MISSION1 vertical slice.
+
+## D38 - 2026-08-20: provisional shell button layout (P4 shell input seam)
+
+Context: the P4 input adapter (bedlam-shell input.rs) needs SOME bit
+assignment to translate winit events into
+`bedlam_core::input::InputFrame.buttons`, but the engine-side bit
+contract is still unpinned - the EXW scan-code keystore map
+(docs/RE-EXW-INPUT.md, 12 edge latches, arrows +0x80 remap) binds a
+different mechanism and its engine-side binding lands with the P2e
+input RE.
+
+Decision: the SHELL owns a provisional layout (module `button`:
+UP/DOWN/LEFT/RIGHT/FIRE bits 0-4, WEAPON1-4 bits 5-8, ESCAPE bit 9)
+documented as ours, not the EXW keystore. The seam is pinned so P2e
+only has to shrink this module to a pure winit->engine-event
+translator and move the layout into bedlam-core:
+1. `map_physical_key(PhysicalKey) -> Option<ShellKey>` is the pure,
+   unit-pinned mapping table (winit's `KeyEvent` carries a
+   `pub(crate) platform_specific` field and CANNOT be constructed
+   outside winit - the thin `map_winit_key(&KeyEvent)` wrapper is
+   covered by the corpus smoke instead; this replaced a predecessor
+   test that could never compile).
+2. `ShellInput` accumulates between pumps and `tick()` snapshots:
+   held buttons PERSIST across ticks (the FSM derives edges itself -
+   D26 hashed per-tick latches), pointer deltas are consumed per
+   tick, i16-saturating; focus loss clears held state so an alt-tab
+   cannot stick a key.
+3. Mapping shape per PLAN sec 6 P6 modern defaults: WASD+arrows
+   move, mouse aims, left button fires, 1-4 weapon hotkeys, Escape
+   backs. Wheel provisionally maps to Up/Down (menu stepping); the
+   1996 build had no wheel. Original-scheme rebinding stays P6.
+
+## D39 - 2026-08-20: winit 0.30.13 is the window host (P4 shell step 1)
+
+Context: PLAN sec 4 dependency spike for the native shell - winit
+was the default candidate; this records the choice + pinned version.
+
+1. CHOICE: winit 0.30.13 (Cargo.lock) + pollster 0.4 for blocking
+   GPU init; wgpu itself stays consumed through the bedlam-platform
+   re-export so the workspace pins exactly one wgpu (27.0.1).
+2. winit 0.30 SHAPE (the part that cost a predecessor session): the
+   window is created INSIDE `resumed()` via
+   `ActiveEventLoop::create_window` (the pre-run `EventLoop` form
+   is deprecated) and held behind `Arc<Window>`, because wgpu's
+   surface needs an owned window handle to give `Surface<'static>`
+   a lifetime that outlives `run_app`. `about_to_wait` is
+   borrow-scoped: clock read -> pump -> stage -> redraw request.
+3. GPU: `ParityGpu::new_for_surface` added to bedlam-platform (the
+   headless `new()` and the surface path share the low-power /
+   default-limits / no-features device contract; pollster blocking
+   is window-host-only, never on the sim path).
+4. LOOP: Determinism Charter honored - the measured frame delta
+   feeds `FixedStepClock::advance` (pure u128 integer banking,
+   anti-spiral clamp DEFAULT_MAX_CATCHUP=4 pumps, surplus DROPPED
+   not fast-forwarded) which decides only HOW MANY identical 60 Hz
+   pumps run (fixed dt = 4 sub-ticks on the 240 Hz grid); present
+   is the D20 PARITY path (640x480 indexed upload, palette expand,
+   integer-scale, Fifo vsync).
+5. HEADLESS DISCIPLINE: the window path is runtime-gated behind
+   `--window` / `BEDLAM_SHELL=1`; the default binary path is the
+   headless smoke (fixed 600 pumps, scripted walk, neutral input)
+   whose report is byte-identical across runs. The smoke walks the
+   full wired chain and fetches exactly GTLOG/LOGO/TITLE/ZONEDONE/
+   BETWEEN/LOAD_UK/LOADPAL/FULLFONT/FULLPAL/LANGUAGE.ENG.
+6. CORPUS SOURCE: `GameGfxSource` is the ONLY fs reader in the
+   engine crates; two-tier lookup GAMEGFX/<name> then <root>/<name>
+   (LANGUAGE.* sits at the install root - EXW read them from its
+   CWD; bare names only, separators/parent hops rejected).
+7. LESSON (from the four step-capped worker sessions this WIP
+   survived): the original `gpu.rs` blocker was a stray apostrophe
+   - `Surface<'_'>` instead of `Surface<'_>` - which rustc lexed as
+   a const-generic argument and reported as a misleading E0107
+   "struct takes 0 generic arguments". When a trait/generic error
+   looks impossible against the vendored source, check for stray
+   quote characters before suspecting the toolchain.
+8. TESTS: 13 bedlam-shell units (5 clock banking/clamp cases, 7
+   input seam cases incl. the disjoint-bit pin, scene_assets chain
+   pin) + the binary smoke (byte-identical x2). Workspace 356
+   green / 0 failed (343 + 13).

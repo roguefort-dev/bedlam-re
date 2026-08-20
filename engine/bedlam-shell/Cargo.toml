@@ -1,0 +1,24 @@
+[package]
+name = "bedlam-shell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bedlam-core = { path = "../bedlam-core" }
+bedlam-game = { path = "../bedlam-game" }
+bedlam-platform = { path = "../bedlam-platform" }
+bedlam-render = { path = "../bedlam-render" }
+pollster = "0.4"
+thiserror = "1"
+winit = "0.30"
+
+# wgpu itself is consumed through the bedlam-platform re-export so the
+# whole workspace pins exactly one wgpu version.
+
+[dev-dependencies]
+sha2 = "0.10"
+
+[[bin]]
+name = "bedlam-shell"
+path = "src/main.rs"
+
