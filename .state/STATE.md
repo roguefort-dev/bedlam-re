@@ -1,3 +1,21 @@
+- CLOSED 2026-08-20 (P5 cutscene movies + corpus inventory, D32): every
+  game-data SMK inventoried and PINNED (bedlam-assets smk_corpus_gate:
+  34 files, formats/rates/ring/y-scale/audio shapes; listing must match
+  the table both ways). Reject-or-map verdict: ALL MAP onto the D31
+  playback path, none rejected - y-scale None corpus-wide (no scaling
+  logic owed), all periods exact on the x240-us grid, the single audio
+  shape (DPCM mono 8/11025) is already stream-bus-native. Movie
+  selection module (bedlam-game movies.rs): cutscene_name over the
+  hashed stage (ZONEDONE.SMK; END.SMK at the endgame = stage >=
+  MAX_STAGE, EXW pre-increment vs FSM post-increment reconciled and
+  unit-pinned through the FULL_MASK cadence), Region (DAT_0046ae64)
+  backing LOAD_UK/US.BIN + LOADPAL(U).PAL + LOGO/GTLOG variants,
+  briefing_name over BRF_{B..F}{1..5}. Host wiring:
+  GameHost::cutscene_name + load_cutscene = the D31 lifecycle on
+  Scene::Cutscene (inert-until-scene, dropped on exit, hash-free).
+  Workspace 257 tests green, fmt + clippy -D warnings clean,
+  MANIFEST.sha256 verified before AND after the corpus runs. Next:
+  Shop/Brief backdrop wiring, then the post-cutscene loading screen.
 # STATE - project snapshot (update when phase changes)
 
 - CLOSED 2026-08-19 (P5 title-movie playback, D31): TITLE.SMK plays

@@ -600,3 +600,78 @@ the same D31 shape below; the reconciliation unified them.
    Workspace 280 tests green; the existing D30 double-decode gate is
    untouched; manifests verified before/after the corpus-touching runs.
 
+
+## D32 - P5 cutscene-movie selection + SMK corpus inventory gate (2026-08-20)
+
+Context: NEXT item 1 - extend the D31 playback integration to the
+remaining cutscene movies (game-data SMK corpus inventory first) and
+wire the Cutscene scene to LOAD_UK/US.BIN-backed movie selection.
+Interrupted-WIP adoption: an interrupted predecessor lineage left this
+unit ~90% built in the tree (engine/bedlam-game/src/movies.rs untracked,
+host.rs/lib.rs modified, smk_corpus_gate.rs untracked); claim holder
+1bd01455 adopted and validated it per the AGENTS.md adoption rules
+(snapshot archived under /tmp/opencode/wip-snapshot-1bd01455/), then
+finished docs + queue bookkeeping.
+
+1. CORPUS INVENTORY (tests/smk_corpus_gate.rs, bedlam-assets): opens
+   EVERY .SMK under game-data/BEDLAM/GAMEGFX through the SmkStream
+   seam and pins, per file: raster (w x h), frame count, us/frame,
+   ring flag, y-scale, and audio track 0 shape; the directory listing
+   must match the table exactly both ways (a new corpus file fails the
+   gate, a dropped one too). Ignored regen_inventory test is the only
+   documented way to re-print the table.
+2. REJECT-OR-MAP VERDICT (the D31 policy applied corpus-wide): every
+   corpus file MAPS onto the existing playback path, nothing is
+   rejected. Facts [verified 2026-08-20 against the corpus, confidence:
+   pinned by the gate]: 34 files total - 25x BRF_{B..F}{1..5} + BRF_DROP
+   (640x480, 33330 us ~30 fps, silent, BRF rings 512 frames); END/
+   GAMEOVER/GTLOG_{UK,US}/LOGO_{UK,US}/ZONEDONE (640x480, 66660 us
+   15 fps, DPCM mono/8-bit/11025 track 0; all ring except GAMEOVER);
+   SHOP (640x480, 61 frames, 25000 us 40 fps, ring, DPCM); TITLE
+   (already D31). ALL y-scale flags are SmkYScale::None - the D31
+   letterbox-blit-never-scale compositing needs no y-scale handling,
+   and no corpus file is rejected. All periods divide the x240-us grid
+   exactly (33330x240 = 7_999_200; 25000x240 = 6_000_000;
+   66660x240 = 15_998_400), so banking accumulators pace every file
+   with zero rounding. The single audio shape corpus-wide is the one
+   the D31 stream bus already consumes natively (no resampling owed).
+3. MOVIE SELECTION MODULE (engine/bedlam-game movies.rs): pure name
+   arithmetic over hashed state + caller region - selection is
+   presentation-side (D17 bucket b), hash-free, and the host stays
+   byte-source-free (DESIGN-GAME sec 8). cutscene_name(stage) [verified
+   vs EXW LAB_0041c69e: ZONEDONE.SMK every zone completion, END.SMK on
+   the _DAT_004edd8c == 7 endgame arm; EXW reads the counter BEFORE
+   its post-movie ++ while Episode::complete() advances the stage
+   BEFORE the Cutscene entry, so the endgame arm is exactly
+   stage >= MAX_STAGE]. Region (the DAT_0046ae64 reimplementation:
+   0 = UK, nonzero = US [verified via the string selects at
+   RE-EXW-GAMETHREAD.md:145-146,225,280]) backs the LOAD_UK/US.BIN +
+   LOADPAL/LOADPALU.PAL loading-screen pair [verified same call site]
+   and the LOGO_{UK,US}/GTLOG_{UK,US} variant pairs; Region is
+   deliberately NOT a GameConfig field (it is not an OPTIONS.BDL
+   field; entangling it would deviate from the typed view) - callers
+   pass it with the movie-name fns. briefing_name(zone_letter, sub)
+   covers the BRF_{B..F}{1..5} corpus and rejects the rest [corpus
+   census; the zone-letter map is not yet RE-ved - letter taken
+   verbatim]. logo/gtlog/gameover/shop/title names cover their
+   play sites [logo/gtlog verified; gameover/shop/briefing corpus-
+   pinned, play sites not yet RE-d to the movie call].
+4. CUTSCENE WIRING (host.rs): GameHost::cutscene_name() reads
+   movies::cutscene_name over the hashed stage slot; load_cutscene()
+   = load_movie(Scene::Cutscene, bytes) - the D31 lifecycle verbatim:
+   inert until the FSM enters Cutscene (entry starts playback +
+   queues frame-0 audio), dropped + stream cleared on leaving, hash
+   chain untouched. Unit-pinned: selection walks the FULL_MASK cadence
+   through all 7 zones (END exactly on the 7th zone completion, held
+   at the MAX_STAGE ceiling), and load_cutscene plays + drops on the
+   Cutscene scene like the Title movie.
+5. GATES: smk_corpus_inventory_is_pinned (corpus, manifest-bracketed)
+   + 5 movies.rs unit tests + 2 host.rs lifecycle tests; workspace 257
+   tests green, fmt + clippy -D warnings clean, MANIFEST.sha256
+   verified before AND after the corpus-touching runs. The D30/D31
+   gates are untouched.
+
+Not done here (queued): the post-cutscene BETWEEN.BIN + loading-screen
+display, the boot LOGO/GTLOG attract sequence, briefing/shop backdrops
+as live scenes - all callers of these name fns, once their host scenes
+exist.

@@ -186,6 +186,24 @@ impl GameHost {
     pub fn movie(&self) -> Option<&MoviePlayer> {
         self.movie.as_ref().map(|slot| &slot.player)
     }
+    /// The zone-complete cutscene movie the CURRENT episode state
+    /// selects (movies::cutscene_name over the hashed stage slot):
+    /// ZONEDONE.SMK mid-game, END.SMK at the endgame ceiling
+    /// (EXW LAB_0041c69e: ZONEDONE.SMK on every zone completion,
+    /// END.SMK when the zone counter reads its last value). Pure
+    /// name arithmetic for the caller ByteSource fetch - the host
+    /// never loads anything by itself (DESIGN-GAME sec 8).
+    pub fn cutscene_name(&self) -> &'static str {
+        crate::movies::cutscene_name(self.fsm.episode().stage())
+    }
+
+    /// Load the zone-complete cutscene movie (.SMK bytes the caller
+    /// fetched under [`Self::cutscene_name`]) onto the Cutscene
+    /// scene (D32). Same lifecycle as [`Self::load_movie`] (D31):
+    /// inert until the FSM enters Cutscene, dropped on leaving.
+    pub fn load_cutscene(&mut self, data: &[u8]) -> Result<(), GameError> {
+        self.load_movie(Scene::Cutscene, data)
+    }
 
     /// Movie step (D31): advance the started player on the same dt the
     /// sim consumed, then queue whatever decoded. A decode failure
@@ -292,7 +310,7 @@ impl GameHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fsm::BOOT_TICKS;
+    use crate::fsm::{BOOT_TICKS, MAX_STAGE};
 
     fn palette() -> [Vga6; 256] {
         [[0, 0, 0]; 256]
@@ -533,5 +551,92 @@ mod tests {
         host.apply(SceneAction::MissionComplete);
         assert_eq!(host.scene(), Scene::Debrief);
         assert_eq!(host.fsm().episode().linear(), 1);
+    }
+
+    #[test]
+    fn cutscene_selection_follows_the_episode_stage() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        // Boot: stage 1, no completions - the zone-complete name.
+        assert_eq!(host.cutscene_name(), "ZONEDONE.SMK");
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        // Title -> Brief -> Select -> Mission.
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        assert_eq!(host.scene(), Scene::Mission);
+        // Zone cadence per FULL_MASK: slot 1 has one sub, slots 2..=7
+        // have four (1 + 4*6 = 25 completions routed through Debrief).
+        for (zone, &subs) in [1u32, 4, 4, 4, 4, 4, 4].iter().enumerate() {
+            for sub in 0..subs {
+                assert_eq!(host.scene(), Scene::Mission);
+                host.apply(SceneAction::MissionComplete); // -> Debrief
+                host.apply(SceneAction::Advance); // -> Cutscene | Shop
+                let zone_done = sub + 1 == subs;
+                assert_eq!(
+                    host.scene(),
+                    if zone_done {
+                        Scene::Cutscene
+                    } else {
+                        Scene::Shop
+                    }
+                );
+                if zone_done {
+                    // Read WHILE on Cutscene: the name the host would
+                    // play for this zone-complete scene. Only the 7th
+                    // zone (the endgame) selects END.
+                    assert_eq!(
+                        host.cutscene_name(),
+                        if zone + 1 == 7 {
+                            "END.SMK"
+                        } else {
+                            "ZONEDONE.SMK"
+                        }
+                    );
+                }
+                host.apply(SceneAction::Advance); // -> Select
+                host.apply(SceneAction::Advance); // Select -> Mission
+            }
+        }
+        // The 7th zone completion left the stage at MAX_STAGE: the
+        // endgame ceiling holds the END selection from then on.
+        assert_eq!(host.fsm().episode().stage(), MAX_STAGE);
+        assert_eq!(host.cutscene_name(), "END.SMK");
+    }
+
+    #[test]
+    fn load_cutscene_binds_the_cutscene_scene() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_cutscene(&synth_smk()).unwrap();
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+        assert_eq!(host.scene(), Scene::Mission);
+        // Slot 1 has one sub: the FIRST completion zones out, so the
+        // Debrief advance lands on Cutscene.
+        host.apply(SceneAction::MissionComplete);
+        host.apply(SceneAction::Advance);
+        assert_eq!(host.scene(), Scene::Cutscene);
+        // Inert until the next pump starts it (D31 lifecycle), then it
+        // plays like the Title movie.
+        assert_eq!(host.movie().unwrap().frame_index(), 0);
+        host.pump_frame(4, &InputFrame::default());
+        assert!(host.movie().is_some(), "started on Cutscene entry");
+        // 40 ms period: 3 more pumps decode frame 1 and finish the
+        // 2-frame synth stream (non-ring hold).
+        for _ in 0..3 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(host.movie().unwrap().frame_index(), 1);
+        assert!(host.movie().unwrap().finished());
+        // Leaving Cutscene drops the slot and clears the stream.
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Select);
+        assert!(host.movie().is_none(), "slot dropped on Cutscene exit");
     }
 }
