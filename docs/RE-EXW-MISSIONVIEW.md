@@ -152,15 +152,112 @@ FUN_0040167a (water variant): same header, forces u8-RLE decode, each
 literal byte written as TXPAL1-relative lookup (bank 0x4edbfc)
 [secondary; ZONEA unaffected unless the water range hits].
 
-## 5. FUN_0040798e — sprite-list enqueue (entities/overlays) [verified]
+## 5. FUN_0040798e — sprite-list enqueue (entities/overlays) [verified, asm-anchored]
 
-48-B nodes from arena cursor `DAT_0046cc04` into a 36×36×8 bucket grid
-at 0x46cdbc (bucket = `[tx-camTileX+9]*4 + [ty-camTileY+9]*0x90 +
-layer*0x1440`), node = `{dest=buf+sx+sy*0x280, bank, frame, layer 0..7,
-wy, wx, mode, sort=wx+wy, next}` — insertion-sorted by `sort`
-(painter's order, west+south first). FUN_00403938 flushes each bucket
-per terrain layer (§3). (Decoded for completeness; the terrain crop
-gate needs only §2–§4.)
+Per-frame lifecycle [asm 0x403950..0x403962]: the bucket head array at
+0x46cdbc is ZERO-CLEARED every frame (`FUN_00402965` with ECX=0xa200
+= 36*36*8 ptrs, EDI=0x46cdbc) and the arena cursor resets
+(`DAT_0046cc04 = _DAT_004edd50`) BEFORE the entity loops run — so a
+fresh list per frame is the faithful model.
+
+`FUN_0040798e(sx, sy, bank, wx, wy, frame, layer, mode)` (register
+convention: EAX/EDX/EBX/ECX + 4 stack args):
+
+- `dest = sx + sy*0x280` (byte offset rel. buffer 0x4ede18);
+- `bx = (wx >> 5) - camTileX + 9`, `by = (wy >> 5) - camTileY + 9`
+  (camTile from `_DAT_004ddb24/28`, set per frame); `bx/by < 0` →
+  RETURN (not drawn). No upper clip — the caller's sx/sy clip bounds
+  it (both clips ⇒ dx ≤ 0x1c8 ⇒ bx ≤ 23 < 36);
+- `layer = clamp(layer, 0..7)`; `sort = wx + wy` (the +0xb-adjusted
+  pixel coords the entity loop passes);
+- bucket = head ptr at `0x46cdbc + bx*4 + by*0x90 + layer*0x1440`;
+  48-B node `{+0 dest, +4 bank, +8 frame, +c layer, +10 wy, +14 wx,
+  +18 mode, +1c sort, +20 next, +24 sx}` (arena cursor advances 40 B
+  in the empty-bucket path — the +24 word only in the copy-insert
+  path; node identity is not observable, list ORDER is);
+- insertion keeps the list ASCENDING by sort, STABLE after equals
+  (walk while `next != 0 && cur.sort <= new.sort`); head-insert when
+  `new.sort < head.sort`; insert-before via duplicate-forward of the
+  successor node. Entities enqueue BEFORE the terrain pass; the
+  terrain loop (§3) flushes each visited bucket per layer, so sprites
+  interleave with terrain in painter order (§5b).
+
+### 5b. Flush site in the terrain loop [verified]
+
+Per cache cell, per layer, AFTER the blit + seen-chase: gate
+`0 <= bx < 0x24 && 0 <= by < 0x24` (bx/by = cell tile − camTile + 9,
+same index form as the enqueue), then walk the bucket list via
+`next` (+0x20) and call `FUN_0040179b(node.frame, node.frame,
+node.mode)` with ESI = node.bank, EDI = 0x4ede18 + node.dest. Buckets
+whose tile has no cache cell are never flushed (the EXW never draws
+them either — same observable behavior).
+
+### 5c. FUN_0040179b — the flush blit [verified, asm-authoritative]
+
+Directory identical to §4 (`id & 0xFFF` → entry `2 + 4*id` → sprite
+at `entry + u32[entry]`), but the header read starts +2 past the §4
+sprite start (the fmt word is SKIPPED): dy, dx, gate (skipped), rows.
+The decode is ALWAYS the u16-RLE family of §4 regardless of fmt, and
+— unlike the terrain blit — **literal runs copy RAW bytes with NO
+zero-skip** (REP MOVSB): transparency exists only as RLE skip words.
+
+Mode dispatch (mode = node +0x18):
+- `0x130` → paint every literal-run byte as 0xFF (STOSB 0xFF);
+- water flag `_DAT_004edbd4 == 0` OR mode `0x12c` (= decimal 300) →
+  plain raw copy;
+- water on: `0x12d` → `dest = TXPAL1[(dest<<8) | b]` and `0x12e` →
+  `dest = TXPAL1[(b<<8) | dest]` — TXPAL1 at 0x4edbfc is a 64-KiB
+  two-level composition table [asm: `MOV AH,[ESI]; MOV AL,[EDI]` /
+  swapped]; `0x12f` → `if b != 0: dest = DARKPAL[dest]` (256-B XLAT
+  at 0x4edc00 — the ONLY zero-gated mode); any other mode → RET
+  (nothing drawn).
+
+### 5d. The robot entity loop of FUN_00403938 [verified, decomp 0x4039fa..0x4067a0]
+
+Runs over the robot array at 0x4c69e4 (stride 0xa8, count
+`DAT_0046ccbc`) BEFORE the terrain pass, per frame. Field map below
+uses record offsets from 0x4c69e4 (the SIM doc §3's row labels are
+anchor-address-authoritative; its "+0x14" countdown row is actually
+u16@+0x16 — see the correction note):
+
+```
+wx_px = pos_x(Q13) >> 8;  wy_px = pos_y >> 8     // 32 px per tile
+dx = wx_px - camQ5X;      dy = wy_px - camQ5Y
+sx = ((camQ5X&31) - (camQ5Y&31) + 0x20) & 0x3f + (dx - dy) + 0x110
+sy = shakeY + ((dx + dy) >> 1) + 0x10c + ((camQ5X&31)+(camQ5Y&31))>>1 - z
+clip: 0 <= sx < 0x23f && 0 <= sy < 0x23f && i32@+0x7c (alive) != 0
+```
+
+`z` = i32@+0x08 (Q5 px, raw in sy); enqueue layer = `z >> 5`. Per
+visible+alive robot, in order (all enqueues pass `wx_px+0xb`,
+`wy_px+0xb`):
+
+1. **shield** (state u16@+0x0c ∈ {5,6}): bank DAT_0046af38 at
+   `sy - 0x48`, mode 0x12e, frame = clamp(10 − wobble/4, 0..9) with
+   wobble = i32@+0x90;
+2. **body** DANTE (unless hidden): bank `_DAT_004ede2c` =
+   `GAMEGFX\DANTE.BIN` [LoadFile @0x41e02e, ArenaAlloc 85000], frame
+   = u16@+0x12 (the walk anim phase), mode 300. Hidden when
+   `state==2 && i32[0x4dcdd4 + i32@+0x84*0x24] > 0xf`,
+   `state==5 && wobble > 0xf`, or `state==6`;
+3. **variant sprite** (i32@+0x88 != 0): bank DAT_0046af44, frame =
+   u16@+0x18, mode 300;
+4. **animated overlay** (u16@+0x16 != 0xFFFF): DANTE, frame =
+   u16@+0x14 * 3 + g_frame_count%3 + 0x40;
+5. **always**: DANTE, frame = u16@+0x14 + 0x20, mode 300.
+
+Spawn (FUN_0040cca0, decomp @0x41dc5a family) zero-fills the record
+then sets facing = 0xFFFF, u16@+0x16 = 0xFFFF, i32@+0x88 = 0,
+u16@+0x18 = RandA()&3, pos = tile*0x2000+0xF00, z = level*0x20−1 —
+so **a spawned robot draws exactly two sprites: DANTE[anim] and
+DANTE[0x20]** (u16@+0x14 stays 0). After the loop the low 2 bits of
+u16@+0x18 cycle +1 &3 (only observable through the +0x88-gated
+sprite). `_DAT_004edb88 != 0` additionally queues ROBNUMS
+(DAT_0046cdb0) name-plate digits at `sx + i32[0x4e44c8 + c] + 6*i`
+for name chars < 0x41 (multiplayer; not modeled). Platform
+(0x4eb638) and effects (0x4cf638, the FUN_00401e39 draw_IMG codec
+family) loops follow the same sx/sy form — out of scope for the P4
+robot overlay.
 
 ## 6. Sprite banks staged by FUN_0041df10 [verified] (context)
 
@@ -198,8 +295,10 @@ the present window reads).
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: producers unfound (likely BIN/TABLE.BIN parse);
    ZONEA/M1 LNK identity cells make frames irrelevant there.
-3. FUN_00403938's entity loops (robots at 0x4c69e4, platforms
-   0x4eb644, effects 0x4c7202) + FUN_0040179b flush order — needed
-   when the P4 slice adds robots to the frame; the sprite-list seam
-   (§5) is the designed insertion point.
+3. ~~FUN_00403938's entity loops~~ **CLOSED 2026-08-21**: the robot
+   entity loop + FUN_0040798e/0179b enqueue/flush are decoded (§5b–§5d)
+   and wired into bedlam-render. Remaining out-of-scope tail: the
+   platform loop (0x4eb638, bank DAT_0046af54), the effects loop
+   (0x4cf638 — the separate draw_IMG/FUN_00401e39 codec family), and
+   the ROBNUMS name plates (§5d).
 4. BIN u32[bank+0] directory header word / sprite count sanity.

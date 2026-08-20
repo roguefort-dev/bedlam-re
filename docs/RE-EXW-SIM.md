@@ -100,7 +100,8 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x0E | u16 | last dir byte used (copied from facing each move) | 0x4c69f2 |
 | +0x10 | u16 | facing/direction: 0x00 N, 0x40 E, 0x80 S, 0xC0 W, 0xFFFF none | 0x4c69f4 |
 | +0x12 | u16 | anim phase = ((angle_byte+4)&0xFF)>>3 (0..31 walk sectors) | 0x4c69f6 |
-| +0x14 | u16 | deploy countdown (0xFFFF when spent; decrements phase 0) | 0x4c69fa |
+| +0x14 | u16 | frame-base word for the viewport overlay sprites (DANTE frames `base+0x20` and `base*3+…+0x40`); zero-filled at spawn [MISSIONVIEW §5d] | 0x4c69f8 |
+| +0x16 | u16 | deploy countdown (0xFFFF when spent; decrements phase 0; gates the +0x40 overlay) — this row was previously mislabeled +0x14 [corrected 2026-08-21, MISSIONVIEW §5d] | 0x4c69fa |
 | +0x18 | u16 | random at spawn: RandA()&3 (variant) | 0x4c69fc |
 | +0x1A..+0x29 | 8×u16 | per-probe floor z cache (written by move_is_possible; +0x1A doubles as the climb-compare z: `dword@+0x18 >> 16`) | 0x4c69fe |
 | +0x2A | u16 | robot TYPE (indexes the 0x62-stride stats table at 0x4de664) | via 0x4c6a0c>>16 |
