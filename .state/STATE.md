@@ -1,3 +1,22 @@
+- CLOSED 2026-08-20 (P4 native shell step 2, D40, commits 58eb8a6 +
+  c48cd91 + 143e60d, worker e76159bb claim 1): platform audio output.
+  cpal 0.18.2 (bedlam-shell only; mixer stays hermetic, un-hashed):
+  bounded stereo-frame ring (4096 frames; full = drop OLDEST, underrun
+  = exact [0,0]) behind a poison-tolerant mutex - the ONE thread
+  crossing; window loop the ONLY producer (watermark fill 736 frames
+  after each pump batch), cpal callback the only consumer. Device
+  config pinned at the native 11025 Hz when any supported range
+  contains it (stereo > mono > other; this machine's Pulse/ALSA
+  default accepted 11025/2ch live - #[ignore]d probe), else device
+  default through a Q16 nearest-neighbor frame stepper (4x = exact
+  repeats; 48k/8k step values + sample-hold positions unit-pinned);
+  mono floor-average (l+r)>>1; formats via dasp conversions; no
+  device = stderr note + silent run, never fatal. Headless smoke now
+  drains 184 frames/pump off the host bus (110400 = 600x184, 158092
+  non-silent samples) - scene/frame hashes IDENTICAL to the pre-
+  change binary, two runs byte-identical, MANIFEST OK x2, workspace
+  366 tests / 0 failed, fmt + clippy -D warnings clean. Next per
+  queue: menu/ZONEA/MISSION1 playable vertical slice (P4 exit).
 - CLOSED 2026-08-20 (P4 native shell step 1, D38/D39, commit 493fbd5,
   landed by the watchdog repair agent after a step-cap death spiral):
   bedlam-shell crate = window + surface + fixed-step present loop.

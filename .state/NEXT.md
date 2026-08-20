@@ -1,21 +1,21 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] Native executable shell, step 2 - platform audio output: make
-   the D31 audio stream bus + the entry-audio sites audible. cpal is
-   the default candidate per PLAN sec 4 (record the choice + pinned
-   version in DECISIONS.md as D40): an output stream at the mixer's
-   native 11025 Hz consuming the GameHost audio stream the window
-   host already pumps. Same headless discipline as step 1 (D39): the
-   device path lives only in bedlam-shell behind the window/env
-   gate; the mixer stays hermetic (no floats, no I/O - DESIGN-AUDIO);
-   byte-identity of the mix stream remains the gate (D17b: audio is
-   NOT hashed). Unit-pin the device-feed arithmetic (resampling is
-   NOT owed - native rate), smoke-drive headless if feasible, fmt +
-   clippy -D warnings, MANIFEST check around any corpus-touching run.
+1. [P2g] Title menu RE slice (first UI archaeology): locate the EXW
+   title-menu screen code - the menu draw list (buttons/items, hit
+   rects or cursor regions), input dispatch (mouse click/keys), and
+   the options entry path. Anchor everything to EXW addresses in a
+   docs/RE-EXW-*.md section. Stream-survival rule (AGENTS): decode a
+   BOUNDED piece, commit the RE notes immediately, then proceed -
+   many small committed hops, no long silent analysis stretch. This
+   is the prerequisite for the P4 vertical-slice menu step (PLAN
+   sec 6 P4: menu -> ZONEA/MISSION1 render -> move one squad member
+   -> palette/audio present; the shell now has window + input +
+   present + audio, so the menu is the first missing slice piece).
 
 ## Backlog (not yet started)
-- Build the first menu and ZONEA/MISSION1 playable vertical slice.
+- P4 vertical slice assembly: menu + ZONEA/MISSION1 render + one
+  squad-member move (needs the P2g menu RE above + the P2d sim tail).
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -23,6 +23,23 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-20: P4 native shell step 2 COMPLETE (D40, commits 58eb8a6 +
+  c48cd91 + 143e60d, worker e76159bb claim 1): platform audio output.
+  cpal 0.18.2 (bedlam-shell only; mixer hermetic, audio un-hashed per
+  D17b): bounded stereo-frame ring (4096 fr; full = drop oldest,
+  underrun = exact silence) behind one poison-tolerant mutex; window
+  loop the only producer (watermark 736 fr after each pump batch),
+  cpal callback the only consumer; device pinned at native 11025 Hz
+  when a supported range contains it (live default device accepted
+  11025/2ch - ignored-tagged probe; ~100-200 ms device startup
+  latency measured), else Q16 nearest-neighbor frame stepper (4x
+  exact repeats; 48k step 15053 / 8k step 90317 + sample-hold
+  positions unit-pinned); mono floor-average; dasp format
+  conversions; no device = silent run, never fatal. Headless smoke
+  drains 184 fr/pump (110400 = 600x184, 158092 non-silent samples);
+  scene/frame hashes IDENTICAL to the pre-change binary; two runs
+  byte-identical; MANIFEST x2; 366 workspace tests / 0 failed; fmt +
+  clippy -D warnings clean.
 - 2026-08-20: P4 native shell step 1 COMPLETE (D38/D39, commit
   493fbd5, watchdog repair): bedlam-shell crate (FixedStepClock
   integer banking + anti-spiral; map_physical_key input seam - winit
