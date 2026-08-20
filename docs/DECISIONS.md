@@ -1100,3 +1100,62 @@ was the default candidate; this records the choice + pinned version.
    input seam cases incl. the disjoint-bit pin, scene_assets chain
    pin) + the binary smoke (byte-identical x2). Workspace 356
    green / 0 failed (343 + 13).
+
+## D40 - 2026-08-20: cpal 0.18.2 is the audio output device (P4 shell step 2)
+
+Context: NEXT item 1 - make the D31 audio stream bus + the entry-
+audio sites audible. PLAN sec 4 names cpal the default candidate;
+this records the choice + pinned version + the device-feed contract.
+
+1. CHOICE: cpal 0.18.2 (Cargo.lock; the crate's first use in the
+   workspace). Dependency lives in bedlam-shell ONLY - the mixer in
+   bedlam-audio stays hermetic (integer math, no I/O, no floats -
+   DESIGN-AUDIO), and the mixed byte stream stays un-hashed (D17
+   bucket b: audio is NOT hashed; re-proven empirically below).
+2. THREAD SHAPE: GameHost/mixer are main-thread-only (not Send, by
+   design), so the cpal callback (its own realtime thread) never
+   touches them. The ONE crossing point is a bounded ring of ready
+   interleaved-stereo i16 frames behind a plain mutex (poison-
+   tolerant: a panicking producer must not turn the callback into
+   an error storm). The window loop is the ONLY producer (watermark
+   fill toward 736 frames ~67 ms after every pump batch); the
+   callback is the only consumer.
+3. DEVICE CONFIG: prefer the supported range that CONTAINS the
+   mixer-native 11025 Hz (stereo, then mono, then any channel
+   count) pinned exactly at 11025 - resampling is NOT owed at the
+   native rate (task wording); this machine's default device
+   (PulseAudio over ALSA) accepted 11025 Hz 2ch directly. No such
+   range falls back to the device default through a Q16
+   nearest-neighbor frame stepper (output n reads input
+   floor(n*step/65536); pinned: 44100 = each frame exactly 4x,
+   48000 step 15053 with pinned sample-hold positions, 8000 step
+   90317 with pinned skip counts). Underrun = EXACT [0,0] frames
+   (mixer bus semantics); a full ring drops the OLDEST frames
+   (lateness skipped, never accumulated). Mono devices take the
+   floor average (l+r)>>1; >2 channels repeat L/R (even=L, odd=R);
+   sample formats convert through cpal's dasp Sample conversions.
+4. RUNTIME GATE (D39 discipline): the stream is built ONLY inside
+   the window host (run_window, after boot staging); headless and
+   tests never open a device. No device / no workable config = a
+   stderr note and a silent run - audio is best-effort, the game
+   itself never depends on it. An #[ignore]d opt-in probe test
+   (cargo test -- --ignored) opens the real device and drains
+   silence; measured device startup latency before the first
+   callback pull is ~100-200 ms, invisible to the 16 ms steady-
+   state refills.
+5. HEADLESS SMOKE DRAIN: the walk now mixes 184 frames (ceil of
+   11025/60) per pump off the host bus into a discard sink,
+   counting frames + non-silent samples in the report (110400
+   frames = exactly 600x184; 158092 non-silent samples = the
+   TITLE.SMK track and the other entry-audio sites actually
+   producing PCM on the walk).
+6. GATES: two smoke runs byte-identical (full stdout diff); the
+   scene hash (696adb1cd110e062) and frame parity hash
+   (cce30c983b97b16d) are IDENTICAL to the pre-change binary -
+   the audio drain provably hashes nothing; MANIFEST.sha256
+   verified before AND after the corpus runs; workspace 366
+   tests / 0 failed (356 + 10 new audio units); fmt + clippy -D
+   warnings clean.
+Not done here (queued): the menu/ZONEA/MISSION1 playable vertical
+slice (P4 exit) - the shell now has window, input, present AND
+audio; the slice needs the P2d/P2g tails.
