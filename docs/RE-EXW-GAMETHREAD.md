@@ -173,8 +173,10 @@ LAB_0041c454:                                     // ===== EPISODE LOOP =====
           FUN_0043e7d4(old);                      // [hyp: menu/modal runner]
           _DAT_004edbd4 = DAT_0046ae80;           // restore
           if (DAT_0046ae74) break;                // quit
-          ret = (ret == 1) ? 1 : FUN_0043d00b(...);   // THE gameplay advance;
-                                                     // reads 50Hz gate 004ede10 (0043d5e6)
+          ret = (ret == 1) ? 1 : FUN_0043d00b(...);   // CORRECTED D37: the BRIEFING screen
+                                                     // (drop intro + zone backdrop + mission select -
+                                                     // see the D37 section); its 004ede10 read (0043d5e6)
+                                                     // is the exit while-loop fade-done condition
           if (ret == 2) DAT_0046ae74 = 1;         // 2 = abort -> quit
         }
       }
@@ -347,10 +349,11 @@ engine/bedlam-assets/tests/font_gate.rs):
 
 ### New xref leads (second-hop candidates, NOT decompiled this run)
 
-- **FUN_0043d00b** reads 004ede10 (0043d5e6) - prime candidate for the
-  per-frame sim/render step [inferred]. NOTE (tick2): 004ede10 = fade
-  countdown, so that read is fade-status, not a rate gate; the sim/render
-  rate mechanism inside FUN_0043d00b is the open question (D15).
+- **FUN_0043d00b** reads 004ede10 (0043d5e6). RESOLVED D37 (2026-08-20):
+  FUN_0043d00b is the BRIEFING screen (the BRF_DROP play site - see the
+  D37 section), not the sim/render step; that read is its exit-loop
+  fade-done condition. The sim/render body question (D15) moves wholly
+  to FUN_00440e45 (gameplay, runs after the briefing returns 1).
 - **FUN_00440e45** - zone/level manager returning quit status [inferred].
 - **FUN_00448ef1** reads divider 004edbc8 four times (0044936b/004493eb/
   004495ae/00449797) - another rate consumer, candidate render/anim pacer
@@ -382,10 +385,11 @@ engine/bedlam-assets/tests/font_gate.rs):
 
 **Still open:**
 1. DONE 2026-08-17 (tick2 run): GoFlagSet caller = FUN_0041e19d (see above).
-2. Bodies of FUN_0043d00b (gate-consuming gameplay advance) and FUN_00440e45
-   (level manager) - the real per-frame sim/render, and whether the 50Hz gate
-   is further subdivided (25Hz? 20Hz?) there. This is the last place the
-   8street claim could still hold partially.
+2. PARTIALLY RESOLVED D37 (2026-08-20): FUN_0043d00b fully decompiled =
+   the briefing screen (the BRF_DROP play site, see the D37 section) - NOT
+   the gameplay advance. FUN_00440e45 (level manager = the real gameplay
+   loop) is still open, as is any rate-gate subdivision there. This is the
+   last place the 8street claim could still hold partially.
 3. RNG function/constants consuming 004ede48/004ede4c; reader of exit code
    004ef676.
 4. DONE 2026-08-17 (tick2 run): FUN_0041e19d decompiled - divider 004edbc8
@@ -505,3 +509,139 @@ FUN_0042582a(0x4b0); if movies enabled: FUN_0044567c("GAMEGFX\TITLE.SMK",
 Builds `<prefix from DAT_004de544>\<name>` (char-pair copy loops), calls
 _SmackOpen; on failure retries with a drive-letter substitute
 (DAT_0046ccc8, not C) - a CD-drive fallback.
+
+## Briefing screen + BRF_DROP play site (D37, 2026-08-20; queue item 1)
+
+Provenance: Ghidra headless `-process BEDLAM.EXW -noanalysis` + postScript
+`tools/ghidra-scripts/ExwBrfDrop.java` (string-block xrefs + decompile +
+caller census). Raw dump: `ghidra-project/exw-brfdrop.txt`, log
+`ghidra-project/process-exw-brfdrop.log`. String VAs computed from
+strings/xxd file offsets via the DGROUP map (file off + 0x401a00) and
+confirmed by the Ghidra reference targets; instruction anchors
+cross-checked with objdump. Same tag discipline as the rest of this doc.
+
+### Function identity: FUN_0043d00b IS the briefing screen [verified]
+
+The full decompile (dump lines 47-527) shows a self-contained modal
+screen, not the gameplay loop: it loads the briefing asset set
+(FULLFONT.BIN, BRIEF.BIN, TXPAL2.PAL, DARKPAL.PAL, six BEEP/TEXTBOX SFX
+via SfxLoad), builds the zone-movie name, plays the movies (below), runs
+a mission-map UI (24 hotspots at 0x4e9628, stride 0xe, cursor hit tests;
+GO/exit buttons at rows 0x16b..0x18e), then exits INTO the region loading
+screen (LOAD_{UK,US}.BIN + LOADPAL(U) + SetPaletteIndex(0x90)) and
+returns 1 when GO was clicked (DAT_0046cbe4 == 1), 0 otherwise. GameMain
+calls it in the level wait/advance loop; the real gameplay runs in
+FUN_00440e45 AFTER it returns 1. This corrects the earlier "[inferred]
+THE gameplay advance / prime candidate for the per-frame sim/render step"
+gloss. The briefing entry also starts the music:
+`load_midi("SOUND\MIDI\BRIEF") + MusicStart(3)` [verified decompile].
+
+### The BRF_DROP play site [verified - asm at 0043d447..0043d490]
+
+```asm
+0043d447  MOV EAX,0x400
+0043d44c  CALL 0042582a         ; Smacker subsystem init (0x400)
+0043d451  MOV EAX,0x4591f7      ; "GAMEGFX\BRF_DROP.SMK" (literal!)
+0043d456  CALL 0041ce69         ; path prefix + _SmackOpen (+ CD retry)
+0043d45b  MOV EBP,EAX           ; handle held in EBP across the screen
+0043d45d  TEST EAX,EAX / JNE 0043d47d
+0043d461  CALL 00420100         ; fade cancel
+0043d466  PUSH 0x45920c         ; "ERROR: COULD NOT OPEN BRF_DROP SMACK"
+0043d46b  CALL 0044eba0         ; print (FUN_00450bc7, CRT printf family)
+0043d473  MOV EAX,1
+0043d478  CALL 0044d2da         ; FATAL EXIT (see below)
+0043d47d  PUSH 0 / PUSH buf / PUSH 0x1e0 / ...  ; _SmackToBuffer(...)
+                                                ; dst height 0x1e0 = 480 rows
+```
+
+- **Position**: the HEAD of EVERY briefing (movies enabled): BRF_DROP
+  opens first, plays its pass, and hands off to the zone backdrop. A
+  dedicated literal + a dedicated error string exist for it - unlike the
+  zone backdrops, whose names are constructed at runtime.
+- **Full screen**: _SmackToBuffer dst height 0x1e0 = 480 rows = the
+  640x480 raster 1:1, no letterbox [verified asm].
+- **Gate**: the only condition is DAT_0046cca4 != 0 (movies enabled -
+  the same gate FUN_0044567c checks). No skip gate is consulted; the
+  drop movie is unskippable (the GO button activates only AFTER the
+  handoff, see below) [verified decompile].
+- **FATAL on open failure**: FUN_0044d2da/0044d2f2 = fn-pointer teardown
+  chain (`call *0x4575a4`, `call *0x4575a8`) then `JMP 00450202` into
+  the CRT exit - no return path [verified asm]. The same fatal tail
+  guards the zone-backdrop open at the handoff (generic
+  "ERROR: COULD NOT OPEN %s SMACK" 0x459245 + FUN_0044eb7b strupr of
+  the name) [verified decompile + xref at 0043d695].
+- **8street re-anchor** [navigation ref only]: their reconstruction
+  plays the briefing pair the same way and keys
+  `cinematics_is_enable()` off the EXISTENCE of GAMEGFX/BRF_DROP.SMK
+  (options.cpp:217-224, a Win95-vs-DOS data-set sniff) - the EXW analog
+  is the DAT_0046cca4 gate this site checks; EXW anchors above are
+  primary.
+
+### The handoff to the zone backdrop [verified - decompile]
+
+The screen main loop (`while (DAT_0046cbe4 == 0 || _g_fade_ticks_left !=
+0)` - the 004ede10 read at 0043d5e6 is this exit-loop fade-done
+condition) per iteration: ScrollUpdate -> if movies: palette sync
+(Smack +0x68 new-palette flag -> 0x300-byte copy -> FUN_004258d0 DAC
+apply) -> _SmackDoFrame -> _SmackNextFrame -> **handoff check
+`framecount(+0xc) - 1 == frame_index(+0x370)`**: _SmackClose +
+FUN_00425851 shutdown + FUN_0042582a(0x400) re-init + open the pre-built
+name buffer DAT_004dca0c + _SmackToBuffer (failure = the generic fatal
+error above). The zone backdrop then RINGS forever (no close bound; the
+loop exits only via the UI/quit paths, then _SmackClose +
+FUN_00425851). Pacing per frame: PresentEnd + `while (_SmackWait() !=
+0)` [verified decompile].
+
+- **One-pass bound**: the drop closes exactly when the frame index
+  reaches count-1, i.e. frames 0..count-2 rendered = count-1 frames -
+  the SAME render count as the FUN_0044567c modal runner (mechanism
+  differs: frame-index equality vs loop counter) [verified decompile;
+  field identities: +0xc = frame count (the runner bound field),
+  +0x370 = current frame index - inferred from use].
+- **The GO button arms only after the handoff**: the cursor handlers
+  are gated on `(DAT_0046cca4 != 0 && local_20 == 1)` where local_20 =
+  "handoff fired" - the player cannot leave the screen while the drop
+  movie plays [verified decompile].
+- **Corpus fit** (D32 gate): BRF_DROP.SMK = 640x480, 30 frames,
+  33_330 us/frame (~1.0 s), NON-ring, no audio track - a one-shot by
+  construction; the handoff is therefore mandatory (a non-ring Smack
+  simply stops). 29 of its 30 frames render. The BRF_{B..F}{1..5}
+  backdrops are 512-frame silent rings.
+
+### The name builder (resolves the D33 open note) [verified]
+
+The zone-movie name is assembled BEFORE the movies play (0043d1b7..
+0043d335, Watcom inline strcpy/strcat/itoa expansions) into the buffer
+at DAT_004dca0c:
+
+```
+"GAMEGFX\BRF_" (0x4591c2) + char(zone@004edd8c + 0x40) +
+itoa(level@004edd88, 10) (FUN_0044d291) + ".SMK" (0x4591cf)
+```
+
+when movies are enabled; when DAT_0046cca4 == 0 the SAME layout uses the
+second prefix copy (0x4591d4) + ".BIN" (0x4591e1) and the screen instead
+loads the static backdrop: ArenaAlloc(290000) + LoadFile(.BIN) +
+LoadFile("GAMEGFX\BRFPAL.PAL" 0x459232 -> 004edbf8) + FUN_00401e39(0,1,
+0,0) + FUN_004258d0 [verified decompile; corpus: BRIEF.BIN + BRFPAL.PAL
+exist - the branch is corpus-backed, merely shadowed by the default-on
+movies gate].
+
+**Letter map [verified]**: letter = zone + 0x40, so zones 2..=6 = B..=F
+directly - the D33 open note about the zone-number-to-letter map (the
+letter was taken verbatim) is resolved. The theoretical letters A
+(zone 1) / G (zone 7) have no corpus files; zone 7 never briefs
+(GameMain `if (zone@004edd8c == 7) ret = 1` skips the call [verified])
+and the boot camp briefs through its own pre-episode path (D33
+reconciliation) [inferred] - the episode-loop briefing domain is zones
+2..=6 = exactly the 25-file BRF_{B..F}{1..5} corpus.
+
+### Rust wiring (D37)
+
+engine/bedlam-game `src/brief.rs` BriefIntro (Staged -> Drop ->
+Backdrop on the D31 movie lifecycle: the drop plays its one pass capped
+at frames-1 decoded frames, then the backdrop ring takes the plane for
+the rest of the scene), GameHost::load_briefing(drop, backdrop) staging
+it inert-until-Brief; corpus gate `tests/brief_gate.rs` (drop 29/30
+frames, exact switch pump, silent, ring continues, two runs
+byte-identical). See DECISIONS.md D37.
