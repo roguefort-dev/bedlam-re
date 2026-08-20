@@ -16,19 +16,26 @@ git -C "$PLAN" config user.name test
 git -C "$PLAN" add AGENTS.md .state/NEXT.md .state/STATE.md code.txt
 git -C "$PLAN" commit -qm init
 
+cat > "$TMP/mock-notify-send" <<EOF
+#!/usr/bin/env bash
+printf "%s\n" "\$*" >> "$TMP/notifications"
+EOF
+chmod +x "$TMP/mock-notify-send"
+
 cat > "$TMP/mock-opencode" <<EOF
 #!/usr/bin/env bash
 printf "%s\n" "\$*" >> "$TMP/calls"
 case "\$*" in
-  *gpt-5.6-luna*)
+  *deepseek-v4-flash*)
     case "\${MOCK_LUNA:-healthy}" in
       healthy) printf "\033[32mWATCHDOG_OK\033[0m\r\n" ;;
       repair) echo WATCHDOG_REPAIR ;;
       invalid) echo WATCHDOG_OK; echo trailing-text ;;
       race) printf "human pause\n" > "$PLAN/.state/PAUSE"; echo WATCHDOG_REPAIR ;;
+      transport) echo "Error: Transport"; exit 1 ;;
     esac
     ;;
-  *gpt-5.6-sol*)
+  *glm-5.3*)
     if [ "\${MOCK_SOL_SLEEP:-0}" = 1 ]; then sleep 3; fi
     if [ "\${MOCK_SOL_COMMIT:-0}" = 1 ]; then
       token=\$(cat "$PLAN/.state/PAUSE")
@@ -41,38 +48,77 @@ case "\$*" in
 esac
 EOF
 chmod +x "$TMP/mock-opencode"
+
+cat > "$TMP/mock-systemctl" <<EOF
+#!/usr/bin/env bash
+printf "systemctl %s\n" "\$*" >> "$TMP/systemctl-calls"
+case "\$*" in
+  *"start bedlam-nudge.service"*) touch "$TMP/nudge-started" ;;
+esac
+exit 0
+EOF
+chmod +x "$TMP/mock-systemctl"
+
+cat > "$TMP/mock-proc-check" <<EOF
+#!/usr/bin/env bash
+[ -e "$PLAN/.state/claims/\$2-owner.claim" ]
+EOF
+chmod +x "$TMP/mock-proc-check"
+
 # Process matchers must accept the absolute executable path used by systemd.
 grep -q "\^\[\^ \]\*opencode2 run" "$ROOT/tools/llm-watchdog.sh"
 ! grep -q "\"^opencode2 run" "$ROOT/tools/llm-watchdog.sh"
-common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 CHECK_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60)
+common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 CHECK_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 NOTIFY_SEND="$TMP/mock-notify-send")
 
 # ANSI/CR final marker is accepted as healthy and does not invoke Sol.
 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/healthy.lock" "$ROOT/tools/llm-watchdog.sh"
-grep -q "openai/gpt-5.6-luna#max" "$TMP/calls"
-! grep -q "openai/gpt-5.6-sol#high" "$TMP/calls"
+grep -q "opencode/deepseek-v4-flash-free#max" "$TMP/calls"
+! grep -q "zai-coding-plan/glm-5.3#high" "$TMP/calls"
 [ ! -e "$PLAN/.state/PAUSE" ]
+grep -q "^state=healthy$" "$PLAN/.state/llm-watchdog-verdict"
 
-# A valid repair runs Sol high, requires commit evidence, then releases pause.
+# A valid repair runs Sol (GLM-5.3 high, build agent), requires commit
+# evidence, then releases pause.
 MOCK_LUNA=repair MOCK_SOL_COMMIT=1 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/repair.lock" "$ROOT/tools/llm-watchdog.sh"
-grep -q "openai/gpt-5.6-sol#high" "$TMP/calls"
+grep -q "zai-coding-plan/glm-5.3#high" "$TMP/calls"
 grep -q -- "--agent build" "$TMP/calls"
 [ ! -e "$PLAN/.state/PAUSE" ]
 [ ! -e "$PLAN/.state/llm-watchdog-pause" ]
 grep -q "Sol repair produced evidence" "$PLAN/.state/llm-watchdog.log"
+grep -q "^state=repaired$" "$PLAN/.state/llm-watchdog-verdict"
 
-# Trailing text invalidates an otherwise exact marker and a no-op Sol cools down.
-rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+# A Luna observation failure (invalid marker, transport, timeout) must NOT
+# stop workers, invoke Sol, or write a cooldown. State becomes unknown.
+sol_calls=$(grep -c "glm-5.3" "$TMP/calls")
+notify_lines=$(wc -l < "$TMP/notifications" 2>/dev/null || echo 0)
 MOCK_LUNA=invalid env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/invalid.lock" "$ROOT/tools/llm-watchdog.sh"
-[ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
-grep -q "no repair evidence" "$PLAN/.state/llm-watchdog.log"
+[ "$(grep -c "glm-5.3" "$TMP/calls")" -eq "$sol_calls" ]
+[ ! -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
 [ ! -e "$PLAN/.state/PAUSE" ]
+grep -q "no valid WATCHDOG_REPAIR marker - not escalating" "$PLAN/.state/llm-watchdog.log"
+grep -q "^state=unknown$" "$PLAN/.state/llm-watchdog-verdict"
+grep -q "workers left running" "$TMP/notifications"
+# A second unknown pass does not re-notify (edge-triggered).
+MOCK_LUNA=transport env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/invalid2.lock" "$ROOT/tools/llm-watchdog.sh"
+[ "$(grep -c "glm-5.3" "$TMP/calls")" -eq "$sol_calls" ]
+[ "$(wc -l < "$TMP/notifications")" -eq "$((notify_lines + 1))" ]
+
+# Sol cooldown suppresses only repair, never Luna observation.
+echo $(( $(date +%s) + 600 )) > "$PLAN/.state/llm-watchdog-cooldown-until"
+luna_calls=$(grep -c "deepseek-v4-flash" "$TMP/calls")
+MOCK_LUNA=repair env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/cool.lock" "$ROOT/tools/llm-watchdog.sh"
+[ "$(grep -c "deepseek-v4-flash" "$TMP/calls")" -eq "$((luna_calls + 1))" ]
+[ "$(grep -c "glm-5.3" "$TMP/calls")" -eq "$sol_calls" ]
+[ ! -e "$PLAN/.state/PAUSE" ]
+grep -q "Luna still observing" "$PLAN/.state/llm-watchdog.log"
+grep -q "^state=repair-deferred$" "$PLAN/.state/llm-watchdog-verdict"
 rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
 
 # Human PAUSE winning the O_EXCL race is preserved and Sol is not called again.
-sol_calls=$(grep -c "gpt-5.6-sol#high" "$TMP/calls")
+sol_calls=$(grep -c "glm-5.3" "$TMP/calls")
 MOCK_LUNA=race env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/race.lock" "$ROOT/tools/llm-watchdog.sh"
 [ "$(cat "$PLAN/.state/PAUSE")" = "human pause" ]
-[ "$(grep -c "gpt-5.6-sol#high" "$TMP/calls")" -eq "$sol_calls" ]
+[ "$(grep -c "glm-5.3" "$TMP/calls")" -eq "$sol_calls" ]
 rm -f "$PLAN/.state/PAUSE"
 
 # Matching stale watchdog tokens are recovered under the singleton lock.
@@ -87,9 +133,10 @@ grep -q "recovered stale watchdog-owned pause" "$PLAN/.state/llm-watchdog.log"
 MOCK_LUNA=repair MOCK_SOL_SLEEP=1 env "${common[@]}" REPAIR_TIMEOUT=1 LLM_WATCHDOG_LOCK="$TMP/timeout.lock" "$ROOT/tools/llm-watchdog.sh"
 [ ! -e "$PLAN/.state/PAUSE" ]
 [ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
+grep -q "^state=repair-no-evidence$" "$PLAN/.state/llm-watchdog-verdict"
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
 
 # TERM during Sol cannot strand a watchdog-owned pause.
-rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
 MOCK_LUNA=repair MOCK_SOL_SLEEP=1 env "${common[@]}" REPAIR_TIMEOUT=10 LLM_WATCHDOG_LOCK="$TMP/signal.lock" "$ROOT/tools/llm-watchdog.sh" &
 watchdog_pid=$!
 for _ in $(seq 1 100); do [ -e "$PLAN/.state/PAUSE" ] && break; sleep 0.02; done
@@ -106,4 +153,35 @@ lines=$(wc -l < "$TMP/calls")
 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/paused.lock" "$ROOT/tools/llm-watchdog.sh"
 [ "$(wc -l < "$TMP/calls")" -eq "$lines" ]
 grep -q "human PAUSE present" "$PLAN/.state/llm-watchdog.log"
+rm -f "$PLAN/.state/PAUSE"
+
+# --- Full resume path (production mode) with fake systemd control ---
+real=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl" RESUME_PROC_CHECK="$TMP/mock-proc-check" CHECK_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 NOTIFY_SEND="$TMP/mock-notify-send" RESUME_WAIT_LOOPS=10 RESUME_WAIT_SLEEP=1)
+
+# A fresh locked claim with matching item and non-empty worker id resumes GLM.
+(
+  for _ in $(seq 1 200); do [ -s "$PLAN/.state/llm-watchdog-preclaims" ] && break; sleep 0.05; done
+  sleep 0.5
+  printf "%s
+" "reserved fresh" > "$PLAN/.state/claims/1-owner.claim"
+  echo "lock-v1 worker testworker1 owns queue item 1" >> "$PLAN/.state/claims/1-owner.claim"
+  exec 8>>"$PLAN/.state/claims/1-owner.claim"
+  flock 8
+  sleep 30
+) &
+resume_holder=$!
+MOCK_LUNA=repair MOCK_SOL_COMMIT=1 env "${real[@]}" LLM_WATCHDOG_LOCK="$TMP/resume-ok.lock" "$ROOT/tools/llm-watchdog.sh"
+grep -q "GLM resumed item 1 as worker testworker1" "$PLAN/.state/llm-watchdog.log"
+[ -e "$TMP/nudge-started" ]
+kill "$resume_holder" 2>/dev/null || true
+rm -f "$PLAN/.state/claims/1-owner.claim" "$TMP/nudge-started"
+
+# A stale-format claim (reserved-only first line, no lock-v1) must never be
+# reported as a resume: without a fresh locked claim the resume fails loudly.
+notify_before=$(wc -l < "$TMP/notifications")
+MOCK_LUNA=repair MOCK_SOL_COMMIT=1 env "${real[@]}" RESUME_WAIT_LOOPS=2 RESUME_WAIT_SLEEP=1 LLM_WATCHDOG_LOCK="$TMP/resume-fail.lock" "$ROOT/tools/llm-watchdog.sh"
+grep -q "GLM failed to resume with a live claim" "$PLAN/.state/llm-watchdog.log"
+grep -q "did not resume after repair" "$TMP/notifications"
+[ "$(wc -l < "$TMP/notifications")" -gt "$notify_before" ]
+
 echo "llm watchdog tests: PASS"

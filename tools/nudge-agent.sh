@@ -6,6 +6,7 @@ STATE="$PLAN_DIR/.state"
 CLAIMS="$STATE/claims"
 CONC_FILE="$STATE/concurrency"
 CONC_DOWN_TS="$STATE/conc-degraded-at"
+NUDGE_LOCK=${NUDGE_LOCK:-/tmp/bedlam-nudge.lock}
 CONC_MIN=1
 item=${1:?queue item required}
 slotid=${2:?slot id required}
@@ -19,6 +20,7 @@ else
 fi
 MODEL=zai-coding-plan/glm-5.3
 NOTIFY_SEND=${NOTIFY_SEND-notify-send}
+unit_name="bedlam-nudge-item${item}-${slotid}"
 
 cd "$PLAN_DIR" || exit 1
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
@@ -45,7 +47,20 @@ flock 8 || {
   echo "$(date -Is) failed to lock claim for item $item; worker standing down" >> "$STATE/nudge.log"
   exit 75
 }
+
+# Re-check PAUSE after winning the claim: a watchdog pause that appeared while
+# we were claiming must still stop this launch before the model runs.
+if [ -e "$STATE/PAUSE" ]; then
+  exec 8>&-
+  rm -f "$own"
+  echo "$(date -Is) PAUSE appeared during claim acquisition for item $item; worker standing down" >> "$STATE/nudge.log"
+  exit 0
+fi
+
+task_hash=$(sed -n "s/^[[:space:]]*$item\.[[:space:]]*//p" "$STATE/NEXT.md" 2>/dev/null | head -n 1 | sha256sum | cut -c1-16)
 echo "lock-v1 worker $slotid owns queue item $item" >&8
+echo "task=$task_hash" >&8
+echo "unit=$unit_name" >&8
 claim_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
 
 PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow it EXACTLY. HARD CONCURRENCY RULE: do NOT spawn or invoke subagents. You personally perform one bounded unit. The wrapper atomically acquired queue item $item for slot $slotid before launching you; .state/claims/$item-owner.claim naming worker $slotid is YOUR claim, not another owner claim. NEVER infer ownership from Ghostty, cmux, an operator OpenCode TUI, editors, shells, process age, dirty files, prior decisions, or historical stand-down entries. The persistent operator TUI is supervisory and never blocks work; only .state/PAUSE does. Work ONLY item $item and never switch items. Inspect and adopt relevant interrupted WIP while preserving unrelated changes; stage explicit paths only. Do not create state-only stand-down commits. If genuinely blocked, rewrite item $item with a [BLOCKED] tag and one concrete reason, then stop. Every commit you create MUST include the exact trailer Nudge-Worker: $slotid (for example, a second git commit -m paragraph). Commit and push substantive completed work. NEVER create, delete, rename, or modify claim files; the wrapper owns them. On model/transport/API error, commit recoverable substantive work if possible. Never start an analyzeHeadless import already running or succeeded. Do not ask questions or wait for input."
@@ -71,7 +86,7 @@ fi
 kind=none
 if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
-elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed" "$LOG"; then
+elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS" "$LOG"; then
   kind=transport
 elif [ "$rc" -ne 0 ]; then
   kind=client-error
@@ -79,28 +94,32 @@ elif [ "$progress" -eq 0 ] && ! grep -qE "^[[:space:]]*$item\.[[:space:]]+(\[[^]
   kind=no-progress
 fi
 
-exec 9>/tmp/bedlam-nudge.lock
+exec 9>"$NUDGE_LOCK"
 flock 9
 cur=$(cat "$CONC_FILE" 2>/dev/null || echo 3)
 if [ "$kind" != none ]; then
-  fail_count=$(cat "$STATE/fails" 2>/dev/null || echo 0)
-  fail_count=$((fail_count + 1))
-  echo "$fail_count" > "$STATE/fails"
+  # Failures are scoped to this task, not to the whole controller, so
+  # unrelated items can never be blamed for (or cleared by) this run.
+  mkdir -p "$STATE/taskfails" "$STATE/taskcooldown"
+  fails_file="$STATE/taskfails/$task_hash"
+  fail_count=$(( $(cat "$fails_file" 2>/dev/null || echo 0) + 1 ))
+  echo "$fail_count" > "$fails_file"
   if [ "$fail_count" -ge 3 ]; then
-    echo $(( $(date +%s) + 900 )) > "$STATE/cooldown-until"
+    echo $(( $(date +%s) + 900 )) > "$STATE/taskcooldown/$task_hash"
     if [ "$fail_count" -eq 3 ] && [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
-      "$NOTIFY_SEND" -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind); cooling down 15 minutes" 2>/dev/null || true
+      "$NOTIFY_SEND" -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind, task $task_hash); cooling down 15 minutes" 2>/dev/null || true
     fi
   fi
   if [ "$cur" -gt "$CONC_MIN" ]; then
     echo $((cur-1)) > "$CONC_FILE"
     date +%s > "$CONC_DOWN_TS"
-    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress]; concurrency degraded $cur -> $((cur-1))" >> "$STATE/nudge.log"
+    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency degraded $cur -> $((cur-1))" >> "$STATE/nudge.log"
   else
-    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress]; concurrency remains 1" >> "$STATE/nudge.log"
+    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency remains 1" >> "$STATE/nudge.log"
   fi
 else
-  echo "$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress)" >> "$STATE/nudge.log"
+  rm -f "$STATE/taskfails/$task_hash"
+  echo "$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress) task=$task_hash" >> "$STATE/nudge.log"
 fi
 
 # Drop only this wrapper lock, then inspect the same inode we acquired. A live

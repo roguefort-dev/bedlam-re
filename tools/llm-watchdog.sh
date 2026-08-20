@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Ten-minute LLM supervisor: Luna judges health; Sol repairs only on escalation.
+# Ten-minute LLM supervisor: Luna observes health; Sol repairs only when Luna
+# emits an explicit WATCHDOG_REPAIR marker. Observation failures (transport,
+# timeout, malformed output) never stop workers and never invoke Sol.
+# TEMP 2026-08-20 model switch: Luna = opencode/deepseek-v4-flash-free#max,
+# Sol = zai-coding-plan/glm-5.3#high (revert to gpt-5.6-luna#max /
+# gpt-5.6-sol#high when the OpenAI endpoints are trusted again).
 set -u
 PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
 STATE="$PLAN_DIR/.state"
@@ -12,16 +17,20 @@ else
 fi
 SYSTEMCTL=${SYSTEMCTL_OVERRIDE:-systemctl}
 REAPER=${REAPER_OVERRIDE:-$PLAN_DIR/tools/nudge-reap-claims.sh}
-LUNA_MODEL=${LUNA_MODEL:-openai/gpt-5.6-luna#max}
-SOL_MODEL=${SOL_MODEL:-openai/gpt-5.6-sol#high}
+LUNA_MODEL=${LUNA_MODEL:-opencode/deepseek-v4-flash-free#max}
+SOL_MODEL=${SOL_MODEL:-zai-coding-plan/glm-5.3#high}
+NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 CHECK_TIMEOUT=${CHECK_TIMEOUT:-480}
 REPAIR_TIMEOUT=${REPAIR_TIMEOUT:-1800}
 REPAIR_COOLDOWN=${REPAIR_COOLDOWN:-1800}
+RESUME_WAIT_LOOPS=${RESUME_WAIT_LOOPS:-20}
+RESUME_WAIT_SLEEP=${RESUME_WAIT_SLEEP:-1}
 TEST_MODE=${WATCHDOG_TEST_MODE:-0}
 LOG="$STATE/llm-watchdog.log"
 LUNA_OUT="$STATE/llm-watchdog-luna.log"
 SOL_OUT="$STATE/llm-watchdog-sol.log"
 SNAPSHOT="$STATE/llm-watchdog-snapshot"
+VERDICT="$STATE/llm-watchdog-verdict"
 PAUSE="$STATE/PAUSE"
 MARKER="$STATE/llm-watchdog-pause"
 COOLDOWN="$STATE/llm-watchdog-cooldown-until"
@@ -37,6 +46,20 @@ flock -n 9 || exit 0
 cd "$PLAN_DIR" || exit 1
 
 log() { echo "$(date -Is) $*" >> "$LOG"; }
+notify() {
+  if [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
+    "$NOTIFY_SEND" -u critical "$1" "$2" 2>/dev/null || true
+  fi
+}
+write_verdict() {
+  {
+    echo "time=$(date -Is)"
+    echo "state=$1"
+    echo "rc=$2"
+    echo "markers=$3"
+    echo "cooldown_until=$(cat "$COOLDOWN" 2>/dev/null || echo 0)"
+  } > "$VERDICT"
+}
 release_owned_pause() {
   [ "$pause_owned" -eq 1 ] || return 0
   if [ "$(cat "$PAUSE" 2>/dev/null || true)" = "$token" ] && [ "$(cat "$MARKER" 2>/dev/null || true)" = "$token" ]; then
@@ -46,34 +69,44 @@ release_owned_pause() {
   fi
   pause_owned=0
 }
+check_worker_proc() {
+  if [ -n "${RESUME_PROC_CHECK:-}" ]; then
+    "$RESUME_PROC_CHECK" "$1" "$2"
+    return $?
+  fi
+  pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$2[[:space:]].*slot $1" >/dev/null 2>&1
+}
 resume_glm() {
   [ "$workers_stopped" -eq 1 ] || return 0
   workers_stopped=0
-  [ "$TEST_MODE" = 1 ] && return 0
   [ -e "$PAUSE" ] && { log "PAUSE present; not resuming GLM"; return 0; }
   sleep 1
   DEAD_CLAIM_TTL=0 RESERVATION_TTL=0 "$REAPER" "$STATE/claims" "$STATE/nudge.log"
   touch -d @0 "$STATE/heartbeat"
   "$SYSTEMCTL" --user start bedlam-nudge.service || true
-  for _ in $(seq 1 20); do
+  local claim item identity worker_line worker_id claim_item
+  for _ in $(seq 1 "$RESUME_WAIT_LOOPS"); do
     for claim in "$STATE"/claims/*-owner.claim; do
       [ -e "$claim" ] || continue
-      if grep -q "^lock-v1 worker .* owns queue item " "$claim" 2>/dev/null && ! flock -n "$claim" true 2>/dev/null; then
-        item=$(basename "$claim" -owner.claim)
-        identity=$(stat -c "%d:%i" "$claim" 2>/dev/null || echo missing)
-        grep -q "^$identity " "$PRE_CLAIMS" 2>/dev/null && continue
-        read -ra claim_words < "$claim"
-        worker_id=${claim_words[2]:-}
-        if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*--title bedlam-nudge-item$item[[:space:]].*slot $worker_id" >/dev/null 2>&1; then
-          log "GLM-5.3 resumed item $item as new worker $worker_id with a fresh locked claim"
-          return 0
-        fi
+      grep -q "^lock-v1 worker .* owns queue item " "$claim" 2>/dev/null || continue
+      if flock -n "$claim" true 2>/dev/null; then continue; fi
+      item=$(basename "$claim" -owner.claim)
+      identity=$(stat -c "%d:%i" "$claim" 2>/dev/null || echo missing)
+      grep -q "^$identity " "$PRE_CLAIMS" 2>/dev/null && continue
+      worker_line=$(grep "^lock-v1 worker " "$claim" 2>/dev/null | tail -n 1)
+      worker_id=$(printf "%s\n" "$worker_line" | awk "{print \$3}")
+      claim_item=$(printf "%s\n" "$worker_line" | awk "{print \$7}")
+      case "$worker_id" in ""|*[!A-Za-z0-9-]*) continue ;; esac
+      [ "$claim_item" = "$item" ] || continue
+      if check_worker_proc "$worker_id" "$item"; then
+        log "GLM resumed item $item as worker $worker_id with a fresh locked claim"
+        return 0
       fi
     done
-    sleep 1
+    sleep "$RESUME_WAIT_SLEEP"
   done
-  log "GLM-5.3 failed to resume with a live claim; next pass will re-evaluate"
-  command -v notify-send >/dev/null 2>&1 && notify-send -u critical "bedlam-re watchdog" "GLM-5.3 did not resume after repair" 2>/dev/null || true
+  log "GLM failed to resume with a live claim; next pass will re-evaluate"
+  notify "bedlam-re watchdog" "GLM did not resume after repair"
 }
 on_exit() {
   rc=$?
@@ -111,13 +144,16 @@ if [ -e "$PAUSE" ]; then
   log "human PAUSE present; watchdog standing down"
   exit 0
 fi
+
 now=$(date +%s)
 until=$(cat "$COOLDOWN" 2>/dev/null || echo 0)
+in_cooldown=0
 if [ "$now" -lt "$until" ]; then
-  log "repair cooldown active until $until; watchdog standing down"
-  exit 0
+  in_cooldown=1
+  log "Sol repair cooldown active until $until; Luna still observing"
+else
+  rm -f "$COOLDOWN"
 fi
-rm -f "$COOLDOWN"
 
 {
   echo "time=$(date -Is)"
@@ -132,7 +168,7 @@ rm -f "$COOLDOWN"
     [ -e "$claim" ] || continue
     printf "%s age=%s locked=" "$(basename "$claim")" "$(( $(date +%s) - $(stat -c %Y "$claim") ))"
     if flock -n "$claim" true 2>/dev/null; then echo no; else echo yes; fi
-    sed -n "1p" "$claim" 2>/dev/null || true
+    sed -n "1,4p" "$claim" 2>/dev/null || true
   done
   echo claims_end
   echo workers_begin
@@ -155,17 +191,30 @@ set +e
 timeout "$CHECK_TIMEOUT" "$OPENC" run --standalone --model "$LUNA_MODEL" --title bedlam-llm-watchdog-check "$LUNA_PROMPT" >> "$LUNA_OUT" 2>&1
 luna_rc=$?
 set -e
-normalized=$(perl -pe 's/\e\[[0-?]*[ -\/]*[@-~]//g; s/\r//g' "$LUNA_OUT")
+normalized=$(perl -pe "s/\e\[[0-?]*[ -\/]*[@-~]//g; s/\r//g" "$LUNA_OUT")
 final_marker=$(printf "%s\n" "$normalized" | awk "NF { last=\$0 } END { print last }")
 marker_count=$(printf "%s\n" "$normalized" | grep -Ec "^(WATCHDOG_OK|WATCHDOG_REPAIR)$" || true)
+prev_state=$(sed -n "s/^state=//p" "$VERDICT" 2>/dev/null | tail -n 1)
+
 if [ "$luna_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_OK ] && [ "$marker_count" -eq 1 ]; then
   log "Luna reports healthy"
+  write_verdict healthy "$luna_rc" "$marker_count"
   exit 0
 fi
 if [ "$luna_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_REPAIR ] && [ "$marker_count" -eq 1 ]; then
+  if [ "$in_cooldown" -eq 1 ]; then
+    log "Luna requested repair but Sol cooldown is active; deferring repair, GLM keeps running"
+    write_verdict repair-deferred "$luna_rc" "$marker_count"
+    exit 0
+  fi
   log "Luna requested repair"
 else
-  log "Luna invalid or failed rc=$luna_rc final=$final_marker markers=$marker_count; escalating to Sol"
+  log "Luna observation failed rc=$luna_rc final=$final_marker markers=$marker_count; no valid WATCHDOG_REPAIR marker - not escalating"
+  write_verdict unknown "$luna_rc" "$marker_count"
+  if [ "$prev_state" != "unknown" ]; then
+    notify "bedlam-re watchdog" "Luna cannot observe (rc=$luna_rc); workers left running"
+  fi
+  exit 0
 fi
 
 # Publish the marker first, then acquire PAUSE with O_EXCL. If a human wins the
@@ -181,15 +230,23 @@ pause_owned=1
 
 stop_glm_workers() {
   workers_stopped=1
-  [ "$TEST_MODE" = 1 ] && return 0
-  local unit props
-  while read -r unit; do
-    [ -n "$unit" ] || continue
-    props=$("$SYSTEMCTL" --user show -p ExecStart --value "$unit" 2>/dev/null || true)
-    case "$props" in
-      *bedlam-re/tools/nudge-agent.sh*) "$SYSTEMCTL" --user stop "$unit" || true ;;
-    esac
-  done < <("$SYSTEMCTL" --user list-units "run-p*.service" --state=running --no-legend --plain 2>/dev/null | awk "{print \$1}")
+  local unit props pass stopped_any
+  for pass in 1 2; do
+    stopped_any=0
+    while read -r unit; do
+      [ -n "$unit" ] || continue
+      props=$("$SYSTEMCTL" --user show -p ExecStart --value "$unit" 2>/dev/null || true)
+      case "$props" in
+        *"$PLAN_DIR/tools/nudge-agent.sh"*)
+          "$SYSTEMCTL" --user stop "$unit" || true
+          stopped_any=1
+          ;;
+      esac
+    done < <("$SYSTEMCTL" --user list-units --type=service --state=running --no-legend --plain 2>/dev/null | awk "{print \$1}")
+    [ "$stopped_any" -eq 0 ] && break
+    sleep 1
+  done
+  if [ "$TEST_MODE" = 1 ]; then return 0; fi
   sleep 2
   # Terminate only the exact unattended GLM command family if it lacked a unit.
   if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
@@ -208,6 +265,7 @@ stop_glm_workers() {
     log "unable to stop all GLM workers; aborting Sol repair"
     return 1
   fi
+  local old_identity old_name old_claim current_identity
   while read -r old_identity old_name; do
     [ -n "$old_name" ] || continue
     old_claim="$STATE/claims/$old_name"
@@ -218,6 +276,7 @@ stop_glm_workers() {
       return 1
     fi
   done < "$PRE_CLAIMS"
+  return 0
 }
 : > "$PRE_CLAIMS"
 for claim in "$STATE"/claims/*-owner.claim; do
@@ -228,7 +287,7 @@ if ! stop_glm_workers; then exit 1; fi
 
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
 grep -E "^[[:space:]]*[0-9]+\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null | sort -u > "$BLOCKED_BEFORE" || true
-SOL_PROMPT="You are the high-reasoning repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
+SOL_PROMPT="You are the repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
 : > "$SOL_OUT"
 set +e
 timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --agent build --model "$SOL_MODEL" --auto --title bedlam-llm-watchdog-repair "$SOL_PROMPT" >> "$SOL_OUT" 2>&1
@@ -251,10 +310,12 @@ if [ "$repair_evidence" -eq 0 ]; then
 fi
 if [ "$repair_evidence" -eq 1 ]; then
   log "Sol repair produced evidence rc=$sol_rc head=$start_head..$end_head"
+  write_verdict repaired "$sol_rc" "1"
 else
   log "Sol produced no repair evidence rc=$sol_rc; cooling escalation while GLM resumes"
   echo $(( $(date +%s) + REPAIR_COOLDOWN )) > "$COOLDOWN"
-  command -v notify-send >/dev/null 2>&1 && notify-send -u critical "bedlam-re watchdog repair failed" "Sol produced no commit or BLOCKED handoff; GLM will resume" 2>/dev/null || true
+  notify "bedlam-re watchdog repair failed" "Sol produced no commit or BLOCKED handoff; GLM will resume"
+  write_verdict repair-no-evidence "$sol_rc" "0"
 fi
 release_owned_pause
 resume_glm

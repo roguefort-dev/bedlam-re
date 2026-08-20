@@ -5,6 +5,6 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/bash /home/kato/Documents/bedlam-re/tools/llm-watchdog.sh
-TimeoutStartSec=40min
+TimeoutStartSec=50min
 MemoryHigh=8G
 MemoryMax=12G

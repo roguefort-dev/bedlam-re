@@ -214,7 +214,8 @@ grep -q "Process liveness is NEVER ownership evidence" "$ROOT/AGENTS.md"
 grep -q "Never make a commit whose only effect is a stand-down/status journal" "$ROOT/AGENTS.md"
 ! grep -q "read them first" "$ROOT/.state/NEXT.md"
 ! grep -q "release your placeholder" "$AGENT"
-grep -q -- '-newermt "@\$lp_ts"' "$ROOT/tools/nudge.sh"
-grep -q 'echo "\$head_now \$now" > "\$LP"' "$ROOT/tools/nudge.sh"
+# v5: working-tree mtimes are no longer progress evidence.
+! grep -q "newermt" "$ROOT/tools/nudge.sh"
+grep -q "taskfails" "$ROOT/tools/nudge-agent.sh"
 
 echo "nudge claim tests: PASS"

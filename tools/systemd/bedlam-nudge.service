@@ -1,0 +1,6 @@
+[Unit]
+Description=bedlam-re continuation nudge (check stall, maybe spawn agent)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/kato/Documents/bedlam-re/tools/nudge.sh
