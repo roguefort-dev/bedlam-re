@@ -206,6 +206,81 @@ impl Terrain {
         })
     }
 
+    /// Build from the raw on-disk mission bytes, mirroring EXW
+    /// load_mission@0041dc5a [verified, docs/RE-EXW-SIM.md sec 7c]:
+    /// `dat` is the whole `.DAT` file (u16 w + u16 h + 8 plane-major
+    /// u8 planes), `pad` the whole `.PAD` file (6-byte `(x, y, level)`
+    /// records, 0xFFFF-x fill ends the list), `cgr` the zone-level
+    /// `.CGR` bank (u16 count + count u32 offsets + sprite bodies).
+    ///
+    /// Loader rules applied verbatim: bytes >= 0x80 in planes 0..6 are
+    /// swept to 0 (plane 7 untouched); every PAD record writes 0xFF at
+    /// `DAT[level][y][x]` (0xFF later reads back as type 1 — the pad
+    /// materialises a deck block); height slot `t-1` is the RAW 1024
+    /// bytes at `CGR[2 + 4*(t-1) + dir[t-1] + 6]` (no codec). The EXW
+    /// write is fully UNCHECKED [0x41ded0, verified absence of bounds];
+    /// out-of-range level/x/y are skipped here instead of writing out of
+    /// bounds (shipped records are in-bounds, so corpus behavior is
+    /// identical — charter: no panics, no UB). Returns `None` on
+    /// malformed inputs.
+    pub fn from_mission_bytes(dat: &[u8], pad: &[u8], cgr: &[u8]) -> Option<Self> {
+        // DAT: dims + 8 planes.
+        if dat.len() < 4 {
+            return None;
+        }
+        let width = u16::from_le_bytes([dat[0], dat[1]]) as i32;
+        let height = u16::from_le_bytes([dat[2], dat[3]]) as i32;
+        let n = (width * height) as usize;
+        if width <= 0 || height <= 0 || dat.len() != 4 + 8 * n {
+            return None;
+        }
+        let mut planes = dat[4..].to_vec();
+        // Sweep: planes 0..6, bytes >= 0x80 -> 0 [0x41dde4, verified].
+        for z in 0..7 {
+            for b in planes[z * n..z * n + n].iter_mut() {
+                if *b >= 0x80 {
+                    *b = 0;
+                }
+            }
+        }
+        // PAD marks: DAT[level][y][x] = 0xFF [0x41ded0, verified].
+        for rec in pad.chunks_exact(6) {
+            let x = u16::from_le_bytes([rec[0], rec[1]]) as i32;
+            let y = u16::from_le_bytes([rec[2], rec[3]]) as i32;
+            let level = u16::from_le_bytes([rec[4], rec[5]]) as i32;
+            if x == -1 {
+                break; // 0xFFFF fill ends the record run [0x41defa]
+            }
+            if !(0..8).contains(&level) || x < 0 || y < 0 || x >= width || y >= height {
+                continue;
+            }
+            planes[level as usize * n + y as usize * width as usize + x as usize] = 0xFF;
+        }
+        // CGR: u16 count + count u32 offsets; slot s body at
+        // 2 + 4*s + dir[s] + 6 [0x41e328..0x41e353, verified].
+        if cgr.len() < 2 {
+            return None;
+        }
+        let count = u16::from_le_bytes([cgr[0], cgr[1]]) as usize;
+        if cgr.len() < 2 + 4 * count {
+            return None;
+        }
+        let mut heights = Vec::with_capacity(count);
+        for s in 0..count {
+            let o = 2 + 4 * s;
+            let dir = u32::from_le_bytes([cgr[o], cgr[o + 1], cgr[o + 2], cgr[o + 3]]) as usize;
+            let body = dir.checked_add(4 * s + 8)?;
+            let end = body.checked_add(1024)?;
+            if end > cgr.len() {
+                return None;
+            }
+            let mut map = [0u8; 1024];
+            map.copy_from_slice(&cgr[body..end]);
+            heights.push(map);
+        }
+        Terrain::from_parts(width, height, planes, heights)
+    }
+
     /// Map size in tiles (DAT_004eddec / DAT_004eddf0).
     pub fn size(&self) -> (i32, i32) {
         (self.width, self.height)
@@ -947,6 +1022,98 @@ mod tests {
         // 0xFF reads back as type 1 -> height slot 0.
         assert_eq!(t2.dat_type(0, 0, 0), 1);
         assert_eq!(t2.floor_z(16, 16, 0), 0, "type 1 height 0 -> z 0");
+    }
+
+    /// A minimal valid CGR bank for `slot_bodies`: u16 count + u32
+    /// directory + per-slot (8-byte header + 1024-byte raw map). The
+    /// directory values are chosen so the EXW body address
+    /// `dir[s] + 4*s + 8` [0x41e328, verified] lands exactly on each
+    /// slot's 1024-byte map (real files store the same relationship:
+    /// dir[s] is NOT a plain file offset — dir[1]=1538 in MISSIONA.CGR
+    /// puts slot 1's body at 1550, 6 bytes past its 1544 header).
+    fn cgr_bank(slot_bodies: &[[u8; 1024]]) -> Vec<u8> {
+        let count = slot_bodies.len();
+        let mut v = vec![count as u8, 0];
+        // body_s = 2 + 4*count + s*(8 + 1024) + 8 (after its header)
+        let body_at = |s: usize| 2 + 4 * count + s * (8 + 1024) + 8;
+        for s in 0..count {
+            let dir = (body_at(s) - 4 * s - 8) as u32;
+            v.extend_from_slice(&dir.to_le_bytes());
+        }
+        for body in slot_bodies {
+            v.extend_from_slice(&1u32.to_le_bytes());
+            v.extend_from_slice(&32u16.to_le_bytes());
+            v.extend_from_slice(&32u16.to_le_bytes());
+            v.extend_from_slice(body);
+        }
+        v
+    }
+
+    fn dat_file(w: u16, h: u16, planes: &[u8]) -> Vec<u8> {
+        let mut v = w.to_le_bytes().to_vec();
+        v.extend_from_slice(&h.to_le_bytes());
+        v.extend_from_slice(planes);
+        v
+    }
+
+    fn pad_file(recs: &[(u16, u16, u16)]) -> Vec<u8> {
+        let mut v = Vec::new();
+        for (x, y, k) in recs {
+            v.extend_from_slice(&x.to_le_bytes());
+            v.extend_from_slice(&y.to_le_bytes());
+            v.extend_from_slice(&k.to_le_bytes());
+        }
+        v.extend_from_slice(&[0xFF; 6]); // terminator fill
+        v
+    }
+
+    #[test]
+    fn from_mission_bytes_loader_rules() {
+        // 4x2 map, plane 0 all type 1 (deck), plane 4 one 0x90 byte to
+        // sweep, plus a PAD mark at level 5 tile (1,1).
+        let w = 4u16;
+        let h = 2u16;
+        let n = (w * h) as usize;
+        let mut planes = vec![0u8; 8 * n];
+        for b in planes[..n].iter_mut() {
+            *b = 1;
+        }
+        planes[4 * n + 3] = 0x90; // swept in plane 4
+        planes[7 * n + 1] = 0x90; // plane 7 NOT swept
+        let mut bodies = vec![[7u8; 1024]; 2];
+        bodies[0] = [0x1Fu8; 1024];
+        let mut t = Terrain::from_mission_bytes(
+            &dat_file(w, h, &planes),
+            &pad_file(&[(1, 1, 5), (0, 0, 9)]), // 9 = out of range, skipped
+            &cgr_bank(&bodies),
+        )
+        .unwrap();
+        assert_eq!(t.size(), (4, 2));
+        // Deck floor: type 1 -> slot 0 height 0x1F -> z 0x1F.
+        assert_eq!(t.floor_z(16, 16, 0), 0x1F);
+        // Sweep cleared the plane-4 byte; plane 7 untouched.
+        assert_eq!(t.dat_type(3, 0, 4), 0);
+        assert_eq!(t.dat_type(1, 0, 7), 0x90);
+        // PAD mark: level 5, tile (1,1) reads back as type 1.
+        assert_eq!(t.dat_type(1, 1, 5), 1);
+        assert_eq!(t.dat_type(1, 1, 4), 0, "mark is plane-local");
+        // Second slot kept its own body (type 2 -> slot 1 height 7).
+        let mut t2planes = planes.clone();
+        t2planes[..n].copy_from_slice(&[2, 2, 2, 2, 2, 2, 2, 2]);
+        let mut t2 = Terrain::from_mission_bytes(
+            &dat_file(w, h, &t2planes),
+            &pad_file(&[]),
+            &cgr_bank(&bodies),
+        )
+        .unwrap();
+        assert_eq!(t2.floor_z(16, 16, 0), 7);
+        // Malformed inputs -> None (no panics).
+        assert!(Terrain::from_mission_bytes(&[0, 4], &[], &[]).is_none());
+        let truncated_cgr = [1u8, 0]; // claims 1 slot, no directory
+        assert!(
+            Terrain::from_mission_bytes(&dat_file(2, 2, &[0; 32]), &[0xFF; 6], &truncated_cgr)
+                .is_none()
+        );
     }
 
     #[test]
