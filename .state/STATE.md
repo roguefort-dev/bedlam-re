@@ -1,3 +1,28 @@
+- CLOSED 2026-08-21 (P4 mission RENDER half 2 - ENTITIES, commits
+  007237e + 186050b, worker e08e64c2 claim 1): the robot entity
+  overlay decoded and wired onto the pinned frame. RE notes
+  RE-EXW-MISSIONVIEW sec 5b-5d: per-frame bucket-grid clear (ECX
+  0xa200 @0x46cdbc) + arena reset; FUN_0040798e node/bucket/
+  insertion semantics (48-B nodes, bucket (wx>>5 - camTx +9)*4 +
+  (wy>>5 - camTy +9)*0x90 + layer*0x1440, sort = wx+wy ascending,
+  stable after equals, head-insert); the terrain-loop flush site
+  (per cache cell per layer, gate 0..0x24, next @+0x20); FUN_0040179b
+  asm-authoritative (directory entry 2+4*id with the fmt word SKIPPED,
+  forced u16-RLE, literal runs RAW-copied with NO zero-skip - mode
+  0x130 paints 0xFF, 0x12c/300 plain, 0x12d/0x12e TXPAL1 64-KiB
+  composition / 0x12f DARKPAL XLAT only with the water flag on);
+  the robot loop field map (sx/sy iso projection + 0x23f clip,
+  shield sy-0x48 mode 0x12e, body DANTE[anim], variant/overlay/
+  +0x20 sprites; spawn defaults => DANTE[anim] + DANTE[0x20]);
+  SIM sec 3 correction: the deploy countdown is u16@+0x16, +0x14 is
+  the frame-base word. Engine: mission_view.rs SpriteList +
+  RobotView + enqueue_robots + flush_node + the draw_terrain flush;
+  corpus gate: ZONEA/MISSION1 spawned robot + order-walking second
+  robot from MissionSim on real bytes drawn with real DANTE.BIN
+  (160 sprites) - spawn frame pinned 8d2c559df035b75b, mid-walk frame
+  8804f9deec6b1fee, terrain pin 90a9e929eea24ced kept as the
+  no-entities regression pin. 5 hermetic entity tests; 413 workspace
+  tests green, fmt+clippy clean, MANIFEST verified, pushed.
 - CLOSED 2026-08-21 (P4 mission RENDER half, commits 02363f6 + 889d6b0,
   worker b9aaaa38 claim 1): the isometric viewport draw chain decoded
   and rendering ZONEA/MISSION1 to a hash-pinned frame. New
