@@ -2,7 +2,7 @@
 # Staged autonomy start for bedlam-re after a successful autonomy-stop.
 # Verifies installed units match committed templates, clears diagnosed stale
 # controller state, removes only a stop-owned PAUSE, and enables the nudge
-# timer (watchdog only with --with-watchdog, after a healthy Luna cycle).
+# timer (watchdog only with --with-watchdog, after a healthy check cycle).
 set -u
 PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
 STATE="$PLAN_DIR/.state"
@@ -69,7 +69,7 @@ else
 Staged start checklist:
  1. Watch the first GLM unit end-to-end: an attributed Nudge-Worker commit and
     a released claim in .state/nudge.log.
- 2. Run one controlled Luna cycle: systemctl --user start bedlam-llm-watchdog.service
+ 2. Run one controlled check cycle: systemctl --user start bedlam-llm-watchdog.service
     then check .state/llm-watchdog-verdict (expect state=healthy).
  3. Only then: $0 --with-watchdog
 EOF

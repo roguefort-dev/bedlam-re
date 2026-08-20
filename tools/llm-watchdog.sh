@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Ten-minute LLM supervisor: Luna observes health; Sol repairs only when Luna
-# emits an explicit WATCHDOG_REPAIR marker. Observation failures (transport,
-# timeout, malformed output) never stop workers and never invoke Sol.
-# TEMP 2026-08-20 model switch: Luna = opencode/deepseek-v4-flash-free#max,
-# Sol = zai-coding-plan/glm-5.3#high (revert to gpt-5.6-luna#max /
-# gpt-5.6-sol#high when the OpenAI endpoints are trusted again).
+# Ten-minute LLM supervisor: check observes health; the repair agent runs only
+# when check emits an explicit WATCHDOG_REPAIR marker. Observation failures
+# (transport, timeout, malformed output) never stop workers and never repair.
+# Models (operator constraint, 2026-08-20): check = opencode/deepseek-v4-flash-free#max
+# (FREE tier); repair agent + workers = zai-coding-plan/glm-5.3#high.
+# OpenAI endpoints are OFF-LIMITS until the operator says otherwise.
 set -u
 PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
 STATE="$PLAN_DIR/.state"
@@ -17,8 +17,8 @@ else
 fi
 SYSTEMCTL=${SYSTEMCTL_OVERRIDE:-systemctl}
 REAPER=${REAPER_OVERRIDE:-$PLAN_DIR/tools/nudge-reap-claims.sh}
-LUNA_MODEL=${LUNA_MODEL:-opencode/deepseek-v4-flash-free#max}
-SOL_MODEL=${SOL_MODEL:-zai-coding-plan/glm-5.3#high}
+CHECK_MODEL=${CHECK_MODEL:-opencode/deepseek-v4-flash-free#max}
+REPAIR_MODEL=${REPAIR_MODEL:-zai-coding-plan/glm-5.3#high}
 NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 CHECK_TIMEOUT=${CHECK_TIMEOUT:-480}
 REPAIR_TIMEOUT=${REPAIR_TIMEOUT:-1800}
@@ -27,8 +27,8 @@ RESUME_WAIT_LOOPS=${RESUME_WAIT_LOOPS:-20}
 RESUME_WAIT_SLEEP=${RESUME_WAIT_SLEEP:-1}
 TEST_MODE=${WATCHDOG_TEST_MODE:-0}
 LOG="$STATE/llm-watchdog.log"
-LUNA_OUT="$STATE/llm-watchdog-luna.log"
-SOL_OUT="$STATE/llm-watchdog-sol.log"
+CHECK_OUT="$STATE/llm-watchdog-check.log"
+REPAIR_OUT="$STATE/llm-watchdog-repair.log"
 SNAPSHOT="$STATE/llm-watchdog-snapshot"
 VERDICT="$STATE/llm-watchdog-verdict"
 PAUSE="$STATE/PAUSE"
@@ -124,7 +124,7 @@ rotate() {
     tail -c 131072 "$file" > "$file.tmp" && mv "$file.tmp" "$file"
   fi
 }
-for file in "$LOG" "$LUNA_OUT" "$SOL_OUT"; do rotate "$file"; done
+for file in "$LOG" "$CHECK_OUT" "$REPAIR_OUT"; do rotate "$file"; done
 
 # Holding LOCK proves a matching watchdog token is stale, not live.
 if [ -e "$MARKER" ]; then
@@ -150,7 +150,7 @@ until=$(cat "$COOLDOWN" 2>/dev/null || echo 0)
 in_cooldown=0
 if [ "$now" -lt "$until" ]; then
   in_cooldown=1
-  log "Sol repair cooldown active until $until; Luna still observing"
+  log "repair (glm-5.3) cooldown active until $until; check (deepseek-v4-flash-free) still observing"
 else
   rm -f "$COOLDOWN"
 fi
@@ -185,34 +185,34 @@ fi
   echo controller_tail_end
 } > "$SNAPSHOT"
 
-LUNA_PROMPT="You are the read-only health supervisor for the autonomous Bedlam remaster loop. Work in $PLAN_DIR. Do not modify files, kill processes, create commits, or launch agents. Read AGENTS.md, $SNAPSHOT, current worker logs, claim/controller scripts when relevant, and git history/status. Judge whether GLM-5.3 is advancing or is stuck, churning, or mis-owning work. A persistent Ghostty, cmux, or operator TUI is never ownership and never a fault. Dirty relevant WIP alone is not a fault. A live locked worker with recent meaningful investigation may be healthy before its first commit; distinguish that from repetitive reading, no-op stand-downs, dead claims, launch failures, stale logs, or controller defects. End with exactly one marker on its own final non-empty line: WATCHDOG_OK if no intervention is needed, or WATCHDOG_REPAIR if Sol must intervene now. Before the marker, give concise evidence and the exact repair objective."
-: > "$LUNA_OUT"
+CHECK_PROMPT="You are the read-only health supervisor for the autonomous Bedlam remaster loop. Work in $PLAN_DIR. Do not modify files, kill processes, create commits, or launch agents. Read AGENTS.md, $SNAPSHOT, current worker logs, claim/controller scripts when relevant, and git history/status. Judge whether GLM-5.3 is advancing or is stuck, churning, or mis-owning work. A persistent Ghostty, cmux, or operator TUI is never ownership and never a fault. Dirty relevant WIP alone is not a fault. A live locked worker with recent meaningful investigation may be healthy before its first commit; distinguish that from repetitive reading, no-op stand-downs, dead claims, launch failures, stale logs, or controller defects. End with exactly one marker on its own final non-empty line: WATCHDOG_OK if no intervention is needed, or WATCHDOG_REPAIR if the repair agent must intervene now. Before the marker, give concise evidence and the exact repair objective."
+: > "$CHECK_OUT"
 set +e
-timeout "$CHECK_TIMEOUT" "$OPENC" run --standalone --model "$LUNA_MODEL" --title bedlam-llm-watchdog-check "$LUNA_PROMPT" >> "$LUNA_OUT" 2>&1
-luna_rc=$?
+timeout "$CHECK_TIMEOUT" "$OPENC" run --standalone --model "$CHECK_MODEL" --title bedlam-llm-watchdog-check "$CHECK_PROMPT" >> "$CHECK_OUT" 2>&1
+check_rc=$?
 set -e
-normalized=$(perl -pe "s/\e\[[0-?]*[ -\/]*[@-~]//g; s/\r//g" "$LUNA_OUT")
+normalized=$(perl -pe "s/\e\[[0-?]*[ -\/]*[@-~]//g; s/\r//g" "$CHECK_OUT")
 final_marker=$(printf "%s\n" "$normalized" | awk "NF { last=\$0 } END { print last }")
 marker_count=$(printf "%s\n" "$normalized" | grep -Ec "^(WATCHDOG_OK|WATCHDOG_REPAIR)$" || true)
 prev_state=$(sed -n "s/^state=//p" "$VERDICT" 2>/dev/null | tail -n 1)
 
-if [ "$luna_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_OK ] && [ "$marker_count" -eq 1 ]; then
-  log "Luna reports healthy"
-  write_verdict healthy "$luna_rc" "$marker_count"
+if [ "$check_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_OK ] && [ "$marker_count" -eq 1 ]; then
+  log "check (deepseek-v4-flash-free) reports healthy"
+  write_verdict healthy "$check_rc" "$marker_count"
   exit 0
 fi
-if [ "$luna_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_REPAIR ] && [ "$marker_count" -eq 1 ]; then
+if [ "$check_rc" -eq 0 ] && [ "$final_marker" = WATCHDOG_REPAIR ] && [ "$marker_count" -eq 1 ]; then
   if [ "$in_cooldown" -eq 1 ]; then
-    log "Luna requested repair but Sol cooldown is active; deferring repair, GLM keeps running"
-    write_verdict repair-deferred "$luna_rc" "$marker_count"
+    log "check (deepseek-v4-flash-free) requested repair but repair cooldown is active; deferring, GLM keeps running"
+    write_verdict repair-deferred "$check_rc" "$marker_count"
     exit 0
   fi
-  log "Luna requested repair"
+  log "check (deepseek-v4-flash-free) requested repair"
 else
-  log "Luna observation failed rc=$luna_rc final=$final_marker markers=$marker_count; no valid WATCHDOG_REPAIR marker - not escalating"
-  write_verdict unknown "$luna_rc" "$marker_count"
+  log "check (deepseek-v4-flash-free) observation failed rc=$check_rc final=$final_marker markers=$marker_count; no valid WATCHDOG_REPAIR marker - not escalating"
+  write_verdict unknown "$check_rc" "$marker_count"
   if [ "$prev_state" != "unknown" ]; then
-    notify "bedlam-re watchdog" "Luna cannot observe (rc=$luna_rc); workers left running"
+    notify "bedlam-re watchdog" "check (deepseek-v4-flash-free) cannot observe (rc=$check_rc); workers left running"
   fi
   exit 0
 fi
@@ -262,7 +262,7 @@ stop_glm_workers() {
   pkill -KILL -f "^timeout 3900 [^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" || true
   sleep 1
   if pgrep -f "^[^ ]*opencode2 run.*zai-coding-plan/glm-5.3.*bedlam-nudge-item" >/dev/null 2>&1; then
-    log "unable to stop all GLM workers; aborting Sol repair"
+    log "unable to stop all GLM workers; aborting repair"
     return 1
   fi
   local old_identity old_name old_claim current_identity
@@ -272,7 +272,7 @@ stop_glm_workers() {
     [ -e "$old_claim" ] || continue
     current_identity=$(stat -c "%d:%i" "$old_claim" 2>/dev/null || echo missing)
     if [ "$current_identity" = "$old_identity" ] && ! flock -n "$old_claim" true 2>/dev/null; then
-      log "pre-repair claim $old_name remains locked by a descendant; aborting Sol repair"
+      log "pre-repair claim $old_name remains locked by a descendant; aborting repair"
       return 1
     fi
   done < "$PRE_CLAIMS"
@@ -287,11 +287,11 @@ if ! stop_glm_workers; then exit 1; fi
 
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
 grep -E "^[[:space:]]*[0-9]+\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null | sort -u > "$BLOCKED_BEFORE" || true
-SOL_PROMPT="You are the repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $LUNA_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting Luna blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
-: > "$SOL_OUT"
+REPAIR_PROMPT="You are the repair agent for the autonomous Bedlam remaster loop in $PLAN_DIR. The watchdog token is: $token. This is the narrow AGENTS.md PAUSE exception: before working, verify both .state/PAUSE and .state/llm-watchdog-pause contain exactly that token. If they do, proceed despite PAUSE; otherwise stop. The watchdog stopped GLM workers. Read AGENTS.md, $CHECK_OUT, $SNAPSHOT, git status/diff, queue, controller and worker logs. Diagnose reality rather than trusting the check report blindly. Fix the smallest concrete cause of stalled or churning autonomy. Use your direct file and shell tools, including shell or Python edits if needed; do not ask to delegate. Preserve interrupted WIP; never reset, clean, or overwrite it; bracket game-data reads; stage explicit paths only. Run focused tests. Every repair commit MUST include the exact trailer Watchdog-Repair: $token. Commit and push substantive fixes when green, or rewrite the claimed queue item once as [BLOCKED] with a concrete blocker. Do not spawn subagents. Leave both pause files untouched for the wrapper. End with diagnosis, changes, tests, commit, and exact GLM resume state."
+: > "$REPAIR_OUT"
 set +e
-timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --agent build --model "$SOL_MODEL" --auto --title bedlam-llm-watchdog-repair "$SOL_PROMPT" >> "$SOL_OUT" 2>&1
-sol_rc=$?
+timeout "$REPAIR_TIMEOUT" "$OPENC" run --standalone --agent build --model "$REPAIR_MODEL" --auto --title bedlam-llm-watchdog-repair "$REPAIR_PROMPT" >> "$REPAIR_OUT" 2>&1
+repair_rc=$?
 set -e
 end_head=$(git rev-parse HEAD 2>/dev/null || echo none)
 repair_evidence=0
@@ -309,13 +309,13 @@ if [ "$repair_evidence" -eq 0 ]; then
   [ -n "$new_blocked" ] && repair_evidence=1
 fi
 if [ "$repair_evidence" -eq 1 ]; then
-  log "Sol repair produced evidence rc=$sol_rc head=$start_head..$end_head"
-  write_verdict repaired "$sol_rc" "1"
+  log "repair (glm-5.3) produced evidence rc=$repair_rc head=$start_head..$end_head"
+  write_verdict repaired "$repair_rc" "1"
 else
-  log "Sol produced no repair evidence rc=$sol_rc; cooling escalation while GLM resumes"
+  log "repair (glm-5.3) produced no evidence rc=$repair_rc; cooling escalation while GLM resumes"
   echo $(( $(date +%s) + REPAIR_COOLDOWN )) > "$COOLDOWN"
-  notify "bedlam-re watchdog repair failed" "Sol produced no commit or BLOCKED handoff; GLM will resume"
-  write_verdict repair-no-evidence "$sol_rc" "0"
+  notify "bedlam-re watchdog repair failed" "repair agent produced no commit or BLOCKED handoff; GLM will resume"
+  write_verdict repair-no-evidence "$repair_rc" "0"
 fi
 release_owned_pause
 resume_glm

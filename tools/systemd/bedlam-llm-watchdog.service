@@ -1,5 +1,5 @@
 [Unit]
-Description=Bedlam autonomous LLM health supervisor (Luna check, Sol repair)
+Description=Bedlam autonomous LLM health supervisor (DeepSeek check, GLM repair)
 After=network-online.target
 
 [Service]
