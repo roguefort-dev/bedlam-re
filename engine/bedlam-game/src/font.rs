@@ -147,32 +147,43 @@ pub(crate) struct LoadingFont {
 }
 
 impl LoadingFont {
-    /// Extract the drawer tables from a FULLFONT.BIN image. The bank
-    /// parses through the generic sprites decoder; a bank that
-    /// rejects, or holds no glyph at entry GLYPH_BASE, is a staging
-    /// error. Missing individual glyphs stay None (skipped at draw).
+    /// Extract the drawer tables from a FULLFONT.BIN image (the
+    /// loading-text pass, glyph base 0x82 - ECX on every LAB_0041c69e
+    /// draw). See [`Self::from_bank_at`] for the general form.
     pub(crate) fn from_bank(bin: &[u8]) -> Result<LoadingFont, GameError> {
+        Self::from_bank_at(bin, GLYPH_BASE)
+    }
+
+    /// Extract the drawer tables with an arbitrary glyph-entry base.
+    /// The title menu draws its unselected rows through base 0 and
+    /// the selected row through 0x82 (RE-EXW-TITLEMENU sec 2/2a:
+    /// entries k and 0x82+k are the SAME shapes in two FULLPAL ramp
+    /// slices - blue vs green pixels - so both sets extract with the
+    /// identical walker). A bank that rejects, or holds no glyph at
+    /// the base entry, is a staging error. Missing individual glyphs
+    /// stay None (skipped at draw).
+    pub(crate) fn from_bank_at(bin: &[u8], base: usize) -> Result<LoadingFont, GameError> {
         let bank = parse_bin_images(bin).map_err(GameError::Assets)?;
-        if bank.count < GLYPH_BASE + ACCENT_GLYPH_OFF + 4 {
+        if bank.count < base + ACCENT_GLYPH_OFF + 4 {
             return Err(GameError::BadLoadingAsset {
                 what: "font bank",
-                reason: "too few entries for the loading font",
+                reason: "too few entries for the font",
             });
         }
-        let first = Glyph::from_bank(&bank, GLYPH_BASE).ok_or(GameError::BadLoadingAsset {
+        let first = Glyph::from_bank(&bank, base).ok_or(GameError::BadLoadingAsset {
             what: "font bank",
-            reason: "entry 0x82 (first glyph) undecoded",
+            reason: "glyph-base entry undecoded",
         })?;
         let mut glyphs = Vec::with_capacity((LAST_CHAR - FIRST_CHAR + 1) as usize);
         glyphs.push(Some(first));
-        for entry in GLYPH_BASE + 1..=GLYPH_BASE + (LAST_CHAR - FIRST_CHAR) as usize {
+        for entry in base + 1..=base + (LAST_CHAR - FIRST_CHAR) as usize {
             glyphs.push(Glyph::from_bank(&bank, entry));
         }
         let accents = [
-            Glyph::from_bank(&bank, GLYPH_BASE + ACCENT_GLYPH_OFF + 1),
-            Glyph::from_bank(&bank, GLYPH_BASE + ACCENT_GLYPH_OFF + 2),
-            Glyph::from_bank(&bank, GLYPH_BASE + ACCENT_GLYPH_OFF + 3),
-            Glyph::from_bank(&bank, GLYPH_BASE + ACCENT_GLYPH_OFF + 4),
+            Glyph::from_bank(&bank, base + ACCENT_GLYPH_OFF + 1),
+            Glyph::from_bank(&bank, base + ACCENT_GLYPH_OFF + 2),
+            Glyph::from_bank(&bank, base + ACCENT_GLYPH_OFF + 3),
+            Glyph::from_bank(&bank, base + ACCENT_GLYPH_OFF + 4),
         ];
         Ok(LoadingFont { glyphs, accents })
     }
@@ -223,8 +234,18 @@ impl LoadingFont {
     /// pixels are skipped (transparent blit); every destination
     /// pixel is bounds-clipped.
     pub(crate) fn draw(&self, plane: &mut [u8], stride: usize, text: &[u8], y: i32) {
+        let pen = self.pen_start(text);
+        self.draw_at(plane, stride, text, pen, y);
+    }
+
+    /// [`Self::draw`] with an explicit pen start instead of the
+    /// centered x0 = 0x140 - total/2 (the EXW drawer computes x0
+    /// internally for every row it draws, but the name-entry cursor
+    /// blit passes its own x - RE-EXW-TITLEMENU sec 4: glyph entry
+    /// 0x8e at width("Name: ")+width(name))/2 + 0x146).
+    pub(crate) fn draw_at(&self, plane: &mut [u8], stride: usize, text: &[u8], x: i32, y: i32) {
         let rows = (plane.len() / stride) as i32;
-        let mut pen = self.pen_start(text);
+        let mut pen = x;
         for &c in text {
             let (eff, glyph, accent) = self.resolve(c);
             match glyph {
@@ -469,10 +490,40 @@ mod tests {
         match LoadingFont::from_bank(&empty) {
             Err(GameError::BadLoadingAsset {
                 what: "font bank",
-                reason: "entry 0x82 (first glyph) undecoded",
+                reason: "glyph-base entry undecoded",
             }) => {}
             other => panic!("wrong error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn dual_base_extraction_shares_shapes() {
+        // The D41 corpus pin as a unit property: bases 0 and 0x82
+        // extract the SAME shapes (widths/heights) from one bank -
+        // the menu's blue/green sets differ only in pixel values.
+        let count = GLYPH_BASE + ACCENT_GLYPH_OFF + 5;
+        // Bang glyphs at both bases with DIFFERENT fills.
+        let images = vec![
+            glyph_bytes(3, 2, 0xF0), // entry 0 (base 0 window)
+            glyph_bytes(3, 2, 0xA0), // entry 0x82 (base 0x82 window)
+        ];
+        let entries = vec![0, GLYPH_BASE];
+        let data = bank(count, &entries, &images);
+        let blue = LoadingFont::from_bank_at(&data, 0).unwrap();
+        let green = LoadingFont::from_bank_at(&data, GLYPH_BASE).unwrap();
+        // Same measure (shape-driven), and an explicit-pen draw of
+        // each set lands the SAME footprint with different pixels.
+        assert_eq!(blue.measure(&[0x21]), green.measure(&[0x21]));
+        let mut b = vec![0u8; 16];
+        let mut g = vec![0u8; 16];
+        blue.draw_at(&mut b, 4, &[0x21], 0, 0);
+        green.draw_at(&mut g, 4, &[0x21], 0, 0);
+        assert_eq!(&b[0..4], &[0u8, 0xF0, 0xF0, 0]);
+        assert_eq!(&g[0..4], &[0u8, 0xA0, 0xA0, 0]);
+        assert_eq!(
+            b.iter().filter(|&&v| v != 0).count(),
+            g.iter().filter(|&&v| v != 0).count()
+        );
     }
 }
 
@@ -521,7 +572,10 @@ pub(crate) mod synth {
     /// A minimal but complete loading font bank: the five chars of
     /// the synth strings below (bang e i o u space-free) plus the
     /// diaeresis/acute overlays. Glyph values use fills 0xF0.. so
-    /// compositing is observable against a 0x10 still.
+    /// compositing is observable against a 0x10 still. The SAME
+    /// chars also populate the base-0 window (fills 0xC0.. - the
+    /// menu's blue set; same shapes, different palette indices, the
+    /// D41 corpus pin) so menu tests can extract both sets.
     pub(crate) fn font_bin() -> Vec<u8> {
         let count = GLYPH_BASE + ACCENT_GLYPH_OFF + 5;
         // chars: 0x21 bang, 0x45 E, 0x49 I, 0x4f O, 0x55 U, 0x65 e,
@@ -543,6 +597,9 @@ pub(crate) mod synth {
         for (c, fill) in chars {
             entries.push(GLYPH_BASE + (c - FIRST_CHAR) as usize);
             images.push(raw_glyph(3, 2, fill));
+            // Base-0 twin: same shape, blue-set fill.
+            entries.push((c - FIRST_CHAR) as usize);
+            images.push(raw_glyph(3, 2, fill - 0x30));
         }
         // Accent overlays 238 (diaeresis) and 239 (acute): 2x1, dy=-1,
         // dx 0 and 1, distinct fills.

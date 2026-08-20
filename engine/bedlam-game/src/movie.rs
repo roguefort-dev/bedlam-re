@@ -117,6 +117,31 @@ impl MoviePlayer {
         self.finished
     }
 
+    /// Rewind to frame 0 and decode it (D42: the EXW attract replay
+    /// re-opens TITLE.SMK through FUN_004459f7 - the engine restarts
+    /// the staged player in place instead). Resets the accumulator,
+    /// clears pending audio and re-collects the frame-0 packet (the
+    /// D31 entry-audio rule applies to the replay too: the caller
+    /// queues take_audio() when the replay starts).
+    pub fn restart(&mut self) -> Result<(), GameError> {
+        self.stream.first_frame()?;
+        self.acc = 0;
+        self.finished = false;
+        self.pending_audio.clear();
+        self.collect_audio();
+        Ok(())
+    }
+
+    /// Latch finished while holding the last decoded frame (D42: the
+    /// attract SKIP - EXW aborts FUN_0044567c's wait loop mid-pass
+    /// through skip gate 004edbc4 and redraws the menu; the frozen
+    /// raster is never presented because the menu plane takes over
+    /// once the player stops playing).
+    pub fn finish(&mut self) {
+        self.finished = true;
+        self.acc = 0;
+    }
+
     /// Take the audio decoded since the last call, in decode order.
     /// Empty when nothing new decoded.
     pub fn take_audio(&mut self) -> Vec<u8> {

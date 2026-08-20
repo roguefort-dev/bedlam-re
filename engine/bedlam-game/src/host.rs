@@ -16,6 +16,7 @@ use crate::brief::{BriefIntro, BriefPhase};
 use crate::config::GameConfig;
 use crate::fsm::{Scene, SceneAction, SceneFsm};
 use crate::loading::{LoadingFlow, LoadingPhase, TextRow};
+use crate::menu::{MenuAction, TitleMenu};
 use crate::movie::MoviePlayer;
 use crate::music::{self, MusicPump};
 use crate::GameError;
@@ -55,6 +56,14 @@ pub struct GameHost {
     /// zone backdrop ring, presentation-only like the movie - on
     /// the Brief scene.
     brief: Option<BriefIntro>,
+    /// The title menu (D41/D42): the NameEntryScreen model + strip
+    /// + draw plane, presentation-only - on the Title scene, where
+    /// it also OWNS the input path (explicit intents replace the
+    /// generic click-advance, D42.1).
+    menu: Option<TitleMenu>,
+    /// Score seed of the menu's last Start action (survives the menu
+    /// drop on the Title exit; D42.8).
+    menu_start_score: Option<i32>,
     frame: Frame,
     palette: [Vga6; 256],
 }
@@ -86,6 +95,8 @@ impl GameHost {
             loading: None,
             boot: None,
             brief: None,
+            menu: None,
+            menu_start_score: None,
             frame: Frame::new(palette),
             palette,
         };
@@ -105,13 +116,31 @@ impl GameHost {
     /// 4. the canonical frame is re-rendered and stored for present.
     pub fn pump_frame(&mut self, dt_subticks: u32, input: &InputFrame) -> u32 {
         let executed = self.driver.advance(dt_subticks, input);
+        // Menu input ownership (D42.1): while a menu is staged on
+        // Title, the menu IS the Title input path - the FSM is fed
+        // NEUTRAL frames (ticks count, no generic click-advance) and
+        // menu outcomes become explicit intents. Re-checked per
+        // executed tick: a Start/Quit intent can leave the scene
+        // mid-loop.
         for _ in 0..executed {
-            self.fsm.tick(input);
+            if self.menu.is_some() && self.fsm.scene() == Scene::Title {
+                let movies_playing = self.title_movie_playing();
+                let tick = self
+                    .menu
+                    .as_mut()
+                    .expect("checked staged")
+                    .tick(input, movies_playing);
+                self.apply_menu_tick(tick);
+                self.fsm.tick(&InputFrame::default());
+            } else {
+                self.fsm.tick(input);
+            }
         }
         self.sync_movie();
         self.sync_boot();
         self.sync_brief();
         self.sync_loading();
+        self.sync_menu();
         self.sync_music();
         self.pump_movie(dt_subticks);
         self.pump_boot(dt_subticks);
@@ -310,6 +339,162 @@ impl GameHost {
     /// gates: movie index 0 = GTLOG / 1 = LOGO, frame index, phase).
     pub fn boot_attract(&self) -> Option<&BootAttract> {
         self.boot.as_ref()
+    }
+
+    /// Stage the title menu (D41/D42) from the corpus bytes the
+    /// caller fetched: LANGUAGE.* (the [MENU_ITEMS] table),
+    /// FULLFONT.BIN (glyph sets at bases 0x82 and 0), FULLPAL.PAL
+    /// (the ramp folded into the plane palette tail) and the SFX
+    /// pair MENU1.RAW/MENU2.RAW (mixer instruments 0xE0/0xE1, the
+    /// EXW SfxLoad pair at NameEntryScreen entry). The menu is
+    /// presentation-only: staging touches no hashed state, and while
+    /// it owns the Title input path the FSM is fed neutral frames
+    /// (D42.1) - a staged menu drops when Title is left.
+    pub fn load_title_menu(
+        &mut self,
+        language: &[u8],
+        font_bin: &[u8],
+        fullpal: &[u8],
+        sfx_hover: &[u8],
+        sfx_click: &[u8],
+    ) -> Result<(), GameError> {
+        let menu = TitleMenu::new(language, font_bin, fullpal)?;
+        self.mixer.load_wave(crate::menu::SFX_HOVER, sfx_hover)?;
+        self.mixer.load_wave(crate::menu::SFX_CLICK, sfx_click)?;
+        self.menu = Some(menu);
+        Ok(())
+    }
+
+    /// The staged title menu, if any (introspection: id, slots,
+    /// selection, phase, idle, cursor, start score).
+    pub fn menu(&self) -> Option<&TitleMenu> {
+        self.menu.as_ref()
+    }
+
+    /// Score seed of the menu's last Start action (D42.8): 4000 -
+    /// 500*difficulty at the moment Start was clicked. Cached on the
+    /// host because the menu itself drops when the handoff leaves
+    /// Title; the value waits for the P2d sim-tail wiring.
+    pub fn menu_start_score_seen(&self) -> Option<i32> {
+        self.menu_start_score
+    }
+
+    /// Type one character into the active name entry (the explicit
+    /// shell text path, D42.6). False when no name entry is active.
+    pub fn menu_type_char(&mut self, c: u8) -> bool {
+        self.menu.as_mut().is_some_and(|m| m.type_char(c))
+    }
+
+    /// Backspace in the active name entry (D42.6).
+    pub fn menu_backspace(&mut self) -> bool {
+        self.menu.as_mut().is_some_and(|m| m.backspace())
+    }
+
+    /// Apply one menu tick report (inside the executed-tick loop):
+    /// SFX straight to the mixer, host intents via the FSM, attract
+    /// events against the staged Title movie slot. Nothing here
+    /// touches hashed state beyond the FSM's own apply.
+    fn apply_menu_tick(&mut self, tick: crate::menu::MenuTick) {
+        if tick.hover_sfx {
+            self.mixer.note_on(
+                crate::menu::SFX_HOVER,
+                crate::menu::SFX_RATIO_UNITY,
+                crate::menu::SFX_VOLUME,
+            );
+        }
+        if tick.click_sfx {
+            self.mixer.note_on(
+                crate::menu::SFX_CLICK,
+                crate::menu::SFX_RATIO_UNITY,
+                crate::menu::SFX_VOLUME,
+            );
+        }
+        match tick.action {
+            // Start: the Title -> Brief handoff (the P4 slice's
+            // "start action hands off"); the score seed is cached on
+            // the host for the future sim-tail wiring (D42.8).
+            Some(MenuAction::Start { score }) => {
+                self.menu_start_score = Some(score);
+                self.apply(SceneAction::Advance);
+            }
+            Some(MenuAction::Quit) => self.apply(SceneAction::Quit),
+            // Attract: restart the staged Title movie in place (the
+            // EXW replay re-opens TITLE.SMK) and queue its frame-0
+            // audio - the D31 entry rule applied to the replay. No
+            // staged title movie = cancel the attract (D42.3).
+            Some(MenuAction::Attract) => {
+                let mut audio = Vec::new();
+                let mut started = false;
+                let mut failed = false;
+                if let Some(slot) = self.movie.as_mut() {
+                    if slot.scene == Scene::Title {
+                        match slot.player.restart() {
+                            Ok(()) => {
+                                slot.started = true;
+                                started = true;
+                                audio = slot.player.take_audio();
+                            }
+                            Err(_) => failed = true,
+                        }
+                    }
+                }
+                if !started && !failed {
+                    if let Some(menu) = self.menu.as_mut() {
+                        menu.cancel_attract();
+                    }
+                }
+                if !audio.is_empty() && self.mixer.queue_pcm_u8(&audio).is_err() {
+                    failed = true;
+                }
+                if failed {
+                    // The D31 self-terminate pattern: drop the slot,
+                    // silence the stream (the menu falls back to
+                    // Interactive on the next tick).
+                    self.movie = None;
+                    self.mixer.clear_pcm_stream();
+                    if let Some(menu) = self.menu.as_mut() {
+                        menu.cancel_attract();
+                    }
+                }
+            }
+            // Skip: finish the replay in place; the menu plane takes
+            // over once the player stops playing (D42.3).
+            Some(MenuAction::SkipAttract) => {
+                if let Some(slot) = self.movie.as_mut() {
+                    if slot.scene == Scene::Title {
+                        slot.player.finish();
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// Whether a Title-scene movie owns the screen: one that is
+    /// playing (started, not finished) OR staged but not yet started
+    /// by the scene sync (the load-to-sync gap of one pump - the
+    /// EXW title movie takes the screen before the menu loop runs).
+    /// The menu is inert behind it either way, and its plane yields.
+    fn title_movie_playing(&self) -> bool {
+        self.movie.as_ref().is_some_and(|slot| {
+            slot.scene == Scene::Title && (!slot.started || !slot.player.finished())
+        })
+    }
+
+    /// Title-menu scene sync (D42.1): a menu standing on Title goes
+    /// live; one that was live is DROPPED when Title is left
+    /// (NameEntryScreen owns everything and frees it on exit). A
+    /// menu staged while the host stands elsewhere stays inert,
+    /// waiting for its scene (the Staged semantics of the other
+    /// flows). The SFX waves stay in the mixer either way.
+    fn sync_menu(&mut self) {
+        if let Some(menu) = self.menu.as_mut() {
+            if self.fsm.scene() == Scene::Title {
+                menu.mark_entered();
+            } else if menu.entered() {
+                self.menu = None;
+            }
+        }
     }
 
     /// Stage the zone-transition interlude still (BETWEEN.BIN entry-0
@@ -668,6 +853,23 @@ impl GameHost {
     /// same way, and a full-screen 640x480 still centers at the origin,
     /// i.e. the 1:1 no-letterbox blit the loading gate pins.
     fn render_now(&mut self) -> Frame {
+        // Menu plane (D41/D42): the staged menu owns the Title plane
+        // whenever no Title movie is playing (the first pass and the
+        // attract replay own it instead - the menu is inert behind
+        // them and redraws when they end).
+        let menu_frame = if self.title_movie_playing() || self.fsm.scene() != Scene::Title {
+            None
+        } else {
+            self.menu
+                .as_mut()
+                .and_then(|menu| menu.plane(&self.palette))
+                .map(|p| MovieFrame {
+                    width: p.w,
+                    height: p.h,
+                    pixels: p.pixels,
+                    palette: p.palette,
+                })
+        };
         let movie = self
             .loading
             .as_ref()
@@ -700,6 +902,7 @@ impl GameHost {
                         palette: p.palette,
                     })
             })
+            .or(menu_frame)
             .or_else(|| {
                 self.movie
                     .as_ref()
@@ -1651,5 +1854,228 @@ mod tests {
             .to_string(),
             "loading-flow asset image bank entry 0: undecoded raster"
         );
+    }
+
+    /// Walk a fresh host to Title (the boot hold), pump-neutral.
+    fn walk_to_title(host: &mut GameHost) {
+        while host.scene() != Scene::Title {
+            host.pump_frame(4, &InputFrame::default());
+        }
+    }
+
+    /// One-tick hover to item i (exact cursor delta), then a click
+    /// press+release over two pumps.
+    fn menu_click(host: &mut GameHost, i: i8) {
+        let menu = host.menu().expect("menu staged");
+        let count = menu.count() as i32;
+        let top = crate::menu::STRIP_Y_MAX - count * crate::menu::ROW_H;
+        let y = top + i as i32 * crate::menu::ROW_H + crate::menu::ROW_H / 2;
+        let x = (crate::menu::STRIP_X_MIN + crate::menu::STRIP_X_MAX) / 2;
+        let (cx, cy) = menu.cursor();
+        let hover = InputFrame {
+            mouse_dx: (x - cx) as i16,
+            mouse_dy: (y - cy) as i16,
+            ..InputFrame::default()
+        };
+        host.pump_frame(4, &hover);
+        let press = InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        };
+        host.pump_frame(4, &press);
+        host.pump_frame(4, &InputFrame::default());
+    }
+
+    #[test]
+    fn menu_interaction_never_touches_the_scene_hash() {
+        // D42.1/D42.8: while the menu owns Title input the FSM is fed
+        // neutral frames, so the scene-hash chain of a menu run under
+        // CLICKING input equals a no-menu run under NEUTRAL input
+        // (the no-menu run under the same clicks would advance - the
+        // generic D26 path the menu replaces).
+        let run = |menu: bool, neutral: bool| -> Vec<u64> {
+            let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+            if menu {
+                crate::menu::tests::stage_synth_menu(&mut host);
+            }
+            walk_to_title(&mut host);
+            let mut chain = Vec::new();
+            for buttons in [0u8, 1, 1, 0, 1, 0, 2, 0] {
+                let input = if neutral {
+                    InputFrame::default()
+                } else {
+                    InputFrame {
+                        mouse_dx: 3,
+                        mouse_dy: 2,
+                        mouse_buttons: buttons,
+                        ..InputFrame::default()
+                    }
+                };
+                host.pump_frame(4, &input);
+                chain.push(host.scene_hash().0);
+            }
+            chain
+        };
+        assert_eq!(run(true, false), run(false, true));
+    }
+
+    #[test]
+    fn menu_start_click_hands_off_to_brief() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        crate::menu::tests::stage_synth_menu(&mut host);
+        walk_to_title(&mut host);
+        assert_eq!(host.scene(), Scene::Title);
+        assert!(host.menu().is_some());
+        // Generic clicks no longer advance Title (the menu owns the
+        // path): clicking outside the strip opens the multiplayer
+        // menu instead of moving the scene.
+        host.pump_frame(
+            4,
+            &InputFrame {
+                mouse_dx: 10,
+                mouse_dy: 10,
+                mouse_buttons: 1,
+                ..InputFrame::default()
+            },
+        );
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Title);
+        assert_eq!(host.menu().unwrap().id(), crate::menu::MenuId::Multi);
+        // Back to Main, then Start on item 0 -> Brief with the seed.
+        menu_click(&mut host, 3); // Main Menu item
+        assert_eq!(host.menu().unwrap().id(), crate::menu::MenuId::Main);
+        menu_click(&mut host, 0);
+        assert_eq!(host.scene(), Scene::Brief, "start hands off");
+        assert!(host.menu().is_none(), "menu dropped on leaving Title");
+        assert_eq!(
+            host.menu_start_score_seen(),
+            Some(4000),
+            "score seed exposed for the sim tail"
+        );
+    }
+
+    #[test]
+    fn menu_quit_confirm_reaches_the_quit_scene() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        crate::menu::tests::stage_synth_menu(&mut host);
+        walk_to_title(&mut host);
+        menu_click(&mut host, 6); // Quit to Windows -> confirm menu
+        assert_eq!(host.menu().unwrap().id(), crate::menu::MenuId::QuitConfirm);
+        assert_eq!(host.scene(), Scene::Title);
+        menu_click(&mut host, 0); // confirmed
+        assert_eq!(host.scene(), Scene::Quit);
+        assert!(host.menu().is_none());
+    }
+
+    #[test]
+    fn menu_attract_replays_the_title_movie_and_skips() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        crate::menu::tests::stage_synth_menu(&mut host);
+        walk_to_title(&mut host);
+        host.load_movie(Scene::Title, &synth_smk()).unwrap();
+        // First pass: 2 frames at 40 ms = 10 pumps at 60 Hz; the
+        // menu is inert while it plays (no idle counting), then
+        // starts counting once the plane is its.
+        while !host.movie().unwrap().finished() {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(
+            host.menu().unwrap().phase(),
+            crate::menu::MenuPhase::Interactive
+        );
+        assert_eq!(
+            host.menu().unwrap().idle(),
+            0,
+            "no idle while the pass played"
+        );
+        // Idle to 0x300 (768 ticks = 768 pumps at one tick each).
+        let mut attract_seen = false;
+        for _ in 0..crate::menu::ATTRACT_IDLE {
+            host.pump_frame(4, &InputFrame::default());
+            if host.menu().unwrap().phase() == crate::menu::MenuPhase::Attract {
+                attract_seen = true;
+                break;
+            }
+        }
+        assert!(attract_seen, "attract fired at the threshold");
+        // The attract restarted the movie from frame 0.
+        let player = host.movie().unwrap();
+        assert!(!player.finished(), "replay running");
+        assert!(player.frame_index() <= 1, "restarted near frame 0");
+        assert_eq!(
+            host.menu().unwrap().phase(),
+            crate::menu::MenuPhase::Attract
+        );
+        // Skip: any click finishes the replay and returns the menu.
+        host.pump_frame(
+            4,
+            &InputFrame {
+                mouse_buttons: 1,
+                ..InputFrame::default()
+            },
+        );
+        assert!(host.movie().unwrap().finished(), "skip finished the replay");
+        assert_eq!(
+            host.menu().unwrap().phase(),
+            crate::menu::MenuPhase::Interactive
+        );
+        // The menu plane owns the screen now (strip rows non-black,
+        // the movie raster is not 4x4).
+        let frame = host.frame();
+        let strip_rows_have_pixels =
+            (300..470u32).any(|r| (0..640u32).any(|c| frame.get(c, r) != Some(0)));
+        assert!(strip_rows_have_pixels, "menu visible after the skip");
+    }
+
+    #[test]
+    fn menu_plane_takes_over_when_the_title_movie_ends() {
+        let movie_then_menu = || {
+            let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+            crate::menu::tests::stage_synth_menu(&mut host);
+            walk_to_title(&mut host);
+            host.load_movie(Scene::Title, &synth_smk()).unwrap();
+            host
+        };
+        let mut host = movie_then_menu();
+        // During the first pass the movie owns the plane: the frame
+        // carries the folded movie palette (synth frame-0 entry 0 =
+        // 6-bit [1,2,3]) instead of the host palette.
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.frame().palette[0], [1, 2, 3], "movie palette mid-pass");
+        // After the pass the menu owns it: the palette returns to
+        // the host's (black canvas) with the staged FULLPAL ramp in
+        // the 224..=255 tail, and the bottom-anchored strip draws.
+        for _ in 0..12 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        let frame = host.frame();
+        assert_eq!(frame.palette[0], [0, 0, 0], "host palette under the menu");
+        assert!(
+            frame.palette[224..].iter().any(|c| c != &[0, 0, 0]),
+            "ramp tail"
+        );
+        let above = (0..200u32).all(|r| (0..640u32).all(|c| frame.get(c, r) == Some(0)));
+        assert!(above, "canvas black above the strip");
+        let strip = (302..470u32).any(|r| (0..640u32).any(|c| frame.get(c, r) != Some(0)));
+        assert!(strip, "text strip drawn bottom-anchored");
+    }
+
+    #[test]
+    fn menu_sfx_play_through_the_mixer() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        crate::menu::tests::stage_synth_menu(&mut host);
+        walk_to_title(&mut host);
+        // Hover to item 0: MENU1 fires; click: MENU2 fires. Both land
+        // as sounding voices on instruments 0xE0/0xE1.
+        menu_click(&mut host, 0);
+        assert!(
+            host.mixer_mut().voice_playing(crate::menu::SFX_HOVER, 0)
+                || host.mixer_mut().voice_playing(crate::menu::SFX_CLICK, 0)
+        );
+        // The staged waves render audible (non-silent) samples.
+        let mut buf = [0i16; 256];
+        let n = host.render_audio(&mut buf).unwrap();
+        assert!(n > 0);
+        assert!(buf[..n * 2].iter().any(|&s| s != 0), "sfx audible");
     }
 }

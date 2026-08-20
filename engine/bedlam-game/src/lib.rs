@@ -26,6 +26,7 @@ mod font;
 pub mod fsm;
 pub mod host;
 pub mod loading;
+pub mod menu;
 pub mod movie;
 pub mod movies;
 pub mod music;
@@ -71,6 +72,14 @@ pub enum GameError {
     /// raster is missing or the wrong size (host staging rejects it).
     #[error("loading-flow asset {what}: {reason}")]
     BadLoadingAsset {
+        what: &'static str,
+        reason: &'static str,
+    },
+    /// A title-menu asset decoded structurally but the menu cannot
+    /// be built from it (short [MENU_ITEMS] table, undecodable font
+    /// base, bad ramp).
+    #[error("title-menu asset {what}: {reason}")]
+    BadMenuAsset {
         what: &'static str,
         reason: &'static str,
     },
