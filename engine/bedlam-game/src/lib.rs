@@ -20,6 +20,7 @@
 #![forbid(unsafe_code)]
 
 pub mod boot;
+pub mod brief;
 pub mod config;
 mod font;
 pub mod fsm;
@@ -30,6 +31,7 @@ pub mod movies;
 pub mod music;
 
 pub use boot::{BootAttract, BootPhase};
+pub use brief::{BriefIntro, BriefPhase};
 pub use config::{GameConfig, OPTIONS_LEN, OPTIONS_NAME, VOLUME_MAX};
 pub use fsm::{
     Episode, Scene, SceneAction, SceneFsm, BOOT_TICKS, FULL_MASK, MAX_LINEAR, MAX_STAGE,

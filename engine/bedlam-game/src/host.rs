@@ -12,6 +12,7 @@ use bedlam_core::sim::SimConfig;
 use bedlam_render::{render, Frame, MovieFrame, RenderInput, Vga6};
 
 use crate::boot::{BootAttract, BootPhase};
+use crate::brief::{BriefIntro, BriefPhase};
 use crate::config::GameConfig;
 use crate::fsm::{Scene, SceneAction, SceneFsm};
 use crate::loading::{LoadingFlow, LoadingPhase, TextRow};
@@ -50,6 +51,10 @@ pub struct GameHost {
     /// The boot attract pair (D36): GTLOG then LOGO, presentation-only
     /// like the movie - one EXW pass each on the Boot scene.
     boot: Option<BootAttract>,
+    /// The briefing intro pair (D37): BRF_DROP one pass then the
+    /// zone backdrop ring, presentation-only like the movie - on
+    /// the Brief scene.
+    brief: Option<BriefIntro>,
     frame: Frame,
     palette: [Vga6; 256],
 }
@@ -80,6 +85,7 @@ impl GameHost {
             movie: None,
             loading: None,
             boot: None,
+            brief: None,
             frame: Frame::new(palette),
             palette,
         };
@@ -104,10 +110,12 @@ impl GameHost {
         }
         self.sync_movie();
         self.sync_boot();
+        self.sync_brief();
         self.sync_loading();
         self.sync_music();
         self.pump_movie(dt_subticks);
         self.pump_boot(dt_subticks);
+        self.pump_brief(dt_subticks);
         self.pump_loading(dt_subticks);
         self.frame = self.render_now();
         executed
@@ -222,24 +230,49 @@ impl GameHost {
     /// The briefing backdrop movie the CURRENT hashed episode slot
     /// selects (movies::briefing_name_for_slot over stage + mask):
     /// the lettered zone stages 2..=6 pick BRF_{B..F}{sub}.SMK for
-    /// the mission the slot is about to play; the boot-camp and
-    /// endgame stages pick None (no lettered backdrop in the
-    /// corpus, so the caller simply plays no movie there). Pure name
-    /// arithmetic for the caller ByteSource fetch - the host never
-    /// loads anything by itself (DESIGN-GAME sec 8).
+    /// the mission the slot is about to play (the letter map is now
+    /// EXW-verified, D37: letter = zone@004edd8c + 0x40, zones
+    /// 2..=6 = B..=F); the boot-camp and endgame stages pick None
+    /// (no lettered backdrop in the corpus, so the caller stages no
+    /// briefing pair there). Pure name arithmetic for the caller
+    /// ByteSource fetch - the host never loads anything by itself
+    /// (DESIGN-GAME sec 8). The DROP half of the pair is the
+    /// region-independent movies::BRIEFING_DROP_NAME.
     pub fn briefing_name(&self) -> Option<String> {
         let episode = self.fsm.episode();
         crate::movies::briefing_name_for_slot(episode.stage(), episode.mask())
     }
 
-    /// Load the briefing backdrop movie (.SMK bytes the caller
-    /// fetched under [`Self::briefing_name`]) onto the Brief scene
-    /// (D33). Same lifecycle as [`Self::load_movie`] (D31): inert
-    /// until the FSM enters Brief (entry starts playback + queues
-    /// frame-0 audio on tracks that have one - the BRF rings are
-    /// silent), dropped + stream cleared on leaving.
-    pub fn load_briefing(&mut self, data: &[u8]) -> Result<(), GameError> {
-        self.load_movie(Scene::Brief, data)
+    /// Load the briefing intro pair (BRF_DROP.SMK bytes + the zone
+    /// backdrop .SMK bytes the caller fetched under
+    /// [`Self::briefing_name`]) onto the Brief scene (D37): the D31
+    /// lifecycle applied to the EXW briefing screen movie head
+    /// [verified asm 0043d447..0043d490] - inert until the FSM
+    /// enters Brief (entry starts the drop pass and queues its
+    /// frame-0 audio - the corpus pair is silent), the drop plays
+    /// exactly one EXW pass (frames 0..=frames-2 render: 29 of its
+    /// 30 corpus frames; the handoff bound is the frame index
+    /// reaching count-1, never decoded), then the zone backdrop
+    /// ring takes the plane for the rest of the scene (unbounded -
+    /// the EXW ring closes only on the UI exit); dropped + stream
+    /// cleared when Brief is left. The pair is UNSKIPPABLE (the GO
+    /// button arms only after the handoff - no input path exists).
+    /// Staging touches no hashed state (unit-pinned).
+    pub fn load_briefing(&mut self, drop: &[u8], backdrop: &[u8]) -> Result<(), GameError> {
+        self.brief = Some(BriefIntro::new(drop, backdrop)?);
+        Ok(())
+    }
+
+    /// The staged briefing-intro phase, if any (D37 introspection:
+    /// Staged / Drop / Backdrop / None when nothing is staged).
+    pub fn brief_phase(&self) -> Option<BriefPhase> {
+        self.brief.as_ref().map(|flow| flow.phase())
+    }
+
+    /// The staged briefing intro, if any (introspection for hosts
+    /// and gates: phase, frame index of the on-screen movie).
+    pub fn brief_intro(&self) -> Option<&BriefIntro> {
+        self.brief.as_ref()
     }
 
     /// Load the shop backdrop movie (SHOP.SMK bytes, fetched under
@@ -572,6 +605,60 @@ impl GameHost {
         }
     }
 
+    /// Briefing-intro scene sync (D37, the sync_movie semantics):
+    /// start when the FSM ENTERS Brief (the drop frame-0 audio
+    /// queues HERE, one pump before any decode - the D31 entry
+    /// rule); a STAGED flow stays inert on every other scene, an
+    /// ACTIVE one is dropped on leaving Brief (the backdrop ring
+    /// plays until the UI exits the scene - the flow never ends by
+    /// itself). The EXW pair is unskippable, so there is no input
+    /// abort path.
+    fn sync_brief(&mut self) {
+        let mut stop = false;
+        if let Some(flow) = self.brief.as_mut() {
+            if flow.phase() == BriefPhase::Staged {
+                if self.fsm.scene() == Scene::Brief {
+                    let first = flow.start();
+                    // Stream-bus overflow at start = the host
+                    // stopped draining audio (16x-headroom cap):
+                    // drop the flow, the D31 start pattern.
+                    if self.mixer.queue_pcm_u8(&first).is_err() {
+                        stop = true;
+                    }
+                }
+            } else if self.fsm.scene() != Scene::Brief {
+                stop = true;
+            }
+        }
+        if stop {
+            self.brief = None;
+            self.mixer.clear_pcm_stream();
+        }
+    }
+
+    /// Briefing-intro time pump (D37): the same dt the sim
+    /// consumed; the decoded PCM rides the D31 stream bus. A decode
+    /// failure or stream overflow self-terminates the flow (the
+    /// D31 movie-lifecycle pattern - presentation self-terminates,
+    /// never a pump error).
+    fn pump_brief(&mut self, dt_subticks: u32) {
+        let mut failed = false;
+        if let Some(flow) = self.brief.as_mut() {
+            match flow.advance(dt_subticks) {
+                Ok(packets) => {
+                    if self.mixer.queue_pcm_u8(&packets).is_err() {
+                        failed = true;
+                    }
+                }
+                Err(_) => failed = true,
+            }
+        }
+        if failed {
+            self.brief = None;
+            self.mixer.clear_pcm_stream();
+        }
+    }
+
     /// Parity render pass: canonical frame from the current sim. A
     /// started movie REPLACES the scene pipeline (D31): the plane is
     /// the decoded raster + the folded 6-bit movie palette, and render
@@ -593,6 +680,17 @@ impl GameHost {
             })
             .or_else(|| {
                 self.boot
+                    .as_ref()
+                    .and_then(|flow| flow.plane())
+                    .map(|p| MovieFrame {
+                        width: p.w,
+                        height: p.h,
+                        pixels: p.pixels,
+                        palette: p.palette,
+                    })
+            })
+            .or_else(|| {
+                self.brief
                     .as_ref()
                     .and_then(|flow| flow.plane())
                     .map(|p| MovieFrame {
@@ -1029,32 +1127,81 @@ mod tests {
     }
 
     #[test]
-    fn load_briefing_binds_the_brief_scene() {
+    fn brief_intro_lifecycle_on_the_brief_scene() {
         let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
-        host.load_briefing(&synth_smk()).unwrap();
+        host.load_briefing(&synth_smk(), &synth_smk()).unwrap();
         while host.scene() == Scene::Boot {
             host.pump_frame(4, &InputFrame::default());
         }
-        // Still on Title: inert (D31 lifecycle), frame 0 held.
-        assert!(host.movie().is_some());
-        assert_eq!(host.movie().unwrap().frame_index(), 0);
+        // Still on Title: inert (D31 lifecycle) - the flow stays
+        // Staged and is NOT the plain movie slot.
+        assert_eq!(host.brief_phase(), Some(crate::BriefPhase::Staged));
+        assert!(host.movie().is_none());
         host.apply(SceneAction::Advance); // Title -> Brief
         host.pump_frame(4, &InputFrame::default());
-        assert!(host.movie().is_some(), "started on Brief entry");
-        // 40 ms period: 3 more pumps decode frame 1 and finish the
-        // 2-frame synth stream (non-ring hold; the corpus BRF rings
-        // wrap instead).
-        for _ in 0..3 {
-            host.pump_frame(4, &InputFrame::default());
-        }
-        assert_eq!(host.movie().unwrap().frame_index(), 1);
-        assert!(host.movie().unwrap().finished());
-        // Leaving Brief (-> Select) drops the slot and clears the
-        // stream.
+        // Entry starts the drop pass and queues its frame-0 audio
+        // (the synth drop carries a track; the corpus pair is
+        // silent).
+        assert_eq!(host.brief_phase(), Some(crate::BriefPhase::Drop));
+        let expect = |b: u8| (((i32::from(b) - 128) << 8) * 100) >> 8;
+        let mut buf = [0i16; 4];
+        host.render_audio(&mut buf).unwrap();
+        assert_eq!(
+            buf,
+            [
+                expect(0xAA) as i16,
+                expect(0xAA) as i16,
+                expect(0x55) as i16,
+                expect(0x55) as i16
+            ]
+        );
+        // 2-frame synth drop: one EXW pass = 1 period = 9.6
+        // sub-ticks. The entry pump banked 4; the second reaches 8
+        // (still Drop); the third crosses 9.6 - the handoff fires.
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.brief_phase(), Some(crate::BriefPhase::Drop));
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.brief_phase(), Some(crate::BriefPhase::Backdrop));
+        assert_eq!(host.brief_intro().unwrap().frame_index(), 0);
+        // Leaving Brief (-> Select) drops the flow and clears the
+        // stream bus.
         host.apply(SceneAction::Advance);
         host.pump_frame(4, &InputFrame::default());
         assert_eq!(host.scene(), Scene::Select);
-        assert!(host.movie().is_none(), "slot dropped on Brief exit");
+        assert_eq!(host.brief_phase(), None);
+        let mut quiet = [1i16; 8];
+        host.render_audio(&mut quiet).unwrap();
+        assert!(quiet.iter().all(|&s| s == 0), "stream bus cleared");
+    }
+
+    #[test]
+    fn brief_intro_never_touches_the_scene_hash() {
+        // Same pump sequence with and without the staged pair: the
+        // scene-hash chain must be IDENTICAL (D17 bucket b - the
+        // briefing pair is presentation, like the movie).
+        let walk = |with_pair: bool| -> Vec<u64> {
+            let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+            if with_pair {
+                host.load_briefing(&synth_smk(), &synth_smk()).unwrap();
+            }
+            let mut chain = Vec::new();
+            while host.scene() == Scene::Boot {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            host.apply(SceneAction::Advance); // Title -> Brief
+            for _ in 0..8 {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            host.apply(SceneAction::Advance); // Brief -> Select
+            for _ in 0..4 {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            chain
+        };
+        assert_eq!(walk(false), walk(true));
     }
 
     #[test]

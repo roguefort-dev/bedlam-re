@@ -128,10 +128,13 @@ pub fn cutscene_name(stage: u8) -> &'static str {
     }
 }
 
-/// Briefing backdrop movie for zone letter + sub [corpus: BRF_B1..F5
-/// exist, 512-frame rings; B2 census ties the BRF_* backdrops to the
-/// mission-select screens. The zone-number-to-letter map is not yet
-/// RE'd, so the letter is taken verbatim].
+/// Briefing backdrop movie for zone letter + sub [verified play
+/// site, D37: the EXW briefing screen FUN_0043d00b builds
+/// GAMEGFX\BRF_ + char(zone@004edd8c + 0x40) + itoa of
+/// level@004edd88 + .SMK at 0043d1b7..0043d335 and hands off to
+/// the ring after the BRF_DROP pass - asm 0043d447..0043d490;
+/// zones 2..=6 = letters B..=F. Corpus: BRF_B1..F5 exist as
+/// 512-frame silent rings].
 pub fn briefing_name(zone_letter: char, sub: u8) -> Option<String> {
     let z = zone_letter.to_ascii_uppercase();
     if !matches!(z, 'B'..='F') || !(1..=5).contains(&sub) {
@@ -143,7 +146,9 @@ pub fn briefing_name(zone_letter: char, sub: u8) -> Option<String> {
 /// The briefing backdrop for the hashed episode slot (D33): stage ->
 /// zone letter, lowest-unset mask bit + 1 -> sub (the SAME sub
 /// arithmetic `Episode::complete` applies [design, DESIGN-GAME open
-/// Q5]). Letter map [design, anchored both ways]: stage 1 is the
+/// Q5]). Letter map [verified, D37 name builder 0043d1b7..0043d335:
+/// letter = zone@004edd8c + 0x40; Rust stages 2..=6 = EXW zones
+/// 2..=6 = B..=F]: stage 1 is the
 /// BootCamp intro and stages 7..=8 the endgame zone / post-endgame
 /// ceiling (EXW zone counter 1..7, 7 = endgame, RE-EXW-GAMETHREAD
 /// fact table) - neither has a lettered backdrop in the corpus (no
@@ -173,8 +178,12 @@ pub fn briefing_name_for_slot(stage: u8, mask: u8) -> Option<String> {
     briefing_name(letter, sub + 1)
 }
 
-/// Drop-ship briefing interlude [corpus: BRF_DROP.SMK, 30-frame
-/// non-ring].
+/// Drop-ship briefing interlude [verified play site, D37: the
+/// literal at EXW 0x4591f7 opens FIRST at every movie-enabled
+/// briefing (gate DAT_0046cca4), full screen, one pass, then the
+/// zone-backdrop handoff - asm 0043d447..0043d490, unskippable
+/// (the GO button arms only after the handoff). Corpus:
+/// 640x480, 30 frames, 33_330 us, non-ring, silent].
 pub const BRIEFING_DROP_NAME: &str = "BRF_DROP.SMK";
 
 #[cfg(test)]

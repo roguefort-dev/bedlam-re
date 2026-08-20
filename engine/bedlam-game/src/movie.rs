@@ -162,6 +162,17 @@ impl MoviePlayer {
             decoded += 1;
             match status {
                 SmkFrameStatus::More => {}
+                SmkFrameStatus::Last if self.stream.info().ring_frame => {
+                    // A ring stream reports Last at the closing slot
+                    // of EVERY pass and wraps to frame 1 on the next
+                    // advance (the seam contract: Last = the last
+                    // frame of a stream OR OF A RING PASS) - a ring
+                    // never ends, so finished never latches and the
+                    // ring keeps decoding (D37: the briefing
+                    // backdrops ring until the scene exit; found by
+                    // the brief_gate corpus run freezing at the
+                    // first closing slot).
+                }
                 SmkFrameStatus::Last | SmkFrameStatus::Done => {
                     self.finished = true;
                     self.acc = 0;
@@ -346,5 +357,90 @@ mod tests {
         assert_eq!(p.info().audio[0].unwrap().rate_hz, 22_050);
         assert_eq!(p.info().audio[0].unwrap().codec, SmkAudioCodec::Raw);
         assert_eq!(p.take_audio(), Vec::<u8>::new());
+    }
+
+    /// 3-frame RING variant of [synth_stream] (flags bit 0 set, one
+    /// extra closing-slot chunk per the container: total = frames +
+    /// 1). Frame 0 carries the palette + [AA 55]; frames 1, 2 and
+    /// the closing slot 3 carry distinct 3-byte packets, so the
+    /// wrap back to frame 1 is observable in the audio order.
+    fn synth_ring_stream() -> Vec<u8> {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"SMK2");
+        d.extend_from_slice(&4u32.to_le_bytes());
+        d.extend_from_slice(&4u32.to_le_bytes());
+        d.extend_from_slice(&3u32.to_le_bytes()); // frames
+        d.extend_from_slice(&40u32.to_le_bytes()); // 40 ms per frame
+        d.extend_from_slice(&1u32.to_le_bytes()); // flags: ring frame
+        for i in 0..7u32 {
+            d.extend_from_slice(&(if i == 0 { 16u32 } else { 0u32 }).to_le_bytes());
+        }
+        d.extend_from_slice(&1u32.to_le_bytes()); // tree chunk: 1 byte
+        for _ in 0..4 {
+            d.extend_from_slice(&0u32.to_le_bytes()); // tree maxima: unused
+        }
+        for i in 0..7u32 {
+            d.extend_from_slice(
+                &(if i == 0 {
+                    0x4000_0000u32 | 11_025
+                } else {
+                    0u32
+                })
+                .to_le_bytes(),
+            );
+        }
+        d.extend_from_slice(&0u32.to_le_bytes()); // dummy
+        d.extend_from_slice(&17u32.to_le_bytes()); // frame0 chunk
+        for _ in 0..3 {
+            d.extend_from_slice(&8u32.to_le_bytes()); // frames 1..=3 chunks
+        }
+        d.push(0x03); // frame0 type: palette + audio track 0
+        d.extend(std::iter::repeat_n(0x02, 3)); // later types
+        d.push(0x00); // tree chunk: four absent trees
+        d.extend_from_slice(&[0x02, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0x00, 0x00]); // palette
+        d.extend_from_slice(&[0x06, 0x00, 0x00, 0x00, 0xAA, 0x55]); // audio subchunk
+        d.extend_from_slice(&[0x00, 0x00]); // video pad
+        for b in [0x11u8, 0x22, 0x33] {
+            d.extend_from_slice(&[0x07, 0x00, 0x00, 0x00, b, b, b, 0x00]);
+        }
+        d
+    }
+
+    #[test]
+    fn ring_stream_wraps_forever_and_never_finishes() {
+        // The seam contract: for a ring, Last marks the closing
+        // slot of a PASS (returned every cycle), and the wrap jumps
+        // to frame 1 (frame 0 is the setup frame). A ring player
+        // therefore never reports finished and keeps decoding +
+        // queueing audio cycle after cycle (D37: the briefing
+        // backdrops; the pre-fix player froze at the first closing
+        // slot).
+        let mut p = MoviePlayer::new(&synth_ring_stream()).unwrap();
+        assert!(p.info().ring_frame);
+        assert_eq!(
+            p.take_audio(),
+            vec![0xAA, 0x55],
+            "frame-0 packet from the open"
+        );
+        assert_eq!(p.advance(10).unwrap(), ());
+        assert_eq!(p.frame_index(), 1);
+        assert_eq!(p.take_audio(), vec![0x11, 0x11, 0x11]);
+        assert_eq!(p.advance(10).unwrap(), ());
+        assert_eq!(p.frame_index(), 2);
+        assert_eq!(p.take_audio(), vec![0x22, 0x22, 0x22]);
+        // Frame 3 = the closing slot: the decoder reports Last
+        // here, but the ring has NOT ended.
+        assert_eq!(p.advance(10).unwrap(), ());
+        assert_eq!(p.frame_index(), 3);
+        assert_eq!(p.take_audio(), vec![0x33, 0x33, 0x33]);
+        assert!(!p.finished(), "a ring pass end is not a stream end");
+        // The wrap: the next advance re-decodes frame 1 (audio
+        // order proves it), and bursts ride across many cycles.
+        assert_eq!(p.advance(10).unwrap(), ());
+        assert_eq!(p.frame_index(), 1);
+        assert_eq!(p.take_audio(), vec![0x11, 0x11, 0x11]);
+        assert_eq!(p.advance(1000).unwrap(), ());
+        assert!(!p.finished());
+        assert!(p.frame_index() < 4);
     }
 }
