@@ -1,21 +1,23 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P2g] Title menu RE slice (first UI archaeology): locate the EXW
-   title-menu screen code - the menu draw list (buttons/items, hit
-   rects or cursor regions), input dispatch (mouse click/keys), and
-   the options entry path. Anchor everything to EXW addresses in a
-   docs/RE-EXW-*.md section. Stream-survival rule (AGENTS): decode a
-   BOUNDED piece, commit the RE notes immediately, then proceed -
-   many small committed hops, no long silent analysis stretch. This
-   is the prerequisite for the P4 vertical-slice menu step (PLAN
-   sec 6 P4: menu -> ZONEA/MISSION1 render -> move one squad member
-   -> palette/audio present; the shell now has window + input +
-   present + audio, so the menu is the first missing slice piece).
+1. [P4-menu] Title menu step of the P4 vertical slice: implement the
+   D41 RE findings in the engine - menu model (id/count/slots builder
+   semantics), strip hit-test (x in (0xdc,0x1a4), y in (top,0x1d6),
+   item=(y-top)/0x18), hover/click SFX (MENU1/MENU2), bottom-anchored
+   draw (row 0x1d6 - count*0x18, 24 px rows, glyph base 0x82 selected
+   = green set vs 0 = blue set per docs/RE-EXW-TITLEMENU.md sec 2a),
+   attract replay (>= 0x300 idle -> skippable TITLE.SMK), item actions
+   for menu 1 (start/difficulty/name/quit at minimum - HOF/credits
+   can stub). Corpus-gate the draw against LANGUAGE.ENG MENU_ITEMS +
+   FULLFONT/FULLPAL. Keep it one bounded step: menu visible +
+   clickable + start action hands off (the ZONEA/MISSION1 render +
+   squad move are separate queue items per PLAN sec 6 P4).
 
 ## Backlog (not yet started)
-- P4 vertical slice assembly: menu + ZONEA/MISSION1 render + one
-  squad-member move (needs the P2g menu RE above + the P2d sim tail).
+- P4 vertical slice assembly tail: ZONEA/MISSION1 render + one
+   squad-member move (needs the P2d sim tail).
+- [P2d] sim tail RE slice (the P4 slice's other input).
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -23,6 +25,22 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-20: P2g title-menu RE slice COMPLETE (D41, commits 3eb3092 +
+  cf75108, worker aca4dac6 claim 1): NameEntryScreen@0043a5fc IS the
+  title/options menu; FUN_00445b5c builds menus 1..5 (count word
+  004eabd2 + 7 slots @004eabd4 stride 0x30), FUN_0044653a draws
+  bottom-anchored; hit model = strip x (0xdc,0x1a4) y (top,0x1d6),
+  index (y-top)/0x18; click = g_scroll_flags, hover/click SFX
+  MENU1/MENU2; attract >= 0x300 -> skippable TITLE.SMK; all menu-1
+  item actions asm-anchored (start 4000-diff*500, difficulty cycle,
+  name entry ENTER-exit + FUN_0042540c CONFIG.BDL save, HOF,
+  CREDIT_1..13, quit-confirm); multiplayer player-count 2..12 via
+  left/right click; save-load restore with completion bits. Negative:
+  MENU_ITEMS 47..58 (Options + toggles) unreferenced - no options
+  screen in EXW. Corpus pin: base 0 vs 0x82 glyph sets = blue vs
+  green FULLPAL ramps, identical shapes. docs/RE-EXW-TITLEMENU.md +
+  ExwTitleMenu.java (-process, no re-import); MANIFEST verified; no
+  Rust changes this run.
 - 2026-08-20: P4 native shell step 2 COMPLETE (D40, commits 58eb8a6 +
   c48cd91 + 143e60d, worker e76159bb claim 1): platform audio output.
   cpal 0.18.2 (bedlam-shell only; mixer hermetic, audio un-hashed per
