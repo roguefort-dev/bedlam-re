@@ -1268,3 +1268,33 @@ parity IDENTICAL to the D40-complete baseline 143e60d; corpus gate
 tests/menu_gate.rs pins the table, geometry, the green/blue ramp
 slices end-to-end, start handoff, SFX audibility and the TITLE.SMK
 restart; MANIFEST verified before and after.
+
+## D43 - 2026-08-20: provider-side transport failures never charge the task
+
+The 2026-08-20 provider incident (`Invalid
+zai-coding-plan/openai-compatible-chat stream event`, also hitting the
+watchdog check model as `Invalid opencode/openai-compatible-chat stream
+event`) killed nine nudge spawns within seconds of their first model
+call plus two mid-run sessions (20:42-22:59). nudge-agent.sh classified
+the instant deaths `client-error` (the transport grep did not know the
+signature) and charged every one of them to the task fail counter:
+task 4f6a0d2b reached 11 fails and kept refreshing 15-minute cooldowns
+for ~2.5h AFTER the provider recovered - the loop stood down while
+fully healthy. One charged run (f2d86578) had even committed attributed
+work (98fc0b0) before its session died.
+
+CHOICE: extend the transport signature grep with
+`Invalid <provider>/openai-compatible-chat stream event`, and give
+`kind=transport` the same accounting exemption step-cap already had:
+log loudly, retain the claim for the DEAD_CLAIM_TTL retry backoff
+(which throttles spawn churn during a live incident, plus MAXSPAWN=16/h
+above it), but never touch taskfails/taskcooldown. Task failure state
+is reserved for failures attributable to the work itself
+(no-progress, genuine client errors). Provider-incident escalation is
+the llm-watchdog job, not the task counter. Rate-limit keeps charging
+(account-side, worker-behavior-coupled). Contaminated live state
+(taskfails/taskcooldown for 4f6a0d2b) was cleared by the same repair;
+verified post-fix: fresh glm-5.3 probe PROBE-OK rc=0, both nudge test
+harnesses PASS.
+
+Watchdog-Repair: llm-watchdog 86278 1787260264

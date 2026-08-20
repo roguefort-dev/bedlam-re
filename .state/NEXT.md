@@ -10,6 +10,17 @@
    (docs/RE-EXW-*.md section), then the bedlam-core seam. This
    unblocks the last P4 queue item (ZONEA/MISSION1 render + one
    squad move) per PLAN sec 6 P4.
+   ADOPT INTERRUPTED WIP (watchdog repair 2026-08-20): the RE-notes
+   half is DONE (commit 98fc0b0). engine/bedlam-core/src/mission.rs
+   (untracked, ~1078 lines, EXW-anchored seam) plus the one-line
+   lib.rs `pub mod mission;` are the interrupted engine write from
+   the 22:57 session (worker e1eb0092, killed mid-test-iteration by
+   the provider stream outage; insurance snapshot in .state/scratch/
+   mission.rs.e1eb0092-interrupted-wip-20260820). State at cutoff:
+   6/9 mission tests pass, 3 red (dist_octagonal_matches_original,
+   spawn_settles_and_tiles, order_walk_and_arrival_snap). Build on
+   this WIP - do NOT re-derive it; drive the red tests green, then
+   fmt+clippy, and commit green checkpoints early.
 
 ## Backlog (not yet started)
 - P4 vertical slice assembly tail: ZONEA/MISSION1 render + one

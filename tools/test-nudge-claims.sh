@@ -79,7 +79,10 @@ set -e
 [ "$rc" -eq 1 ]
 [ -e "$PLAN/.state/claims/5-owner.claim" ]
 flock -n "$PLAN/.state/claims/5-owner.claim" true
-grep -q "failed \[transport rc=1 progress=0\]" "$PLAN/.state/nudge.log"
+grep -q "failed \[transport rc=1 progress=0\] task=.*; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
+transport_hash=$(sed -n "s/^[[:space:]]*5\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+[ ! -e "$PLAN/.state/taskfails/$transport_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$transport_hash" ]
 touch -d "10 seconds ago" "$PLAN/.state/claims/5-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/5-owner.claim" ]
@@ -115,6 +118,9 @@ DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/6-owner.claim" ]
 
 # A clean client with no substantive commit is a failed no-progress run.
+# Transport failures no longer charge the task (items 5/6 above), so the
+# three-strike notification + cooldown now needs three genuinely
+# task-attributable failures; the first strike alone must stay silent.
 cat > "$TMP/mock-no-progress" <<EOF
 #!/usr/bin/env bash
 echo other-worker >> "$PLAN/code.txt"
@@ -123,17 +129,26 @@ git -C "$PLAN" commit -qm other-worker -m "Nudge-Worker: 999"
 exit 0
 EOF
 chmod +x "$TMP/mock-no-progress"
-echo reserved > "$PLAN/.state/claims/8-803.claim"
-set +e
-BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-no-progress" "$AGENT" 8 803
-nop_rc=$?
-set -e
-[ "$nop_rc" -eq 0 ]
-[ -e "$PLAN/.state/claims/8-owner.claim" ]
-flock -n "$PLAN/.state/claims/8-owner.claim" true
-rm -f "$PLAN/.state/claims/8-owner.claim"
-grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
+nop_hash=$(sed -n "s/^[[:space:]]*8\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+for nop_slot in 803 812 813; do
+  echo reserved > "$PLAN/.state/claims/8-$nop_slot.claim"
+  set +e
+  BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-no-progress" "$AGENT" 8 "$nop_slot"
+  nop_rc=$?
+  set -e
+  [ "$nop_rc" -eq 0 ]
+  [ -e "$PLAN/.state/claims/8-owner.claim" ]
+  flock -n "$PLAN/.state/claims/8-owner.claim" true
+  rm -f "$PLAN/.state/claims/8-owner.claim"
+  grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
+  if [ "$nop_slot" = 803 ]; then
+    [ "$(cat "$PLAN/.state/taskfails/$nop_hash" 2>/dev/null)" = "1" ]
+    ! grep -q "item 8 failed three consecutive" "$TMP/notifications"
+  fi
+done
 grep -q "item 8 failed three consecutive observed runs" "$TMP/notifications"
+[ "$(cat "$PLAN/.state/taskfails/$nop_hash")" = "3" ]
+[ "$(cat "$PLAN/.state/taskcooldown/$nop_hash")" -gt "$(date +%s)" ]
 
 # A step-cap truncation (opencode2 "Maximum steps" kill, rc=0, no
 # commit) is NOT a task failure: no taskfails bookkeeping, no
@@ -163,6 +178,32 @@ flock -n "$PLAN/.state/claims/10-owner.claim" true
 touch -d "10 seconds ago" "$PLAN/.state/claims/10-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/10-owner.claim" ]
+
+# The 2026-08-20 provider-incident signature (opencode2 dying on an
+# unparseable provider stream event) is classified transport - not
+# client-error - and is never charged to the task.
+cat > "$TMP/mock-stream-invalid" <<EOF
+#!/usr/bin/env bash
+echo "Error: Invalid zai-coding-plan/openai-compatible-chat stream event"
+exit 1
+EOF
+chmod +x "$TMP/mock-stream-invalid"
+echo "11. [P4] stream-incident mock item" >> "$PLAN/.state/NEXT.md"
+stream_hash=$(sed -n "s/^[[:space:]]*11\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/11-820.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-stream-invalid" "$AGENT" 11 820
+stream_rc=$?
+set -e
+[ "$stream_rc" -eq 1 ]
+grep -q "failed \[transport rc=1 progress=0\] task=$stream_hash; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$stream_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$stream_hash" ]
+[ -e "$PLAN/.state/claims/11-owner.claim" ]
+flock -n "$PLAN/.state/claims/11-owner.claim" true
+touch -d "10 seconds ago" "$PLAN/.state/claims/11-owner.claim"
+DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/claims/11-owner.claim" ]
 
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF

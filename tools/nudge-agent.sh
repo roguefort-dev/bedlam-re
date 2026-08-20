@@ -93,7 +93,7 @@ fi
 kind=none
 if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
-elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS" "$LOG"; then
+elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event" "$LOG"; then
   kind=transport
 elif grep -aq "Maximum steps for this agent" "$LOG"; then
   # opencode2 truncated the run at the agent step budget. Distinct
@@ -117,6 +117,17 @@ if [ "$kind" = step-cap ]; then
   # task 247ce5e255167e9a). Log loudly, keep the claim for the
   # short DEAD_CLAIM_TTL backoff, never punish the task.
   echo "$(date -Is) agent item $item hit the opencode2 step cap [rc=$rc progress=$progress] task=$task_hash; treating as truncation, not failure" >> "$STATE/nudge.log"
+elif [ "$kind" = transport ]; then
+  # A provider-side stream failure is environmental, not a task failure
+  # (watchdog repair, 2026-08-20: "Invalid zai-coding-plan/openai-
+  # compatible-chat stream event" killed nine spawns within seconds plus
+  # two mid-run sessions between 20:42 and 22:59, charging task
+  # 4f6a0d2b eleven fails so 15-min cooldowns persisted for 2.5h after
+  # the provider recovered). Log loudly, keep the claim for the
+  # DEAD_CLAIM_TTL retry backoff (which throttles spawn churn during a
+  # live incident), never punish the task; the llm-watchdog owns
+  # provider-incident escalation.
+  echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task" >> "$STATE/nudge.log"
 elif [ "$kind" != none ]; then
   # Failures are scoped to this task, not to the whole controller, so
   # unrelated items can never be blamed for (or cleared by) this run.
