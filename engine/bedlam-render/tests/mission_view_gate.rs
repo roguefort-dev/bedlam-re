@@ -18,6 +18,12 @@
 //!    fills the 0x64000 buffer; the 480×480 present window
 //!    (FUN_00401107, camera 0 → origin (96, 64)) is hash-pinned, and
 //!    a second identical run is byte-identical.
+//! 5. ENTITIES: the FUN_00403938 robot loop + FUN_0040798e/0179b
+//!    enqueue/flush overlay (MISSIONVIEW sec 5b–5d) draws the
+//!    ZONEA/MISSION1 spawned robot and the order-walking second robot
+//!    from a bedlam-core MissionSim onto the frame with real
+//!    GAMEGFX\DANTE.BIN sprites — hash-pinned at spawn and mid-walk,
+//!    with the terrain-only frame as the no-entities regression pin.
 //!
 //! game-data access is read-only. No game bytes enter git — only
 //! hashes and counts are asserted.
@@ -246,4 +252,140 @@ fn zonea_mission1_viewport_edge_variants_are_isolated() {
     let b = draw(1, 8);
     assert_eq!(a, a2, "same stream reproduces");
     assert_ne!(a, b, "a different edge stream changes off-map tiles");
+}
+
+/// The ZONEA/MISSION1 entity overlay: the FUN_00403938 robot loop
+/// over a bedlam-core MissionSim, enqueued (FUN_0040798e) and flushed
+/// (FUN_0040179b) onto the terrain frame with real DANTE.BIN sprites
+/// [MISSIONVIEW sec 5b–5d]. Two pinned moments: both robots at their
+/// spawn spots, and the second robot mid-walk east (order armed at
+/// robot 0 — the same scripted run the sim corpus gate pins).
+#[test]
+fn zonea_mission1_entity_overlay_frame_hash_pinned() {
+    let Some([tot, dat, bin, lnk]) = zonea() else {
+        eprintln!("corpus absent - skipping (CI)");
+        return;
+    };
+    let Some(dante) = read(&["GAMEGFX", "DANTE.BIN"]) else {
+        eprintln!("DANTE.BIN absent - skipping");
+        return;
+    };
+    let (Some(pad), Some(cgr), Some(sintable)) = (
+        read(&["EDITOR", "ZONEA", "MISSION1.PAD"]),
+        read(&["EDITOR", "ZONEA", "MISSIONA.CGR"]),
+        read(&["GAMEGFX", "SINTABLE.BIN"]),
+    ) else {
+        eprintln!("sim corpus files absent - skipping");
+        return;
+    };
+
+    // --- the sim side: the scripted spawn + walk ---------------------
+    let terrain =
+        bedlam_core::mission::Terrain::from_mission_bytes(&dat, &pad, &cgr).expect("DAT parse");
+    let mut words = [0i16; 256];
+    for (i, w) in words.iter_mut().enumerate() {
+        *w = i16::from_le_bytes([sintable[2 * i], sintable[2 * i + 1]]);
+    }
+    let angles = bedlam_core::mission::AngleTable::from_sintable_words(&words).expect("angles");
+    let mut sim = bedlam_core::mission::MissionSim::new(terrain, angles, 0x1E240);
+    let a = sim.spawn_robot((21, 73, 1)); // ZONEA MRK record 0
+    let b = sim.spawn_robot((18, 73, 1)); // staged second robot
+    assert!(sim.arm_order_at_robot(a));
+
+    // --- the view side -----------------------------------------------
+    let planes = dat_planes(&dat);
+    let mut view = MissionView::from_mission_bytes(&tot, &planes, &bin, &lnk).unwrap();
+    view.set_entity_bank(&dante);
+    // DANTE.BIN sanity: 160 sprites [corpus]; the two spawn-default
+    // frames (anim word + the +0x20 base) resolve with nonzero gates.
+    assert_eq!(u16::from_le_bytes([dante[0], dante[1]]), 160);
+    for id in [0u16, 0x20] {
+        let e = 2 + 4 * id as usize;
+        let off = u32::from_le_bytes(dante[e..e + 4].try_into().unwrap()) as usize;
+        let s = e + off;
+        let hdr = |i: usize| u16::from_le_bytes([dante[s + 2 * i], dante[s + 2 * i + 1]]);
+        assert!(hdr(3) != 0, "DANTE sprite {id:#x} gate word");
+    }
+
+    // Camera on the robots: Q5 (19*32, 73*32) — tile (19, 73), fine 0.
+    let cam_q5 = (19 * 32, 73 * 32);
+    let render =
+        |sim: &bedlam_core::mission::MissionSim, view: &mut MissionView| -> (Vec<u8>, usize) {
+            let robots: Vec<_> = sim
+                .robots()
+                .iter()
+                .map(bedlam_render::mission_view::RobotView::from_sim)
+                .collect();
+            view.enqueue_robots(&robots, cam_q5.0, cam_q5.1, 0, sim.frame());
+            let queued = view.sprite_nodes();
+            let mut buf = vec![0u8; VIEW_BUF_LEN];
+            let mut rng = Pcg32::new(0x1E240, 0);
+            view.draw_terrain(&mut buf, &mut DrawParams::new(19, 73, 0, &mut rng));
+            (buf, queued)
+        };
+
+    // --- moment A: spawn (both robots at their MRK spots) ------------
+    assert_eq!(view.sprite_nodes(), 0, "nothing queued before enqueue");
+    let (buf_a, queued_a) = render(&sim, &mut view);
+    // Spawn defaults enqueue exactly two DANTE sprites per robot
+    // (body = anim 0, base + 0x20) [MISSIONVIEW sec 5d].
+    assert_eq!(queued_a, 4, "2 robots x 2 sprites");
+    assert_eq!(view.sprite_nodes(), 0, "draw_terrain consumed the list");
+    let win_a = present_window(&buf_a, 0, 0).expect("crop");
+    let non_zero = win_a.iter().filter(|&&b| b != 0).count();
+    assert!(
+        non_zero > 50_000,
+        "the crop carries real content ({non_zero})"
+    );
+
+    // --- moment B: mid-walk ------------------------------------------
+    for _ in 0..3 {
+        sim.advance_frame();
+    }
+    let walker = &sim.robots()[b];
+    assert_eq!(walker.state, bedlam_core::mission::STATE_MOVING);
+    assert_ne!(walker.anim, 0, "the walk anim phase is live");
+    let (buf_b, queued_b) = render(&sim, &mut view);
+    assert_eq!(queued_b, 4);
+
+    // --- the entity effect is real and localized ---------------------
+    // Without entities the SAME terrain state draws differently only
+    // where the robots stand (the list is empty without enqueue).
+    let terrain_only = {
+        let mut v2 = MissionView::from_mission_bytes(&tot, &planes, &bin, &lnk).unwrap();
+        // Two LNK steps to match the two drawn frames of the reused view.
+        let mut rng = Pcg32::new(0x1E240, 0);
+        let mut buf = vec![0u8; VIEW_BUF_LEN];
+        v2.draw_terrain(&mut buf, &mut DrawParams::new(19, 73, 0, &mut rng));
+        v2.draw_terrain(&mut buf, &mut DrawParams::new(19, 73, 0, &mut rng));
+        buf
+    };
+    let diff_a: usize = buf_a
+        .iter()
+        .zip(terrain_only.iter())
+        .filter(|(x, y)| x != y)
+        .count();
+    assert!(
+        diff_a > 500,
+        "the robots paint real pixels ({diff_a} bytes differ)"
+    );
+
+    // --- hash pins ----------------------------------------------------
+    let mut h = Fnv1a64::new();
+    h.write_bytes(&win_a);
+    let hash_a = format!("{:016x}", h.finish());
+    let win_b = present_window(&buf_b, 0, 0).expect("crop");
+    let mut h2 = Fnv1a64::new();
+    h2.write_bytes(&win_b);
+    let hash_b = format!("{:016x}", h2.finish());
+    eprintln!("entity frame A hash {hash_a}, frame B hash {hash_b}");
+    assert_ne!(hash_a, hash_b, "the walking robot changes the frame");
+    assert_eq!(
+        hash_a, "8d2c559df035b75b",
+        "ZONEA/MISSION1 spawn-moment entity frame at camera (19,73)"
+    );
+    assert_eq!(
+        hash_b, "8804f9deec6b1fee",
+        "ZONEA/MISSION1 mid-walk entity frame (3 frames, robot b walking east)"
+    );
 }
