@@ -1194,3 +1194,67 @@ inside the text stream).
    renders green, unselected blue.
 Unblocked: the P4 menu step (PLAN sec 6 P4) can now be implemented
 against pinned addresses; the P2d sim tail remains its other input.
+
+## D42 - 2026-08-20: title menu engine step (P4-menu, item 1)
+
+Context: NEXT item 1 - implement the D41 findings as the P4 vertical
+slice's menu step. All EXW-verified facts carry their anchors in
+docs/RE-EXW-TITLEMENU.md; this entry logs the ENGINE-SIDE choices the
+RE does not decide (T2/T3 territory per the parity budget).
+
+1. OWNERSHIP: while a title menu is staged on Scene::Title, the menu
+   IS the Title input path (EXW NameEntryScreen owns its loop): the
+   host feeds the FSM NEUTRAL frames (scene ticks still count, no
+   generic click-advance), and menu outcomes map to explicit intents -
+   Start -> SceneAction::Advance, quit-accepted -> SceneAction::Quit.
+   A host without a staged menu keeps the D26 generic click-advance
+   (back-compat: the headless walk and determinism scripts).
+2. CLICK MODEL: EXW dispatches on g_scroll_flags != 0 (the button
+   LEVEL with a 4-tick SFX debounce, RE sec 3). The engine models a
+   click as any-button PRESS EDGE per executed tick - the same
+   edge-at-the-tick-grid discipline as the FSM (D26); holding a
+   button fires once. [deviation, T2]
+3. ATTRACT REPLAY: the menu's idle counter (reset on hover/click,
+   EXW 0043a8b0) fires at >= 0x300; the host replays by RESTARTING
+   the staged Title-scene movie slot in place (MoviePlayer::restart:
+   rewind + frame-0 decode + frame-0 audio requeue - the EXW replay
+   re-opens TITLE.SMK through FUN_004459f7). No staged title movie ->
+   the attract is a silent no-op and the counter restarts. The
+   replay is SKIPPABLE (EXW skip gate 004edbc4): any button/key press
+   edge during the replay finishes the player in place; the first
+   entry play stays unskippable (D31). The idle counter does not
+   advance while a Title movie plays (EXW's menu loop starts after
+   the movie).
+4. BACKDROP: the menu plane is a 640x480 BLACK canvas + the text
+   strip (the EXW attract arm's clear-screen semantics). The EXW
+   backdrop buffer content (0x64000 alloc at 0043a5fc, filled by the
+   draw cycle's PresentCopy re-blit) is NOT yet pinned - queued as an
+   open question in RE-EXW-TITLEMENU sec 8 rather than guessed.
+   Text geometry IS pinned: row 0x1d6 - count*0x18 bottom anchor,
+   24-px rows, glyph base 0x82 selected (green set) vs 0 (blue set).
+5. STUBS (this slice): HOF / credits item actions are inert; the
+   save-load menu builds 5 "EMPTY" slots + Cancel (EXW literal
+   0x45980f) with slot clicks inert (no save corpus yet); coop /
+   head2head exits are inert (multiplayer lobby = future slice);
+   CONFIG.BDL persistence (FUN_0042540c) is deferred to the config
+   writer slice; the name seeds EMPTY (fresh-BSS EXW state) and
+   applies the "GOD" default (literal 0x459078) on empty name-entry
+   exit [inferred: FUN_0044efb3(name, 0x459078) default argument].
+6. NAME ENTRY: entering the mode is reachable and visible (cursor
+   blink = bank entry 0x8e - the 0x82-set slot for char 0x2d - at
+   x = 0x146 + (width("Name: ")+width(name))/2, row of item 3, shown
+   while (tick & 0xc) != 0); TYPING rides an explicit host API
+   (menu_type_char / menu_backspace) because InputFrame.buttons is
+   still the provisional D38 bitmask (no text path until P2e lands);
+   in the hashed-input path any click edge exits the mode [deviation:
+   EXW exits on ENTER, keystore[0x1c]].
+7. SFX: MENU1.RAW/MENU2.RAW stage as mixer instruments 0xE0/0xE1
+   (outside the music-script instrument domain) played via note_on at
+   unity ratio / volume 48 (unity at master 127), both debounced 4
+   ticks. Fetch tier: bare name -> GAMEGFX -> root -> SOUND/SFX (the
+   EXW "SOUND\SFX\MENU1.RAW" path, GameGfxSource third tier).
+8. HASH ISOLATION (D17): the menu is presentation-only. Staging +
+   the whole interactive loop leave the scene-hash chain identical to
+   a NEUTRAL-input run (the FSM sees neutral frames either way);
+   unit + corpus pinned. The score seed (4000 - difficulty*500) is
+   exposed for the P2d sim-tail wiring, not consumed yet.
