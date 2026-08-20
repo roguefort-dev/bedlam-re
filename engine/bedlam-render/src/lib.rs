@@ -23,6 +23,7 @@
 pub mod blit;
 pub mod compose;
 pub mod frame;
+pub mod mission_view;
 
 pub use blit::{blit_indexed, center_in_canonical};
 pub use compose::{render, MovieFrame, RenderInput};

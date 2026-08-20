@@ -40,7 +40,7 @@ Two passes, zero-fill helper FUN_00402965 (rep-stos, args in ECX/EDI):
      for gx in 0..36: x = 0x130 + gx*0x20 - gy*0x20
                       y = -0x100 + gy*0x10 + gx*0x10
        if 0 <= x < 0x260 and 0 <= y < 0x320:      // 608×800 window
-         first = (first==0) ? gx+5 : first         // sticky = 21 on ZONEA
+         first = (first==0) ? gx+5 : first         // sticky = 17
          entry = { s32 buf_off = y*0x280 + x;      // into the 0x64000 buffer
                    s32 dtile_x = gx - first;       // tile delta vs camera
                    s32 dtile_y = gy - first; }
@@ -48,9 +48,10 @@ Two passes, zero-fill helper FUN_00402965 (rep-stos, args in ECX/EDI):
    Screen geometry: classic 2:1 iso — x steps +32 along gx and −32
    along gy, y steps +16 along both; grid origin (0x130, −0x100). The
    sticky `first` is the gx anchor of the FIRST in-bounds cell of the
-   whole scan (gy=0, y≥0 ⇒ gx=16 ⇒ first=21), so tile deltas are
-   (gx−21, gy−21). Entries are emitted gy-major (cache index order =
-   the filtered gy-major scan).
+   whole gy-major scan — (gx,gy) = (12, 4) ⇒ first = 17, so tile
+   deltas are (gx−17, gy−17) and the anchor tile (17, 17) sits at
+   buffer (0x130, 0x120). The ZONEA cache holds 467 entries (dtile_y
+   −13..=18; the anchored row dtile_y = 0 spans dtile_x −9..=9).
 2. **TOT → type DB mirror**: zero 0x4ab50 bytes at 0x4796bc, then for
    every map tile (y,x), for z in 0..8:
    - if `TOT_plane_word != 0`: `wordDB[tile][z] = word`;
