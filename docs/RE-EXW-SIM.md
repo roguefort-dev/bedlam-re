@@ -433,9 +433,16 @@ was where the tables filled: 0x41d954 only allocates.)
 | CGR height byte | CGR[2+4(type−1)+dir[type−1]+6+(sy<<5)+sx] (no codec) | 0x41e328, 7c |
 | MRK word 3 | spawn z level (z = w3<<5 − 1) | 0x40d06d, 7c |
 | CGR/DB ptrs | DAT_004edd60 (CGR), DAT_004edd58 (DAT), 0x4796bc/cc (type DB 0x1E stride) | 0041e231, 00407e11 |
+| viewport cache | DAT_004ede24 36×36×12 B (screen off + tile deltas), count DAT_004ede28 | 00407e11, MISSIONVIEW §2 |
+| terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link | MISSIONVIEW §1/§4 |
 
 ## 9. Open items (next slices)
 
+0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,
+   docs/RE-EXW-MISSIONVIEW.md: init_tiles cache geometry + TOT→typeDB
+   mirror, LNK as the per-frame tile animation link, BIN as the
+   terrain sprite bank, FUN_00401471 blit codec, FUN_00403938 terrain
+   loop, FUN_00401107 present window.
 1. ~~The mission file-load + table-build pass~~ — DECODED 2026-08-21,
    amendment 7c: load_mission@0041dc5a (paths, TOT/DAT/CGR/BIN/MIN/LNK
    loads, y-line/z-base tables, ≥0x80 sweep, PAD 0xFF marks) + markers →
