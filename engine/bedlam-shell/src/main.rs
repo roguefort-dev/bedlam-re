@@ -92,4 +92,8 @@ fn print_report(report: &bedlam_shell::headless::HeadlessReport) {
     }
     println!("final scene hash: {:016x}", report.scene_hash);
     println!("final frame parity hash: {:016x}", report.frame_hash);
+    println!(
+        "audio mixed: {} frames, {} non-silent samples",
+        report.audio_frames, report.audio_nonzero_samples
+    );
 }

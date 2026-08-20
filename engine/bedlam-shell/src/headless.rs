@@ -14,6 +14,13 @@
 //! behind [`bedlam_game::ByteSource`]. It also records the fetch
 //! order + sizes so the report can pin exactly which corpus files
 //! the wired chain touched.
+//!
+//! Audio is smoke-driven the same way (D40): each pump mixes
+//! [`PUMP_FRAMES`] frames from the host audio bus (the SAME bus the
+//! window device path consumes) into a discard sink, counting frames
+//! and non-silent samples. The mix is un-hashed (D17 bucket b) so
+//! this changes no parity value - it only proves the D31 stream bus
+//! and the entry-audio sites actually produce PCM on the walk.
 
 use std::collections::VecDeque;
 const SEP1: char = '/';
@@ -24,6 +31,7 @@ use std::path::{Path, PathBuf};
 use bedlam_core::input::InputFrame;
 use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, Scene, SceneAction};
 
+use crate::audio::PUMP_FRAMES;
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::SUBTICKS_PER_PUMP;
 
@@ -158,6 +166,12 @@ pub struct HeadlessReport {
     pub scene_hash: u64,
     /// Canonical frame parity hash at the last pump.
     pub frame_hash: u64,
+    /// Audio frames mixed off the host bus during the walk (D40
+    /// smoke drain: PUMP_FRAMES per pump, discarded after counting).
+    pub audio_frames: u64,
+    /// Non-silent samples among them (L and R counted separately) -
+    /// the entry-audio/movie signal the walk actually produced.
+    pub audio_nonzero_samples: u64,
 }
 
 /// Run the headless smoke: construct the host, stage the boot pair,
@@ -186,6 +200,12 @@ pub fn run_headless(opts: &HeadlessOptions) -> Result<HeadlessReport, GameError>
     }];
     let mut actions: Vec<(u64, SceneAction)> = Vec::new();
     let mut held = 0u64;
+    // Audio smoke drain: one reusable scratch (fixed size, no
+    // allocation in the loop), zeroed so stale data can never leak
+    // into a count.
+    let mut audio_scratch = vec![0i16; PUMP_FRAMES * 2];
+    let mut audio_frames = 0u64;
+    let mut audio_nonzero = 0u64;
 
     for pump in 0..opts.pumps {
         // 1. Walk step due? Apply the host intent.
@@ -202,9 +222,17 @@ pub fn run_headless(opts: &HeadlessOptions) -> Result<HeadlessReport, GameError>
         stage_if_entered(&mut host, &mut source, opts.config, &mut scenes, &mut held)?;
         // 3. One fixed 60 Hz host pump.
         host.pump_frame(SUBTICKS_PER_PUMP, &neutral);
-        // 4. Stage on a scene change from the pump (auto exits).
+        // 4. Audio smoke drain: the same per-pump mix the device
+        //    path would consume (D40; chunking-invariant, un-hashed).
+        let mixed = host.render_audio(&mut audio_scratch)?;
+        audio_frames += mixed as u64;
+        audio_nonzero += audio_scratch[..mixed * 2]
+            .iter()
+            .filter(|&&s| s != 0)
+            .count() as u64;
+        // 5. Stage on a scene change from the pump (auto exits).
         stage_if_entered(&mut host, &mut source, opts.config, &mut scenes, &mut held)?;
-        // 5. Bookkeeping.
+        // 6. Bookkeeping.
         scenes.last_mut().expect("seeded").pumps += 1;
         held += 1;
     }
@@ -216,6 +244,8 @@ pub fn run_headless(opts: &HeadlessOptions) -> Result<HeadlessReport, GameError>
         assets: source.fetched().to_vec(),
         scene_hash: host.scene_hash().0,
         frame_hash: host.frame().parity_hash(),
+        audio_frames,
+        audio_nonzero_samples: audio_nonzero,
     })
 }
 
