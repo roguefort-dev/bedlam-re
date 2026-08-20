@@ -1237,9 +1237,11 @@ RE does not decide (T2/T3 territory per the parity budget).
    0x45980f) with slot clicks inert (no save corpus yet); coop /
    head2head exits are inert (multiplayer lobby = future slice);
    CONFIG.BDL persistence (FUN_0042540c) is deferred to the config
-   writer slice; the name seeds EMPTY (fresh-BSS EXW state) and
-   applies the "GOD" default (literal 0x459078) on empty name-entry
-   exit [inferred: FUN_0044efb3(name, 0x459078) default argument].
+   writer slice; the OPTIONS music (load_midi at 0043a739) rides
+   the future D27/MRS Title wiring; the name seeds EMPTY
+   (fresh-BSS EXW state) and applies the "GOD" default (literal
+   0x459078) on empty name-entry exit [inferred: FUN_0044efb3(name,
+   0x459078) default argument].
 6. NAME ENTRY: entering the mode is reachable and visible (cursor
    blink = bank entry 0x8e - the 0x82-set slot for char 0x2d - at
    x = 0x146 + (width("Name: ")+width(name))/2, row of item 3, shown
@@ -1258,3 +1260,11 @@ RE does not decide (T2/T3 territory per the parity budget).
    a NEUTRAL-input run (the FSM sees neutral frames either way);
    unit + corpus pinned. The score seed (4000 - difficulty*500) is
    exposed for the P2d sim-tail wiring, not consumed yet.
+
+LANDED (commits 57413b0 docs + 0a10a54 menu/host + 7ff713e chain/
+gate): 393 workspace tests / 0 failed; fmt + clippy -D warnings
+clean; headless smoke two runs byte-identical with scene/frame/audio
+parity IDENTICAL to the D40-complete baseline 143e60d; corpus gate
+tests/menu_gate.rs pins the table, geometry, the green/blue ramp
+slices end-to-end, start handoff, SFX audibility and the TITLE.SMK
+restart; MANIFEST verified before and after.

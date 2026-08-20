@@ -1,3 +1,28 @@
+- CLOSED 2026-08-20 (P4-menu engine step, D42, commits 57413b0 +
+  0a10a54 + 7ff713e, worker 26ccbd31 claim 1): the D41 title-menu
+  findings implemented. bedlam-game menu.rs = TitleMenu (builder
+  semantics for menus 1/2/3/5 with count word + 7 slots, strip hit
+  test, hover/click SFX debounced 4 ticks, bottom-anchored draw with
+  the dual glyph bases - font.rs from_bank_at/draw_at, name entry
+  with the 0x8e cursor blink + explicit typing API + GOD default,
+  attract replay at idle >= 0x300 via MoviePlayer restart/finish,
+  menu-1 actions incl. start (seed 4000-diff*500, cached on the
+  host) and quit-confirm). GameHost: load_title_menu staging
+  (LANGUAGE + FULLFONT + FULLPAL + MENU1/MENU2 RAW as instruments
+  0xE0/E1), the menu OWNS the Title input path (fsm fed neutral
+  frames - hash-isolated, unit + corpus pinned), staged-inert
+  lifecycle, menu plane after the title movie. Shell chain: Title
+  fetch set = TITLE + LANGUAGE + FULLFONT + FULLPAL + MENU1/2,
+  GameGfxSource SOUND/SFX tier. Corpus gate tests/menu_gate.rs
+  (MENU_ITEMS table, difficulty cycle, strip geometry, green 233..=
+  244 vs blue 244..=255 ramp pin end-to-end, start handoff, SFX
+  audibility, TITLE.SMK restart, scripted two-run byte-identity).
+  393 workspace tests / 0 failed, fmt + clippy -D warnings clean,
+  headless smoke two runs byte-identical, parity IDENTICAL to the
+  D40 baseline 143e60d, MANIFEST OK x2. Open: backdrop content
+  (RE-EXW-TITLEMENU sec 8), HOF/credits/save/coop stubs, CONFIG.BDL
+  writer, OPTIONS music. Remaining for the P4 slice exit: ZONEA/
+  MISSION1 render + one squad move (needs P2d sim tail).
 - CLOSED 2026-08-20 (P4 native shell step 2, D40, commits 58eb8a6 +
   c48cd91 + 143e60d, worker e76159bb claim 1): platform audio output.
   cpal 0.18.2 (bedlam-shell only; mixer stays hermetic, un-hashed):

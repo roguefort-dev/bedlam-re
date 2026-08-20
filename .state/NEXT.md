@@ -1,23 +1,26 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4-menu] Title menu step of the P4 vertical slice: implement the
-   D41 RE findings in the engine - menu model (id/count/slots builder
-   semantics), strip hit-test (x in (0xdc,0x1a4), y in (top,0x1d6),
-   item=(y-top)/0x18), hover/click SFX (MENU1/MENU2), bottom-anchored
-   draw (row 0x1d6 - count*0x18, 24 px rows, glyph base 0x82 selected
-   = green set vs 0 = blue set per docs/RE-EXW-TITLEMENU.md sec 2a),
-   attract replay (>= 0x300 idle -> skippable TITLE.SMK), item actions
-   for menu 1 (start/difficulty/name/quit at minimum - HOF/credits
-   can stub). Corpus-gate the draw against LANGUAGE.ENG MENU_ITEMS +
-   FULLFONT/FULLPAL. Keep it one bounded step: menu visible +
-   clickable + start action hands off (the ZONEA/MISSION1 render +
-   squad move are separate queue items per PLAN sec 6 P4).
+1. [P2d] sim-tail RE slice (the P4 slice's remaining input): decode
+   the EXW mission-sim tail the vertical slice needs - one squad
+   member's move on the ZONEA/MISSION1 map: the order input path
+   (squad select + destination), the movement grid/pathing (tile
+   stride, walkability bits), and the per-tick mover state the sim
+   hash must cover. Bounded piece: RE notes committed FIRST
+   (docs/RE-EXW-*.md section), then the bedlam-core seam. This
+   unblocks the last P4 queue item (ZONEA/MISSION1 render + one
+   squad move) per PLAN sec 6 P4.
 
 ## Backlog (not yet started)
 - P4 vertical slice assembly tail: ZONEA/MISSION1 render + one
-   squad-member move (needs the P2d sim tail).
-- [P2d] sim tail RE slice (the P4 slice's other input).
+   squad-member move (blocked on the P2d sim tail above).
+- Title-menu polish backlog (all optional, none block P4): pin the
+   menu BACKDROP content (RE-EXW-TITLEMENU sec 8 - the 0x64000
+   PresentCopy buffer), HOF + CREDIT_1..13 page flows (RE sec 6),
+   the save-load restore path (FUN_0044745e + completion bits),
+   CONFIG.BDL writer family (FUN_0042540c) for name persistence,
+   OPTIONS.MRS staging on Title (music track_name wiring), and the
+   FUN_00448ef1 multiplayer lobby if ever needed.
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -25,6 +28,29 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-20: P4-menu engine step COMPLETE (D42, commits 57413b0 +
+  0a10a54 + 7ff713e, worker 26ccbd31 claim 1): the D41 findings in
+  the engine. menu.rs TitleMenu - builder semantics menus 1/2/3/5,
+  strip hit-test, hover/click SFX (MENU1/MENU2 RAW as mixer
+  instruments 0xE0/E1, 4-tick debounce), bottom-anchored dual-base
+  draw (0x82 green selected vs 0 blue - font.rs from_bank_at +
+  draw_at), name entry (0x8e cursor blink, (blink&0xc) duty,
+  menu_type_char/menu_backspace API, GOD default), attract replay
+  (idle >= 0x300 -> MoviePlayer restart in place, skippable via
+  finish()), menu-1 actions (start seed 4000-diff*500 -> Title->
+  Brief handoff cached host-side, difficulty cycle, saved-game
+  EMPTY menu, quit-confirm -> Scene::Quit; HOF/credits/coop stubs
+  per D42.5). Menu OWNS Title input (fsm fed neutral frames -
+  hash-isolated unit+corpus pinned); staged-inert lifecycle; menu
+  plane after the title movie. Chain Title fetch set grown
+  (LANGUAGE/FULLFONT/FULLPAL/MENU1/MENU2) + GameGfxSource SOUND/SFX
+  tier. Corpus gate tests/menu_gate.rs (exact MENU_ITEMS strings,
+  difficulty cycle, strip geometry, green 233..=244 vs blue 244..=
+  255 ramp pin END-TO-END, start handoff seed 3500, SFX audibility,
+  TITLE.SMK restart, scripted two-run byte-identity). 393 workspace
+  tests / 0 failed, fmt+clippy clean, headless smoke two runs
+  byte-identical, parity IDENTICAL to D40 baseline 143e60d,
+  MANIFEST OK x2.
 - 2026-08-20: P2g title-menu RE slice COMPLETE (D41, commits 3eb3092 +
   cf75108, worker aca4dac6 claim 1): NameEntryScreen@0043a5fc IS the
   title/options menu; FUN_00445b5c builds menus 1..5 (count word
@@ -58,35 +84,3 @@
   scene/frame hashes IDENTICAL to the pre-change binary; two runs
   byte-identical; MANIFEST x2; 366 workspace tests / 0 failed; fmt +
   clippy -D warnings clean.
-- 2026-08-20: P4 native shell step 1 COMPLETE (D38/D39, commit
-  493fbd5, watchdog repair): bedlam-shell crate (FixedStepClock
-  integer banking + anti-spiral; map_physical_key input seam - winit
-  KeyEvent cannot be constructed outside winit, the predecessor test
-  was rewritten; D31-D37 chain fetch layer; env-gated winit 0.30.13 +
-  wgpu surface host via Arc<Window> -> Surface<'static>, Fifo vsync,
-  PARITY present; headless smoke 600 fixed pumps, two runs
-  byte-identical, fetch set exactly GTLOG/LOGO/TITLE/ZONEDONE/
-  BETWEEN/LOAD_UK/LOADPAL/FULLFONT/FULLPAL/LANGUAGE.ENG; two-tier
-  GameGfxSource GAMEGFX-then-root). ParityGpu::new_for_surface in
-  bedlam-platform. Work of four step-capped GLM workers (486a18e1,
-  8d2f7acc, 3a5e5f9e, f24c9332 - incl. the Surface<'_'> stray-quote
-  fix and the LANGUAGE.ENG re-root) adopted + landed by watchdog
-  repair agent 410671: 356 workspace tests green / 0 failed, fmt,
-  clippy -D warnings, manifest OK before AND after.
-- 2026-08-20: P5 BRF_DROP play site + briefing intro pair COMPLETE
-  (D37, commits 3a2981d RE + bba01fe code + 40b3700 docs): RE verified
-  FUN_0043d00b IS the briefing screen; BRF_DROP.SMK opens FIRST at
-  every movie-enabled briefing (asm 0043d447..0043d490, gate
-  DAT_0046cca4), full-screen ONE pass (frames-1 renders), then the
-  constructed BRF_{zone}{level}.SMK ring (letter = zone@004edd8c +
-  0x40, zones 2..=6 = B..=F - D33 open note resolved) rings until UI
-  exit; open failures fatal; GO arms only after the handoff. Engine:
-  brief.rs BriefIntro Staged->Drop->Backdrop, GameHost load_briefing
-  on the D31 lifecycle, latent D31 movie.rs ring-Last bug FIXED (rings
-  froze at first cycle end; now wrap and continue), corpus gate
-  tests/brief_gate.rs (drop 29/30 frames, handoff pump 58, silent
-  pair, 512->1 ring wrap, two runs byte-identical). Code by
-  predecessor 3d88a359 (died after bba01fe; its uncommitted
-  DECISIONS/RE-EXW docs adopted, 342->343 test recount corrected);
-  this run 5a637669 (claim 1) re-verified green (343/0 tests, fmt,
-  clippy, manifest x2) + closed the queue.

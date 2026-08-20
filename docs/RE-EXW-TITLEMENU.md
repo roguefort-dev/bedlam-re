@@ -241,3 +241,12 @@ variants; first 0x10 lines cap on column 1, rows 0x55+). Page waits:
   slice if P4 ever needs multiplayer.
 - Menu id 4 vs 3: identical construction; who calls FUN_00445b5c(4)?
   (Not NameEntryScreen; probably the lobby.) [inferred]
+- BACKDROP CONTENT (D42.4, raised by the engine step): the menu
+  draws over a 0x64000 buffer (arena alloc at 0043a5fc) that the
+  draw cycle re-blits via PresentCopy (00425a1e) - WHAT fills it
+  (the title movie's last frame? a dedicated still? solid fill?) is
+  not pinned. The engine renders a black canvas for now; pinning
+  needs the FUN_00425a1e / draw-cycle-tail RE.
+- MENU1/MENU2 playback params: FUN_0043a48e(handle, 0, -1, -1, 2)
+  argument semantics unpinned; the engine plays both at unity ratio
+  and unity gain (D42.7).
