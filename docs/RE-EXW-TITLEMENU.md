@@ -70,9 +70,8 @@ FUN_004473cd(int, buf) = int->decimal (used for save-game level text).
 row_base = **0x1d6 - count\*0x18** (bottom-anchored); item i drawn at
 row row_base + i\*0x18, string slot i (stride 0x30), via font drawer
 FUN_0043c87c with glyph base **0x82 for i == sel, 0 otherwise**
-(selected item uses the standard ASCII set at entries 130.., unselected
-a second font variant at entries 0..; which variant is "bright" is a
-corpus question - open, see sec 7). Draw cycle everywhere: PresentCopy
+(corpus-pinned, see sec 2a: the two sets are the SAME shapes in two
+FULLPAL ramp slices - selected = green set, unselected = blue set). Draw cycle everywhere: PresentCopy
 (00425a1e) backdrop re-blit -> draw -> palette fiddles (004edbf8
 [0x2a2..0x301] = 0x3f fill = the 96-entry fade window) -> FUN_004258d0
 palette commit -> FadeSetup(10) -> PresentEnd (00425a03) -> lock
@@ -136,6 +135,33 @@ SOUND(004ede5c)/SPEECH(004eb93c)/CINEMATICS(0046cca4)/ACTIONPAN
 (004edbd8)/LANGUAGE(004eba1c)/DEFAULTNAME(004e444c,8) via
 FUN_0044ed98/FUN_0044edcc + FUN_0044ed84 commit (the CONFIG.BDL
 writer family).
+
+## 2a. Glyph base 0 vs 0x82 [corpus-pinned, this run]
+
+FULLFONT.BIN entries k and 0x82+k (k = 0..) are the SAME glyph shapes
+(identical w/h, hotspots, pixel counts - python probe mirroring
+sprites.rs + codecs.rs on game-data FULLFONT.BIN). They differ ONLY in
+palette indices: base 0 pixels span 244..255, base 0x82 pixels span
+233..244 (overlap exactly at the shadow entry 244). Mapping through
+the FULLPAL.PAL ramp (98-byte blob = lead-in `e0 20` + 32 triples =
+DAC entries 224..=255, per engine bedlam-assets pal.rs and the D35
+LAB_0041c69e tail-copy proof):
+
+| entry | RGB (6-bit) | role |
+|---|---|---|
+| 233 | 3f 3f 3f | white outline (base 0x82 set) |
+| 234..243 | (v,3f,v), v 0x38..0x00 | green body ramp (base 0x82 set) |
+| 244 | 02 03 08 | dark shadow (shared) |
+| 245 | 3f 3f 3f | white outline (base 0 set) |
+| 246..255 | (0x37,0x3a,0x3d) .. (0,0x16,0x2f) | blue-grey body ramp (base 0 set) |
+
+So the menu's SELECTED item renders GREEN, unselected BLUE (both with
+white outline + dark shadow). The HOF own-row and credits line0 use
+base 0 (blue) while their siblings use 0x82 (green) - i.e. on those
+screens green is the body style and blue marks the special line; on
+the menu strip green marks the selection. [facts pinned; aesthetic
+reading tagged inferred]
+
 
 **There is no separate Options screen in EXW**: MENU_ITEMS entries 47
 "Options" and 48..58 (Double Buffer..No CD Audio) are UNREFERENCED
@@ -208,13 +234,8 @@ variants; first 0x10 lines cap on column 1, rows 0x55+). Page waits:
 
 ## 8. Open questions
 
-- Glyph base 0 vs 0x82: which FULLFONT variant is bright? Corpus pin
-  needed (entries 0..111 vs 130..241 pixel sets; the D35 gate pinned
-  only the 130.. set). The menu shows sel=0x82, HOF own-row=0,
-  credits line0=0 - the inversion suggests base 0 is the HIGHLIGHT
-  variant everywhere EXCEPT the menu strip, i.e. semantics may be
-  "0 = large/bright, 0x82 = body" with FUN_0044653a's sel=0x82 being
-  the counter-example. One screenshot or pixel-pin settles it.
+- Glyph base 0 vs 0x82: RESOLVED this run (sec 2a) - same shapes,
+  green (0x82) vs blue (0) FULLPAL ramp slices.
 - FUN_00448ef1 (HEREIAM lobby, 2953 bytes, skipped as large): the
   multiplayer session flow (uses "Locating Players" idx 7) - separate
   slice if P4 ever needs multiplayer.
