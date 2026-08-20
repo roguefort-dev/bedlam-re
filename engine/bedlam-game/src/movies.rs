@@ -38,6 +38,11 @@ impl Region {
     }
 
     /// Loading-screen palette [verified: same call site].
+    ///
+    /// Corpus fact (bedlam-assets tests/loading_gate.rs, P5 gate): this
+    /// data set ships LOAD_UK.BIN == LOAD_US.BIN and LOADPAL.PAL ==
+    /// LOADPALU.PAL byte-for-byte - the region split is a path
+    /// selection only, decode parity is region-independent.
     pub fn loading_pal(self) -> &'static str {
         match self {
             Region::Uk => "LOADPAL.PAL",

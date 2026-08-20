@@ -1,3 +1,33 @@
+- CLOSED 2026-08-20 (P5 loading-screen asset path, this commit): the
+  LAB_0041c69e zone-transition tail assets are decoded + PINNED
+  (bedlam-assets tests/loading_gate.rs, 3 tests + ignored regen):
+  BETWEEN.BIN / LOAD_UK.BIN / LOAD_US.BIN are single-image 640x480
+  rle16 banks (flags=3, hot=(0,0)) through the existing
+  sprites::parse_bin_images - no decoder changes owed; 1:1 blit into
+  the 640x480x8 render Frame (no letterbox/scale). LOADPAL/LOADPALU:
+  770B VGA palettes, 244 distinct, entry0 black/entry1 white.
+  CORPUS FACT: LOAD_UK == LOAD_US and LOADPAL == LOADPALU
+  byte-for-byte - the EXW region split selects paths, not content;
+  doc note added at Region::loading_pal (bedlam-game movies.rs).
+  Content pinned via file sha-heads + decoded-plane sha256s. Next per
+  P5: the post-cutscene loading-screen FLOW in GameHost (queue item 1).
+- CLOSED 2026-08-20 (P5 shop + briefing backdrops, D33, 1b3ef85): Shop
+  and Brief scenes play their SMK backdrops through the D31 movie
+  lifecycle - GameHost::load_shop (SHOP.SMK 61-frame 40 fps ring behind
+  the shop UI), GameHost::briefing_name + load_briefing
+  (BRF_{B..F}{sub}.SMK from the hashed episode slot;
+  movies::briefing_name_for_slot: stages 2..=6 -> letters B..=F = the
+  25-file corpus domain, sub = lowest-unset mask bit + 1 = the
+  Episode::complete arithmetic, boot camp + endgame stages -> None - no
+  BRF_A/BRF_G exists in the corpus). 6 new units (3 selection incl. the
+  corpus-domain cross-check, 3 host lifecycle through the FULL_MASK
+  campaign). Commit landed by worker a1ad7346 which died after push,
+  before the queue rewrite; run ed15e708 (claim 1) adopted +
+  independently re-validated: workspace 294 tests green / 0 failed with
+  all 6 D33 units passing, fmt + clippy -D warnings clean,
+  MANIFEST.sha256 OK before AND after the corpus runs. Next per P5:
+  loading-screen asset path (BIN image-bank decode), then the
+  Cutscene->Select flow.
 - CLOSED 2026-08-20 (P5 cutscene movies + corpus inventory, D32): every
   game-data SMK inventoried and PINNED (bedlam-assets smk_corpus_gate:
   34 files, formats/rates/ring/y-scale/audio shapes; listing must match
