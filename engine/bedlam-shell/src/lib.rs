@@ -15,6 +15,12 @@
 //!   through a shell-owned button-bit layout (provisional, D38 - the
 //!   EXW scan-code keystore map is RE-EXW-INPUT.md, engine-side
 //!   binding lands with P2e input RE).
+//! - [`audio`]: the platform audio output (step 2, D40): a cpal
+//!   output stream at the mixer-native 11025 Hz, drained through a
+//!   bounded ring by the device callback while the main loop mixes
+//!   into it from the GameHost audio bus. Device-gated exactly like
+//!   the window: never built on the headless path; the mixer stays
+//!   hermetic and the mixed stream stays un-hashed (D17 bucket b).
 //! - [`chain`]: the D31-D37 asset wiring - which corpus files each
 //!   scene needs and the staging calls that hand them to
 //!   [`bedlam_game::GameHost`] (the host never loads by itself).
@@ -29,12 +35,14 @@
 
 #![forbid(unsafe_code)]
 
+pub mod audio;
 pub mod chain;
 pub mod clock;
 pub mod headless;
 pub mod input;
 pub mod window;
 
+pub use audio::{AudioDevice, AudioFeed, StreamFacts, PUMP_FRAMES, RING_CAP_FRAMES, TARGET_FRAMES};
 pub use chain::{scene_assets, stage_boot, stage_scene, ChainConfig};
 pub use clock::FixedStepClock;
 pub use headless::{

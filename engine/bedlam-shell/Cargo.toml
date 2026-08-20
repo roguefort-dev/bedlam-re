@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bedlam-audio = { path = "../bedlam-audio" }
 bedlam-core = { path = "../bedlam-core" }
 bedlam-game = { path = "../bedlam-game" }
 bedlam-platform = { path = "../bedlam-platform" }
 bedlam-render = { path = "../bedlam-render" }
+cpal = "0.18"
 pollster = "0.4"
 thiserror = "1"
 winit = "0.30"
