@@ -1,3 +1,52 @@
+- CLOSED 2026-08-20 (P5 BRF_DROP briefing intro pair, D37, commits
+  3a2981d + bba01fe + 40b3700): the BRF_DROP play site located and
+  wired - the EXW briefing screen (FUN_0043d00b; RE corrected the
+  prior gameplay-advance gloss) opens BRF_DROP.SMK FIRST at every
+  movie-enabled briefing (asm 0043d447..0043d490), one full-screen
+  pass, then the constructed BRF_{zone}{level}.SMK backdrop ring
+  until UI exit (letter = zone + 0x40, zones 2..=6 = B..=F; D33
+  open note resolved; open failures fatal; GO arms after handoff).
+  Engine: bedlam-game brief.rs BriefIntro Staged->Drop->Backdrop
+  (drop hard-capped frames-1, starvation-proof; backdrop ring
+  unbounded; entry audio at start + handoff); GameHost
+  load_briefing on the D31 lifecycle (inert-until-Brief, drop +
+  stream clear on exit, hash isolation unit-pinned); latent D31
+  MoviePlayer ring-Last bug FIXED (rings froze at their first
+  cycle end; now wrap 512->1 and continue; SHOP.SMK inherits the
+  fix). Corpus gate tests/brief_gate.rs: drop max frame 28 =
+  29/30 rendered, handoff at closed-form pump 58, zero PCM, 2+
+  ring cycles, two runs byte-identical. Code by predecessor
+  3d88a359 (died after bba01fe leaving the DECISIONS/RE-EXW docs
+  uncommitted; adopted + 342->343 test recount corrected by this
+  run), verified + queue-closed by run 5a637669 (claim 1): 343
+  workspace tests green / 0 failed, fmt + clippy -D warnings
+  clean, MANIFEST.sha256 OK before AND after. All P5 D31-D37
+  movie/play sites now wired. Next per queue: native executable
+  shell step 1 (window + surface + fixed-step present loop, P4).
+- CLOSED 2026-08-20 (P5 boot attract sequence, D36, commit 8738a03):
+  the region-variant publisher pair plays on the Boot scene. RE
+  prerequisite landed by predecessor as 4e9ccbb (RE-EXW-GAMETHREAD
+  "Boot attract arm RE": FUN_0044567c runner - one-pass bound
+  frames-1, dst 480-2*arg2 geometry incl. the TITLE replay arg2=0x50
+  letterbox that verifies D31 centering, per-frame 256-entry palette,
+  screen cleared twice per call, skip gate 004edbc4 => boot pair
+  unskippable). Engine: bedlam-game boot.rs BootAttract
+  Staged->Playing->Done (EXW order GTLOG then LOGO, movies::boot_pair,
+  time-exact switch at (frames-1)*period on the x240-us grid, entry
+  audio per movie, Done holds the last raster);
+  MoviePlayer::advance_limited hard decode cap (EXW loop bound,
+  starvation-proof); GameHost load_boot_attract on the D31 lifecycle
+  (inert-until-Boot, dropped + stream cleared on exit, scene-hash
+  untouched - unit-pinned). Corpus gate tests/boot_attract_gate.rs:
+  both region pairs to Done at 60 Hz, max decoded frame = frames-2
+  (68/69 of 70/71 - ring never wraps), switch/Done pump counts by
+  closed formula, continuous in-order DPCM >100 kB per pair, two
+  runs byte-identical. Rust WIP of interrupted predecessor 19dc859e
+  (died on transport error after the docs commit) adopted, validated
+  + completed by run 7d041b7e (claim 1; clippy tail only). 335
+  workspace tests green / 0 failed, fmt + clippy -D warnings clean,
+  manifest OK x2. All D31-D36 movie play sites now wired. Next per
+  P5: BRF_DROP.SMK play-site RE (queue item 1).
 - CLOSED 2026-08-20 (P5 FULLFONT loading-text glyph pass, D35, this
   commit): the four LAB_0041c69e text draws + the FULLPAL font-ramp
   copy run in GameHost. bedlam-game font.rs = FUN_0043c87c (measure/
