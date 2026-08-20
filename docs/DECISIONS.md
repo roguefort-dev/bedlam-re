@@ -1159,3 +1159,38 @@ this records the choice + pinned version + the device-feed contract.
 Not done here (queued): the menu/ZONEA/MISSION1 playable vertical
 slice (P4 exit) - the shell now has window, input, present AND
 audio; the slice needs the P2d/P2g tails.
+
+## D41 - 2026-08-20: title-menu screen = NameEntryScreen 0043a5fc (P2g, item 1)
+
+Context: NEXT item 1 - the first UI-archaeology slice, prerequisite
+for the P4 vertical-slice menu step. RE notes landed as
+docs/RE-EXW-TITLEMENU.md (commits 3eb3092 + cf75108, raw dump
+ghidra-project/exw-titlemenu.txt via ExwTitleMenu.java -process pass;
+jump tables decoded from the raw EXW image because they are data blobs
+inside the text stream).
+
+1. NameEntryScreen@0043a5fc IS the title/options menu (8.7 KB, one
+   function, GameMain its only caller at the outer restart point).
+   Menu state: builder FUN_00445b5c(id 1..5) -> count word 004eabd2 +
+   7 string slots 004eabd4.. stride 0x30 + id 0046ae7c; drawer
+   FUN_0044653a bottom-anchored (row 0x1d6 - count*0x18, 24 px rows).
+2. Hit model is a STRIP, not rects: x in (0xdc,0x1a4), y in
+   (top,0x1d6), item = (y-top)/0x18 [verified asm 0043a934..0043a996].
+   Click = g_scroll_flags != 0; hover SFX MENU1 / click SFX MENU2;
+   attract counter >= 0x300 -> skippable TITLE.SMK replay (the only
+   skippable movie, gate 004edbc4 armed around FUN_004459f7).
+3. All item actions anchored (0x43aad5..0x43b097): single-player start
+   (score seed 4000 - difficulty*500), difficulty cycle 0..2,
+   name entry (ENTER = keystore[0x1c] exits; config persisted by
+   FUN_0042540c = the CONFIG.BDL writer), HOF, CREDIT_1..13 pages,
+   quit-confirm; multiplayer menu (player count 2..12 cycled by
+   left/right CLICK on the count item); save-load menu (slot stride
+   0xb4, completion bitmask restored via FUN_004474ef).
+4. NEGATIVE finding: MENU_ITEMS entries 47..58 ("Options" + the
+   Double Buffer..No CD Audio toggles) have ZERO xrefs in EXW - there
+   is no separate options screen; the options ARE main-menu items.
+5. Corpus pin: glyph base 0x82 vs 0 = same shapes, green vs blue
+   FULLPAL ramp slices (233..244 vs 244..255) - menu selection
+   renders green, unselected blue.
+Unblocked: the P4 menu step (PLAN sec 6 P4) can now be implemented
+against pinned addresses; the P2d sim tail remains its other input.
