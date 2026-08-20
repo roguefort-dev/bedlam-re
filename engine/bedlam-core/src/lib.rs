@@ -39,6 +39,7 @@ pub mod frame;
 pub mod fx;
 pub mod hash;
 pub mod input;
+pub mod mission;
 pub mod replay;
 pub mod rng;
 pub mod sim;
