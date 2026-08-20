@@ -77,3 +77,13 @@ stops the autonomous loop permanently.
 - If a model/transport/API error interrupts you mid-task: stop, record exactly
   what you finished and the blocker in .state/NEXT.md, commit that much, stop.
   Never leave silent partial state for the next agent to trip over.
+
+## Reverse-engineering discipline (stream-survival rule)
+The API client dies after 300s of zero streamed bytes (known upstream bug). A model
+call that thinks silently for >5 minutes is killed mid-thought. Therefore: any
+reverse-engineering or analysis-heavy step MUST be split so that no single reasoning
+stretch runs long - first decode a bounded piece, immediately write the findings as
+a committed RE-notes artifact (docs/RE-EXW-*.md section or task notes), then proceed.
+Implementation commits follow their RE notes. Prefer many small committed hops over
+one long silent think. Emit interim notes/tool output while working rather than
+reasoning in silence for minutes.
