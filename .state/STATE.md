@@ -1,3 +1,28 @@
+- CLOSED 2026-08-20 (P4 native shell step 1, D38/D39, commit 493fbd5,
+  landed by the watchdog repair agent after a step-cap death spiral):
+  bedlam-shell crate = window + surface + fixed-step present loop.
+  FixedStepClock (pure u128 integer banking, anti-spiral clamp 4,
+  surplus dropped not fast-forwarded); input seam map_physical_key
+  pinned (winit KeyEvent has a pub(crate) field - NOT constructible
+  outside winit; predecessor test rewritten); D31-D37 chain fetch
+  layer (scene_assets + stage_boot/stage_scene); env-gated (--window
+  / BEDLAM_SHELL=1) winit 0.30.13 + wgpu surface host (Arc<Window> ->
+  Surface<'static>, Fifo vsync, D20 PARITY present); headless smoke
+  (600 fixed pumps, scripted campaign walk, two runs byte-identical,
+  fetch set exactly the 10 D31-D37 corpus files); two-tier
+  GameGfxSource (GAMEGFX/<name> then <root>/<name> - LANGUAGE.ENG at
+  install root). bedlam-platform +ParityGpu::new_for_surface. The
+  WIP survived FOUR GLM workers killed at the opencode2 step cap
+  (orchestrator default agent, steps:60, edit denied) - cumulative
+  work by 486a18e1/8d2f7acc/3a5e5f9e/f24c9332, fixed (impossible
+  KeyEvent test, saturate-bank assertion, usage string) + verified +
+  landed by repair agent 410671: 356 workspace tests green / 0
+  failed, fmt, clippy -D warnings, MANIFEST OK before AND after.
+  CONTROLLER FIX (same repair): nudge workers now launch with
+  --agent build (no step cap, edit allowed); step-cap truncations
+  classify as 'step-cap' and no longer feed the taskfails/cooldown
+  spiral; the llm-watchdog check prompt flags the signature. Next per
+  queue: native shell step 2 (cpal audio output).
 - CLOSED 2026-08-20 (P5 BRF_DROP briefing intro pair, D37, commits
   3a2981d + bba01fe + 40b3700): the BRF_DROP play site located and
   wired - the EXW briefing screen (FUN_0043d00b; RE corrected the
