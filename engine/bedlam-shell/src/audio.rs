@@ -185,7 +185,9 @@ pub(crate) struct FeedState {
 }
 
 /// Producer handle: the main-thread side that mixes into the ring.
-#[derive(Debug)]
+/// Cheap `Clone` (one Arc) so split-borrow sites can hand the feed
+/// out while the host stays mutably borrowed.
+#[derive(Debug, Clone)]
 pub struct AudioFeed {
     state: Arc<Mutex<FeedState>>,
 }
@@ -572,5 +574,61 @@ mod tests {
         // At target: nothing more is rendered.
         assert_eq!(feed.fill_from(&mut host, 3).unwrap(), 0);
         assert_eq!(feed.buffered_frames(), 3);
+    }
+
+    /// LIVE-DEVICE PROBE - explicitly opt-in (`cargo test -- --ignored`),
+    /// NEVER part of the normal suite: it opens the real default
+    /// output device and lets the callback drain ~100 ms of exact
+    /// silence, proving the cpal wiring (config pick, stream build,
+    /// play, drop) end to end on this machine. Hermetic CI boxes
+    /// without audio simply never run it.
+    #[test]
+    #[ignore = "opens the real audio device"]
+    fn device_open_probe_drains_silence() {
+        let Some(dev) = AudioDevice::open_default() else {
+            eprintln!("probe: no audio device present - skipping (not a failure)");
+            return;
+        };
+        let facts = dev.facts().clone();
+        eprintln!(
+            "probe: opened {} Hz, {} ch, {}",
+            facts.rate, facts.channels, facts.format
+        );
+        let feed = dev.feed().clone();
+        assert_eq!(
+            feed.buffered_frames(),
+            0,
+            "a fresh device has an empty ring"
+        );
+        // ~100 ms of real host mix (all silence on a fresh host).
+        let mut host = GameHost::new(
+            &bedlam_game::GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        assert_eq!(
+            feed.fill_from(&mut host, TARGET_FRAMES).unwrap(),
+            TARGET_FRAMES
+        );
+        // Let the callback drain it. The default ALSA/Pulse device has
+        // ~100-200 ms of startup latency before the first callback
+        // pulls (visible in the samples below); the window loop's
+        // steady-state 16 ms refills never see this.
+        let mut left = TARGET_FRAMES;
+        for i in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let now = feed.buffered_frames();
+            eprintln!("probe: t={}00ms buffered={}", i + 1, now);
+            left = left.min(now);
+        }
+        assert!(
+            left < TARGET_FRAMES,
+            "callback drained the ring ({left} left)"
+        );
+        eprintln!(
+            "probe: drained {} of {} frames",
+            TARGET_FRAMES - left,
+            TARGET_FRAMES
+        );
     }
 }

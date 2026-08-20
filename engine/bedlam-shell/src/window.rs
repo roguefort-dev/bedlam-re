@@ -18,9 +18,11 @@
 //!
 //! Input events accumulate into [`ShellInput`] between pumps (the
 //! provisional D38 seam); a focus loss clears held state so a key
-//! held across an alt-tab cannot stick. Audio output is shell step 2
-//! (cpal) - the mixer stream exists in the host but nothing consumes
-//! it here yet.
+//! held across an alt-tab cannot stick. Audio output (step 2,
+//! D40): a cpal stream drains the ring [`crate::audio`] keeps, and
+//! each iteration refills that ring from the host audio bus toward
+//! a fixed watermark - the ONLY producer. No audio device means
+//! the shell runs silent (stderr note), never fatal.
 //!
 //! winit 0.30 shape (D39): the window is created inside resumed()
 //! through ActiveEventLoop::create_window (the pre-run EventLoop
@@ -41,6 +43,7 @@ use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
+use crate::audio::{AudioDevice, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
@@ -109,6 +112,26 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
     );
     stage_boot(&mut host, &mut source, opts.config)?;
 
+    // Audio (step 2, D40): open the default output device, best
+    // effort - no device (or no workable config) runs silent, the
+    // game itself never depends on it. Prefill the ring so playback
+    // does not start in an underrun.
+    let audio = AudioDevice::open_default();
+    match audio.as_ref() {
+        Some(dev) => {
+            let facts = dev.facts();
+            eprintln!(
+                "bedlam-shell: audio output {} Hz, {} ch, {}",
+                facts.rate, facts.channels, facts.format
+            );
+            let feed = dev.feed().clone();
+            if let Err(err) = feed.fill_from(&mut host, TARGET_FRAMES) {
+                eprintln!("bedlam-shell: audio prefill failed ({err}); continuing");
+            }
+        }
+        None => eprintln!("bedlam-shell: no audio output device; running silent"),
+    }
+
     let mut app = ShellApp {
         opts,
         source,
@@ -117,6 +140,7 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
         input: ShellInput::new(),
         clock: FixedStepClock::host(),
         gfx: None,
+        audio,
         fatal: None,
     };
     event_loop
@@ -216,6 +240,9 @@ struct ShellApp {
     clock: FixedStepClock,
     /// The window half, absent until resumed() builds it.
     gfx: Option<WindowHost>,
+    /// The audio output (step 2, D40), absent when no device
+    /// exists - the shell runs silent then, never fatal.
+    audio: Option<AudioDevice>,
     fatal: Option<ShellError>,
 }
 
@@ -357,12 +384,21 @@ impl ApplicationHandler for ShellApp {
         };
         // 2. Run them (fixed dt + input snapshots each).
         self.run_pumps(pumps);
-        // 3. Stage any scene the pumps entered.
+        // 3. Refill the audio ring toward the watermark (the device
+        //    callback drains it at its own pace; production self-
+        //    balances against the device clock - D40). The Arc comes
+        //    out first so host and audio borrow disjointly.
+        if let Some(feed) = self.audio.as_ref().map(|dev| dev.feed().clone()) {
+            if let Err(err) = feed.fill_from(&mut self.host, TARGET_FRAMES) {
+                eprintln!("bedlam-shell: audio fill failed ({err}); continuing");
+            }
+        }
+        // 4. Stage any scene the pumps entered.
         self.stage_entered(event_loop);
         if self.fatal.is_some() {
             return;
         }
-        // 4. Present on the next vsync.
+        // 5. Present on the next vsync.
         if let Some(g) = self.gfx.as_ref() {
             g.window.request_redraw();
         }
