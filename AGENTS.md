@@ -46,7 +46,7 @@ runs. Read it fully before doing anything.
 
 ## Workflow for every run
 1. touch .state/heartbeat  (do this again periodically during long shell work)
-2. If .state/PAUSE exists -> do nothing, exit. The sole exception is a Sol repair launched by `tools/llm-watchdog.sh`: it may proceed only when its prompt supplies a watchdog token and both `.state/PAUSE` and `.state/llm-watchdog-pause` contain that exact token. It must leave both files untouched for the wrapper to release.
+2. If .state/PAUSE exists -> do nothing, exit. The sole exception is a watchdog repair launched by `tools/llm-watchdog.sh`: it may proceed only when its prompt supplies a watchdog token and both `.state/PAUSE` and `.state/llm-watchdog-pause` contain that exact token. It must leave both files untouched for the wrapper to release.
 3. Read .state/NEXT.md. An unattended worker works ONLY its wrapper-assigned item. If genuinely blocked, tag that item `[BLOCKED]`, record one concrete reason, and stop; never select another item. Interactive runs may select another unclaimed item.
 4. Do the work. Keep it small enough to finish and verify in this run.
 5. Update docs as you go (provenance + confidence tags for RE claims; DECISIONS.md for choices).
