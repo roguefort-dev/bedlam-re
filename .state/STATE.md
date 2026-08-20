@@ -1,3 +1,35 @@
+- CLOSED 2026-08-21 (P4 mission RENDER half, commits 02363f6 + 889d6b0,
+  worker b9aaaa38 claim 1): the isometric viewport draw chain decoded
+  and rendering ZONEA/MISSION1 to a hash-pinned frame. New
+  docs/RE-EXW-MISSIONVIEW.md (ghidra dumps exw-missionrender{,2,3}.txt,
+  scripts ExwMissionRender{,2,3}.java, -process -noanalysis x3):
+  init_tiles@00407e11 = the 36x36 2:1 iso viewport cache at
+  DAT_004ede24 (grid origin (0x130,-0x100), +32/+16 steps, sticky
+  anchor 17, 467 cells) + the TOT 8-plane word mirror into the
+  0x1e-stride type-DB records at 0x4796bc (8 words + 8 seen bytes at
+  +0x10 + zero-filled tail); LNK = the PER-FRAME tile ANIMATION link
+  (word -> LNK[word] walked and memoized back every drawn frame);
+  BIN = MISSION{A..G}.BIN the terrain sprite bank (u16 count + u32
+  offsets relative to entry 2+4*id); FUN_00401471 blit codec (fmt 0
+  raw 64x64 skip-0 / fmt 1-3 u16 RLE bit15-ctrl bit14-eol low12 /
+  fmt>=4 u8 RLE bit7-ctrl bit6-eol low6+1; stride 640; XLAT remap);
+  FUN_00403938 terrain loop (camera tiles, 8-layer bottom-up walk,
+  0x5000/level, seen-chase columns, 0x59b00 draw cap, off-map edges
+  via FUN_00408030 per zone); sprite-list enqueue FUN_0040798e +
+  flush FUN_0040179b (entity overlay seam, decoded not yet wired);
+  present FUN_00401107 = the 480x480 window at buf+0xa040 + fine-cam
+  offset (camera 0 -> (96,64)). Engine: bedlam-render mission_view.rs
+  (MissionView + DrawParams + present_window, hermetic, per-write
+  bounds) + corpus gate mission_view_gate.rs: cache geometry/anchor
+  pins, deck mirror + seen semantics, codec pixels on sprite 0,
+  one-LNK-step-per-frame walk (visible tiles only - off-camera words
+  frozen, layer-0 cap respected - faithful), frame hash pinned
+  90a9e929eea24ced (camera (0,0), frame 0), two-run byte identity,
+  zone-0 fixed edges vs zone-1 stream sensitivity. Corrected en route:
+  the cache anchor is 17 (first in-bounds cell (12,4)), not 21; TOT
+  plane stride is the standard w*h*2 (decompiler artifact fixed from
+  asm). 407 workspace tests green, fmt+clippy clean, release build
+  ok, MANIFEST verified, pushed.
 - CLOSED 2026-08-21 (P4 slice tail, commits 5381bea + c4f615a +
   055879e, worker d8c46c88 claim 1): the mission file-load +
   table-build pass decoded and wired. docs/RE-EXW-SIM.md amendment 7c:
