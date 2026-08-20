@@ -205,6 +205,38 @@ impl GameHost {
         self.load_movie(Scene::Cutscene, data)
     }
 
+    /// The briefing backdrop movie the CURRENT hashed episode slot
+    /// selects (movies::briefing_name_for_slot over stage + mask):
+    /// the lettered zone stages 2..=6 pick BRF_{B..F}{sub}.SMK for
+    /// the mission the slot is about to play; the boot-camp and
+    /// endgame stages pick None (no lettered backdrop in the
+    /// corpus, so the caller simply plays no movie there). Pure name
+    /// arithmetic for the caller ByteSource fetch - the host never
+    /// loads anything by itself (DESIGN-GAME sec 8).
+    pub fn briefing_name(&self) -> Option<String> {
+        let episode = self.fsm.episode();
+        crate::movies::briefing_name_for_slot(episode.stage(), episode.mask())
+    }
+
+    /// Load the briefing backdrop movie (.SMK bytes the caller
+    /// fetched under [`Self::briefing_name`]) onto the Brief scene
+    /// (D33). Same lifecycle as [`Self::load_movie`] (D31): inert
+    /// until the FSM enters Brief (entry starts playback + queues
+    /// frame-0 audio on tracks that have one - the BRF rings are
+    /// silent), dropped + stream cleared on leaving.
+    pub fn load_briefing(&mut self, data: &[u8]) -> Result<(), GameError> {
+        self.load_movie(Scene::Brief, data)
+    }
+
+    /// Load the shop backdrop movie (SHOP.SMK bytes, fetched under
+    /// movies::shop_name) onto the Shop scene (D33): the 61-frame
+    /// ring plays behind the shop UI - same D31 lifecycle, inert
+    /// until the FSM enters Shop, dropped + stream cleared on
+    /// leaving.
+    pub fn load_shop(&mut self, data: &[u8]) -> Result<(), GameError> {
+        self.load_movie(Scene::Shop, data)
+    }
+
     /// Movie step (D31): advance the started player on the same dt the
     /// sim consumed, then queue whatever decoded. A decode failure
     /// mid-playback stops the movie and silences the stream -
@@ -638,5 +670,121 @@ mod tests {
         host.pump_frame(4, &InputFrame::default());
         assert_eq!(host.scene(), Scene::Select);
         assert!(host.movie().is_none(), "slot dropped on Cutscene exit");
+    }
+
+    #[test]
+    fn briefing_selection_walks_the_campaign() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        // Boot camp (stage 1): the brief carries no lettered backdrop
+        // (no BRF_A in the corpus).
+        assert_eq!(host.briefing_name(), None);
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance); // Title -> Brief
+        assert_eq!(host.scene(), Scene::Brief);
+        assert_eq!(host.briefing_name(), None, "boot-camp brief");
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+                                          // Boot-camp mission (stage 1, its only sub): no backdrop
+                                          // either; completing it zones out to stage 2.
+        assert_eq!(host.scene(), Scene::Mission);
+        assert_eq!(host.briefing_name(), None, "boot-camp mission");
+        host.apply(SceneAction::MissionComplete); // -> Debrief (stage -> 2)
+        host.apply(SceneAction::Advance); // zone complete -> Cutscene
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+                                          // Lettered zone stages 2..=6 = B..=F, four subs each per
+                                          // FULL_MASK; the slot names the mission it is ABOUT to play:
+                                          // sub = lowest-unset mask bit + 1 (the complete() arithmetic).
+        for (zone, letter) in ['B', 'C', 'D', 'E', 'F'].iter().enumerate() {
+            for sub in 1..=4u8 {
+                assert_eq!(host.scene(), Scene::Mission);
+                let stage = zone as u8 + 2;
+                assert_eq!(
+                    host.briefing_name().as_deref(),
+                    Some(format!("BRF_{letter}{sub}.SMK").as_str()),
+                    "stage {stage} sub {sub}"
+                );
+                host.apply(SceneAction::MissionComplete); // -> Debrief
+                host.apply(SceneAction::Advance); // -> Shop (mid-zone)
+                host.apply(SceneAction::Advance); // -> Select
+                host.apply(SceneAction::Advance); // -> Mission
+            }
+        }
+        // The F-zone completion advanced to stage 7 = the endgame
+        // zone (EXW zone 7): no lettered backdrop there, nor at the
+        // MAX_STAGE ceiling its completion reaches.
+        assert_eq!(host.fsm().episode().stage(), 7);
+        for _ in 0..4 {
+            assert_eq!(host.briefing_name(), None, "endgame zone");
+            host.apply(SceneAction::MissionComplete); // -> Debrief
+            host.apply(SceneAction::Advance); // -> Shop | Cutscene
+            host.apply(SceneAction::Advance); // -> Select
+            host.apply(SceneAction::Advance); // -> Mission
+        }
+        assert_eq!(host.fsm().episode().stage(), MAX_STAGE);
+        assert_eq!(host.briefing_name(), None, "post-endgame ceiling");
+    }
+
+    #[test]
+    fn load_briefing_binds_the_brief_scene() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_briefing(&synth_smk()).unwrap();
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        // Still on Title: inert (D31 lifecycle), frame 0 held.
+        assert!(host.movie().is_some());
+        assert_eq!(host.movie().unwrap().frame_index(), 0);
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.pump_frame(4, &InputFrame::default());
+        assert!(host.movie().is_some(), "started on Brief entry");
+        // 40 ms period: 3 more pumps decode frame 1 and finish the
+        // 2-frame synth stream (non-ring hold; the corpus BRF rings
+        // wrap instead).
+        for _ in 0..3 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(host.movie().unwrap().frame_index(), 1);
+        assert!(host.movie().unwrap().finished());
+        // Leaving Brief (-> Select) drops the slot and clears the
+        // stream.
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Select);
+        assert!(host.movie().is_none(), "slot dropped on Brief exit");
+    }
+
+    #[test]
+    fn load_shop_binds_the_shop_scene() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_shop(&synth_smk()).unwrap();
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+                                          // A mission FAIL routes through Debrief to Shop (the fail
+                                          // path never pends a zone completion).
+        host.apply(SceneAction::MissionFail);
+        assert_eq!(host.scene(), Scene::Debrief);
+        host.apply(SceneAction::Advance);
+        assert_eq!(host.scene(), Scene::Shop);
+        // Inert until the next pump starts it (D31), then it plays
+        // like the Title movie (the corpus SHOP ring wraps).
+        assert_eq!(host.movie().unwrap().frame_index(), 0);
+        host.pump_frame(4, &InputFrame::default());
+        assert!(host.movie().is_some(), "started on Shop entry");
+        for _ in 0..3 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert!(host.movie().unwrap().finished());
+        // Shop -> Select drops the slot and clears the stream.
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Select);
+        assert!(host.movie().is_none(), "slot dropped on Shop exit");
     }
 }

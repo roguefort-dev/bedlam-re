@@ -109,6 +109,39 @@ pub fn briefing_name(zone_letter: char, sub: u8) -> Option<String> {
     Some(format!("BRF_{z}{sub}.SMK"))
 }
 
+/// The briefing backdrop for the hashed episode slot (D33): stage ->
+/// zone letter, lowest-unset mask bit + 1 -> sub (the SAME sub
+/// arithmetic `Episode::complete` applies [design, DESIGN-GAME open
+/// Q5]). Letter map [design, anchored both ways]: stage 1 is the
+/// BootCamp intro and stages 7..=8 the endgame zone / post-endgame
+/// ceiling (EXW zone counter 1..7, 7 = endgame, RE-EXW-GAMETHREAD
+/// fact table) - neither has a lettered backdrop in the corpus (no
+/// BRF_A / BRF_G files exist), so they select None = no briefing
+/// movie; stages 2..=6 map onto EXW zones 2..=6 = letters B..=F,
+/// exactly the 25-file BRF_{B..F}{1..5} corpus domain (the linear
+/// formula clamp((zone-2)*5 + level - 1, 1, 26) walks zones 2..6 =
+/// the 25 lettered levels). The B2 4-sub FULL_MASK cadence selects
+/// BRF_*{1..4} only; BRF_*5 stays corpus-resident but
+/// cadence-unreachable (the EXW 5-level cadence files, like B2's
+/// mostly-absent MISSION5, census sec 1); a transitional full mask
+/// (0b1111) still lands inside the corpus domain (sub 5), and masks
+/// with bit 4+ set are not playable subs (briefing_name rejects
+/// them -> None).
+pub fn briefing_name_for_slot(stage: u8, mask: u8) -> Option<String> {
+    if !(2..=6).contains(&stage) {
+        return None;
+    }
+    let letter = char::from(b'B' + (stage - 2));
+    // Lowest unset bit (the complete() arithmetic); the < 8 guard
+    // keeps a saturated mask (u8 all-bits) from shifting past the
+    // width - it lands on sub 9, which briefing_name rejects.
+    let mut sub = 0u8;
+    while sub < 8 && mask >> sub & 1 != 0 {
+        sub += 1;
+    }
+    briefing_name(letter, sub + 1)
+}
+
 /// Drop-ship briefing interlude [corpus: BRF_DROP.SMK, 30-frame
 /// non-ring].
 pub const BRIEFING_DROP_NAME: &str = "BRF_DROP.SMK";
@@ -172,5 +205,60 @@ mod tests {
         assert_eq!(briefing_name('C', 0), None);
         assert_eq!(briefing_name('C', 6), None);
         assert_eq!(BRIEFING_DROP_NAME, "BRF_DROP.SMK");
+    }
+
+    #[test]
+    fn briefing_slot_map_letters_the_campaign_and_skips_the_doms() {
+        // Boot camp (stage 1), the endgame zone (7) and the
+        // post-endgame ceiling (8) select no backdrop - no BRF_A /
+        // BRF_G exists in the corpus. Fresh lettered stages 2..=6
+        // select B..=F sub 1.
+        for stage in [0u8, 1, 7, 8, 9, u8::MAX] {
+            assert_eq!(briefing_name_for_slot(stage, 0), None, "stage {stage}");
+        }
+        for (i, letter) in ['B', 'C', 'D', 'E', 'F'].iter().enumerate() {
+            let stage = i as u8 + 2;
+            assert_eq!(
+                briefing_name_for_slot(stage, 0).as_deref(),
+                Some(format!("BRF_{letter}1.SMK").as_str()),
+                "stage {stage}"
+            );
+        }
+    }
+
+    #[test]
+    fn briefing_slot_sub_follows_the_mask_bits() {
+        // Observable FULL_MASK cadence at one zone stage: masks
+        // 0, 1, 3, 7 select subs 1..=4 (lowest-unset bit + 1 - the
+        // Episode::complete arithmetic). A transitional full mask
+        // still lands in the 1..=5 corpus domain; bit 4+ set is not
+        // a playable sub (briefing_name rejects -> None).
+        let expect = |sub: u8| Some(format!("BRF_C{sub}.SMK"));
+        assert_eq!(briefing_name_for_slot(3, 0b000), expect(1));
+        assert_eq!(briefing_name_for_slot(3, 0b001), expect(2));
+        assert_eq!(briefing_name_for_slot(3, 0b011), expect(3));
+        assert_eq!(briefing_name_for_slot(3, 0b111), expect(4));
+        assert_eq!(briefing_name_for_slot(3, 0b1111), expect(5));
+        assert_eq!(briefing_name_for_slot(3, 0b1_1111), None);
+    }
+
+    #[test]
+    fn briefing_slot_map_stays_inside_the_corpus_domain() {
+        // Every Some over the whole slot domain is one of the 25
+        // corpus BRF names (cross-check against the domain, not a
+        // recomputation of the map itself).
+        let corpus: Vec<String> = ('B'..='F')
+            .flat_map(|z| (1..=5u8).map(move |s| format!("BRF_{z}{s}.SMK")))
+            .collect();
+        for stage in 0..=10u8 {
+            for mask in [0u8, 1, 2, 3, 7, 15, 31, 255] {
+                if let Some(name) = briefing_name_for_slot(stage, mask) {
+                    assert!(
+                        corpus.contains(&name),
+                        "stage {stage} mask {mask}: {name} not in the corpus domain"
+                    );
+                }
+            }
+        }
     }
 }

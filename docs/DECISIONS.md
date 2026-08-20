@@ -675,3 +675,63 @@ Not done here (queued): the post-cutscene BETWEEN.BIN + loading-screen
 display, the boot LOGO/GTLOG attract sequence, briefing/shop backdrops
 as live scenes - all callers of these name fns, once their host scenes
 exist.
+
+## D33 - P5 shop + briefing backdrop wiring: GameHost load_shop/load_briefing, movies briefing_name_for_slot (2026-08-20)
+
+Context: NEXT item 1 - wire the Shop + Brief scene movie backdrops
+into GameHost per the D31/D32 lifecycle (the D32 not-done-here
+list). Clean tree at a56f669; no predecessor WIP to adopt.
+
+1. SLOT-KEYED BRIEFING SELECTION (movies::briefing_name_for_slot
+   (stage, mask) -> Option<String>): stage -> zone letter, lowest
+   unset mask bit + 1 -> sub. Letter map [design, anchored both
+   ways]: stage 1 = the BootCamp intro and stages 7..=8 = the
+   endgame zone / post-endgame ceiling (EXW zone counter 1..7,
+   7 = endgame, RE-EXW-GAMETHREAD fact table) select None - no BRF_A
+   / BRF_G exists in the corpus, so the honest selection there is
+   no briefing movie; stages 2..=6 map onto EXW zones 2..=6 =
+   letters B..=F, exactly the 25-file BRF_{B..F}{1..5} corpus
+   domain (the linear formula clamp((zone-2)*5 + level - 1, 1, 26)
+   walks zones 2..6 = the 25 lettered levels; the D32 gate pins the
+   domain). Sub arithmetic = the SAME lowest-unset-bit selection
+   Episode::complete applies [design, open Q5]; the observable
+   FULL_MASK cadence (masks 0, 1, 3, 7) selects BRF_*{1..4} only,
+   so BRF_*5 stays corpus-resident but cadence-unreachable (the EXW
+   5-level cadence files, like the mostly-absent B2 MISSION5,
+   census sec 1). Total over the whole (stage, mask) domain: a
+   transitional full mask 0b1111 lands on sub 5 (still corpus),
+   masks with bit 4+ set and saturated masks land on sub > 5 ->
+   briefing_name rejects -> None (an explicit sub < 8 shift guard
+   keeps the walk defined). Note: the FSM deliberately carries the
+   B2 FULL_MASK cadence (DESIGN-GAME fact 3) while the corpus is
+   the EXW 5-level one; this map is the reconciliation point and
+   gets re-anchored when the EXW zone/level reader RE lands.
+2. HOST WIRING (host.rs, D31/D32 shape verbatim): GameHost
+   briefing_name() reads movies::briefing_name_for_slot over the
+   hashed episode slot (pure name arithmetic, byte-source-free);
+   load_briefing(bytes) = load_movie(Scene::Brief, bytes) and
+   load_shop(bytes) = load_movie(Scene::Shop, bytes) - the D31
+   lifecycle: inert until the FSM enters the target scene (entry
+   starts playback + queues frame-0 audio on tracks that have one -
+   the BRF rings are silent), dropped + stream cleared on leaving,
+   hash chain untouched (the D31 isolation test covers the generic
+   load_movie path). The Shop selection stays the constant
+   movies::shop_name() (SHOP.SMK, 61-frame 40 fps ring, D32 gate) -
+   no host getter for a constant. Re-load per entry is the caller
+   pattern (load_movie replaces the slot), which is what the Brief
+   scene needs: the backdrop changes per mission.
+3. TESTS (D32 shape): 3 movies.rs units (letter map + None domains;
+   sub-follows-mask-bits incl. the transitional and rejected masks;
+   every Some over the whole slot domain stays inside the 25-name
+   corpus set) + 3 host.rs units (selection walks the FULL_MASK
+   campaign: boot camp -> None, stages 2..=6 subs 1..4 ->
+   BRF_B1..BRF_F4, endgame zone + MAX_STAGE ceiling -> None;
+   load_briefing lifecycle inert-on-Title -> started-on-Brief ->
+   dropped-on-exit; load_shop via the MissionFail -> Debrief ->
+   Shop path, same lifecycle). Workspace 281 tests green, fmt +
+   clippy -D warnings clean, MANIFEST.sha256 verified before AND
+   after the corpus-touching runs.
+
+Not done here (queued): BRF_DROP.SMK as the boot-camp/endgame brief
+fallback (its play site is not yet located), the post-cutscene BETWEEN.BIN
++ loading-screen flow, the boot LOGO/GTLOG attract sequence.

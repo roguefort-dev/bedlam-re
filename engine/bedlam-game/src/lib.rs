@@ -33,8 +33,8 @@ pub use fsm::{
 pub use host::{ByteSink, ByteSource, GameHost};
 pub use movie::MoviePlayer;
 pub use movies::{
-    briefing_name, cutscene_name, gameover_name, gtlog_name, logo_name, shop_name, title_name,
-    Region, BRIEFING_DROP_NAME,
+    briefing_name, briefing_name_for_slot, cutscene_name, gameover_name, gtlog_name, logo_name,
+    shop_name, title_name, Region, BRIEFING_DROP_NAME,
 };
 pub use music::{build_script, track_name, MusicPump, ScriptMeta, ScriptTerminal};
 
