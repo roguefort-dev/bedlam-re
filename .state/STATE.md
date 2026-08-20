@@ -1,3 +1,34 @@
+- CLOSED 2026-08-21 (P4 slice tail, commits 5381bea + c4f615a +
+  055879e, worker d8c46c88 claim 1): the mission file-load +
+  table-build pass decoded and wired. docs/RE-EXW-SIM.md amendment 7c:
+  load_mission@0041dc5a (EDITOR\ZONE{x}\MISSION{n} / zone-level path
+  prefixes from build_mission_paths@0044670c; TOT/DAT/CGR/BIN/MIN/LNK
+  arena loads; map w/h from the TOT header; y-line table 0x4ea900 =
+  y*w for y in 0..=h, z-base 0x4eaacc = z*w*h for z in 0..=7; >=0x80
+  sweep planes 0..6; PAD records staged 8-byte and written
+  DAT[kind*w*h+y*w+x]=0xFF with NO bounds check; CGR height byte at
+  2+4(type-1)+dir[type-1]+6+(sy<<5)+sx - RAW 1024-byte 32x32 height
+  maps, NO codec, correcting FORMATS-MISSION 18; MRK word 3 = spawn
+  z LEVEL feeding z=word3*0x20-1, robot i takes record i verbatim;
+  the order armer FUN_004247b5 has a single caller, the robot-sprite
+  click family 0x433cbc - the verified move producer stays the
+  order/walk path, and no shipped mission spawns two markers within
+  the 6-tile order radius, so a second walker on a real map is a
+  staged marker, exactly what the network override 0x46cbe0 does).
+  FORMATS-MISSION rows updated (DAT/MRK/PAD/CGR semantics confirmed).
+  Engine: Terrain::from_mission_bytes (hermetic loader rules) +
+  corpus gate engine/bedlam-core/tests/mission_corpus_gate.rs - ZONEA
+  25x75 loader pin (deck floor z 31, type-37 wall column reads z 1 =
+  climb 30 = the real-map wall, PAD mark materialises), MRK[0]
+  (21,73,1) spawn settle z 31, staged second robot order->walk 4
+  tiles east on the real bytes (arrival snap from the west lands one
+  tile short of the target origin - faithful 0x1400-radius + grid-snap
+  semantics), state hash pinned at spawn/arm/arrival with the 7-frame
+  EXW cadence + two-run identity, and ZONEB/MISSION1 MRK[0] (27,71,3)
+  settling at z 95 on the 3-deep deck stack. All workspace tests
+  green, fmt+clippy clean, release build ok, MANIFEST verified,
+  pushed. P4 slice remaining: the isometric viewport RENDER half -
+  queued as the next Now item (init_tiles@00407e11 + the draw chain).
 - CLOSED 2026-08-20 (P2d sim-tail slice, commits c33f615 + 6280857,
   worker 778d091a claim 1): the mission-sim seam for the P4 vertical
   slice. docs/RE-EXW-SIM.md amendment 7b re-verified the contested

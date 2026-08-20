@@ -1,17 +1,17 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] vertical slice assembly tail: ZONEA/MISSION1 render + one
-   squad-member move. Inputs are all in place: the mission DAT/CGR/TOT
-   formats (FORMATS-MISSION), the P2d sim seam (engine/bedlam-core/
-   src/mission.rs - Terrain from DAT planes + CGR height sprites,
-   MissionSim order/walk/hash, green 9/9), and the P2d RE notes
-   (docs/RE-EXW-SIM.md incl. amendment 7b). REMAINING RE INPUT: the
-   mission file-load + table-build pass (RE-EXW-SIM sec 9 open item 1:
-   fills 0x4ea900/0x4eaacc/004eddec/df0 - the ".TOT/.DAT/.CGR/.MIN/
-   .PAD" loader) - decode that first as a bounded RE-notes commit,
-   then wire ZONEA/MISSION1 terrain into a Terrain + MissionSim and
-   drive one order->walk on the real map (corpus-gated, hash-pinned).
+1. [P4] mission RENDER half: decode the isometric viewport draw chain
+   and render ZONEA/MISSION1 to a frame. Inputs now complete: the
+   loader rules (RE-EXW-SIM sec 7c + Terrain::from_mission_bytes,
+   corpus-gated), init_tiles@00407e11 (builds the 36x36 ISO viewport
+   tile cache DAT_004ede24, 12 B entries: screen offset + tile deltas,
+   mirrors the TOT data into the 0x1E-stride type DBs 0x4796bc/cc),
+   and the MissionShell draw chain (...FUN_00412010/FUN_00425010
+   family, tile render buffer _DAT_004ede18 0x64000). Bounded unit:
+   decode init_tiles + the tile-draw function as RE notes, then a
+   corpus gate rendering a viewport crop of ZONEA/MISSION1 to a
+   hash-pinned/palette-indexed frame (render crate, no window).
 
 ## Backlog (not yet started)
 - Title-menu polish backlog (all optional, none block P4): pin the
@@ -24,6 +24,9 @@
 - RE-EXW-SIM sec 9 open items 2-5: FUN_00440e45 identity, robots()
   extra-phase semantics + state-1 producers, sidebar order buttons,
   the 0x62-stride robot-type stats table.
+- TOT semantics: what the loader stages from TOT beyond the w/h
+  header read (the 0x302-byte copy 0x4edbf8 -> 0x4ddb34, word
+  DAT_0046cdb8) - consumer unidentified [7c.3].
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -31,6 +34,22 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 slice TAIL COMPLETE (worker d8c46c88 claim 1, commits
+  5381bea + c4f615a + 055879e): RE amendment 7c decoded the mission
+  file-load + table-build pass (load_mission@0041dc5a: EDITOR\ZONE
+  paths, TOT/DAT/CGR/BIN/MIN/LNK loads, y-line 0x4ea900 + z-base
+  0x4eaacc table build, >=0x80 sweep planes 0..6, PAD->DAT 0xFF marks
+  at level*w*h+y*w+x UNCHECKED, CGR heights RAW 1024-B maps at
+  dir[s]+4*s+8 - no codec, corrects FORMATS 18; MRK word 3 = spawn z
+  level; order armer single caller 0x433cfb). Engine:
+  Terrain::from_mission_bytes + corpus gate mission_corpus_gate.rs -
+  ZONEA 25x75 loader pin (deck z 31, type-37 wall z 1 = climb 30, PAD
+  mark), MRK[0] (21,73,1) spawn settle z 31, staged second robot
+  order->walk 4 tiles east on real bytes, arrival snap (west approach
+  lands one tile short of the target origin - faithful 0x1400 radius
+  semantics), hashes pinned spawn/arm/arrival + two-run identity,
+  ZONEB multi-level spawn settle z 95. All workspace tests green,
+  fmt+clippy clean, release build ok, MANIFEST verified, pushed.
 - 2026-08-20: P2d sim-tail slice COMPLETE (commits c33f615 + 6280857,
   worker 778d091a claim 1): RE notes amendment 7b (objdump re-read of
   move_is_possible@0041e897, FUN_0041ebf8, FUN_004247b5, FUN_004248c8,
