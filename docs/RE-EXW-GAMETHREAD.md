@@ -140,7 +140,12 @@ void GameMain(void)                       // returns 16-bit code in AX
   // string tables: FUN_00424679("MENU ITEMS"), FUN_004245e6, FUN_0042463d loop;
   //                 FUN_00424679("WARNINGS"),  same pattern (loads, counts entries)
   DAT_0046cca4 = 1;  FUN_0043a144();              // suppress flag forced during load, restored after
-  if (first run / iVar4 == 0) {                   // intro path
+  if (first run / iVar4 == 0) {                   // intro path (boot attract;
+                                                   // RE-verified 2026-08-20 - see the
+                                                   // "Boot attract arm RE" section:
+                                                   // GTLOG then LOGO, full screen,
+                                                   // unskippable, one pass each)
+
     FUN_0042582a(0x400);
     FUN_0044567c(DAT_0046ae64 ? "GAMEGFX\\GTLOG_US.SMK" : "GAMEGFX\\GTLOG_UK.SMK", 0);
     FUN_0044567c(DAT_0046ae64 ? "GAMEGFX\\LOGO_US.SMK"   : "GAMEGFX\\LOGO_UK.SMK", 0);
@@ -387,3 +392,116 @@ engine/bedlam-assets/tests/font_gate.rs):
    re-zeroed when the boot sequence releases the timer (prevents a mid-phase
    first fade/palette-cycle tick); see above.
 5. FUN_00448ef1 - the four-read divider consumer.
+
+## Boot attract arm RE (2026-08-20 run; closes the item-1 RE prerequisite)
+
+Provenance: Ghidra headless `-process BEDLAM.EXW -noanalysis` + postScripts
+`tools/ghidra-scripts/ExwBootAttract.java` / `ExwBootAttract2.java` on the
+single BedlamWatcom import. Raw dumps: `ghidra-project/exw-bootattract.txt`
+(string xrefs + GameMain decompiles + skip-gate/flag ref census) and
+`ghidra-project/exw-bootattract2.txt` (runner body + callee closure + caller
+census). Same tag discipline as the rest of this doc.
+
+### The movie runner FUN_0044567c(name_EAX, arg2_EDX) [verified - decompile]
+
+```c
+undefined4 FUN_0044567c(char *name, int arg2)
+{
+  if (DAT_0046cca4 == 0) return 0;          // movies-enabled gate [verified ref census]
+  FUN_0042597c();                            // CLEAR: SurfaceLock, zero 480 rows x 640,
+                                             // PresentEnd - TWICE [verified body]
+  ...                                        // staging-lock priming spin (0044bc08/0044bc6c)
+  handle = FUN_0041ce69(name);               // path prefix (DAT_004de544) + _SmackOpen,
+                                             // drive-letter retry via 0046ccc8 [verified]
+  if (handle == 0) { FUN_00420100(); ... }   // open-failed cleanup (MCI + global frees)
+  dst_h = 0x1e0 - 2*arg2;                    // = 480 - 2*arg2  [verified]
+  for (f = 1; f < *(uint*)(handle+0xc); f++) {
+    if ((_DAT_004edbc4 != 0) &&
+        (ScrollUpdate(), (DAT_004edc45 != 0) || (_g_scroll_flags != 0))) {
+      _SmackClose(); FUN_00425851(); return 1;   // SKIP: close + subsystem shutdown
+    }
+    FUN_0044bc08();                          // lock staging
+    _SmackToBuffer(..., dst_h, ...);         // decode into the staging buffer
+    if (*(int*)(handle+0x68) != 0) {         // frame set a new palette [verified]
+      // if palette entry 0 non-black / entry 255 not 0x3f3f3f:
+      //   build _SmackColorTrans() nearest-color tables [verified]
+      SetPaletteRGB(handle+0x6c, 0, 0x100);  // FULL 256-entry movie palette
+    }
+    _SmackDoFrame();                         // scale/blit to the surface
+    FUN_0044bc6c();                          // unlock
+    FUN_0044b340();                          // Blt/Flip primary (present)
+    _SmackNextFrame(..., 0x1e0, 0, handle);
+    do { _SmackWait(); } while (ret != 0);   // pace: Smacker frame timing
+  }
+  return 0;
+}
+```
+
+Facts pinned [verified from the decompile unless tagged]:
+
+1. ONE-PASS BOUND: the frame loop runs `framecount - 1` iterations (loop
+   var 1..count-1, first iteration renders the frame _SmackOpen left
+   current, index 0). RING movies therefore play EXACTLY ONE bounded
+   pass through the file and the runner returns - the ring flag never
+   matters at a play site. Last frame RENDERED is index count-2; the
+   final _SmackNextFrame lands on count-1 which is never rendered or
+   audibly played. [field at handle+0xc = frame count: inferred - the
+   only header field the bound reads, and the only sane external stop
+   for the corpus ring movies; loop renders count-1 frames: verified]
+2. Y-INSET ARG: destination height = 480 - 2*arg2 (symmetric top/bottom
+   bars). Boot GTLOG/LOGO: arg2 = 0 -> full 640x480 1:1, no letterbox.
+   TITLE replay: arg2 = 0x50 = 80 -> 480-160 = 320 rows = the 640x320
+   title raster letterboxed at y=80. This VERIFIES the D31 "[design]
+   exact centering" placement note with the actual EXW arithmetic.
+3. PALETTE: applied per frame from the Smack struct (+0x6c, 768 bytes =
+   256 RGB), ALL 256 entries, only when the frame changed it (flag
+   +0x68); nearest-color translate tables are additionally built when
+   palette entry 0 is non-black or entry 255 is not (0x3f,0x3f,0x3f).
+   The D31 per-frame palette_dirty compositing matches this shape.
+4. SKIP GATE: abort requires _DAT_004edbc4 != 0 AND (after ScrollUpdate)
+   DAT_004edc45 / _g_scroll_flags nonzero -> _SmackClose + FUN_00425851
+   + return 1. Writers of 004edbc4 [verified xref census]: GameMain
+   0041c06b writes 0 at entry; NameEntryScreen (0043a5fc) 0043a843 /
+   0043a84e write ESI/EDI - straddling its FUN_004459f7 title-replay
+   call at 0043a849. CONSEQUENCE: during the BOOT attract (GTLOG+LOGO,
+   which runs BEFORE NameEntryScreen) the gate is 0 -> the check is
+   short-circuited OFF -> the boot attract movies are UNSKIPPABLE in
+   EXW and always play their full one pass. The skippable movie is the
+   TITLE replay inside NameEntryScreen (gate armed around it).
+5. SCREEN BETWEEN MOVIES: every FUN_0044567c call starts with
+   FUN_0042597c = lock + zero 480x640 + present, done TWICE - the plane
+   between two movies (and before TITLE.SMK) is CLEARED TO BLACK by the
+   runner itself, then the movie takes it over.
+6. MOVIES-ENABLED GATE: DAT_0046cca4 != 0 to play anything; GameMain
+   saves/restores it around menu-string parsing and forces 1 around
+   FUN_0043a144 [verified ref census, 26 sites].
+
+### The boot arm call order [verified - GameMain decompile]
+
+```c
+if (iVar4 == 0) {                            // first-run intro gate (local_2c == 0)
+  FUN_0042582a(0x400);                       // Smacker subsystem init
+  FUN_0044567c(DAT_0046ae64 ? "GAMEGFX\GTLOG_US.SMK" : "GAMEGFX\GTLOG_UK.SMK", 0);
+  FUN_0044567c(DAT_0046ae64 ? "GAMEGFX\LOGO_US.SMK" : "GAMEGFX\LOGO_UK.SMK", 0);
+  FUN_00425851();                            // Smacker subsystem shutdown
+}
+```
+
+GTLOG first, then LOGO; region via DAT_0046ae64 (0 = UK, nonzero = US);
+both at full screen (arg2 = 0). The pair is bracketed by
+FUN_0042582a/FUN_00425851 (init/shutdown; arg = allocation hint:
+0x400 boot, 0x4b0 title, 0x800 gameover [inferred from call sites]).
+FUN_0044567c callers [verified census]: GameMain x4 (boot pair, END,
+ZONEDONE), FUN_004459f7 (TITLE replay), FUN_0044764c (GAMEOVER).
+
+### The title replay FUN_004459f7 [verified - decompile]
+
+Called from NameEntryScreen@0043a5fc at 0043a849 (its only caller):
+FUN_0042582a(0x4b0); if movies enabled: FUN_0044567c("GAMEGFX\TITLE.SMK",
+0x50); FUN_00425851(); then either a present-sequence or FUN_00445aab.
+
+### FUN_0041ce69 path builder [verified - decompile]
+
+Builds `<prefix from DAT_004de544>\<name>` (char-pair copy loops), calls
+_SmackOpen; on failure retries with a drive-letter substitute
+(DAT_0046ccc8, not C) - a CD-drive fallback.
