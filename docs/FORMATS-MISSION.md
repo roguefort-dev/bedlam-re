@@ -214,7 +214,8 @@ What RE must confirm: everything beyond the layout.
     3×50, 4×62, 5×47, 6×8 (7 pad types).
 - **Meaning (CONFIRMED storage, EXW RE 2026-08-21 — docs/RE-EXW-SIM.md
   §7c.5):** after loading, the engine writes `DAT[plane=type][y·w+x] = 0xFF`
-  for every record (kind < 8 checked; x/y unchecked but in-bounds shipped).
+  for every record (the EXW write is unchecked; shipped type values are
+  0..6 and the arena covers them).
   get_from_dat_file reads 0xFF back as tile type 1 — a CGR slot-0
   0x1F-height deck block at level `kind`. So **`type` is the z LEVEL the
   pad materialises its tile at**, matching the TXT "lowers section two

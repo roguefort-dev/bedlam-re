@@ -366,10 +366,12 @@ was where the tables filled: 0x41d954 only allocates.)
    0 such bytes in ZONEA (the 0xFF seen in-plane there is PAD-written
    post-sweep), so this only matters for editor/padded data.
 5. **PAD staging** [verified 0x41de44..0x41df03]: PAD is read into
-   `0x4e44f8` (0x1f38 = 999×6 + 2 slack), then for i in 0..999:
-   `(x,y,kind) = rec[i]`; if `x != -1`: rec flag word set 1, and
-   **`DAT[plane=kind][y*w+x] = 0xFF`** when `kind < 8` (the only bound
-   checked — x/y are unchecked, in-bounds in the shipped corpus).
+   `0x4e44f8` (0x1f38 = 999 records + slack) as 8-byte staged records
+   `(flag, x, y, kind)` (disk 6-byte `(x, y, kind)` unpacked 2 bytes at a
+   time), then for i in 0..999: if `x != -1`: flag word set 1, and
+   **`DAT[kind·w·h + y·w + x] = 0xFF`** with NO bounds check on kind/x/y
+   [verified absence — shipped kind values are 0..6 and the 0x13884
+   arena covers the largest map, so real writes stay in the allocation].
    get_from_dat_file reads 0xFF back as type 1 → **a PAD marks its tile
    as a type-1 (CGR slot 0, 0x1F-height deck block) cell at level `kind`**
    — the concrete "pad effect" storage FORMATS-MISSION §10 was looking
