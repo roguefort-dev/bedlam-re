@@ -33,10 +33,10 @@ use crate::GameError;
 pub const SUBTICKS_PER_SECOND: u64 = 240;
 
 /// Units per sub-tick (1 sub-tick = 1/240 s = 1_000_000 x240-us units).
-const UNITS_PER_SUBTICK: u64 = 1_000_000;
+pub(crate) const UNITS_PER_SUBTICK: u64 = 1_000_000;
 
 /// Units per microsecond (1 us = 240 units of 1/240_000_000 s).
-const UNITS_PER_US: u64 = 240;
+pub(crate) const UNITS_PER_US: u64 = 240;
 
 /// Runaway-dt guard: a single advance decoding more movie frames than
 /// this drops the excess (accumulator reset) instead of spinning. 4096

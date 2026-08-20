@@ -85,6 +85,16 @@ pub fn shop_name() -> &'static str {
     "SHOP.SMK"
 }
 
+/// Zone-transition interlude still (P5, D34): BETWEEN.BIN, drawn as
+/// entry 0 right after the zone-complete cutscene movie [verified:
+/// FUN_0041db89(310000) + FUN_0041cc7f + FUN_00401e39(0,1,0,0) in the
+/// LAB_0041c69e tail]. Single-image 640x480 rle16 bank (loading gate);
+/// fetched by the caller and staged via
+/// GameHost::load_interlude.
+pub fn interlude_name() -> &'static str {
+    "BETWEEN.BIN"
+}
+
 /// The zone-complete cutscene movie for a Cutscene scene entered with
 /// the episode at `stage` [verified vs EXW LAB_0041c69e]: EXW reads the
 /// zone counter BEFORE its post-movie increment (`_DAT_004edd8c == 7`
@@ -172,6 +182,7 @@ mod tests {
         assert_eq!(title_name(), "TITLE.SMK");
         assert_eq!(gameover_name(), "GAMEOVER.SMK");
         assert_eq!(shop_name(), "SHOP.SMK");
+        assert_eq!(interlude_name(), "BETWEEN.BIN");
     }
 
     #[test]

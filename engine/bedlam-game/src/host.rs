@@ -13,6 +13,7 @@ use bedlam_render::{render, Frame, MovieFrame, RenderInput, Vga6};
 
 use crate::config::GameConfig;
 use crate::fsm::{Scene, SceneAction, SceneFsm};
+use crate::loading::{LoadingFlow, LoadingPhase, TextRow};
 use crate::movie::MoviePlayer;
 use crate::music::{self, MusicPump};
 use crate::GameError;
@@ -42,6 +43,9 @@ pub struct GameHost {
     music_scene: Option<Scene>,
     /// The loaded movie and the scene it plays on (D31).
     movie: Option<MovieSlot>,
+    /// The post-cutscene loading flow (D34): BETWEEN interlude +
+    /// region-variant loading screen, presentation-only like the movie.
+    loading: Option<LoadingFlow>,
     frame: Frame,
     palette: [Vga6; 256],
 }
@@ -70,6 +74,7 @@ impl GameHost {
             music: None,
             music_scene: None,
             movie: None,
+            loading: None,
             frame: Frame::new(palette),
             palette,
         };
@@ -93,8 +98,10 @@ impl GameHost {
             self.fsm.tick(input);
         }
         self.sync_movie();
+        self.sync_loading();
         self.sync_music();
         self.pump_movie(dt_subticks);
+        self.pump_loading(dt_subticks);
         self.frame = self.render_now();
         executed
     }
@@ -237,6 +244,160 @@ impl GameHost {
         self.load_movie(Scene::Shop, data)
     }
 
+    /// Stage the zone-transition interlude still (BETWEEN.BIN entry-0
+    /// bytes the caller fetched under [`crate::movies::interlude_name`])
+    /// for the post-cutscene flow (D34). Inert until the FSM stands on
+    /// Cutscene with the cutscene movie finished or absent; the still
+    /// then owns the plane under the standing host palette until the
+    /// Cutscene -> Select advance. Staging touches no hashed state
+    /// (unit-pinned like the D31 movie isolation).
+    pub fn load_interlude(&mut self, bin: &[u8]) -> Result<(), GameError> {
+        let still = crate::loading::decode_entry0(bin)?;
+        self.stage_loading_slot().between = Some(still);
+        Ok(())
+    }
+
+    /// The staging target: a flow still in its Staged phase absorbs
+    /// the new part; anything ACTIVE (a leftover Between/Loading from
+    /// a transition whose drop has not pumped yet) is replaced by a
+    /// fresh staged flow - the load_movie replace-the-slot semantics,
+    /// applied per staged part.
+    fn stage_loading_slot(&mut self) -> &mut crate::loading::LoadingFlow {
+        let staged = matches!(
+            self.loading.as_ref().map(|flow| flow.phase),
+            None | Some(crate::loading::LoadingPhase::Staged)
+        );
+        if staged {
+            self.loading
+                .get_or_insert_with(crate::loading::LoadingFlow::staged);
+        } else {
+            self.loading = Some(crate::loading::LoadingFlow::staged());
+        }
+        self.loading.as_mut().unwrap()
+    }
+
+    /// Stage the region-variant loading screen (LOAD_UK/US.BIN
+    /// entry-0 bytes + LOADPAL/LOADPALU.PAL bytes the caller fetched
+    /// per [`crate::movies::Region`]) for the post-cutscene flow
+    /// (D34). It owns the Select plane on the Cutscene -> Select
+    /// transition, fading in from black over FadeSetup 10 steps at
+    /// 50 Hz, and holds until Select is left. The palette folds to
+    /// 6-bit with entries 224..=255 forced to the EXW 0x3f tail.
+    pub fn load_loading_screen(&mut self, bin: &[u8], pal: &[u8]) -> Result<(), GameError> {
+        let still = crate::loading::decode_entry0(bin)?;
+        let target = crate::loading::loading_palette(pal)?;
+        let flow = self.stage_loading_slot();
+        flow.screen = Some(still);
+        flow.target = Some(target);
+        Ok(())
+    }
+
+    /// The flow presentation phase, if one is staged (D34
+    /// introspection: Staged / Between / Loading).
+    pub fn loading_phase(&self) -> Option<LoadingPhase> {
+        self.loading.as_ref().map(|flow| flow.phase)
+    }
+
+    /// Fade steps completed on the active loading screen (0..=10);
+    /// None when no screen is fading.
+    pub fn loading_fade_step(&self) -> Option<u16> {
+        self.loading
+            .as_ref()
+            .filter(|flow| flow.phase == LoadingPhase::Loading)
+            .map(|flow| flow.fade_step)
+    }
+
+    /// The pinned text row of the active loading screen (D34): the y
+    /// coordinate plus the zone-dependent x columns the FULLFONT
+    /// glyph pass will draw [geometry verified; glyphs queued].
+    pub fn loading_text_row(&self) -> Option<TextRow> {
+        self.loading
+            .as_ref()
+            .filter(|flow| flow.phase == LoadingPhase::Loading)
+            .and_then(|flow| flow.text_row)
+    }
+
+    /// Loading-flow scene sync (D34): the EXW zone-transition tail as
+    /// phase transitions. The flow only runs on the zone-transition
+    /// arm (episode stages 2..=7; the endgame arm loads no BETWEEN /
+    /// LOAD assets, so a staged flow is dropped there and never
+    /// activates). Between arms on Cutscene once the cutscene movie
+    /// is over; Loading arms on the Select entry that follows a
+    /// Cutscene the flow saw (a skip-advance still runs the loading
+    /// screen - the EXW tail is unconditional after the movie call);
+    /// leaving the flow scenes drops an ACTIVE flow, while a staged
+    /// one keeps waiting for its cutscene.
+    fn sync_loading(&mut self) {
+        let scene = self.fsm.scene();
+        let stage = self.fsm.episode().stage();
+        let cutscene_movie_holds = self
+            .movie
+            .as_ref()
+            .is_some_and(|slot| slot.scene == Scene::Cutscene && !slot.player.finished());
+        enum Decision {
+            Keep,
+            CutsceneHold,
+            Drop,
+            Between,
+            Loading(u8),
+        }
+        let decision = match self.loading.as_ref() {
+            None => Decision::Keep,
+            Some(flow) => match scene {
+                Scene::Cutscene | Scene::Select if !crate::loading::flow_armed_at_stage(stage) => {
+                    Decision::Drop
+                }
+                Scene::Cutscene => {
+                    if flow.phase == LoadingPhase::Staged && !cutscene_movie_holds {
+                        Decision::Between
+                    } else {
+                        Decision::CutsceneHold
+                    }
+                }
+                Scene::Select => {
+                    if flow.saw_cutscene && flow.phase != LoadingPhase::Loading {
+                        Decision::Loading(stage.saturating_sub(1))
+                    } else {
+                        Decision::Keep
+                    }
+                }
+                _ => {
+                    if flow.phase != LoadingPhase::Staged {
+                        Decision::Drop
+                    } else {
+                        Decision::Keep
+                    }
+                }
+            },
+        };
+        match decision {
+            Decision::Keep => {}
+            Decision::Drop => self.loading = None,
+            Decision::CutsceneHold | Decision::Between => {
+                if let Some(flow) = self.loading.as_mut() {
+                    flow.saw_cutscene = true;
+                    if matches!(decision, Decision::Between) {
+                        flow.enter_between();
+                    }
+                }
+            }
+            Decision::Loading(zone) => {
+                if let Some(flow) = self.loading.as_mut() {
+                    flow.enter_loading(zone);
+                }
+            }
+        }
+    }
+
+    /// Loading-flow time pump (D34): feed the fade engine the same dt
+    /// the host pumped - the 50 Hz steps bank on the 240 Hz grid
+    /// exactly like movie frame periods.
+    fn pump_loading(&mut self, dt_subticks: u32) {
+        if let Some(flow) = self.loading.as_mut() {
+            flow.advance(dt_subticks);
+        }
+    }
+
     /// Movie step (D31): advance the started player on the same dt the
     /// sim consumed, then queue whatever decoded. A decode failure
     /// mid-playback stops the movie and silences the stream -
@@ -300,17 +461,31 @@ impl GameHost {
     /// started movie REPLACES the scene pipeline (D31): the plane is
     /// the decoded raster + the folded 6-bit movie palette, and render
     /// emits the centered letterboxed blit - one compositing path,
-    /// inside bedlam-render.
+    /// inside bedlam-render. An active loading-flow plane (D34) takes
+    /// priority: BETWEEN / the fading loading screen own the screen the
+    /// same way, and a full-screen 640x480 still centers at the origin,
+    /// i.e. the 1:1 no-letterbox blit the loading gate pins.
     fn render_now(&mut self) -> Frame {
         let movie = self
-            .movie
+            .loading
             .as_ref()
-            .filter(|slot| slot.started)
-            .map(|slot| MovieFrame {
-                width: slot.player.info().width,
-                height: slot.player.info().height,
-                pixels: slot.player.pixels(),
-                palette: slot.player.palette(),
+            .and_then(|flow| flow.plane(&self.palette))
+            .map(|p| MovieFrame {
+                width: p.w,
+                height: p.h,
+                pixels: p.pixels,
+                palette: p.palette,
+            })
+            .or_else(|| {
+                self.movie
+                    .as_ref()
+                    .filter(|slot| slot.started)
+                    .map(|slot| MovieFrame {
+                        width: slot.player.info().width,
+                        height: slot.player.info().height,
+                        pixels: slot.player.pixels(),
+                        palette: slot.player.palette(),
+                    })
             });
         let input = RenderInput {
             sim: self.driver.sim(),
@@ -786,5 +961,278 @@ mod tests {
         host.pump_frame(4, &InputFrame::default());
         assert_eq!(host.scene(), Scene::Select);
         assert!(host.movie().is_none(), "slot dropped on Shop exit");
+    }
+    /// Marker host palette: every entry distinct, 6-bit clean.
+    fn marker_palette() -> [Vga6; 256] {
+        let mut p = [[0u8; 3]; 256];
+        for (i, c) in p.iter_mut().enumerate() {
+            *c = [(i as u8) & 0x3f, 7, 9];
+        }
+        p
+    }
+
+    /// Full-canon 640x480 single-image raw BIN (fill byte = identity).
+    fn full_still_bin(fill: u8) -> Vec<u8> {
+        let mut img = Vec::new();
+        img.extend_from_slice(&0u16.to_le_bytes());
+        img.extend_from_slice(&640i16.to_le_bytes());
+        img.extend_from_slice(&480i16.to_le_bytes());
+        img.extend(std::iter::repeat_n(fill, 640 * 480));
+        let mut v = 1u16.to_le_bytes().to_vec();
+        v.extend_from_slice(&4u32.to_le_bytes());
+        v.extend_from_slice(&img);
+        v
+    }
+
+    /// 770-byte palette file: entry 0 = [12,34,56], entry 223 =
+    /// [21,22,23], tail entries 224..=255 = [1,2,3] (to be overridden).
+    fn load_pal() -> Vec<u8> {
+        let mut d = vec![0u8; 770];
+        for (i, c) in [(0usize, [12u8, 34, 56]), (223, [21, 22, 23])] {
+            d[2 + i * 3..2 + i * 3 + 3].copy_from_slice(&c);
+        }
+        for i in 224..256usize {
+            d[2 + i * 3..2 + i * 3 + 3].copy_from_slice(&[1, 2, 3]);
+        }
+        d
+    }
+
+    /// Walk the FSM to the FIRST zone-complete Cutscene (stage 2):
+    /// boot out, three advances to Mission, the one-sub boot-camp
+    /// completion zones out to the cutscene.
+    fn walk_to_first_cutscene(host: &mut GameHost) {
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+        host.apply(SceneAction::MissionComplete); // -> Debrief (stage 2)
+        host.apply(SceneAction::Advance); // -> Cutscene
+    }
+
+    #[test]
+    fn loading_flow_lifecycle_through_the_zone_transition() {
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig::default(),
+            marker_palette(),
+        );
+        host.load_cutscene(&synth_smk()).unwrap();
+        host.load_interlude(&full_still_bin(0xB7)).unwrap();
+        host.load_loading_screen(&full_still_bin(0x10), &load_pal())
+            .unwrap();
+        // Inert from construction through the first completion.
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Staged));
+        walk_to_first_cutscene(&mut host);
+        assert_eq!(host.scene(), Scene::Cutscene);
+        // Cutscene entered: the movie starts first, the flow holds.
+        host.pump_frame(4, &InputFrame::default());
+        assert!(host.movie().is_some());
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Staged));
+        // The 2-frame synth movie finishes within 3 more pumps; the
+        // interlude then owns the Cutscene plane: full-canon BETWEEN
+        // raster (1:1, no letterbox) under the standing host palette.
+        for _ in 0..3 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert!(host.movie().unwrap().finished());
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Between));
+        assert!(host.frame().indices.iter().all(|&i| i == 0xB7));
+        assert_eq!(host.frame().palette, marker_palette());
+        // Cutscene -> Select: the loading screen takes over at fade
+        // step 0 - LOAD raster present, palette still all black.
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Select);
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Loading));
+        assert_eq!(host.loading_fade_step(), Some(0));
+        assert!(host.frame().indices.iter().all(|&i| i == 0x10));
+        assert_eq!(host.frame().palette, [[0u8; 3]; 256]);
+        // Zone 1 completed (stage 2): the 3-column text row.
+        assert_eq!(
+            host.loading_text_row().map(|row| (row.y, row.xs)),
+            Some((130, &[150, 180, 210][..]))
+        );
+        // 11 more pumps = 48 sub-ticks total = 200 ms = the 10-step
+        // 50 Hz fade complete: folded palette, forced 0x3f tail.
+        for _ in 0..11 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(host.loading_fade_step(), Some(10));
+        let pal = host.frame().palette;
+        assert_eq!(pal[0], [12, 34, 56], "file entry 0 folded back");
+        assert_eq!(pal[223], [21, 22, 23], "pre-tail entry preserved");
+        assert_eq!(pal[224], [63, 63, 63], "tail start forced");
+        assert_eq!(pal[255], [63, 63, 63], "tail end forced");
+        // Leaving Select drops the flow entirely.
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Mission);
+        assert_eq!(host.loading_phase(), None);
+        assert_eq!(host.loading_fade_step(), None);
+    }
+
+    #[test]
+    fn loading_flow_never_touches_the_scene_hash() {
+        // Same pump sequence with and without the staged flow: the
+        // scene hash chain must be IDENTICAL (D17 bucket b).
+        let walk = |with_flow: bool| -> Vec<u64> {
+            let mut host = GameHost::new(
+                &GameConfig::default(),
+                &SimConfig::default(),
+                marker_palette(),
+            );
+            if with_flow {
+                host.load_interlude(&full_still_bin(0xB7)).unwrap();
+                host.load_loading_screen(&full_still_bin(0x10), &load_pal())
+                    .unwrap();
+            }
+            let mut chain = Vec::new();
+            walk_to_first_cutscene(&mut host);
+            for _ in 0..4 {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            host.apply(SceneAction::Advance); // Cutscene -> Select
+            for _ in 0..12 {
+                host.pump_frame(4, &InputFrame::default());
+                chain.push(host.scene_hash().0);
+            }
+            host.apply(SceneAction::Advance); // Select -> Mission
+            host.pump_frame(4, &InputFrame::default());
+            chain.push(host.scene_hash().0);
+            chain
+        };
+        assert_eq!(walk(false), walk(true));
+    }
+
+    #[test]
+    fn endgame_arm_drops_the_staged_flow() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+                                          // Slot cadence per FULL_MASK: zone 1 has one sub, zones 2..=7
+                                          // four each. The flow is staged with each zone completion
+                                          // (the caller pattern: stage it when the cutscene is staged).
+        for (zone, &subs) in [1u32, 4, 4, 4, 4, 4, 4].iter().enumerate() {
+            for sub in 0..subs {
+                assert_eq!(host.scene(), Scene::Mission);
+                host.load_interlude(&full_still_bin(0xB7)).unwrap();
+                host.load_loading_screen(&full_still_bin(0x10), &load_pal())
+                    .unwrap();
+                host.apply(SceneAction::MissionComplete); // -> Debrief
+                host.apply(SceneAction::Advance); // -> Cutscene | Shop
+                if sub + 1 < subs {
+                    assert_eq!(host.scene(), Scene::Shop);
+                    // Mid-zone Select never saw the cutscene: the
+                    // staged flow stays inert (EXW has no tail there).
+                    host.apply(SceneAction::Advance); // -> Select
+                    host.pump_frame(4, &InputFrame::default());
+                    assert_eq!(
+                        host.loading_phase(),
+                        Some(crate::LoadingPhase::Staged),
+                        "mid-zone Select: inert"
+                    );
+                    host.apply(SceneAction::Advance); // -> Mission
+                }
+            }
+            assert_eq!(host.scene(), Scene::Cutscene);
+            let stage = host.fsm().episode().stage();
+            host.pump_frame(4, &InputFrame::default());
+            if zone + 1 == 7 {
+                // The endgame completion reached MAX_STAGE: the EXW
+                // endgame arm (END.SMK + credits) loads no BETWEEN /
+                // LOAD assets - the staged flow is dropped, never
+                // activated.
+                assert_eq!(stage, MAX_STAGE);
+                assert_eq!(host.loading_phase(), None, "endgame arm drops it");
+            } else {
+                assert_eq!(
+                    host.loading_phase(),
+                    Some(crate::LoadingPhase::Between),
+                    "zone-transition arm at stage {stage}"
+                );
+            }
+            host.apply(SceneAction::Advance); // -> Select
+            host.pump_frame(4, &InputFrame::default());
+            if zone + 1 == 6 {
+                // Completing zone 6 (into the endgame zone): the
+                // zone-6 arm adds the fourth text column.
+                let row = host.loading_text_row().unwrap();
+                assert_eq!(row.xs, &[150, 180, 210, 260][..]);
+            }
+            if zone + 1 == 7 {
+                assert_eq!(host.loading_phase(), None, "stays dropped");
+            } else {
+                assert_eq!(
+                    host.loading_phase(),
+                    Some(crate::LoadingPhase::Loading),
+                    "Select after the cutscene"
+                );
+            }
+            host.apply(SceneAction::Advance); // Select -> Mission
+        }
+    }
+
+    #[test]
+    fn skip_advance_bypasses_the_interlude_but_runs_the_loading_screen() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_cutscene(&synth_smk()).unwrap();
+        host.load_interlude(&full_still_bin(0xB7)).unwrap();
+        host.load_loading_screen(&full_still_bin(0x10), &load_pal())
+            .unwrap();
+        walk_to_first_cutscene(&mut host);
+        // One pump in: the movie still plays frame 0. Advancing now
+        // skips ahead - the EXW tail is unconditional after the movie
+        // call returns, so the loading screen still runs; only the
+        // interlude visual is bypassed.
+        host.pump_frame(4, &InputFrame::default());
+        assert!(!host.movie().unwrap().finished());
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.scene(), Scene::Select);
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Loading));
+        assert_eq!(host.loading_fade_step(), Some(0));
+        assert!(host.frame().indices.iter().all(|&i| i == 0x10));
+    }
+
+    #[test]
+    fn interlude_without_a_movie_shows_immediately_on_cutscene() {
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig::default(),
+            marker_palette(),
+        );
+        host.load_interlude(&full_still_bin(0xB7)).unwrap();
+        walk_to_first_cutscene(&mut host);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.loading_phase(), Some(crate::LoadingPhase::Between));
+        assert!(host.frame().indices.iter().all(|&i| i == 0xB7));
+        assert_eq!(host.frame().palette, marker_palette());
+    }
+
+    #[test]
+    fn bad_staging_assets_error_without_state_change() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        // Garbage bank / short palette: typed errors, no staging.
+        assert!(host.load_interlude(&[1u8, 2, 3]).is_err());
+        assert!(host
+            .load_loading_screen(&full_still_bin(0x10), &[0u8; 9])
+            .is_err());
+        assert_eq!(host.loading_phase(), None);
+        // The error display is pinned.
+        assert_eq!(
+            GameError::BadLoadingAsset {
+                what: "image bank entry 0",
+                reason: "undecoded raster"
+            }
+            .to_string(),
+            "loading-flow asset image bank entry 0: undecoded raster"
+        );
     }
 }

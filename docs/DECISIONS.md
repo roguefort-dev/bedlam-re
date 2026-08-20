@@ -735,3 +735,75 @@ list). Clean tree at a56f669; no predecessor WIP to adopt.
 Not done here (queued): BRF_DROP.SMK as the boot-camp/endgame brief
 fallback (its play site is not yet located), the post-cutscene BETWEEN.BIN
 + loading-screen flow, the boot LOGO/GTLOG attract sequence.
+
+## D34 - P5 post-cutscene loading flow: GameHost BETWEEN interlude + region loading screen (2026-08-20)
+
+Context: NEXT item 1 - the EXW LAB_0041c69e zone-transition tail
+(ZONEDONE.SMK -> BETWEEN.BIN -> LOAD_UK/US.BIN + LOADPAL/LOADPALU.PAL
+-> forced DAC tail -> text row -> FadeSetup 10) as the GameHost flow,
+on top of the DONE decode gate (8cc4951). Engine WIP from interrupted
+predecessor 3977d55d (max-steps exit after verification, before
+commit) adopted per AGENTS.md: snapshot under /tmp/opencode/
+wip-snapshot-f807449c/, one doc-grammar fix applied, all gates
+re-run green by the adopting run.
+
+1. FLOW MODULE (game loading.rs, presentation-only, D17 bucket b:
+   no sim/scene-hash contact - hash-isolation test): LoadingFlow
+   phases Staged -> Between -> Loading. decode_entry0 runs BETWEEN/LOAD
+   banks through the validated sprites parser (single-image 640x480
+   corpus gate; any decodable entry 0 accepted - EXW draws entry 0);
+   short/undecodable -> typed GameError::BadLoadingAsset, staging
+   rejected without state change. loading_palette folds the 770B PAL
+   through parse_vga770 + >>2 (lossless 6-bit round trip, the PALMAP
+   argument) then FORCES entries 224..=255 = 0x3f3f3f - DAC commit
+   buffer bytes 0x2a2..0x301, boundary-exact (0x2a2-2)/3=224,
+   32 entries [verified fill; the later font-ramp copy into the same
+   region belongs to the FULLFONT pass, queued].
+2. PHASE SEMANTICS (host sync_loading): Between arms on Cutscene once
+   the cutscene movie finished/absent - the interlude still owns the
+   plane under the STANDING host palette (EXW makes no DAC change
+   between movie return and LOADPAL commit; which palette the DAC
+   held is open, FUN_0044567c exit path). Loading arms on the first
+   post-cutscene Select entry: the LOAD raster under fade_palette
+   (integer lerp from black, step k = target*k/10, monotone,
+   drift-free), fade paced 10 steps x 20 ms at 50 Hz on the SAME
+   x240-us accumulator grid as movie periods (chunking-invariant,
+   pinned: 12x4-sub-tick pumps = 200 ms = step 10; saturation holds
+   full brightness). A skip-advance before movie end bypasses the
+   interlude visual but still runs the loading screen (the EXW tail
+   is unconditional after the movie call) [design: no BETWEEN hold
+   duration RE-ed]. Leaving the flow scenes, or reaching the endgame
+   arm (stage == MAX_STAGE: END.SMK + credits loads NO BETWEEN/LOAD
+   [verified code path]), drops an active flow; a staged flow waits.
+   Zone math = the cutscene_name reconciliation: EXW reads
+   _DAT_004edd8c pre-increment, so just-completed zone = stage - 1;
+   tail armed stages 2..=7 (completed zones 1..=6), text row y=0x82
+   x=150/180/210 + 260 only for completed zone 6 [verified coords];
+   pinned as TextRow flow state for the FULLFONT glyph pass (not yet
+   RE-ed) so it consumes without re-deriving zone logic [design].
+   Region variant = movies::Region path selection only (UK==US
+   byte-for-byte, 8cc4951 gate). The 310000/300000 FUN_0041db89
+   allocs are decode scratch - internal representation, parity
+   budget T3, not reproduced. render_now: loading plane > movie
+   plane > scene pipeline (full-screen 640x480 centers at origin =
+   the 8cc4951 gate 1:1 no-letterbox blit).
+3. HOST SURFACE: load_interlude(bin) / load_loading_screen(bin, pal)
+   stage parts into one slot (staged-merge, active-replace - the
+   load_movie semantics per part); introspection loading_phase /
+   loading_fade_step / loading_text_row; lib exports LoadingPhase +
+   TextRow; movie.rs UNITS_* -> pub(crate) for the accumulator.
+4. TESTS: 8 loading.rs units (decode incl. multi-entry entry-0-wins
+   + rejections; fold + tail boundaries + short-PAL; fade lerp
+   monotonicity; 50 Hz accumulator pacing + chunking invariance +
+   saturation + staged-idle; text columns; arming domain; planes per
+   phase) + 6 host.rs units (full lifecycle through the first zone
+   transition incl. palette assertions at fade 0 and 10; scene-hash
+   isolation with/without flow; FULL_MASK campaign walk to MAX_STAGE
+   - endgame drop + zone-6 4th column + mid-zone Select inertness;
+   skip-advance; interlude-without-movie; error paths). Workspace
+   311 tests green, fmt + clippy -D warnings clean, MANIFEST.sha256
+   verified before AND after the corpus-touching runs.
+
+Not done here (queued): the FULLFONT.BIN glyph pass over the pinned
+text row (FUN_0043c87c + the buf+0x2a2 font-ramp copy), BRF_DROP
+play site, boot LOGO/GTLOG attract sequence.

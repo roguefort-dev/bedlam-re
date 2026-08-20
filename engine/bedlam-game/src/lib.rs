@@ -22,6 +22,7 @@
 pub mod config;
 pub mod fsm;
 pub mod host;
+pub mod loading;
 pub mod movie;
 pub mod movies;
 pub mod music;
@@ -31,6 +32,7 @@ pub use fsm::{
     Episode, Scene, SceneAction, SceneFsm, BOOT_TICKS, FULL_MASK, MAX_LINEAR, MAX_STAGE,
 };
 pub use host::{ByteSink, ByteSource, GameHost};
+pub use loading::{LoadingPhase, TextRow};
 pub use movie::MoviePlayer;
 pub use movies::{
     briefing_name, briefing_name_for_slot, cutscene_name, gameover_name, gtlog_name, logo_name,
@@ -60,6 +62,13 @@ pub enum GameError {
     /// A byte source could not produce the named asset.
     #[error("asset {name} missing from the byte source")]
     AssetMissing { name: String },
+    /// A loading-flow asset decoded structurally but its entry-0
+    /// raster is missing or the wrong size (host staging rejects it).
+    #[error("loading-flow asset {what}: {reason}")]
+    BadLoadingAsset {
+        what: &'static str,
+        reason: &'static str,
+    },
 }
 
 #[cfg(test)]
