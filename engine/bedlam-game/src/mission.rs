@@ -65,6 +65,23 @@ pub const SIDEBAR_ROW_SPRITES: [(u16, u16); 2] = [(0x47, 0x4A), (0x49, 0x4C)];
 pub const SIDEBAR_PORTRAIT_IDS: (u16, u16) = (0x12, 0x15);
 /// Select-portrait x base + pitch (the strip x positions) + y.
 pub const SIDEBAR_PORTRAIT_XY: (i32, i32, i32) = (0x1E7, 0x32, 5);
+/// The dither noise ring length [RE-EXW-SIM 7i.2]: 0x800 bytes at
+/// 0x4e6ed8 (.bss — runtime state, no EXE bytes).
+pub const DITHER_BANK_LEN: usize = 0x800;
+/// The dither churn rate [7i.2, asm 0x448147..0x448195]: 15
+/// cursor-advancing re-randoms per MissionShell frame epilogue
+/// (unconditional — overlay frames churn too).
+pub const DITHER_CHURN: usize = 15;
+/// The blit seed formula [7i.3, FUN_0041ec59(0x7f6, 0x30)]:
+/// `(rand & 0x7fff) / 15` clamped ≤ 0x7f5 (divisor 0x8000/0x7f6-1).
+pub const DITHER_SEED: (u32, usize) = (15, 0x7F5);
+/// The per-row reseed look-ahead [7i.1, asm 0x401b14..0x401b20]:
+/// reseed when `src_off + 2*48 ≥ 0x800` (a full 48x48 blit reads
+/// 2304 B > the ring, so every full blit reseeds at least once).
+pub const DITHER_LOOKAHEAD: usize = 96;
+/// The static byte pair [7i.2]: the bank content is strictly
+/// `RandB()&3 == 0 ? 0xFF : 0x00` — 25% white noise.
+pub const DITHER_WHITE: u8 = 0xFF;
 /// Order-row NAME text x + COUNT text x [sec 6c.8a, asm 0x408507/
 /// 0x408539], both at y = 0x5B + 14*i (the row body +2), color
 /// 0x24 [asm 0x4084f8/0x40853e], drawn through SMLFONT
@@ -226,6 +243,108 @@ impl Sidebar {
     }
 }
 
+/// The dither noise ring [RE-EXW-SIM 7i; D17 split — never enters
+/// the sim hash]: the 2048-byte static bank at 0x4e6ed8 + its
+/// persistent cursor 0x4ddb30 (both .bss in the EXW). Content is
+/// binary {0x00, DITHER_WHITE}, 25% white. All random draws come
+/// from the caller's shared mission RandB stand-in — the EXW
+/// interleaves fill/churn/seeds/reseeds with the terrain edge
+/// variants on the ONE RandB stream [7i.4]; the engine consumes
+/// its stand-in in the same per-frame order (terrain edges →
+/// dither draws → churn), so the stream lives on
+/// [`MissionScene::rand_b`], not here.
+#[derive(Debug)]
+struct Dither {
+    bank: Vec<u8>,
+    cursor: usize,
+}
+
+impl Dither {
+    fn new() -> Dither {
+        Dither {
+            bank: vec![0; DITHER_BANK_LEN],
+            cursor: 0,
+        }
+    }
+
+    /// The boot fill [7i.2, MissionShell staging 0x447b13..0x447b3a]:
+    /// 2048 RandB draws, `rand&3 == 0 ? 0xFF : 0x00`. Runs once per
+    /// mission entry ([`MissionScene::activate`]); the cursor is
+    /// .bss zero at load and the fill does not touch it.
+    fn fill(&mut self, rng: &mut Pcg32) {
+        for b in self.bank.iter_mut() {
+            *b = if rng.next_u32() & 3 == 0 {
+                DITHER_WHITE
+            } else {
+                0
+            };
+        }
+    }
+
+    /// The per-frame churn [7i.2, the MissionShell epilogue
+    /// 0x448147..0x448195]: 15 times — advance the cursor (wrapping
+    /// ≥ 0x800 → 0), then re-randomize the byte AT the advanced
+    /// cursor. The whole ring refreshes every ≈137 frames.
+    fn churn(&mut self, rng: &mut Pcg32) {
+        for _ in 0..DITHER_CHURN {
+            self.cursor += 1;
+            if self.cursor >= DITHER_BANK_LEN {
+                self.cursor = 0;
+            }
+            self.bank[self.cursor] = if rng.next_u32() & 3 == 0 {
+                DITHER_WHITE
+            } else {
+                0
+            };
+        }
+    }
+
+    /// The blit seed [7i.3, FUN_0041ec59(0x7f6, 0x30)]:
+    /// `(rand & 0x7fff) / 15` clamped ≤ 0x7f5. One draw per blit.
+    fn seed(rng: &mut Pcg32) -> usize {
+        let (div, max) = DITHER_SEED;
+        (((rng.next_u32() & 0x7FFF) / div) as usize).min(max)
+    }
+
+    /// The static blit FUN_00401ae6(y, 48, x, 48, src_off, mode)
+    /// [7i.1] at the fixed portrait box y = 5: 48 rows of 48 bytes
+    /// from the ring at `src_off`, per row FIRST the wrap check
+    /// `src_off + DITHER_LOOKAHEAD ≥ 0x800 → src_off = rand & 0x1ff`
+    /// (a random reseed into the ring head, not a sequential wrap).
+    /// `masked = false` (mode 0, the DEAD/UNOCCUPIED path) copies
+    /// every byte including zeros — the box content is REPLACED;
+    /// `masked = true` (mode 1, the HIT-FLASH path) writes only the
+    /// nonzero bytes — the portrait under zero bytes survives.
+    fn blit(&mut self, rng: &mut Pcg32, plane: &mut [u8], pw: usize, x: i32, y: i32, masked: bool) {
+        let size = (DITHER_LOOKAHEAD / 2) as i32;
+        debug_assert_eq!(size, 48);
+        // Charter: never panic on a malformed plane — the sidebar
+        // box is in-bounds by construction (x ≤ 0x27B, y+48 ≤ 0x35).
+        let in_bounds = x >= 0
+            && y >= 0
+            && x + size <= pw as i32
+            && (y + size) as usize * pw + (x + size) as usize <= plane.len();
+        if !in_bounds {
+            return;
+        }
+        let size = size as usize;
+        let mut off = Self::seed(rng);
+        for row in 0..size {
+            if off + DITHER_LOOKAHEAD >= DITHER_BANK_LEN {
+                off = (rng.next_u32() & 0x1FF) as usize;
+            }
+            let dst = (y as usize + row) * pw + x as usize;
+            for col in 0..size {
+                let b = self.bank[off + col];
+                if !masked || b != 0 {
+                    plane[dst + col] = b;
+                }
+            }
+            off += size;
+        }
+    }
+}
+
 /// The spawn stats-copy armer over a loadout row [sec 6c.6, verified
 /// asm 0x40ceb2..0x40cf70]: `1 << first group whose word0 != 0`,
 /// 0 when no group carries a weapon (the fresh-campaign case — the
@@ -348,10 +467,19 @@ pub struct MissionScene {
     /// Left-button level at the last consumed tick (the D26 hashed
     /// edge-latch analog; only the left bit matters to this seam).
     prev_buttons: u8,
-    /// The off-map edge-variant stream (DrawParams.rng) [design:
-    /// Pcg32::new(0x1E240, 0) — the MissionShell seed; zone 0 = ZONEA
-    /// draws fixed edges and consumes none, MISSIONVIEW sec 7].
-    edge_rng: Pcg32,
+    /// The shared mission RandB stand-in (charter T3 — the EXW
+    /// 16-bit-pair stream at 0x4ede4c/0x4ede4e is NOT mirrored).
+    /// ONE stream consumed in the EXW per-frame order [7i.4]: the
+    /// terrain edge variants (MISSIONVIEW sec 7) → the dither
+    /// family draws (fill at activate / seeds + reseeds in the
+    /// portrait pass / churn at the frame epilogue).
+    /// `Pcg32::new(0x1E240, 0)` — the MissionShell stand-in seed;
+    /// zone 0 = ZONEA draws fixed edges and consumes none.
+    rand_b: Pcg32,
+    /// The dither noise ring [RE-EXW-SIM 7i, D55] — the 0x4e6ed8
+    /// static bank + its cursor, filled at activate, churned at
+    /// the frame epilogue, read by the portrait pass.
+    dither: Dither,
     /// The 0x64000 viewport buffer (DAT_004ede18).
     buf: Vec<u8>,
     /// The 640x480 presentation plane: the 480x480 present window at
@@ -506,7 +634,8 @@ impl MissionScene {
             cam_q5: (0, 0),
             cursor: (0, 0),
             prev_buttons: 0,
-            edge_rng: Pcg32::new(0x1E240, 0),
+            rand_b: Pcg32::new(0x1E240, 0),
+            dither: Dither::new(),
             buf: vec![0u8; VIEW_BUF_LEN],
             plane: vec![0u8; 640 * 480],
             palette,
@@ -546,6 +675,10 @@ impl MissionScene {
         // lockout family [7e.5, asm 0x44786b / 0x44871d].
         self.overlay_on = false;
         self.map_lockout = 0;
+        // The dither bank boot fill [7i.2, MissionShell staging
+        // 0x447b13]: 2048 RandB draws BEFORE the first frame — the
+        // stream order the shared stand-in mirrors (edges → dither).
+        self.dither.fill(&mut self.rand_b);
         self.active = true;
     }
 
@@ -732,11 +865,12 @@ impl MissionScene {
     /// canonical (0, 0) of the 640x480 plane. Then the SIDEBAR ART
     /// half [RE-EXW-SIM 6c.8 + 7f, the CORRECTED FUN_00403938 tail
     /// order 7f.3]: the select portraits every present
-    /// (FUN_004072bf — squad-size + alive + hp gates), the HP/armor
-    /// bars every present (FUN_0040807f — the staged vitals D52),
+    /// (FUN_004072bf — squad-size + alive + hp gates + the dead/hit
+    /// DITHER blit FUN_00401ae6 over the box, D55), the HP/armor
+    /// bars every present (FUN_0040807f — the sim robot fields),
     /// the score strip on its own countdown (FUN_004085ce —
-    /// NUMBERS.BIN, armed 2 at activate like the redraw one), and
-    /// the order-row chrome on the redraw countdown (FUN_00408403 —
+    /// NUMBERS.BIN, armed 2 at activate like the redraw one), the
+    /// order-row chrome on the redraw countdown (FUN_00408403 —
     /// armed rows 0x47+0x4A, unarmed 0x49+0x4C, rows gated by the
     /// availability bit; the decrements-then-draws rhythm [asm
     /// 0x407205..0x407217]), and the map button chrome 0x5E at the
@@ -744,13 +878,15 @@ impl MissionScene {
     /// the bit is set [7e.1f]: FUN_004089b1 never returns (JMP
     /// 0x4072b8), so an overlay frame clears the viewport half,
     /// draws the strategic map (backdrop + territory stamps + robot
-    /// markers) and skips the sidebar passes + chrome. The
-    /// dead/hit-flash dither (FUN_00401ae6 + the 0x4e6ed8 bank),
-    /// the deploy panel and the blink cursor stay unwired — each
-    /// needs state the slice does not model (never invented); the
-    /// PAD/order markers 0x57..0x59 need the unmodeled order
-    /// staging. Advances the LNK walk + edge stream once — one
-    /// render per host frame (D17 bucket b). Inert until active.
+    /// markers) and skips the sidebar passes + chrome. The frame
+    /// epilogue then churns the dither ring [7i.2 — the MissionShell
+    /// epilogue runs on overlay frames too]. The deploy panel and
+    /// the blink cursor stay unwired — each needs state the slice
+    /// does not model (never invented); the PAD/order markers
+    /// 0x57..0x59 need the unmodeled order staging. Advances the
+    /// LNK walk + the shared stand-in stream once (terrain edges →
+    /// dither draws → churn, the EXW RandB order 7i.4) — one render
+    /// per host frame (D17 bucket b). Inert until active.
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
@@ -785,9 +921,46 @@ impl MissionScene {
                 &self.general,
                 &robots,
             );
+            // The MissionShell frame epilogue still churns the
+            // dither ring on overlay frames [7i.2] — the sidebar
+            // passes are skipped, the churn is not.
+            self.dither.churn(&mut self.rand_b);
             self.render_count += 1;
             return Some(&self.plane);
         }
+        // The terrain pass first [the EXW consumes the shared RandB
+        // stream in this order, 7i.4: edge variants → dither draws]:
+        // enqueue the robots (camera Q5, shake 0, the sim frame),
+        // run the terrain pass into the 0x64000 buffer, crop the
+        // 480x480 present window with the fine-camera offset, and
+        // blit it at canonical (0, 0) of the 640x480 plane (the
+        // sidebar half x ≥ 480 never overlaps it — the pixel output
+        // is identical to the old draw order).
+        let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
+        self.view
+            .enqueue_robots(&robots, self.cam_q5.0, self.cam_q5.1, 0, self.sim.frame());
+        let (cam_x, cam_y) = self.cam_q5;
+        let zone = self.zone;
+        self.view.draw_terrain(
+            &mut self.buf,
+            &mut DrawParams::new(cam_x >> 5, cam_y >> 5, zone, &mut self.rand_b),
+        );
+        let win = present_window(&self.buf, cam_x, cam_y)?;
+        for row in 0..480usize {
+            let dst = row * 640;
+            self.plane[dst..dst + 480].copy_from_slice(&win[row * 480..(row + 1) * 480]);
+        }
+        // Then the SIDEBAR ART half [RE-EXW-SIM 6c.8 + 7f, the
+        // CORRECTED FUN_00403938 tail order 7f.3]: the select
+        // portraits every present (FUN_004072bf — squad-size +
+        // alive + hp gates + the DITHER blit FUN_00401ae6, D55),
+        // the HP/armor bars every present (FUN_0040807f — the sim
+        // robot fields, D53), the score strip on its own countdown
+        // (FUN_004085ce — NUMBERS.BIN, armed 2 at activate like the
+        // redraw one), and the order-row chrome on the redraw
+        // countdown (FUN_00408403 — armed rows 0x47+0x4A, unarmed
+        // 0x49+0x4C, rows gated by the availability bit; the
+        // decrements-then-draws rhythm [asm 0x407205..0x407217]).
         self.draw_sidebar_portraits();
         self.draw_sidebar_bars();
         if self.strip > 0 {
@@ -798,24 +971,13 @@ impl MissionScene {
             self.sidebar.redraw -= 1;
             self.draw_sidebar_rows();
         }
-        let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
-        self.view
-            .enqueue_robots(&robots, self.cam_q5.0, self.cam_q5.1, 0, self.sim.frame());
-        let (cam_x, cam_y) = self.cam_q5;
-        let zone = self.zone;
-        self.view.draw_terrain(
-            &mut self.buf,
-            &mut DrawParams::new(cam_x >> 5, cam_y >> 5, zone, &mut self.edge_rng),
-        );
-        let win = present_window(&self.buf, cam_x, cam_y)?;
-        for row in 0..480usize {
-            let dst = row * 640;
-            self.plane[dst..dst + 480].copy_from_slice(&win[row * 480..(row + 1) * 480]);
-        }
         // The map button chrome [7e.5, asm 0x4072a7]: GENERAL.BIN
         // 0x5E at (0x213, 0x1b5) — the last tail draw.
         let (chrome, cx, cy) = MAP_BUTTON_SPRITE;
         draw_sprite(&mut self.plane, 640, &self.general, chrome, cx, cy, true);
+        // The MissionShell frame epilogue churn [7i.2]: 15 ring
+        // bytes re-randomize AFTER the render, every frame.
+        self.dither.churn(&mut self.rand_b);
         self.render_count += 1;
         Some(&self.plane)
     }
@@ -879,35 +1041,50 @@ impl MissionScene {
         }
     }
 
-    /// The FUN_004072bf select-portrait subset [sec 6c.8d + 7f.4]:
-    /// slot k within the spawned squad draws its 48x48 portrait
-    /// (0x12+k when selected, 0x15+k otherwise) at
-    /// (0x1E7+0x32*k, 5), gated by the target's alive word AND the
-    /// SIM hp ≥ 1 (the FUN_004072bf gates — hp spawns 5000, so the
-    /// fresh-campaign frames are unchanged). Every present.
-    /// Presentation half only. The dead/hit dither overlay
-    /// (FUN_00401ae6) stays unwired (bank decode queued).
+    /// The FUN_004072bf select-portrait pass [sec 6c.8d + 7f.4 +
+    /// the dither 7i.3, D55]: per slot k of the 3-box strip, in
+    /// order: inside the squad (k < spawned count) with alive AND
+    /// sim hp ≥ 1 → the 48x48 portrait (0x12+k when selected,
+    /// 0x15+k otherwise) at (0x1E7+0x32*k, 5), THEN if the sim
+    /// hit_flash word != 0 the DITHER blit mode 1 (the sparse
+    /// nonzero-only overlay — the portrait under zero bytes
+    /// survives; the flash DECAY is the sim's 7g.8 per-frame tick,
+    /// this pass only reads it); dead or hp < 1 → NO portrait and
+    /// the blit mode 0 (the full static replaces the box); k ≥
+    /// squad size → the blit mode 0 every frame (the unoccupied
+    /// boxes are pure static — the EXW dithers them
+    /// unconditionally, asm 0x4073d8/0x4073fc). Presentation half
+    /// only.
     fn draw_sidebar_portraits(&mut self) {
         let selected = self.sidebar.selected;
-        for (slot, robot) in self.sim.robots().iter().enumerate() {
-            if slot >= 3 || !robot.alive || robot.hp < 1 {
-                continue;
-            }
-            let id = if slot == selected {
-                SIDEBAR_PORTRAIT_IDS.0
+        let squad = self.sim.robots().len();
+        let (x0, pitch, y) = SIDEBAR_PORTRAIT_XY;
+        for slot in 0..3usize {
+            let x = x0 + pitch * slot as i32;
+            let robot = if slot < squad {
+                self.sim.robots().get(slot)
             } else {
-                SIDEBAR_PORTRAIT_IDS.1
-            } + slot as u16;
-            let (x0, pitch, y) = SIDEBAR_PORTRAIT_XY;
-            draw_sprite(
-                &mut self.plane,
-                640,
-                &self.general,
-                id,
-                x0 + pitch * slot as i32,
-                y,
-                true,
-            );
+                None
+            };
+            let (alive, hp, flash) = match robot {
+                Some(r) => (r.alive, r.hp, u32::from(r.hit_flash)),
+                None => (false, 0, 0),
+            };
+            if alive && hp >= 1 {
+                let id = if slot == selected {
+                    SIDEBAR_PORTRAIT_IDS.0
+                } else {
+                    SIDEBAR_PORTRAIT_IDS.1
+                } + slot as u16;
+                draw_sprite(&mut self.plane, 640, &self.general, id, x, y, true);
+                if flash != 0 {
+                    self.dither
+                        .blit(&mut self.rand_b, &mut self.plane, 640, x, y, true);
+                }
+            } else {
+                self.dither
+                    .blit(&mut self.rand_b, &mut self.plane, 640, x, y, false);
+            }
         }
     }
 
@@ -1764,10 +1941,18 @@ mod tests {
         let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
         // Portraits: 2-robot squad -> slots 0 (selected, 0x12 ->
         // color 0x32) and 1 (not selected, 0x16 -> 0x36) at
-        // (0x1E7,5) and (0x219,5); slot 2 gated (squad < 3).
+        // (0x1E7,5) and (0x219,5); slot 2 is BEYOND the squad, so
+        // the dither draws full static over its box every frame
+        // (mode 0, D55 — the unoccupied boxes are pure noise).
         assert_eq!(px(plane, 0x1E7, 5), 0x32);
         assert_eq!(px(plane, 0x219, 5), 0x36);
-        assert_eq!(px(plane, 0x24B, 5), 0, "slot 2 gated (squad < 3)");
+        assert!(
+            (0..48).all(|dy| (0..48).all(|dx| {
+                let b = px(plane, 0x24B + dx as usize, 5 + dy as usize);
+                b == 0 || b == DITHER_WHITE
+            })),
+            "slot 2 beyond the squad: static replaces the box (mode 0)"
+        );
         // Rows (robot 0 selected, groups 0..2 present, bits = 1):
         // row 0 ARMED -> body 0x47 (0xA7) at (0x1EB,0x59) + well 0x4A
         // (0xCA) at (0x25A,0x59); rows 1/2 unarmed -> 0xB9/0xDC;
@@ -1856,6 +2041,101 @@ mod tests {
     }
 
     #[test]
+    fn dither_family_draws_the_7i_semantics() {
+        // [RE-EXW-SIM 7i, D55] The noise ring + the portrait-pass
+        // blit: boot fill 25% white binary noise, the mode-0 FULL
+        // static over dead + beyond-squad boxes, the mode-1 masked
+        // overlay on hit_flash (the portrait survives under zero
+        // bytes), the pass never decaying the flash itself (7g.8 is
+        // the sim tick), and the 15-byte/frame epilogue churn.
+        let mut m = staged(&[]);
+        m.activate();
+        // The bank is binary {0, 0xFF} at ~25% white (2048 draws,
+        // deterministic under the Pcg32 stand-in).
+        let whites = m.dither.bank.iter().filter(|&&b| b == DITHER_WHITE).count();
+        assert!(
+            (350..=700).contains(&whites),
+            "the boot fill is ~25% white ({whites})"
+        );
+        // 1-robot squad (zone 0): the entry frame draws the slot-0
+        // portrait; slots 1/2 are BEYOND the squad -> full static
+        // (the EXW dithers the unoccupied boxes every frame, asm
+        // 0x4073d8/0x4073fc). Pre-paint slot 1's box with a sentinel
+        // to prove the mode-0 blit REPLACES the content (the synth
+        // portraits are 2x2 dots, so a sentinel stands in for
+        // pixels).
+        for dy in 0..48usize {
+            for dx in 0..48usize {
+                m.plane[(5 + dy) * 640 + 0x219 + dx] = 0x77;
+            }
+        }
+        let plane = m.present().expect("entry frame");
+        let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
+        assert_eq!(
+            px(plane, 0x1E7, 5),
+            0x32,
+            "the portrait draws (alive, hp 5000)"
+        );
+        assert!(
+            (0..48).all(|dy| (0..48).all(|dx| {
+                let b = px(plane, 0x219 + dx as usize, 5 + dy as usize);
+                b == 0 || b == DITHER_WHITE
+            })),
+            "beyond-squad boxes carry full static — mode 0 REPLACES the box"
+        );
+        let whites = (0..48 * 48usize)
+            .filter(|&i| px(plane, 0x219 + i % 48, 5 + i / 48) == DITHER_WHITE)
+            .count();
+        assert!(whites > 100, "the static is ~25% white ({whites})");
+        // hit_flash != 0 -> the mode-1 blit over the LIVE portrait:
+        // sentinel-paint the box, flash, present — the box ends up
+        // ONLY {sentinel, 0xFF}: zeros never overwrite (the portrait
+        // survives under zero bytes) and the white specks overlay.
+        for dy in 0..48usize {
+            for dx in 0..48usize {
+                m.plane[(5 + dy) * 640 + 0x1E7 + dx] = 0x77;
+            }
+        }
+        m.sim.robots_mut()[0].hit_flash = 3;
+        let plane = m.present().expect("hit-flash frame");
+        let mut sentinel_px = 0;
+        let mut white_px = 0;
+        for i in 0..48 * 48usize {
+            match px(plane, 0x1E7 + i % 48, 5 + i / 48) {
+                DITHER_WHITE => white_px += 1,
+                0x77 => sentinel_px += 1,
+                _ => {}
+            }
+        }
+        assert!(
+            (0..48 * 48usize).all(|i| px(plane, 0x1E7 + i % 48, 5 + i / 48) != 0),
+            "mode 1 never writes zero — the box keeps its pixels (plus the fresh 2x2 portrait dot)"
+        );
+        assert!(
+            sentinel_px > 1000,
+            "the portrait survives under zero bytes ({sentinel_px})"
+        );
+        assert!(
+            white_px > 50,
+            "flash specks overlay the portrait ({white_px})"
+        );
+        assert_eq!(
+            m.sim.robots()[0].hit_flash,
+            3,
+            "the pass READS the flash; the 7g.8 decay is the sim tick"
+        );
+        // The epilogue churn: 15 ring bytes per frame — after 137+
+        // frames every byte re-randomized, the bank stays binary.
+        for _ in 0..140 {
+            m.present();
+        }
+        assert!(
+            m.dither.bank.iter().all(|&b| b == 0 || b == DITHER_WHITE),
+            "the churn re-randomizes without leaving the noise alphabet"
+        );
+    }
+
+    #[test]
     fn bars_and_score_strip_draw_the_exw_semantics() {
         // FUN_0040807f + FUN_004085ce [RE-EXW-SIM 7f, D52]: the bars
         // map the staged vitals through the exact asm sprite
@@ -1887,10 +2167,11 @@ mod tests {
         assert_eq!(px(plane, 0x225, 0x1A4), 0xF4, "money 10^3 = '4'");
         assert_eq!(px(plane, 0x245, 0x1A4), 0xF0, "money units '0'");
         // Re-staged sim vitals re-map the bars every present; hp 0
-        // gates the portrait but the stale pixels persist (the
-        // dither overlay is unwired — the plane keeps its pixels).
-        // robots_mut is the verified test seam for direct state
-        // setup (the damage path lands in the core tests).
+        // gates the portrait AND the dither now REPLACES the dead
+        // robot's box with full static (mode 0, D55): the portrait
+        // pixels do not survive, the box carries the {0, 0xFF}
+        // noise. robots_mut is the verified test seam for direct
+        // state setup (the damage path lands in the core tests).
         {
             let robots = m.sim.robots_mut();
             robots[0].hp = 2500;
@@ -1907,7 +2188,20 @@ mod tests {
             0x93,
             "armor 3000 clamps -> full 0x60"
         );
-        assert_eq!(px(plane, 0x219, 5), 0x36, "portrait stale (not redrawn)");
+        assert!(
+            (0..48).all(|dy| (0..48).all(|dx| {
+                let b = px(plane, 0x219 + dx as usize, 5 + dy as usize);
+                b == 0 || b == DITHER_WHITE
+            })),
+            "dead slot 1: full static replaces the portrait box (mode 0)"
+        );
+        assert!(
+            (0..48 * 48)
+                .filter(|&i| plane[(5 + i / 48) * 640 + 0x219 + i % 48] == DITHER_WHITE)
+                .count()
+                > 100,
+            "the static carries the 25% white noise (mode 0 replaces the box)"
+        );
         // The strip countdown drained (2 armed - 2 presents): a
         // campaign re-stage alone does NOT redraw the strip; only
         // the case-4 pickup producer re-arms it [7f.6].

@@ -268,8 +268,18 @@ palette with the mission — fetch set 10 files.
   unarmed 0x49+0x4C at (0x1EB/0x25A, 0x59+14i), names via the
   pinned FUN_00420260 table, counts "%04i", SMLFONT color 0x24)
   on the redraw countdown; both countdowns start at 2 on activate
-  (MissionShell 0x447c74/0x447c7a). The dead/hit dither
-  (FUN_00401ae6), deploy panel and blink cursor stay unwired
+  (MissionShell 0x447c74/0x447c7a). The dead/hit DITHER
+  (FUN_00401ae6 + the 0x4e6ed8 noise ring, D55) draws in the
+  portrait pass per slot: dead/hp<1 or beyond the squad -> the
+  mode-0 full static REPLACES the box (the unoccupied boxes
+  dither EVERY frame); alive with sim hit_flash != 0 -> the
+  portrait draws, then the mode-1 nonzero-only overlay flickers
+  over it (the pass reads hit_flash, never decays it — 7g.8 is
+  the sim tick). The ring: 2048 binary {0,0xFF} bytes at 25%
+  white, boot-filled at activate, churned 15 bytes/frame at the
+  present epilogue; every draw comes from the shared mission
+  RandB stand-in in the EXW order (terrain edges → dither →
+  churn, 7i.4). The deploy panel and blink cursor stay unwired
   (never invented). Out of scope: the keyboard latches (P2e
   button map).
 
@@ -291,3 +301,7 @@ no new binary decoding. GAMEPAL present tail amended 2026-08-21
 copy) + the parse_vga770 corpus format (RESEARCH-8STREET .PAL row);
 the fold rule and the MovieFrame palette hand-off are the established
 D31/D34 conventions.
+
+The D55 dither passage added 2026-08-21 (worker efc8b1e0) from the
+fresh RE-EXW-SIM 7i decode (FUN_00401ae6 objdump + the 0x447b13/
+0x448147 producers inside MissionShell FUN_0044771c).

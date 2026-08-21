@@ -1762,3 +1762,54 @@ Nudge-Worker: 416ca029-3c29-4b69-b978-09fb4222af4d
    byte-identical, MANIFEST verified.
 
 Nudge-Worker: 66831068-5861-4218-8409-6b1e3d3f360e
+
+## D55 - 2026-08-21: the dead/hit dither lands as pure presentation; the 0x4e6ed8 "mask bank" refuted as runtime noise state
+
+1. DECISION (bedlam-game): the FUN_00401ae6 dither family
+   (RE-EXW-SIM 7i) lands entirely inside the MissionScene
+   presentation half. (a) The noise ring: a 2048-byte binary
+   {0x00, 0xFF} bank (25% white) + a persistent cursor — boot
+   filled at activate (the MissionShell staging 0x447b13 analog),
+   churned 15 bytes/frame at the present epilogue (0x448147 —
+   unconditional, overlay frames included). (b) The blit in the
+   portrait pass: per slot, dead/hp<1 or beyond-squad -> mode 0
+   (full static REPLACES the box — the EXW dithers the unoccupied
+   boxes EVERY frame, asm 0x4073d8/0x4073fc); alive with sim
+   hit_flash != 0 -> the portrait draws THEN mode 1 overlays only
+   the nonzero bytes (the portrait survives under zeros). The pass
+   READS hit_flash and never decrements it — the 7g.8 decay stays
+   the sim per-frame tick (D53 hash-covered field).
+2. CORRECTION (RE): the queued-unit "512-B mask bank" gloss is
+   refuted — 0x4e6ed8 lies in .bss: the bank is RUNTIME state,
+   0x800 bytes, produced by RandB draws (fill + churn); 512 is
+   the reseed mask (RandB()&0x1ff), not the size. The blit
+   reseeds (not wraps) when src+96 >= 0x800; the per-blit seed is
+   FUN_0041ec59(0x7f6,0x30) = (RandB()&0x7fff)/15 clamp 0x7f5.
+3. STREAM MODEL: all dither draws (fill/churn/seeds/reseeds) come
+   from the ONE shared mission RandB stand-in (charter T3) —
+   edge_rng renamed rand_b — consumed in the EXW per-frame order
+   [7i.4]: terrain edge variants -> dither draws -> churn. The
+   sidebar block moved AFTER the terrain pass in present() to
+   mirror the FUN_00403938 order; pixel output is unchanged
+   (disjoint plane halves: viewport [0,480) vs sidebar [480,640)).
+4. NOT MODELED: the EXW bit-stream itself (T3 stand-in); the
+   0x4ddb30 cursor is NOT reset at activate (the fill writes the
+   bank only; the EXW cursor is .bss zero and MissionShell does
+   not zero it per mission).
+5. GATES: sim pins byte-identical (spawn 1cc7b8e125165988, click
+   0bf4fb534d6b3bd5, overlay 78a16ba63607d197, armed-sim
+   unchanged); frame pins RE-PINNED ONCE with the reason recorded
+   in the gate header (spawn 7fdada56b10f1cad, walk
+   58ea10373e8d4284, overlay 1d70e0bd059f5ae0, armed
+   6050d20755b2d852 — ZONEA spawns a 1-robot squad, so the two
+   beyond-squad boxes carry static every frame); the overlay
+   gate's "stale sidebar" reference re-anchored to the
+   last-presented frame (the per-blit seed draws make normal
+   sidebars differ frame-to-frame, exactly like the EXW); 41
+   suites green (+1 dither unit test), fmt + clippy clean, smoke
+   two-run byte-identical AND equal to the recorded baselines
+   (scene 696adb1cd110e062, parity cce30c983b97b16d — the smoke
+   hashes are end-of-journey cutscene state, mission frames never
+   entered them), MANIFEST verified.
+
+Nudge-Worker: efc8b1e0-9dfb-4f2d-a0ae-1688ac88db6f

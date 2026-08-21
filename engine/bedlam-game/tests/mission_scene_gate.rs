@@ -66,6 +66,20 @@
 //! (spawn/click) and every observation pin are UNCHANGED - the
 //! overlay is presentation-only (D17).
 //!
+//! PIN REGENERATION 2026-08-21 (DITHER unit, RE-EXW-SIM 7i + D55):
+//! the four FRAME pins (spawn/walk/overlay/armed) moved ONCE when
+//! the dead/hit dither (FUN_00401ae6 + the 0x4e6ed8 noise ring)
+//! joined the portrait pass - ZONEA spawns a 1-robot squad, so the
+//! two beyond-squad boxes carry full static every frame and the
+//! overlay frame's frozen sidebar includes it. The overlay test's
+//! "stale sidebar" reference changed from an EARLIER normal frame
+//! to the last-presented frame (the static seeds redraw per
+//! present, so normal sidebars now differ frame to frame - exactly
+//! like the EXW's per-blit FUN_0041ec59 draws). The SIM pins
+//! (spawn/click/overlay/armed) and every observation pin are
+//! UNCHANGED - the dither is presentation-only (D17); the sim hash
+//! has covered hit_flash since D53.
+//!
 //! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
 
@@ -528,10 +542,15 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // (hp/armor/hit_flash/alarm/kind/shield family — spawn hp 5000
     // is the only nonzero new value, so the sim pins move while the
     // FRAME pins stay put: the bars draw the same 5000/0 values).
+    // FRAME pins RE-PINNED ONCE 2026-08-21 (the dither unit, D55):
+    // ZONEA spawns a 1-robot squad, so slots 1/2 now carry the
+    // FUN_00401ae6 static every frame (RE-EXW-SIM 7i) — the frame
+    // hashes move, the SIM hashes do NOT (the dither is
+    // presentation-only; the sim hash covers hit_flash since D53).
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "9ecd7691d388bbfa",
-        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits + bars + score strip, empty loadout)"
+        "7fdada56b10f1cad",
+        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits + bars + score strip + dither, empty loadout)"
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
@@ -545,8 +564,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "333d128dc812d547",
-        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits + bars, empty loadout)"
+        "58ea10373e8d4284",
+        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits + bars + dither, empty loadout)"
     );
     // The overlay pins [7e]: the strategic-map frame after the strip
     // click, and the sim hash at that moment (the overlay never
@@ -557,8 +576,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // clears them either).
     assert_eq!(
         format!("{overlay_frame:016x}"),
-        "1504c600819e724c",
-        "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers)"
+        "1d70e0bd059f5ae0",
+        "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers + frozen dithered sidebar)"
     );
     assert_eq!(
         format!("{overlay_sim:016x}"),
@@ -652,8 +671,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     assert_eq!(
         format!("{armed_frame:016x}"),
-        "86a788ff93bd78a5",
-        "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text + bars + strip)"
+        "6050d20755b2d852",
+        "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text + bars + strip + dither)"
     );
 
     // Determinism: two independent runs are identical.
@@ -744,6 +763,19 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
         host.mission().expect("staged").map_overlay_on(),
         "the strip opened the map"
     );
+    // The FROZEN sidebar baseline: the click frame's sidebar half —
+    // whether that frame presented normal (drew the sidebar one
+    // last time) or already-overlay (kept the prior frame's pixels)
+    // — is exactly what every later overlay frame must show. (The
+    // dither unit D55 made normal sidebars differ per frame: the
+    // static seeds redraw every present, so `normal` — an EARLIER
+    // frame — is no longer the byte-identical reference.)
+    let frozen: Vec<u8> = host
+        .frame()
+        .indices
+        .chunks(640)
+        .flat_map(|row| row[480..].to_vec())
+        .collect();
     host.pump_frame(4, &InputFrame::default());
     let map1 = host.frame().indices.to_vec();
     // The viewport half is fully owned by the backdrop (480x480 RLE
@@ -762,21 +794,29 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
     // but the flat base dominates by area).
     let flat = map1[..480 * 480].iter().filter(|&&b| b == 0x6B).count();
     assert!(flat > 5_000, "MAPTRAN0 flat-color stamps paint ({flat})");
-    // The sidebar half keeps its stale pixels: the portraits band is
-    // byte-identical to the normal frame's (the non-returning tail
-    // skipped the sidebar passes; only [0,480) columns were redrawn).
-    let sidebar_same = (0..480usize)
-        .all(|r| map1[r * 640 + 480..(r + 1) * 640] == normal[r * 640 + 480..(r + 1) * 640]);
-    assert!(sidebar_same, "the sidebar half survives the overlay frame");
+    // The sidebar half keeps its stale pixels: it is byte-identical
+    // to the FROZEN baseline above (the non-returning tail skipped
+    // the sidebar passes; only [0,480) columns were redrawn).
+    let sidebar: Vec<u8> = map1
+        .chunks(640)
+        .flat_map(|row| row[480..].to_vec())
+        .collect();
+    assert_eq!(
+        sidebar, frozen,
+        "the sidebar half survives the overlay frame"
+    );
     // The mission keeps ticking under the overlay (the next frame is
     // a fresh overlay compose — the walker's markers/rings moved, so
     // the frames legitimately differ in the viewport half while the
     // sidebar half stays frozen).
     host.pump_frame(4, &InputFrame::default());
     let map2 = host.frame().indices.to_vec();
-    assert!(
-        (0..480usize)
-            .all(|r| map2[r * 640 + 480..(r + 1) * 640] == normal[r * 640 + 480..(r + 1) * 640]),
+    let sidebar2: Vec<u8> = map2
+        .chunks(640)
+        .flat_map(|row| row[480..].to_vec())
+        .collect();
+    assert_eq!(
+        sidebar2, frozen,
         "the sidebar half stays frozen across overlay frames"
     );
     assert!(
