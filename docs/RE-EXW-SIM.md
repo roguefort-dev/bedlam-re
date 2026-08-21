@@ -376,6 +376,135 @@ is open]; per-robot order bits default `1 << first available`
 robots_per_player(zone). Keyboard latches + the map-toggle strip
 stay unwired (button map P2e; overlay machinery open).
 
+8. **The sidebar redraw pass FUN_00408403 + the sidebar art family**
+   (2026-08-21, worker 49294e3c; decompile + full objdump
+   0x408403..0x4085c6, banks verified against the shipped bytes).
+
+   a. **FUN_00408403 = the 7 order-row draw** [asm 0x408403..0x4085c6]:
+   loops i = 0..6 over the SELECTED robot's record (base
+   `(DAT_0046cbd4 + DAT_0046cbdc) * 0xA8`, group cursor `+0x36+8i`,
+   bit mask `1<<i`):
+   - row gate: group word0 (name index, +0x36+8i) ≠ 0 — rows with
+     no weapon draw nothing;
+   - count = group word1 (+0x38+8i), clamped ≤ 9999 (0x270F, the
+     4-digit cap of the "%04i" template);
+   - ARMED row (order-bits word +0x6E bit i set): sprite **0x47**
+     @ (0x1EB, 0x59+14i) + sprite **0x4A** @ (0x25A, 0x59+14i),
+     count template @0x457A28 [asm 0x4084bc..0x4084ef];
+   - UNARMED row: sprites **0x49** / **0x4C** at the same positions,
+     template @0x457A2E [asm 0x408553..0x408586];
+   - name text: `FUN_00420260(name idx)` → SMLFONT string draw
+     `FUN_00408913` at (0x1ED, 0x5B+14i), color 0x24 [asm
+     0x40850c..0x40851f];
+   - count text: `BmpNameBuild@0x44d1f2(buf, template, count)` —
+     both templates are the literal `"%04i"` (0x457A28/0x457A2E,
+     objdump -s) — then FUN_00408913 at (0x25C, 0x5B+14i) [asm
+     0x408524..0x408549];
+   - row body y = 0x59..0xAD step 14 (text +2), sitting inside the
+     click rows 0x57..0xB8 [4]. GENERAL.BIN sprite geometry (real
+     bank bytes): 0x47/0x49 = 108×11 (x 0x1EB..0x257, the row
+     body), 0x4A/0x4C = 27×11 (x 0x25A..0x275, the count well).
+
+   b. **Semantic correction — the "orders" are weapons.**
+   `FUN_00420260@0x420260` is a compiled-in equipment-name switch:
+   2..4 NEEDLER CANNON (1..3), 6..8 PLASMA CANNON X1..X3, 9..0xB
+   HADES BOMB (1..3), 0xE FLAME BOMB, 0x10..0x12 PROXIMITY MINE
+   X2/X4/X6, 0x14..0x16 PRESSURE MINE X2/X4/X6, 0x18..0x19 FRAG
+   GRENADE (1..2), 0x1B/0x1C BOUNCY GRENADE X4/X6, 0x1D/0x1E STICKY
+   GRENADE X4/X6, 0x20..0x23 ROCKET PACK X1/X3/X6/X9, 0x25..0x28
+   REAPER PACK X1/X2/X4/X6, 0x2A AUTO SHIELDING, 0x2B BATTERY
+   PACK, 0x2C THERMAL DAMPER, 0x2D/0x2E SCANNER LEVEL 2/3, default
+   "ERROR" [strings 0x4589DD..0x458C0F]. So group word0 = the
+   weapon NAME index, group word1 = its AMMO count, and the
+   "+0x6E order-bits word" = per-weapon ARMED bits. Confirmation:
+   FUN_0040eba0 case 8 (0x40ec86 region) is the ammo-refill pickup
+   — per group it caps the current count at the group word1 max
+   (mode-2 games read `>>0x11`, i.e. half the stored max) and sets
+   `DAT_0046ccec = 2`; case 4 (0x40f0xx) is the money/score pickup
+   (player type `== word@0x4edb90` only): +1000/+2000/+5000/+
+   10000 to score `_DAT_004dd40c` or +10/+50/+100/+250 to money
+   `DAT_0046ae70`, each setting sibling countdown `0x46ccf0 = 2`.
+
+   c. **The banks** [FUN_0041d4e9 game-init / FUN_0041df10
+   mission-init loads; ESI anchors in each consumer's asm]: the row
+   sprites, portraits and bars come from **GAMEGFX\GENERAL.BIN**
+   (153 sprites, 128826 B → `_DAT_004edd7c`, ESI at 0x4084CB/
+   0x4080CE/0x40819F); the name/count text from
+   **GAMEGFX\SMLFONT.BIN** (63 glyphs 5×7, chars 0x21..0x5E →
+   `_DAT_004ede7c`, ESI at 0x408511/0x408540); the score/money
+   strip from **GAMEGFX\NUMBERS.BIN** (12 sprites: digits 0..9
+   9×11, 0xA 100×11, 0xB 74×11 → `DAT_0046af3c`, ESI at
+   0x4085E7); the deploy-panel backdrop from
+   **GAMEGFX\SCANNER.BIN** (→ `_DAT_004edd80`, ESI at 0x407233).
+   All use the one .BIN layout [RESEARCH-8STREET .BIN row]:
+   directory entry `2 + 4*id`, record `entry + u32[entry]`, record
+   `{u16 flags; if flags&2: u16 yhot(+2), u16 xhot(+4); u16 w;
+   u16 h; data}`. The sprite blit `FUN_00401ca2(id, transp, x, y)`
+   [0x401ca2]: flags bit0 = RLE (control u16 — bit15 skip
+   (w&0xFFF), bit14 end-of-line, else literal run of (w&0xFFF)
+   bytes); bit0 clear = raw rows, transp=1 keeping only nonzero
+   bytes; flags bit1 adds the hotspot to (x,y). The glyph blit
+   `FUN_00402884(ch-0x21, color, x, y)` [0x402884] fills the
+   glyph mask with a solid color (width at record+6, i.e.
+   SMLFONT glyphs carry hotspots);
+   `FUN_00402a12` is the width lookup; `FUN_00408913` is the text
+   draw: char < 0x21 advances 6 px, else glyph `ch-0x21`, advance
+   `w + 1`; chars ≥ 0x7F remap through FUN_00410493 (the codepage
+   family — unused by these ASCII names).
+
+   d. **The sibling per-frame passes** in FUN_00403938's tail [asm
+   0x4071d5..0x40724e, verified]: with the map overlay off
+   (`_DAT_004edba0 == 0`): 0x4071E3 `FUN_004072bf` EVERY FRAME —
+   per-slot select portraits from GENERAL.BIN at (0x1E7/0x219/
+   0x24B, y=5): slot 0 sprite 0x12 (selected) / 0x15, slot 1
+   0x13/0x16, slot 2 0x14/0x17 (48×48 each — filling strip
+   y 5..0x35 exactly); gates per slot: squad size
+   `DAT_0046cbd8 > slot`, ALIVE word +0x7C ≠ 0, HP +0x78 ≥ 1; the
+   pass also ticks armor (+0x2E −1/frame, clamp 5 — a draw-pass
+   state mutation the engine does not model), draws the dither HP
+   fill `FUN_00401ae6` under each portrait, and the active-robot
+   blink cursor sprite `(g_frame_count & 3) + 0x51` @ (0x1F0/
+   0x222/0x254, 0xD) when the sprite-list field `0x4dc5d0` ∈
+   {1,2,3} (its producer is open). 0x4071E8 `FUN_0040807f` EVERY
+   FRAME — per-slot HP bar sprite `0x46 - min(hp*46/5000, ...)`
+   (46 steps, hp = dword@+0x78 clamped ≤ 5000; hp ≤ 0 → 0x46) @
+   (slot_x, 0x3C) and armor bar `0x8E - (armor*46)/2500` clamped
+   ≤ 0x8D (armor = word@+0x2E clamped ≤ 2500; the +0x30 word == 0
+   → 0x8E) @ (slot_x, 0x49), GENERAL.BIN, slot_x = 0x1E8/0x21A/
+   0x24C. Countdown `0x46ccf0` → `FUN_004085ce` (the score/money
+   strip, NUMBERS.BIN): icon 0xA @ (0x1FE, 0x18E) + nine digit
+   sprites (score `_DAT_004dd40c`, x 0x202..0x256 step), icon 0xB
+   @ (0x20B, 0x1A4) + six digits (money `DAT_0046ae70`, x
+   0x211..0x245). Countdown `0x46ccf8` → sprite 0x12 from
+   SCANNER.BIN @ (0x1EE, 0xC3) — the deploy-panel backdrop (the
+   FUN_0041ec81 deploy-strip region y 0xC3..0x147).
+
+   e. **The initial draw**: MissionShell zeroes both countdowns
+   with the mission-state globals at entry (0x4478BE/0x4478C4),
+   then AFTER the mission-load calls sets BOTH `0x46ccec` and
+   `0x46ccf0` to 2 (0x447C5D `mov edi,2` → 0x447C74/0x447C7A) —
+   the rows + score strip draw on the first frames. Other
+   `0x46ccec` producers: sidebar_control = 2 [2-4], robot death
+   FUN_00409138 = 3 [5], ammo pickup = 2 [b], the MissionShell
+   auto-reselect (0x448111..0x448117: when it changes
+   `DAT_0046cbdc` it writes 0x46ccec = ebx(2), clearing
+   `_DAT_004ede34`/`_DAT_004ea8f8`).
+
+   Engine seam (this unit): GENERAL.BIN + SMLFONT.BIN stage with
+   the mission (the GAMEGFX tail grows to 12 files); present draws
+   the row chrome exactly like (a) on the countdown — sprites
+   0x47/0x4A (armed) / 0x49/0x4C (unarmed) at (0x1EB,0x59+14i) /
+   (0x25A,0x59+14i), rows gated by the availability mask bit (the
+   name-index gate analog) — plus the select portraits (d) at
+   (0x1E7+0x32*slot, 5) gated by squad size + alive (0x12+slot
+   selected / 0x15+slot not); the initial countdown is 2 on
+   activate [e]. NOT wired (each needs unmodeled state, never
+   invented pixels): name/count text (needs the type table's name
+   indices + ammo counts), HP/armor bars (needs +0x78/+0x2E sim
+   fields), the score strip (needs `_DAT_004dd40c`/`DAT_0046ae70`
+   sim state + NUMBERS.BIN), the deploy panel + blink cursor
+   (overlay family / 0x4dc5d0 producer open).
+
 ## 7. Per-tick mover state the sim hash must cover (P4 slice)
 
 From the verified write sets of {robots, robot_move, move_x/y_who,
@@ -563,10 +692,15 @@ was where the tables filled: 0x41d954 only allocates.)
 4. ~~Sidebar order buttons beyond selection~~ — DECODED 2026-08-21,
    §6c: order keys 1..7 + the 7-row click strip (gate word +0x38+8k,
    bits word +0x6E, redraw countdown DAT_0046ccec consumed by the
-   FUN_00403938 tail via FUN_00408403). Remaining open: the sidebar
-   DRAW passes (FUN_00408403 et al — the sidebar art producer), the
-   map-overlay family (_DAT_004edba0/FUN_004089b1/FUN_00401107), and
-   the keyboard-latch wiring (P2e button map).
+   FUN_00403938 tail via FUN_00408403). The sidebar DRAW passes
+   DECODED 2026-08-21 §6c.8 (FUN_00408403 rows, FUN_004072bf
+   portraits, FUN_0040807f bars, FUN_004085ce score strip; banks
+   GENERAL/SMLFONT/NUMBERS/SCANNER). Remaining open: the HP/armor
+   bar + score-strip ENGINE wiring (needs +0x78/+0x2E sim fields,
+   score/money sim state), name/count row text (needs the type
+   table's name indices + ammo counts), the map-overlay family
+   (_DAT_004edba0/FUN_004089b1/FUN_00401107 + the 0x4dc5d0 blink
+   producer), and the keyboard-latch wiring (P2e button map).
 5. The 0x62-stride robot-type stats table at 0x4de664 — STRUCTURE
    decoded 2026-08-21 (§6c.6: 7×0x0E ORDER groups, word0 default
    probe / word1 gate; engine models availability as a mask until

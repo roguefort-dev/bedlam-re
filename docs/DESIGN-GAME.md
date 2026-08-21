@@ -227,25 +227,38 @@ palette with the mission — fetch set 10 files.
   LNK memo walk + edge stream are presentation state (D17 bucket b)
   — one render per host frame advances the walk once, matching the
   render corpus gate's one-draw-per-frame rhythm at 1 tick/frame.
-- SIDEBAR PRODUCER (added 2026-08-21, RE-EXW-SIM sec 6c): clicks at
-  `x >= 0x1E0` run `sidebar_control` (the mouse subset of
-  FUN_0040d197) INSTEAD of the robot arm — the robot-select strips
+- SIDEBAR PRODUCER (added 2026-08-21, RE-EXW-SIM sec 6c; ART half
+  added 2026-08-21, sec 6c.8): clicks at `x >= 0x1E0` run
+  `sidebar_control` (the mouse subset of FUN_0040d197) INSTEAD of
+  the robot arm — the robot-select strips
   (`SIDEBAR_SELECT_STRIPS` × y[5,0x35], gated by the spawned squad
   size and the target's alive word), the 7 order rows
   (`SIDEBAR_ORDER_RECT`, `row = (y-0x57)/14` clamp 6, gated by a
   per-robot availability mask, toggling the per-robot order-bits
   word), and the `DAT_0046ccec` redraw COUNTDOWN (producers set 2,
-  every present decrements while nonzero — the sidebar redraw PASS
-  FUN_00408403 itself is a future slice). All of it lives on the
+  every present decrements while nonzero and, while nonzero, runs
+  the sidebar redraw PASS below). All of it lives on the
   presentation half: none of it enters the sim state hash (unit
   pinned + corpus pinned — sidebar clicks never arm orders).
   Availability defaults to all-7 [design: the per-type order table
   at 0x4de664 is runtime-loaded and its file source is open];
   `set_order_availability` is the host seam for the real table.
   Order bits default `1 << first available` at spawn [sec 6c.6].
-  Out of scope: the map-toggle strip (screen-mode globals + the
-  0x4edba0 overlay family) and the keyboard latches (P2e button
-  map).
+  ART: GAMEGFX\GENERAL.BIN + GAMEGFX\SMLFONT.BIN stage with the
+  mission (the GAMEGFX tail; RE-EXW-SIM 6c.8c); present draws, on
+  the countdown, the FUN_00408403 row chrome into [480,640) —
+  sprites 0x47/0x4A on armed rows, 0x49/0x4C on unarmed ones, at
+  (0x1EB, 0x59+14i) and (0x25A, 0x59+14i), rows gated by the
+  availability bit — plus the FUN_004072bf select portraits
+  (0x12+slot selected / 0x15+slot not, at (0x1E7+0x32·slot, 5),
+  gated by squad size + alive) every present; the countdown starts
+  at 2 on activate (MissionShell 0x447c74). The name/count text,
+  HP/armor bars, score strip, deploy panel and blink cursor stay
+  unwired (each needs state the sim does not model yet — names/
+  counts from the type table, +0x78/+0x2E fields, score/money,
+  the overlay family; never invented). Out of scope: the map-toggle
+  strip (screen-mode globals + the 0x4edba0 overlay family) and the
+  keyboard latches (P2e button map).
 
 ## Provenance
 
