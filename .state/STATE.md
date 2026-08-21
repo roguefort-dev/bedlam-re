@@ -1,3 +1,27 @@
+ - CLOSED 2026-08-22 (P4 7j.26 the MISSIONVIEW §5d DRAW TAILS
+   unit COMPLETE, worker 7658328a claim 1, commits 753f0a2 +
+   2d124e6 + d9bb40f, D74, docs-only; dump ghidra-project/
+   exw-effectstager-asm.txt): both consumer passes decoded —
+   the EFFECTS LOOP (0x4cf638, 80×0x1E) draws DEBRIS.BIN imgs
+   0..23 (group u16@+0x16 ×8 + frame&7, counter++ in the draw)
+   via the direct blit FUN_00401e39, sy base 0x100 + the second
+   shake table 0x454518, z Q13; 7j.25 field map corrected
+   (d@+0x14 = rising vz 6000..12069 with the group in its high
+   word, u16@+0x1A = spawn delay = producer ECX arg,
+   FUN_0041ec59(n) = RandB()/(0x8000/n−1) bounded-uniform);
+   mover FUN_00419f62 (ceiling/off-map kill). The PLATFORM LOOP
+   (0x4eb638, 32×0x14) = the enqueue pair SMOKER.BIN (bank
+   pinned) frame 0 mode 300 + column frame+1 mode 0x12d at
+   sy−0x20; tick FUN_004238af 2..16/5..16. FUN_00401e39 codec
+   decoded + the .BIN container corpus-verified (u16 count
+   word0 + u32 dir at bank+2+4·img, 24/24 DEBRIS + 160/160
+   DANTE exact — MISSIONVIEW open item 4 resolved). BONUS: the
+   DROPSHIP ring passes recorded (banks 0x4e64c0 + 0x4e6610..
+   0x4e66b8, 7×7 0x40-grids, DROPSHIP.BIN; producers → 7j.27)
+   + the [0x4ede24/28] backlog table re-pinned as the terrain
+   RESTAMP list (FUN_00440a2d = the scroll/camera restamp
+   stager). 7 new + 2 rewritten ledger rows. Next: the
+   DROPSHIP ring producers (7j.27).
  - CLOSED 2026-08-21 (P4 7j.25 the WEAPON-FIRE FAMILY TAIL
    unit COMPLETE, worker 399aeff4 claim 1, commits 3bfd400 +
    1016123 + b4950a8 + 6183be5, D73, docs-only; dump

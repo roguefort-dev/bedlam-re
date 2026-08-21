@@ -1,22 +1,29 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The MISSIONVIEW §5d DRAW TAILS (7j.26), both
-   producer-anchored now: (a) the 0x4cf638 EFFECTS LOOP —
-   the draw pass over the 80×0x1E bank (7j.25 landed its
-   FIRST producer FUN_0041a225 = destroy-tail cases 1/8:
-   jittered Q13 particles, ttl 6000+, active word@+0x18 =
-   FUN_0041ec59(3)); the consumer is the FUN_00401e39
-   draw_IMG codec family (a DIFFERENT .BIN sprite layout per
-   RESEARCH-8STREET) — decode the pass + pin
-   FUN_0041ec59(3)'s identity; (b) the 0x4eb638 PLATFORM
-   LOOP (producer CLOSED 7j.24 = FUN_0042382c robot-death
-   blast records 32×0x14; bank DAT_0046af54) — the last
-   undecoded §5d consumer. Both are bounded single-pass
-   decodes inside the FUN_00403938 render tail.
+1. [P4] The DROPSHIP RING PRODUCERS (7j.27) — the pod-descent
+   family: who writes the 7j.26-pinned ring records (12 × 0x1C
+   robot-indexed @0x4e64c0 + 6 × 0x1C standalone @0x4e6610..
+   0x4e66b8, {active d@+0, x d@+8, y d@+0xC, alt d@+0x10,
+   img-group d@+0x14}) and the pod-descent stagger state (the
+   7j.20 w@+0x2C = 1+k·(2000−m·1000/27) countdown). Bounded:
+   find writers of 0x4e64c0/0x4e6610/0x4e661c/0x4e6620/0x4e6624
+   words, decode the staging family head. Consumers + bank
+   (DROPSHIP.BIN, img = group*0x23 + 7·row+col over 7×7 0x40
+   grids) already landed (7j.26, MISSIONVIEW §5e). Needed by the
+   P4.2 harness (the first seconds of every mission have robots
+   frozen in pods). Bounded add-on if quick: the 0x4c71f4
+   state-machine pass (states <0x13, splash/screen-effect
+   sequences, sits between the platform and effects loops).
 
 ## Backlog (not yet started)
-- CLOSED by 7j.17: the [0x4edd60] height-bank family and the
+- CLOSED by 7j.26: the [0x4ede24]/[0x4ede28] "7×7 screen-address
+  table" question — it is the terrain RESTAMP list (count + 3-dword
+  {dest row, tile-x, tile-y} records, blitted via FUN_00401471;
+  writer FUN_00440a2d = the scroll/camera restamp stager, confirming
+  the hypothesis). REMAINS open slim: FUN_00440dc2's own identity
+  (reads the backbuffer [0x4ede18] @0x440e02; the 7j.16
+  TOT-materializer caller). CLOSED by 7j.17: the [0x4edd60] height-bank family and the
   projectile z-encoding census. CLOSED by 7j.24: the critter
   death-handler family. CLOSED by 7j.25: the destroy-tail
   effect-entry map + the 160-vs-0xA8 stride anomaly + the
@@ -32,9 +39,6 @@
   high-water marks + the record↔pad arm mapping task) + the
   FUN_00424a6f message string table — mechanical, decode per
   zone only when P4.2 needs it.
-- FUN_00440dc2 (the 7j.16 TOT-materializer caller) + the
-  [0x4ede24] 7×7 screen-address table: is the materializer the
-  scroll/camera restamp? Bounded head decode.
 - The 0x4787c4/0x47879c hot-rect record (renderer FUN_00403938
   writes it @0x403c93, count [0x46ccd8]; picker reads
   center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
@@ -137,6 +141,36 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4 7j.26 the MISSIONVIEW §5d DRAW TAILS unit
+  COMPLETE (worker 7658328a claim 1, commits 753f0a2 + 2d124e6
+  + d9bb40f, D74, docs-only; dump ghidra-project/
+  exw-effectstager-asm.txt (objdump 0x41a220..0x41a4f8)). Both
+  consumer passes decoded: (a) the EFFECTS LOOP (0x4cf638,
+  80×0x1E) draws DEBRIS.BIN imgs 0..23 (u16@+0x16 group ×8 +
+  frame&7, counter u16@+0x1C++ in the draw) via the DIRECT blit
+  FUN_00401e39, sy base 0x100 (−0xC vs robots) + the SECOND
+  shake table 0x454518, z Q13; 7j.25 field map CORRECTED:
+  d@+0x14 = RISING vz 6000..12069 (high word = the sprite
+  group), u16@+0x1A = SPAWN DELAY (the producer ECX arg),
+  FUN_0041ec59(n) = bounded-uniform RandB()/(0x8000/n−1)
+  helper (identity pinned); mover FUN_00419f62 kills at the
+  z=12 ceiling/off-map. (b) the PLATFORM LOOP (0x4eb638,
+  32×0x14) uses the ENQUEUE path: DAT_0046af54 = SMOKER.BIN
+  (pinned) frame 0 mode 300 + smoke column frame d@+0x10+1
+  mode 0x12d (DARKPAL) at sy−0x20; tick FUN_004238af cycles
+  2..16 intro/5..16 loop. FUN_00401e39 CODEC DECODED + the
+  .BIN container CORPUS-VERIFIED (u16 count word0, u32 dir at
+  bank+2+4·img, offsets rel. own slot; 24/24 DEBRIS + 160/160
+  DANTE exact-consumption; DEBRIS 24/SMOKER 17/DROPSHIP 210
+  imgs — MISSIONVIEW open item 4 RESOLVED, FORMATS §18
+  cross-ref). BONUS: the three DROPSHIP ring passes recorded
+  (7×7 0x40-stride grids, img = group*0x23+7·row+col, bank
+  [0x4edd64] = DROPSHIP.BIN; producers open → 7j.27) + the
+  [0x4ede24/28] backlog "7×7 screen-address table" re-pinned
+  as the terrain RESTAMP list (FUN_00440a2d = the scroll/
+  camera restamp stager — hypothesis confirmed). 7 new + 2
+  rewritten ledger rows. Manifest verified. PUSHED d9bb40f.
+  Queued: the DROPSHIP ring producers (7j.27).
 - 2026-08-21: P4 7j.25 the WEAPON-FIRE FAMILY TAIL unit COMPLETE
   (worker 399aeff4 claim 1, commits 3bfd400 + 1016123 + b4950a8
   + 6183be5, D73, docs-only; dump ghidra-project/
