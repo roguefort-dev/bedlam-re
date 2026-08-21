@@ -1,20 +1,20 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The FUN_00424051 scorch-family decode (small bounded RE):
-   the one remaining FUN_00422287 producer outside the debris
-   stager (7j.9 item 5): identify the function (its guard
-   word@0x4e9780, its tile-word sources 0x4e9776/0x4e9778, the
-   leading FUN_0042394a call, its callers), decide the engine
-   seam (host-seam vs corpus-path), and decode the surrounding
-   0x424051..0x424355 body enough to name it in the docs. If it
-   turns out corpus-path (weapon-fire scorch), land it per D57
-   patterns; else document + keep unwired.
+1. [P4] The FUN_00420608 remaining-kind census (kinds 1/2/7/8/10/
+   16..19 record params + which corpus paths stage them; the 7 ring
+   kinds 3/4/5/6/9/11/12/20 + jump table are pinned per 7j.9) —
+   feeds a later debris-stager widening beyond kind 5. NOTE from
+   7j.10: FUN_0042394a (the z-structure writer) is called at
+   0x4203a5 inside the debris stager region — check whether any
+   debris kind edits terrain (not just stages rows) while there.
 ## Backlog (not yet started)
-- The FUN_00420608 remaining-kind census (kinds 1/2/7/8/10/16..19
-  record params + which corpus paths stage them; the 7 ring kinds
-  3/4/5/6/9/11/12/20 + jump table are pinned per 7j.9) — feeds a
-  later debris-stager widening beyond kind 5.
+- The weapon-fire family decode (FUN_0041a894, 5000 B, 17 callers
+  + FUN_00412f34/FUN_00417e2f/FUN_0041bc1c): the 11 splash-stager
+  call sites of 7j.10 + the debris co-staging + the projectile/
+  impact model. Unlocking this re-opens the water-splash event
+  system (the 250-record tick decoded in 7j.10, currently unwired
+  for want of a corpus producer).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -73,6 +73,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.10 FUN_00424051 decode unit COMPLETE (worker
+  89d34b53 claim 1, commits 782a25b + 54c4109 + d08b51f, D58):
+  RE-EXW-SIM 7j.10 = FUN_00424051 IDENTIFIED as the per-frame
+  mission-epilogue tick (call 0x447ff0, right after the debris
+  tick): (1) the GLOBAL +0x18 FADE — every nonzero armor-pad/
+  scorch byte decays 1/frame unconditionally, so the D57 ring is
+  TRANSIENT (≤ value frames) and permanent map pads cannot exist
+  (MISSIONVIEW 8.1 +0x18 question FULLY closed); (2) the
+  WATER-SPLASH EVENT TICK — 250 records @0x4e9778 {x,y,z,delay,
+  age}: weapon impacts (11 stager callers, the FUN_0041a894
+  family, one co-staging debris) stamp the zone water sprite at
+  the first free z (FUN_0041bd78), fall through empty levels on
+  odd frames (g_frame_count&1), absorb into water below, re-stamp
+  base+0x16 @age 40, dry up @age≥47, scorching the tile every
+  tick (the 7j.9 item-5 re-roll writes). FUN_0042394a = the
+  z-structure writer (TOT z-word + seen + DAT volume — the
+  map-edit primitive); FUN_0041eb28 = the DAT volume read (NOT
+  visibility). ENGINE: the fade landed at the advance_frame tail
+  (corpus-safe — armor_pads has no corpus producer, set_armor_pads
+  is test-only); the two permanent-pad tests now stage value 7; +1
+  unit test (decay, single-charge value-1, full ring fade). The
+  splash system stays UNWIRED (no corpus producer — documented,
+  re-open with the weapon family). Gates: pins UNMOVED, 41 suites
+  green, fmt/clippy clean, smoke two-run byte-identical AT the
+  baselines (scene 696adb1cd110e062, parity cce30c983b97b16d,
+  audio 110400/158092), MANIFEST verified. Pushed. Queued: the
+  FUN_00420608 remaining-kind census.
 - 2026-08-21: P4 7j.8 scorch re-verify unit COMPLETE (worker
   11384359 claim 1, commits d436a58 + 982e0fa, D57): RE-EXW-SIM
   7j.9 = the armor reader 0x40bc57..0x40bc9f re-verified RAW (byte

@@ -1,3 +1,32 @@
+ - CLOSED 2026-08-21 (P4 7j.10 FUN_00424051 decode unit COMPLETE,
+   commits 782a25b + 54c4109 + d08b51f, worker 89d34b53 claim 1,
+   D58): RE-EXW-SIM amendment 7j.10 IDENTIFIES the 7j.9 item-5
+   producer — FUN_00424051 is the per-frame mission-epilogue tick
+   (0x447ff0, right after the debris tick): (1) the GLOBAL +0x18
+   FADE — every nonzero armor-pad/scorch byte decays 1/frame
+   unconditionally, so the D57 ring is TRANSIENT (a value-4 center
+   arms pads for exactly four phase-1 passes) and permanent map
+   pads CANNOT exist (MISSIONVIEW 8.1 +0x18 question FULLY
+   closed); (2) the WATER-SPLASH EVENT TICK — 250 records @0x4e9778
+   {x,y,z,delay,age}: weapon impacts (11 stager callers, the
+   FUN_0041a894 family, one co-staging debris) stamp the zone
+   water sprite at the first free z (FUN_0041bd78), fall through
+   empty levels on odd frames (g_frame_count&1), absorb into
+   water below, re-stamp base+0x16 @age 40, dry up @age≥47,
+   scorching the tile every tick. FUN_0042394a = the z-structure
+   writer (TOT z-word + seen + DAT volume — the map-edit
+   primitive); FUN_0041eb28 = the DAT volume read (NOT
+   visibility). ENGINE: the fade landed at the advance_frame tail
+   (corpus-safe: no armor_pads corpus producer, set_armor_pads
+   test-only); the two permanent-pad tests now stage value 7; +1
+   unit test (decay + single-charge value-1 + full ring fade);
+   the splash system stays UNWIRED (no corpus producer —
+   documented, re-open with the weapon family). Gates: pins
+   UNMOVED, 41 suites green, fmt/clippy clean, smoke two-run
+   byte-identical AT the baselines (scene 696adb1cd110e062,
+   parity cce30c983b97b16d, audio 110400/158092), MANIFEST
+   verified. Pushed. Queued: the FUN_00420608 remaining-kind
+   census.
  - CLOSED 2026-08-21 (P4 7j.8 scorch re-verify unit COMPLETE, commits
    d436a58 + 982e0fa, worker 11384359 claim 1, D57): RE-EXW-SIM
    amendment 7j.9 resolves the 7j.8 caveat byte-precisely — the
