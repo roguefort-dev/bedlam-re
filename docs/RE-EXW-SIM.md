@@ -3920,7 +3920,17 @@ render tail, closing the 7j.25 queue item:
    robot-indexed sy subtracts the robot z as well. Bank
    geography: 12×0x1C robot rings + 6×0x1C standalone = ends
    exactly at the trail-ring bank 0x4e66b8 (7j.22/23). Ring
-   producers (pod-descent stagger) remain open.
+   producers (pod-descent stagger) remain open. **Bonus: the
+   [0x4ede24/0x4ede28] backlog "7×7 screen-address table"
+   re-pinned as the terrain RESTAMP list** [verified decomp
+   0x406a8c..0x406c73]: count + 3-dword records {dest row,
+   tile-x, tile-y} blitted through FUN_00401471 (border tile
+   FUN_00408030 outside the window, full LNK path inside);
+   writers = FUN_00440a2d (TOT-mirror materializer — so it IS
+   the scroll/camera restamp stager), FUN_0043d00b, FUN_0041d954.
+   Also noted: an open state-machine pass at 0x4c71f4 (states
+   <0x13, splash/screen-effect sequences) between the platform
+   and effects loops.
 8. **Corpus verdict: unchanged** — both passes consume records
    whose producers sit off the corpus path (no deaths, no
    destroy-tail, no pod descent in the crop gates). Engine seam:
@@ -3994,6 +4004,7 @@ render tail, closing the 7j.25 queue item:
 | platform anim tick | FUN_004238af (MissionShell @0x447fff): for active 0x4eb638 records d@+0x10++, wrap 0x10→4 (drawn smoke column 2..16 intro, 5..16 loop) | §7j.26 |
 | bounded random helper | FUN_0041ec59(n) = RandB()/(0x8000/n − 1) clamped n−1 — uniform-ish [0,n−1] on the 15-bit RandB | §7j.26 |
 | dropship ring banks | 0x4e64c0 (12 × 0x1C robot-indexed) + 0x4e6610..0x4e66b8 (6 × 0x1C standalone) {active d@+0, x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14}; consumer draws 7×7 grids of 0x40-stride tiles, img = group*0x23 + 7*row+col, bank [0x4edd64] = DROPSHIP.BIN (ArenaAlloc 0x25990); ends at the trail bank 0x4e66b8; producers = pod-descent family (OPEN) | §7j.26 |
+| terrain restamp list | [0x4ede24] ptr + [0x4ede28] count → 3-dword records {dest row (y·0x280 basis), tile-x, tile-y}; render-tail readers 0x4067a6/0x406b32 blit each via FUN_00401471 (border tile FUN_00408030 off-window, full LNK path in-window); writers FUN_00440a2d (= the TOT-mirror materializer = the scroll/camera restamp stager), FUN_0043d00b, FUN_0041d954 — resolves the backlog "7×7 screen-address table" hypothesis | §7j.26 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |

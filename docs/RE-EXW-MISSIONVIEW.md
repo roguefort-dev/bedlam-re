@@ -367,6 +367,23 @@ wide, centered differently. The trail-ring bank 0x4e66b8 (7j.22/23)
 begins exactly at the end of the 6 standalone records. Producers
 of the ring records = the pod-descent family (open; P4.2 harness).
 
+**Bonus pin: the [0x4ede24/0x4ede28] "7×7 screen-address table"
+of the backlog is NOT a 7×7 table — it is the terrain RESTAMP
+list** [verified decomp 0x406a8c..0x406c73 region, readers
+0x4067a6/0x406b32]: `_DAT_004ede28` = record count,
+`_DAT_004ede24` = pointer to 3-dword records {dest row offset
+(y·0x280 basis), tile-x, tile-y}; per record the pass blits via
+the §4 terrain codec FUN_00401471 — tiles outside the map window
+edges get the FUN_00408030 border tile, in-window tiles go
+through the full LNK/type-DB terrain path (continuing into the
+DAT_004796bc/LNK-image code). Writers per the 7j.16 census:
+FUN_00440a2d (the TOT-mirror materializer), FUN_0043d00b,
+FUN_0041d954 — so the materializer IS the scroll/camera
+restamp stager, confirming the backlog hypothesis. A separate
+state-machine pass over 0x4c71f4 (states <0x13; the splash/
+screen-effect sequences) sits between the platform and effects
+loops — still open, decode with its producers.
+
 ### 5f. FUN_00401e39 — the direct draw_IMG blit [verified, decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer` re-anchored]
 
 Register args (EAX img, DX transp, EBX x, ECX y, ESI bank, EDI
