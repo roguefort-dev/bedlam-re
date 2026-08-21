@@ -40,10 +40,44 @@ anchors (two independent evidence pieces) per the W1 ticket.
 - Post-import program census: see §1b below (function count, strings).
 - MANIFEST.sha256 re-verified OK after the import (game-data read-only).
 
-### 1b. Program census
+### 1b. Program census (probe 1, ghidra-project/exd-probe.txt)
 
-- TODO (filled after analysis completes): function count, entry-chain
-  names, strings scale, comparison vs EXW 675 fns / B2 671 fns.
+- 758 functions (EXW 675, B2 671 — same scale). Largest: FUN_000448e7
+  (28,451 B), FUN_0003d253 (27,493), FUN_00036b6f (26,211, INT 0x60 +
+  PIT 0x43/0x40 = the HMI sound driver), FUN_0001476d (14,644).
+- Blocks: .object1 0x10000-0x727ff R, .object2 0x80000-0x12583d R(Ghidra
+  marks R; loader semantics RW), .image overlay 0x0-0x9ff1c.
+- Entry 0x5fbb0 decompiles as the Watcom DOS4GW CRT stub (INT 21h AH=30h,
+  DX 0x4458 marker, PSP cmdline @0x81, ENV scan) → CRT init chain
+  FUN_00064320 / FUN_000642d1 / FUN_0006436b → INT 21h 4C exit. The
+  game-init/main dispatch hangs off FUN_000642d1 (B2: CrtInitChain@0x6b1bc
+  twin shape).
+- Strings corpus (418 defined): C:\MIRAGE\BEDLAM\OPTIONS.BDL @0x850a3,
+  SOUND\SPEECH\SPCH*.RAW (B1-only speech family), SOUND\MIDI\* (B1 has
+  MIDI scores), GAMEGFX banks GENERAL/SINTABLE/MONOFONT/TINYFONT/SMLFONT/
+  DROPSHIP/SPIDER/TERRA/CACO/HUMANS/SENTRYG/SENTRY/BIOMEX3G/BIOMEX3/
+  WEAPONS/DEBRIS/ROBNUMS/SMOKER/SCANNER, DEADMAN1/2.RAW @0x869ea/0x86a01,
+  "\MISSION" @0x86f9c (path builder), hmidrv/hmidet.386, HMI error
+  strings. Note: mission-section strings (.TOT/.NME/.TRT/.POS/.BDG/.PAD)
+  are NOT in the defined-data pass — raw scan queued for probe 2.
+
+## 1c. Probe-1 anchor hits (all [verified] = read from the EXD listing)
+
+| EXW anchor | EXW evidence | EXD hit | EXD evidence |
+|---|---|---|---|
+| PresentFlip family | EXW PresentEnd@0x425a03 (DDRAW) / B2 PresentFlip@0x1066b | **FUN_00010670** | MOV EAX,0x4f07 ×2 @0x106cd/0x10769 + INT 0x10 ×2 + MOV ECX,0x96 ×2 (the B2 cursor-block copy tail) |
+| WaitVRetrace | B2 @0x10856 | **FUN_0001085b** | MOV EDX,0x3da @0x10865 |
+| VESA mode init | B2 VesaModeInit@0x12290 | **FUN_00012298** | 4f02 @0x12441 + 4f07 + 4f05 + INT 0x10 |
+| VESA set-window | B2 VesaSetWindow@0x12ac8 | **FUN_00012516** | 4f05 ×2 @0x12548/0x12560 |
+| page mappers | B2 0x128df/0x12960 | **FUN_00012aca / FUN_00012b46** | 4f05 pairs @0x12b1c/31, 0x12b6d/93 |
+| RngStepA/B | B2 @0x1220e/0x1224f; additives 0x3619/0x62e9 | **FUN_00012216 / FUN_00012257** | ADC AX,0x3619 + ADD BX,0x62e9 in both |
+| RNG-A seed plant | EXW 0x4ede48 ← 123456 | **[0x00107470] ← 0x1e240** | MOV dword ptr [0x107470],0x1e240 @0x596f9 (FUN_000596ed); second site MOV EBX,0x1e240 + MOV EDX,0x39447 @0x2c7bf/ba (FUN_0002c6e3 — mission reseed twin) |
+| PIT tick install | B2 TickInstall@0x32546, divisor 0x2e9b | **FUN_0002eb0d** | MOV EAX,0x2e9b @0x2eb91 (100.01 Hz — SAME divisor as B2) |
+| tile word grid | EXW 0x460dfa+2·tile (0x7d2/0x7d3/0x7d4 words) | **0x000fe37c + 2·tile** | MOV word ptr [EAX*0x2 + 0xfe37c],0x7d4 @0x33985 (FUN_000337f4 = platform stamper); MOV word ptr [EBX + 0xfe37c],0x7d2/0x7d3 @0x33ea8/0x33ed4 (FUN_00033e44 = the EXW FUN_00422f18 twin) |
+| weapon impact resolver | EXW FUN_0041a894 (0/0x7d2/0x7d3 pass, 0x7d4 platform) | **FUN_0002b150** | CMP EDX,0x7d2/0x7d3/0x7d4 triple @0x2b1a1/a9/b1 |
+| second resolver site | EXW trap pair FUN_0040fe93/FUN_0040ff92 | FUN_0001c7dc @0x1ca6b/8b | CMP EAX,0x7d3/0x7d2 pair |
+| beacon/order armer | EXW FUN_004247b5 (0x197 timer + validity window) | **FUN_0003570e** | MOV ECX,0x197 @0x3572c (the only 0x197 immediate in the EXD code) |
+| pod payout 5000 | EXW escape-craft animator FUN_0041fbb1 (+5000) | **FUN_0001f8c1** + score cand | ADD [0x10da28],0x1388 @0x1feca; ADD [0x10da28],0x2710 @0x1fed6 — score home candidate 0x10da28 [hypothesis, needs the chain-detonation site for the dual anchor] |
 
 ## 2. EXD present/frame-tail site (the S0 dump trigger)
 
