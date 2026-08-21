@@ -1,20 +1,35 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The FUN_00420608 remaining-kind census (kinds 1/2/7/8/10/
-   16..19 record params + which corpus paths stage them; the 7 ring
-   kinds 3/4/5/6/9/11/12/20 + jump table are pinned per 7j.9) —
-   feeds a later debris-stager widening beyond kind 5. NOTE from
-   7j.10: FUN_0042394a (the z-structure writer) is called at
-   0x4203a5 inside the debris stager region — check whether any
-   debris kind edits terrain (not just stages rows) while there.
+1. [P4] The FUN_00422693 platform/destructible-terrain family
+   decode (415 B @0x422693 + the 0x4227xx..0x422fxx kin): the
+   0x465daa/0x460dfa per-tile word gate banks (writers incl.
+   0x4227d5/0x422a73/0x422b0d, the 0x7d2/0x7d3/0x7d4 tile
+   words), the two FUN_0042394a calls @0x422750/0x422a54 (the
+   ONLY non-splash, non-arrival z-structure writers), and the
+   k7 debris staging @0x4227b9 — surfaced by 7j.11; feeds the
+   gate-bank semantics the 7h pickup floor-word swap + the
+   D53-noted 0x7d2/0x7d3 tile words both need. Keep it
+   bounded: this family only, census the rest.
 ## Backlog (not yet started)
+- The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
+  staging at 0x425daf/0x426079/0x42688c + the register-addressed
+  countdown writes + the record draw pass 0x4065f8..0x4066a3) —
+  the delayed-arrival scheduler is decoded (7j.11 item 1), its
+  producers are not.
 - The weapon-fire family decode (FUN_0041a894, 5000 B, 17 callers
   + FUN_00412f34/FUN_00417e2f/FUN_0041bc1c): the 11 splash-stager
   call sites of 7j.10 + the debris co-staging + the projectile/
   impact model. Unlocking this re-opens the water-splash event
   system (the 250-record tick decoded in 7j.10, currently unwired
-  for want of a corpus producer).
+  for want of a corpus producer) AND stages 17 of the 20 debris
+  kinds (the 7j.11 census: k1..k4/k6/k7/k8..k20 producers all
+  live here or in the platform family).
+- The debris-stager ENGINE widening beyond kind 5 (fed by the
+  7j.11 20-kind table + the 11 seq tables): model the k2/k8
+  single-center scorch (values 3/4), the k1/k20 shared-tail
+  ring, and the +0x20 physics classes (0/1/2/3/6 ->
+  FUN_0040de9c) — blocked on real producers (weapon family).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -28,7 +43,8 @@
 - Mission SFX tier (RE-EXW-SIM sec 9 open item 5; MENU1/MENU2-style
   mixer instruments exist) + the order SFX 0x2A armer click + the
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
-  entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6).
+  entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
+  debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4).
 - The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
   mirror rows + the probe-latch walk + the DAT z-plane consume +
   the 0x454a90 floor-word swap) — unblocks the apply_pickup
@@ -50,7 +66,8 @@
   boot-cleared alongside the effect rows per 7j.1), ROBNUMS name
   plates, Shield/Variant bank staging (nodes enqueue, flush skips
   while unstaged). The debris physics/collision FUN_0040de9c (7j.7
-  head decode) lives here too.
+  head decode) lives here too (+ the 0x454510+ physics-param dword
+  table census-noted in 7j.11 item 5).
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
   per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
   weapon-table writer family - see 7d.2), robots() extra-phase
@@ -73,6 +90,23 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.11 FUN_00420608 kind census unit COMPLETE
+  (worker 804e8c9d claim 1, commit 199fe32, D59, docs-only):
+  the 0x4203a5 queue NOTE answered — the FUN_0042394a call is
+  in FUN_0042034c (the DELAYED-ARRIVAL SCHEDULER, epilogue
+  0x448076, 45 records @0x4dcdb8 stride 0x24: countdown w/ the
+  0xa SFX, the 0x465daa word-gate, the first-water-level CLEAR,
+  the robot teleport + get_z_pos re-settle + the 8-word z fill),
+  NOT a debris kind; the stager body has ZERO type-DB refs and
+  ZERO z-writer calls. The 20-kind table pinned (11 seq tables
+  0x454424..0x454510, physics classes 0/1/2/3/6, inits 0x40/
+  0x20, the two arrival-SFX helpers + the k11 LCG gate).
+  CORRECTION: kinds 1/13/14/15 DO write the nine ring (jmp
+  into the k20 tail); kinds 2/8 write ONE center tile (3/4);
+  only 7/10/16..19 ring-free. Full 47-site caller census: only
+  k5 (death, engine-landed) is corpus-reachable today. No
+  engine change (D59); manifest verified; pushed. Queued: the
+  FUN_00422693 platform/destructible family.
 - 2026-08-21: P4 7j.10 FUN_00424051 decode unit COMPLETE (worker
   89d34b53 claim 1, commits 782a25b + 54c4109 + d08b51f, D58):
   RE-EXW-SIM 7j.10 = FUN_00424051 IDENTIFIED as the per-frame
@@ -100,86 +134,3 @@
   baselines (scene 696adb1cd110e062, parity cce30c983b97b16d,
   audio 110400/158092), MANIFEST verified. Pushed. Queued: the
   FUN_00420608 remaining-kind census.
-- 2026-08-21: P4 7j.8 scorch re-verify unit COMPLETE (worker
-  11384359 claim 1, commits d436a58 + 982e0fa, D57): RE-EXW-SIM
-  7j.9 = the armor reader 0x40bc57..0x40bc9f re-verified RAW (byte
-  != 0, no mask — scorch and pads share the type-DB +0x18 byte) +
-  FUN_00422287 re-verified (same 0x4796d4+tile*0x1E byte, sar>>5,
-  bounds, value >= 8 -> 7) + the kind-5 ring CORRECTED to NINE 3x3
-  writes (corners 1/edges 2/center 4, exact order incl. the shared
-  0x421291 tail) + FULL caller census: SEVEN in-family ring
-  producers (kinds 3/4/5/6+12/9/11/20, identical rings, jump table
-  0x4205b8 re-verified) + ONE external FUN_00424051 (five
-  same-tile re-rolls, census-only). ENGINE: MissionSim::scorch_write
-  (FUN_00422287 model over the armor_pads mirror, zero-padded
-  growth) + the death-tail nine ring writes per debris + pub
-  armor_pad_byte + DEBRIS_SCORCH_RING + 2 unit tests (ring fold +
-  bounds/clamp). Gates: every pin UNMOVED, smoke two-run
-  byte-identical AT the baselines (scene 696adb1cd110e062, parity
-  cce30c983b97b16d, audio 110400/158092), fmt/clippy clean,
-  MANIFEST verified. Pushed. Queued: the FUN_00424051 decode.
-- 2026-08-21: P4 effect-row seam unit COMPLETE (worker 6ab53863
-  claim 1, commits 4f858d9 + e706a33 + 9bbf1ac, D56): RE-EXW-SIM
-  7j = the 0x4dc5d0 family decoded (the 10 16-B effect rows at
-  0x4dc5d4 {x,y,z,id} + the FUN_00422038 alloc + the FUN_0042205c
-  rise-tick + the FLAGS.BIN draw pass + the COMPLETE effect-id
-  table {1,6,7,1,0xE,0xC,0xD} per case; the blink-cursor scalar
-  _DAT_004dc5d0 = selected slot+1, its producers/consumer pinned)
-  + FUN_00420608 = the 128x0x30 debris stager (z clamp, LRU
-  eviction, 20-kind table, kind 5 = death debris with the six
-  FUN_00422287 scorch-ring writes — closing the MISSIONVIEW §8.1
-  +0x18 producer question with the armor-pad reader caveat) + the
-  FUN_00420549 seq tick + the BLOWUP(B/G).BIN draw pass. ENGINE:
-  NodeBank::{Flags,Blowup} + enqueue_effects in bedlam-render,
-  EffectRows + DebrisFx presentation state + the damage/pickup
-  seam stagings + the epilogue-order ticks + the sidebar blink
-  cursor in bedlam-game; FLAGS.BIN + BLOWUP.BIN join the 25-file
-  chain. Gates: ALL pins UNMOVED (effects off the default corpus
-  path, cursor 0 until a select click), smoke two-run
-  byte-identical AT the recorded baselines (scene 696adb1cd110e062,
-  parity cce30c983b97b16d), 41 suites green (+3 render units, +6
-  game units, +1 corpus gate with the control-host diff), fmt/
-  clippy clean, MANIFEST verified. Pushed. Queued: the 7j.8
-  scorch/armored-pad re-verify.
-- 2026-08-21: P4 dead/hit dither unit COMPLETE (worker efc8b1e0
-  claim 1, commits 4f702e1 + 31a4691, D55): RE-EXW-SIM 7i =
-  FUN_00401ae6 fully decoded (mode 0 rep-movsb full static vs
-  mode 1 nonzero-only overlay; dest = fb + y*pitch + x; per-row
-  RESEED rand&0x1ff when src+96 >= 0x800; seed =
-  FUN_0041ec59(0x7f6,0x30) = (RandB()&0x7fff)/15 clamp 0x7f5) +
-  the bank REFUTED as EXE content: 0x4e6ed8 is a 2048-B .bss RING
-  (cursor 0x4ddb30) of binary {0,0xFF} 25% white — boot fill
-  2048 draws (MissionShell 0x447b13) + 15-B/frame churn
-  (0x448147 epilogue, unconditional); +0x2E confirmed hit_flash:
-  in-squad dead/hp<1 -> mode 0, flash != 0 -> mode 1 after the
-  portrait, beyond-squad slots -> mode 0 EVERY frame. ENGINE: the
-  Dither ring + blit in draw_sidebar_portraits (reads the sim
-  hit_flash, never decays — 7g.8 stays the sim tick), edge_rng ->
-  rand_b shared stand-in consumed in the EXW order (terrain edges
-  -> dither -> churn), sidebar block moved after the terrain pass
-  (disjoint halves, pixels identical). Gates: frame pins RE-PINNED
-  ONCE (spawn 7fdada56b10f1cad, walk 58ea10373e8d4284, overlay
-  1d70e0bd059f5ae0, armed 6050d20755b2d852 — ZONEA 1-robot squad
-  dithers slots 1/2; reason in the gate header), sim pins
-  byte-identical, the overlay gate's stale-sidebar reference
-  re-anchored to the last-presented frame, 41 suites green (+1),
-  fmt/clippy clean, smoke two-run identical at the recorded
-  baselines, MANIFEST verified. Pushed.
-- 2026-08-21: P4 pickup consumer unit COMPLETE (worker 66831068
-  claim 1, commits e10fdb5 + d8e03a7 + 5a3a419 + 81fd558, D54):
-  RE-EXW-SIM 7h = the FUN_0040eba0 dispatch decoded (range tables
-  0x454a58/0x454a74 — CORRECTED A values [0x4e,0x75,0x75,0x358,
-  0x75,0xa3,0xa3] after a byte-precise re-dump; closed 4-word
-  groups → cases A:1/3/2/4 B:9/7/8; the jump table; the case
-  bodies with effect ids 1/6/7/0xE; the caller consume block
-  (DAT z-plane zero + 0x454a90 floor-word swap + probe-latch
-  walk); the _DAT_004edd8c producers). ENGINE: pickup_case pure
-  decode + MissionSim::apply_pickup cases 1/2/3/7 (drop 1000,
-  shield 1000, hp +=2500 clamp 5000, shield_boost 200 — writes
-  hash-covered D53 fields) + PickupOutcome (effect-id seam) +
-  the MissionScene::pickup host seam; case 4 kept as the D52
-  seam. Gates: workspace green (+4 tests), fmt/clippy clean,
-  smoke two-run byte-identical AND at the recorded baselines
-  (scene 696adb1cd110e062, parity cce30c983b97b16d — pins
-  UNMOVED, the seam is off the corpus path), MANIFEST verified.
-  Pushed.

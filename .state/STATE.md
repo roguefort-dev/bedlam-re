@@ -751,6 +751,37 @@
   Shop/Brief backdrop wiring, then the post-cutscene loading screen.
 # STATE - project snapshot (update when phase changes)
 
+ - CLOSED 2026-08-21 (P4 7j.11 FUN_00420608 kind census unit
+   COMPLETE, commit 199fe32, worker 804e8c9d claim 1, D59,
+   docs-only): RE-EXW-SIM amendment 7j.11 answers the 7j.10
+   tail note — the 0x4203a5 FUN_0042394a call is NOT in a
+   debris kind body but inside FUN_0042034c, the DELAYED-ARRIVAL
+   SCHEDULER (MissionShell epilogue 0x448076; 45 records
+   @0x4dcdb8 stride 0x24 {active, two xy pairs, spawn xyz,
+   countdown, robot slot}: countdown 0xa SFX, the 0x465daa word
+   gate (both banks cleared at the tile), the FIRST water-level
+   z-structure CLEAR via FUN_0042394a (arg order pinned: eax=x,
+   edx=y, ebx=z, ecx=word, stack=byte), the robot teleport
+   x<<13/y<<13/z<<5-1 + FUN_0041e231 re-settle + the 8-word z
+   fill at robot+0x1a). The stager body itself: ZERO type-DB
+   references, ZERO z-writer calls — no debris kind edits
+   terrain beyond the FUN_00422287 rings. The 20-kind table
+   fully pinned (11 seq tables 0x454424..0x454510 = BLOWUP
+   sprite walks 0..104, +0x20 physics classes 0/1/2/3/6, inits
+   0x40/0x20, FUN_00421e60 3-way + FUN_00421dec 4-way arrival
+   SFX, k11's FUN_00402975 LCG gate). CORRECTION to 7j.9 item
+   4: kinds 1/13/14/15 DO write the nine ring (shared body
+   jmp 0x4209e9 into the k20 tail); kinds 2/8 write ONE center
+   tile (values 3/4); only 7/10/16..19 are ring-free. Complete
+   47-site caller census: every kind except k5 (the death
+   tail, engine-landed D53/D57) lives in the weapon-fire/
+   impact families, the FUN_00422693 platform/destructible
+   family, the selection chaser, or FUN_004244a1 — all off the
+   current corpus path. NO engine change (D59 — the census
+   feeds the later widening); manifest verified before and
+   after; pushed. Queued: the FUN_00422693 platform/
+   destructible family decode.
+
  - CLOSED 2026-08-21 (P4 effect-row seam unit COMPLETE, commits
    4f858d9 + e706a33 + 9bbf1ac, worker 6ab53863 claim 1, D56):
    RE-EXW-SIM amendment 7j decodes the whole 0x4dc5d0 producer
