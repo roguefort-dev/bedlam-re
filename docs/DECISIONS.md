@@ -1914,3 +1914,41 @@ Nudge-Worker: 6ab53863-71dc-4010-b6eb-fa9a3f724411
    unwired (no corpus-path producer yet).
 
 Nudge-Worker: 11384359-21d7-4dbe-8130-1d504d6c2511
+
+## D58 - 2026-08-21: FUN_00424051 = the epilogue tick - the +0x18 fade lands, every pad/scorch byte is transient; the splash system stays unwired
+
+1. RE FIRST (RE-EXW-SIM 7j.10, committed before the code): the D57
+   item-5 "unidentified" producer is the per-frame MISSION-EPILOGUE
+   TICK (call 0x447ff0, immediately after the debris tick
+   FUN_00420549) and it does two things. (a) The GLOBAL +0x18 FADE:
+   every nonzero armor-pad/scorch byte on the whole map decays by 1
+   EVERY frame, unconditionally - so the D57 ring is TRANSIENT (a
+   value-4 center arms its pads for exactly four phase-1 passes)
+   and permanent map pads CANNOT exist (confirms MISSIONVIEW 8.1:
+   no static +0x18 producer). (b) The WATER-SPLASH EVENT TICK: a
+   250-record array @0x4e9778 (stride 0xA {x,y,z,delay,age}) -
+   weapon impacts (11 stager callers in the FUN_0041a894 weapon
+   family, one co-staging debris) stamp the zone water sprite at
+   the first free z-level (FUN_0041bd78), drain down through
+   empty levels on odd frames (g_frame_count&1), absorb when water
+   is directly below, re-stamp water_base+0x16 at age 40, dry up
+   and free at age >= 47, scorching the tile every tick (the
+   seven-word 7j.9 item-5 re-roll writes). Supporting family:
+   FUN_0042394a = the z-structure writer (TOT z-word + seen byte +
+   DAT volume byte - the map-edit primitive), FUN_0041eb28 = the
+   DAT volume read (NOT a visibility test - corrects 7j.9's
+   guess), FUN_00424355 = the stager (claim-bank gated, LRU
+   eviction with a cancel call).
+2. ENGINE: the fade lands at the advance_frame tail (epilogue
+   position): iterate armor_pads, nonzero -> -1. Corpus-safe -
+   armor_pads has no corpus producer and set_armor_pads is
+   test-only, so all pins UNMOVED (smoke two-run byte-identical AT
+   the baselines: scene 696adb1cd110e062, parity cce30c983b97b16d,
+   audio 110400/158092). The two permanent-pad unit tests now
+   stage the max value 7 (outlives their frames); a new unit test
+   covers the decay, the single-charge value-1 case, and the full
+   death-ring fade. The splash system stays UNWIRED - no
+   corpus-path producer (weapons never fire in the gates);
+   re-open when the weapon family decodes.
+
+Nudge-Worker: 89d34b53-1d5c-4d36-ab77-7cf704547435
