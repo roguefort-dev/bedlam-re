@@ -1585,3 +1585,36 @@ counts, no +0x78 HP / +0x2E armor, no score/money).
    MANIFEST verified.
 
 Nudge-Worker: 49294e3c-af62-4b24-b2fa-7a12980d8eb6
+
+## D51 - 2026-08-21: the weapon table is host-staged session state; fresh-campaign default is EMPTY
+
+RE-EXW-SIM 7d refuted the TABLE.BIN hypothesis (TABLE.BIN = the
+map-overlay backdrop bank; the 0x4de664 loadout is .bss session state
+written only by shop FUN_00440e45 / save-load / MP lobby; player TYPE
+0x4edb90 = 0 all SP; a fresh campaign enters the pre-mission shop with
+money 4000 and an ALL-ZERO row). Engine consequence, replacing the D49
+[design] all-7 default:
+
+1. MissionScene models the per-robot weapon loadout as the 7 groups
+   the EXW spawn copy reads — (name_idx: u16, ammo: u16) per group,
+   staged by the host (GameHost::load_mission seam, like markers).
+   set_order_availability and the all-7 mask are REMOVED; availability
+   = name_idx != 0 (the EXW row gate), ammo = word1 clamped 9999 at
+   draw, spawn copies word0/word1/word1 and arms 1 << first group
+   with word_idx != 0 (no group => armed bits 0 — faithful).
+2. The DEFAULT is the faithful fresh-campaign EMPTY loadout (all
+   groups zero => no rows, no armed weapons). Nothing draws that the
+   original would not; tests that need rows stage them explicitly.
+3. Row TEXT now draws from real data: names via the pinned
+   FUN_00420260 switch (the 39-entry compiled-in table embedded as
+   data + index mapping, RE 7d.5), counts "%04i", both through
+   SMLFONT at the EXW coords (0x1ED/0x25C, 0x5B+14i), color 0x24.
+4. GATES: frame pins regenerate ONCE (rows only appear where the
+   gate script stages a loadout; default-path frames lose the row
+   chrome D50 drew because the real gate says no rows); sim pins
+   byte-identical unless the staged loadout changes spawn state —
+   the corpus gate stages none by default so D17/D50 sim pins hold.
+   Tests + fmt + clippy -D warnings; headless smoke two-run
+   byte-identical; MANIFEST verified.
+
+Nudge-Worker: 4b75846d-3486-4bcd-be7c-fbeff298deec

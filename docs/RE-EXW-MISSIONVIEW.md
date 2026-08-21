@@ -265,7 +265,11 @@ DANTE/SCANNER/BLOWUP(/BLOWUPG)/WEAPONS/SHRIKE/REAPER/SMOKE/TELEPORT/
 NUMBERS/FLAGS/VICERA/DEBRIS/SHIELD/ROBNUMS .BIN + TABLE.BIN +
 DIGITS/SMOKER/HUMANS/IDIOTGFX + palettes TXPAL1/GAMEPAL/DARKPAL —
 entity/overlay banks + game palette (GAMEPAL 0x4edbf8; 7c's 0x302-B
-copy target). The 0x64000 tile buffer is NOT cleared by init_tiles
+copy target). TABLE.BIN identity pinned 2026-08-21 (RE-EXW-SIM 7d):
+a draw_IMG-family bank whose image 0 is the strategic-map backdrop —
+sole reader FUN_004089b1 (the map overlay); the per-tile map colors
+come from the 0x45cdd8+2*type word table (PALTRAN/MAPTRAN .TRN kin).
+The 0x64000 tile buffer is NOT cleared by init_tiles
 beyond the rep-stos in init_tiles itself (0x64000 bytes — full clear
 each mission start; per-frame the terrain pass overwrites everything
 the present window reads).

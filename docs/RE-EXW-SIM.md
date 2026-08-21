@@ -352,12 +352,14 @@ consumed unconditionally at the tail (`= -1`, 0x40d70d).
    ORDER table** (open item 5's stride now structurally explained:
    7 groups of 14 B); the default order bit is `1 << first i whose
    group word0 ≠ 0`. The select gate (2) uses the ALIVE word; the
-   order gates (3/4) use group word1 (+0x38+8i). The table lives in
-   .bss (runtime-loaded) — its FILE SOURCE is open (no static xref;
-   [hypothesis] TABLE.BIN from the fixed-load list). Every player
-   robot's TYPE comes from the one global word@0x4edb90 (written by
-   GameMain@0x41c34c; the robot-choice state — also read by the
-   multiplayer lobby FUN_00448ef1 and the shell screens).
+   order gates (3/4) use group word1 (+0x38+8i). The table is .bss
+   LIVE SESSION STATE — NOT file-loaded (amendment 7d REFUTES the
+   TABLE.BIN hypothesis: TABLE.BIN is the map-overlay backdrop bank;
+   the loadout is written only by shop/save/MP). Every player
+   robot's TYPE comes from the one global word@0x4edb90, written 0
+   once by GameMain@0x41c34c (SP; the MP lobby writes otherwise) —
+   also read by the multiplayer lobby FUN_00448ef1 and the shell
+   screens.
 7. **Field-table offset correction**: rows +0x78/+0x7C drifted — the
    ALIVE flag is at 0x4c6a60 = **+0x7C** and the drop countdown at
    0x4c6a64 = **+0x80** (address column was right, offset column
@@ -639,6 +641,80 @@ was where the tables filled: 0x41d954 only allocates.)
    be staged externally (host/test seam) — exactly what multiplayer's
    0x46cbe0 override does in the original.
 
+## 7d. Amendment 2026-08-21 (worker 4b75846d, the weapon-table provenance
+pass — REFUTES the TABLE.BIN hypothesis and closes open item 5)
+
+New dump `ghidra-project/exw-typetable.txt` (script
+`tools/ghidra-scripts/ExwTypeTable.java`, -process -noanalysis) + XRefList
+over the whole program.
+
+1. **TABLE.BIN is NOT the 0x4de664 table's file source — the §6c.6
+   hypothesis is REFUTED.** The TABLE.BIN load
+   `LoadFile("GAMEGFX\TABLE.BIN", [0x0046cbbc])` (FUN_0041df10 @0x41e01e)
+   targets an `ArenaAlloc(160000)` bump-arena buffer (FUN_0041d954
+   @0x41dad6) — a runtime heap address, never .bss 0x4de664. The pointer
+   variable 0x0046cbbc has exactly 3 xrefs program-wide [XRefList,
+   verified]: alloc @0x41dad6, load @0x41e01e, and ONE reader:
+   `FUN_004089b1 @0x4089d5`. FUN_004089b1 is the STRATEGIC-MAP overlay
+   pass: it clears the 0x4b000 map buffer (0x4ede18), then its FIRST
+   action is `ESI = [0x0046cbbc]; FUN_00401e39(EDI=map_buf, EAX=0,
+   EDX=1, ESI=TABLE.BIN)` [asm 0x4089d5..0x4089e1] — i.e. **TABLE.BIN is
+   a draw_IMG-family sprite bank whose image 0 is the map backdrop**
+   (ESI is immediately after clobbered by GENERAL.BIN 0x4edd7c for the
+   robot markers 0x55/0x56 and the PAD/order-target markers 0x57/0x58;
+   per-tile map coloring runs through the word table at 0x45cdd8+2*type,
+   kin to the GAMEGFX\PALTRAN\*.TRN + GAMEGFX\MAPTRAN\*.TRN strings at
+   0x458c15..0x458c40). TABLE.BIN = map-overlay art (the sec-6c.1
+   backlog family), nothing to do with weapons.
+2. **0x4de664 is LIVE SESSION STATE, not file data** [verified writer
+   census over the dumped shells + the zero-init]: .bss-zeroed at boot,
+   mutated only by (a) the SHOP FUN_00440e45 buy/sell/auto-buy paths
+   (0x4413xx..0x4425xx — e.g. buy writes the full 7-word group
+   `name_idx, ammo, price, category, item_idx, 0, owned=1` at
+   `0x4de664 + type*0x62 + group*0xE` [decomp 0x44168b region]; the
+   sibling chassis table 0x4deafc is type-stride 0x1C = 2×0xE groups),
+   (b) the SAVE-LOAD restore (FUN_0044745e case 2 copies the saved row
+   word-for-word, 7×7 words, into `0x4de664 + type*0x62` [decomp
+   0x43c1xx region]), (c) the MULTIPLAYER lobby exchange FUN_00448ef1
+   (5 writer sites 0x4491xx..0x449axx staging rows via the 0x4dd4a0
+   0x80-stride per-player buffer). No loader ever bulk-copies the table.
+3. **The player TYPE word@0x4edb90 = 0 for the whole single-player
+   campaign** [verified]: GameMain writes `_DAT_004edb90 = 0` once at
+   boot (0x41c34c, right after FUN_0043a144 — the bootattract decompile;
+   XRefList shows the only SP writer), so every player robot's stats row
+   is row 0 = 0x4de664 itself; all other writers are the MP lobby
+   FUN_00448ef1 (network-chosen chassis). Every other 0x4edb90 xref is a
+   READ (NameEntryScreen, shop, MissionShell 0x4480d0, load_markers).
+4. **Campaign flow + fresh-campaign loadout** [verified GameMain
+   decompile, bootattract dump]: the episode loop per mission is
+   map-room FUN_0043e7d4 → briefing FUN_0043d00b → **SHOP FUN_00440e45
+   (before EVERY mission, incl. mission 1)** → MissionShell → debrief.
+   A fresh campaign enters the shop with money 4000 (single-player;
+   difficulty −500/step via the title start `4000 − 500*diff`, mode-2
+   variant 0x5DC) and an ALL-ZERO loadout [verified: money init sites +
+   no table initializer exists] — weapons exist only after purchase.
+   Consequence for the mission slice: a faithful fresh-campaign mission
+   has NO weapon rows (all group word0 = 0 → no rows draw, spawn stats
+   copy yields zero groups, default armed-bits word stays 0 — the
+   §6c.6 `1 << first i with word0 != 0` finds no i).
+5. **FUN_00420260 name switch pinned exactly** (for the row text): the
+   compiled-in table 0x4589DD..0x458C11 maps name index → string
+   [verified decompile + PE bytes]: 2/3/4 NEEDLER CANNON #1/#2/#3,
+   6/7/8 PLASMA CANNON X1/X2/X3, 9/10/0xB HADES BOMB #1/#2/#3, 0xE
+   FLAME BOMB, 0x10/11/12 PROXIMITY MINE X2/X4/X6, 0x14/15/16
+   PRESSURE MINE X2/X4/X6, 0x18/19 FRAG GRENADE #1/#2, 0x1B/0x1C
+   BOUNCY GRENADE X4/X6, 0x1D/0x1E STICKY GRENADE X4/X6, 0x20..0x23
+   ROCKET PACK X1/X3/X6/X9, 0x25..0x28 REAPER PACK X1/X2/X4/X6, 0x2A
+   AUTO SHIELDING, 0x2B BATTERY PACK, 0x2C THERMAL DAMPER, 0x2D/0x2E
+   SCANNER LEVEL 2/3, default (incl. 0/1/5/0xD/0xF/0x17/0x1A/0x24/0x29)
+   "ERROR" (0x458C0F). String 0x4589D2 "CLASSIFIED" sits just before
+   the table (map overlay use, not a weapon).
+
+Engine consequence (this unit): the type table is modeled as HOST-STAGED
+per-robot loadout data — 7 groups of (name_idx, ammo) — with the
+faithful default EMPTY (fresh campaign, D51); the all-7 availability
+default + set_order_availability seam are removed. See DECISIONS D51.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -697,13 +773,17 @@ was where the tables filled: 0x41d954 only allocates.)
    portraits, FUN_0040807f bars, FUN_004085ce score strip; banks
    GENERAL/SMLFONT/NUMBERS/SCANNER). Remaining open: the HP/armor
    bar + score-strip ENGINE wiring (needs +0x78/+0x2E sim fields,
-   score/money sim state), name/count row text (needs the type
-   table's name indices + ammo counts), the map-overlay family
+   score/money sim state), the map-overlay family
    (_DAT_004edba0/FUN_004089b1/FUN_00401107 + the 0x4dc5d0 blink
-   producer), and the keyboard-latch wiring (P2e button map).
-5. The 0x62-stride robot-type stats table at 0x4de664 — STRUCTURE
-   decoded 2026-08-21 (§6c.6: 7×0x0E ORDER groups, word0 default
-   probe / word1 gate; engine models availability as a mask until
-   the table's file source lands). Open: the file source loader
-   ([hypothesis] TABLE.BIN) and the word@0x4edb90 player-robot TYPE
-   producer (GameMain@0x41c34c).
+   producer), and the keyboard-latch wiring (P2e button map). The
+   name/count row TEXT landed 2026-08-21 (amendment 7d + D51: the
+   loadout is host-staged session state; names via the pinned
+   FUN_00420260 table).
+5. ~~The 0x62-stride robot-type stats table at 0x4de664 — file source
+   question~~ — CLOSED 2026-08-21, REFUTED by amendment 7d: NOT
+   TABLE.BIN (that is the map-overlay backdrop bank, sole reader
+   FUN_004089b1); the table is .bss session state written only by the
+   shop FUN_00440e45 / save-load / MP lobby; player TYPE word@0x4edb90
+   = 0 all SP (GameMain 0x41c34c); fresh campaign = all-zero loadout
+   (money 4000, shop before every mission). Name switch FUN_00420260
+   pinned (7d.5).
