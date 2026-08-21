@@ -1431,6 +1431,10 @@ census (`objdump | grep "call.*0x422287"`). All [verified] asm.
    bug (intended ±0x20) or deliberate re-roll jitter; function
    purpose unidentified (calls FUN_0042394a first — SFX family).
    NOT the death path; stays unwired (host-seamed if ever needed).
+   [FULLY DECODED by §7j.10 below: FUN_00424051 = the per-frame
+   mission-epilogue tick — the five writes are the water-splash
+   event's per-tick scorch, and the function ALSO runs the global
+   +0x18 fade every frame, making every ring byte transient.]
 
 Engine seam (this unit): `MissionSim::scorch_write` models
 FUN_00422287 (world>>5, map bounds, value ≥ 8 → 7) over the
@@ -1441,6 +1445,114 @@ is hashed only through its armor effect, the corpus gates stage
 no deaths before their pins, and the default corpus pads stay
 all-zero until a death. The scene's DebrisFx is untouched — the
 scorch is sim state, not presentation.
+
+## 7j.10 Amendment 2026-08-21 (worker 89d34b53, the FUN_00424051
+decode — queued from 7j.9 item 5)
+
+Full decode of 0x424051..0x424355 (772 B) + its sibling stager
+FUN_00424355@0x424355 + the FUN_0042394a/FUN_0041eb28/FUN_0041bd78
+helpers, from `objdump` + the full-disasm dump. All [verified] asm.
+**FUN_00424051 is NOT a scorch variant — it is the per-frame
+MISSION-EPILOGUE TICK** (called unconditionally at 0x447ff0 in the
+MissionShell epilogue chain, immediately after the debris tick
+FUN_00420549@0x447feb, before 0x423a85), and it does TWO unrelated
+things:
+
+1. **The GLOBAL +0x18 FADE** [0x42405a..0x42409e, verified]: for
+   EVERY map tile (outer x over `w`@0x4eddec, inner y over `h`
+   rows via the 0x4ea900 line table — w*h records), if the
+   type-DB +0x18 byte (`0x4796d4 + (line[y]+x)*0x1E`) is nonzero,
+   decrement it by 1. NO gate — runs EVERY frame. **This corrects
+   the 7j.9 reading of the ring as persistent sim state: every
+   +0x18 byte (death ring AND armor-pad charge) is TRANSIENT,
+   fading to 0 in ≤ value frames (max 7). A corpse arms its 3×3
+   pads for only ~1-4 frames; permanent map pads CANNOT exist
+   (consistent with §MISSIONVIEW 8.1: no static +0x18 producer,
+   the mirror zero-fills).** The 7j.9 "last-write-wins overlap"
+   question is thereby moot — overlapping ring writes self-heal
+   within 7 frames.
+2. **The WATER-SPLASH EVENT TICK** — a 250-record array at
+   0x4e9778, stride 0xA (10 B), spanning 0x4e9778..0x4ea13c
+   (`ebp` loop 0..0x9C4 step 0xA). Record layout [verified via
+   the Watcom `dword@base−2; sar 16` word loads]:
+   `+0x00 x (tile i16) · +0x02 y (tile i16) · +0x04 z (level
+   0..7) · +0x06 delay u16 · +0x08 age u16`. The loop
+   [0x424300..0x424324]: age==0 → free slot, skip; delay != 0 →
+   delay--, skip (like the debris delay); else run body+tail.
+   - Body [0x4240a5..0x4241c5, gated by `g_frame_count@0x46ae68
+     & 1` — ODD FRAMES ONLY (0x46ae68 = the pacer frame counter,
+     PACER doc) and z != 0]: read the DAT VOLUME below via
+     FUN_0041eb28(x, y, z−1, DAT@0x4edd58) == 0 (empty below):
+     - z-word below ∈ water range (`0x454aac[zone@0x4edd8c]` ..
+       +0x1E, the same per-zone water sprite family the renderer
+       remaps, MISSIONVIEW §2c) → **ABSORB**: clear own level
+       (FUN_0042394a(x,y,z,0,0)), age = 0 — record dies, nothing
+       stamped (a splash into existing water).
+     - else → **FALL one level**: remember own z-word S, clear
+       own level, z−−, FUN_0042394a(x,y,z−1,S,0) re-stamps S one
+       level down (S is 0 until the age-1 stamp below — the first
+       falls are bare drops).
+   - Tail [0x4241ca..0x4242fa, EVERY processed frame, age != 0]:
+     the FIVE same-tile scorch writes 7j.9 item 5 pinned
+     (center `(RandA&3)+3` = 3..6, four ±1-unit re-rolls 1..4 —
+     after `>>5` floor all five hit the SAME tile; final value
+     1..4) at `(x<<5, y<<5)`; then `age == 1` →
+     FUN_0042394a(x,y,z, water_base[zone], 0) **stamps the zone
+     water sprite base at z**; age++; `age == 0x28` (40) →
+     stamps `water_base+0x16` (later water frame); `age ≥ 0x2F`
+     (47) → FUN_0042394a(...,0,0) clears the level, age = 0 —
+     **the splash dries up** (~47-frame life, stamps at ticks 1
+     and 40).
+   So the record semantics = a weapon-impact WATER SPLASH: soak
+   the hit tile, drain downward through empty z-levels (odd
+   frames), merge into water below, evaporate at 47 ticks, all
+   while scorching the tile each frame.
+
+Supporting family [all verified]:
+- **FUN_0042394a@0x42394a (33 registers, `ret 4`)** — the
+  per-tile z-STRUCTURE writer: tile = `line[y]+x`, record =
+  `0x4796bc + tile*0x1E`; writes the TOT-mirror z-word at
+  `record + z*2` (arg ecx; 0 → clear), the SEEN byte at
+  `record+0x10+z` (`sete` of the byte arg when ecx != 0), and
+  the **DAT volume byte** `DAT[0x4edd58] + tile + zoff[z]`
+  (zoff = 0x4eaacc table, z*w*h) = the byte arg. The map-edit
+  primitive the splash family (and future terrain-destroy
+  features) share.
+- **FUN_0041eb28@0x41eb28** — read the DAT volume byte at
+  (x,y,z): `byte[DAT + tile + zoff[z]]`, `0xFF → 1`, else raw.
+  NOT a visibility test (corrects the 7j.9 "guard" guess).
+- **FUN_0041bd78@0x41bd78** — find the first FREE z-level at
+  (x,y): clamp z ≤ 7, x/y in-bounds, then scan z upward while
+  volume(z) != 0 OR seen(z) != 0; returns z (7 if exhausted).
+  The stager's z source.
+- **FUN_00424355@0x424355 — the STAGER** (12 callers): args
+  (x, y, z, delay). Gates: in-bounds x/y, z clamp ≤ 7, DAT
+  volume(z) == 0 (FUN_0041eb28), z-word(z) == 0, claim byte
+  `byte[0x46af58-bank + tile] == 0` (0x46af58 = a 10000-B arena
+  bank alloc'd at mission load 0x41d9d7; written 1 by the ORDER
+  marker family 0x425556, read by the platform stager 0x423858 —
+  the per-tile order/platform CLAIM bank). Allocation: first
+  age==0 slot, else the max-age slot (evict; the evicted record
+  is cancelled with FUN_0042394a(old,0,0) first). Writes
+  {x, y, z, delay, age=1}.
+- **Producer census (11 call sites, census-only)**: 0x413212
+  (inside FUN_00412f34, 9546 B), 0x417f04 (FUN_00417e2f), and
+  NINE inside FUN_0041a894 (5000 B, 0x41ad84/0x41adb1/0x41af8b/
+  0x41b0eb/0x41b3a7/0x41b4c8/0x41b5f1/0x41b725) + 0x41bd47
+  (FUN_0041bc1c). All in the WEAPON-FIRE family (projectiles/
+  impacts): 0x41bd47 stages debris (FUN_00420608) AND the splash
+  at the same tile — a weapon hitting water splashes + debris.
+  Delay args vary (0x41bd47 passes 0; 0x41af8b passes base +
+  RandA&3). Deeper weapon decode = backlog.
+
+Engine seam (this unit, D58): the FADE lands sim-side
+(`advance_frame` tail — epilogue position after the phases:
+corpus-safe, `armor_pads` has no corpus producers and
+`set_armor_pads` is test-only, so pins are unmoved; the landed
+D57 ring becomes transient exactly like the original). The
+250-record splash system stays UNWIRED + undocumented-in-code —
+no corpus-path producer exists (weapons never fire in the
+gates); re-open when the weapon family decodes.
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
@@ -1462,6 +1574,12 @@ scorch is sim state, not presentation.
 | anim phase | ((angle+4)&0xFF)>>3 (32 sectors) | 0x40c536 tail |
 | robots per zone | <3|7→1, 3→2, else 3 | FUN_0040cca0 |
 | map size globals | DAT_004eddec (w) / DAT_004eddf0 (h) tiles | 0041e897 |
+| +0x18 fade | every frame, all w*h tiles, nonzero → −1 (FUN_00424051 head) | §7j.10 |
+| splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
+| splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
+| z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |
+| DAT volume read | FUN_0041eb28(x,y,z): byte[DAT+tile+zoff[z]], 0xFF→1 | §7j.10 |
+| tile-claim bank | 0x46af58, 10000 B arena @mission-load; order-marker writer 0x425556 | §7j.10 |
 | sidebar select strips | [0x1E7,0x217]/[0x219,0x249]/[0x24B,0x27B] × y[5,0x35]; F1/F2/F3 latches 0x4edc0c/10/14 | §6c.2 |
 | sidebar order rows | x[0x1E9,0x275] × y[0x57,0xB8]; row=(y-0x57)/14 clamp ≤6; keys 1..7 latches 0x4edc18+4k | §6c.3/4 |
 | sidebar redraw flag | DAT_0046ccec countdown: set 2/3 by producers, dec+FUN_00408403 in the FUN_00403938 tail | 0x407205 |

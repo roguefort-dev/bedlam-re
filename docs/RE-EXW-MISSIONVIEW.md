@@ -308,8 +308,14 @@ terrain pass overwrites everything the present window reads.
    RAW byte != 0 — no mask — so scorch values and armor pads SHARE
    the byte and a death genuinely arms 3×3 pad tiles around each
    debris. The engine wires the ring writes on the death path
-   (MissionSim::scorch_write). The +0x1a/+0x1b/+0x1c producers
-   remain open.
+   (MissionSim::scorch_write). **+0x18 FULLY CLOSED 2026-08-21
+   (RE-EXW-SIM §7j.10)**: FUN_00424051 (the per-frame epilogue
+   tick) DECAYS every nonzero +0x18 byte by 1 each frame — the
+   byte is a TRANSIENT event ring (fades in ≤7 frames; no
+   permanent producer exists, so shipped maps have no static
+   pads), and the 7j.9 "census-only producer" is that same
+   tick's water-splash scorch tail. The +0x1a/+0x1b/+0x1c
+   producers remain open.
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader
