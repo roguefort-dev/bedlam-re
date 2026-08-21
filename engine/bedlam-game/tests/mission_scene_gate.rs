@@ -8,16 +8,17 @@
 //! bedlam-render tests/mission_view_gate.rs and are NOT re-derived
 //! here - this gate pins the SCENE-composed frames):
 //!
-//! 1. STAGING: the 9-file chain (TOT/DAT/PAD/CGR/BIN/LNK plus the
-//!    GAMEGFX tail SINTABLE and DANTE, then MRK) stages the
+//! 1. STAGING: the 10-file chain (TOT/DAT/PAD/CGR/BIN/LNK plus the
+//!    GAMEGFX tail SINTABLE, DANTE, GAMEPAL, then MRK) stages the
 //!    ZONEA/MISSION1 mission; MRK record 0 is (21, 73, z-level 1)
 //!    plus the staged second marker (18, 73, 1) - the host/test seam
 //!    the network override 0x46cbe0 fills in the original
 //!    (RE-EXW-SIM sec 7c.8). Entering Mission activates the camera
 //!    at robot 0's Q5 spawn.
 //! 2. SPAWN FRAME: the entry pump presents the 480x480 viewport at
-//!    canonical (0,0) - real terrain + both DANTE robots; frame
-//!    parity hash pinned.
+//!    canonical (0,0) - real terrain + both DANTE robots, under the
+//!    folded GAMEPAL palette (the GAMEPAL present tail; the frame
+//!    palette IS GAMEPAL); frame parity hash pinned.
 //! 3. CLICK SEAM: a scripted left-click at robot 0's projected
 //!    screen position arms the order AT robot 0 (tile (21,73), snap
 //!    to tile origin, state 3) - the sec 6.4 semantics.
@@ -25,6 +26,13 @@
 //!    (state 4, live anim); frame parity hash pinned.
 //! 5. DETERMINISM: two independent full runs produce identical hash
 //!    traces.
+//!
+//! PIN REGENERATION 2026-08-21 (GAMEPAL unit): the two FRAME pins
+//! (spawn + mid-walk) were regenerated ONCE when the mission plane
+//! palette changed from the host stand-in (all black in this gate)
+//! to the folded GAMEGFX\GAMEPAL.PAL - Frame::parity_hash covers the
+//! palette, so the pins moved; the SIM pins (spawn/click) and every
+//! observation pin are UNCHANGED (the palette touches no sim state).
 //!
 //! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
@@ -43,7 +51,7 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
 }
 
 /// The staged corpus inputs in load_mission order: TOT, DAT, PAD,
-/// CGR, BIN, LNK, SINTABLE, DANTE, MRK.
+/// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, MRK.
 fn zonea() -> Option<Vec<Vec<u8>>> {
     Some(vec![
         read(&["EDITOR", "ZONEA", "MISSION1.TOT"])?,
@@ -54,6 +62,7 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
         read(&["EDITOR", "ZONEA", "MISSIONA.LNK"])?,
         read(&["GAMEGFX", "SINTABLE.BIN"])?,
         read(&["GAMEGFX", "DANTE.BIN"])?,
+        read(&["GAMEGFX", "GAMEPAL.PAL"])?,
         read(&["EDITOR", "ZONEA", "MISSION1.MRK"])?,
     ])
 }
@@ -81,6 +90,7 @@ fn scripted_run(files: &[Vec<u8>]) -> (u64, u64, u64, (u16, u16, i32), u64) {
         &files[6],
         &files[7],
         &files[8],
+        &files[9],
         None,
         &[(18, 73, 1)],
     )
@@ -184,6 +194,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         &files[6],
         &files[7],
         &files[8],
+        &files[9],
         None,
         &[(18, 73, 1)],
     )
@@ -217,13 +228,39 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         .sum();
     assert_eq!(sidebar, 0, "the sidebar stays black this slice");
 
+    // The GAMEPAL present tail: the frame palette IS the folded
+    // GAMEGFX\GAMEPAL.PAL (6-bit file values verbatim; the frame
+    // carries the mission plane palette through the MovieFrame seam)
+    // and presentation must re-upload it (palette_dirty).
+    let expect_gamepal = bedlam_assets::pal::parse_vga770(&files[8]).expect("GAMEPAL parses");
+    let mut folded = [[0u8; 3]; 256];
+    for (dst, src) in folded.iter_mut().zip(expect_gamepal.0) {
+        *dst = [src[0] >> 2, src[1] >> 2, src[2] >> 2];
+    }
+    assert_eq!(
+        frame.palette, folded,
+        "the mission frame palette is GAMEPAL"
+    );
+    assert!(frame.palette_dirty, "the mission palette is a fresh upload");
+    // 254 of 256 GAMEPAL entries are non-black on the corpus (entry 0
+    // and 255 are) - the pin would pass vacuously under the old
+    // all-black stand-in otherwise. Entry 1 = 6-bit (0x3E,0x3A,0x39).
+    assert_eq!(
+        folded.iter().filter(|&&c| c != [0u8, 0, 0]).count(),
+        254,
+        "GAMEPAL carries color"
+    );
+    assert_eq!(folded[1], [0x3E, 0x3A, 0x39]);
+
     // The hash pins (extend the render-gate family: these are the
     // SCENE-composed frames — host pipeline + fixed spawn camera +
-    // one render per pump).
+    // one render per pump). Regenerated ONCE for the GAMEPAL present
+    // tail (see the header): the frame pins moved with the palette,
+    // the sim pins did not.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "51ef4fe93eaaed77",
-        "ZONEA/MISSION1 spawn-moment scene frame"
+        "a79fcada30ec5e50",
+        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL palette)"
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
@@ -237,8 +274,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "7bae11a5c7f34ab6",
-        "ZONEA/MISSION1 mid-walk scene frame"
+        "1b75b68ce66019e1",
+        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL palette)"
     );
 
     // Determinism: two independent runs are identical.

@@ -1389,3 +1389,44 @@ anchors (scene 0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame
 provably inert on paths that never stage it.
 
 Nudge-Worker: 74fa370e-5260-47d4-8c03-9986e7c86ef3
+
+## D46 - 2026-08-21: GAMEPAL mission present tail (P4)
+
+CONTEXT: D45 choice 3 left the mission plane presenting under the
+host palette stand-in (all black on the corpus gate). This unit
+stages GAMEGFX\GAMEPAL.PAL (770 B, the parse_vga770 LOADPAL format
+family) with the mission and makes it the mission plane palette.
+
+CHOICES (tagged [design] in the code):
+1. FETCH POSITION: GAMEPAL.PAL joins the Mission fetch set inside
+   the GAMEGFX tail - SINTABLE, DANTE, GAMEPAL - before MRK, making
+   the set 10 files. The chain convention stays load_mission-path
+   files, then GAMEGFX family, then markers (D45 choice 4); the EXW
+   anchor is the FUN_0041df10 staging family (GAMEPAL among the
+   mission sprite banks + palettes, RE-EXW-MISSIONVIEW sec 6).
+2. PALETTE FOLD: GAMEPAL folds with the exact loading_palette rule
+   (parse_vga770 then >>2 - lossless for 6-bit file values), so the
+   mission palette is the same canonical [Vga6; 256] the loading
+   screens and movies carry; no new palette form exists.
+3. OWNERSHIP: MissionScene owns the folded palette; plane() drops
+   the host-palette parameter and returns its own. The plane still
+   rides the MovieFrame seam, so the mission frame's palette IS
+   GAMEPAL with palette_dirty every frame (the movie convention) -
+   the indexed->RGBA window upload stays platform-side untouched.
+4. PIN REGENERATION: Frame::parity_hash covers the palette, so the
+   two scene-gate FRAME pins moved once (spawn 51ef4fe93eaaed77 ->
+   a79fcada30ec5e50, mid-walk 7bae11a5c7f34ab6 -> 1b75b68ce66019e1);
+   both sim pins and every observation pin are unchanged, and the
+   render-gate pins (mission_view_gate) never touch a palette.
+
+EVIDENCE: corpus GAMEPAL has 254/256 non-black entries (entry 1 =
+6-bit (0x3E,0x3A,0x39)) pinned structurally; the gate also pins
+frame.palette == folded GAMEPAL + palette_dirty. Headless smoke 25
+fetches (GAMEPAL.PAL 770 B), two runs byte-identical, exit 0.
+Parity harness BYTE-IDENTICAL to the standing anchors (chain
+0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame
+0x87263f149564ad25, audio 0xc862e45d2e95ad29) - GAMEPAL never loads
+on unstaged paths. All workspace tests green, fmt + clippy -D
+warnings clean, MANIFEST verified after the corpus reads.
+
+Nudge-Worker: 1776dc60-7f7e-4546-b875-fd9210b9836d

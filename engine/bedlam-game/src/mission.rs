@@ -70,9 +70,10 @@ pub fn mission_number_for_mask(mask: u8) -> i32 {
 /// The mission asset names in fetch order [design chain convention:
 /// the load_mission path-1 trio (TOT/DAT/PAD, sec 7c.1), then the
 /// zone-level path-2 pair (CGR/BIN) + LNK, then the GAMEGFX staging
-/// family tail (SINTABLE, DANTE — staged after the mission files in
-/// MissionShell, sec 7c header) and the markers]. Names carry the
-/// `EDITOR` tree sub-path with '/' separators; the byte source
+/// family tail (SINTABLE, DANTE, GAMEPAL — staged after the mission
+/// files in MissionShell, sec 7c header; GAMEPAL is the mission
+/// plane palette, MISSIONVIEW sec 6) and the markers. Names carry
+/// the `EDITOR` tree sub-path with '/' separators; the byte source
 /// resolves them under `EDITOR/` [see bedlam-shell GameGfxSource].
 pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
     let zone_dir = format!("ZONE{}", (b'A' + zone as u8) as char);
@@ -87,6 +88,7 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
         format!("{zone_dir}/{zone_file}.LNK"),
         "SINTABLE.BIN".to_string(),
         "DANTE.BIN".to_string(),
+        "GAMEPAL.PAL".to_string(),
         format!("{per_mission}.MRK"),
     ]
     .to_vec()
@@ -121,6 +123,10 @@ pub struct MissionScene {
     /// (0,0) — the EXW mission screen is viewport [0,480)x[0,480) +
     /// sidebar [480,640) [sec 6.2], NOT letterbox-centered.
     plane: Vec<u8>,
+    /// The folded GAMEPAL palette the mission plane presents under
+    /// [MISSIONVIEW sec 6: GAMEPAL loads into the 0x4edbf8 0x302-B
+    /// blob the mission-load pass copies to 0x4ddb34, SIM sec 7c.3].
+    palette: [Vga6; 256],
     /// Presents executed (the one-render-per-host-frame rhythm).
     render_count: u64,
     active: bool,
@@ -134,8 +140,10 @@ impl MissionScene {
     /// any staged markers (the host/test seam the network override
     /// 0x46cbe0 fills in the original, sec 7c.8), and the viewport
     /// over TOT + swept DAT planes + BIN + LNK with DANTE staged.
-    /// Malformed bytes -> [`GameError::BadMissionAsset`], never a
-    /// panic (charter); nothing is mutated on error.
+    /// GAMEPAL (770 B, the parse_vga770 family) folds to the
+    /// canonical 6-bit palette and owns the plane [MISSIONVIEW
+    /// sec 6]. Malformed bytes -> [`GameError::BadMissionAsset`],
+    /// never a panic (charter); nothing is mutated on error.
     #[allow(clippy::too_many_arguments)]
     pub fn stage(
         tot: &[u8],
@@ -147,6 +155,7 @@ impl MissionScene {
         lnk: &[u8],
         sintable: &[u8],
         dante: &[u8],
+        gamepal: &[u8],
         zone: i32,
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
@@ -164,6 +173,10 @@ impl MissionScene {
         }
         let angles = AngleTable::from_sintable_words(&words)
             .ok_or_else(|| bad("SINTABLE", "short words array"))?;
+        // GAMEPAL folds exactly like the loading palettes (6-bit file
+        // values; the expand/fold round trip is lossless).
+        let palette = crate::loading::loading_palette(gamepal)
+            .map_err(|_| bad("GAMEPAL", "not a 770-byte VGA palette"))?;
         let mut sim = MissionSim::new(terrain, angles, 0x1E240);
         // MRK: 12 staged 16-B records `(flag, x, y, z-level)`; robot i
         // takes record i verbatim (flag dropped) [sec 7c.7, verified].
@@ -204,6 +217,7 @@ impl MissionScene {
             edge_rng: Pcg32::new(0x1E240, 0),
             buf: vec![0u8; VIEW_BUF_LEN],
             plane: vec![0u8; 640 * 480],
+            palette,
             render_count: 0,
             active: false,
         })
@@ -335,23 +349,32 @@ impl MissionScene {
         Some(&self.plane)
     }
 
-    /// The presentation plane under the host palette (GAMEPAL is the
-    /// next unit — the host palette stands in).
-    pub(crate) fn plane(&mut self, host_palette: &[Vga6; 256]) -> Option<Plane<'_>> {
+    /// The presentation plane under the mission's OWN palette: the
+    /// folded GAMEPAL staged with the mission (the host palette no
+    /// longer stands in — DESIGN-GAME sec 11 PRESENT, GAMEPAL unit).
+    pub(crate) fn plane(&mut self) -> Option<Plane<'_>> {
+        let palette = self.palette;
         self.present().map(|pixels| Plane {
             w: 640,
             h: 480,
             pixels,
-            palette: *host_palette,
+            palette,
         })
+    }
+
+    /// The folded GAMEPAL palette the plane presents under (gate
+    /// seam).
+    pub fn palette(&self) -> &[Vga6; 256] {
+        &self.palette
     }
 }
 
 /// A minimal hermetic mission for host tests: a 4x4 type-1 deck
 /// (CGR slot 0 raw 0x1F heights), one MRK record at (1, 1, z-level
 /// 1), an empty BIN (no terrain sprites draw), a zero LNK (words
-/// stay put), SINTABLE-shaped angle words, an empty DANTE bank.
-/// Files in [`mission_asset_names`] order.
+/// stay put), SINTABLE-shaped angle words, an empty DANTE bank, and
+/// a 770-B synth GAMEPAL. Files in [`MissionScene::stage`] parameter
+/// order (MRK 5th, GAMEPAL after DANTE).
 #[cfg(test)]
 pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     let w = 4usize;
@@ -398,7 +421,16 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     }
     // DANTE: empty bank (entity flushes draw nothing).
     let dante = Vec::new();
-    vec![tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante]
+    // GAMEPAL: 770-B synth palette — entry i carries the 6-bit
+    // components (i*3, i*3+1, i*3+2) & 0x3F so the fold is visible.
+    let mut gamepal = vec![0u8; 2];
+    for i in 0..256usize {
+        for c in 0..3usize {
+            gamepal.push(((i * 3 + c) & 0x3F) as u8);
+        }
+    }
+    assert_eq!(gamepal.len(), 770);
+    vec![tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal]
 }
 
 #[cfg(test)]
@@ -408,7 +440,7 @@ mod tests {
     fn staged(markers: &[(i32, i32, i32)]) -> MissionScene {
         let f = synth_mission_files();
         MissionScene::stage(
-            &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], 0, None, markers,
+            &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], 0, None, markers,
         )
         .expect("synth mission stages")
     }
@@ -436,6 +468,7 @@ mod tests {
                 "ZONEA/MISSIONA.LNK",
                 "SINTABLE.BIN",
                 "DANTE.BIN",
+                "GAMEPAL.PAL",
                 "ZONEA/MISSION1.MRK",
             ]
         );
@@ -472,63 +505,47 @@ mod tests {
     #[test]
     fn bad_bytes_error_without_panic() {
         let f = synth_mission_files();
-        let short = &f[1][..10];
-        assert!(matches!(
+        // (dat, mrk, sintable, gamepal) override slices, else the
+        // synth files.
+        let try_stage = |dat: &[u8], mrk: &[u8], sintable: &[u8], gamepal: &[u8]| {
             MissionScene::stage(
                 &f[0],
-                short,
+                dat,
                 &f[2],
                 &f[3],
-                &f[4],
+                mrk,
                 &f[5],
                 &f[6],
-                &f[7],
+                sintable,
                 &f[8],
+                gamepal,
                 0,
                 None,
-                &[]
-            ),
+                &[],
+            )
+        };
+        assert!(matches!(
+            try_stage(&f[1][..10], &f[4], &f[7], &f[9]),
             Err(GameError::BadMissionAsset {
                 what: "DAT/PAD/CGR",
                 ..
             })
         ));
-        let short_mrk = &f[4][..8];
         assert!(matches!(
-            MissionScene::stage(
-                &f[0],
-                &f[1],
-                &f[2],
-                &f[3],
-                short_mrk,
-                &f[5],
-                &f[6],
-                &f[7],
-                &f[8],
-                0,
-                None,
-                &[]
-            ),
+            try_stage(&f[1], &f[4][..8], &f[7], &f[9]),
             Err(GameError::BadMissionAsset { what: "MRK", .. })
         ));
-        let short_sin = &f[7][..100];
         assert!(matches!(
-            MissionScene::stage(
-                &f[0],
-                &f[1],
-                &f[2],
-                &f[3],
-                &f[4],
-                &f[5],
-                &f[6],
-                short_sin,
-                &f[8],
-                0,
-                None,
-                &[]
-            ),
+            try_stage(&f[1], &f[4], &f[7][..100], &f[9]),
             Err(GameError::BadMissionAsset {
                 what: "SINTABLE",
+                ..
+            })
+        ));
+        assert!(matches!(
+            try_stage(&f[1], &f[4], &f[7], &f[9][..100]),
+            Err(GameError::BadMissionAsset {
+                what: "GAMEPAL",
                 ..
             })
         ));
@@ -587,5 +604,25 @@ mod tests {
         assert_eq!(m.render_count(), 1);
         m.present();
         assert_eq!(m.render_count(), 2);
+    }
+
+    #[test]
+    fn plane_carries_the_folded_gamepal() {
+        // The mission plane presents under its OWN palette: the
+        // folded GAMEPAL entry i = ((i*3+c) & 0x3F) for the synth
+        // file (the fold keeps the 6-bit file values exactly).
+        let mut m = staged(&[]);
+        m.activate();
+        let mut want = [[0u8; 3]; 256];
+        for (i, entry) in want.iter_mut().enumerate() {
+            *entry = [
+                ((i * 3) & 0x3F) as u8,
+                ((i * 3 + 1) & 0x3F) as u8,
+                ((i * 3 + 2) & 0x3F) as u8,
+            ];
+        }
+        assert_eq!(m.palette(), &want);
+        let plane = m.plane().expect("active plane");
+        assert_eq!(plane.palette, want, "the plane palette IS GAMEPAL");
     }
 }

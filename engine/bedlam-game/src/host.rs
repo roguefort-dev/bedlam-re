@@ -419,14 +419,16 @@ impl GameHost {
 
     /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes
     /// the caller fetched, in [`GameHost::mission_asset_names`]
-    /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, MRK.
-    /// The zone comes from the episode slot (consistent with the
-    /// names the chain fetched); `staged_markers` is the host/test
-    /// seam the network override 0x46cbe0 fills in the original
-    /// (RE-EXW-SIM sec 7c.8) — a staged marker spawns one extra
-    /// robot at activation-free spawn time. The scene is INERT until
-    /// the FSM enters Mission and drops on exit; staging touches no
-    /// hashed state (the movie pattern, D31).
+    /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL,
+    /// MRK. GAMEPAL (770 B) is the mission plane palette (folds to
+    /// the canonical 6-bit form; MISSIONVIEW sec 6). The zone comes
+    /// from the episode slot (consistent with the names the chain
+    /// fetched); `staged_markers` is the host/test seam the network
+    /// override 0x46cbe0 fills in the original (RE-EXW-SIM sec 7c.8)
+    /// — a staged marker spawns one extra robot at activation-free
+    /// spawn time. The scene is INERT until the FSM enters Mission
+    /// and drops on exit; staging touches no hashed state (the movie
+    /// pattern, D31).
     #[allow(clippy::too_many_arguments)]
     pub fn load_mission(
         &mut self,
@@ -438,6 +440,7 @@ impl GameHost {
         lnk: &[u8],
         sintable: &[u8],
         dante: &[u8],
+        gamepal: &[u8],
         mrk: &[u8],
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
@@ -453,6 +456,7 @@ impl GameHost {
             lnk,
             sintable,
             dante,
+            gamepal,
             zone,
             robots_override,
             staged_markers,
@@ -963,13 +967,14 @@ impl GameHost {
         let title_movies_playing = self.title_movie_playing();
         // Mission plane (DESIGN-GAME sec 11): the active mission owns
         // the screen — the 480x480 viewport window at (0,0) plus the
-        // black sidebar, under the host palette (GAMEPAL is the next
-        // unit). Highest precedence: scenes are exclusive and the
-        // mission drops when Mission is left.
+        // black sidebar, under the mission's OWN folded GAMEPAL
+        // (staged with the mission; MISSIONVIEW sec 6). Highest
+        // precedence: scenes are exclusive and the mission drops when
+        // Mission is left.
         let mission_frame = if self.fsm.scene() == Scene::Mission {
             self.mission
                 .as_mut()
-                .and_then(|mission| mission.plane(&self.palette))
+                .and_then(|mission| mission.plane())
                 .map(|p| MovieFrame {
                     width: p.w,
                     height: p.h,
@@ -2030,6 +2035,7 @@ mod tests {
             &f[6],
             &f[7],
             &f[8],
+            &f[9],
             &f[4],
             None,
             &[(3, 1, 1)],
@@ -2081,7 +2087,8 @@ mod tests {
         // MISSION1.
         assert_eq!(host.mission_slot(), (0, 1));
         assert_eq!(host.mission_asset_names()[0], "ZONEA/MISSION1.TOT");
-        assert_eq!(host.mission_asset_names().len(), 9);
+        assert_eq!(host.mission_asset_names()[8], "GAMEPAL.PAL");
+        assert_eq!(host.mission_asset_names().len(), 10);
         walk_to_first_cutscene(&mut host); // completes zone 1
         host.apply(SceneAction::Advance); // Cutscene -> Select
                                           // Stage 2 now: zone B, still MISSION1 (mask reset).
