@@ -3259,6 +3259,151 @@ process-exw-arrival*.log) + the 7j.19 exitfamily dumps. All
    (which must step a robot onto a scripted elevator pad to
    exercise it).
 
+## 7j.22 Amendment 2026-08-21 (worker 27e4f048, the weapon-fire
+family HEAD: the FUN_00410823 weapon-anim machine decoded)
+
+Method: `DecompList`/`DumpRange`/`DumpAscii`
+(-process BEDLAM.EXW -noanalysis), dumps =
+`ghidra-project/exw-weaponanim.txt` (full 6102-B decompile) +
+`exw-weaponanim-asm.txt` (full listing 0x410823..0x412000) +
+`exw-weaponanim2.txt` (FUN_0041879d + FUN_0041874c) +
+`exw-weaponanim2-data.txt`/`exw-weaponanim3-data.txt` (the
+0x456bf0/0x456c78 artillery tables + burst-list bytes). All
+facts [verified] against those dumps unless tagged.
+
+1. **FUN_00410823(arg EAX = phase 0..3) = the WEAPON-ANIM/
+   PROJECTILE TICK** over the WHOLE 400×0x36 bank 0x4c71f4
+   (loop tail asm 0x411f95: idx++, EBP += 0x36, bound 0x190) —
+   one walk per call; MissionShell calls it 4× per frame (the
+   §2 i=0..3 loop). The type word@+0 IS the weapon-stat id
+   (dword@(rec−2)>>0x10 at every read site). Record layout
+   CLOSED (extends the §7j.17 map): w@+0 type (0 = free slot),
+   d@+2 owner robot idx, d@+6 TARGET selector (type 0x29 only),
+   d@+0xA tick counter, x/y/z Q13 d@+0x12/+0x16/+0x1A, vx/vy
+   d@+0x1E/+0x22, vz d@+0x26 (straight types) , d@+0x2A class,
+   d@+0x2E arc (= ballistic z-velocity, gravity −0x100/tick;
+   = heading byte &0xFF for 0x29), d@+0x32 trail link (−1 =
+   none). TWO class semantics [verified]: LAUNCH DELAY for
+   0x24/0x29 (countdown each call, fly only at 0), DETONATION
+   CYCLE COUNT for 0xF/0x13 (ttl≥0x65 → ttl=0, class−−; class
+   0 → the 4-quadrant detonation).
+2. **Phase cadence** [asm]: types 9..0xB tick ONLY on the
+   phase-0 call (`CMP [ESP],0` @0x411583) = 1×/frame; the
+   actor hit-tests run ONLY on odd phases (`TEST byte[ESP],1`
+   @0x410bc4/0x411803/0x411e5a) = 2×/frame; everything else
+   ticks all 4 calls.
+3. **Types 2..4 = BULLETS (ray-walk with lagged commit)**
+   @0x41087e: per call up to 2 sub-steps (x+=vx, y+=vy, z+=vz,
+   ttl+=2), testing robot-lane hit (FUN_0041879d), MP actor
+   (FUN_0041874c, [0x4edb88]==2 only), floor (FUN_0041e231(x>>8,
+   y>>8,z>>8) > z>>8), bounds/ttl>99; the walk then ROLLS BACK
+   one step and hit paths re-add it — 2 cells tested, 1
+   committed per call (anti-tunnel lookahead). Terrain hit →
+   FUN_0041a894(damage=FUN_00419aff(id), score flag 1) +
+   FUN_0041bc1c + FUN_004124a4 disburser (K2, ±3 jitter); actor
+   hit → disburser only (damage applied inside the lane);
+   expire → type := 0.
+4. **Type 5 = SHELL (K3 smoke trail)** @0x410b5a: one full move
+   per call; robot-lane hit (odd phases) → store pos + disburser
+   (K3); terrain hit → impact pair (FUN_00419aff(5) = 75) +
+   disburser + free; else pos/ttl update AND a per-tick K3
+   debris FUN_00420608(x>>8, y>>8, (z>>8)−10, 3, 0, owner) —
+   the in-flight trail is the same kind the disburser emits.
+5. **Types 9..0xB = ARTILLERY (scripted burst) @0x411583:
+   fall 0x200/tick to the FUN_0041e411 floor (settle floor<<8);
+   ttl==0x18 ∧ owner-robot word@+0x2A == player TYPE
+   [0x4edb90] → FUN_004245c9 wall-strip redraw (spotter
+   reveal); ttl≥0x20: while ttl−0x20 < dword[0x456c78+4·id]
+   walk the i16 (Δy,Δx) pair list PTR[0x456bf0 + 4·(ttl−0x20)]
+   (sentinel first-short 500) firing FUN_004244a1 (the
+   5000-damage scripted blast) at tile+offset, 50%
+   (FUN_00402975 = RandA [identity pinned @0x4116b5]) K0xB
+   debris at the record center per pair; ttl>0x22 → disburser
+   (9..0xB clear-only per the §7j.14 kind map). TABLES dumped
+   [verified]: durations w9→2, w0xA→4, w0xB→7 frames; the 7
+   per-frame lists @0x45687c/0x4568a2/0x4568d4/0x456936/
+   0x456998/0x456a1a/0x456adc = expanding square rings (frame 0
+   = 7-cell cluster around center, later frames radius-2/-3
+   rings) — 7 pointers exactly cover max index 6.
+6. **The BALLISTIC/BOUNCE family = {0xE, 0xF, 0x13, 0x17, 0x1A,
+   0x1F}** (the §7j.14 K0xC cosmetic-debris set — now the
+   in-flight semantics) @0x410ce6: z += arc, arc −= 0x100
+   (gravity); x/y wall contact (FUN_0041e231 floor > z) →
+   0xE/0x17 bounce (v = −v), 0x1A damped bounce (v = −(v>>1)),
+   0x13/0x1F full stop (vx/vy/vz/arc := 0); FLOOR contact →
+   0xE: full vertical bounce + horizontal halving + a 3-cell
+   scripted detonation (FUN_004244a1 at center, (x−vx·4,
+   y−vy·4), (x−vx·4, y+vy·4) — kill-anything bursts every
+   contact), 0x17: bounce + 3-CLONE SPLIT (FUN_00412848 free
+   slots, type 0x17, damped (vx,vy) rotated to (vy,−vx),
+   (−vy,vx), (−vx,−vy)), 0xF/0x1F: damped roll (vx>>=1,
+   vy>>=1, arc>>=2), 0x1A..0x1E: damped bounce (arc = −arc
+   −arc>>1 unless 0xE); settle onto scenery: type-DB byte
+   0x4796d5-family ≠ 0 → z = floor<<8. COMMON TAIL @0x41138e:
+   ttl++; weapon 0xE ∧ link ≠ −1 ∧ ttl odd → append the PREV
+   position to the SMOKE-TRAIL ring (see item 8). EXPIRY
+   (ttl≥0x65): 0xF/0x13 → ttl=0, class−−; class==0 (any
+   ballistic type) → FUN_004124a4 + the "weapon 0x1A"
+   FOUR-QUADRANT detonation (the §7j.13 sites 0x410e59..0x410e9e
+   re-anchored: 4× FUN_0041a894 + 4× FUN_0041bc1c,
+   damage = FUN_00419aff(0x1A) = 75, at ±0x1000 Q13 half-tile
+   offsets) + trail-link clear. Types 0xC/0xD, 0x10..0x12,
+   0x14..0x16, 0x18/0x19, 0x1B..0x1E, 0x20..0x23, 0x25..0x28,
+   >0x29: NO tick in this function (0x10..0x12/0x1B..0x1E are
+   the spawner-side scatter ids of §7j.17, not tick types).
+7. **Type 0x24 = ROCKET @0x411744**: class countdown (launch
+   delay) → straight flight (x/y/z += v, NO gravity, z<0 →
+   z=0x1000 + K6 disburser + free); actor lanes (odd phases,
+   MP gate for the robot lane); floor via FUN_0041e231 → impact
+   pair FUN_00419aff(0x24) = 400 + disburser (K6); ttl>0x64 or
+   out-of-bounds → free; bounds-exit clears the trail link.
+8. **Type 0x29 = HOMING MISSILE @0x411905**: class = launch
+   delay; TARGET dword@+6 [asm 0x411974..0x411a04]: bit 0x1000
+   → robot ((t&0xFFF)−1)·0xA8, aim (z+0x15)<<8; bit 0x2000 →
+   TRT structure (t&0x1FFF)·0x20 off the 0x4cccec stager frame,
+   tile·0x2000+0x1500; else → critter t−1 via FUN_004128ec +
+   z+0x1500. Homing: z eases ±0x200/tick clamp [0,0xFF00],
+   ground-lift +0x200; heading byte (+0x2E) steered by the
+   FUN_0041ebf8/FUN_0041eb7d/FUN_0041ebc1 angle family +
+   FUN_00412a19 clamp (turn·4); velocity 2·(cos>>4, sin>>4)
+   (FUN_0041eb65/FUN_0041eb77); OBSTACLE AVOIDANCE loop ±0x40
+   in 4-sector steps (FUN_0041e411 floor tests; blocked →
+   heading := candidate, z += 0x600 climb). Target-dead gates:
+   critter state==7/zero-word @0x4cffa2+0x7E·(t−1) or structure
+   active==0 (0x4cccd8 idiom) → disburser + fizzle; floor
+   (FUN_0041e411) → impact pair FUN_00419aff(0x29) = 250 +
+   disburser (K9); ttl>0xC8 (201) or bounds → free.
+9. **The actor hit-test FRONT DOORS** (7j.13's "muzzle-offset
+   target" gloss replaced): FUN_0041879d(owner, x, y, z,
+   weapon) = the CRITTER lane — 3-row presence-grid prefilter
+   (dwords at rows [0x4ea900 + (y>>13)·4 −4/0/+4] + row ptr +
+   (x>>13)−1, the §7j.17 presence marks) then per-critter
+   FUN_004190bc(critter, owner, x, y, z, weapon, MODE 2);
+   FUN_0041874c(owner, x, y, z, weapon) = the OTHER-ROBOT lane
+   (MP only, [0x4edb88]==2 at every caller): per-robot
+   FUN_00418fca(robot, x, y, z, weapon, 2), skipping the owner.
+   **This CORRECTS the §7j.15/queue hypothesis that
+   FUN_004190bc is a panel/preview**: it is the CRITTER
+   hit-test/damage applier (its 6 FUN_00419aff stat reads =
+   per-critter damage lookups), and FUN_00418fca is the ROBOT
+   sibling — both called with mode 2 from this family
+   [internals still open, head-bounded].
+10. **The 0x4e66b8 SMOKE-TRAIL bank** (immediately after the
+    5×0x1C exit slots 0x4e662c): stride 0x68 = {d@+0 active,
+    d@+4 ring counter &7, 8×0xC xyz ring @+8..+0x67}; the
+    weapon-0xE ballistic tick appends {x−vx, y−vy, z−arc} (the
+    previous position) every 2nd tick; cleared at free/expiry/
+    detonation (d@(0x4e66b8 + link·0x68) := 0, sites
+    0x410d51/0x410eac/0x411744-family bounds path). The link
+    slot allocation (writer of +0x32 ≠ −1) stays OPEN.
+11. Engine verdict: docs-only (D70) — unchanged from §7j.13:
+    no corpus producer reaches any fire site; the family stays
+    anchored-but-unwired for P4.2. Re-opens cleanly at:
+    FUN_004190bc/FUN_00418fca internals (the critter/robot
+    damage application + the remaining FUN_00419aff reads), the
+    0x4e66b8 slot allocator, projectile type 0x69, and the
+    draw pass that consumes the trail rings.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -3302,7 +3447,10 @@ process-exw-arrival*.log) + the 7j.19 exitfamily dumps. All
 | object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
-| robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
+| weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
+| artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
+| actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x,y,z,weapon,mode 2)); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner); odd phases only (2×/frame); FUN_004190bc = the CRITTER hit applier (NOT a panel — §7j.15 hypothesis corrected) | §7j.22 |
+| mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; cleared on free/detonate; slot allocator open | §7j.22 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
@@ -3390,7 +3538,16 @@ process-exw-arrival*.log) + the 7j.19 exitfamily dumps. All
    table and the per-zone record↔pad arm mapping (deferred
    until P4.2 needs it).
    Projectile type 0x69 vs the FUN_00419aff damage table
-   remains open (low priority).
+   remains open (low priority). The FUN_00410823 weapon-anim
+   machine is CLOSED 2026-08-21 §7j.22 (the full per-type
+   tick — bullets 2..4 / shell 5 / artillery 9..0xB /
+   ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F} / rocket 0x24 /
+   homing 0x29, the artillery burst tables, the 0x4e66b8
+   smoke-trail bank, and the two actor hit-test front doors;
+   FUN_004190bc re-identified as the critter hit applier,
+   killing the §7j.15 panel hypothesis). Family remainders:
+   FUN_004190bc/FUN_00418fca internals, the 0x4e66b8 slot
+   allocator, and the trail-ring draw pass.
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
    (full writer/reader census in the ledger row).
 0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,

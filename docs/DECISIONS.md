@@ -2335,3 +2335,42 @@ Nudge-Worker: a840f0af-b732-44df-ae91-3caaa1de5960
 
 Nudge-Worker: c7269abe-e8c7-4c92-9a9b-568763c70e8f
 
+## 2026-08-21 P4 7j.22 — the FUN_00410823 weapon-anim machine
+(worker 27e4f048)
+
+1. RE (docs-only, RE-EXW-SIM §7j.22): FUN_00410823 = the
+   WEAPON-ANIM/PROJECTILE TICK over the whole 400×0x36 bank
+   0x4c71f4 (4 calls/frame, phase 0..3; artillery ticks phase-0
+   only, actor hit-tests odd phases only). The 0x36 record
+   layout CLOSED: target selector d@+6 (type 0x29: 0x1000-bit
+   robot / 0x2000-bit TRT structure / plain critter idx), class
+   d@+0x2A = launch delay (0x24/0x29) OR detonation cycle count
+   (0xF/0x13), arc d@+0x2E = ballistic z-velocity with gravity
+   −0x100/tick (heading byte for 0x29), trail link d@+0x32.
+   Per-type machines: bullets 2..4 = 2-substep lookahead ray
+   (commit 1 — anti-tunnel); type 5 shell + K3 trail; artillery
+   9..0xB = scripted-burst family with DURATION dwords
+   0x456c78+4·id (w9→2/w0xA→4/w0xB→7 frames) over 7 expanding-
+   ring (Δy,Δx) lists @0x45687c.. via PTR[0x456bf0] + ttl-24
+   index, 500-sentinel; the §7j.14 K0xC debris set {0xE,0xF,
+   0x13,0x17,0x1A,0x1F} = the BALLISTIC bounce family (0xE
+   mortar = bounce + 3-cell 5000-blast per contact + smoke
+   trail ring bank 0x4e66b8 0x68-stride; 0x17 = 3-clone split;
+   0xF/0x13 = ttl-cycle submunitions detonating as the §7j.13
+   four-quadrant "weapon 0x1A" blast — those 4 sites
+   re-anchored to the detonation path); 0x24 rocket (launch
+   delay, straight, 400 dmg); 0x29 homing missile (robot/
+   critter/structure target lock, ±0x40 heading-search terrain
+   avoidance, ttl 201). The two actor hit-test front doors
+   pinned: FUN_0041879d = critter lane (presence-grid
+   prefilter → FUN_004190bc mode 2), FUN_0041874c = MP
+   other-robot lane (FUN_00418fca mode 2) — CORRECTING the
+   §7j.15 "FUN_004190bc = panel/preview" hypothesis: it is the
+   critter hit/damage applier. RandA identity re-pinned at
+   0x4116b5 (FUN_00402975).
+2. ENGINE: no change (D70) — the weapon family stays
+   anchored-but-unwired for P4.2 (the harness must inject
+   orders to exercise it).
+
+Nudge-Worker: 27e4f048-ad51-4479-a42a-54e91ec114c3
+
