@@ -2078,3 +2078,47 @@ Nudge-Worker: b7f866b6-9b16-4d83-ab08-cc080284ee3b
    projectile-record z encoding (site-1 arg shape).
 
 Nudge-Worker: d37fb3a2-9df1-482a-88c5-20504c5bb254
+
+## D63 - 2026-08-21: the weapon-fire third hop is docs-only - FUN_00419aff is a pure id->damage switch scaled by the NEW difficulty dword 0x46cbf8; the 0x4cccf8 terrain-structure producer is the ".TRT" mission-section loader; the TRT third field is the z level
+
+1. RE (all [verified] vs ghidra-project/exw-weaponfire3.txt +
+   exw-weaponfire4.txt, ExwWeaponFire3.java/ExwWeaponFire4.java):
+   FUN_00419aff(EAX id) = the WEAPON/PROJECTILE DAMAGE TABLE, a
+   pure switch, NO table walk: 2->20, 3->30, 4->40, 5->75,
+   0xc->5000, 0xd->312, 0x1a->75, 0x24->400, 0x29->250,
+   0x65->(d+1)*50, 0x66->(d+1)*300, 0x67/0x68->(d+1)*75 (d=2
+   flat overrides 200/1200/300), else 1. The 7j.13 second-arg
+   "(weapon_id, field)" reading is an ERRATUM - EDX passes
+   through untouched; the only second selector is DAT_0046cbf8
+   = the DIFFICULTY dword (0..2): cycled (d+1)%3 at
+   NameEntryScreen, save-persisted, money 500*d vs 4000 base,
+   zone-7 temporarily forces d=2 (GameMain around FUN_0044771c).
+   28 callers: FUN_00410823 x16, FUN_004190bc x6 (stat reads off
+   the 0x4cff98 bank - a second consumer, likely panel/preview),
+   FUN_00412010 x4, FUN_004197d4, FUN_00418fca. The 0x4cccf8
+   PRODUCER = FUN_004170a6, the ".TRT" section loader (sole
+   caller FUN_00416458 0x416487, the mission-load dispatcher
+   clearing 0x4cff98/0xac44 + 0x4dabdc/0xf00 then opening .NME;
+   sibling tags .MOFO/.NME/.TRT/.POS/.BDG): clears the FULL
+   250-rec bank (0x1f40 B), count u16 -> [0x46ccd4], per rec
+   3x u32 reads -> stager frame 0x4cccfc {+0=1, +4 active=1,
+   +8=0 scratch (no producer found), +0xC hp = 250 + (250 *
+   [0x46ae8c])/27 = 250+250*linear-mission/27 -> 259..490,
+   +0x10 x, +0x14 y, +0x18 z}; ALSO stamps tile byte 0x66 into
+   the 3D tile bank byte[[0x4edd58]+x+y*w+z*w*h] and word 1
+   into a second 3D word bank word[[0x4ede20]+2(x+y*w+z*w*h)].
+   7j.14's resolver frame (base 0x4cccf8) is +4 - all its
+   offsets stand; the external 1-based idiom unchanged.
+   FORMATS-MISSION sec 14 ANCHORED: the TRT third u32 is the
+   z LEVEL (0..6), not a type enum - "turrets?" retired as
+   primary; open consumers FUN_00417264/FUN_00419943/
+   FUN_0041ee20.
+2. ENGINE: no change - unchanged corpus verdict from 7j.13/7j.14;
+   the fire/impact family stays player/script-driven and
+   unwired. Re-open points: the FUN_00410823 anim-machine
+   internals, the structure consumers above, the two 3D banks'
+   other consumers, the FUN_004190bc 0x4cff98 record family,
+   and the +0x08 scratch dword producer.
+
+Nudge-Worker: efff097c-b4e9-41a0-b4ce-fcdc7fbf713e
+

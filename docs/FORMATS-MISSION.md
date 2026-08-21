@@ -268,17 +268,28 @@ What RE must confirm: everything beyond the layout.
 - **Sizes:** 2 … 1310 B, 19 distinct; **every size ≡ 2 (mod 12)** —
   `(size − 2) / 12` is an exact integer for all 37 files. VERIFIED
 - **Layout (VERIFIED):** `u16 count + count × 12 B`, each record = 3 × u32
-  `(x, y, type)`.
+  `(x, y, z-level)` (third field re-anchored from "type" — see
+  Interpretation).
   - ZONEA/MISSION1.TRT @0x0000: `03 00` then (14,15,1), (11,15,1), (10,33,1).
   - ZONEB/MISSION1.TRT: count=19; records (13,45,2), (15,45,2), (1,73,2), …
   - Across all missions: x ≤ 97, y ≤ 97, always within that mission's map
     bounds (no out-of-bounds record found); type ∈ 0…6 (1×265, 2×212, 3×64,
     4×24, 5×5, 6×6, 0×1).
   - 11 files have count = 0 (2-byte file).
-- **Interpretation (LIKELY):** per-tile placed entities with a 7-value type
-  vocabulary — "TRT" suggests **turrets**; could equally be triggers/traps.
-- **What RE must confirm:** type vocabulary and behaviour (compare with MRK
-  types 0–7 and PAD types 0–6, which may be one shared enum family).
+- **Interpretation (ANCHORED 2026-08-21 to RE-EXW-SIM §7j.15):** the
+  third u32 is the **z LEVEL** (values 0..6 = map levels; per-zone bands:
+  ZONEA records all level 1, ZONEB all 2), not a type enum. The records are
+  destructible **terrain-structure placements** — the consumer array
+  (base 0x4cccfc/0x4cccf8 per §7j.15 frames, 250-rec capacity, stride 0x20
+  {=1, active, scratch 0, hp, x, y, z})
+  staged by the ".TRT" mission-section loader FUN_004170a6 at mission load
+  and damaged by the terrain resolver FUN_0041bc1c (hp = 250+(250·linear
+  mission)/27). The earlier "turrets?" reading is retired as primary;
+  turret-vs-static behaviour, if any, would live in the still-open consumers
+  FUN_00417264 / FUN_00419943 / FUN_0041ee20.
+- **What RE must confirm:** the open consumers above (esp. whether any
+  structure shoots — FUN_004190bc's 0x4cff98 record family is a candidate),
+  and the +0x08 scratch dword producer.
 
 ## 15. TXT — ASCII designer/mission notes (two known documents)
 

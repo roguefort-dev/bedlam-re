@@ -2147,6 +2147,118 @@ type word. Re-opens cleanly at: the 0x4cccf8 array PRODUCER
 (mission-load stager), the FUN_00410823 anim-machine internals,
 and FUN_00419aff's per-weapon table layout.
 
+## 7j.15 Amendment 2026-08-21 (worker efff097c, the weapon-fire
+family THIRD HOP: FUN_00419aff + the 0x4cccf8 producer census)
+
+Method: `ExwWeaponFire3.java` + `ExwWeaponFire4.java`
+(-process BEDLAM.EXW -noanalysis), dumps =
+`ghidra-project/exw-weaponfire3.txt` / `exw-weaponfire4.txt`
+(full decompile + listing + all-28-caller 0x40 arg windows; xref
+census with ±0x18 context; producer full decode + caller).
+All facts below [verified] against those dumps unless tagged.
+
+1. **FUN_00419aff = the WEAPON/PROJECTILE DAMAGE TABLE — a pure
+   id switch, no table walk.** EAX = weapon/projectile id → EAX
+   = damage. EDX is pushed/popped untouched (plain register
+   helper); the `push 1` at the fire sites is consumed
+   downstream as FUN_0041a894's score flag — the 7j.13
+   "(weapon_id, field)" second-arg hypothesis is CLOSED as an
+   ERRATUM: beside the id, the ONLY selector is the global
+   DIFFICULTY dword 0x46cbf8 (d, values 0..2):
+   | id | damage |
+   |---|---|
+   | 2 / 3 / 4 | 20 / 30 / 40 |
+   | 5 | 75 |
+   | 0xc | 5000 |
+   | 0xd | 312 |
+   | 0x1a | 75 |
+   | 0x24 | 400 |
+   | 0x29 | 250 |
+   | 0x65 | (d+1)·50, d=2 → 200 |
+   | 0x66 | (d+1)·300, d=2 → 1200 |
+   | 0x67 / 0x68 | (d+1)·75, d=2 → 300 |
+   | all other ids | 1 |
+   Coherence: the 7j.14 cosmetic anim kinds ({0xE,0xF,0x13,0x17,
+   0x1A,0x1F}→K0xC, 9..0xB clear-only) all land in damage-1
+   buckets; the four real robot weapons pinned 7j.13
+   (5/0x1a/0x24/0x29) hit 75/75/400/250; only the four
+   projectile types 0x65..0x68 are difficulty-scaled (enemy
+   fire; d=2 overrides the linear (d+1)·k with a flat larger
+   constant via the branchless `ADD` idiom at 0x419bf1).
+2. **DAT_0046cbf8 = the DIFFICULTY dword (0..2)** [verified]:
+   cycled at NameEntryScreen 0x43ab7e `(d+1)%3` (toggle →
+   FUN_00445b5c redraw, itself a reader); persisted in the
+   campaign save (0x43c3a6: word read right after [0x46ae70]);
+   money context 0x43aaa3 `IMUL d,0x1f4` (=500·d vs 0xfa0=4000
+   base); GameMain 0x41c568: zone [0x4edd8c]==7 temporarily
+   forces d=2 around FUN_0044771c then restores EBP (saved
+   value); campaign-start write 0x41c14a. 44 refs total; heavy
+   readers: FUN_00412f34 ×13, the FUN_00403938 sidebar ×10,
+   FUN_00416458 ×5.
+3. **Caller census (28 sites, verified)**: FUN_00410823 ×16
+   (the fire controller — 8 beyond the FUN_0041a894-adjacent
+   sites, incl. non-impact stat reads), FUN_004190bc ×6 (stat
+   reads off the 0x4cff98-family record bank — the bank
+   FUN_00416458 clears at load; a second stat consumer, likely
+   a panel/preview), FUN_00412010 ×4 (projectile tick: the
+   0x65/0x66 impacts + expiry paths), FUN_004197d4 ×1 (the
+   robot-hit walker re-reads 0x65), FUN_00418fca ×1 (weapon id
+   word [0x4c71f2+2·i] out of the anim-rec family).
+4. **The 0x4cccf8 PRODUCER = FUN_004170a6, the ".TRT"
+   mission-file section loader** [verified]; sole caller
+   FUN_00416458 at 0x416487 — the mission-load dispatcher
+   (clears 0x4cff98/0xac44 B + 0x4dabdc/0xf00 B, calls the TRT
+   loader, then opens ".NME"; section strings .MOFO/.NME/.TRT/
+   .POS/.BDG at 0x457a4c..0x457a65). FUN_004170a6 itself:
+   (a) clears 8000 B at 0x4cccf8 via FUN_00402965 (ECX=0x1f40)
+   = the FULL 250-record bank (capacity pin; 0x4cccf8 is .bss,
+   no file backing); (b) FUN_0041dbbed(0x4dca0c, ".TRT") stages
+   the section bytes, FUN_0041cd90 inits the reader;
+   (c) count = FUN_0041cccb(&0x46ccd4, 2); (d) per record
+   i < count: three FUN_0041cccb(ptr, 4) reads → x, y, z staged
+   at +0x10/+0x14/+0x18 (stager frame, see (e)); hp@+0xC =
+   250 + (250·[0x46ae8c])/27 integer-div ([0x46ae8c] = linear
+   mission 1..26 per GAMETHREAD → hp 259 at m1 … 490 at m26);
+   +0x00 = 1, +0x04 = 1 (the active dword), +0x08 = 0 (unknown
+   scratch dword — no producer found this unit).
+   (e) **base refinement of 7j.14**: the stager frame base is
+   0x4cccfc, i.e. one dword BELOW 7j.14's resolver frame
+   (0x4cccf8, active@+0). All 7j.14 offsets (hp@+0x10,
+   x@+0x14, y@+0x18, z@+0x1C) remain correct in its frame; the
+   extra +0x00=1 dword sits at −4 there; the external 1-based
+   idiom (0x4cccd8+id·0x20 = active of rec id−1) is unchanged
+   (0x4cccd8 = the id-0 slot one record below the array).
+   (f) the stager ALSO stamps tile byte 0x66 at
+   byte[[0x4edd58] + x + y·[0x4eddec] + z·[0x4eddf4]] — the 3D
+   per-level tile bank (w=[0x4eddec], plane stride
+   [0x4eddf4]); 0x66 = the terrain-structure tile, sibling of
+   the 0x62 trap tile — and word 1 at
+   word[[0x4ede20] + 2·(x + y·w + z·w·h)] (a second 3D word
+   bank, pointer slot @0x4ede20). Both banks' consumers stay
+   open [census]. Consumers of the record array found by the
+   count-xref census: FUN_0041bc1c (damage, 7j.14),
+   FUN_00417264 (scans active; reads the +0x08 scratch dword
+   frame-off and y), FUN_00419943 (RandA/IDIV scatter vs map
+   globals [0x4edde4]/[0x4edde8] — a placement search),
+   FUN_0041ee20 (scans active).
+5. **FORMATS-MISSION §14 TRT anchored**: the third u32 per
+   record is the z LEVEL (census values 0..6 = levels;
+   per-zone bands: ZONEA all 1, ZONEB all 2), NOT a type enum
+   — records are destructible terrain-structure placements
+   (the FUN_0041bc1c hp family, hp scaled by linear mission).
+   The "turrets?" reading retires as primary; turret-vs-static
+   behaviour moves to the open consumers above.
+6. Corpus-path verdict: unchanged — the weapon family stays
+   unwired (no corpus producer reaches a fire site; D63,
+   docs-only). CLOSED this unit: FUN_00419aff's full layout
+   (the queue item), the 0x46cbf8 difficulty identity +
+   writers, the producer census (FUN_004170a6/.TRT/the
+   FUN_00416458 chain), the 250-record capacity, and the TRT
+   third-field anchoring. Re-opens cleanly at: the FUN_00410823
+   anim-machine internals, the FUN_00417264/FUN_00419943/
+   FUN_0041ee20 structure consumers, the two 3D banks' other
+   consumers, and the FUN_004190bc 0x4cff98 record family.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -2186,7 +2298,9 @@ and FUN_00419aff's per-weapon table layout.
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
 | robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
-| weapon stat lookup | FUN_00419aff(weapon_id, field) — 28 callers, feeds every damage arg; its stack arg is the same push that arms FUN_0041a894's score flag | §7j.13 |
+| weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
+| difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales only projectile damage 0x65..0x68 | §7j.15 |
+| terrain-structure loader | FUN_004170a6 (call 0x416487 in the dispatcher FUN_00416458): ".TRT" section @staging buf 0x4dca0c; clears 250×0x20 @0x4cccf8; count→[0x46ccd4]; rec {+0=1, +4 active=1, +8=0, +0xC hp=250+(250·mission)/27, +0x10 x, +0x14 y, +0x18 z} (stager base 0x4cccfc); stamps tile 0x66 @byte[[0x4edd58]+x+y·w+z·w·h] + word 1 @word[[0x4ede20]+2(x+y·w+z·w·h)] | §7j.15 |
 | terrain-structure array | recs @0x4cccf8 + i·0x20, i < [0x46ccd4] — {active@+0, hp@+0x10, x tile@+0x14, y@+0x18, z@+0x1C}; externally 1-based (dword[0x4cccd8+id·0x20] = rec id−1 active; 0x4cccd8 = id-0 guard) | §7j.14 |
 | terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
 | terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |
