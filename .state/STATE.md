@@ -1,3 +1,20 @@
+ - CLOSED 2026-08-21 (P4 7j.23 the ACTOR HIT APPLIERS unit
+   COMPLETE, commit 45329e9, worker ad591680 claim 1, D71,
+   docs-only; 4 × -process runs, dumps ghidra-project/
+   exw-hitters{,2,3,4}*.txt + exw-hitters-scan.txt; new
+   StoreScan.java operand scanner for computed refs):
+   FUN_004190bc = the CRITTER hit applier (kind switch w@+0
+   = the .NME section states, mode 2 = octile+z-box per-kind
+   thresholds, damage FUN_00419aff per-WEAPON, attacker/
+   flash/impact stores, 6 per-kind death handlers, 25%
+   knockback FUN_0041a028 = 2nd 0x4cec38 spawner, k7
+   in-record knock); FUN_00418fca = robot box-test applier →
+   FUN_0040e230 [head: shield/hp/alarm/tier-SFX/MP-frags];
+   TRAIL ALLOCATOR CLOSED (FUN_00412a4a 20 slots, writer
+   FUN_0040a9ff mortar spawner, link/active/ring-zero
+   protocol); third critter-applier caller found
+   (FUN_00403938 weapon 0xC 5000-blast). 9 ledger rows
+   touched. Next: the critter death-handler family (7j.24).
  - CLOSED 2026-08-21 (P4 7j.22 the WEAPON-ANIM MACHINE head
    unit COMPLETE, commit 29adbf1, worker 27e4f048 claim 1,
    D70, docs-only; 3 × -process runs, dumps ghidra-project/

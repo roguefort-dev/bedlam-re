@@ -1,27 +1,26 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The weapon-fire family TAIL head, promoted by 7j.22:
-   the ACTOR HIT APPLIER internals — FUN_004190bc (the critter
-   hit test/damage applier; the 7j.15 "panel/preview"
-   hypothesis is CORRECTED, it is called (critter, owner, x, y,
-   z, weapon, mode 2) from FUN_0041879d's presence-gated lane;
-   6 FUN_00419aff reads = per-critter damage lookups) +
-   FUN_00418fca (the robot sibling via FUN_0041874c, skips the
-   owner, MP-gated). Decode both (mode semantics, the hit test,
-   damage/hit-flash application, the 0x7E-stride critter-record
-   reads +0xC state/+0x24 word) → fold into RE-EXW-SIM 7j.23 +
-   ledger rows. Small addendum if room: the 0x4e66b8
-   smoke-trail bank slot allocator (writer of the 0x4c71f4
-   record's +0x32 link ≠ −1) — the trail-ring draw pass can
-   stay backlog.
+1. [P4] The CRITTER DEATH-HANDLER family, promoted by 7j.23:
+   the six per-kind death handlers dispatched by the hit
+   applier FUN_004190bc — FUN_00418835 (k1, 155 B), FUN_004188d0
+   (k2, 156 B), FUN_00418aa6 (k3, 510 B), FUN_00418ca4 (k4,
+   386 B, takes weapon), FUN_00418e26 (k5/6, 420 B, takes
+   weapon), FUN_0041896c (k7, 307 B). Decode each (k1/k6 debris
+   + FUN_00424355 rings + 0x4cec38 effect rows expected per
+   7j.17; weapon-dependent drops for k4/k5/k6) → RE-EXW-SIM
+   7j.24 + ledger rows. Small addendum if room: the SP tail of
+   FUN_0040e230 (robot death in non-MP mode; MP scoreboard +
+   no-extract latch already pinned 7j.23).
+
 ## Backlog (not yet started)
-- The weapon-fire family TAIL (after 7j.23): the destroy-tail
+- The weapon-fire family TAIL (after 7j.24): the destroy-tail
    debris-kind map (which id-table type@+0xE stages which kinds
    — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
    @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
    death is now a confirmed non-weapon producer of k1/k6 +
-   FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f),
+   FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f;
+   NOTE 7j.23: FUN_0041a028 is a SECOND 0x4cec38 spawner),
    and the 160-vs-0xA8 stride anomaly at 0x4c69e4
    (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
    base, stride 0xA8, count 0x46ccbc — the 160 stride at
@@ -30,8 +29,10 @@
    @0x4c69e4+idx·0xA8). CLOSED by 7j.17: the [0x4edd60]
    height-bank family and the projectile z-encoding census.
    OPEN small: projectile type 0x69 vs the FUN_00419aff damage
-   table (7j.17/7j.18 — low priority); the trail-ring draw
-   pass consuming the 0x4e66b8 bank (7j.22).
+   table (7j.17/7j.18 — low priority); the trail-ring DRAW
+   pass consuming the 0x4e66b8 bank (7j.22/7j.23: FUN_00403938
+   reads the record link @0x404464 — bounded decode when
+   needed).
 - The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
   beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
   extraction-pad (zone,slot) pairs and §7j.21 the record
@@ -141,6 +142,37 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.23 the ACTOR HIT APPLIERS unit COMPLETE
+  (worker ad591680 claim 1, commit 45329e9, D71, docs-only;
+  4 × -process runs, dumps ghidra-project/exw-hitters{,2,3,4}
+  *.txt + exw-hitters-scan.txt via the NEW StoreScan.java
+  operand scanner). FUN_004190bc = the CRITTER hit applier:
+  presence w@+0x24, KIND switch w@+0x00 (the 7j.18 .NME
+  section states {2,1,5,4,3,6,7} = cases 1..7), attacker
+  w@+0x04, hp s16 w@+0x06, state w@+0x0C (6/7/0xB immune for
+  k3..7), hit-flash w@+0x7C, impact x/y +0x1C/+0x20; mode 2 =
+  octile<0x20 + z-box (k1/4 cell-unit coords, others Q13; z
+  0x20, k3 0x24, k7 0x40), mode 1 = x/y only; damage =
+  FUN_00419aff(weapon) — the 7j.22 "per-critter" gloss
+  CORRECTED (per-WEAPON); 6 per-kind death handlers
+  (FUN_00418835/d0/aa6/ca4/e26/96c); k4/5/6 survivors 25%
+  knockback FUN_0041a028 (2nd spawner of the 0x4cec38 effect
+  rows, heading away-from-shooter ±jitter) + impact SFX
+  FUN_00421fc2 (RandB%3 → banks 0x4edf7c/80/84); k7 does its
+  own in-record knock (vx/vy w@+0x74/+0x76). FUN_0041ebf8 =
+  octile distance. FUN_00418fca = robot box-test applier (|dx|
+  |dy|<0x20, |dz|<0x30) → FUN_0040e230 [head-decoded: shield
+  d@+0x88 absorb, hp d@+0x78, alarm d@+0xA4→SFX 0x10..12,
+  tier SFX 0x2B/0x13/0x16 per 5000+100·variant, MP frags
+  0x4ebaa8 0xC-stride] + hp clamp. TRAIL ALLOCATOR CLOSED:
+  FUN_00412a4a (20 slots @0x4e66b8, first active==0), writer
+  FUN_0040a9ff (mortar spawner: slot weapon w@+0x36+8k==0xE →
+  link := slot, active := 1, ring zeroed; else link := 0;
+  ballistics /8-unit ×2 at the order target, ttl 0x32, arc
+  0x500). Third caller of the critter applier found
+  (FUN_00403938, weapon 0xC=5000 blast, owner −1). 7 new +
+  2 rewritten ledger rows. Manifest verified. PUSHED 45329e9.
+  Queued: the critter death-handler family (7j.24).
 - 2026-08-21: P4 7j.22 the WEAPON-ANIM MACHINE head unit COMPLETE
   (worker 27e4f048 claim 1, commit 29adbf1, D70, docs-only;
   3 × -process runs, dumps ghidra-project/exw-weaponanim{,2,3}*
