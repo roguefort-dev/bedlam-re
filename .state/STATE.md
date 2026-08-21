@@ -1,3 +1,22 @@
+ - CLOSED 2026-08-21 (P4 7j.21 the 0x425xxx ARRIVAL-PRODUCER
+   family unit COMPLETE, commit 923668e, worker b67abe61
+   claim 1, D69, docs-only; 4 × -process runs, dumps
+   ghidra-project/exw-arrival{1,2,3}*.txt): FUN_00425da4 =
+   the ELEVATOR-RIDE STAGER (MissionShell boot @0x447b4e,
+   zone/mode/mission switch, fixed-address stores, markers
+   from .PAD slot words, countdown NEVER producer-written —
+   records stage dormant); the runtime armer = the
+   FUN_00433980 ride cases (countdown:=10, rider state 2,
+   pre-position at the marker) — the 45-record 0x4dcdb8
+   array is the elevator/teleport RIDE PIPELINE, closed
+   boot→arm→tick(SFX+burn+teleport)→draw (sprite 0x12E,
+   width clamp(11−c,0,9)). 7j.11 corrected (record layout
+   marker x/y/z; walk stops at first inactive). Rect-list
+   boundary: the 0x4dcae8 0x2d0 clear ends EXACTLY at
+   0x4dcdb8 (no overlap; 7j.12 same-family hypothesis
+   refuted; FUN_004223b8 = door open/close stepper
+   re-anchored). 0x4c71c4 anchor refresh negative. Next: the
+   weapon-fire head FUN_00410823 (7j.22).
  - CLOSED 2026-08-21 (P4 7j.20 the extraction BEACON +
     POD-COUNTDOWN producers unit COMPLETE, commit c37b8ef,
     worker c7269abe claim 1, D68, docs-only; 2 × -process

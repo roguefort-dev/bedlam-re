@@ -1,55 +1,43 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The 0x425xxx ARRIVAL-PRODUCER family — the top backlog
-   item, now unblocked head: FUN_0042034c's 45-record staging at
-   0x425daf/0x426079/0x42688c + the register-addressed countdown
-   writes + the record draw pass 0x4065f8..0x4066a3 — the
-   delayed-arrival scheduler is decoded (7j.11 item 1: 45 rec
-   @0x4dcdb8 stride 0x24 {active, xy×2, spawn xyz, countdown,
-   robot slot}; epilogue 0x448076; fires FUN_0042394a), its
-   producers are not. NOTE 7j.12: the 45x0x10 rectangle list at
-   0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
-   before the arrival array 0x4dcdb8 — same producer family is
-   likely. NOTE 7j.16: the arrival records ARE drawn (scanner
-   icon 0xB in FUN_0041ee20) — the family has a confirmed
-   consumer. NOTE 7j.20: the FUN_0040cca0 spawn tail already
-   writes a per-player anchor bank at 0x4c71c4 — check whether
-   the arrival producer refreshes it too. Bounded head: decompile
-   FUN_0042034c + the 0x425xxx staging sites → fold into
-   RE-EXW-SIM 7j.21 + ledger rows.
+1. [P4] The weapon-fire family REMAINDER, bounded head: the
+   FUN_00410823 weapon-anim machine internals (6102 B, the
+   biggest piece). Its 0x4c71f4 record family is now 400x0x36
+   with frame + spawners pinned per 7j.17; the bank's
+   head-adjacent 0x4c71c4 = the per-player selected anchor
+   (spawn-seeded + renderer-updated; NOTE 7j.21: the arrival
+   producer does NOT refresh it — CLOSED). Decode
+   FUN_00410823's state machine (frames, anim ids, fire
+   cadence) → fold into RE-EXW-SIM 7j.22 + ledger rows.
 ## Backlog (not yet started)
-- The weapon-fire family REMAINDER (7j.13/14/15/16/17/18 done): the
-  FUN_00410823 weapon-anim machine internals (6102 B — the
-  biggest piece; its 0x4c71f4 record family is now 400x0x36
-  with frame + spawners pinned per 7j.17; NOTE 7j.20: the bank's
-  head-adjacent 0x4c71c4 = the per-player selected anchor,
-  spawn-seeded + renderer-updated), the destroy-tail
-  debris-kind map (which id-table type@+0xE stages which kinds
-  — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
-  @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
-  death is now a confirmed non-weapon producer of k1/k6 +
-  FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f),
-  FUN_004190bc (the 0x4cff98-family second stat consumer —
-  8 octile + 6 damage reads, a strong panel/preview
-  candidate; 7j.17 gives it the bank layout to check
-  against), and the 160-vs-0xA8 stride anomaly at 0x4c69e4
-  (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
-  base, stride 0xA8, count 0x46ccbc — the 160 stride at
-  0x4c69e4/0x4c6a60 needs the FUN_0040fe93 view re-anchored;
-  NOTE 7j.18: FUN_0040db9e writes the robot stun word
-  @0x4c69e4+idx·0xA8). CLOSED by 7j.17: the [0x4edd60]
-  height-bank family and the projectile z-encoding census.
-  OPEN small: projectile type 0x69 vs the FUN_00419aff damage
-  table (7j.17/7j.18 — low priority).
+- The weapon-fire family TAIL (after 7j.22): the destroy-tail
+   debris-kind map (which id-table type@+0xE stages which kinds
+   — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
+   @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
+   death is now a confirmed non-weapon producer of k1/k6 +
+   FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f),
+   FUN_004190bc (the 0x4cff98-family second stat consumer —
+   8 octile + 6 damage reads, a strong panel/preview
+   candidate; 7j.17 gives it the bank layout to check
+   against), and the 160-vs-0xA8 stride anomaly at 0x4c69e4
+   (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
+   base, stride 0xA8, count 0x46ccbc — the 160 stride at
+   0x4c69e4/0x4c6a60 needs the FUN_0040fe93 view re-anchored;
+   NOTE 7j.18: FUN_0040db9e writes the robot stun word
+   @0x4c69e4+idx·0xA8). CLOSED by 7j.17: the [0x4edd60]
+   height-bank family and the projectile z-encoding census.
+   OPEN small: projectile type 0x69 vs the FUN_00419aff damage
+   table (7j.17/7j.18 — low priority).
+- The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
+  beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
+  extraction-pad (zone,slot) pairs and §7j.21 the record
+  high-water marks + the record↔pad arm mapping task) + the
+  FUN_00424a6f message string table — mechanical, decode per
+  zone only when P4.2 needs it.
 - FUN_00440dc2 (the 7j.16 TOT-materializer caller) + the
   [0x4ede24] 7×7 screen-address table: is the materializer the
   scroll/camera restamp? Bounded head decode.
-- The full per-zone FUN_00433980 case table (≈28 pad ids × 7
-  zones, beyond the §7j.19 head decode; 7j.20 item 2 gives the
-  ~25 extraction-pad (zone,slot) pairs as an index) + the
-  FUN_00424a6f message string table — mechanical, decode per
-  zone only when P4.2 needs it.
 - The 0x4787c4/0x47879c hot-rect record (renderer FUN_00403938
   writes it @0x403c93, count [0x46ccd8]; picker reads
   center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
@@ -144,6 +132,41 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.21 the 0x425xxx ARRIVAL-PRODUCER family unit
+  COMPLETE (worker b67abe61 claim 1, commit 923668e, D69,
+  docs-only; 4 × -process runs, dumps ghidra-project/
+  exw-arrival{1,2,3}*.txt). FUN_00425da4 (26 234 B, sole caller
+  MissionShell boot @0x447b4e) = the ELEVATOR-RIDE STAGER:
+  FUN_00402965(0x4dcdb8, 0x654) clears all 45 records, then a
+  zone switch ([0x4edd8c] 1..7, jump table 0x425d88) with
+  mode/mission gates ([0x4edb88]==2 MP, [0x4edd88] mission)
+  stages a contiguous record run from record 0 via
+  FIXED-ADDRESS stores (the "register-addressed" gloss was a
+  Watcom artifact): active:=1, marker tile xyz ← .PAD slot u16
+  words @0x4e44f8+slot·8+2, dest := immediates, +0x20:=−1;
+  the countdown is NEVER producer-written — records stage
+  DORMANT (7j.11 premise REFUTED). High-water: Z1 0..6, Z2/Z3
+  0..16, Z4 0..8, Z5 0..9, Z6 0..14, Z7 0..6; zone 1 worked
+  example (SP mission 1): rec0 (8,0x39,2) slot 0, rec1..5
+  (8,0x1A,5) slots 10..14, rec6 (0xE,0x20,1) slot 15.
+  7j.11 CORRECTED: record layout +4/+8/+0xC = marker x/y/z
+  (not two x/y pairs); the walk STOPS at the first inactive
+  record (shared epilogue 0x41e176), −1 store only on fire.
+  RUNTIME ARMER = the FUN_00433980 ride cases (guard +0x20≠−1,
+  rider state@+0x0C:=2, pre-position marker·0x2000+0x1000,
+  countdown:=10 — every armed countdown in the program is 10):
+  the array = the elevator/teleport RIDE PIPELINE. DRAW PASS
+  decoded (0x4065e5..0x4066e3): sprite 0x12E flash at the
+  marker, width clamp(11−countdown,0,9), only while armed.
+  RECT-LIST BOUNDARY resolved: the MissionShell clear
+  (0x4dcae8, 0x2d0) ends EXACTLY at 0x4dcdb8 — no overlap, the
+  7j.12 "same producer family" hypothesis refuted; door
+  consumers use rect idx 0..0x24; FUN_004223b8 = the door
+  open/close stepper (rect {state,x,w,y,h,type}, type-DB
+  door-tile stamp/clear type<<4, SFX 0x23/0x24). 0x4c71c4
+  anchor refresh: NEGATIVE (spawn-seed only, closed). 7 ledger
+  rows + 0a rewritten. Manifest verified. PUSHED 923668e.
+  Queued: the weapon-fire family head (FUN_00410823, 7j.22).
 - 2026-08-21: P4 7j.20 the extraction BEACON + POD-COUNTDOWN
   producers unit COMPLETE (worker c7269abe claim 1, commit
   c37b8ef, D68, docs-only; 2 × -process runs, dumps
