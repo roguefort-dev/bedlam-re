@@ -1,3 +1,35 @@
+ - CLOSED 2026-08-21 (P4 7j.19 the EXIT/ESCAPE RUNTIME unit
+   COMPLETE, commit c64c637, worker 90c04773 claim 1, D67
+   docs-only; 3 × -process BEDLAM.EXW -noanalysis runs, dumps
+   ghidra-project/exw-exitfamily{,2,3}*.txt): FUN_0041fbb1 =
+   the ESCAPE-CRAFT ANIMATOR (MissionShell @0x448012): 3
+   machines over one 0x1C frame {active, PHASE, x, y,
+   altitude, toggle, dwell} — the 5 exit elevators @0x4e662c,
+   the extraction DROPSHIP @0x4e6610 (landing = extraction
+   sweep of robot states 3/4 → 5, _DAT_004dc680++, departure
+   → _DAT_004dc67c = 1 complete flag read by MissionShell +
+   FUN_0044425c), the per-robot ESCAPE PODS @0x4e64c0
+   (landing = payout 100·w@+0x94+5000; gated by the
+   [0x46aed4+idx·4] no-extract latch). The 7j.17 "+4 kind" is
+   a PHASE (1 descend / 2 landed-OPEN / 3 depart) — the POI
+   flee gate kind==2 = LANDED elevators only.
+   FUN_00433980 = the ZONE PAD-TRIGGER SCRIPT DISPATCHER
+   (caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order
+   word ≠ −1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte
+   0xFF → 999×8B .PAD slot scan @0x4e44f8); per-zone switch
+   on 0x4edd8c = elevator rides (scripted dests
+   0x4dcdbc..0x4dd330), messages FUN_00424a6f, doors
+   FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B =
+   the SOLE exit-pad activation FUN_0041fa51 — the
+   personnel-rescue loop is CLOSED end-to-end (.PAD load →
+   00433980 script → 0041fa51 activator → 0041fbb1 lands →
+   00412a98 POI flee → [0x4eba0c]++ → 00448b80(5000)).
+   FUN_0041faf0 = dropship deployer (beacon 0x4eabb4/76);
+   FUN_0041fb4b = pod spawner (countdown w@0x4c6a10).
+   [0x4eba0c]/[0x4eba10] consumer censuses CLOSED; 4 ledger
+   rows added/updated; open item 0a rewritten. Manifest
+   verified. PUSHED c64c637. Next: the beacon/pod-countdown
+   producers (FUN_004247b5 + FUN_004248c8 + 0x4c6a10 writers).
  - CLOSED 2026-08-21 (P4 7j.18 the critter/POI/exit LOADER hop
    unit COMPLETE, commits 7f1c8fb docs + f04681d tooling,
    worker a840f0af claim 1, D66): FUN_00416458 = the .NME
