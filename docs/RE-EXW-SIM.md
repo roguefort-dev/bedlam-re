@@ -1158,6 +1158,87 @@ MP FUN_00425647 tail) stays unwired; `PickupOutcome` exposes the
 per-case effect id for that future slice. Nothing on the default
 corpus path invokes the seam — the sim pins stay frozen.
 
+## 7i. Amendment 2026-08-21 (worker efc8b1e0, the dead/hit dither
+overlay — FUN_00401ae6 + the 0x4e6ed8 noise bank)
+
+Fresh objdump of 0x401ae6..0x401bbb (the whole blit), 0x447ab0..0x447b60
++ 0x448090..0x4481b0 (the bank producers inside MissionShell
+FUN_0044771c), cross-checked against the exw-sidebarbars FUN_004072bf
+decompile/asm. The 7f.4 gloss is confirmed and COMPLETED: the "mask
+bank" is NOT EXE content and NOT 512 B — it is a RUNTIME noise ring in
+.bss. All items [verified] (decompile + asm agree).
+
+1. **FUN_00401ae6 = the static/dither blit** [verified, Watcon reg
+   args EAX,EDX,EBX,ECX,ESI,EDI; call sites set the registers
+   explicitly at 0x4073bb..0x4073d3 etc.]: signature
+   `(y, height, x, width, src_off, mode)`:
+   - dest = `[0x4edb3c] + y*[0x4edb40] + x` (framebuffer base +
+     pitch), rows advance by pitch; bracketed by FUN_00425a8b /
+     FUN_00425a8a (the acquire/release pair — presentation only).
+   - `mode == 0` (EDI=0, the DEAD/UNOCCUPIED path): per row a plain
+     `rep movsb` of `width` bytes — zeros included, the box content
+     is REPLACED by the pattern.
+   - `mode != 0` (EDI=1, the HIT-FLASH path): per byte
+     `if bank[b] != 0 → dest = bank[b]` (0x401b3b..0x401b46) — a
+     sparse overlay, the portrait pixels under zero bytes survive.
+     Both modes advance src AND dst identically; only the write is
+     conditional.
+   - wrap: before EACH row, `if (src_off + 2*width − 0x800) ≥ 0` →
+     RESEED (not a sequential wrap): `src_off = RandB() & 0x1ff`
+     (a fresh random 0..511 into the bank head, 0x401b22..0x401b39).
+     A full 48×48 blit reads 2304 B > the 2048-B bank, so every
+     full blit reseeds at least once.
+2. **The noise bank** [verified]: 2048 B at 0x4e6ed8 (IN .bss
+   0x45b000..0x4efa00 — runtime state, no EXE bytes; the queue-item
+   "512-B mask bank" gloss is corrected: 512 is the reseed MASK
+   `& 0x1ff`, the bank is 0x800 B). Persistent cursor dword at
+   0x4ddb30. Content is strictly binary {0x00, 0xFF}:
+   - boot fill [0x447b13..0x447b3a, the MissionShell staging block
+     right before the LoadFile family 0x447b3f]: all 2048 bytes,
+     each `RandB()&3 == 0 ? 0xFF : 0x00` — 25% white noise.
+   - churn [0x448147..0x448195, the MissionShell per-frame epilogue
+     after the render call 0x448094 and the 0x419f62/0x41ec81
+     pair]: 15 bytes/frame — `cursor = (cursor+1) mod 2048` (asm:
+     inc, store, `≥ 0x800 signed → 0`), then the byte AT the
+     advanced cursor is re-randomized 25%/75%. The whole bank
+     refreshes every ceil(2048/15) ≈ 137 frames — slow-crawl TV
+     static. Unconditional (runs on overlay frames too — the
+     sidebar passes are skipped but the epilogue is not).
+3. **The portrait-pass consume** [verified 0x4072bf; extends 7f.4]:
+   per slot k of the squad (DAT_0046cbd8), in order k=0,1,2:
+   - alive ∧ hp ≥ 1 → portrait FUN_00401ca2(0x12+k sel / 0x15+k
+     unselected, 1, 0x1E7+0x32k, 5); THEN if hit_flash(+0x2E) != 0
+     the clamp>5→5 + decrement (the 7g.8 decay lives HERE) and the
+     dither blit mode 1 (sparse flicker over the live portrait).
+   - dead ∨ hp < 1 (inside the squad) → NO portrait, blit mode 0
+     (full static replaces the box).
+   - k ≥ squad size → blit mode 0 EVERY frame (the strip always
+     shows 3 boxes; the unoccupied ones are pure static).
+   - seed per blit: `FUN_0041ec59(0x7f6, 0x30)` [verified decompile
+     exw-missionrender3 1067..]: `(RandB() & 0x7fff) / 15` clamped
+     ≤ 0x7f5 (divisor = 0x8000/0x7f6 − 1 = 15; the 0x30 arg is a
+     pass-through returned in EDX — it is the WIDTH the caller then
+     moves into ECX). One seed draw per blit, i.e. up to 3/frame.
+4. **RandB consumers joined** [verified call census]: the bank
+   producers + the seeds + the intra-blit reseeds + the terrain
+   edge variants (MISSIONVIEW sec 7) all draw the ONE shared RandB
+   stream (0x4029b6). Per-frame order: terrain edges (inside
+   FUN_00403938's terrain loop) → portrait seeds/reseeds (the
+   sidebar tail of the same call) → the 15 churn bytes (the
+   epilogue). The boot fill's 2048 draws precede the first frame.
+
+Engine seam (this unit, D55): presentation only — the sim decay
+(7g.8) already runs per frame in `MissionSim` (the sim hash covers
+hit_flash since D53); the portrait pass READS it for the mode-1
+gate and never decrements again. The noise bank + cursor + the
+RandB stand-in draws (fill/churn/seeds/reseeds) are MissionScene
+presentation state modeled on the shared stand-in stream (charter
+T3 — the EXW interleaves them with the terrain edge variants on
+one stream; the engine consumes its stand-in in the same per-frame
+order: terrain edges → dither draws → churn, boot fill at
+activate). The blit lands in the sidebar portrait pass after the
+portrait sprite, before the bars (7f.3 tail order unchanged).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -1198,6 +1279,8 @@ corpus path invokes the seam — the sim pins stay frozen.
 | CGR/DB ptrs | DAT_004edd60 (CGR), DAT_004edd58 (DAT), 0x4796bc/cc (type DB 0x1E stride) | 0041e231, 00407e11 |
 | viewport cache | DAT_004ede24 36×36×12 B (screen off + tile deltas), count DAT_004ede28 | 00407e11, MISSIONVIEW §2 |
 | terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link | MISSIONVIEW §1/§4 |
+| dither noise bank | 0x4e6ed8 (2048 B .bss ring, cursor 0x4ddb30), bytes {0,0xFF}, `RandB()&3==0` 25%; boot fill MissionShell 0x447b13, churn 15 B/frame 0x448147 | §7i |
+| dither blit | FUN_00401ae6(y,h,x,w,src_off,mode): mode 0 = rep-movsb full copy (dead/unoccupied boxes), mode ≠ 0 = nonzero-only overlay (hit flash); reseed `RandB()&0x1ff` when src_off+96 ≥ 0x800; seed `(RandB()&0x7fff)/15` clamp ≤ 0x7f5 | §7i |
 
 ## 9. Open items (next slices)
 
@@ -1236,9 +1319,11 @@ corpus path invokes the seam — the sim pins stay frozen.
    the dispatch decode + the case-1/2/3/7 bodies landed as
    pickup_case/apply_pickup seams the same day; case 4
    remains the D52 seam), the 0x7d2 hazard caller, and the
-   projectile callers. Remaining open after
-   that: the 0x4dc5d0 blink producer, the dead/hit dither
-   (FUN_00401ae6 + the 0x4e6ed8 bank), and the keyboard-latch
+   projectile callers. The dead/hit dither (FUN_00401ae6 + the
+   0x4e6ed8 bank) was DECODED 2026-08-21 amendment §7i and WIRED
+   the same day (D55: the noise ring + churn + the portrait-pass
+   blit on the sim hit_flash field). Remaining open after
+   that: the 0x4dc5d0 blink producer, and the keyboard-latch
    wiring (P2e button map). The map-overlay family
    (_DAT_004edba0/FUN_004089b1/FUN_00401107) was DECODED 2026-08-21
    amendment §7e and wired engine-side the same day. The
