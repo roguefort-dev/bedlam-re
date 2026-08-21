@@ -82,7 +82,7 @@ write_status() {
 }
 
 exec 9>"$NUDGE_LOCK"
-flock -n 9 || exit 0
+flock -n 9 || { echo "$(date -Is) controller lock busy; standing down" >> "$STATE/nudge.log"; exit 0; }
 
 write_status
 
