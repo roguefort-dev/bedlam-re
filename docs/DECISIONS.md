@@ -2374,3 +2374,28 @@ Nudge-Worker: c7269abe-e8c7-4c92-9a9b-568763c70e8f
 
 Nudge-Worker: 27e4f048-ad51-4479-a42a-54e91ec114c3
 
+## 2026-08-21 P4 7j.25 — the destroy-tail effect-entry map is docs-only (D73); FUN_0041a225 is the first 0x4cf638 producer; the 160-B stride anomaly was a census slip
+
+1. RE: the FUN_0041a894 destroy tail = TERRAIN RESTORE (template
+   banks @type+0x46/+0x4A → TOT-mirror z-words + seen + DAT
+   volume) then a FIVE-effect loop over the type-table entries
+   @+0x16+8m: selector 1..9 → jump table 0x41a870; kinds
+   1→k14+FUN_0041a225+5 splashes, 2/3/4/5→k18/k17/k16/k19
+   single gibs at fixed sub-tile bearings, 6/7→k10 + the
+   DEADMAN1/2 thud pair, 8→k14×25 water-level demolition
+   shower, 9→k20 + 3×3 splash ring; payload words = tile
+   offsets off the object record; delays ride the chain
+   counter + entry index. The GER gate skips the whole tail
+   for type-0xb objects (record still dies + triggers fire).
+   FUN_0041a225 = the FIRST producer of the MISSIONVIEW §5d
+   effects bank 0x4cf638 (80×0x1E, free-slot word@+0x18,
+   jittered Q13 particles, ttl 6000+). The 7j.13
+   "160-B stride at 0x4c69e4" anomaly CLOSED: 21·idx·8 =
+   0xA8 canonical — a census arithmetic slip, no second array.
+2. ENGINE: no change — the destroy path needs a destroyed
+   destructible object; corpus gates destroy none. The effect
+   families re-open with the P4.2 differential harness
+   (injected weapon fire).
+
+Nudge-Worker: 399aeff4-03bf-4c9c-8569-83f955528215
+
