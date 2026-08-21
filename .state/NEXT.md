@@ -1,38 +1,35 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The CRITTER DEATH-HANDLER family, promoted by 7j.23:
-   the six per-kind death handlers dispatched by the hit
-   applier FUN_004190bc — FUN_00418835 (k1, 155 B), FUN_004188d0
-   (k2, 156 B), FUN_00418aa6 (k3, 510 B), FUN_00418ca4 (k4,
-   386 B, takes weapon), FUN_00418e26 (k5/6, 420 B, takes
-   weapon), FUN_0041896c (k7, 307 B). Decode each (k1/k6 debris
-   + FUN_00424355 rings + 0x4cec38 effect rows expected per
-   7j.17; weapon-dependent drops for k4/k5/k6) → RE-EXW-SIM
-   7j.24 + ledger rows. Small addendum if room: the SP tail of
-   FUN_0040e230 (robot death in non-MP mode; MP scoreboard +
-   no-extract latch already pinned 7j.23).
+1. [P4] The WEAPON-FIRE FAMILY TAIL, promoted by 7j.24 (7j.25):
+   the destroy-tail debris-kind map — which id-table
+   type@+0xE stages which debris kinds (the 7j.11 sites
+   0x41ace7..0x41b67a inside FUN_0041a894; the 9-case jump
+   table @0x41a870 + selectors@+0x16+8k pinned 7j.22/7j.23).
+   Context now complete: both 0x4cec38 effect-row spawners are
+   decoded (FUN_0041a14f + FUN_0041a028, 7j.24), critter
+   death producers closed (7j.24), so FUN_0041a894/FUN_0041bc1c
+   are the last big debris/effect producers. Also in this unit
+   if room: the 160-vs-0xA8 stride anomaly at 0x4c69e4
+   (FUN_0040fe93; 7j.16 confirmed the ROBOT bank base 0x4c69e4
+   stride 0xA8; the 160 stride at 0x4c69e4/0x4c6a60 needs the
+   FUN_0040fe93 view re-anchored — NOTE 7j.24: FUN_0040dce0's
+   caller FUN_0040de9c is the debris physics tick that reads
+   BOTH critter and POI counts).
 
 ## Backlog (not yet started)
-- The weapon-fire family TAIL (after 7j.24): the destroy-tail
-   debris-kind map (which id-table type@+0xE stages which kinds
-   — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
-   @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
-   death is now a confirmed non-weapon producer of k1/k6 +
-   FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f;
-   NOTE 7j.23: FUN_0041a028 is a SECOND 0x4cec38 spawner),
-   and the 160-vs-0xA8 stride anomaly at 0x4c69e4
-   (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
-   base, stride 0xA8, count 0x46ccbc — the 160 stride at
-   0x4c69e4/0x4c6a60 needs the FUN_0040fe93 view re-anchored;
-   NOTE 7j.18: FUN_0040db9e writes the robot stun word
-   @0x4c69e4+idx·0xA8). CLOSED by 7j.17: the [0x4edd60]
-   height-bank family and the projectile z-encoding census.
-   OPEN small: projectile type 0x69 vs the FUN_00419aff damage
-   table (7j.17/7j.18 — low priority); the trail-ring DRAW
-   pass consuming the 0x4e66b8 bank (7j.22/7j.23: FUN_00403938
-   reads the record link @0x404464 — bounded decode when
-   needed).
+- CLOSED by 7j.17: the [0x4edd60] height-bank family and the
+   projectile z-encoding census. CLOSED by 7j.24: the critter
+   death-handler family (both 0x4cec38 spawners, the bounty
+   gate, the debris-crush dispatcher FUN_0040dce0, the
+   FUN_0040e230 SP tail). OPEN small: projectile type 0x69 vs
+   the FUN_00419aff damage table (7j.17/7j.18 — low priority);
+   the trail-ring DRAW pass consuming the 0x4e66b8 bank
+   (7j.22/7j.23: FUN_00403938 reads the record link @0x404464
+   — bounded decode when needed); the 0x4eb638 draw pass
+   (producer CLOSED 7j.24 = FUN_0042382c robot-death blast
+   records; the MISSIONVIEW sec 5d "platform loop" consumer
+   still needs its decode).
 - The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
   beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
   extraction-pad (zone,slot) pairs and §7j.21 the record
@@ -96,8 +93,10 @@
   CONTENT consumers still open). CLOSED: u32[0x4dd444]
   (7e.4 - the PALTRAN ramps); +0x18 producer (7j.8/7j.9 -
   FUN_00422287, reader raw, ring landed D57).
-- MISSIONVIEW sec 5d tail (robots only are wired): platform loop
-  (0x4eb638, bank DAT_0046af54), effects loop (0x4cf638 - the
+- MISSIONVIEW sec 5d tail (robots only are wired): platform
+  loop (0x4eb638, bank DAT_0046af54 — NOTE 7j.24: producer
+  CLOSED = FUN_0042382c, robot-death blast records 32×0x14;
+  only the draw pass remains), effects loop (0x4cf638 - the
   FUN_00401e39 draw_IMG codec family, a DIFFERENT .BIN sprite layout
   per RESEARCH-8STREET; the 0xa00 @0x4cec38 + 0x960 @0x4cf638 arrays
   boot-cleared alongside the effect rows per 7j.1 — NOTE 7j.17:
@@ -142,6 +141,36 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.24 the CRITTER DEATH-HANDLER family unit
+  COMPLETE (worker 0f986419 claim 1, commit 3819586, D72,
+  docs-only; dumps ghidra-project/exw-dead1..5*.txt — 1..3
+  adopted from predecessor ad591680's session tail, 4/5 +
+  objdump spot-checks this unit). The six per-kind handlers
+  decoded: k1 FUN_00418835 (state 7+presence 0, 1× k1 debris,
+  +30), k2 FUN_004188d0 (state 7+presence 0, 1× k0xD, +50),
+  k3 FUN_00418aa6 (1× k7 + 3× k6 delays 0/2/4 + SFX trio
+  FUN_00421f4c, +500, tail call = NOP stub FUN_00418a9f), k4
+  FUN_00418ca4(+weapon) (w@+0x02 := 1, hp 0, state 6, timer 6,
+  1× k7; weapon {0x24,0x29,0xC} → 3× k7 + 8 rows, +75), k5/6
+  FUN_00418e26(+weapon) (sub-timer 0; weapon-gated 3× k7 + 12
+  rows, +150), k7 FUN_0041896c (3 falling gibs + 1× k0xD, SFX
+  FUN_0043a48e(0x4edff8,…,3), w@+0x78 := 1, +1000). BOUNTY
+  GATE: attacker ≠ −1 ∧ robot[killer].type == [0x4edb90] →
+  score [0x4dd40c] += N + DAT_0046ccf0 := 2 (score-strip
+  refresh). SECOND DISPATCHER: FUN_0040dce0 = debris crush
+  (sole caller FUN_0040de9c; k4 weapon 0, k5/6 weapon 0x24,
+  k5/6 state {5,6} absorbed; knock via FUN_00412998 +
+  FUN_0041e9a2). FUN_0041a14f/FUN_0041a494 = the 0x4cec38
+  effect-row spawner + age-LRU allocator (w@+0 = AGE word —
+  7j.23 gloss corrected). 7j.17 CORRECTED: death handlers
+  never call FUN_00424355 (splashes = controller landing/
+  suicide paths only). ADDENDUM: FUN_0040e230 SP tail
+  CONFIRMED + MP respawn completed (suicide gate/clamps, MRK
+  reposition, 7-slot weapon + 2-entry equipment re-copy);
+  FUN_0042382c = FIRST producer of the 0x4eb638 platform bank
+  (claim-byte gated, 32×0x14, LRU). 8 new + 2 rewritten
+  ledger rows. Manifest verified. PUSHED 3819586.
+  Queued: the weapon-fire family TAIL (7j.25).
 - 2026-08-21: P4 7j.23 the ACTOR HIT APPLIERS unit COMPLETE
   (worker ad591680 claim 1, commit 45329e9, D71, docs-only;
   4 × -process runs, dumps ghidra-project/exw-hitters{,2,3,4}

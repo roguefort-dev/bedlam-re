@@ -1,3 +1,30 @@
+ - CLOSED 2026-08-21 (P4 7j.24 the CRITTER DEATH-HANDLER family
+   unit COMPLETE, commit 3819586, worker 0f986419 claim 1,
+   D72, docs-only; dumps ghidra-project/exw-dead1..5*.txt —
+   exw-dead1..3 = adopted predecessor WIP from worker
+   ad591680's 7j.23 session tail, exw-dead4/5 + objdump
+   spot-checks this unit): the SIX per-kind death handlers
+   decoded (k1/k2/k3 instant death state 7+presence 0, k4..k7
+   dying anim state 6; per-kind debris kinds 1/0xD/7+6/7/7/7,
+   weapon gate {0x24,0x29,0xC} → 3 extra k7 + 8/12 effect rows
+   for k4/k5-6); the BOUNTY GATE (score += 30/50/500/75/150/
+   1000 when killer robot type == [0x4edb90], + score-strip
+   refresh DAT_0046ccf0 := 2); SECOND DEATH DISPATCHER found =
+   FUN_0040dce0 (debris crush via the physics tick
+   FUN_0040de9c, attacker −1, k5/6 as-if-rocket 0x24, k4 no
+   weapon, k5/6 state {5,6} absorbed); FUN_00421f4c = the
+   critter-death SFX trio (0x4edf88/8c/90, twin of the impact
+   trio); FUN_0041a14f/FUN_0041a494 = the 0x4cec38 effect-row
+   spawner + always-evict LRU allocator (w@+0 = AGE word,
+   correcting the 7j.23 gloss); FUN_00418a9f = NOP stub;
+   7j.17 splash expectation CORRECTED (the death handlers
+   never call FUN_00424355 — splash producers are the
+   controller landing/suicide paths); FUN_0040e230 SP tail
+   CONFIRMED + MP respawn completed (suicide gate, MRK
+   reposition, weapon/equipment re-copy); FUN_0042382c = the
+   FIRST producer of the 0x4eb638 "platform loop" bank (robot
+   death blast records, claim-byte gated). 8 new + 2 rewritten
+   ledger rows. Next: the weapon-fire family TAIL (7j.25).
  - CLOSED 2026-08-21 (P4 7j.23 the ACTOR HIT APPLIERS unit
    COMPLETE, commit 45329e9, worker ad591680 claim 1, D71,
    docs-only; 4 × -process runs, dumps ghidra-project/
