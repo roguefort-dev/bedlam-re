@@ -159,8 +159,8 @@ rm -f "$PLAN/.state/claims/1-owner.claim"
 
 # 7. Provider quota exhaustion is rate-limit, even with the capital-U
 #    "Usage limit reached" spelling (regression, watchdog repair
-#    2026-08-21): no taskfails charge, cooldown taken from the provider's
-#    own reset timestamp instead of a flat 15 minutes.
+#    2026-08-21): no taskfails charge, cooldown from the provider's own
+#    reset stamp but capped at one probe interval (1800s).
 : > "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/taskfails/$th" "$PLAN/.state/taskcooldown/$th"
 touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
@@ -179,7 +179,31 @@ grep -q "provider quota, not charged to the task" "$PLAN/.state/nudge.log"
 until=$(cat "$PLAN/.state/taskcooldown/$th")
 now=$(date +%s)
 [ "$until" -gt "$now" ]
-[ "$until" -le $(( now + 7205 )) ]
+[ "$until" -le $(( now + 1805 )) ]
+rm -f "$PLAN/.state/taskcooldown/$th" "$PLAN/.state/claims/1-owner.claim"
+
+# 8. A reset stamp ~6h out (inside the old 6h sanity bound - the
+#    2026-08-21 ~07:45 incident shape: the provider resumed serving
+#    ~5h49m before its own stamp) must not blind the loop for hours:
+#    the armed cooldown is still capped at now+1800.
+: > "$PLAN/.state/nudge.log"
+rm -f "$PLAN/.state/taskfails/$th" "$PLAN/.state/taskcooldown/$th"
+touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
+cat > "$TMP/mock-client" <<'EOF'
+#!/usr/bin/env bash
+echo "Error: Usage limit reached for 5 hour. Your limit will reset at $(date -d '+6 hours' '+%Y-%m-%d %H:%M:%S')"
+exit 1
+EOF
+chmod +x "$TMP/mock-client"
+run_nudge
+wait_agent_done
+grep -q "failed \[rate-limit rc=1 progress=0\]" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$th" ]
+[ -e "$PLAN/.state/taskcooldown/$th" ]
+until=$(cat "$PLAN/.state/taskcooldown/$th")
+now=$(date +%s)
+[ "$until" -gt "$now" ]
+[ "$until" -le $(( now + 1805 )) ]
 rm -f "$PLAN/.state/taskcooldown/$th" "$PLAN/.state/claims/1-owner.claim"
 
 echo "nudge controller tests: PASS"

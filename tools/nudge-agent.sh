@@ -187,15 +187,28 @@ elif [ "$kind" = rate-limit ]; then
   # fails + 15-min cooldowns that rolled over repeatedly for the rest of
   # the quota window). Never touch taskfails; instead hold this task in
   # cooldown until the reset timestamp the provider prints (fallback and
-  # sanity cap: the standard 900s window) so the controller stands down
-  # instead of cycling doomed ~40s spawns. The llm-watchdog owns
-  # cross-item escalation (global pause) for longer or unparsable
-  # outages.
+  # sanity cap: the standard 900s window), but never trust that stamp
+  # beyond one probe interval (see the 1800s cap below), so the
+  # controller stands down without cycling doomed ~40s spawns and still
+  # notices early recovery. The llm-watchdog owns cross-item escalation
+  # (global pause) for longer or unparsable outages.
   reset=$(grep -aoiE "will reset at [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}" "$LOG" | head -n 1 | cut -d' ' -f4-5)
   until=$(date -d "$reset" +%s 2>/dev/null || echo 0)
   now_ts=$(date +%s)
   if [ "$until" -le "$now_ts" ] || [ "$until" -gt $(( now_ts + 21600 )) ]; then
     until=$(( now_ts + 900 ))
+  fi
+  # Watchdog repair 2, 2026-08-21 ~08:30: the provider's reset stamp can
+  # be wildly wrong. This morning it printed "will reset at 13:41:22"
+  # from ~07:45 but resumed serving at ~07:52; the armed 5h59m cooldown
+  # froze the sole queue item on a healthy provider for a would-be ~5h.
+  # Cap the armed cooldown at one probe interval: if the quota window is
+  # genuinely still open, the next probe dies in ~40s with the same
+  # rate-limit signature and re-arms the cap (at most one benign probe
+  # per 30 min, no taskfails charge); if the provider recovered early,
+  # the loop is back within 30 min instead of hours.
+  if [ "$until" -gt $(( now_ts + 1800 )) ]; then
+    until=$(( now_ts + 1800 ))
   fi
   mkdir -p "$STATE/taskcooldown"
   echo "$until" > "$STATE/taskcooldown/$task_hash"
