@@ -314,8 +314,22 @@ terrain pass overwrites everything the present window reads.
    byte is a TRANSIENT event ring (fades in ≤7 frames; no
    permanent producer exists, so shipped maps have no static
    pads), and the 7j.9 "census-only producer" is that same
-   tick's water-splash scorch tail. The +0x1a/+0x1b/+0x1c
-   producers remain open.
+   tick's water-splash scorch tail. **+0x18 SECOND PRODUCER +
+   +0x19/+0x1a PRODUCERS CLOSED 2026-08-21 (RE-EXW-SIM §7j.12,
+   the platform/destructible family)**: (a) FUN_0042223c is an
+   INCREMENT writer — `byte[0x4796d4+0x1E·tile] += v; clamp 7`
+   — fired with v=4 by both the platform-damage entry
+   FUN_00422693 and the platform-spread primitive FUN_004228ce,
+   so platform hits/builds leave transient scorch too;
+   (b) FUN_00422fd1 (mission-load call 0x447ba3) stamps
+   RECTANGLES from the 45×0x10 records at 0x4dcae8
+   {active,x0,y0,w,h,variant,cd,flag}: for records with type
+   word ≥3, `byte[0x4796d5+0x1E·tile] = variant<<4` and
+   `byte[0x4796d6+0x1E·tile] = (type==3 ? 0 : 0x80)`. So the
+   "+0x1a height-bias" byte is a type-3/other flag (0 / 0x80)
+   over the stamped rectangles, +0x19 carries a variant
+   nibble<<4, and only the +0x1b/+0x1c anim-window bytes
+   (0x4796d7/d8) remain open (zero-fill keeps them 0 on ZONEA).
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader

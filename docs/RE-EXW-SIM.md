@@ -1025,9 +1025,13 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    at 0x460df8+2*tile >> 16) — word == 0x7d2 ∧ phase 0 →
    `FUN_0040e230(idx, 15, -1)` (a hazard tile); word == 0x7d3 →
    the phase clamp (drop==0 → skip phases > 2, drop!=0 → skip
-   phases > 4). The word-array producer is OPEN (the FUN_0040fe93
-   0x62 tile consumer reads the same array; likely the trigger
-   plane family) — the engine leaves both unwired (never-invent).
+   phases > 4). **PRODUCER CLOSED 2026-08-21 (§7j.12 item 6)**:
+   FUN_00422f18 stamps both words at mission load from the
+   type-DB z-words vs the per-zone 4-word ranges at
+   0x454a20 (0x7d2) / 0x454a3c (0x7d3); the bank is a
+   runtime-mutable object grid, not a TOT mirror. The engine
+   leaves the words unwired (never-invent; the stamper runs at
+   load — a future engine seam for the mission-load path).
 6. **The death tail pinned** [verified asm 0x40e6b9..0x40e791]:
    FUN_0042382c(idx) (presentation) → `DAT_0046ccec = 3` → the
    SEVEN order words zeroed (words +0x38..+0x68 stride 8 — NOT
@@ -1598,7 +1602,11 @@ the 20-kind table. All [verified] asm unless tagged.
    fire (0x41a84f) + the 0x4227xx platform family (0x7d2/0x7d3/
    0x7d4 tile words), read by the armor pass (0x40fef4/0x410018)
    + the splash tick (0x41b8xx); 0x465daa written/read by the
-   platform family + read at 0x41f0fd. The records ALSO have a
+   platform family + read at 0x41f0fd. [SEMANTICS PINNED
+   2026-08-21 §7j.12: 0x460dfa = the tile object-word grid
+   (0x7d4 while a platform stands), 0x465daa = the platform
+   strength word; the arrival "clear both" burns the platform.]
+   The records ALSO have a
    draw pass in the FUN_00403938 tail (0x4065f8..0x4066a3
    reads +0/+0x1C/+0x04/+0x0C) [census-only]. **Verdict for the
    queue note: NO debris kind edits terrain — the stager body
@@ -1714,6 +1722,165 @@ Engine seam: NONE this unit (census-only, D59) — the kind
 table feeds the LATER debris-stager widening beyond kind 5
 (backlog). Pins untouched by construction (no code change).
 
+## 7j.12 Amendment 2026-08-21 (worker 5aa2d164, the
+FUN_00422693 platform/destructible family decode)
+
+Fresh intel objdump of 0x42223c..0x4222ce, 0x41a8c0..0x41a9b0,
+0x41bd54..0x41bd77, 0x41eb4c..0x41eb64, 0x422600..0x423100 (+ the
+DGROUP words 0x454a20..0x454a9c and the jump tables 0x4225d0/
+0x4225e4). Answers the queue item: the two gate banks, the two
+FUN_0042394a calls, the k7 staging, the 0x7d2/0x7d3 producer, and
+the type-DB tail producers. All [verified] asm unless tagged.
+
+1. **The gate banks are an OBJECT-PRESENCE WORD GRID, not a TOT
+   mirror** [verified 0x41a8c0..0x41a906]: the weapon-fire ray step
+   (FUN_0041a894) reads `word[0x460dfa + 2*tile]` each step and
+   dispatches: **0** → projectile passes; **0x7d2/0x7d3** → ray
+   stops, no effect (the hazard/phase-clamp tiles); **0x7d4** →
+   `FUN_00422693(x, y, damage=esi)` (call 0x41a8ff, ebx=esi = the
+   weapon damage/charge); **any other word n** → destructible
+   OBJECT record n−1 at the 0x46cbf4 array: hp@+0x10 −= damage;
+   ≤0 → hp=0 and flags byte@+0xD |= 0x40 (triggered/destroyed);
+   −1 hp = immune. The 0x46cbf4 array (ptr@0x46cbf4, count@
+   0x46cbe8, stride 0x14) is therefore the map's DESTRUCTIBLE
+   OBJECT/TRIGGER LIST: `+0/+4/+8` spawn x/y/z, `+0xC` id byte,
+   `+0xD` flags (0x40 = fired), `+0x10` hp (−1 = never dies).
+   Consumers of the grid besides the ray: robots() 0x7d2 hazard +
+   0x7d3 clamp (§7g.5), the armor pass 0x40fef4/0x410018, the
+   splash tick 0x41b8xx, the arrival scheduler (§7j.11), and
+   weapon fire's own object-stamp loop (0x41a84f writes word=si
+   over a tile run). The §7c "TOT mirror DAT_00460df8" gloss is
+   superseded: 0x460dfa is a runtime-mutable word bank, zeroed at
+   load, written by FUN_00422f18/0x4228ce/0x41a84f.
+2. **FUN_00422693 = the PLATFORM DAMAGE entry** [verified
+   0x422693..0x422832] (single caller 0x41a8ff, args eax=x, edx=y,
+   ebx=damage): bounds-check; scan z 0..7 for the FIRST level
+   whose type-DB z-word (dword[0x4796ba+30·tile+2z]>>16) lies in
+   the zone water range `[0x454ae4+4·zone, +0xe)` — none → exit
+   (only real platforms take damage); `cx = word[0x465daa+2·tile]`
+   (the STRENGTH bank), diff = (i16)cx − damage:
+   - **diff ≤ 0 → DESTROY**: `FUN_0042394a(x, y, z, 0, 0)` (call
+     0x422750 — CLEARS the platform's water z-structure: word 0,
+     seen cleared, volume 0); both banks zeroed; then FIVE kind-7
+     debris via FUN_00420608 (call 0x4227b9, ebp = 0,2,4,6,8):
+     x = (x<<5)+(RandA&0xf)+8, y = (y<<5)+(RandA&0xf)+8, z<<5,
+     delay = k·2, param = −1 (the queue's k7 staging).
+   - **diff > 0 → WEAKEN**: word[0x465daa+2·tile] = cx−damage
+     (writer 0x4227d5); `FUN_0042223c(x, y, 4)` (scorch +4, see
+     5); if strength ≥ 100 and (diff < 200 or new < 100) →
+     `FUN_00422832(x, y, z, new_strength)` (ring spread, see 3) —
+     i.e. a big hit or a drop below half (100 of 199/300) makes
+     the platform spawn neighbors; both paths store the site
+     `0x4dc5c8/0x4dc5cc = x/y` (the creep seed, see 4).
+   So 0x465daa = per-tile PLATFORM STRENGTH (0 = none) and
+   0x460dfa = the tile OBJECT WORD (0x7d4 while a platform
+   stands). The arrival scheduler's "gate ≠ 0 → clear both banks"
+   (§7j.11) = arrivals burn the platform they land on.
+3. **FUN_00422832/FUN_004228ce = the platform SPREAD ring**
+   [verified 0x422832..0x422a84]: FUN_00422832(x,y,z,strength)
+   calls FUN_004228ce for the EIGHT 3×3-minus-center neighbors
+   (same geometry as the debris scorch ring). FUN_004228ce
+   builds one new platform tile if ALL hold: in bounds; BOTH bank
+   words 0; tile-claim byte @0x46af58-arena 0; no live robot
+   standing in the tile's SE 2×2 sub-block (pos>>13 == tile or
+   the three SE neighbors); z ≥ 1; type-DB z-word@2z == 0 (empty
+   stack level); z-plane-A byte ([z·4+0x4eaacc] rowstarts +
+   [0x4edd58] base) == 0; z-plane-B byte ([z·4+0x4eaac8] +
+   base + tile) == 1. Then it writes the platform:
+   `FUN_0042394a(x, y, z, [0x454ae4+4·zone], volume 2)` (call
+   0x422a54 — creates a WATER z-structure at the empty level:
+   word = zone water base, seen=1); `word[0x460dfa+2·tile] =
+   0x7d4` (writer 0x422a61); `word[0x465daa+2·tile] = strength`
+   (writer 0x422a73); `FUN_0042223c(x, y, 4)`. Platforms are
+   walkable water: build = write a water z-word + gate words;
+   destroy = clear the water z-word + banks.
+4. **FUN_00422a9c = the platform CREEP tick** [verified
+   0x422a9c..0x422c78] (epilogue call 0x44808a, right after
+   FUN_00422cc2@0x448085 and FUN_0042205c@0x448080): 1/32 gate
+   (RandA&0x1f == 0), else exit; start from the last damage site
+   0x4dc5c8/0x4dc5cc + RandA&7 jitter −3; require
+   word[0x465daa+2·tile] ≠ 0; find the FIRST water level (same
+   z-scan); RandA&3 → 4-way direction {up, right, down, left};
+   walk the ray while each next tile's z-word is in the water
+   range; one step back onto the last water tile; if in bounds →
+   `FUN_00422832(x, y, z, 199)` (build ring, strength 0xC7) and
+   update 0x4dc5c8/cc to the new tip. Bridges GROW across water
+   one hop per lucky frame from the last touched platform tile.
+5. **FUN_0042223c = the type-DB scorch INCREMENT writer**
+   [verified 0x42223c..0x422287]: `byte[0x4796d4+30·tile] +=
+   value; if ≥ 8 → 7` — the +0x18 byte's SECOND producer beside
+   the absolute writer FUN_00422287 (7j.8/7j.9); platform damage
+   and platform build both add 4 (clamp 7). The byte decays via
+   the §7j.10 fade, so platform hits leave ≤7-frame scorch.
+6. **FUN_00422f18 = the 0x7d2/0x7d3 STAMPER — the §7g.5 word
+   producer, CLOSED** [verified 0x422f18..0x422fd1] (mission-load
+   call 0x447b8f): for EVERY tile, for z 0..7: z-word in
+   `[0x454a20+4·zone, +4]` → `word[0x460dfa+2·tile] = 0x7d2`;
+   z-word in `[0x454a3c+4·zone, +4]` → `= 0x7d3` (writers
+   0x422f9a/0x422fc6; later z can overwrite earlier). Zone bases
+   [bytes verified]: 0x7d2 {0x20,0x49,0x49,0x34e,0x49,0x77,0x77},
+   0x7d3 {0x49,0x77,0x77,0x49,0x4e,0x4e,0x349} — the tables sit
+   directly before the 7h pickup tables 0x454a58/74/90.
+7. **FUN_00422fd1 = the type-DB TAIL stamper (rect list)**
+   [verified 0x422fd1..0x423081] (mission-load call 0x447ba3):
+   walks up to 45 records @0x4dcae8 stride 0x10 (STOPS at the
+   first word@+0 == 0) `{+0 active, +2 x0, +4 y0, +6 w, +8 h,
+   +0xA variant byte, +0xC countdown, +0xE flag}` [field map
+   verified; the array is immediately followed by the §7j.11
+   arrival array at 0x4dcdb8]. Records with word@+2 (type) ≥ 3
+   stamp every tile of their rectangle:
+   `byte[0x4796d5+30·tile] = variant<<4` and
+   `byte[0x4796d6+30·tile] = (type==3 ? 0 : 0x80)` (writers
+   0x423061/0x423070/0x423078). These are type-DB +0x19/+0x1a
+   (MISSIONVIEW record base 0x4796bc) — the MISSIONVIEW §8.1
+   "+0x1a height-bias" producer plus the unlisted +0x19 variant
+   nibble; +0x1b/+0x1c (0x4796d7/d8) remain open.
+8. **FUN_00422cc2 = the delayed-TRIGGER timer tick** [verified
+   0x422cc2..0x422e0a] (epilogue 0x448085): 32 records @0x4ea828
+   stride 0x18 `{dword payload, word@+4 countdown}`; producers
+   FUN_00422c9b (find-free + set countdown 8) and FUN_00422e0a
+   (payload = FUN_00439c20() result, then rec-id match →
+   FUN_004245c9(x<<5, y<<5, z<<5) — census). On countdown 0 the
+   payload's LOW and HIGH bytes each select 0x46cbf4 records by
+   id: flags |= 0x40; their z-plane-A occupancy byte is CLEARED;
+   `FUN_0041bd54(x, y, z, word[0x454a90+4·zone])` — writes the
+   BARE-FLOOR z-word (the 7h floor-word table!) + seen=1 into
+   the type-DB. SFX FUN_004239ef(0x22, 3) fires once per expiry.
+   FUN_0041bd54 [verified 0x41bd54..0x41bd77] = the fast
+   z-structure writer: `word[0x4796bc+30·tile+2z] = cx`,
+   `byte[0x4796cc+30·tile+z] = 1` — FUN_0042394a minus the DAT
+   volume write. This is a SECOND floor-word context beside the
+   7h pickup consume (§7h item 3): trigger expiry converts a
+   tile to bare floor at level z with the SAME 0x454a90 table —
+   the 7h.3 PICKUP word producer (staging pickup words into the
+   mirror rows) remains open.
+9. **FUN_00422e5e = the void-tile marker check** [census,
+   0x422e5e..0x422f09]: args (Q5 x,y,z); tile byte via
+   FUN_0041eb4c(x,y,z,[0x4edd58]) == 0xFF (void) → scan 999
+   stride-8 records @0x4e44f8 `{word active, word x, word y,
+   word z}` for a match; if the hit is the active index
+   [0x4eb9fc] → set it −2, bump counter [0x4eb9f4]; miss → −1.
+   Six callers in the 0x433xxx–0x435xxx script family. The
+   0x422600 trigger dispatcher + FUN_00423081 zone-script tick
+   are census-only (consumers of the same 0x46cbf4/0x4dcae8
+   arrays; 0x422600: per-zone trigger-code jump tables
+   0x4225e4/0x4225d0 → codes {5, 0x84, 0x6f, 0x7e, 0x80, 0x79,
+   0x88, 0x2f, 0x2710} matching a record id → FUN_00422832(rec
+   x,y,z, 300) — destroying the right object BUILDS a bridge
+   ring).
+
+Corpus-path verdict: the family's callers are the weapon ray
+(FUN_0041a894), the MissionShell load/epilogue (0x447b8f/
+0x447ba3/0x448085/0x44808a) and the 0x433xxx+ script family —
+weapons never fire and platforms never stage in the gates, so the
+engine seam stays NONE this unit (D60): banks/timers remain
+unwired (never-invent). What CLOSED: the 0x7d2/0x7d3 producer
+(§7g.5 open), the type-DB +0x19/+0x1a producers (MISSIONVIEW
+§8.1), the trigger-expiry floor-word WRITE (second 0x454a90
+context, §7h item 8 above — the 7h.3 pickup producer stays
+open), and the "non-splash non-arrival z-writer" pair (both are
+platform water-word writes at 0x422750 clear / 0x422a54 create).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -1739,6 +1906,14 @@ table feeds the LATER debris-stager widening beyond kind 5
 | debris seq tables | 11 tables, i16 −1-terminated, DGROUP 0x454424..0x454510 (k5-family {5..16}; k2/k8 {0..4}; …{44..104} = k16..20) | §7j.11 |
 | debris arrival SFX | FUN_00421e60 3-way (banks 0x4edf64/68/6c, push 2) · FUN_00421dec 4-way (0x4edf98/9c/a0/a4, push 1); both gated [0x4ede58]≠0 | §7j.11 |
 | arrival scheduler | FUN_0042034c epilogue 0x448076: 45 rec @0x4dcdb8 stride 0x24 {active, xy×2, spawn xyz, countdown, robot slot}; gate word banks 0x465daa/0x460dfa (2·tile); fires FUN_0042394a(x,y,z,0,0) clearing the first water z-word | §7j.11 |
+| tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
+| platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via trigger / 199 via creep; weaken −damage; <0 → destroy: clear water z-word + both banks + 5× k7 debris); ring spread when ≥100 ∧ (hit <200 ∨ new <100) | §7j.12 |
+| platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; spread ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word + planeA 0 + planeB 1 + no robot, writes water z-word + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (1/32, ray over water, tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc | §7j.12 |
+| 0x7d2/0x7d3 stamper | FUN_00422f18 (load 0x447b8f): z-word ∈ [0x454a20+4z, +4] → 0x7d2; ∈ [0x454a3c+4z, +4] → 0x7d3; zone bases 0x7d2 {0x20,0x49,0x49,0x34e,0x49,0x77,0x77} / 0x7d3 {0x49,0x77,0x77,0x49,0x4e,0x4e,0x349} | §7j.12 |
+| type-DB tail stamper | FUN_00422fd1 (load 0x447ba3): 45 rec @0x4dcae8 stride 0x10 {active,x0,y0,w,h,variant,cd,flag}; type≥3 → byte 0x4796d5 = variant<<4, byte 0x4796d6 = (type==3?0:0x80) | §7j.12 |
+| delayed trigger timers | 32 rec @0x4ea828 stride 0x18 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
+| fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
+| scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
 | z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |

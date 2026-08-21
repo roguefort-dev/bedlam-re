@@ -1977,3 +1977,36 @@ Nudge-Worker: 89d34b53-1d5c-4d36-ab77-7cf704547435
    FUN_0040de9c) per the 7j.11 table.
 
 Nudge-Worker: 804e8c9d-76fc-4936-a020-a83282838d7e
+
+## D60 - 2026-08-21: the platform/destructible family decode is docs-only - the gate banks are an object-word grid + platform strength; the 0x7d2/0x7d3 and type-DB +0x19/+0x1a producers close
+
+1. RE (7j.12): word[0x460dfa+2*tile] is NOT a TOT mirror but a
+   runtime OBJECT-PRESENCE grid (0 empty / 0x7d2 hazard /
+   0x7d3 phase-clamp / 0x7d4 platform / n>0 = destructible
+   object record n-1 at 0x46cbf4, stride 0x14 {x,y,z,id,flags,
+   hp}); word[0x465daa+2*tile] is the PLATFORM STRENGTH word.
+   FUN_00422693 (weapon ray 0x41a8ff) weakens (strength -=
+   damage, scorch +4 via the NEW increment writer FUN_0042223c,
+   ring spread when >=100 and (hit<200 or new<100)) or destroys
+   (FUN_0042394a(x,y,z,0,0) clears the water z-word + both
+   banks + 5 kind-7 debris @0x4227b9). FUN_00422832/FUN_004228ce
+   build platform tiles (empty z-word + planeA 0 + planeB 1 +
+   no robot -> water z-word create @0x422a54 + 0x7d4 + strength
+   300 trigger / 199 creep); FUN_00422a9c is the 1/32 creep tick
+   over water rays from the site latch 0x4dc5c8/cc. FUN_00422f18
+   stamps 0x7d2/0x7d3 at load from the 0x454a20/0x454a3c
+   per-zone z-word ranges (closes 7g.5); FUN_00422fd1 stamps the
+   type-DB +0x19 (variant<<4) / +0x1a (0 / 0x80 by type) from
+   the 45x0x10 rectangle list at 0x4dcae8 (closes MISSIONVIEW
+   8.1's +0x1a; +0x1b/+0x1c stay open); FUN_00422cc2 is the
+   32-timer delayed-trigger tick whose expiry writes the
+   0x454a90 bare-floor z-word via FUN_0041bd54 (fast z-writer).
+2. ENGINE: no change this unit - the family's callers (weapon
+   ray, MissionShell load/epilogue, 0x433xxx scripts) are all
+   off the corpus path; banks/timers stay unwired
+   (never-invent). Re-open points: the weapon-fire family (the
+   grid's object-stamp loop + the ray dispatch), the 0x425xxx
+   arrival producers, and any future mission-load seam for the
+   0x7d2/0x7d3 stamper.
+
+Nudge-Worker: 5aa2d164-5a28-4d42-805a-7b2f629bd29f
