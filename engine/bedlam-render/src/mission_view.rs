@@ -375,6 +375,31 @@ impl MissionView {
         &self.sprite_list
     }
 
+    /// Project one robot to viewport screen space [the enqueue head,
+    /// MISSIONVIEW sec 5d, verified]: `wx/wy = pos>>8` (Q5),
+    /// `sx = colAdj + (dx-dy) + 0x110`, `sy = shake + ((dx+dy)>>1) +
+    /// 0x10C + rowAdj - z` with `dx/dy = wx/wy - cam Q5` and the
+    /// same-camera colAdj/rowAdj fine terms the present window uses.
+    /// The scene host reuses this for its click hit-test (the EXW
+    /// sprite-click family ~0x433cbc tests the drawn sprite position).
+    pub fn project_robot(
+        &self,
+        r: &RobotView,
+        cam_q5_x: i32,
+        cam_q5_y: i32,
+        shake_y: i32,
+    ) -> (i32, i32) {
+        let wx = r.pos_x >> 8;
+        let wy = r.pos_y >> 8;
+        let dx = wx - cam_q5_x;
+        let dy = wy - cam_q5_y;
+        let col_adj = ((cam_q5_x & 0x1F) - (cam_q5_y & 0x1F) + 0x20) & 0x3F;
+        let row_adj = ((cam_q5_x & 0x1F) + (cam_q5_y & 0x1F)) >> 1;
+        let sx = col_adj + (dx - dy) + 0x110;
+        let sy = shake_y + ((dx + dy) >> 1) + 0x10C + row_adj - r.z;
+        (sx, sy)
+    }
+
     /// Run the robot entity loop of FUN_00403938 [MISSIONVIEW sec 5d,
     /// verified]: rebuild the per-frame sprite list (the EXW clears
     /// the bucket grid + arena before the loop), project every
@@ -396,21 +421,16 @@ impl MissionView {
         let mut list = SpriteList::new();
         let cam_tx = cam_q5_x >> 5;
         let cam_ty = cam_q5_y >> 5;
-        let col_adj = ((cam_q5_x & 0x1F) - (cam_q5_y & 0x1F) + 0x20) & 0x3F;
-        let row_adj = ((cam_q5_x & 0x1F) + (cam_q5_y & 0x1F)) >> 1;
         for r in robots {
             if !r.alive {
                 continue;
             }
-            let wx = r.pos_x >> 8;
-            let wy = r.pos_y >> 8;
-            let dx = wx - cam_q5_x;
-            let dy = wy - cam_q5_y;
-            let sx = col_adj + (dx - dy) + 0x110;
-            let sy = shake_y + ((dx + dy) >> 1) + 0x10C + row_adj - r.z;
+            let (sx, sy) = self.project_robot(r, cam_q5_x, cam_q5_y, shake_y);
             if !(0..ENTITY_CLIP).contains(&sx) || !(0..ENTITY_CLIP).contains(&sy) {
                 continue;
             }
+            let wx = r.pos_x >> 8;
+            let wy = r.pos_y >> 8;
             let layer = r.z >> 5;
             let ex = wx + 0xB;
             let ey = wy + 0xB;

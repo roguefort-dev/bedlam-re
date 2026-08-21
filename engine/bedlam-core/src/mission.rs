@@ -183,6 +183,35 @@ pub struct Terrain {
     pub last_trigger: Option<(i32, i32, i32)>,
 }
 
+/// The mission DAT's raw plane bytes after the EXW header skip + the
+/// (bytes at least 0x80) sweep [load_mission 0x41dde4, verified]:
+/// `Some(8*w*h)` swept plane bytes, or `None` on a malformed header.
+/// This is the PRE-PAD
+/// form: the walkability [`Terrain`] layers the PAD 0xFF marks on top
+/// of a private copy, while the viewport TOT mirror (the seen marks
+/// compare DAT bytes against zero) reads exactly this.
+pub fn dat_plane_bytes(dat: &[u8]) -> Option<Vec<u8>> {
+    if dat.len() < 4 {
+        return None;
+    }
+    let width = u16::from_le_bytes([dat[0], dat[1]]) as i32;
+    let height = u16::from_le_bytes([dat[2], dat[3]]) as i32;
+    let n = (width * height) as usize;
+    if width <= 0 || height <= 0 || dat.len() != 4 + 8 * n {
+        return None;
+    }
+    let mut planes = dat[4..].to_vec();
+    // Sweep: planes 0..6, bytes >= 0x80 -> 0 [0x41dde4, verified].
+    for z in 0..7 {
+        for b in planes[z * n..z * n + n].iter_mut() {
+            if *b >= 0x80 {
+                *b = 0;
+            }
+        }
+    }
+    Some(planes)
+}
+
 impl Terrain {
     /// Build from the raw pieces. `dat` must be `8 * w * h` bytes
     /// (8 plane-major u8 planes); `heights` holds the CGR sprite
@@ -224,25 +253,11 @@ impl Terrain {
     /// identical — charter: no panics, no UB). Returns `None` on
     /// malformed inputs.
     pub fn from_mission_bytes(dat: &[u8], pad: &[u8], cgr: &[u8]) -> Option<Self> {
-        // DAT: dims + 8 planes.
-        if dat.len() < 4 {
-            return None;
-        }
-        let width = u16::from_le_bytes([dat[0], dat[1]]) as i32;
-        let height = u16::from_le_bytes([dat[2], dat[3]]) as i32;
+        // DAT: dims + 8 planes, swept by the shared loader helper.
+        let width = u16::from_le_bytes([*dat.first()?, *dat.get(1)?]) as i32;
+        let height = u16::from_le_bytes([*dat.get(2)?, *dat.get(3)?]) as i32;
         let n = (width * height) as usize;
-        if width <= 0 || height <= 0 || dat.len() != 4 + 8 * n {
-            return None;
-        }
-        let mut planes = dat[4..].to_vec();
-        // Sweep: planes 0..6, bytes >= 0x80 -> 0 [0x41dde4, verified].
-        for z in 0..7 {
-            for b in planes[z * n..z * n + n].iter_mut() {
-                if *b >= 0x80 {
-                    *b = 0;
-                }
-            }
-        }
+        let mut planes = dat_plane_bytes(dat)?;
         // PAD marks: DAT[level][y][x] = 0xFF [0x41ded0, verified].
         for rec in pad.chunks_exact(6) {
             let x = u16::from_le_bytes([rec[0], rec[1]]) as i32;
