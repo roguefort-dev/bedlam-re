@@ -2195,3 +2195,86 @@ Nudge-Worker: efff097c-b4e9-41a0-b4ce-fcdc7fbf713e
 
 Nudge-Worker: 16f43187-a265-44ee-8a03-96137fcb721a
 
+## 2026-08-21 P4 7j.17 — the ROBOT TARGETING/AIM family
+(adopt unit: three provider-outage-killed runs landed as one
+docs hop; worker 3f4f7c10)
+
+1. DOCS (RE-EXW-SIM 7j.17 + ledger rows + open items; all
+   re-verified against the dead runs' on-disk Ghidra dumps
+   exw-robottarget*.txt/-xrefs/-asm, NO new Ghidra run):
+   - FUN_00412f34 = the 0x4cff98 CRITTER-ACTOR controller
+     (stride 0x7E, count DAT_0046cc2c <- FUN_00416458
+     @0x41646d; sole caller MissionShell @0x447fe1). States
+     1 wander / 2 sine-walk shooter (projectile 0x65 at a
+     random alive robot, range gate (2-d)*-0x40+300) /
+     3 chase-combat (FUN_00417c00 probe, modes 2 attack ->
+     projectile 0x67 full-3D velocity / 3 approach +
+     pathfinder FUN_0041571c / 8 idle / 10 return-home,
+     leash 400) / 4-5-6 mixed-AI (modes 0xB dormant with
+     the DIFFICULTY respawn-delay table DAT_00454edc[d],
+     7 dying 0x28, 6 ballistic -> landing floor probe +
+     8x debris k6 + 5x FUN_00424355 + splash
+     FUN_0041a14f(0x18), 9 seek-steppers, 2 range attack
+     FUN_0040db9e) / 7 close-combat (point-blank 0x69,
+     fire rate 32/16/8 by d, break odds 1/8·1/16·never,
+     leash (d+1)*0x40+600). Presence byte mark
+     [[0x4ea900+(y>>13)*4]+[0x46af4c]+(x>>13)] := 1
+     (SAR 0xD asm-verified; decompile >>5 = artifact).
+     Q13 coords x@+0x36/y@+0x3A/z@+0x3E CONFIRMED.
+   - Difficulty dial AMENDED: 12 objdump sites in
+     FUN_00412f34 - it drives critter behavior (respawn
+     delay, ranges, fire rates, break odds), not only
+     projectile damage (7j.15's "scales only damage" row
+     corrected).
+   - FUN_00417e2f = the SUICIDE-BOMB trigger (< 0x30 px ->
+     deactivate + 8x debris k1 + rings).
+   - FUN_00412a98 = the 0x4dabdc POI/PERSONNEL controller
+     (stride 0x1E, count DAT_0046cbf0 <- FUN_00416458
+     @0x416f6e): flee-to-exit machine over FIVE 0x1C
+     exit/threat slots @0x4e662c (kind 2, nearest via
+     FUN_00417c64, producer FUN_0041fa51 [open]); escape ->
+     [0x4eba0c]++ progress, [0x4eba10]=0x32 quota,
+     FUN_00448b80(5000).
+   - FUN_00409138 = the COMMAND-RECORD consumer (7j.13's
+     "robot behaviour pass" pinned): records 0x4dd4a0
+     stride 0x80 count DAT_0046cbe0 (the per-frame command
+     ring - builder FUN_00449c94, MP lobby/SHOP readers);
+     flags byte@+5 (bit0 select/auto-arm, bit1 ORDER ->
+     0x4dd484/88/8C); the 39-case weapon switch: order
+     dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/
+     0xa9ff + projectile spawners into the 400x0x36 bank
+     0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24 aimed
+     at the order target; ammo/enable/cooldown bookkeeping;
+     auto-rearm + msgs 0x1C..0x21 FUN_004239ef).
+   - FUN_00448b80 = the MISSION-OBJECTIVE RESOLVER (6x0x20
+     slots @0x4eaaee; type 5000 rescue vs kill-stats
+     [0x46cbf4]+type*0x14 + mirror-row wipe 0x4796d7/d8;
+     msgs 0x26/0x27/0x34, all-done 0x28+0x29 -> phase state
+     DAT_0046cd00; zone-7 types 0x44..0x47 counter
+     [0x46cce0]).
+   - Helper identities: FUN_0041e411 floor probe (the
+     [0x4edd60]=.CGR height-bank semantics: per-type entries
+     + in-tile 0x20x0x20 byte maps -> closes the height-bank
+     backlog head), FUN_0041f8f9 walk probe, FUN_004186fc
+     standing check, FUN_004182c3 z-settle, FUN_00417af2/
+     FUN_004181bd dominant-axis steer, FUN_00412848 400x0x36
+     free slot, FUN_0041286f 50x0x22 free slot,
+     FUN_0041a14f effect-row spawner (0x4cec38 bank gets
+     its first reachable producer), FUN_004180b9 NOP.
+   - Census folds: the residual 0x4dd484 reader census
+     CLOSED (writers FUN_00410644 + FUN_00409138; readers
+     FUN_00409138 x6, FUN_0040af98 x3, 0xa56f/0xa7a1/0xace8/
+     0xb615/0xa9ff x2, FUN_00449c94); 0x46cbe0 MP-family
+     census; 0x46cc2c/0x46cbf0 producers + sidebar/scanner/
+     physics consumers. The 7j.11 47-site and 7j.15 28-site
+     censuses re-read, unchanged; critter death adds their
+     first non-weapon producers (k1, k6, FUN_00424355,
+     FUN_0041a14f).
+2. ENGINE: no change (D65, docs-only) - the critter/POI/
+   command/objective families stay unwired like the rest of
+   the weapon family. Next bounded head queued: the
+   critter/POI/exit LOADER section inside FUN_00416458
+   (which mission file feeds 0x4cff98/0x4dabdc/0x4e662c).
+
+Nudge-Worker: 3f4f7c10-b73d-4662-8d35-0d770246bdd3
+

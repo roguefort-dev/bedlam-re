@@ -2488,6 +2488,253 @@ against those dumps unless tagged.
    FUN_0044661b's EDITOR\ZONE restore context, and the
    [0x4ede24] 7×7 screen-address table (FUN_00440a2d head).
 
+## 7j.17 Amendment 2026-08-21 (worker 3f4f7c10, the ROBOT
+TARGETING/AIM family — adopted from three provider-outage-killed
+runs 2026-08-21 19:15/19:34/19:40, logs
+agent-31790e94/agent-08f6fa30/agent-0ce3a285)
+
+Method: the three dead runs had already produced the Ghidra
+dumps (`ghidra-project/exw-robottarget.txt` = the four main
+decompiles, `-xrefs.txt`/`exw-robottarget2.txt` = xref
+censuses, `exw-robottarget3.txt` = 11 helper decompiles,
+`exw-robottarget4.txt` = 10 caller decompiles,
+`-asm.txt` = the 0x413f40..0x413fc0 SAR check; produced
+19:05..19:29, gitignored). This unit re-verified every claim
+against those dumps + objdump and wrote it up — NO new Ghidra
+run. All facts [verified] against the dumps unless tagged.
+
+1. **FUN_00412f34 (9546 B) = the 0x4cff98 CRITTER-ACTOR
+   controller** — sole caller MissionShell @0x447fe1 (every
+   frame). Count DAT_0046cc2c (written by the mission-load
+   dispatcher FUN_00416458 @0x41646d; also read by the sidebar
+   FUN_00403938, the scanner FUN_0041ee20 (icon 4), the debris
+   physics FUN_0040de9c and FUN_004244a1). Record frame,
+   stride 0x7E, Q13 coords (asm: SAR 0xD @0x413f8c/0x413fa4 —
+   the decompile's `>>5` tails are artifacts):
+   {state w@+0, substeps w@+2 (dword@+0>>16), timerC w@+6,
+   MODE w@+0xC (dword@+0xA>>16), anim-ctr w@+0xE,
+   attack-target xyz d@+0x2A/+0x2E/+0x32, x/y/z d@+0x36/
+   +0x3A/+0x3E, home xyz d@+0x42/+0x46/+0x4A, z-restore
+   d@+0x4E, seek-dir d@+0x50, countdown w@+0x56 (dword@+0x54
+   >>16), dir w@+0x58, frame w@+0x5A, 8 corner-z words
+   +0x60..+0x6E, facing d@+0x70>>16, y-bob d@+0x74>>16,
+   target-robot w@+0x7A (dword@+0x78>>16), fuse w@+0x7C,
+   active w@+0x24}. Machine:
+   - state 1 WANDER: per substep, dir-steppers ±6 Q13 with
+     wall probe FUN_0041f8f9 + map bounds
+     (x < _DAT_004eddec·0x20 px etc.); blocked/new-dir →
+     pause 8..27; direction 25% random else toward nearest
+     robot (FUN_00417af2); z clamp FUN_00418250.
+   - state 2 SINE-WALK SHOOTER: pos += sin/cos heading
+     (FUN_0041eb65/77) ·0x14; 1/128 SFX _DAT_004edffc; every
+     4th substep picks a random ALIVE robot (FUN_0041ec1c)
+     and if octile>>8 < (2−d)·−0x40+300 = 172/236/300 px
+     fires projectile 0x65 into the 50×0x22 bank 0x4cc654
+     (FUN_0041286f free slot) aimed at the robot ±0x1F00
+     scatter.
+   - state 3 CHASE-COMBAT: nearest-robot probe FUN_00417c00;
+     home-leash octile(home−pos) > 400 → mode 10 return;
+     dist > 200 ∧ mode 2 → mode 10; dist < 200 ∧ leash ok ∧
+     mode ∉{2,3} → mode 3 approach; dist < 100 → mode 2
+     attack. Mode 3: re-aim every 9 frames (atan2
+     FUN_00425498 snapped to 32-sector) + pathfinder step
+     FUN_0041571c(idx, heading) gated by the walk-pattern
+     dword table [0x454b48 + ctr·4]. Mode 2: re-aim + fire
+     0x67 with full 3D velocity (dx·0x800/dist etc., z via a
+     second octile); >4 shots → reset. Mode 10: aim home +
+     pathfinder.
+   - states 4/5/6 MIXED-AI (per-MODE dispatch): mode 0xB
+     DORMANT — respawn countdown vs the DIFFICULTY-indexed
+     delay table DAT_00454edc[d]; wake → rand dir, pause 6,
+     timer 200/0x96, SFX _DAT_004edfe0. Mode 7 DYING: 0x28
+     frames → mode 0xB (+0x5dc timer in state 3). Mode 6
+     BALLISTIC: drift ±0xF, ground probe FUN_0041e411;
+     landing → 8× debris KIND 6 (FUN_00420608) + 5×
+     FUN_00424355 chunks + splash FUN_0041a14f(x,y,(z+0x15)·
+     0x100, 0x18) — a reachable producer for the 7j.10/
+     7j.1 effect-row bank. Mode 9 SEEK: dominant-axis
+     steppers FUN_00417f2c/17fe8/180c0/1813d (y−1/x+1/y+1/
+     x−1) each → FUN_00415490. Mode 2 RANGE-ATTACK
+     (dist<500): FUN_0040db9e(robot, 2, heading<<6, 1, −1)
+     [identity open]. Mode 5: brief rise then mode 3.
+   - state 7 CLOSE-COMBAT: steer (atan2 + FUN_00412a19
+     clamp) + sin/cos move; engage leash
+     (d+1)·0x40+600 = 640/704/768; point-blank
+     (dist<0x50) projectile 0x69 — NEW type, absent from the
+     7j.15 damage table (→ "else 1") — fired at fire rate
+     every 32/16/8 frames for d=0/1/2, {type 0x69, z=6,
+     +0x1A=0, +0x1E=0x18}; attack-break odds d=0: 1/8,
+     d=1: 1/16, d=2: never (RandA gates @0x41353e/56/6e).
+   - FLEE scan (states 5/6, order active [0x4dc6bc]≠0,
+     mode ∉{0xb,7,6,5,9,2}): scan the 400×0x36 projectile
+     bank 0x4c71f4 for types 9/0xA/0xB within 300 px → steer
+     away (heading ±0x80), pause 200, mode 10.
+   - Epilogue per active critter: presence mark — byte 1 at
+     [[0x4ea900 + (y>>13)·4] + [0x46af4c] + (x>>13)]
+     (asm-verified); z-settle FUN_004182c3; moved? →
+     FUN_0040ff92 (the 7j.13 tile-0x62 trap re-probe).
+   - DIFFICULTY: 12 direct [0x46cbf8] sites in
+     0x412f34..0x41547E [objdump-verified; the dead-run's
+     ×13 double-counted a shared load] — respawn delay,
+     0x65 range, engage leash, fire rate, break odds. AMENDS
+     the 7j.15 ledger row: the dial does NOT scale only
+     projectile damage — it drives critter behavior too.
+2. **FUN_00417e2f = the SUICIDE-BOMB trigger** (the case-1
+   gate): nearest-robot FUN_00417c00 dist < 0x30 px →
+   deactivate + 8× debris KIND 1 (FUN_00420608) + 8×
+   FUN_00424355 chunk rings. Returns FUN_004180b9's (NOP)
+   leaked EAX — the case-1 `== 0` guard is EAX-leak
+   tolerant [hypothesis: asm tail sets it].
+3. **FUN_00412a98 = the 0x4dabdc POI/PERSONNEL controller**
+   — count DAT_0046cbf0 (FUN_00416458 write @0x416f6e).
+   Record, stride 0x1E: {active w@+0, state w@+4, heading
+   w@+8, timer w@+0xA, x/y/z d@+0xE/+0x12/+0x16}. Ground
+   clamp FUN_0041e411 every tick. States: 1 idle (timer 0xB,
+   then 1/16 → 2 startle-aim or 3 wander, timer 10..25);
+   2 settle (7 → 1); 3 walk-out (FUN_00415b6c wall-walker);
+   4 FLEE-TO-EXIT: nearest of the FIVE 0x1C-stride exit/
+   threat slots @0x4e662c {active d@+0, kind d@+4 (== 2 =
+   exit), x/y d@+8/+0xC, d@+0x18} via FUN_00417c64 (octile);
+   trigger: exit within 0x180 ∧ 1/16 (state ∉ 4..7);
+   arrival < 0x10 → state 5; 5 ESCAPE: active=0, rescue
+   progress _DAT_004eba0c++, quota _DAT_004eba10 = 0x32,
+   clear the slot's +0x18, SFX _DAT_004edfa8 (screen-wide
+   −1,−1, mode 3), then FUN_00448b80(5000); 6/7 panic pair.
+   The exit-bank producer = FUN_0041fa51 @0x41fabb [open
+   head — MRK/NME candidate]. Reset: MissionShell
+   0x44792d/33 zeroes quota/progress at mission start.
+4. **FUN_00409138 = the COMMAND-RECORD consumer** (7j.13's
+   "robot behaviour pass" — now pinned): records @0x4dd4a0
+   stride 0x80, count DAT_0046cbe0; sole caller MissionShell
+   @0x448030, immediately after FUN_00410644 (click order)
+   + FUN_00449c94 (the record BUILDER — it reads the current
+   order target 0x4dd484 to stage records). Record: {robot-id
+   short@+1 (id = rec·DAT_0046cbd8 + v — per-player id
+   bases DAT_0046cbd4), spot short@+3, FLAGS byte@+5:
+   bit0 SELECT → order words → DAT_0046cc30[id]/DAT_0046cc60
+   [id] + auto-arm (state@+0xC := 1, target@+0x74 :=
+   1000000) when state ∉ 2..5; bit1 ORDER →
+   _DAT_004dd484/88/8C := xyz words@+7/+9/+0xB,
+   _DAT_004dc6bc := 1, clears 0x4eb940..50; bit4 →
+   FUN_00449c82/FUN_0041c9f0}. WEAPON dispatch per robot: 7
+   slots {id w@+0x36+8k, ammo w@+2, cooldown w@+6}, enable
+   mask w@+0x6E, alive d@+0x7C; weapon id−2 ∈ 0..0x26 =
+   the 39-case switch @0x40a08e:
+   - w 2/3/4 → FUN_0040b615 orders 3/2/1; w 6/7/8 →
+     FUN_0040af98 orders 0/1/2; w 0x18/0x19 → FUN_0040a56f
+     1/2; w 0x21/0x22/0x23 → FUN_0040ace8 3/6/9; w 0x25/
+     0x26/0x27/0x28 → FUN_0040a7a1 1/2/4/6; w 0xE →
+     FUN_0040a9ff.
+   - PROJECTILE spawners into the 400×0x36 bank 0x4c71f4
+     (FUN_00412848 free slot; record {type w@+0, owner w@+2,
+     ttl d@+0xA, xyz d@+0x12/+0x16/+0x1A, vxyz d@+0x1E/
+     +0x22/+0x26, class d@+0x2A (0/4), arc d@+0x2E}):
+     w 9/0xA/0xB → 1× type = id; w 0x10/0x11/0x12 → 2/4/6×
+     type 0xF (vel>>2, scatter ±0x20 around the ORDER
+     TARGET, ttl RandA&0xF+1, arc 0x900−RandA&0x2FF, class
+     4); w 0x14/0x15/0x16 → type 0x13 (vel>>1); w 0x1B/
+     0x1C → 4/6× 0x1A (3D vel incl. order z 0x4dd48C, ttl
+     0x33−RandA&0xF..0x42, arc 0xB00−…); w 0x1D/0x1E → 4/
+     6× 0x1F (ttl 0x32+RandA&0xF..0x41); w 0x20 → 1× 0x24
+     straight missile (ttl 0, cd 5, SFX _DAT_004edfac,
+     angle pair FUN_0041eb7d/ebc1 → arc). All aimed at the
+     ORDER TARGET; ammo−1, 0 → clear enable bit; cooldown
+     8 (0x24: 5); SFX pair _DAT_004edf94/_DAT_004edfe4
+     one-shot-gated by _DAT_004eb950.
+   - All weapons empty after a firing pass → auto-rearm
+     first slot with id≠0 ∧ ammo≠0 + FUN_004239ef(0x1C..
+     0x21, playerIdx) — the weapon-empty/auto-switch
+     message family, per player 0/1/2 (id bases
+     DAT_0046cbd4/+/+2, guard 2/3 players DAT_0046cbd8).
+   - Idle path ([0x4dc6bc]==0, every 4th frame): player-type
+     robot present → DAT_0046ccec = 2 (sidebar redraw) +
+     idle AI ticks FUN_0040af98(10)/FUN_0040ace8(9)/
+     FUN_0040a56f(2)/FUN_0040a7a1(6). Epilogue: recharge
+     tick — every robot's enabled weapons with nonzero
+     cooldown decrement (7-slot loop over
+     DAT_0046ccbc robots).
+   - The record bank = the per-frame COMMAND RING shared by
+     local input and MP networking: NameEntryScreen writes
+     the count; readers FUN_00449c94 ×7, FUN_0040cca0 ×3,
+     the MP lobby FUN_00448ef1 ×3, FUN_00440e45 (THE SHOP),
+     FUN_0043d00b ×3, FUN_0041ca2e, FUN_00445b5c,
+     FUN_0044a38a ×2.
+5. **FUN_00448b80 = the MISSION-OBJECTIVE RESOLVER** (arg =
+   event type: 5000 = rescue, else = destroyed object-type
+   id; gated [0x4edb88]≠2 (no-MP) ∧ zone [0x4edd8c]≠7):
+   6 slots × 0x20 @0x4eaaee {remaining w@+2 (dword@+0>>16),
+   TYPE w@+6 (dword@+4>>16), status w@+0xC (0xFFFF = done),
+   quota w@+0x1E}. Type-5000: progress [0x4eba0c] ≥ quota →
+   done. Else: kill-stat bank [0x46cbf4]+type·0x14 {x0, y0,
+   …, +0xC&0x3FFF = id-table index} → wipe the 0x1E-stride
+   scenery-mirror rows 0x4796d7/d8 over the object's W×H
+   (id-table 0x4dedf2 words) → done. Slot completes →
+   FUN_004239ef(0x26 first slot / 0x27 others, 3) +
+   DAT_0046cd00 := 1/2 + [0x46ccfc] := 0x20 +
+   [0x4eb8b8+slot·4] := 1; non-5000 partial → msg 0x34 +
+   state 4; ALL 6 done → msgs 0x28 + 0x29, state 3. Zone-7
+   special: counter [0x46cce0]−− per destroyed type
+   0x44..0x47 (mirror wipe) → 0 → msgs 0x28/0x29, state 3,
+   [0x46ccc4] := 0x32. DAT_0046cd00 = the objective phase
+   state {1 first, 2 done, 3 all-complete, 4 partial}.
+6. **Helper identities** [all verified this unit]:
+   FUN_00417c64(i,&d) = nearest-of-5 exit slots (above);
+   FUN_00417ba1 = a second nearest-robot probe (Q13 in);
+   FUN_00417af2/FUN_004181bd = dominant-axis direction
+   toward the nearest robot (0 = −y, 1 = +x, 2 = +y,
+   3 = −x — matches the mode-9 steppers);
+   FUN_0041f8f9 = the 8-sample walk probe (offset tables
+   0x4543e4/0x454404 step 4; same-level FUN_0041e231 + DAT
+   height-diff ≤ 3 via FUN_0041eb4c);
+   FUN_004186fc = standing-on-scenery check (mirror byte
+   0x4796d5[row·0x1E] ≠ 0 → FUN_00418250 reposition);
+   FUN_004182c3 = the 8-corner z-settle (x/y snapped to
+   tile centers +0x13/+0x0B, z → FUN_0041e411 floor,
+   probe-z words +0x60..+0x6E);
+   FUN_0041e411 = the FLOOR probe (FUN_0041eaa1's sibling):
+   z level z>>5 clamp 0..7, level try +1 then −2, per-TYPE
+   entries {[0x4edd60+2+(type−1)·4] = dword offset} with an
+   in-tile 0x20×0x20 HEIGHT BYTE map @(x&31)+(y&31)·32 at
+   bank+off+6; floor = level·0x20 + byte; byte 0x1F =
+   top-of-stack (peek level+1). This anchors the open
+   "[0x4edd60] height-bank family" backlog item — note
+   7j.16 already pins [0x4edd60] = the .CGR loader target,
+   so the CGR bank doubles as the per-type height maps;
+   FUN_004180b9 = NOP; FUN_0041642d(idx,n) = anim counter
+   w@+0xE wrap at n; FUN_0041286f = free slot, 50×0x22 bank
+   0x4cc654; FUN_00412848 = free slot, 400×0x36 bank
+   0x4c71f4; FUN_0041a14f = effect-row spawner for the
+   0x20-stride rows @0x4cec38 (the 7j.1 boot-cleared bank —
+   now with a reachable producer via critter death);
+   FUN_00415b6c = the POI wall-walker (8-way FUN_0040cc5e
+   probes, Q13); FUN_00415ff2 = the critter step mover
+   (same probe family).
+7. **Census folds (from exw-robottarget2/-xrefs):**
+   - 0x4dd484/88/8C order target — writers FUN_00410644
+     (×3, click) + FUN_00409138 (bit1 records); readers
+     FUN_00409138 ×6, FUN_0040af98 ×3, FUN_0040a56f/
+     0xa7a1/0xace8/0xb615/0xa9ff ×2 each, FUN_00449c94.
+     CLOSES the residual "0x4dd484 reader census" left by
+     7j.16.
+   - 0x46cbe0 command count — see item 4 (MP-family census).
+   - 0x46cc2c/0x46cbf0 — producers FUN_00416458 (load);
+     drawing consumers sidebar FUN_00403938 + scanner
+     FUN_0041ee20; physics FUN_0040de9c reads BOTH (debris
+     vs critter/POI collision family).
+   - The 47-site k1..k20 census (7j.11 item 6) and the
+     28-site damage-table census (7j.15 item 3) were
+     re-read and stand unchanged; this unit adds their
+     first non-weapon corpus-reachable PRODUCERS: critter
+     death → k1 (FUN_00417e2f) and k6 (state-4/5/6 mode-6
+     landing) + FUN_00424355 + FUN_0041a14f(0x18).
+8. Corpus-path verdict: docs-only (D65) — no engine change;
+   the critter/POI/command/objective families stay unwired
+   like the rest of the weapon family (weapons never fire
+   in the gates; critters would tick but their LOADER
+   section inside FUN_00416458 — which mission file feeds
+   0x4cff98/0x4dabdc/0x4e662c — is the next bounded head
+   [.NME/.POS family candidate, cf. FORMATS §9/§12]).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -2528,20 +2775,28 @@ against those dumps unless tagged.
 | robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
-| difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales only projectile damage 0x65..0x68 | §7j.15 |
+| difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
+| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17 |
+| suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
+| POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17 |
+| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, kind d@+4 (==2 exit), x/y d@+8/+0xC, d@+0x18 cleared on escape}; nearest scan FUN_00417c64; producer FUN_0041fa51 @0x41fabb [open] | §7j.17 |
+| command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
+| mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
+| floor probe | FUN_0041e411(px,py,z): level try +1/−2; per-type height entry [0x4edd60+2+(type−1)·4] → in-tile 0x20×0x20 byte map @(x&31)+(y&31)·32 at +6; floor = level·0x20 + byte; 0x1F = top-of-stack (sibling of FUN_0041eaa1 §7j.14) | §7j.17 |
+| walk/settle helpers | FUN_0041f8f9 8-sample walk probe (0x4543e4/0x454404, level ∧ height-diff ≤3); FUN_004186fc standing-on-scenery (mirror 0x4796d5); FUN_004182c3 8-corner z-settle (snap +0x13/+0x0B); FUN_0041642d anim ctr wrap; FUN_0041286f 50×0x22 free slot; FUN_00412848 400×0x36 free slot | §7j.17 |
 | terrain-structure loader | FUN_004170a6 (call 0x416487 in the dispatcher FUN_00416458): ".TRT" section @staging buf 0x4dca0c; clears 250×0x20 @0x4cccf8; count→[0x46ccd4]; rec (canonical frame, active@0x4cccf8): active=1, state=1, frame=0, fire=0, hp=250+(250·mission)/27, x/y/z tiles; stamps tile 0x66 @byte[[0x4edd58]+x+y·w+z·w·h] + word 1 @word[[0x4ede20]+2(x+y·w+z·w·h)] (the .DAT/.TOT file volumes) | §7j.15 |
 | TRT anim/fire machine | FUN_00417264 (MissionShell @0x44807b, every frame): states 1 idle→2 alert (frames 0..7→TOT word frame+1)→5/6/7/8 aim S/N/W/E (octant vs nearest robot FUN_00417c00 dist<0x81)→FUN_00417698 fire at frame top + 4-frame muzzle (words 0x17..0x1E); 3/4 = death/settle; FUN_00417210(idx,n) = mirror word n+1; FUN_00417652 = frame remap 0xF→7, 6→0xE | §7j.16 |
 | TRT fire routine | FUN_00417698: lane test |lateral|<0x28 px + direction + ≤2 levels vs robot bank 0x4c69e4/0xA8; arms fire_ctr@+0xC; odd ctr → FUN_0041286f free slot → projectile type 0x66 (damage (d+1)·300) @0x4cc654+slot·0x22 {x,y tile·0x2000+0xF00, z<<0xD, +0x16=0x14, unit vx/vy}; structures never move | §7j.16 |
 | map volume loader | FUN_0041dc5a (MissionShell @0x447b3a): ".TOT"→[0x4ede20] (u16 W,u16 H header + 8 planes W·H u16 → [0x4eddec]/[0x4eddf0]/[0x4eddf4]), ".DAT"→[0x4edd58] (same header, u8 planes, >0x7F sanitized→0), ".CGR"→[0x4edd60], ".BIN"→[0x4ede1c] (word→[0x46cdb8]), ".MIN"→[0x4edd9c], .LNG/.LNK→0x45cdda, ".PAD"→999×8B slots 0x4e44f8 stamping 0xFF; FUN_0044661b = the EDITOR\ZONE restore reload; FUN_0041dbed/FUN_0041cd90 = path/section opener (handle 0x4eba20) | §7j.16 |
 | TOT materializer | FUN_00440a2d (caller FUN_00440dc2): 7×7 tiles × 8 z: TOT word≠0 ∧ DAT byte==0 → mirror word@0x4796bc = word + seen@0x4796cc; bridges the .TOT volume into the runtime mirror (how TRT word-1 stamps become visible) | §7j.16 |
 | map-click pick | FUN_00419943 (caller FUN_00410644 ← MissionShell @0x448021): rect list 0x4787c4/{center@+8/+0xC, w@+0x14} count [0x46ccd8] (written by renderer FUN_00403938) with octile cost FUN_0041ebf8; else screen→iso ((p−0xF0)·[0x4ede54])/0x1E0 + TRT scan; ret 0=ground / k+1=rect / (idx+1)\|0x2000=structure; FUN_00418a9f = empty stub | §7j.16 |
-| click order target | {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c written by FUN_00410644 (ground iso / rect / structure tile-center), read by the robot behaviour family (FUN_00409138 ×6, FUN_0040a56f/0xa7a1/0xace8/0xaf98/0xb615/0xa9ff) | §7j.16 |
+| click order target | {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c written by FUN_00410644 (ground iso / rect / structure tile-center) AND by FUN_00409138 (command-record bit1, words@+7/+9/+0xB); readers FUN_00409138 ×6, FUN_0040af98 ×3, FUN_0040a56f/0xa7a1/0xace8/0xb615/0xa9ff ×2 each, FUN_00449c94 | §7j.16/§7j.17 |
 | scanner overlay | FUN_0041ec81 (MissionShell @0x48142): corner widget box 0x1EE..0x272×0xC3..0x147, grow [0x4edd68]→0x40, asset GAMEGFX\SCANNER.BIN; FUN_0041ee20(cx,cy) around the SELECTED robot ([0x46cbd4]+[0x46cbdc]): icons via FUN_00402572 (128×128 blitter→[0x4eddb8]) — 1/2 robots sel/rest, 4=0x4cffbc, 5/6 linked blink, 7/0xD tiles, 8=TRT, 9/0xA objects, 0xB arrivals, 0xC pads | §7j.16 |
 | nearest-robot probe | FUN_00417c00(px,py,&dist): octile over robot bank, ret idx; callers: turret machine + FUN_00412a98, FUN_00412f34 ×4, FUN_00417e2f (the robot targeting family). FUN_0041ebf8 = octile distance max+min/2 (51 sites) | §7j.16 |
 | terrain-structure array | recs @0x4cccf8 + i·0x20, i < [0x46ccd4] — {active@+0, hp@+0x10, x tile@+0x14, y@+0x18, z@+0x1C}; externally 1-based (dword[0x4cccd8+id·0x20] = rec id−1 active; 0x4cccd8 = id-0 guard) | §7j.14 |
 | terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
 | terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |
-| weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i, kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14 |
+| weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i (400 slots, free-slot FUN_00412848), kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14/§7j.17 |
 | projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4; coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20) | §7j.14 |
 | splash gates/eviction | FUN_0041bd78: first z ≥ min(z,7) with DAT 0 ∧ seen 0; FUN_00424355 gates: DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58+tile]=0; full ring → evict max-age + FUN_0042394a flush | §7j.14 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
@@ -2574,6 +2829,20 @@ against those dumps unless tagged.
 
 ## 9. Open items (next slices)
 
+0a. The critter/POI/exit LOADER section inside FUN_00416458
+   (writes count DAT_0046cc2c @0x41646d, DAT_0046cbf0
+   @0x416f6e, banks 0x4cff98/0x4dabdc/0x4e662c producer
+   FUN_0041fa51 @0x41fabb) — which mission file section feeds
+   them [.NME/.POS family candidate, FORMATS §9/§12];
+   anchors the critter/POI record producers and the exit
+   markers. Also open from 7j.17: FUN_0040db9e identity (the
+   mode-2 range attack on robots), projectile type 0x69
+   absent from the FUN_00419aff damage table (→ else-1), the
+   [0x4eb8b8+slot·4] objective-done bank consumers, and
+   FUN_00449c94 (the command-record BUILDER — the local-input
+   side of the 0x4dd4a0 ring).
+0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
+   (full writer/reader census in the ledger row).
 0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,
    docs/RE-EXW-MISSIONVIEW.md: init_tiles cache geometry + TOT→typeDB
    mirror, LNK as the per-frame tile animation link, BIN as the
