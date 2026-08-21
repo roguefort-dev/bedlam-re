@@ -1080,8 +1080,8 @@ MECHANISM is new.
    index (kept in ebp). `idx = _DAT_004edd8c` (the TERRAIN-SET
    index) selects one dword from EACH of two 7-entry DGROUP tables
    (values [verified PE bytes 0x454a58..0x454a8f]):
-   - A = dword[0x454a58 + idx*4] = `[0x75, 0x75, 0x358, 0x75,
-     0xa3, 0x535, 0x70b]`
+   - A = dword[0x454a58 + idx*4] = `[0x4e, 0x75, 0x75, 0x358, 0x75,
+     0xa3, 0xa3]`
    - B = dword[0x454a74 + idx*4] = `[0x75, 0x535, 0x70b, 0x656,
      0x535, 0x4fe, 0x31e]`
    Each table base then splits into FOUR closed 4-word groups

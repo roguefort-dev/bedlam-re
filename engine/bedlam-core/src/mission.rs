@@ -508,6 +508,20 @@ pub struct DamageOutcome {
     pub debris: [(i32, i32, i32, i32); 5],
 }
 
+/// What [`MissionSim::apply_pickup`] did — the presentation half of
+/// the FUN_0040eba0 case bodies the host stages (7h.2): `effect` is
+/// the 0x4dc5d0 sprite-effect row id (1 = the reinforcement
+/// drop-in, 6 = the shield bubble, 7 = the health cross-up, 0xE =
+/// the booster flare) plus the per-case 0x43a48e SFX queue entry —
+/// both unwired until the mission SFX/effects slices land.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PickupOutcome {
+    /// The case body ran (robot index valid, case in 1/2/3/7).
+    pub applied: bool,
+    /// The 0x4dc5d0 row effect id for the case (7h.2).
+    pub effect: i32,
+}
+
 /// Shield tick granted by the ordered/auto-shield conversions
 /// (+0x88 = 0x20, 7g.1).
 pub const SHIELD_TICK: i32 = 0x20;
@@ -523,6 +537,55 @@ pub const ARMOR_MAX: i16 = 0xBB8;
 pub const ARMOR_BLEED: i16 = 10;
 /// Armor charge per phase-1 pad pass (robots() 0x40bc72, 7g.3).
 pub const ARMOR_CHARGE: i32 = 0x14;
+/// The reinforcement-staging value FUN_0040eba0 case 1 writes to
+/// `drop_countdown` (+0x80, 7h.2).
+pub const PICKUP_DROP: i32 = 0x3E8;
+/// The pool value the shield pickup writes (+0x88, case 2, 7h.2).
+pub const PICKUP_SHIELD: i32 = 0x3E8;
+/// The health pickup increment (+0x78, case 3, 7h.2); the sum
+/// clamps at the landing HP ceiling 5000 (0x1388).
+pub const PICKUP_HEALTH: i32 = 0x9C4;
+/// The HP ceiling the health pickup clamps to (case 3, 7h.2 —
+/// also the hp-bar full denominator, 7f.1).
+pub const HP_MAX: i32 = 0x1388;
+/// The booster countdown the shield-booster pickup arms (+0xA0,
+/// case 7, 7h.2).
+pub const PICKUP_BOOST: i32 = 0xC8;
+
+/// The pickup range-table A bases per terrain set (7 dwords at
+/// DGROUP 0x454a58, PE bytes, 7h.1): tile words in the closed
+/// groups `[base, base+0x10)` map to cases 1/3/2/4.
+pub const PICKUP_RANGE_A: [i32; 7] = [0x4E, 0x75, 0x75, 0x358, 0x75, 0xA3, 0xA3];
+/// The pickup range-table B bases per terrain set (7 dwords at
+/// DGROUP 0x454a74, PE bytes, 7h.1): tile words in the closed
+/// groups `[base, base+0xC)` map to cases 9/7/8.
+pub const PICKUP_RANGE_B: [i32; 7] = [0x75, 0x535, 0x70B, 0x656, 0x535, 0x4FE, 0x31E];
+
+/// The FUN_0040eba0 dispatch decode [RE-EXW-SIM 7h.1, verified asm
+/// 0x40ebaa..0x40ecef]: which pickup case a per-tile type word
+/// selects for terrain set `set` (the `_DAT_004edd8c` index, 7h.4).
+/// Each table base splits into closed 4-word groups — table A
+/// `[A, A+0x10)` → cases 1/3/2/4, table B `[B, B+0xC)` → cases
+/// 9/7/8 — so `Some(1..=9)` exactly when the word is one of the
+/// 28 pickup words of that set. The tile-word PRODUCER (the
+/// type-DB mirror + probe-latch walk, 7h.3) is still host-seamed.
+pub fn pickup_case(tile_word: i32, set: usize) -> Option<u8> {
+    const CASES_A: [u8; 4] = [1, 3, 2, 4];
+    const CASES_B: [u8; 3] = [9, 7, 8];
+    let tables: [(&[i32], &[u8], i32); 2] = [
+        (&PICKUP_RANGE_A, &CASES_A, 16),
+        (&PICKUP_RANGE_B, &CASES_B, 12),
+    ];
+    for (table, cases, span) in tables {
+        if let Some(base) = table.get(set).copied() {
+            let d = tile_word - base;
+            if d >= 0 && d < span {
+                return Some(cases[(d / 4) as usize]);
+            }
+        }
+    }
+    None
+}
 
 /// The mission simulation slice: terrain + robots + one pending order.
 ///
@@ -717,6 +780,53 @@ impl MissionSim {
         // `killer` reaches only the MP bookkeeping (7g.6) — kept in
         // the signature for the callers' fidelity, unused in SP.
         let _ = killer;
+        out
+    }
+
+    /// Apply a pickup to robot `idx` — the FUN_0040eba0 case bodies
+    /// 1/2/3/7 [RE-EXW-SIM 7h.2, verified asm]: case 1 stages the
+    /// reinforcement (`drop_countdown = 1000`), case 2 refills the
+    /// shield pool (`shield = 1000`), case 3 heals (`hp += 2500`
+    /// clamped `> 5000 → 5000`), case 7 arms the shield booster
+    /// (`shield_boost = 200` — the phase-0 pre-walk consumes it,
+    /// 7g.2). No alive/state gates (the caller fires the dispatch
+    /// on the tile match alone); cases 4/8/9 (score-money/ammo/
+    /// episode) are NOT this seam — case 4 is the D52
+    /// score/money host seam, 8/9 remain unlanded. The SFX +
+    /// 0x4dc5d0 effect-row staging are presentation — the host
+    /// reads the effect id off [`PickupOutcome`]. Nothing on the
+    /// default corpus path invokes this (the tile-word producer
+    /// 7h.3 is host-seamed).
+    pub fn apply_pickup(&mut self, idx: usize, case: u8) -> PickupOutcome {
+        let mut out = PickupOutcome {
+            applied: false,
+            effect: 0,
+        };
+        // The field value per case (7h.2), paired with the
+        // 0x4dc5d0 effect-row id the tail stages for it.
+        let (value, effect) = match case {
+            1 => (PICKUP_DROP, 1),
+            2 => (PICKUP_SHIELD, 6),
+            3 => (PICKUP_HEALTH, 7),
+            7 => (PICKUP_BOOST, 0xE),
+            _ => return out,
+        };
+        let Some(r) = self.robots.get_mut(idx) else {
+            return out;
+        };
+        out.applied = true;
+        out.effect = effect;
+        match case {
+            1 => r.drop_countdown = value,
+            2 => r.shield = value,
+            3 => {
+                r.hp += value;
+                if r.hp > HP_MAX {
+                    r.hp = HP_MAX;
+                }
+            }
+            _ => r.shield_boost = value,
+        }
         out
     }
 
@@ -1899,5 +2009,91 @@ mod tests {
         assert_ne!(sim.state_hash().0, base.0, "hit_flash covered");
         sim.robots_mut()[0].death_flag = 1;
         assert_ne!(sim.state_hash().0, base.0, "death_flag covered");
+    }
+
+    #[test]
+    fn pickup_case_decodes_the_range_tables() {
+        // 7h.1: table A groups → 1/3/2/4, table B → 9/7/8, four
+        // CLOSED words per case. Set 0 (A=0x4e, B=0x75):
+        for g in 0..4i32 {
+            let b_cases = [9, 7, 8];
+            for o in 0..4i32 {
+                assert_eq!(
+                    pickup_case(0x4E + 4 * g + o, 0),
+                    Some([1, 3, 2, 4][g as usize])
+                );
+                if (g as usize) < b_cases.len() {
+                    assert_eq!(pickup_case(0x75 + 4 * g + o, 0), Some(b_cases[g as usize]));
+                }
+            }
+        }
+        // The blocks are closed: the words just past each block and
+        // every non-pickup word decode to None.
+        assert_eq!(pickup_case(0x4E + 16, 0), None);
+        assert_eq!(pickup_case(0x75 + 12, 0), None);
+        assert_eq!(pickup_case(0x4D, 0), None);
+        assert_eq!(pickup_case(0x10, 0), None);
+        // Set 3 (A=0x358), set 2 (B=0x70b), set 5 (A=0xa3, B=0x4fe)
+        // + a bogus set index.
+        assert_eq!(pickup_case(0x358, 3), Some(1));
+        assert_eq!(pickup_case(0x358 + 12, 3), Some(4));
+        assert_eq!(pickup_case(0x70B + 4, 2), Some(7));
+        assert_eq!(pickup_case(0xA3 + 8, 5), Some(2));
+        assert_eq!(pickup_case(0x4FE + 8, 5), Some(8));
+        assert_eq!(pickup_case(0x4FE + 4, 7), None, "set 7 has no table");
+    }
+
+    #[test]
+    fn apply_pickup_follows_fun_0040eba0_cases() {
+        // 7h.2: case 1 stages the reinforcement drop.
+        let mut sim = damage_sim();
+        let out = sim.apply_pickup(0, 1);
+        assert_eq!((out.applied, out.effect), (true, 1));
+        assert_eq!(sim.robots()[0].drop_countdown, 1000);
+
+        // Case 2 refills the shield pool.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].shield = 40;
+        let out = sim.apply_pickup(0, 2);
+        assert_eq!((out.applied, out.effect), (true, 6));
+        assert_eq!(sim.robots()[0].shield, 1000);
+
+        // Case 3 heals +2500, clamped at 5000.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].hp = 1000;
+        sim.apply_pickup(0, 3);
+        assert_eq!(sim.robots()[0].hp, 3500);
+        let out = sim.apply_pickup(0, 3);
+        assert_eq!((out.applied, out.effect), (true, 7));
+        assert_eq!(sim.robots()[0].hp, 5000, "0x1388 clamp");
+
+        // Case 7 arms the booster countdown.
+        let mut sim = damage_sim();
+        let out = sim.apply_pickup(0, 7);
+        assert_eq!((out.applied, out.effect), (true, 0xE));
+        assert_eq!(sim.robots()[0].shield_boost, 200);
+
+        // Cases 4/8/9 and a bad robot index are not this seam.
+        let mut sim = damage_sim();
+        assert!(!sim.apply_pickup(0, 4).applied);
+        assert!(!sim.apply_pickup(0, 8).applied);
+        assert!(!sim.apply_pickup(0, 9).applied);
+        assert!(!sim.apply_pickup(9, 1).applied);
+        assert_eq!(sim.robots()[0].hp, 5000);
+    }
+
+    #[test]
+    fn apply_pickup_moves_the_hash_and_boost_feeds_the_pre_walk() {
+        // The pickup writes hash-covered fields (7g/D53), and the
+        // case-7 arming feeds the phase-0 pre-walk booster decay.
+        let mut sim = damage_sim();
+        let base = sim.state_hash();
+        sim.apply_pickup(0, 7);
+        assert_ne!(sim.state_hash().0, base.0, "shield_boost covered");
+        // One frame of the pre-walk: shield forced 10000 while the
+        // booster counts down (7g.2).
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].shield, SHIELD_BOOST_POOL);
+        assert_eq!(sim.robots()[0].shield_boost, 199);
     }
 }

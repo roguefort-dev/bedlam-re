@@ -24,7 +24,9 @@
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::dist_octagonal;
-use bedlam_core::mission::{AngleTable, DamageOutcome, MissionSim, Robot, Terrain, STATE_MOVING};
+use bedlam_core::mission::{
+    AngleTable, DamageOutcome, MissionSim, PickupOutcome, Robot, Terrain, STATE_MOVING,
+};
 use bedlam_core::rng::Pcg32;
 use bedlam_render::map_overlay::{MapOverlay, OverlayRobot};
 use bedlam_render::mission_view::{
@@ -1122,6 +1124,21 @@ impl MissionScene {
         }
         self.strip = 2;
     }
+
+    /// The FUN_0040eba0 case-1/2/3/7 pickup producer host seam
+    /// [RE-EXW-SIM 7h.2]: the tile-word dispatch + the caller's
+    /// DAT-consume walk (7h.3) stay host-seamed (the type-DB
+    /// mirror is not modeled), so the host calls this when its own
+    /// tile watch fires. Delegates to `MissionSim::apply_pickup`
+    /// — the case bodies write only sim fields (no sidebar
+    /// countdowns, no session state; the SFX + 0x4dc5d0 effect
+    /// rows are the unwired presentation the outcome's `effect`
+    /// id stands in for). Case 4 is the separate score/money seam
+    /// above (session state + the strip countdown + the two
+    /// shared-stream draws).
+    pub fn pickup(&mut self, robot: usize, case: u8) -> PickupOutcome {
+        self.sim.apply_pickup(robot, case)
+    }
 }
 
 /// The HP bar sprite for a staged hp [RE-EXW-SIM 7f.1,
@@ -1373,6 +1390,7 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bedlam_core::mission::pickup_case;
 
     fn staged(markers: &[(i32, i32, i32)]) -> MissionScene {
         let f = synth_mission_files();
@@ -1928,6 +1946,48 @@ mod tests {
         assert_eq!(m.sim.robots()[0].hp, 5700, "the landing formula");
         m.set_weapon_loadout(1, &[(0, 0); 7]);
         assert_eq!(m.sim.robots()[1].hp, 5000, "battery 0 -> plain 5000");
+    }
+
+    #[test]
+    fn pickup_seam_lands_the_fun_0040eba0_cases() {
+        // 7h.2: the case-1/2/3/7 host seam writes the sim vitals and
+        // stages NO presentation state (no strip re-arm — that is
+        // the case-4 producer alone, 7f.6; the effect rows + SFX
+        // are unwired, the outcome's effect id stands in).
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        m.present().expect("entry frame");
+        for _ in 0..2 {
+            m.present();
+        }
+        assert_eq!(m.score_strip_countdown(), 0, "strip drained");
+        // Case 3 heals 2500 clamped at 5000 (the robot spawns full).
+        let out = m.pickup(0, 3);
+        assert_eq!((out.applied, out.effect), (true, 7));
+        assert_eq!(m.sim.robots()[0].hp, 5000, "clamp at 0x1388");
+        m.sim.robots_mut()[0].hp = 1000;
+        m.pickup(0, 3);
+        assert_eq!(m.sim.robots()[0].hp, 3500);
+        // Case 2 refills the shield pool, case 7 arms the booster,
+        // case 1 stages the reinforcement drop.
+        m.pickup(0, 2);
+        assert_eq!(m.sim.robots()[0].shield, 1000);
+        m.pickup(0, 7);
+        assert_eq!(m.sim.robots()[0].shield_boost, 200);
+        let out = m.pickup(0, 1);
+        assert_eq!((out.applied, out.effect), (true, 1));
+        assert_eq!(m.sim.robots()[0].drop_countdown, 1000);
+        // None of the four re-arms the score strip; case 4 is not
+        // this seam (the dedicated producer owns it).
+        assert_eq!(m.score_strip_countdown(), 0);
+        assert!(!m.pickup(0, 4).applied);
+        assert!(!m.pickup(9, 1).applied, "bad robot index");
+        // The dispatch decode is the pure half: every set-0 pickup
+        // word round-trips word -> case -> the same field family.
+        assert_eq!(pickup_case(0x4E, 0), Some(1));
+        assert_eq!(pickup_case(0x4E + 8, 0), Some(2));
+        assert_eq!(pickup_case(0x4E + 4, 0), Some(3));
+        assert_eq!(pickup_case(0x75 + 4, 0), Some(7));
     }
 
     #[test]
