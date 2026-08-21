@@ -1,3 +1,36 @@
+ - CLOSED 2026-08-21 (P4 dead/hit dither unit COMPLETE, commits
+   4f702e1 + 31a4691, worker efc8b1e0 claim 1, D55): RE-EXW-SIM
+   amendment 7i decodes the FUN_00401ae6 static blit whole (mode 0
+   rep-movsb replace vs mode 1 nonzero-only overlay; dest = fb +
+   y*pitch + x; per-row RESEED RandB&0x1ff when src+96 >= 0x800;
+   seed FUN_0041ec59(0x7f6,0x30) = (RandB()&0x7fff)/15 clamp
+   0x7f5) and REFUTES the "512-B mask bank" gloss: 0x4e6ed8 is a
+   2048-B .bss NOISE RING (cursor 0x4ddb30), binary {0,0xFF} at
+   25% white - boot fill 2048 RandB draws in the MissionShell
+   staging (0x447b13) + a 15-byte/frame churn in the frame
+   epilogue (0x448147, unconditional incl. overlay frames); the
+   portrait pass confirmed: in-squad dead/hp<1 -> mode 0, alive +
+   hit_flash != 0 -> portrait then mode 1, beyond-squad slots ->
+   mode 0 EVERY frame. ENGINE: the Dither ring + blit wired in
+   draw_sidebar_portraits over the real sim hit_flash (the pass
+   never decays it - 7g.8 stays the sim tick), edge_rng renamed
+   rand_b as the ONE shared RandB stand-in consumed in the EXW
+   order (terrain edges -> dither -> churn), the sidebar block
+   moved after the terrain pass in present() (disjoint plane
+   halves, pixels identical). Gates: frame pins RE-PINNED ONCE
+   (spawn 7fdada56b10f1cad, walk 58ea10373e8d4284, overlay
+   1d70e0bd059f5ae0, armed 6050d20755b2d852 - ZONEA spawns a
+   1-robot squad so slots 1/2 carry static; reason recorded in
+   the gate header), sim pins byte-identical, the overlay gate's
+   stale-sidebar reference re-anchored to the last-presented
+   frame (per-blit seed draws make normal sidebars differ per
+   frame, exactly like the EXW), 41 suites/470 tests green (+1
+   dither unit test), fmt/clippy clean, smoke two-run
+   byte-identical AND at the recorded baselines (scene
+   696adb1cd110e062, parity cce30c983b97b16d - the smoke hashes
+   are end-of-journey cutscene state), MANIFEST verified.
+   Pushed. Queued: the 0x4dc5d0 effect-row producer family +
+   FUN_00420608 debris stager.
  - CLOSED 2026-08-21 (P4 pickup consumer unit COMPLETE, commits
    e10fdb5 + d8e03a7 + 5a3a419 + 81fd558, worker 66831068 claim 1,
    D54): RE-EXW-SIM amendment 7h decodes the FUN_0040eba0 pickup

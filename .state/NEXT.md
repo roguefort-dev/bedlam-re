@@ -1,24 +1,20 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The dead/hit dither overlay unit (RE-EXW-SIM 7f.4 + the
-   7g.8 decay follow-through): decode the FUN_00401ae6 blit +
-   the 0x4e6ed8 512-B mask bank (the dither codec — how the mask
-   selects/blends pixels over the 48x48 portrait) as committed RE
-   notes FIRST, then wire the portrait dither in the sidebar
-   portrait pass reading the now-real sim hit_flash field (the
-   7g.8 decay already runs per frame; clamp>5 then -1 per alive
-   hp>=1 frame). Keep the 0x4dc5d0 blink producer OUT of this
-   unit unless trivially adjacent (it is the FUN_00422038 slot
-   family the pickup tails also stage at — 7h.2 notes the row
-   layout). Bounded: the codec decode is the RE piece; frame
-   pins may move ONCE (the dither draws on the portrait plane)
-   — re-pin with the reason, sim pins must NOT move.
+1. [P4] The 0x4dc5d0 blink/effect-row producer family (RE decode
+   first): FUN_00422038 (the slot alloc — the 16-B rows the
+   sidebar tail's `_DAT_004dc5d0 >= 1/2/3` switch reads at
+   0x407420, drawing at x 0x1F0/0x222/0x254) + the staged inputs
+   already decoded on the sim side (the 7g.6 death tail's FIVE
+   debris rows via FUN_00420608 with kind 5 / param 2k / z+8k /
+   the two RandA draws each, and the 7h.2 PickupOutcome effect
+   ids 1/6/7/0xE) + the FUN_00420608 128-slot 0x30-stride debris
+   stager consumer family. Bounded: decode the producer + stager
+   asm as committed RE notes FIRST (RE-EXW-SIM 7j or a new
+   RE-EXW-EFFECTS doc), then land the effect-row seam. The
+   blink-cursor producer (FUN_00403938's own 0x4dc5d0 stages)
+   may ride along ONLY if trivially adjacent.
 ## Backlog (not yet started)
-- The 0x4dc5d0 blink/effect-row producer family (FUN_00422038
-  slot alloc + the 16-B rows; the DamageOutcome debris rows and
-  the 7h.2 PickupOutcome effect ids 1/6/7/0xE are its staged
-  inputs) + the FUN_00420608 128-slot debris stager consumer.
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -70,6 +66,30 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 dead/hit dither unit COMPLETE (worker efc8b1e0
+  claim 1, commits 4f702e1 + 31a4691, D55): RE-EXW-SIM 7i =
+  FUN_00401ae6 fully decoded (mode 0 rep-movsb full static vs
+  mode 1 nonzero-only overlay; dest = fb + y*pitch + x; per-row
+  RESEED rand&0x1ff when src+96 >= 0x800; seed =
+  FUN_0041ec59(0x7f6,0x30) = (RandB()&0x7fff)/15 clamp 0x7f5) +
+  the bank REFUTED as EXE content: 0x4e6ed8 is a 2048-B .bss RING
+  (cursor 0x4ddb30) of binary {0,0xFF} 25% white — boot fill
+  2048 draws (MissionShell 0x447b13) + 15-B/frame churn
+  (0x448147 epilogue, unconditional); +0x2E confirmed hit_flash:
+  in-squad dead/hp<1 -> mode 0, flash != 0 -> mode 1 after the
+  portrait, beyond-squad slots -> mode 0 EVERY frame. ENGINE: the
+  Dither ring + blit in draw_sidebar_portraits (reads the sim
+  hit_flash, never decays — 7g.8 stays the sim tick), edge_rng ->
+  rand_b shared stand-in consumed in the EXW order (terrain edges
+  -> dither -> churn), sidebar block moved after the terrain pass
+  (disjoint halves, pixels identical). Gates: frame pins RE-PINNED
+  ONCE (spawn 7fdada56b10f1cad, walk 58ea10373e8d4284, overlay
+  1d70e0bd059f5ae0, armed 6050d20755b2d852 — ZONEA 1-robot squad
+  dithers slots 1/2; reason in the gate header), sim pins
+  byte-identical, the overlay gate's stale-sidebar reference
+  re-anchored to the last-presented frame, 41 suites green (+1),
+  fmt/clippy clean, smoke two-run identical at the recorded
+  baselines, MANIFEST verified. Pushed.
 - 2026-08-21: P4 pickup consumer unit COMPLETE (worker 66831068
   claim 1, commits e10fdb5 + d8e03a7 + 5a3a419 + 81fd558, D54):
   RE-EXW-SIM 7h = the FUN_0040eba0 dispatch decoded (range tables
@@ -88,43 +108,3 @@
   (scene 696adb1cd110e062, parity cce30c983b97b16d — pins
   UNMOVED, the seam is off the corpus path), MANIFEST verified.
   Pushed.
-- 2026-08-21: P4 damage unit COMPLETE (worker 416ca029 claim 1,
-  commit d9032d9, D53; unit finished across an interrupted
-  predecessor run that committed the 7g pre-decode 5e10768 + the
-  implementation WIP): RE-EXW-SIM 7g + ENGINE: hp/armor/hit_flash/
-  alarm/alarm_ctr/shield/shield_charges/shield_boost/battery/
-  armor_pool/kind/death_flag promoted to hash-covered sim Robot
-  fields; spawn hp = 5000+100*battery (set_battery seam); apply_damage
-  = the FUN_0040e230 SP core (state-2/alive gates, ordered->shield
-  0x20, auto-shield idle, alarm trip, absorb vs hit_flash-then-hp,
-  SP death subset + 5 debris x 2 shared RandA); phase-0 pre-walk
-  (alarm/ctr decay, shield -2, booster 10000/150); phase-1 armor
-  pad +20/bleed -10 clamp 3000/0 (set_armor_pads seam, corpus pads
-  all-zero); hit_flash portrait decay. Game side dropped the D52
-  Vitals staging (bars/portraits read the sim fields; battery lands
-  through set_weapon_loadout; death stages sidebar redraw 3).
-  Gates: sim pins RE-PINNED ONCE (1cc7b8e125165988 spawn,
-  5b9c2fd5d85f9adc post-arm, d8eeb3e608af0be4 arrival,
-  0bf4fb534d6b3bd5 click, 78a16ba63607d197 overlay); frame pins
-  byte-identical (9ecd7691d388bbfa/333d128dc812d547/
-  1504c600819e724c/86a788ff93bd78a5); 41 suites/465 tests green
-  (8 new), fmt/clippy clean, smoke two-run byte-identical at the
-  recorded baselines, MANIFEST verified. Pushed.
-- 2026-08-21: P4 sidebar bars + score strip COMPLETE (worker
-  36c9e956 claim 1, commits a11e468 + 2035395 + 3f7fad7, D52):
-  RE-EXW-SIM 7f = the vitals family decoded (FUN_0040807f bars
-  exact incl. the word@+0x30 armor correction, FUN_004085ce strip
-  exact x tables + unsigned/signed splits, the CORRECTED tail
-  order, FUN_004072bf gates + the +0x2E hit-flash correction,
-  FUN_0040e230 damage, FUN_0040eba0 pickup cases, FUN_004100b7
-  armor pads + the -10 bleed, the landing hp init, the score/
-  money + NUMBERS.BIN census). ENGINE: bars + strip wired from
-  HOST-STAGED vitals (D52 — hp 5000+100*battery via the BATTERY
-  PACK group, armor 0 with the faithful empty-bar draw) + campaign
-  session state (0/4000) + the case-4 pickup seam (two rand_a
-  draws, countdown 2); NUMBERS.BIN the 23rd chain asset; portrait
-  hp>=1 gate; bars+strip+pickup unit tests. Gates: 41 suites
-  green, fmt/clippy clean, smoke two-run byte-identical, MANIFEST
-  verified; frame pins regenerated once (spawn 9ecd7691d388bbfa,
-  walk 333d128dc812d547, overlay 1504c600819e724c, armed
-  86a788ff93bd78a5), sim pins then UNCHANGED. Pushed.
