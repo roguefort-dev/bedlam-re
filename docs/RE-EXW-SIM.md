@@ -104,14 +104,15 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x16 | u16 | deploy countdown (0xFFFF when spent; decrements phase 0; gates the +0x40 overlay) — this row was previously mislabeled +0x14 [corrected 2026-08-21, MISSIONVIEW §5d] | 0x4c69fa |
 | +0x18 | u16 | random at spawn: RandA()&3 (variant) | 0x4c69fc |
 | +0x1A..+0x29 | 8×u16 | per-probe floor z cache (written by move_is_possible; +0x1A doubles as the climb-compare z: `dword@+0x18 >> 16`) | 0x4c69fe |
-| +0x2A | u16 | robot TYPE (indexes the 0x62-stride stats table at 0x4de664) | via 0x4c6a0c>>16 |
+| +0x2A | u16 | robot TYPE (indexes the 0x62-stride ORDER/stats table at 0x4de664; all player robots take the global word@0x4edb90) | via 0x4c6a0c>>16, 0x40cdf3 |
 | +0x2C | u16 | reinforcement/deploy timer slot (1, 1+(2000-m*1000/27), ...) | 0x4c6a10 |
-| +0x36/+0x38 | u16×2 | words of the per-type stats table | 0x4c6a1a/1c |
-| +0x6E | u16 | toggle bits (bits 0/1 via keys 1/2) | 0x4c6a52 |
+| +0x36/+0x38/+0x3A | u16×3 | per-order stats-group copy i (8-byte groups, i=0..6): word0 = group availability (spawn default probe), word1 = the sidebar order gate (copied twice) [§6c.6] | 0x4c6a1a/1c/1e, spawn 0x40cf05..0x40cf42 |
+| +0x6E | u16 | ORDER BITS (bit i = order i active; bits 0..6 toggled by keys 1..7 / the 7 sidebar order rows; spawn default = 1 << first available) | 0x4c6a52, §6c |
 | +0x70 | i32 | deploy-delay counter (vs table DAT_00454ee8[DAT_0046cbf8]) | 0x4c6a54 |
 | +0x74 | i32 | stop distance for the active order (1000000 = go all the way) | 0x4c6a58 |
-| +0x78 | i32 | alive flag (0 = slot free) | 0x4c6a60 |
-| +0x7C | i32 | countdown (decrements when ≠0; gates phases 4/5: serviced iff > phase*32) | 0x4c6a64 |
+| +0x78 | i32 | (label corrected 2026-08-21, §6c.7: this row had drifted +4 — alive is +0x7C) — | — |
+| +0x7C | i32 | alive flag (0 = slot free; sidebar select gate + armer's one-alive count) | 0x4c6a60 |
+| +0x80 | i32 | countdown (decrements when ≠0; gates phases 4/5: serviced iff > phase*32) | 0x4c6a64 |
 | +0x90 | i32 | dying countdown (states 5/6 → despawn/revive) | 0x4c6a74 |
 
 Related globals [verified]: move-target arrays `DAT_0046cc30` (x) /
@@ -231,11 +232,12 @@ byte) [verified decompile + asm]:
 1. **Input layer** latches the click at `_DAT_004eddf8/_DAT_004eddfc`
    (x/y, -1 when consumed) — the pair RE-EXW-GAMETHREAD saw reset to -1.
 2. **mouse_l_click@0040b835** (called once per frame from MissionShell):
-   x ≥ 0x1E0 → `sidebar_control@0040d197` (sidebar UI: robot-select strips
-   x∈[0x1E7,0x217)/[0x219,0x249)/[0x24A,0x27C) y∈[5,0x35), F1/F2/F3 +
-   keys 1/2 toggles +0x6E bits; map toggle strip x∈[0x212,0x24E)
-   y∈[0x1B4,0x1D0); writes selection DAT_0046cbdc, redraw flag
-   DAT_0046ccec=2). Else (map viewport): **isometric unproject**
+   x ≥ 0x1E0 → `sidebar_control@0040d197` (sidebar UI — full decode
+   §6c: robot-select strips
+   x∈[0x1E7,0x217)/[0x219,0x249)/[0x24B,0x27B) y∈[5,0x35], F1/F2/F3 +
+   keys 1..7 order toggles, order rows x∈[0x1E9,0x275] y∈[0x57,0xB8],
+   map toggle strip x∈[0x213,0x24D) y∈[0x1B4,0x1D0); writes selection
+   DAT_0046cbdc, redraw flag DAT_0046ccec=2). Else (map viewport): **isometric unproject**
    ```
    sx = ((click_x - 0xF0) * viewport_h) / 0x1E0; sx >>= 1
    sy = ((click_y - 0xF0) * viewport_h) / 0x1E0 - 8 + _DAT_004edd54
@@ -274,6 +276,103 @@ byte) [verified decompile + asm]:
    (0x4e6610-family = the reinforcement-drop visual) [verified].
    Net effect: one click = nearby robots converge + a reinforcement drop
    marker at the site [inferred semantics].
+
+## 6c. sidebar_control@0040d197 — full decode (2026-08-21, worker 6ebe5cff)
+
+Decompiled + asm-verified 0x40d197..0x40d712 (objdump), with xref
+provenance from the new `tools/ghidra-scripts/XRefList.java`. This
+corrects §6.2's imprecise gloss: the map-toggle strip writes
+`_DAT_004eb8dc`/`_DAT_004edba0`, NOT the selection `DAT_0046cbdc`;
+the selection write is the robot-select strip family below.
+
+Entry: called from mouse_l_click@0040b835 when the click latch x ≥
+0x1E0, and from the keyboard-latch path (the 12 latches,
+RE-EXW-INPUT; keyboard wiring is deferred to the P2e button-map
+slice on the engine side). The click latch `_DAT_004eddf8` is
+consumed unconditionally at the tail (`= -1`, 0x40d70d).
+`FUN_00424a6e` (called at every fire site) is an EMPTY STUB
+[decompile 0x424a6e: bare ret] — a no-op.
+
+1. **Map-toggle strip** [asm 0x40d19d..0x40d21a]: fires iff
+   `_DAT_004edd8c ∉ {1,7}` AND `_DAT_004eb8dc == 0` AND (click
+   x∈[0x213,0x24D], y∈[0x1B5,0x1CF] OR `_g_latch_MSpace@0x4edc08`).
+   Action: `_DAT_004eb8dc = 5`; `_DAT_004edba0 = (old == 0)` (0↔1
+   toggle); clear the MSpace latch. `_DAT_004edba0` is the map-overlay
+   draw-mode bit: the terrain-loop tail runs `FUN_004089b1` when it is
+   nonzero (0x4071d5) and the present window `FUN_00401107` reads it
+   (0x40110c) — the strategic-map overlay family, NOT modeled in the
+   engine slice. `_DAT_004edd8c` = the screen/mode global GameMain
+   writes (values 1/7 gate the strip off).
+2. **Robot-select strips** [asm 0x40d220..0x40d3b0]: y∈[5,0x35] all
+   three; x∈[0x1E7,0x217] slot 0 (F1 latch@0x4edc0c, needs
+   `DAT_0046cbd8 ≥ 1`), x∈[0x219,0x249] slot 1 (F2@0x4edc10, ≥ 2),
+   x∈[0x24B,0x27B] slot 2 (F3@0x4edc14, ≥ 3). Gate: target slot's
+   ALIVE dword `0x4c6a60 + 0xA8*(DAT_0046cbd4 + slot)` ≠ 0. Action:
+   `DAT_0046cbdc = slot` (the squad slot), `DAT_0046ccec = 2`,
+   `_DAT_004ede34 = 0`, `_DAT_004ea8f8 = 0`; the F-latch clears
+   regardless of the alive gate. `_DAT_004ede34/_DAT_004ea8f8` are
+   map-overlay/present aux globals (readers FUN_00401107,
+   FUN_00403938, FUN_0044764c) — cleared on select, consumers not
+   decoded this pass.
+3. **Order keys 1..7** [asm 0x40d3b0..0x40d659]: latches
+   0x4edc18+4*(k-1). Selected robot idx = `DAT_0046cbd4 +
+   DAT_0046cbdc`. Gate: word@`0x4c6a1c + 0xA8*idx + 8*(k-1)` ≠ 0
+   (record +0x38+8(k-1) — a per-type ORDER-AVAILABILITY word, see 6).
+   Action: word@`0x4c6a52 + 0xA8*idx` (record +0x6E, the ORDER-BITS
+   word) `^= 1 << (k-1)`; `DAT_0046ccec = 2`; latch clears always.
+4. **Order-row click** [asm 0x40d659..0x40d712]: needs the click
+   latch `_g_scroll_btn_latch@0x4ede14` AND x∈[0x1E9,0x275] AND
+   y∈[0x57,0xB8]. `row = (y - 0x57) / 14` (idiv trunc), clamped to ≤ 6
+   — 7 rows of 14 px starting at y=0x57 (0xB9-0x57 = 98 = 7*14
+   exactly). Same gate/toggle as key row+1; the click latch clears
+   ONLY when the availability gate passes; `DAT_0046ccec = 2`.
+5. **Redraw flag semantics** [asm 0x4071ed..0x407217, in the
+   FUN_00403938 draw tail]: `DAT_0046ccec` is a per-frame COUNTDOWN:
+   when nonzero, decrement and call the sidebar redraw pass
+   `FUN_00408403`. Producers set 2 (sidebar_control) or 3
+   (MissionShell 0x4478bf/0x447c74/0x448117; robot-damage path
+   0x40a483; other sidebar producers FUN_0040e230/FUN_004102b6/
+   FUN_0040eba0). Sibling countdowns in the same tail: `0x46ccf0` →
+   FUN_004085ce, `0x46ccf8` → FUN_00401ca2 (rect (0x12,1,0x1EE,0xC3)).
+6. **Spawn-side order init** [asm 0x40ceb2 + 0x40cef1..0x40cf70, in
+   load_markers' record init]: order bits word (+0x6E) starts 0, then
+   the stats-copy loop runs 7 iterations (i = 0..6, stats byte offset
+   0x0E*i, record word offset 8*i):
+   ```
+   type   = word@(+0x2A)                       // dword@+0x28 >> 16
+   stats  = 0x4de664 + type*0x62               // the per-type stats table
+   word@(record+0x36+8i) = word@(stats+0x0E*i)      // group word0
+   word@(record+0x38+8i) = word@(stats+0x0E*i+2)    // group word1
+   word@(record+0x3A+8i) = word@(stats+0x0E*i+2)    // word1 again
+   if (!found && word@(record+0x36+8i) != 0) bits |= 1<<i; found=1
+   ```
+   i.e. **the 0x62-stride table at 0x4de664 is the 7×0x0E per-type
+   ORDER table** (open item 5's stride now structurally explained:
+   7 groups of 14 B); the default order bit is `1 << first i whose
+   group word0 ≠ 0`. The select gate (2) uses the ALIVE word; the
+   order gates (3/4) use group word1 (+0x38+8i). The table lives in
+   .bss (runtime-loaded) — its FILE SOURCE is open (no static xref;
+   [hypothesis] TABLE.BIN from the fixed-load list). Every player
+   robot's TYPE comes from the one global word@0x4edb90 (written by
+   GameMain@0x41c34c; the robot-choice state — also read by the
+   multiplayer lobby FUN_00448ef1 and the shell screens).
+7. **Field-table offset correction**: rows +0x78/+0x7C drifted — the
+   ALIVE flag is at 0x4c6a60 = **+0x7C** and the drop countdown at
+   0x4c6a64 = **+0x80** (address column was right, offset column
+   wrong). Now double-anchored: sidebar select gate (0x40d269/
+   0x40d2ef/0x40d37b) and the armer's exactly-one-alive loop
+   (0x424810, `cmpl $0, 0x4c6a60(%eax)` stepping 0xA8). The engine
+   struct labels follow below.
+
+Engine seam (this slice): mouse-only sidebar dispatch in
+MissionScene::tick — select strips + order rows + the redraw
+countdown (decrement in present) live on the PRESENTATION half
+(D17 split: none of it enters the sim state hash). Per-robot order
+availability defaults to all-7 [design: the type-table file source
+is open]; per-robot order bits default `1 << first available`
+[verified 6]. Squad = player-0 group (base 0), size
+robots_per_player(zone). Keyboard latches + the map-toggle strip
+stay unwired (button map P2e; overlay machinery open).
 
 ## 7. Per-tick mover state the sim hash must cover (P4 slice)
 
@@ -429,6 +528,11 @@ was where the tables filled: 0x41d954 only allocates.)
 | anim phase | ((angle+4)&0xFF)>>3 (32 sectors) | 0x40c536 tail |
 | robots per zone | <3|7→1, 3→2, else 3 | FUN_0040cca0 |
 | map size globals | DAT_004eddec (w) / DAT_004eddf0 (h) tiles | 0041e897 |
+| sidebar select strips | [0x1E7,0x217]/[0x219,0x249]/[0x24B,0x27B] × y[5,0x35]; F1/F2/F3 latches 0x4edc0c/10/14 | §6c.2 |
+| sidebar order rows | x[0x1E9,0x275] × y[0x57,0xB8]; row=(y-0x57)/14 clamp ≤6; keys 1..7 latches 0x4edc18+4k | §6c.3/4 |
+| sidebar redraw flag | DAT_0046ccec countdown: set 2/3 by producers, dec+FUN_00408403 in the FUN_00403938 tail | 0x407205 |
+| map-toggle strip | x[0x213,0x24D] × y[0x1B5,0x1CF]; MSpace latch 0x4edc08; writes 0x4eb8dc=5, toggles 0x4edba0 | §6c.1 |
+| order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
 | DAT tables | z-base@0x4eaacc, y-line@0x4ea900 | 0041eb28 |
 | loader | load_mission@0041dc5a; paths@0x44670c; sweep ≥0x80→0 planes 0..6; PAD→DAT 0xFF @ plane=kind | 7c |
 | CGR height byte | CGR[2+4(type−1)+dir[type−1]+6+(sy<<5)+sx] (no codec) | 0x41e328, 7c |
@@ -454,7 +558,16 @@ was where the tables filled: 0x41d954 only allocates.)
    room) [hypothesis].
 3. Phase semantics of robots()' extra passes (fields 0x4c6a16/18/88/8c)
    and the state 1 producers (patrol?).
-4. Sidebar order buttons beyond selection (attack/guard modes at
-   FUN_0040d197 tail — not decoded this pass).
-5. The 0x62-stride robot-type stats table at 0x4de664 (speed? armor?) —
-   the seam currently models only the verified geometry constants.
+4. ~~Sidebar order buttons beyond selection~~ — DECODED 2026-08-21,
+   §6c: order keys 1..7 + the 7-row click strip (gate word +0x38+8k,
+   bits word +0x6E, redraw countdown DAT_0046ccec consumed by the
+   FUN_00403938 tail via FUN_00408403). Remaining open: the sidebar
+   DRAW passes (FUN_00408403 et al — the sidebar art producer), the
+   map-overlay family (_DAT_004edba0/FUN_004089b1/FUN_00401107), and
+   the keyboard-latch wiring (P2e button map).
+5. The 0x62-stride robot-type stats table at 0x4de664 — STRUCTURE
+   decoded 2026-08-21 (§6c.6: 7×0x0E ORDER groups, word0 default
+   probe / word1 gate; engine models availability as a mask until
+   the table's file source lands). Open: the file source loader
+   ([hypothesis] TABLE.BIN) and the word@0x4edb90 player-robot TYPE
+   producer (GameMain@0x41c34c).

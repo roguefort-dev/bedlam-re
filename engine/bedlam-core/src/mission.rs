@@ -413,10 +413,12 @@ pub struct Robot {
     pub stop_dist: i32,
     /// Move target, Q5 (the DAT_0046cc30/60 pair; None = -1).
     pub target: Option<(i32, i32)>,
-    /// Alive flag (+0x78).
+    /// Alive flag (+0x7C @ 0x4c6a60 — offset label corrected from
+    /// +0x78 2026-08-21, RE-EXW-SIM sec 6c.7).
     pub alive: bool,
-    /// Countdown buying phases 4/5 (+0x7C): the phase gate is
-    /// `phase < 4 || phase*32 < drop_countdown` [verified expression].
+    /// Countdown buying phases 4/5 (+0x80 @ 0x4c6a64): the phase gate
+    /// is `phase < 4 || phase*32 < drop_countdown` [verified
+    /// expression; offset label corrected 2026-08-21, sec 6c.7].
     pub drop_countdown: i32,
 }
 
