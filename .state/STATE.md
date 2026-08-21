@@ -1,3 +1,33 @@
+- CLOSED 2026-08-21 (P4 modern audio output rates COMPLETE, commit
+  4ed1e26, worker 2cd16045 claim 1): the device edge speaks modern
+  rates. DECISIONS D47 + DESIGN-AUDIO Q1 ANSWERED: cpal output
+  negotiation prefers 48000 Hz, then 44100 Hz, then mixer-native
+  11025, then the device default - a pure choose_output_config over
+  a neutral OutputConfigSpec (cpal 0.18's range is not
+  constructible; fallback matrix unit-pinned without a device),
+  ranked within a rate stereo > mono > other channels then S16 >
+  F32 > other formats, rate dominating (48000 mono beats 44100
+  stereo); wide supported ranges pin via try_with_sample_rate. The
+  D40 Q16 frame stepper gained LINEAR INTERPOLATION (round to
+  nearest, ties toward +inf, i64 internally since |delta|*frac
+  overflows i32; a lone buffered frame edge-holds, an empty ring is
+  exact [0,0] silence, the native rate keeps frac 0 = exact 1:1
+  passthrough - D40's passthrough pin unchanged). The mixer bus and
+  the parity stream stay 11025 Hz stereo u8 byte-faithful; only the
+  callback converts. Tests: negotiation matrix, 44.1k quarter-ramp
+  0/250/500/750 + 48k ramp literals 0/941/1882/2822/3763/4704,
+  downsample blend, i16/f32/u8 silence + both full scales, u8
+  128/255 end-to-end through the D31 bus into the ring. 428
+  workspace tests / 0 failed; fmt + clippy -D warnings clean;
+  headless smoke two-run byte-identical AND byte-identical to the
+  pre-change binary (scene 696adb1cd110e062, frame parity
+  cce30c983b97b16d, audio 110400/158092 unchanged); parity harness
+  identical on all four anchors (chain 0xcae25cd08d7cbc08, sim
+  0x72979d5d9dedc832, frame 0x87263f149564ad25, audio
+  0xc862e45d2e95ad29); MANIFEST verified before and after; the
+  opt-in live probe opens 48000 Hz 2ch i16 on this machine (was
+  11025) and drains cleanly. P4 slice remaining: the Escape-exit
+  window fix (queued next).
 - CLOSED 2026-08-21 (P4 GAMEPAL mission present tail COMPLETE, commits
   663ddba + 7c25bfd, worker 1776dc60 claim 1): the mission viewport
   presents in color. DESIGN-GAME sec 11 amended (design commit

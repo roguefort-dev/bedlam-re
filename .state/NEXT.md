@@ -1,22 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] modern audio output rates: prefer 48000 Hz then 44100 Hz device
-   rates and S16 then F32 sample formats at the output edge of the shell
-   audio path (engine/bedlam-shell/src/audio.rs currently opens
-   mixer-native 11025 Hz whenever the device allows). The mixer and parity
-   stream must stay 11025 Hz stereo u8 byte-faithful; conversion happens
-   only at the device boundary: u8 to target sample format, 11025 to
-   target rate via the existing Q16 frame stepper extended with linear
-   interpolation, documented in code comments. Query the device for
-   supported output configs, choose the best rate by preference order,
-   fall back to mixer-native only when no modern rate is offered. Unit
-   tests: negotiation fallback matrix with mocked device configs,
-   known-ramp conversion at 44100 and 48000, silence and full-scale u8 to
-   s16 and f32 mapping, headless smoke green, parity harness unchanged
-   and green, fmt clean, clippy -D warnings clean. Record the decision in
-   DECISIONS.md with the next D number.
-2. [P4] fix the window-host exit path: pressing Escape in bedlam-shell
+1. [P4] fix the window-host exit path: pressing Escape in bedlam-shell
    --window exits via SIGSEGV instead of a clean exit 0 (coredumpctl
    record 422346 at 2026-08-21 00:56). The Escape handler in
    engine/bedlam-shell/src/window.rs around line 343 intends a clean
@@ -70,6 +55,27 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 modern audio output rates COMPLETE (worker 2cd16045
+  claim 1, commit 4ed1e26, D47): the cpal output edge now negotiates
+  the best MODERN rate - 48000 then 44100 then mixer-native 11025
+  then device default - via a pure choose_output_config over a
+  neutral OutputConfigSpec (cpal's range type is not constructible;
+  the negotiation fallback matrix is unit-pinned without a device),
+  ranked within a rate by channels (stereo/mono/other) then format
+  (S16/F32/other), rate dominating; wide ranges pin via
+  try_with_sample_rate (44100-96000 opens at 48000). The Q16 frame
+  stepper gained linear interpolation (nearest, ties +inf, i64
+  internally; lone frames edge-hold, empty ring exact silence,
+  native rate still exact 1:1 passthrough). Mixer bus + parity
+  stream stay 11025 Hz stereo u8 byte-faithful. New tests: matrix,
+  44.1k/48k interpolated-ramp pins (hand literals 0/941/1882/2822/
+  3763/4704 + quarter-ramp 0/250/500/750), downsample blend,
+  i16/f32/u8 silence + full-scale mapping, u8 128/255 end-to-end
+  through the D31 bus. 428 workspace tests green, fmt + clippy -D
+  warnings clean, headless smoke two-run byte-identical AND
+  identical to the pre-change binary, parity harness identical on
+  all four anchors, MANIFEST verified, live probe opens 48000 Hz
+  2ch i16 (was 11025). Pushed.
 - 2026-08-21: P4 GAMEPAL mission present tail COMPLETE (worker
   1776dc60 claim 1, commits 663ddba + 7c25bfd): DESIGN-GAME sec 11
   amended then implemented - GAMEGFX\GAMEPAL.PAL (770 B,
