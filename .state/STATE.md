@@ -1,3 +1,31 @@
+ - CLOSED 2026-08-21 (P4 7j.25 the WEAPON-FIRE FAMILY TAIL
+   unit COMPLETE, worker 399aeff4 claim 1, commits 3bfd400 +
+   1016123 + b4950a8 + 6183be5, D73, docs-only; dump
+   ghidra-project/exw-destroytail-asm.txt): the FUN_0041a894
+   destroy tail decoded WHOLE — TERRAIN RESTORE (footprint
+   W×H×D: TOT-mirror z-words ← template bank@type+0x46, seen
+   + DAT volume ← bank@type+0x4A) then the FIVE-effect loop
+   (selectors 1..9 → jump table 0x41a870: 1→k14+FUN_0041a225
+   +5 splashes, 2/3/4/5→k18/k17/k16/k19 single gibs at fixed
+   sub-tile bearings + 4-splash loops, 6/7→k10 + the
+   DEADMAN1/2 thud pair (banks 0x4edfb8/0x4edfbc, shared
+   with the crush dispatcher), 8→k14×25 water-level
+   demolition shower, 9→k20 + 3×3 splash ring; payload words
+   = tile offsets; delays ride the chain counter + entry
+   index; GER gate skips the whole tail for type 0xb);
+   FUN_0041a225 = the FIRST producer of the MISSIONVIEW §5d
+   effects bank 0x4cf638 (80×0x1E, allocator FUN_0041a4cc,
+   jittered Q13 particles, ttl 6000+); the 160-vs-0xA8 stride
+   anomaly at 0x4c69e4 CLOSED (21·idx·8 = 0xA8 — a 7j.13
+   census arithmetic slip; trap callers robots()@0x40bc44 +
+   critter FUN_00412f34@0x413fd7); BONUS: FUN_0041a4f8 = the
+   .POS loader (2000×0x10 → the 0x46cbf4 object array) +
+   the .BDG loader (the 0x4dedf2 type table) — .BDG grammar
+   CLOSED (no header, ≤282 variable records, 4 on-disk
+   template banks 2·W·H·D B each; census 37/37 EOF-exact,
+   exactly 282 recs/file, selectors ONLY 1..9); FORMATS
+   §12/§16/§19 rewritten. 4 new + 2 rewritten ledger rows.
+   Next: the MISSIONVIEW §5d draw tails (7j.26).
  - CLOSED 2026-08-21 (P4 7j.24 the CRITTER DEATH-HANDLER family
    unit COMPLETE, commit 3819586, worker 0f986419 claim 1,
    D72, docs-only; dumps ghidra-project/exw-dead1..5*.txt —
