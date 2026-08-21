@@ -1,3 +1,44 @@
+- CLOSED 2026-08-21 (P4 mission sidebar ART COMPLETE, commits
+  5860fe6 + abcbb37 + 805ed10, worker 49294e3c claim 1, D50):
+  RE-EXW-SIM sec 6c.8 decodes the sidebar redraw pass
+  FUN_00408403 in full (asm 0x408403..0x4085c6) + the whole art
+  family: the 7 order rows over the selected robot's record (gate
+  = group word0/name idx +0x36+8i, count = word1 clamped 9999,
+  ARMED rows GENERAL.BIN sprites 0x47+0x4A / unarmed 0x49+0x4C at
+  (0x1EB,0x59+14i)/(0x25A,0x59+14i) - 108x11 + 27x11 real
+  geometry, name + "%04i" count text via FUN_00420260/
+  BmpNameBuild + SMLFONT FUN_00408913 color 0x24); SEMANTIC
+  CORRECTION - the "orders" are WEAPONS (the compiled-in name
+  table 0x4589DD..0x458C0F: needler/plasma/hades/proximity/
+  pressure/frag/bouncy/sticky/rocket/reaper/auto-shielding/
+  battery/thermal/scanner; +0x6E = armed bits, word1 = ammo,
+  FUN_0040eba0 case 8 = the ammo-refill producer, case 4 =
+  score/money pickups); the banks pinned by asm ESI anchors +
+  shipped bytes (GENERAL 0x4edd7c, SMLFONT 0x4ede7c, NUMBERS
+  DAT_0046af3c for the FUN_004085ce score/money strip, SCANNER
+  0x4edd80 for the deploy-panel sprite 0x12@(0x1EE,0xC3)); the
+  sibling every-frame passes FUN_004072bf (portraits 0x12..0x17
+  48x48 + HP dither + armor tick + blink cursor 0x51+ (0x4dc5d0
+  producer open)) and FUN_0040807f (HP bar sprite 0x46-hp*46/5000,
+  armor 0x8E-armor*46/2500) + the MissionShell initial trigger
+  0x447c74 (both countdowns = 2). ENGINE (abcbb37): bedlam-render
+  ui_bank codec (FUN_00401ca2 semantics, 5 tests incl. corpus
+  GENERAL.BIN geometry pin); GENERAL.BIN + SMLFONT.BIN join the
+  12-file mission chain; activate arms redraw 2; present draws
+  the portraits every frame + the row chrome on the countdown
+  (name/count text, bars, score strip, deploy panel + cursor
+  deliberately unwired - unmodeled data, D50 never-invent rule).
+  Corpus gate: sidebar-black pin -> sidebar-carries-art pin
+  (4844 nonzero px); frame pins regenerated ONCE (spawn
+  018eba568d9b3bae, mid-walk 4a3abd2de43f31df), sim pins
+  byte-identical (D17 holds). Workspace tests + fmt + clippy -D
+  warnings clean; headless smoke two-run byte-identical
+  (GENERAL.BIN 128826 B + SMLFONT.BIN 4038 B fetched, scene
+  696adb1cd110e062, parity cce30c983b97b16d, audio
+  110400/158092); MANIFEST verified before and after. P4 sidebar
+  thread: the strip is no longer black; remaining sidebar art
+  (text/bars/score) is blocked on sim state, queued behind the
+  TABLE.BIN slice.
 - CLOSED 2026-08-21 (P4 mission sidebar producer COMPLETE, commits
   cfee256 + 490d856, worker 6ebe5cff claim 1): RE-EXW-SIM sec 6c
   decodes sidebar_control@0040d197 in full (decompile + objdump
