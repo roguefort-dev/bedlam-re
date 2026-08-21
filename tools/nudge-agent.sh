@@ -276,6 +276,10 @@ if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
     "$SYSTEMCTL_OVERRIDE" --user start bedlam-nudge.service >/dev/null 2>&1 || true
   elif [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ]; then
     systemctl --user start bedlam-nudge.service >/dev/null 2>&1 || true
+    # A pass can be mid-flight at the same instant (lock busy at 22:46:31
+    # on 2026-08-21): re-trigger once a few seconds later so a pass always
+    # runs AFTER claim release + heartbeat aging, still far ahead of the timer.
+    systemd-run --user --collect --on-active=4s "--unit=bedlam-nudge-chain-$slotid" systemctl --user start bedlam-nudge.service >/dev/null 2>&1 || true
   fi
 fi
 exit "$rc"
