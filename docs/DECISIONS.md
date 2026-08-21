@@ -1725,3 +1725,40 @@ death writes all match - then finished the pins/docs):
    verified.
 
 Nudge-Worker: 416ca029-3c29-4b69-b978-09fb4222af4d
+
+## D54 - 2026-08-21: the pickup consumer lands as decode + sim seam; the tile-word producer stays host-seamed
+
+1. DECISION (bedlam-core + bedlam-game): the FUN_0040eba0 pickup
+   family (RE-EXW-SIM 7h) lands in two pieces. (a) The DISPATCH is
+   a pure decode `pickup_case(tile_word, terrain_set)` over the
+   verified DGROUP range tables 0x454a58/0x454a74 (closed 4-word
+   groups -> cases 1/3/2/4 and 9/7/8; 28 pickup words per terrain
+   set). (b) The case BODIES are the sim seam
+   `MissionSim::apply_pickup(robot, case)`: case 1 drop=1000, case
+   2 shield=1000, case 3 hp +=2500 clamp 5000, case 7
+   shield_boost=200 - writes to the already-hash-covered D53
+   fields, so the hash moves exactly when invoked. Game side adds
+   the thin MissionScene::pickup host seam; case 4 stays the D52
+   pickup_score_money producer (session state + the strip
+   countdown + the two shared-stream draws). Cases 8 (ammo) and 9
+   (episode staging) remain unlanded - their producers are
+   mission-shell slices, not vitals.
+2. WHY: the caller-side producer (the type-DB mirror word read +
+   the DAT z-plane consume + the mirror floor-word swap, 7h.3)
+   needs the 0x4796bc per-tile mirror the engine Terrain does not
+   model (MISSIONVIEW sec 8 open producers) - landing it is its
+   own slice, and never-invent forbids guessing the mirror from
+   the DAT planes alone. The decode + bodies are independently
+   verifiable now.
+3. NOT MODELED: the 0x43a48e SFX queue entry, the 0x4dc5d0
+   sprite-effect row staging (the per-case ids 1/6/7/0xE ride
+   PickupOutcome for that future slice), the MP FUN_00425647
+   tail, and the terrain-set-per-zone mapping ([hypothesis: set =
+   zone+1] recorded in 7h.4, untested until the producer lands).
+4. GATES: no corpus path invokes the seam - sim/frame pins
+   byte-identical at the recorded baselines (scene
+   696adb1cd110e062, parity cce30c983b97b16d); workspace green
+   (+4 pickup tests), fmt + clippy clean, smoke two-run
+   byte-identical, MANIFEST verified.
+
+Nudge-Worker: 66831068-5861-4218-8409-6b1e3d3f360e
