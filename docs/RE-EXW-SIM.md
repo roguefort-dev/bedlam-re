@@ -1065,6 +1065,99 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    robots' word freezes (the portrait path never reads it again);
    SP death does not clear it (the MP respawn does).
 
+## 7h. Amendment 2026-08-21 (worker 66831068, the pickup consumer unit)
+
+Objdump decode of the FUN_0040eba0 dispatch head + case bodies
+(0x40eba0..0x40f273, intel syntax, fresh `--start-address` dumps —
+the exw-full.asm linear sweep is mis-synced across 0x40eb6b..0x40eba0
+because it swallowed the jump table), the robots() CALLER block
+(0x40bf18..0x40bff8), and the DGROUP tables at 0x454a58/0x454a74/
+0x454a90. The 7f.6 case GLOSSES are all confirmed; the dispatch
+MECHANISM is new.
+
+1. **The tile-word dispatch** [verified asm 0x40ebaa..0x40ecef]:
+   entry eax = the per-tile type word (signed), edx = the robot
+   index (kept in ebp). `idx = _DAT_004edd8c` (the TERRAIN-SET
+   index) selects one dword from EACH of two 7-entry DGROUP tables
+   (values [verified PE bytes 0x454a58..0x454a8f]):
+   - A = dword[0x454a58 + idx*4] = `[0x75, 0x75, 0x358, 0x75,
+     0xa3, 0x535, 0x70b]`
+   - B = dword[0x454a74 + idx*4] = `[0x75, 0x535, 0x70b, 0x656,
+     0x535, 0x4fe, 0x31e]`
+   Each table base then splits into FOUR closed 4-word groups
+   (signed compares, `w >= base+k*4 && w <= base+k*4+3`):
+   - A+0..3 → case 1 (reinforcement), A+4..7 → case 3 (health),
+     A+8..11 → case 2 (shield), A+12..15 → case 4 (score/money)
+   - B+0..3 → case 9 (episode staging), B+4..7 → case 7 (shield
+     booster), B+8..11 → case 8 (ammo refill)
+   Then `ebx--; if (ebx > 8 unsigned) → 0x40dcbc` and
+   `jmp [0x40eb7c + (case-1)*4]` — jump table [verified bytes]:
+   1→0x40eed9, 2→0x40ef72, 3→0x40f1ea, 4→0x40eefe, 5→0x40dcbc,
+   6→0x40dcbc (5/6 share the common-exit stub with the
+   out-of-range default), 7→0x40edcc, 8→0x40ecf0, 9→0x40ee40.
+   So 7 pickup words per set live in table A's block (16 words,
+   `[A, A+0x10)`) and 6 in B's (`[B, B+0xc)`) — 28 pickup words
+   per terrain set, four per case.
+2. **The case bodies this unit lands** [verified asm]: all four
+   open with the SFX queue call `0x43a48e(bank 0x4edfa8, -1, 0,
+   -1, stack 3)` (the mission SFX tier is a backlog slice — not
+   modeled), address the record as `robot_idx*0xA8` off the
+   0x4c69e4 fields, then:
+   - case 1 (0x40eed9): `drop(+0x80) = 0x3E8` (1000) — the
+     reinforcement staging; effect id 1.
+   - case 2 (0x40ef72): `shield(+0x88) = 0x3E8` (1000) — the
+     shield pickup refills the pool; effect id 6.
+   - case 3 (0x40f1ea): `hp(+0x78) += 0x9C4` (2500) then
+     `if hp > 0x1388 (5000) → hp = 5000`; effect id 7.
+   - case 7 (0x40edcc): `shield_boost(+0xA0) = 0xC8` (200) — arms
+     the 10000-while-boosting override the phase-0 pre-walk
+     already implements (7g.2); effect id 0xE.
+   The shared tail stages one 16-B sprite-effect row via the
+   0x422038 slot allocator at `0x4dc5d0+slot*0x10`: +4 = pos_x>>8,
+   +8 = pos_y>>8, +0xC = z(+0x08)+0x20, +0x10 = the per-case
+   effect id above; then `if [0x4edb88] == 2` (MP present) an
+   extra FUN_00425647 staging on the pickup tile latch. All
+   presentation (effect rows + SFX) — not modeled this unit.
+3. **The CALLER consume block** [verified asm 0x40bf18..0x40bff8,
+   in the robots() walk]: reads the per-tile word as
+   `dword[0x4796ba + (yline([0x4dc690]) + [0x4dc68c])*0x1E +
+   [0x4dc688]*2] >> 16` — i.e. the type-DB mirror word
+   (0x4796bc rows of 0x1E B, one row per tile in yline+x order)
+   of the LAST get_z_pos probe cell (the 0x4dc688/8c/90 latch =
+   (z_level, tile_x, tile_y), sec 5 Terrain.last_trigger). If the
+   word is in `[A, A+0x10)` or `[B, B+0xc)` the pickup FIRES:
+   (a) the DAT z-plane byte is zeroed — `DAT[z_base[0x4eaacc +
+   z*4] + tile_x + yline(tile_y)] = 0` (consumes the pickup from
+   the collision plane); (b) the mirror word is REPLACED by
+   `word[0x454a90 + idx*4]` (the bare-floor word; table C =
+   `[0x70b, 0x48f, 0x24c, 0x368, 0x48f, 0x39, 0x39]`) so the
+   drawer stops drawing the pickup sprite; (c) mirror byte at
+   row+0x10+z (0x4796cc family) = 1; (d) the tile latch
+   x/y/z is staged at 0x4dc6ac/b0/b4; then
+   `FUN_0040eba0(tile_word, robot_idx)` runs the dispatch above
+   on the ORIGINAL word.
+4. **_DAT_004edd8c producers** [verified xrefs]: GameMain boots it
+   to 1 (0x41c42a, alongside 0x4edd88=1); the mission-select
+   family 0x43edb0..0x43ee3d maps mission NUMBER → set
+   (1..2→2, 3..4→3, 5..6→4, 7..8→5, 9..10→6, continuing to 7) —
+   i.e. a campaign-episode → terrain-set index, 7 sets (A..G),
+   with the title/first state using set 1. Engine-side the zone
+   letter already keys MISSION{A..G}.BIN; the set per zone is
+   [hypothesis: set = zone+1, boot-consistent] — untested until
+   the tile-word producer lands.
+
+Engine seam (this unit): the tile-word producer (type-DB mirror +
+probe latch walk) is the entangled piece — the engine Terrain has
+no mirror rows — so the DISPATCH lands as a pure decode function
+(`pickup_case(word, set)` over the verified tables) and the case
+BODIES land as a sim seam `MissionSim::apply_pickup(idx, case)`
+on the already-real fields (drop/shield/hp/shield_boost — cases
+1/2/3/7; case 4 stays the D52 host seam, score/money are session
+state). Presentation (SFX 0x43a48e, the 0x4dc5d0 effect rows, the
+MP FUN_00425647 tail) stays unwired; `PickupOutcome` exposes the
+per-case effect id for that future slice. Nothing on the default
+corpus path invokes the seam — the sim pins stay frozen.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -1094,6 +1187,7 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
 | MAPTRAN ramps | u32@(0x4dd464+4i) ← GAMEGFX\MAPTRAN{i}.TRN (256 B each, i 0..7); ramp[mask byte] = palette byte | §7e |
 | PALTRAN ramps | u32@(0x4dd444+4i) ← GAMEGFX\PALTRAN{i}.TRN, slot 0 NULLed after load (MISSIONVIEW §8.2 producer closed) | §7e |
 | LNK map lookup | cw = word@(0x45cdda + 2*w) — the LNK image doubles as the map type→mask index; masks = .MIN bank [0x4edd9c] (16 B/cw) | §7e |
+| pickup range tables | A/B dwords @0x454a58/0x454a74 (7 terrain sets, 4-word closed groups → cases 1/3/2/4 + 9/7/8); floor word table @0x454a90 | §7h |
 | map present | FUN_00401107 map mode: 480×480 from backbuffer base, stride 640; button chrome 0x8f/0x5f/0x5e @ (0x213,0x1b5) | §7e |
 | backbuffer | [0x4ede18] = ArenaAlloc(0x64000) = 640×640; overlay clears 0x4b000 (480 rows) | §7e |
 | order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
@@ -1137,8 +1231,11 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    (the debris/death RNG interleaving included — 10 shared draws),
    the armor pad charge/bleed + the phase-0 shield family run per
    frame, and the sim hashes were re-pinned ONCE for that reason.
-   Still host-seamed: the health/shield pickups (7f.6 cases 2/3 —
-   FUN_0040eba0 producers), the 0x7d2 hazard caller, and the
+   Still host-seamed: the FUN_0040eba0 TILE-WORD PRODUCER (the
+   type-DB mirror + probe-latch walk, DECODED 2026-08-21 §7h —
+   the dispatch decode + the case-1/2/3/7 bodies landed as
+   pickup_case/apply_pickup seams the same day; case 4
+   remains the D52 seam), the 0x7d2 hazard caller, and the
    projectile callers. Remaining open after
    that: the 0x4dc5d0 blink producer, the dead/hit dither
    (FUN_00401ae6 + the 0x4e6ed8 bank), and the keyboard-latch
