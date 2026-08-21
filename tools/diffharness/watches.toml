@@ -1,0 +1,864 @@
+# tools/diffharness/watches.toml — the P4.2 watch registry (W2)
+#
+# DESIGN-DIFFHARNESS.md §4 committed as data (decision D77 build order).
+# Every row carries:
+#   id          stable kebab-case id (used in dump records + diff reports)
+#   tier        S0 = frame-tail dump trigger | T0..T4 = watch tiers |
+#               TS = static-after-load one-shot (DESIGN §4 statics, dumped
+#               once at mission start) | TI = injection surface (§5: watched
+#               AND written)
+#   exw_addr    EXW (Win95) address expression — the canon of record
+#   exd_addr    EXD (DOS oracle) alias from RE-EXD-MAP §4/§5/§5b (W1).
+#               EMPTY = explicit gap (difficulty, SFX gate, blink-cursor,
+#               order target, no-extract latch, selection cursor/squad) or a
+#               not-yet-aliased tier (T2-T4, TI). Never guessed.
+#   indirect    true = EXD keeps the bank behind a pointer cell; read
+#               through it (RE-EXD-MAP §7 divergence seed #4).
+#   extent      watched byte extent (expression form)
+#   layout      record grammar / field offsets for the W6 field map
+#   exd_status  verified | derived | gap | unmapped (provenance of the alias)
+#   anchor_doc  doc whose ledger holds the anchor row
+#   anchor      EXACT ledger row heading (table first cell) or markdown
+#               heading string in that doc — the anti-ghost guard
+#               (tests/registry_anchors.rs) asserts this string resolves;
+#               no unanchored address ever enters this registry.
+#
+# Ordering: S0, T0, T1, TS, T2, T3, T4, TI.
+
+# ---------------------------------------------------------------- S0 trigger
+
+[[watch]]
+id = "s0-trigger"
+tier = "S0"
+exw_addr = "0x425a03"
+exd_addr = "0x5a6eb"
+extent = "0 (breakpoint)"
+layout = "frame-tail dump point: after the last state writer, before the flip (EXW PresentEnd then g_frame_count++; EXD CALL FUN_00010670 in the mission loop)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "2. EXD present/frame-tail site (the S0 dump trigger) — PINNED"
+note = "EXW side names the PresentEnd function; the exact MissionShell-tail call-site instruction is a W11 detail recorded in the run manifest (DESIGN §2)."
+
+# ----------------------------------------------------------------- T0 frame
+
+[[watch]]
+id = "frame-counter"
+tier = "T0"
+exw_addr = "0x46ae68"
+exd_addr = "0x1195f0"
+extent = "4"
+layout = "u32 g_frame_count; increments immediately AFTER the flip (dump-point ordering anchor for the differ)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "frame counter"
+
+[[watch]]
+id = "rng-state-a"
+tier = "T0"
+exw_addr = "0x4ede48"
+exd_addr = "0x107470"
+extent = "4"
+layout = "u32 LCG state A (seed 123456, reseeded per mission, add-tail 0x62E9)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "RNG state A"
+
+[[watch]]
+id = "rng-state-b"
+tier = "T0"
+exw_addr = "0x4ede4c"
+exd_addr = "0x107474"
+extent = "4"
+layout = "u32 LCG state B (seed 234567, add-tail 0x3619)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "RNG state B"
+
+[[watch]]
+id = "score"
+tier = "T0"
+exw_addr = "0x4dd40c"
+exd_addr = "0x10da28"
+extent = "4"
+layout = "u32 score"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "score"
+
+[[watch]]
+id = "money"
+tier = "T0"
+exw_addr = "0x46ae70"
+exd_addr = "0x119600"
+extent = "4"
+layout = "u32 money (4000 at campaign start / new game)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "money"
+
+[[watch]]
+id = "difficulty"
+tier = "T0"
+exw_addr = "0x46cbf8"
+exd_addr = ""
+extent = "4"
+layout = "u32 difficulty scalar 0..2 ((d+1)%3 at name entry; scales projectile damage + critter behavior)"
+exd_status = "gap"
+anchor_doc = "RE-EXW-SIM"
+anchor = "difficulty scalar"
+note = "W1 gap: not in the GameInit boot plants; anchor via the (d+1)%3 site or the critter difficulty-table reads in a later unit (RE-EXD-MAP §4)."
+
+[[watch]]
+id = "zone"
+tier = "T0"
+exw_addr = "0x4edd8c"
+exd_addr = "0x107500"
+extent = "4"
+layout = "u32 zone/stage index 1..7"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "zone"
+
+[[watch]]
+id = "mission"
+tier = "T0"
+exw_addr = "0x4edd88"
+exd_addr = "0x119610"
+extent = "4"
+layout = "u32 level-in-zone"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "mission"
+note = "EXD 0x119610 serves both the EXW mission cell and linear-m (RE-EXD-MAP §7 divergence seed #3)."
+
+[[watch]]
+id = "mode"
+tier = "T0"
+exw_addr = "0x4edb88"
+exd_addr = "0x1075d8"
+extent = "4"
+layout = "u32 game mode (0 SP / 2 MP gates)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "mode"
+
+[[watch]]
+id = "linear-mission-m"
+tier = "T0"
+exw_addr = "0x46ae8c"
+exd_addr = "0x119610"
+extent = "4"
+layout = "u32 linear mission number (pod-stagger + TRT hp formulas consume it)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "linear mission m"
+note = "Same EXD cell as the mission row (one scalar where EXW has two — divergence seed #3)."
+
+[[watch]]
+id = "sfx-master-gate"
+tier = "T0"
+exw_addr = "0x4ede58"
+exd_addr = ""
+extent = "4"
+layout = "u32 (nonzero = SFX enabled); gates every SFX dispatch"
+exd_status = "gap"
+anchor_doc = "RE-EXW-SIM"
+anchor = "debris arrival SFX"
+note = "W1 gap: gate lives inside the EXD SFX dispatch twin; pin when a scenario needs it (RE-EXD-MAP §4)."
+
+# ------------------------------------------------- T1 the P4 slice (robots, orders, terrain)
+
+[[watch]]
+id = "robot-bank"
+tier = "T1"
+exw_addr = "0x4c69e4 + i*0xA8 (count cell 0x46ccbc)"
+exd_addr = "0xf6d34 + i*0xA8 (count cell 0x11958c)"
+extent = "count*0xA8"
+layout = "robot record: state w@+0x0C, hp d@+0x78, pod timer w@+0x2C, pos/facing/anim, order words +0x36..; EXD record front shifted 4 B vs EXW (x@+0 vs x@+4 — divergence seed #1); EXD cap cell 0x11950c"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "robot bank"
+
+[[watch]]
+id = "selection-triple"
+tier = "T1"
+exw_addr = "0x46cbd4 / 0x46cbdc / 0x46cbd8"
+exd_addr = "0x11954c"
+extent = "12"
+layout = "u32 x3 {selected idx / cursor / squad size}"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "selection triple"
+note = "EXD alias covers the selected-idx cell only; cursor/squad cells are an explicit W1 gap (RE-EXD-MAP §5)."
+
+[[watch]]
+id = "blink-cursor"
+tier = "T1"
+exw_addr = "0x4dc5d0"
+exd_addr = ""
+extent = "4"
+layout = "u32 (0 or slot+1) — the S1 blink-cursor-from-spawn hypothesis watch"
+exd_status = "gap"
+anchor_doc = "RE-EXD-MAP"
+anchor = "blink-cursor selector"
+note = "W1 gap: producer twin not located; anchor via the effect-row family when a scenario needs it (RE-EXD-MAP §5)."
+
+[[watch]]
+id = "per-player-selected"
+tier = "T1"
+exw_addr = "0x4c71c4"
+exd_addr = "0x971a4"
+extent = "0x30 (4*0xC)"
+layout = "4 x 0xC {x>>8, y>>8, z} per player"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "per-player selected anchor"
+
+[[watch]]
+id = "order-target"
+tier = "T1"
+exw_addr = "0x4dd484 / 0x4dd488 / 0x4dd48c"
+exd_addr = ""
+extent = "12"
+layout = "i32 x3 {x, y, z} — also the ORDER injection seam (DESIGN §5.2)"
+exd_status = "gap"
+anchor_doc = "RE-EXW-SIM"
+anchor = "click order target"
+note = "W1 gap: click-order path lives in the EXD UI monolith FUN_000448e7 (RE-EXD-MAP §5)."
+
+[[watch]]
+id = "move-target-words"
+tier = "T1"
+exw_addr = "0x46cc30 / 0x46cc60"
+exd_addr = "0xf75ec / 0xf761c"
+extent = "per-robot u16 arrays"
+layout = "u16 arrays (the 0x30 twin gap matches: 0x46cc60-0x46cc30 = 0xf761c-0xf75ec)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "per-robot move-target words"
+
+[[watch]]
+id = "beacon-family"
+tier = "T1"
+exw_addr = "0x4eabb0 / 0x4eabb2 / 0x4eabb4 / 0x4eabb6 / 0x4eabb8"
+exd_addr = "0x119628 / 0x11962a / 0x11962c / 0x11962e / 0x119630"
+extent = "0x18"
+layout = "u32 flag, u32 timer (0x197), 3 x tile"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "extraction beacon family"
+
+[[watch]]
+id = "spread-claims"
+tier = "T1"
+exw_addr = "0x4eabba"
+exd_addr = "0x119632"
+extent = "24 (12*u16)"
+layout = "12 x u16 claim slots (first-free scan, bound = robot count; never released)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "spread claims"
+
+[[watch]]
+id = "no-extract-latch"
+tier = "T1"
+exw_addr = "0x46aed4 + i*4"
+exd_addr = ""
+extent = "per-robot u32"
+layout = "no-extract latch array (also gates MP respawn)"
+exd_status = "gap"
+anchor_doc = "RE-EXW-SIM"
+anchor = "escape-craft animator"
+note = "W1 gap: animator twin not decoded; the SIM row carries the full latch writer census (RE-EXD-MAP §5)."
+
+[[watch]]
+id = "tile-word-grid"
+tier = "T1"
+exw_addr = "0x460dfa + 2*tile"
+exd_addr = "0xfe37c + 2*tile"
+extent = "w*h*2 (map w/h)"
+layout = "u16 per tile: 0 empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "tile word grid"
+
+[[watch]]
+id = "platform-strength"
+tier = "T1"
+exw_addr = "0x465daa + 2*tile"
+exd_addr = "0xf93cc + 2*tile"
+extent = "w*h*2"
+layout = "u16 platform hp per tile (build 300 via trigger / 199 via creep)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "platform strength bank"
+
+[[watch]]
+id = "typedb-mirror-rows"
+tier = "T1"
+exw_addr = "0x4796bc + 30*tile"
+exd_addr = "0xac1e4 + 0x1E*tile"
+extent = "w*h*0x1E"
+layout = "0x1E-stride rows (z-words @row+2z; seen byte @row+0x10+z)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "type-DB mirror rows"
+
+[[watch]]
+id = "typedb-fade-byte"
+tier = "T1"
+exw_addr = "0x4796d4 + 0x1E*tile"
+exd_addr = "0xac1fc + 0x1E*tile"
+extent = "w*h"
+layout = "byte per tile (fade walk decrements nonzero; the S4 five-ring-overlap confirm watch)"
+exd_status = "derived"
+anchor_doc = "RE-EXD-MAP"
+anchor = "type-DB +0x18 fade byte"
+note = "EXD alias derived from the verified row base (0xac1e4 + 0x18), RE-EXD-MAP §5."
+
+[[watch]]
+id = "variant-flag-bytes"
+tier = "T1"
+exw_addr = "0x4796d5 / 0x4796d6 (+0x1E*tile)"
+exd_addr = "0xac1fd / 0xac1fe (+0x1E*tile)"
+extent = "w*h x2"
+layout = "bytes per tile (variant<<4 / type flag 0x80)"
+exd_status = "derived"
+anchor_doc = "RE-EXD-MAP"
+anchor = "variant/flag bytes"
+note = "EXD alias derived from the verified row base (+0x19/+0x1A), RE-EXD-MAP §5."
+
+[[watch]]
+id = "object-instances"
+tier = "T1"
+exw_addr = "0x46cbf4 (count cell 0x46cbe8)"
+exd_addr = "0x119584 (pointer cell; count cell 0x119554)"
+indirect = true
+extent = "2000*0x14"
+layout = "{x, y, z, id, flags, hp} destructible object instances (.POS-fed)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "object instances"
+
+[[watch]]
+id = "trt-array"
+tier = "T1"
+exw_addr = "0x4cccf8 (count cell 0x46ccd4)"
+exd_addr = "0x95264 (count cell 0x11949c)"
+extent = "250*0x20"
+layout = "TRT records {active, hp, x/y/z tiles, frame, fire ctr}"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "TRT array"
+
+[[watch]]
+id = "armor-pad-reads"
+tier = "T1"
+exw_addr = "0x4796d4 + 0x1E*tile"
+exd_addr = "0xac1fc + 0x1E*tile"
+extent = "w*h"
+layout = "alias of typedb-fade-byte: raw byte nonzero arms armor pads (S1/S4 regression watch)"
+exd_status = "derived"
+anchor_doc = "RE-EXW-SIM"
+anchor = "+0x18 fade"
+
+# ------------------------------------------------- TS static-after-load one-shot (RE-EXD-MAP §5b)
+
+[[watch]]
+id = "static-type-table"
+tier = "TS"
+exw_addr = "0x4dedf2"
+exd_addr = "0x108428"
+extent = "282*0x4E"
+layout = "type records {W/H/D, hp, chain, type, count@+0x12, 5x8B effect entries @+0x16, 4 template banks @+0x3E/+0x42/+0x46/+0x4A}; arena cursor EXW 0x46ad5c / EXD 0x1195f8"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "type table 0x4dedf2"
+
+[[watch]]
+id = "static-tot-volume"
+tier = "TS"
+exw_addr = "0x4ede20"
+exd_addr = "0x107454"
+indirect = true
+extent = "map-sized (8 u16 planes)"
+layout = "TOT volume pointer cell (u16 planes; u16 W/H header feeds map w/h)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "TOT volume ptr 0x4ede20"
+
+[[watch]]
+id = "static-dat-volume"
+tier = "TS"
+exw_addr = "0x4edd58"
+exd_addr = "0x107518"
+indirect = true
+extent = "map-sized (u8 planes)"
+layout = "DAT volume pointer cell (>=0x7F bytes sanitized to 0 at load)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "DAT volume ptr 0x4edd58"
+
+[[watch]]
+id = "static-cgr-volume"
+tier = "TS"
+exw_addr = "0x4edd60"
+exd_addr = "0x107540"
+indirect = true
+extent = "bank-sized"
+layout = "CGR height-bank pointer cell (per-type height entries @+2+(type-1)*4, in-tile byte map @+6)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "CGR ptr 0x4edd60"
+
+[[watch]]
+id = "static-bin-terrain"
+tier = "TS"
+exw_addr = "0x4ede1c"
+exd_addr = "0x107434"
+indirect = true
+extent = "bank-sized"
+layout = "BIN terrain bank pointer cell; header word EXW 0x46cdb8 / EXD 0x11a4a8"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "BIN terrain bank ptr 0x4ede1c"
+
+[[watch]]
+id = "static-min-bank"
+tier = "TS"
+exw_addr = "0x4edd9c"
+exd_addr = "0x107538"
+indirect = true
+extent = "bank-sized"
+layout = "MIN bank pointer cell (.MIN volume)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "MIN bank ptr 0x4edd9c"
+
+[[watch]]
+id = "static-lnk-map"
+tier = "TS"
+exw_addr = "0x45cdda"
+exd_addr = "0x10336c"
+extent = "map-sized"
+layout = "LNK link map (mode-indexed .MAP/.LNK load; EXD mode cell 0x10768c)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "LNK map 0x45cdda"
+
+[[watch]]
+id = "static-pad-slots"
+tier = "TS"
+exw_addr = "0x4e44f8"
+exd_addr = "0xf63c"
+extent = "0x1f38 (999*8)"
+layout = ".PAD slots (u8 pad id, u16 x, u16 y, u16 z; 0xFF stamps)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "PAD slots 0x4e44f8"
+
+[[watch]]
+id = "static-map-wh"
+tier = "TS"
+exw_addr = "0x4eddec / 0x4eddf0"
+exd_addr = "0x1074b8 / 0x10748c"
+extent = "8 (2*u32 x2 sides)"
+layout = "u32 map width/height in tiles (EXD w*h product cell 0x1074e4); bounds every grid watch"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "map w/h 0x4eddec/0x4eddf0"
+
+[[watch]]
+id = "static-claim-bank"
+tier = "TS"
+exw_addr = "0x46af58"
+exd_addr = "0x119564"
+indirect = true
+extent = "10000"
+layout = "tile-claim bytes (arena at mission load); EXD alias is the pointer cell — the TS one-shot reads through it, the per-frame T3 row reads the bytes"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "tile-claim bank 0x46af58"
+
+[[watch]]
+id = "static-order-table"
+tier = "TS"
+exw_addr = "0x4de664"
+exd_addr = "0x91ee4"
+extent = "0x62-stride rows"
+layout = "spawn weapon/equipment order table (type*0x62 copy; 0x2a/0x2b/0x2c extras switch)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "order table 0x4de664 (0x62 stride)"
+
+[[watch]]
+id = "static-player-type"
+tier = "TS"
+exw_addr = "0x4edb90"
+exd_addr = "0x1075c0"
+extent = "2"
+layout = "player TYPE word (robot[0].type seed; auto-switch compare)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "player TYPE word 0x4edb90"
+
+[[watch]]
+id = "static-yline-zbase"
+tier = "TS"
+exw_addr = "0x4ea900 / 0x4eaacc"
+exd_addr = "0x8b78c / 0x107718 / 0x107714"
+extent = "table-sized"
+layout = "y-line presence-grid row table + z-line/z-index bases"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "y-line/z-base 0x4ea900/0x4eaacc"
+
+[[watch]]
+id = "static-dither-noise"
+tier = "TS"
+exw_addr = "0x4e6ed8 (cursor 0x4ddb30)"
+exd_addr = "0x8ded4 (cursor 0x108424)"
+extent = "0x800 ring"
+layout = "dither noise bank (15 B/frame churn; RandB&3==0 -> 0xFF else 0)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "dither noise bank 0x4e6ed8 (cursor 0x4ddb30)"
+
+[[watch]]
+id = "static-cursor-clamp"
+tier = "TS"
+exw_addr = ""
+exd_addr = "0x1074ac / 0x1074b0"
+extent = "8"
+layout = "cursor clamp maxima x=0xf0 y=0x140 (320x240 logical space, B2 twin)"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "cursor clamp (INPUT)"
+note = "EXD-only boot plant; the EXW cursor clamps live in host 640x480 space (RE-EXW-INPUT sec 4) — no EXW alias row."
+
+# ------------------------------------------------- T2 weapons & actors (EXD aliasing is a later unit)
+
+[[watch]]
+id = "weapon-anim-bank"
+tier = "T2"
+exw_addr = "0x4c71f4"
+exd_addr = ""
+extent = "400*0x36"
+layout = "{type w@+0, owner, target, tick, xyz Q13, v, class, arc, trail link}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "weapon-anim tick"
+
+[[watch]]
+id = "projectile-bank"
+tier = "T2"
+exw_addr = "0x4cc654"
+exd_addr = ""
+extent = "50*0x22"
+layout = "{type w@+0, xyz Q13, v}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "projectile tick"
+
+[[watch]]
+id = "mortar-trail-bank"
+tier = "T2"
+exw_addr = "0x4e66b8"
+exd_addr = ""
+extent = "20*0x68"
+layout = "{active, ring&7, 8 x xyz}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "mortar smoke-trail bank"
+
+[[watch]]
+id = "critter-bank"
+tier = "T2"
+exw_addr = "0x4cff98 (count cell 0x46cc2c)"
+exd_addr = ""
+extent = "count*0x7E"
+layout = "{state w@+0x0C, hp w@+0x06, kind w@+0x00, presence w@+0x24}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "critter-actor controller"
+
+[[watch]]
+id = "poi-bank"
+tier = "T2"
+exw_addr = "0x4dabdc (count cell 0x46cbf0)"
+exd_addr = ""
+extent = "count*0x1E"
+layout = "{active, state, heading, timer, xyz}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "POI/personnel controller"
+
+# ------------------------------------------------- T3 effects, debris, rings, objectives
+
+[[watch]]
+id = "debris-stager"
+tier = "T3"
+exw_addr = "0x476fbc"
+exd_addr = ""
+extent = "128*0x30"
+layout = "{active, xyz, seq, kind, phys, delay u16@+0x24, param, seq-table} — the S1 2k-start-delay watch"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "debris kinds"
+
+[[watch]]
+id = "effect-rows"
+tier = "T3"
+exw_addr = "0x4cec38"
+exd_addr = ""
+extent = "80*0x20"
+layout = "LRU-aged effect rows (always-evict allocator)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "effect-row spawner"
+
+[[watch]]
+id = "rising-debris"
+tier = "T3"
+exw_addr = "0x4cf638"
+exd_addr = ""
+extent = "80*0x1E"
+layout = "{xyz, v, group, active, delay u16@+0x1A, frame}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "effects-bank stager"
+
+[[watch]]
+id = "blast-bank"
+tier = "T3"
+exw_addr = "0x4eb638"
+exd_addr = ""
+extent = "32*0x14"
+layout = "{x, y, z, age, frame} robot-death blasts"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "robot-death blast bank"
+
+[[watch]]
+id = "splash-records"
+tier = "T3"
+exw_addr = "0x4e9778"
+exd_addr = ""
+extent = "250*0xA"
+layout = "{x, y, z, delay, age}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "splash records"
+
+[[watch]]
+id = "arrival-rides"
+tier = "T3"
+exw_addr = "0x4dcdb8"
+exd_addr = ""
+extent = "45*0x24"
+layout = "{active, marker, dest, countdown, robot}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "arrival ride tick"
+
+[[watch]]
+id = "door-rects"
+tier = "T3"
+exw_addr = "0x4dcae8"
+exd_addr = ""
+extent = "45*0x10"
+layout = "{state, x, w, y, h, type} door rects"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "door-rect list boundary"
+
+[[watch]]
+id = "trigger-timers"
+tier = "T3"
+exw_addr = "0x4ea828"
+exd_addr = ""
+extent = "32*0x18"
+layout = "delayed trigger timers {payload lo/hi ids, cd}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "delayed trigger timers"
+
+[[watch]]
+id = "pod-ring"
+tier = "T3"
+exw_addr = "0x4e64c0"
+exd_addr = ""
+extent = "12*0x1C"
+layout = "{active, phase, x, y, alt, group, dwell}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "dropship ring banks"
+
+[[watch]]
+id = "exit-ring"
+tier = "T3"
+exw_addr = "0x4e662c"
+exd_addr = ""
+extent = "5*0x1C"
+layout = "same layout as pod-ring"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "exit/threat slots"
+
+[[watch]]
+id = "dropship-frame"
+tier = "T3"
+exw_addr = "0x4e6610"
+exd_addr = ""
+extent = "1*0x1C"
+layout = "same layout as pod-ring (the extraction dropship)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "dropship deployer"
+
+[[watch]]
+id = "objective-slots"
+tier = "T3"
+exw_addr = "0x4eaaee (resolver phase 0x46cd00)"
+exd_addr = ""
+extent = "6*0x20"
+layout = "{remaining, type, status, quota} + resolver phase cell"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "mission-objective resolver"
+
+[[watch]]
+id = "escape-counters"
+tier = "T3"
+exw_addr = "0x4eba0c / 0x4eba10"
+exd_addr = ""
+extent = "8"
+layout = "u32 x2 {escape count, rescue timer}"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "POI/personnel controller"
+
+[[watch]]
+id = "tile-claims"
+tier = "T3"
+exw_addr = "0x46af58"
+exd_addr = ""
+extent = "10000"
+layout = "tile-claim bytes (per-frame view; the EXD pointer alias is the static-claim-bank TS row)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "tile-claim bank"
+
+# ------------------------------------------------- T4 event capture (breakpoint-logged entries)
+
+[[watch]]
+id = "ev-sfx-dispatch"
+tier = "T4"
+exw_addr = "0x43a48e (entry)"
+exd_addr = ""
+extent = "0 (event capture)"
+layout = "SFX dispatch entry; logged: (bank u32, ?, x, y, push)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "destruction-thud SFX pair"
+
+[[watch]]
+id = "ev-order-dispatchers"
+tier = "T4"
+exw_addr = "0x40b615 / 0x40af98 / 0x40a56f / 0x40ace8 / 0x40a7a1 / 0x40a9ff (entries)"
+exd_addr = ""
+extent = "0 (event capture)"
+layout = "order dispatcher entries; logged: robot idx, target"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "command-record consumer"
+
+[[watch]]
+id = "ev-debris-stage"
+tier = "T4"
+exw_addr = "0x420608 (entry)"
+exd_addr = ""
+extent = "0 (event capture)"
+layout = "debris stager entry; logged: (x, y, z, kind, delay, param)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "debris kinds"
+
+[[watch]]
+id = "ev-destroy-tail"
+tier = "T4"
+exw_addr = "0x41a894 (entry)"
+exd_addr = ""
+extent = "0 (event capture)"
+layout = "destroy tail entry; logged: (x Q13, y Q13, chain ctr, damage, score flag)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-SIM"
+anchor = "weapon impact resolver"
+
+# ------------------------------------------------- TI injection surface (DESIGN §5: watched AND written)
+
+[[watch]]
+id = "inj-key-state"
+tier = "TI"
+exw_addr = "0x4edc44"
+exd_addr = ""
+extent = "256"
+layout = "g_keystore bytes, scan-code indexed, 1 = held (KEYSTATE injection)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "2. KeySink @0041be05(scan, down) [verified]"
+
+[[watch]]
+id = "inj-remapped-keys"
+tier = "TI"
+exw_addr = "0x4edd0c / 0x4edd0f / 0x4edd11 / 0x4edd14"
+exd_addr = ""
+extent = "4"
+layout = "remapped key bytes (arrows 0xc8/0xcb/0xcd/0xd0 +0x80)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "2. KeySink @0041be05(scan, down) [verified]"
+
+[[watch]]
+id = "inj-mouse-buttons"
+tier = "TI"
+exw_addr = "0x4dc6e4"
+exd_addr = ""
+extent = "4"
+layout = "g_mouse_flags: bit0 left held, bit1 right held"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "3. MouseSink @0041bf35(button, state) [verified]"
+
+[[watch]]
+id = "inj-scroll-snapshot"
+tier = "TI"
+exw_addr = "0x4eddcc"
+exd_addr = ""
+extent = "4"
+layout = "g_scroll_flags = mouse flags snapshot (100 Hz scroll satellite)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "4. Cursor / camera [verified, cross-ref RE-EXW-TICK.md]"
+
+[[watch]]
+id = "inj-cursor"
+tier = "TI"
+exw_addr = "0x4eddc4 / 0x4eddc8"
+exd_addr = ""
+extent = "8"
+layout = "clamped cursor x/y (CursorToGame@0044b428 game space)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "4. Cursor / camera [verified, cross-ref RE-EXW-TICK.md]"
+
+[[watch]]
+id = "inj-anykey-latch"
+tier = "TI"
+exw_addr = "0x4edb50"
+exd_addr = ""
+extent = "4"
+layout = "u32 g_input_seen (ESC/any-key latch)"
+exd_status = "unmapped"
+anchor_doc = "RE-EXW-INPUT"
+anchor = "2. KeySink @0041be05(scan, down) [verified]"

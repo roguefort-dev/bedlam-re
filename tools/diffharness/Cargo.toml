@@ -1,0 +1,13 @@
+[package]
+name = "diffharness"
+version = "0.1.0"
+edition = "2021"
+
+# P4.2 differential harness support code (DESIGN-DIFFHARNESS.md).
+# W2: the watch registry (watches.toml) + this validity guard.
+# Deliberately ZERO external dependencies: the registry parser below is a
+# minimal TOML subset sufficient for the registry file, so the guard builds
+# and runs in any environment (incl. offline CI) without touching the lock
+# file's dependency graph.
+
+[dependencies]
