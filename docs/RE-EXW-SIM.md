@@ -157,8 +157,11 @@ reads back as type 1. (Anchors the DAT addressing: plane-major u8 z-planes
 
 Per-type runtime DB: 0x1E-stride tables at 0x4796bc (current variant word)
 / 0x4796cc (seen flag), mirrored from the TOT data by init_tiles@00407e11
-[verified]; robots() consults `(&DAT_004796d4)[tile_type*0x1E]` for tile
-damage classes. init_tiles also builds the 36×36 ISO viewport tile cache
+[verified]; robots() consults `byte@(0x4796d4 + 0x1E*LINEAR_TILE_INDEX)`
+for the armor pad check [CORRECTED §7g.3: the DB is one 0x1E record per
+TILE — MISSIONVIEW §2 — and the index is the linear tile index, not the
+type; the byte is the record +0x18 static-frame byte]. init_tiles also
+builds the 36×36 ISO viewport tile cache
 at DAT_004ede24 (12 B entries: screen offset + tile deltas).
 
 ## 5. robots@0040b9f6 — the per-tick unit manager (phase arg 0..5) [verified]
@@ -950,6 +953,117 @@ its own countdown (init 2 at activate, MissionShell 0x447c7a) in the
 corrected tail order. Portrait gate gains the hp ≥ 1 arm (default
 identical). The dither pattern blit + hit-flash stay unwired (never
 invent pixels; FUN_00401ae6/0x4e6ed8 bank decode queued).
+
+## 7g. Amendment 2026-08-21 (worker d115c2ea, the damage unit pre-decode)
+
+Objdump censuses over `game-data/BEDLAM/BEDLAM.EXW` (regions
+0x40bb60..0x40bd20, 0x40e670..0x40e7c0, 0x4100b7..0x4102c0, plus
+FUN_00409138 displacement census) against the existing dumps
+(exw-simtail FUN_0040b9f6, exw-missionrender FUN_0040e230,
+exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
+
+1. **FUN_0040e230 field-map corrections** [verified asm
+   0x40e260..0x40e2b5]: the damage gates read the STATE word
+   (+0x0C, dword@+0x0A >> 16), NOT the type: `MP_mode == 0`,
+   `state != 2`, `alive(+0x7C) != 0`; `state == 3` → shield
+   (+0x88) = 0x20 AND RETURN (ordered robots convert damage into
+   a shield tick). The 7f.5 "type(+0x2A)" gloss misread the
+   register. The alarm trip is `if word@+0x34 == 0 → ctr(+0xA4)
+   += 3; if ctr > 100 && TYPE(+0x2A, dword@+0x28 >> 16) ==
+   player_type([0x4edb90]) → word@+0x34 = 100, ctr = 0` — the
+   7f.5 "shield = 0" tail is CORRECTED to "+0xA4 = 0" (no shield
+   write; the SFX slot alerts 0x10/0x11/0x12 are presentation).
+   Damage order [verified]: hit_flash(+0x2E) += 1 FIRST, then
+   hp(+0x78) -= dmg; the low-HP SFX thresholds compare OLD hp
+   vs `5000 + 100*battery(+0x94)` full/half/eighth crossings
+   (presentation only, no state).
+2. **The robots() phase-0 pre-walk** [verified asm 0x40ba..0x40bb
+   block, decompile exw-simtail 10930..10981]: inside the
+   phase-0 invocation ONLY, per robot over ALL records with NO
+   alive gate: word@+0x32 decay-if-nonzero (producer unknown —
+   always 0, no-op), word@+0x34 (alarm) decay, dword@+0xA4 decay,
+   shield(+0x88) −2 clamp ≥ 0, and the +0xA0 booster family:
+   while +0xA0 != 0 → shield = 10000, +0xA0 −= 1, expiry
+   (+0xA0 < 1) → +0xA0 = 0 AND shield = 150 (0x96). The
+   player-type FadeSetup/FUN_004258d0 palette flashes inside are
+   presentation. So the shield pool decays 2/frame; the pickup
+   case 7 (7f.6) arms the 10000-while-boosting override.
+3. **The armor pass CORRECTED — it is PHASE 1, not robot state 1**
+   [verified asm 0x40bbab..0x40bc9f]: in the per-robot walk,
+   after the alive gate (and the outer `word@+0x2C == 0` gate —
+   MP respawn sets +0x2C = 0x28; no SP producer known, always 0),
+   `if (phase == 1)`: tile = `tile_x + y_line[tile_y]`
+   (`pos>>13` + dword@0x4ea900+4*ty); pad byte =
+   `byte@(0x4796d4 + 0x1E*tile)` = the PER-TILE 0x1E record's
+   +0x18 byte — the MISSIONVIEW §2 "static frame byte" (the DB
+   at 0x4796bc is one 0x1E record per TILE, correcting the 7f.7
+   "type-DB +0x18, 0x4796d4+type*0x1E" gloss; FUN_0040fe93
+   preserves ECX push/pop, so the index really is the LINEAR
+   TILE INDEX, verified). Producers of +0x18 are still
+   MISSIONVIEW §8.1-open and the zero-fill leaves them 0 on
+   ZONEA → on the shipped A-zone corpus armor ALWAYS bleeds.
+   byte != 0 → `FUN_004100b7(idx, 20)`; byte == 0 → armor
+   word(+0x30) −= 10 (i16 wrapping) then `SAR(dword@+0x2E) < 0`
+   (the word re-read as signed) → 0.
+4. **FUN_004100b7 decoded** [verified 0x4100b7..0x4102b6, sole
+   caller 0x40bc72]: `amount == 0` → return. If the +0x98 pool
+   != 0: pool −= amount; pool > 0 → return; pool ≤ 0 → pool = 0
+   + the slot SFX 0x2e/0x2f/0x30 ("pool empty") + return. Only
+   when pool == 0: armor word += amount (i16 wrapping), clamp
+   new > 0xBB8 → 0xBB8; SFX families keyed on OLD (pre-write)
+   vs NEW armor: old ≥ 0x9C4 → FUN_004102b6; old < 0x9C4 ∧ new
+   ≥ 0x9C4 → crossing chirps 0x3/0x4/0x5; old < 0x753 → charge
+   ticks. The +0x98 pool producer = the equipment stats-copy
+   switch (spawn path 0x40d013, MP respawn path 0x40ea59):
+   stat case 0x2C → +0x98 = word × 200 (same switch: 0x2A →
+   shield_charges +0x8C, 0x2B → battery +0x94). Fresh campaign:
+   all-zero stats → pool 0 → pads charge armor immediately.
+   [mechanics verified; the drain-before-charge design intent
+   stays tagged unclear]
+5. **The 0x7d2/0x7d3 tile words** [verified 0x40bbef..0x40bc38]:
+   the per-tile word at `0x460dfa + 2*tile` (read as the dword
+   at 0x460df8+2*tile >> 16) — word == 0x7d2 ∧ phase 0 →
+   `FUN_0040e230(idx, 15, -1)` (a hazard tile); word == 0x7d3 →
+   the phase clamp (drop==0 → skip phases > 2, drop!=0 → skip
+   phases > 4). The word-array producer is OPEN (the FUN_0040fe93
+   0x62 tile consumer reads the same array; likely the trigger
+   plane family) — the engine leaves both unwired (never-invent).
+6. **The death tail pinned** [verified asm 0x40e6b9..0x40e791]:
+   FUN_0042382c(idx) (presentation) → `DAT_0046ccec = 3` → the
+   SEVEN order words zeroed (words +0x38..+0x68 stride 8 — NOT
+   armor; the +0x30 armor word is zeroed later, only in the SP
+   branch) → FIVE debris staged via FUN_00420608, per debris:
+   RandA#1 → y = (rand&0x1f) + (pos_y>>8) − 0x10, RandA#2 → x =
+   (rand&0x1f) + (pos_x>>8) − 0x10, z arg = robot.z + 8k, kind
+   5, param5 = 2k, param6 = −1 (k = 0..4; FUN_00420608 = the
+   128-slot 0x30-stride effect stager with map-bounds + z-clamp
+   0x20..0xFF inside — presentation; the 10 draws on the SHARED
+   stream are the sim side). Then the SP/MP gate
+   (`mp_mode == 0 || respawn_ok[idx] != 0`): SP subset = alive =
+   0, drop(+0x80) = 0, hp = 0, +0x9C = 1 (readers not yet
+   census'd), armor = 0, SFX 0x19/0x1a/0x1b + the selected-robot
+   `_DAT_004ede34 = 1` flag. MP branch = the full respawn
+   (zeroes hit_flash/state/facing/armor/order-bits, variant =
+   RandA&3, +0x2C = 0x28, re-spawn from MRK + probe re-seed +
+   the stats re-copy incl. shield_charges/battery/+0x98).
+7. **FUN_00409138 interplay CLOSED** [verified displacement
+   census 0x409138..0x40a573]: it is NOT a death pass — it never
+   writes hp/armor/shield; its two 0x4c6a60 refs are reads. It
+   iterates robots (state-2 skip; player-type present →
+   `DAT_0046ccec = 2`), writes order words (+0x36/+0x38/+0x3C),
+   order bits (+0x6E), positions/state — the robot AI/aim pass
+   (calls FUN_0040b615 → FUN_0040d197; neither reaches
+   FUN_0040e230). ALL death state work flows through
+   FUN_0040e230, which has exactly 4 callers: the robots()
+   0x7d2 hazard (0x40bc38), FUN_0040db9e (0x40dbc2),
+   FUN_004190bc (0x419067), FUN_004197d4 (0x4198b2) — the
+   projectile/effect family.
+8. **hit_flash decay pinned** [verified asm 0x40736d..0x4073b3]:
+   in the portrait pass, per SIDEBAR SLOT robot, ONLY while
+   `alive && hp ≥ 1 && word@+0x2E != 0`: clamp `> 5 → 5`, then
+   −= 1, then the dither blit FUN_00401ae6(5, ...). Dead/hp<1
+   robots' word freezes (the portrait path never reads it again);
+   SP death does not clear it (the MP respawn does).
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
