@@ -1,3 +1,43 @@
+- CLOSED 2026-08-21 (P4 damage unit COMPLETE, commit d9032d9,
+  worker 416ca029 claim 1, D53 — unit finished across an
+  interrupted predecessor run that committed the 7g pre-decode
+  5e10768 + the implementation WIP; this run validated the WIP
+  line-by-line against the exw-missionrender decompile and landed
+  it): RE-EXW-SIM amendment 7g + ENGINE: the Robot damage fields
+  (hp +0x78, armor +0x30, hit_flash +0x2E, alarm +0x34, alarm_ctr
+  +0xA4, shield +0x88, shield_charges +0x8C, shield_boost +0xA0,
+  battery +0x94, armor_pool +0x98, kind +0x2A, death_flag +0x9C)
+  are hash-covered sim state; spawn hp = the dropship-landing
+  5000+100*battery (set_battery seam); MissionSim::apply_damage =
+  the FUN_0040e230 SP core (state-2/alive gates, the ordered
+  state-3 -> shield 0x20 conversion, the auto-shield idle, the
+  alarm trip at ctr > 100 on the player type, shield absorb vs
+  hit_flash-then-hp subtract, the SP death subset with five debris
+  staged from the SHARED stream — 10 RandA draws, DamageOutcome
+  carries the presentation half); the phase-0 pre-walk
+  (alarm/ctr decay, shield -2 clamp, the booster 10000/150
+  family); the phase-1 armor pass (pad byte -> FUN_004100b7 +20
+  behind the +0x98 pool else -10 bleed, clamp 3000/0;
+  set_armor_pads seam — the producer is MISSIONVIEW §8.1-open,
+  all-zero on the shipped corpus); the portrait-pass hit_flash
+  clamp-5 decay. Game side: the D52 Sidebar vitals staging DROPPED
+  (bars/portraits read the sim fields; set_weapon_loadout lands
+  battery through sim.set_battery; the death hosts the
+  DAT_0046ccec = 3 redraw countdown). Not modeled: +0x32 decay,
+  the 0x7d2/0x7d3 tile words, the 7 order-word death clears, MP
+  respawn, SFX — and the damage PRODUCERS stay host-seamed.
+  Gates: sim pins RE-PINNED ONCE for this reason (post-spawn
+  1cc7b8e125165988, post-arm 5b9c2fd5d85f9adc, arrival
+  d8eeb3e608af0be4, click 0bf4fb534d6b3bd5, overlay
+  78a16ba63607d197 — spawn hp 5000 is the only nonzero new hash
+  input); frame pins byte-identical (9ecd7691d388bbfa /
+  333d128dc812d547 / 1504c600819e724c / 86a788ff93bd78a5); 41
+  suites / 465 tests green (8 new), fmt/clippy clean, smoke
+  two-run byte-identical AND equal to the recorded baselines
+  (scene 696adb1cd110e062, parity cce30c983b97b16d), MANIFEST
+  verified. Pushed. Queued: the pickup consumer unit (7f.6
+  cases 1-3 + 7 as sim seams behind the FUN_0040eba0 dispatch
+  decode).
 - CLOSED 2026-08-21 (P4 sidebar bars + score strip COMPLETE,
   commits a11e468 + 2035395 + 3f7fad7, worker 36c9e956 claim 1,
   D52): RE-EXW-SIM amendment 7f decodes the vitals family —
