@@ -1618,3 +1618,49 @@ money 4000 and an ALL-ZERO row). Engine consequence, replacing the D49
    byte-identical; MANIFEST verified.
 
 Nudge-Worker: 4b75846d-3486-4bcd-be7c-fbeff298deec
+
+## D52 - 2026-08-21: hp/armor are host-staged vitals until the damage path lands; the strip rides campaign session state
+
+RE-EXW-SIM 7f decoded the whole family (FUN_0040807f bars,
+FUN_004085ce strip, FUN_0040e230 damage, FUN_0040eba0 pickups, the
+FUN_004100b7 armor pads, the dropship-landing hp init). Engine
+seam:
+
+1. WHAT LANDED: the bars (exact asm sprite arithmetic over
+   per-robot Vitals {hp, armor} staged in the Sidebar — the D17
+   presentation half) + the score strip (NUMBERS.BIN, the 23rd
+   mission-chain asset; score/money as MissionScene session state,
+   fresh campaign 0/4000) in the CORRECTED FUN_00403938 tail order
+   (portraits -> bars -> strip countdown -> rows countdown ->
+   chrome). The default vitals are faithful: hp = 5000 + 100*battery
+   (the landing formula; battery = the BATTERY PACK 0x2B group's
+   word1, re-derived by set_weapon_loadout), armor = 0 (nothing
+   charges it before the pads). The empty armor bar 0x8E DRAWS —
+   the original shows it every frame on a fresh campaign. The
+   portrait pass gains the exact hp >= 1 gate; the case-4 pickup
+   producer is a host seam (PICKUP_AWARDS by two rand_a draws from
+   the shared sim stream + countdown 2).
+2. WHY STAGED, NOT SIM FIELDS: the unit's constraint — sim pins may
+   move only when the damage path genuinely lands. FUN_0040e230 is
+   decoded, but its death path interleaves the debris family (5x
+   FUN_00420608 with 2 RandA each — the shared stream), the
+   robot-death pass FUN_00409138, and the SFX bookkeeping; landing
+   it half-way would be worse than staging. The follow-up damage
+   unit promotes hp/armor (+ the shield pool +0x88 family) to real
+   hash-covered sim fields, wires apply_damage, and RE-PINS the sim
+   hashes deliberately with that reason.
+3. WHAT DOES NOT DRAW, deliberately: the dead/hit dither overlay
+   (FUN_00401ae6 + the 0x4e6ed8 512-B mask bank — decode queued),
+   the deploy panel + blink cursor (0x46ccf8/0x4dc5d0 producers
+   open). Money is modeled >= 0 (every producer adds; the signed
+   strip divide is identical on that domain).
+4. GATES: frame pins regenerated ONCE (spawn 9ecd7691d388bbfa,
+   mid-walk 333d128dc812d547, overlay 1504c600819e724c — the stale
+   sidebar carries the bars/strip pixels, armed 86a788ff93bd78a5);
+   sim pins byte-identical (36ddc86345c8351c / f35db41f0efb858d /
+   64ef1ddbc65cba47). 41 suites green (2 new unit tests: the bar
+   sprite arithmetic table + the bars/strip/pickup seam flow), fmt
+   + clippy -D warnings clean, headless smoke two-run
+   byte-identical, MANIFEST verified.
+
+Nudge-Worker: 36c9e956-335d-48f4-b6f8-a988c6eba472

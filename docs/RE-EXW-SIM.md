@@ -1014,10 +1014,17 @@ invent pixels; FUN_00401ae6/0x4e6ed8 bank decode queued).
    FUN_00403938 tail via FUN_00408403). The sidebar DRAW passes
    DECODED 2026-08-21 §6c.8 (FUN_00408403 rows, FUN_004072bf
    portraits, FUN_0040807f bars, FUN_004085ce score strip; banks
-   GENERAL/SMLFONT/NUMBERS/SCANNER). Remaining open: the HP/armor
-   bar + score-strip ENGINE wiring (needs +0x78/+0x2E sim fields,
-   score/money sim state), the 0x4dc5d0 blink producer, and the
-   keyboard-latch wiring (P2e button map). The map-overlay family
+   GENERAL/SMLFONT/NUMBERS/SCANNER). The HP/armor bars + the score
+   strip were DECODED 2026-08-21 amendment §7f and WIRED the same
+   day (host-staged vitals + campaign session state, D52); the
+   vitals PRODUCERS land with the damage unit: the damage
+   application FUN_0040e230 + its death/debris/RNG interplay
+   (7f.5), the armor pad charge/bleed (7f.7), the health/shield
+   pickups (7f.6 cases 2/3) — promoting hp/armor to real sim fields
+   then re-pins the sim hashes deliberately. Remaining open after
+   that: the 0x4dc5d0 blink producer, the dead/hit dither
+   (FUN_00401ae6 + the 0x4e6ed8 bank), and the keyboard-latch
+   wiring (P2e button map). The map-overlay family
    (_DAT_004edba0/FUN_004089b1/FUN_00401107) was DECODED 2026-08-21
    amendment §7e and wired engine-side the same day. The
    name/count row TEXT landed 2026-08-21 (amendment 7d + D51: the

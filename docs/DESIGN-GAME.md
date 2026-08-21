@@ -228,37 +228,47 @@ palette with the mission — fetch set 10 files.
   — one render per host frame advances the walk once, matching the
   render corpus gate's one-draw-per-frame rhythm at 1 tick/frame.
 - SIDEBAR PRODUCER (added 2026-08-21, RE-EXW-SIM sec 6c; ART half
-  added 2026-08-21, sec 6c.8): clicks at `x >= 0x1E0` run
+  added 2026-08-21, sec 6c.8; loadout + text 2026-08-21 D51; bars +
+  strip 2026-08-21 sec 7f/D52): clicks at `x >= 0x1E0` run
   `sidebar_control` (the mouse subset of FUN_0040d197) INSTEAD of
   the robot arm — the robot-select strips
   (`SIDEBAR_SELECT_STRIPS` × y[5,0x35], gated by the spawned squad
   size and the target's alive word), the 7 order rows
-  (`SIDEBAR_ORDER_RECT`, `row = (y-0x57)/14` clamp 6, gated by a
-  per-robot availability mask, toggling the per-robot order-bits
-  word), and the `DAT_0046ccec` redraw COUNTDOWN (producers set 2,
-  every present decrements while nonzero and, while nonzero, runs
-  the sidebar redraw PASS below). All of it lives on the
+  (`SIDEBAR_ORDER_RECT`, `row = (y-0x57)/14` clamp 6, gated by the
+  weapon group's AMMO word, toggling the per-robot order-bits
+  word), the map-toggle strip (7e.5), and the `DAT_0046ccec`
+  redraw COUNTDOWN + the `0x46ccf0` strip countdown (producers set
+  2, every present decrements while nonzero and, while nonzero,
+  runs the matching pass below). All of it lives on the
   presentation half: none of it enters the sim state hash (unit
   pinned + corpus pinned — sidebar clicks never arm orders).
-  Availability defaults to all-7 [design: the per-type order table
-  at 0x4de664 is runtime-loaded and its file source is open];
-  `set_order_availability` is the host seam for the real table.
-  Order bits default `1 << first available` at spawn [sec 6c.6].
-  ART: GAMEGFX\GENERAL.BIN + GAMEGFX\SMLFONT.BIN stage with the
-  mission (the GAMEGFX tail; RE-EXW-SIM 6c.8c); present draws, on
-  the countdown, the FUN_00408403 row chrome into [480,640) —
-  sprites 0x47/0x4A on armed rows, 0x49/0x4C on unarmed ones, at
-  (0x1EB, 0x59+14i) and (0x25A, 0x59+14i), rows gated by the
-  availability bit — plus the FUN_004072bf select portraits
-  (0x12+slot selected / 0x15+slot not, at (0x1E7+0x32·slot, 5),
-  gated by squad size + alive) every present; the countdown starts
-  at 2 on activate (MissionShell 0x447c74). The name/count text,
-  HP/armor bars, score strip, deploy panel and blink cursor stay
-  unwired (each needs state the sim does not model yet — names/
-  counts from the type table, +0x78/+0x2E fields, score/money,
-  the overlay family; never invented). Out of scope: the map-toggle
-  strip (screen-mode globals + the 0x4edba0 overlay family) and the
-  keyboard latches (P2e button map).
+  WEAPONS (D51): rows are WEAPON groups — 7 × (name_idx, ammo),
+  host-staged per robot (`set_weapon_loadout`, the shop/save/MP
+  seam), faithful fresh-campaign default EMPTY (no rows); order
+  bits default `1 << first group with name_idx != 0` [sec 6c.6].
+  ART: GAMEGFX\GENERAL.BIN + GAMEGFX\SMLFONT.BIN +
+  GAMEGFX\NUMBERS.BIN stage with the mission (the 23-asset chain);
+  present draws, in the CORRECTED FUN_00403938 tail order [7f.3]:
+  the FUN_004072bf select portraits (0x12+slot selected / 0x15+slot
+  not, at (0x1E7+0x32·slot, 5), gated by squad size + alive + hp
+  ≥ 1) every present; the FUN_0040807f HP/armor BARS every present
+  (hp 0x18..0x46 denominating 5000 @ (0x1E8+0x32k, 0x3C), armor
+  0x60..0x8E denominating 2500 @ (slot_x, 0x49), over host-staged
+  vitals D52 — hp = 5000 + 100·battery from the BATTERY PACK
+  group, armor 0; the damage path is decoded but NOT landed, so
+  the vitals stay presentation state and the sim pins hold); the
+  FUN_004085ce score STRIP on its own countdown (icon 0xA + nine
+  score digits, icon 0xB + six money digits, campaign session
+  state 0/4000 fresh, the case-4 pickup producer seam with two
+  `rand_a` draws from the shared sim stream); then the
+  FUN_00408403 row chrome + NAME/COUNT text (armed 0x47+0x4A,
+  unarmed 0x49+0x4C at (0x1EB/0x25A, 0x59+14i), names via the
+  pinned FUN_00420260 table, counts "%04i", SMLFONT color 0x24)
+  on the redraw countdown; both countdowns start at 2 on activate
+  (MissionShell 0x447c74/0x447c7a). The dead/hit dither
+  (FUN_00401ae6), deploy panel and blink cursor stay unwired
+  (never invented). Out of scope: the keyboard latches (P2e
+  button map).
 
 ## Provenance
 
