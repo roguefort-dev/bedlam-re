@@ -147,9 +147,10 @@ pub fn stage_scene(
         Scene::Shop => host.load_shop(&bytes[0])?,
         // Fetch order = load_mission order: TOT, DAT, PAD, CGR, BIN,
         // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
-        // TABLE, MAPTRAN0..7, MIN (the map-overlay family tail,
-        // RE-EXW-SIM 7e). Single player: no robots override, no
-        // staged markers (the 0x46cbe0 network seam).
+        // TABLE, MAPTRAN0..7, MIN, NUMBERS (the map-overlay family
+        // tail, RE-EXW-SIM 7e; the score-strip bank, 7f.9). Single
+        // player: no robots override, no staged markers (the
+        // 0x46cbe0 network seam).
         Scene::Mission => {
             let maptran: Vec<&[u8]> = bytes[13..21].iter().map(|v| v.as_slice()).collect();
             host.load_mission(
@@ -168,6 +169,7 @@ pub fn stage_scene(
                 &bytes[12],
                 &maptran,
                 &bytes[21],
+                &bytes[22],
                 None,
                 &[],
             )?
@@ -264,6 +266,7 @@ mod tests {
                 "MAPTRAN6.TRN".to_string(),
                 "MAPTRAN7.TRN".to_string(),
                 "ZONEA/MISSIONA.MIN".to_string(),
+                "NUMBERS.BIN".to_string(),
             ]
         );
         for scene in [
@@ -298,7 +301,7 @@ mod tests {
             mission.first().map(String::as_str),
             Some("ZONEA/MISSION1.TOT")
         );
-        assert_eq!(mission.len(), 22);
+        assert_eq!(mission.len(), 23);
         assert!(
             scene_assets(host.scene(), cfg, &cutscene, briefing.as_deref(), &mission).is_empty(),
             "boot transition fetches nothing"

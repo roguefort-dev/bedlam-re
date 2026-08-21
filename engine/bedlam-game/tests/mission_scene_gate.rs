@@ -84,7 +84,8 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
 
 /// The staged corpus inputs in load_mission order: TOT, DAT, PAD,
 /// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
-/// TABLE, MAPTRAN0..7, MIN (the map-overlay family tail, 7e).
+/// TABLE, MAPTRAN0..7, MIN, NUMBERS (the map-overlay family tail,
+/// 7e; the score-strip bank, 7f.9).
 fn zonea() -> Option<Vec<Vec<u8>>> {
     Some(vec![
         read(&["EDITOR", "ZONEA", "MISSION1.TOT"])?,
@@ -109,6 +110,7 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
         read(&["GAMEGFX", "MAPTRAN6.TRN"])?,
         read(&["GAMEGFX", "MAPTRAN7.TRN"])?,
         read(&["EDITOR", "ZONEA", "MISSIONA.MIN"])?,
+        read(&["GAMEGFX", "NUMBERS.BIN"])?,
     ])
 }
 
@@ -155,6 +157,7 @@ fn scripted_run(
         &files[12],
         &maptran_of(files),
         &files[21],
+        &files[22],
         None,
         &[(18, 73, 1)],
     )
@@ -307,6 +310,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         &files[12],
         &maptran_of(&files),
         &files[21],
+        &files[22],
         None,
         &[(18, 73, 1)],
     )
@@ -353,6 +357,25 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         band(0x57, 0xB9),
         0,
         "the order-rows band stays black (empty loadout)"
+    );
+    // The HP/armor bars band [RE-EXW-SIM 7f.1, FUN_0040807f]: both
+    // spawned robots draw the FULL HP bar (0x18 — staged hp 5000,
+    // the dropship-landing default) and the EMPTY armor bar (0x8E —
+    // armor 0, the gate sprite; the fresh campaign still draws it)
+    // from the real GENERAL.BIN every present.
+    let bars = band(0x3C, 0x55);
+    assert!(
+        bars > 100,
+        "the bars band carries the GENERAL.BIN art ({bars})"
+    );
+    // The score-strip band [7f.2, FUN_004085ce]: the entry frame
+    // draws icon 0xA + nine "0" score digits (score 0) and icon 0xB
+    // + "004000" (the fresh-campaign money 4000) from the real
+    // NUMBERS.BIN — the strip countdown armed 2 at activate.
+    let strip = band(0x18E, 0x1B0);
+    assert!(
+        strip > 200,
+        "the strip band carries the NUMBERS.BIN art ({strip})"
     );
 
     // The GAMEPAL present tail: the frame palette IS the folded
@@ -498,13 +521,13 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // The hash pins (extend the render-gate family: these are the
     // SCENE-composed frames — host pipeline + fixed spawn camera +
     // one render per pump). Regenerated ONCE per presentation unit
-    // (GAMEPAL, sidebar art, and this unit: the codec fix + the
-    // faithful empty loadout - see the header); the sim pins did
-    // not move across any of them.
+    // (GAMEPAL, sidebar art, the codec fix, the faithful empty
+    // loadout, and the bars + score strip unit - see the header);
+    // the sim pins did not move across any of them.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "b19a8034ee001253",
-        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits, empty loadout)"
+        "9ecd7691d388bbfa",
+        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits + bars + score strip, empty loadout)"
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
@@ -518,16 +541,19 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "1df4dfcb1e8b3eba",
-        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits, empty loadout)"
+        "333d128dc812d547",
+        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits + bars, empty loadout)"
     );
     // The overlay pins [7e]: the strategic-map frame after the strip
     // click, and the sim hash at that moment (the overlay never
     // touches the sim — the hash differs from click_sim only by the
-    // frames that elapsed).
+    // frames that elapsed). The overlay frame carries the STALE
+    // sidebar half (bars + the strip pixels from the entry frames —
+    // the non-returning tail skips the sidebar passes but never
+    // clears them either).
     assert_eq!(
         format!("{overlay_frame:016x}"),
-        "f47217a154bf93c9",
+        "1504c600819e724c",
         "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers)"
     );
     assert_eq!(
@@ -567,6 +593,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
             &files[12],
             &maptran_of(&files),
             &files[21],
+            &files[22],
             None,
             &[(18, 73, 1)],
         )
@@ -619,8 +646,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     assert_eq!(
         format!("{armed_frame:016x}"),
-        "0a22733e37c88a3c",
-        "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text)"
+        "86a788ff93bd78a5",
+        "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text + bars + strip)"
     );
 
     // Determinism: two independent runs are identical.
@@ -674,6 +701,7 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
         &files[12],
         &maptran_of(&files),
         &files[21],
+        &files[22],
         None,
         &[(18, 73, 1)],
     )

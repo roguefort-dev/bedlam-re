@@ -84,6 +84,45 @@ pub const MAP_TOGGLE_LOCKOUT: i32 = 5;
 /// overlay draw never returns to it) and 0x8F is the other-screen
 /// look (modes 1/7), so the mission always draws 0x5E.
 pub const MAP_BUTTON_SPRITE: (u16, i32, i32) = (0x5E, 0x213, 0x1B5);
+/// The HP/armor bar x base + slot pitch [RE-EXW-SIM 7f.1, asm
+/// 0x408103/0x408195/0x408287: slot x = 0x1E8 + 0x32*k, the bar
+/// under each select portrait]. GENERAL.BIN.
+pub const SIDEBAR_BAR_X: (i32, i32) = (0x1E8, 0x32);
+/// The HP bar y + the armor bar y [7f.1: FUN_00401ca2 @ (slot_x,
+/// 0x3C) and (slot_x, 0x49)].
+pub const SIDEBAR_BAR_Y: (i32, i32) = (0x3C, 0x49);
+/// The HP bar sprite mapping [7f.1]: `hp = min(hp, 5000)` (signed);
+/// `hp < 1 → 0x46` else `0x46 - hp*0x2E/5000` — ids 0x18 (full)
+/// .. 0x46 (empty). (empty sprite, full sprite, denominator, scale)
+pub const SIDEBAR_HP_BAR: (u16, u16, i32, i32) = (0x46, 0x18, 5000, 0x2E);
+/// The armor bar sprite mapping [7f.1]: gate `word == 0 → 0x8E`
+/// else `armor = min(armor, 2500)`; `0x8E - armor*0x2E/2500`
+/// clamped `≤ 0x8D` — ids 0x60 (full) .. 0x8E (empty; the gate
+/// sprite doubles as the tiny-armor cap result).
+pub const SIDEBAR_ARMOR_BAR: (u16, u16, i32, i32, u16) = (0x8E, 0x60, 2500, 0x2E, 0x8D);
+/// The score-strip icon + y [7f.2, FUN_004085ce]: NUMBERS.BIN
+/// sprite 0xA (the 100x11 score icon) at (0x1FE, 0x18E), then nine
+/// UNSIGNED score digits at the exact x table (irregular pitch —
+/// thousands groups).
+pub const SCORE_STRIP_ICON: (u16, i32, i32) = (0xA, 0x1FE, 0x18E);
+/// Score digit x positions, 10^8..10^0 [7f.2, asm 0x408614..0x40878a].
+pub const SCORE_STRIP_XS: [i32; 9] = [
+    0x202, 0x20C, 0x216, 0x222, 0x22C, 0x236, 0x242, 0x24C, 0x256,
+];
+/// The money icon + y [7f.2]: NUMBERS.BIN sprite 0xB (the 74x11
+/// money icon) at (0x20B, 0x1A4), then six SIGNED money digits.
+pub const MONEY_STRIP_ICON: (u16, i32, i32) = (0xB, 0x20B, 0x1A4);
+/// Money digit x positions, 10^5..10^0 [7f.2, asm 0x4088a1..0x40890e].
+pub const MONEY_STRIP_XS: [i32; 6] = [0x211, 0x21B, 0x225, 0x231, 0x23B, 0x245];
+/// The score/money pickup award table [7f.6, FUN_0040eba0 case 4]:
+/// `RandA()&1` picks the row (0 = score, 1 = money), `RandA()&3`
+/// the amount.
+pub const PICKUP_AWARDS: [[i32; 4]; 2] = [[1000, 2000, 5000, 10000], [10, 50, 100, 250]];
+/// The fresh-campaign session state [RE-EXW-SIM 7d.4 + 7f.9]: score
+/// starts 0 (GameMain boot write 0x41c44e), money starts 4000
+/// (GameMain campaign init 0x41c5ec — `4000 - 500*difficulty`, and
+/// the difficulty-0 campaign is the modeled default).
+pub const FRESH_CAMPAIGN: (i32, i32) = (0, 4000);
 
 /// The compiled-in weapon-name switch `FUN_00420260` [verified
 /// decompile + PE string bytes 0x4589DD..0x458C11, RE-EXW-SIM 7d.5]:
@@ -139,6 +178,30 @@ pub fn weapon_name(index: u16) -> &'static str {
 /// are shop-side state the mission never reads [RE-EXW-SIM 7d.2].
 pub type WeaponGroup = (u16, u16);
 
+/// The BATTERY PACK name index [RE-EXW-SIM 7f.8]: the equipment
+/// group whose word1 is the battery stat — the spawn HP bonus
+/// `+100*battery` in the dropship-landing formula.
+pub const WEAPON_BATTERY_PACK: u16 = 0x2B;
+
+/// The per-robot HOST-STAGED vitals the bars read [RE-EXW-SIM 7f,
+/// D52]: `hp` = the record dword +0x78 (spawn 5000 + 100*battery —
+/// the dropship-landing init 7f.8; the damage path FUN_0040e230 is
+/// decoded but NOT landed: its death/debris/RNG interplay is its
+/// own slice, so these stay presentation-half state and the sim
+/// hash does not move), `armor` = the record word +0x30 (spawn 0 —
+/// the pad-charge producers 7f.7 are not landed either).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Vitals {
+    pub hp: i32,
+    pub armor: i16,
+}
+
+impl Vitals {
+    /// The fresh-campaign spawn vitals [7f.8]: battery 0 → hp 5000,
+    /// armor 0 (nothing charges it before the pads do).
+    pub const FRESH: Vitals = Vitals { hp: 5000, armor: 0 };
+}
+
 /// The per-robot weapon table row: 7 groups [sec 6c.6 — the
 /// 0x62-stride table row the spawn stats-copy reads].
 pub type WeaponLoadout = [WeaponGroup; 7];
@@ -160,6 +223,9 @@ struct Sidebar {
     redraw: i32,
     order_bits: Vec<u16>,
     weapons: Vec<WeaponLoadout>,
+    /// Host-staged per-robot vitals (D52): the bars + the portrait
+    /// HP gate read these; FRESH = (hp 5000, armor 0).
+    vitals: Vec<Vitals>,
 }
 
 impl Sidebar {
@@ -168,13 +234,14 @@ impl Sidebar {
     /// runs before every mission and only purchases fill groups), so
     /// the spawn stats-copy arms NO bit; selected slot 0
     /// (load_markers 0x40ce0e), redraw 0 (the MissionShell entry
-    /// reset 0x4478bf).
+    /// reset 0x4478bf), vitals FRESH (7f.8).
     fn new(robots: usize) -> Sidebar {
         Sidebar {
             selected: 0,
             redraw: 0,
             order_bits: vec![0; robots],
             weapons: vec![[(0, 0); 7]; robots],
+            vitals: vec![Vitals::FRESH; robots],
         }
     }
 }
@@ -273,6 +340,11 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
         "MAPTRAN6.TRN".to_string(),
         "MAPTRAN7.TRN".to_string(),
         format!("{zone_dir}/{zone_file}.MIN"),
+        // The score-strip bank [RE-EXW-SIM 7f.9]:
+        // `LoadFile("GAMEGFX\NUMBERS.BIN", DAT_0046af3c)` — the
+        // mission-init staging, sole consumer FUN_004085ce.
+        // Appended last so the established indices hold.
+        "NUMBERS.BIN".to_string(),
     ]
     .to_vec()
 }
@@ -318,6 +390,10 @@ pub struct MissionScene {
     /// SMLFONT.BIN (63 glyphs) is the sidebar text bank [6c.8c];
     /// no text draws until the type table lands (never invented).
     smlfont: Vec<u8>,
+    /// `LoadFile("GAMEGFX\NUMBERS.BIN", DAT_0046af3c)` [7f.9]: the
+    /// score/money strip bank (12 sprites: digits 0..9 9x11, 0xA
+    /// 100x11, 0xB 74x11); sole consumer the strip pass.
+    numbers: Vec<u8>,
     /// `LoadFile("GAMEGFX\TABLE.BIN", [0x46cbbc])` — the strategic
     /// map backdrop bank, image 0 a 480×480 RLE sprite [7e.1b].
     table: Vec<u8>,
@@ -333,6 +409,19 @@ pub struct MissionScene {
     /// The sidebar presentation half [sec 6c; D17 split — outside
     /// the sim hash].
     sidebar: Sidebar,
+    /// The campaign session state the strip reads [RE-EXW-SIM 7f.6/
+    /// 7f.9, D52]: score `_DAT_004dd40c` + money `DAT_0046ae70` —
+    /// EXW globals written by GameMain/shop/pickups/save-load (none
+    /// of those shells are modeled, so the host stages the campaign
+    /// point through [`MissionScene::set_campaign`]; producers only
+    /// add). FRESH_CAMPAIGN = (0, 4000).
+    score: i32,
+    money: i32,
+    /// The score-strip countdown `0x46ccf0` [7f.3]: producers set 2,
+    /// the present tail decrements while nonzero and draws the strip
+    /// (MissionShell entry zero 0x4478c5, the post-load trigger
+    /// 0x447c7a sets 2 — the strip draws on the entry frames).
+    strip: i32,
     /// Presents executed (the one-render-per-host-frame rhythm).
     render_count: u64,
     active: bool,
@@ -349,7 +438,8 @@ impl MissionScene {
     /// GAMEPAL (770 B, the parse_vga770 family) folds to the
     /// canonical 6-bit palette and owns the plane [MISSIONVIEW
     /// sec 6]. GENERAL.BIN + SMLFONT.BIN stage as the sidebar art
-    /// banks [sec 6c.8c]. Malformed bytes -> [`GameError::BadMissionAsset`],
+    /// banks [sec 6c.8c] and NUMBERS.BIN as the score-strip bank
+    /// [7f.9]. Malformed bytes -> [`GameError::BadMissionAsset`],
     /// never a panic (charter); nothing is mutated on error.
     #[allow(clippy::too_many_arguments)]
     pub fn stage(
@@ -365,6 +455,7 @@ impl MissionScene {
         gamepal: &[u8],
         general: &[u8],
         smlfont: &[u8],
+        numbers: &[u8],
         table: &[u8],
         min: &[u8],
         maptran: &[&[u8]],
@@ -427,6 +518,7 @@ impl MissionScene {
         let overlay = MapOverlay::new(min, maptran, mw, mh)
             .ok_or_else(|| bad("MIN/MAPTRAN", "not eight 256-byte ramps or bad map size"))?;
         let sidebar = Sidebar::new(sim.robots().len());
+        let (score, money) = FRESH_CAMPAIGN;
         Ok(MissionScene {
             sim,
             view,
@@ -440,11 +532,15 @@ impl MissionScene {
             palette,
             general: general.to_vec(),
             smlfont: smlfont.to_vec(),
+            numbers: numbers.to_vec(),
             table: table.to_vec(),
             overlay,
             overlay_on: false,
             map_lockout: 0,
             sidebar,
+            score,
+            money,
+            strip: 0,
             render_count: 0,
             active: false,
         })
@@ -461,6 +557,11 @@ impl MissionScene {
         }
         self.cam_q5 = self.sim.robots().first().map(Robot::q5).unwrap_or((0, 0));
         self.sidebar.redraw = 2;
+        // The score-strip countdown arms alongside the redraw one
+        // (MissionShell 0x447C74/0x447C7A set BOTH `0x46ccec` and
+        // `0x46ccf0` to 2 after the mission-load calls [7f.3/6c.8e])
+        // — the strip draws on the entry frames too.
+        self.strip = 2;
         // MissionShell entry zeroes the overlay bit + the re-fire
         // lockout family [7e.5, asm 0x44786b / 0x44871d].
         self.overlay_on = false;
@@ -649,24 +750,27 @@ impl MissionScene {
     /// the terrain pass into the 0x64000 buffer, crop the 480x480
     /// present window with the fine-camera offset, and blit it at
     /// canonical (0, 0) of the 640x480 plane. Then the SIDEBAR ART
-    /// half [RE-EXW-SIM 6c.8, the FUN_00403938 tail order]: the
-    /// select portraits every present (FUN_004072bf — squad-size +
-    /// alive gates, 0x12+slot selected / 0x15+slot not), and the
-    /// order-row chrome on the redraw countdown (FUN_00408403 —
+    /// half [RE-EXW-SIM 6c.8 + 7f, the CORRECTED FUN_00403938 tail
+    /// order 7f.3]: the select portraits every present
+    /// (FUN_004072bf — squad-size + alive + hp gates), the HP/armor
+    /// bars every present (FUN_0040807f — the staged vitals D52),
+    /// the score strip on its own countdown (FUN_004085ce —
+    /// NUMBERS.BIN, armed 2 at activate like the redraw one), and
+    /// the order-row chrome on the redraw countdown (FUN_00408403 —
     /// armed rows 0x47+0x4A, unarmed 0x49+0x4C, rows gated by the
-    /// availability bit; the FUN_00408403 decrements-then-draws
-    /// rhythm [asm 0x407205..0x407217]), and the map button chrome
-    /// 0x5E at the tail's very end [7e.5]. THE OVERLAY REPLACES ALL
-    /// OF IT when the bit is set [7e.1f]: FUN_004089b1 never
-    /// returns (JMP 0x4072b8), so an overlay frame clears the
-    /// viewport half, draws the strategic map (backdrop + territory
-    /// stamps + robot markers) and skips the sidebar passes + chrome.
-    /// Name/count text, HP/armor bars, the score strip, the deploy
-    /// panel and the blink cursor stay unwired — each needs state
-    /// the sim does not model (see 6c.8, never invented); the
-    /// PAD/order markers 0x57..0x59 need the unmodeled order staging.
-    /// Advances the LNK walk + edge stream once — one render per
-    /// host frame (D17 bucket b). Inert until active.
+    /// availability bit; the decrements-then-draws rhythm [asm
+    /// 0x407205..0x407217]), and the map button chrome 0x5E at the
+    /// tail's very end [7e.5]. THE OVERLAY REPLACES ALL OF IT when
+    /// the bit is set [7e.1f]: FUN_004089b1 never returns (JMP
+    /// 0x4072b8), so an overlay frame clears the viewport half,
+    /// draws the strategic map (backdrop + territory stamps + robot
+    /// markers) and skips the sidebar passes + chrome. The
+    /// dead/hit-flash dither (FUN_00401ae6 + the 0x4e6ed8 bank),
+    /// the deploy panel and the blink cursor stay unwired — each
+    /// needs state the slice does not model (never invented); the
+    /// PAD/order markers 0x57..0x59 need the unmodeled order
+    /// staging. Advances the LNK walk + edge stream once — one
+    /// render per host frame (D17 bucket b). Inert until active.
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
@@ -705,6 +809,11 @@ impl MissionScene {
             return Some(&self.plane);
         }
         self.draw_sidebar_portraits();
+        self.draw_sidebar_bars();
+        if self.strip > 0 {
+            self.strip -= 1;
+            self.draw_score_strip();
+        }
         if self.sidebar.redraw > 0 {
             self.sidebar.redraw -= 1;
             self.draw_sidebar_rows();
@@ -790,15 +899,21 @@ impl MissionScene {
         }
     }
 
-    /// The FUN_004072bf select-portrait subset [sec 6c.8d]: slot k
-    /// within the spawned squad draws its 48x48 portrait (0x12+k
-    /// when selected, 0x15+k otherwise) at (0x1E7+0x32*k, 5), gated
-    /// by the target's alive word (the HP gate needs the unmodeled
-    /// +0x78 field). Every present. Presentation half only.
+    /// The FUN_004072bf select-portrait subset [sec 6c.8d + 7f.4]:
+    /// slot k within the spawned squad draws its 48x48 portrait
+    /// (0x12+k when selected, 0x15+k otherwise) at
+    /// (0x1E7+0x32*k, 5), gated by the target's alive word AND the
+    /// staged hp ≥ 1 (the FUN_004072bf gates — hp defaults 5000, so
+    /// the fresh-campaign frames are unchanged). Every present.
+    /// Presentation half only. The dead/hit dither overlay
+    /// (FUN_00401ae6) stays unwired (bank decode queued).
     fn draw_sidebar_portraits(&mut self) {
         let selected = self.sidebar.selected;
         for (slot, alive) in self.sim.robots().iter().map(|r| r.alive).enumerate() {
             if slot >= 3 || !alive {
+                continue;
+            }
+            if self.sidebar.vitals.get(slot).is_none_or(|v| v.hp < 1) {
                 continue;
             }
             let id = if slot == selected {
@@ -816,6 +931,71 @@ impl MissionScene {
                 y,
                 true,
             );
+        }
+    }
+
+    /// The FUN_0040807f HP + armor bar pass [RE-EXW-SIM 7f.1]:
+    /// slot k (< squad size, the `DAT_0046cbd8 > k` analog) draws
+    /// the HP bar at (0x1E8+0x32*k, 0x3C) and the armor bar at
+    /// (slot_x, 0x49), both GENERAL.BIN transp — HP sprite
+    /// `0x46 - min(hp,5000)*46/5000` (hp ≤ 0 → 0x46), armor gate
+    /// `0 == word → 0x8E` else `0x8E - min(armor,2500)*46/2500`
+    /// clamped ≤ 0x8D. The armor-0 case DRAWS the empty 0x8E bar —
+    /// the fresh campaign shows both bars every frame exactly like
+    /// the original. Every present; presentation half only (the
+    /// vitals are host-staged, D52).
+    fn draw_sidebar_bars(&mut self) {
+        let (x0, pitch) = SIDEBAR_BAR_X;
+        let (hp_y, armor_y) = SIDEBAR_BAR_Y;
+        for slot in 0..self.sim.robots().len().min(3) {
+            let Some(vitals) = self.sidebar.vitals.get(slot) else {
+                continue;
+            };
+            let x = x0 + pitch * slot as i32;
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                hp_bar_sprite(vitals.hp),
+                x,
+                hp_y,
+                true,
+            );
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                armor_bar_sprite(vitals.armor),
+                x,
+                armor_y,
+                true,
+            );
+        }
+    }
+
+    /// The FUN_004085ce score/money strip [RE-EXW-SIM 7f.2]:
+    /// NUMBERS.BIN transp — icon 0xA @ (0x1FE,0x18E) + the nine
+    /// UNSIGNED score digits at the exact x table (10^8..10^0),
+    /// icon 0xB @ (0x20B,0x1A4) + the six money digits (the EXW
+    /// divides SIGNED — identical on the ≥ 0 domain the producers
+    /// can reach; negative money is outside the modeled session
+    /// state). On the `0x46ccf0` countdown (armed 2 at activate —
+    /// MissionShell 0x447c7a), decrement-then-draw. Presentation
+    /// half only (the campaign state is session, not sim).
+    fn draw_score_strip(&mut self) {
+        let (icon, ix, iy) = SCORE_STRIP_ICON;
+        draw_sprite(&mut self.plane, 640, &self.numbers, icon, ix, iy, true);
+        let score = self.score as u64;
+        for (k, &x) in SCORE_STRIP_XS.iter().enumerate() {
+            let digit = (score / 10u64.pow(8 - k as u32) % 10) as u16;
+            draw_sprite(&mut self.plane, 640, &self.numbers, digit, x, iy, true);
+        }
+        let (icon, ix, iy) = MONEY_STRIP_ICON;
+        draw_sprite(&mut self.plane, 640, &self.numbers, icon, ix, iy, true);
+        let money = self.money;
+        for (k, &x) in MONEY_STRIP_XS.iter().enumerate() {
+            let digit = (money / 10i32.pow(5 - k as u32) % 10) as u16;
+            draw_sprite(&mut self.plane, 640, &self.numbers, digit, x, iy, true);
         }
     }
 
@@ -895,11 +1075,121 @@ impl MissionScene {
     /// arithmetic over the new row — the robot's order-bits word
     /// re-derives as `1 << first group with word0 != 0` (0 when the
     /// row is empty), exactly what load_markers would have written.
+    /// The BATTERY PACK group (0x2B) also re-derives the staged HP
+    /// via the dropship-landing formula `5000 + 100*battery`
+    /// [RE-EXW-SIM 7f.8] — staging models the pre-mission point, so
+    /// re-staging mid-mission re-runs the landing init (D52).
     pub fn set_weapon_loadout(&mut self, robot: usize, groups: &WeaponLoadout) {
         if let Some(slot) = self.sidebar.weapons.get_mut(robot) {
             *slot = *groups;
             self.sidebar.order_bits[robot] = spawn_order_bits(groups);
+            let battery = i32::from(
+                groups
+                    .iter()
+                    .find(|&&(name, _)| name == WEAPON_BATTERY_PACK)
+                    .map_or(0, |&(_, ammo)| ammo),
+            );
+            let vitals = self
+                .sidebar
+                .vitals
+                .get_mut(robot)
+                .expect("vitals parallel the robots");
+            vitals.hp = 5000 + 100 * battery;
         }
+    }
+
+    /// The robot's staged vitals (D52): hp = record +0x78, armor =
+    /// record word +0x30 [RE-EXW-SIM 7f]. Read seam for the tests.
+    pub fn vitals(&self, robot: usize) -> Vitals {
+        self.sidebar
+            .vitals
+            .get(robot)
+            .copied()
+            .unwrap_or(Vitals::FRESH)
+    }
+
+    /// Stage the vitals directly (D52): the damage/pad dynamics
+    /// (FUN_0040e230 / FUN_004100b7, 7f.5/7f.7) are decoded but not
+    /// landed — the host or a test stands in for them until the
+    /// damage slice promotes hp/armor to real sim fields.
+    pub fn set_vitals(&mut self, robot: usize, vitals: Vitals) {
+        if let Some(slot) = self.sidebar.vitals.get_mut(robot) {
+            *slot = vitals;
+        }
+    }
+
+    /// The campaign session state the strip reads [7f.9]: score
+    /// `_DAT_004dd40c`, money `DAT_0046ae70` (money modeled ≥ 0 —
+    /// every producer adds; the SIGNED strip divide is identical on
+    /// this domain).
+    pub fn campaign(&self) -> (i32, i32) {
+        (self.score, self.money)
+    }
+
+    /// Stage the campaign session state (D52): the GameMain campaign
+    /// init / a save-load stand-in. Default FRESH_CAMPAIGN (0, 4000).
+    pub fn set_campaign(&mut self, score: i32, money: i32) {
+        self.score = score;
+        self.money = money;
+    }
+
+    /// The score/money score-strip countdown (`0x46ccf0`, 7f.3):
+    /// producers set 2, each present decrements while nonzero.
+    pub fn score_strip_countdown(&self) -> i32 {
+        self.strip
+    }
+
+    /// The FUN_0040eba0 case-4 pickup producer [RE-EXW-SIM 7f.6]:
+    /// `RandA()&1` picks the row (0 = score, 1 = money), `RandA()&3`
+    /// the amount from PICKUP_AWARDS, and the award sets the strip
+    /// countdown 2 — exactly the asm (the original draws the two
+    /// RandA values from the SHARED sim stream; the player-type gate
+    /// `type == [0x4edb90]` is trivially true in SP where every
+    /// robot is type 0). The tile-walk producer that fires this case
+    /// is not modeled — the host/test seam stands in (never invoked
+    /// on the default corpus path, so the sim pins never move).
+    pub fn pickup_score_money(&mut self) {
+        let row = (self.sim.rand_a() & 1) as usize;
+        let amount = PICKUP_AWARDS[row][(self.sim.rand_a() & 3) as usize];
+        if row == 0 {
+            self.score = self.score.wrapping_add(amount);
+        } else {
+            self.money = self.money.wrapping_add(amount);
+        }
+        self.strip = 2;
+    }
+}
+
+/// The HP bar sprite for a staged hp [RE-EXW-SIM 7f.1,
+/// FUN_0040807f asm 0x4080a3..0x4080f6]: signed clamp ≤ 5000,
+/// `< 1 → 0x46` (empty), else `0x46 - hp*0x2E/5000` (idiv, trunc
+/// toward 0 — full 5000 → 0x18).
+pub fn hp_bar_sprite(hp: i32) -> u16 {
+    let (_, _, denom, scale) = SIDEBAR_HP_BAR;
+    let hp = hp.min(denom);
+    if hp < 1 {
+        SIDEBAR_HP_BAR.0
+    } else {
+        SIDEBAR_HP_BAR.0 - ((hp * scale) / denom) as u16
+    }
+}
+
+/// The armor bar sprite for a staged armor word [7f.1, asm
+/// 0x408129..0x40818b]: `0 → 0x8E` (the gate), else signed clamp
+/// ≤ 2500 then `0x8E - armor*0x2E/2500` capped `≤ 0x8D` — so any
+/// nonzero armor below ~55 shows the one-notch 0x8D and 2500+ shows
+/// the full 0x60.
+pub fn armor_bar_sprite(armor: i16) -> u16 {
+    let (empty, _, denom, scale, cap) = SIDEBAR_ARMOR_BAR;
+    if armor == 0 {
+        return empty;
+    }
+    let a = i32::from(armor).min(denom);
+    let s = empty - ((a * scale) / denom) as u16;
+    if s > cap {
+        cap
+    } else {
+        s
     }
 }
 
@@ -933,8 +1223,9 @@ fn draw_smlfont_text(plane: &mut [u8], bank: &[u8], text: &str, color: u8, x: i3
 /// 770-B synth GAMEPAL, and synth sidebar banks (GENERAL: tiny
 /// solid sprites for the portraits 0x12..0x17 + row chrome
 /// 0x47/0x49/0x4A/0x4C; SMLFONT: 63 uniform 2x2 glyphs — text
-/// draws as solid runs). Files in [`MissionScene::stage`] parameter
-/// order (MRK 5th, GENERAL + SMLFONT after GAMEPAL).
+/// draws as solid runs; NUMBERS: 12 strip sprites). Files in
+/// [`MissionScene::stage`] parameter order (MRK 5th, GENERAL +
+/// SMLFONT after GAMEPAL).
 #[cfg(test)]
 pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     let w = 4usize;
@@ -1000,10 +1291,13 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     assert_eq!(gamepal.len(), 770);
     // GENERAL: a synth UI bank — tiny 2x2 solid sprites for the
     // portraits (0x12..0x17), the row chrome (0x47/0x49 body +
-    // 0x4A/0x4C well), the map markers (0x55/0x56) and the map
-    // button chrome (0x5E), distinct pixel values per id so tests
-    // can tell them apart; everything else empty.
-    let general_count = 0x5Fu16;
+    // 0x4A/0x4C well), the map markers (0x55/0x56), the map button
+    // chrome (0x5E), and the HP/armor bar sprites the default
+    // vitals reach (0x18 full HP, 0x2F half HP, 0x46 empty HP,
+    // 0x60 full armor, 0x77 half armor, 0x8D one-notch armor,
+    // 0x8E empty armor — distinct pixel values per id so tests can
+    // tell them apart); everything else empty.
+    let general_count = 0x8Fu16;
     let mut general = vec![0u8; 2 + 4 * general_count as usize];
     general[0..2].copy_from_slice(&general_count.to_le_bytes());
     let put = |bank: &mut Vec<u8>, id: u16, color: u8| {
@@ -1023,6 +1317,13 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
         put(&mut general, id, 0x20 + id as u8);
     }
     for (id, color) in [
+        (0x18u16, 0x90u8),
+        (0x2F, 0x91),
+        (0x46, 0x92),
+        (0x60, 0x93),
+        (0x77, 0x94),
+        (0x8D, 0x95),
+        (0x8E, 0x96),
         (0x47u16, 0xA7u8),
         (0x49, 0xB9),
         (0x4A, 0xCA),
@@ -1078,10 +1379,30 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
         }
         maptran.push(ramp);
     }
+    // NUMBERS: the score-strip bank — 12 sprites (digits 0..9,
+    // 0xA score icon, 0xB money icon), tiny 2x2 solids with
+    // distinct per-id colors so strip tests can tell digits apart.
+    let numbers_count = 0xCu16;
+    let mut numbers = vec![0u8; 2 + 4 * numbers_count as usize];
+    numbers[0..2].copy_from_slice(&numbers_count.to_le_bytes());
+    for id in 0..numbers_count {
+        let entry = 2 + 4 * id as usize;
+        let start = numbers.len();
+        numbers.extend_from_slice(&3u16.to_le_bytes()); // flags: hotspot + RLE
+        numbers.extend_from_slice(&[0, 0, 0, 0]); // yhot, xhot
+        numbers.extend_from_slice(&2u16.to_le_bytes()); // w
+        numbers.extend_from_slice(&2u16.to_le_bytes()); // h
+        let color = 0xF0u16 + id;
+        numbers.extend_from_slice(&[0x02, 0x00, color as u8, color as u8, 0x00, 0xC0]);
+        numbers.extend_from_slice(&[0x02, 0x00, color as u8, color as u8, 0x00, 0xC0]);
+        let off = (start as u32) - entry as u32;
+        numbers[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
+    }
     let mut files = vec![
         tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont, table, min,
     ];
     files.extend(maptran); // f[14..22] — the eight ramps in slot order
+    files.push(numbers); // f[22] — the score-strip bank
     files
 }
 
@@ -1094,7 +1415,7 @@ mod tests {
         let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
         MissionScene::stage(
             &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], &f[10], &f[11],
-            &f[12], &f[13], &maptran, 0, None, markers,
+            &f[22], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
     }
@@ -1136,6 +1457,7 @@ mod tests {
                 "MAPTRAN6.TRN",
                 "MAPTRAN7.TRN",
                 "ZONEA/MISSIONA.MIN",
+                "NUMBERS.BIN",
             ]
         );
         assert_eq!(
@@ -1193,6 +1515,7 @@ mod tests {
                 gamepal,
                 &f[10],
                 &f[11],
+                &f[22],
                 &f[12],
                 &f[13],
                 &maptran,
@@ -1528,6 +1851,118 @@ mod tests {
             u16::from_le_bytes([m.sidebar_font_bank()[0], m.sidebar_font_bank()[1]]),
             63
         );
+    }
+
+    #[test]
+    fn bar_sprites_map_the_exw_arithmetic() {
+        // FUN_0040807f [7f.1, asm 0x4080a3..0x40818b]: clamp, empty
+        // gates, the idiv step, the armor cap.
+        assert_eq!(hp_bar_sprite(5000), 0x18, "full");
+        assert_eq!(hp_bar_sprite(6000), 0x18, "clamp <= 5000");
+        assert_eq!(hp_bar_sprite(2500), 0x46 - 23, "2500*46/5000 = 23");
+        assert_eq!(hp_bar_sprite(108), 0x46, "108*46/5000 = 0 (idiv trunc)");
+        assert_eq!(hp_bar_sprite(1), 0x46);
+        assert_eq!(hp_bar_sprite(0), 0x46, "hp < 1 -> empty");
+        assert_eq!(hp_bar_sprite(-5), 0x46, "signed");
+        assert_eq!(armor_bar_sprite(0), 0x8E, "gate word == 0");
+        assert_eq!(armor_bar_sprite(1), 0x8D, "0x8E-0 capped 0x8D");
+        assert_eq!(armor_bar_sprite(54), 0x8D, "54*46/2500 = 0 -> capped");
+        assert_eq!(armor_bar_sprite(55), 0x8D, "55*46/2500 = 1");
+        assert_eq!(armor_bar_sprite(1250), 0x8E - 23, "1250*46/2500 = 23");
+        assert_eq!(armor_bar_sprite(2500), 0x60, "full");
+        assert_eq!(armor_bar_sprite(3000), 0x60, "clamp <= 2500");
+    }
+
+    #[test]
+    fn bars_and_score_strip_draw_the_exw_semantics() {
+        // FUN_0040807f + FUN_004085ce [RE-EXW-SIM 7f, D52]: the bars
+        // map the staged vitals through the exact asm sprite
+        // arithmetic EVERY present, the strip draws the campaign
+        // state on its own countdown (armed 2 at activate, the
+        // pickup producer re-arms), the BATTERY PACK group
+        // re-derives hp (the landing formula 7f.8), and the pickup's
+        // two RandA draws advance the shared sim stream.
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        // Fresh vitals + campaign defaults.
+        assert_eq!(m.vitals(0), Vitals { hp: 5000, armor: 0 });
+        assert_eq!(m.campaign(), (0, 4000), "FRESH_CAMPAIGN (7d.4)");
+        let plane = m.present().expect("entry frame");
+        let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
+        // HP 5000 -> the full bar 0x18; armor 0 -> the gate sprite
+        // 0x8E (the empty armor bar still DRAWS); slots 0/1 of the
+        // 2-robot squad, slot 2 gated.
+        assert_eq!(px(plane, 0x1E8, 0x3C), 0x90, "slot 0 full HP bar");
+        assert_eq!(px(plane, 0x21A, 0x3C), 0x90, "slot 1 HP bar");
+        assert_eq!(px(plane, 0x24C, 0x3C), 0, "slot 2 gated (squad < 3)");
+        assert_eq!(px(plane, 0x1E8, 0x49), 0x96, "empty armor bar 0x8E draws");
+        // Strip: icon 0xA + score "000000000" + icon 0xB + money
+        // "004000" (the '4' at the 10^3 digit, x 0x225).
+        assert_eq!(px(plane, 0x1FE, 0x18E), 0xFA, "score icon 0xA");
+        assert_eq!(px(plane, 0x202, 0x18E), 0xF0, "score digit 10^8 = '0'");
+        assert_eq!(px(plane, 0x256, 0x18E), 0xF0, "score digit 10^0");
+        assert_eq!(px(plane, 0x20B, 0x1A4), 0xFB, "money icon 0xB");
+        assert_eq!(px(plane, 0x225, 0x1A4), 0xF4, "money 10^3 = '4'");
+        assert_eq!(px(plane, 0x245, 0x1A4), 0xF0, "money units '0'");
+        // Re-staged vitals re-map the bars every present; hp 0 gates
+        // the portrait but the stale pixels persist (the dither
+        // overlay is unwired — the plane keeps its pixels).
+        m.set_vitals(
+            0,
+            Vitals {
+                hp: 2500,
+                armor: 1250,
+            },
+        );
+        m.set_vitals(1, Vitals { hp: 0, armor: 3000 });
+        let plane = m.present().expect("bars redraw every present");
+        assert_eq!(px(plane, 0x1E8, 0x3C), 0x91, "hp 2500 -> 0x2F");
+        assert_eq!(px(plane, 0x1E8, 0x49), 0x94, "armor 1250 -> 0x77");
+        assert_eq!(px(plane, 0x21A, 0x3C), 0x92, "hp 0 -> empty 0x46");
+        assert_eq!(
+            px(plane, 0x21A, 0x49),
+            0x93,
+            "armor 3000 clamps -> full 0x60"
+        );
+        assert_eq!(px(plane, 0x219, 5), 0x36, "portrait stale (not redrawn)");
+        // The strip countdown drained (2 armed - 2 presents): a
+        // campaign re-stage alone does NOT redraw the strip; only
+        // the case-4 pickup producer re-arms it [7f.6].
+        for y in 0x18E..0x1B0 {
+            for x in 0x1FE..0x260 {
+                m.plane[y as usize * 640 + x] = 0;
+            }
+        }
+        m.set_campaign(123456789, 654321);
+        m.present();
+        assert_eq!(px(&m.plane, 0x1FE, 0x18E), 0, "no countdown, no strip");
+        // The pickup: award + countdown 2 + the two RandA draws move
+        // the shared sim stream (the hash covers it).
+        let sim_before = m.sim.state_hash().0;
+        m.pickup_score_money();
+        assert_eq!(m.score_strip_countdown(), 2);
+        let (score, money) = m.campaign();
+        let scored = PICKUP_AWARDS[0].iter().any(|&a| score == 123456789 + a);
+        let moneied = PICKUP_AWARDS[1].iter().any(|&a| money == 654321 + a);
+        assert!(
+            scored ^ moneied,
+            "exactly one award row fires: ({score}, {money})"
+        );
+        assert_ne!(
+            m.sim.state_hash().0,
+            sim_before,
+            "the two RandA draws advance the shared stream"
+        );
+        let plane = m.present().expect("the pickup re-arms the strip");
+        assert_eq!(px(plane, 0x202, 0x18E), 0xF1, "score still leads '1'");
+        assert_ne!(px(plane, 0x1FE, 0x18E), 0, "the icon redrew");
+        // The BATTERY PACK group re-derives hp: 5000 + 100*7 [7f.8].
+        let mut g = [(0u16, 0u16); 7];
+        g[2] = (WEAPON_BATTERY_PACK, 7);
+        m.set_weapon_loadout(0, &g);
+        assert_eq!(m.vitals(0).hp, 5700, "the landing formula");
+        m.set_weapon_loadout(1, &[(0, 0); 7]);
+        assert_eq!(m.vitals(1).hp, 5000, "battery 0 -> plain 5000");
     }
 
     #[test]

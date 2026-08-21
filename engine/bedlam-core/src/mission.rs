@@ -496,6 +496,16 @@ impl MissionSim {
         self.frame
     }
 
+    /// One `RandA()` draw from the SHARED mission stream [the EXW
+    /// global RandA; spawn variants, walk phases, and the pickup
+    /// awards all draw from it]. Read/write seam for host-staged
+    /// producers (RE-EXW-SIM 7f.6): every draw advances the stream
+    /// exactly like the original, so the sim hash moves with it —
+    /// nothing on the default corpus path calls this.
+    pub fn rand_a(&mut self) -> u32 {
+        self.rng.next_u32()
+    }
+
     /// Spawn a robot from an MRK marker record [FUN_0040cca0,
     /// verified]: `pos = tile*0x2000 + 0xF00`, `z = level*0x20 - 1`,
     /// probe cache seeded with z, variant = rng&3, then one
