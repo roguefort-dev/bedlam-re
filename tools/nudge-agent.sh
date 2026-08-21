@@ -131,7 +131,10 @@ if [ "$end_head" != "$start_head" ] && git cat-file -e "$start_head^{commit}" 2>
 fi
 
 kind=none
-if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
+# -i: the provider prints "Usage limit reached" (capital U); the
+# pre-2026-08-21 case-sensitive matcher missed it and every quota death
+# fell through to client-error (watchdog repair, 2026-08-21).
+if grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
 elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event" "$LOG"; then
   kind=transport
@@ -176,6 +179,27 @@ elif [ "$kind" = transport ]; then
   reap_note=""
   [ "$reaped" -eq 1 ] && reap_note=" (idle-log reaper)"
   echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task$reap_note" >> "$STATE/nudge.log"
+elif [ "$kind" = rate-limit ]; then
+  # Provider quota exhaustion is provider-side, not a task failure
+  # (watchdog repair, 2026-08-21: "Usage limit reached for 5 hour" killed
+  # every spawn at its first model call between 07:08 and 07:52, four
+  # deaths mislabeled client-error charged task c72d408d50275d04 with
+  # fails + 15-min cooldowns that rolled over repeatedly for the rest of
+  # the quota window). Never touch taskfails; instead hold this task in
+  # cooldown until the reset timestamp the provider prints (fallback and
+  # sanity cap: the standard 900s window) so the controller stands down
+  # instead of cycling doomed ~40s spawns. The llm-watchdog owns
+  # cross-item escalation (global pause) for longer or unparsable
+  # outages.
+  reset=$(grep -aoiE "will reset at [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}" "$LOG" | head -n 1 | cut -d' ' -f4-5)
+  until=$(date -d "$reset" +%s 2>/dev/null || echo 0)
+  now_ts=$(date +%s)
+  if [ "$until" -le "$now_ts" ] || [ "$until" -gt $(( now_ts + 21600 )) ]; then
+    until=$(( now_ts + 900 ))
+  fi
+  mkdir -p "$STATE/taskcooldown"
+  echo "$until" > "$STATE/taskcooldown/$task_hash"
+  echo "$(date -Is) agent item $item failed [rate-limit rc=$rc progress=$progress] task=$task_hash; provider quota, not charged to the task; cooling down until $(date -d "@$until" '+%F %T %z')" >> "$STATE/nudge.log"
 elif [ "$kind" != none ]; then
   # Failures are scoped to this task, not to the whole controller, so
   # unrelated items can never be blamed for (or cleared by) this run.
