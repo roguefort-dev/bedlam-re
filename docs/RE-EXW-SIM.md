@@ -715,6 +715,124 @@ per-robot loadout data — 7 groups of (name_idx, ammo) — with the
 faithful default EMPTY (fresh campaign, D51); the all-7 availability
 default + set_order_availability seam are removed. See DECISIONS D51.
 
+## 7e. Amendment 2026-08-21 (worker f4982e53, the map-overlay family —
+FUN_004089b1 fully decoded + the toggle family)
+
+New dumps `ghidra-project/exw-mapoverlay.txt` + `exw-mapoverlay2.txt`
+(scripts `tools/ghidra-scripts/ExwMapOverlay.java` + `ExwMapOverlay2.java`,
+-process -noanalysis) + objdump re-read of the whole EXE. Tags below
+[verified] = decompile+asm+file bytes agree.
+
+1. **FUN_004089b1@0x4089b1 = the strategic-map overlay draw**
+   [0x4089b1..0x408dcd, verified]:
+   a. Clear 0x4b000 bytes (640×480) of the backbuffer `[0x4ede18]`
+      via the rep-stos helper FUN_00402965 (ECX=0x4b000).
+   b. `FUN_00401e39(id=0, transp=1, x=0, y=0)` with ESI = the
+      TABLE.BIN arena `[0x46cbbc]`, EDI = backbuffer — image 0 is a
+      **480×480 RLE sprite** (TABLE.BIN bytes: dir count 1, entry+0
+      record flags 3 = RLE+hotspot, yhot/xhot 0/0, w=h=0x1E0). The
+      draw is the one .BIN blit with EXPLICIT dest+bank (FUN_00401e39
+      = the FUN_00401ca2 codec with EDI dest + ESI bank params).
+   c. Per-tile territory stamps: for row 0..H (`[0x4eddf0]`), col
+      0..W (`[0x4eddec]`), tile = `dword@(0x4ea900+4*row) + col`
+      (y-line table = plain row-major `r*W`, built by load_mission
+      0x41ddb1); record = `0x4796bc + tile*0x1E`; for z-word offset
+      0..0xE step 2:
+      - `w = word@(rec+zoff)` (the TOT type-DB mirror word);
+      - `cw = word@(0x45cdda + 2*w)` — **the LNK file image** (the
+        load_mission `.LNK` load lands AT 0x45cdda in .bss,
+        FUN_0041dbed concat + FUN_0041cc7f(EDX=0x45cdda) at
+        0x41dd13; the "0x45cdd8 table" of 7d.1 is the same image —
+        the dword read at 0x45cdd8+2w >>16 = word at 0x45cdda+2w);
+      - `word@(rec+zoff) = cw` (destructive chain-advance, the SAME
+        LNK step the terrain renderer does — idempotent on ZONEA's
+        identity LNK);
+      - if cw != 0: `FUN_00402ab8(cw, row'=(0x80+row+col)-zoff,
+        ramp, col'=(0xf0-2*row+2*col))` where
+        `variant = byte@(0x4c420c+tile)`, `ramp = u32@(0x4dd464 +
+        4*variant)`.
+   d. Robot markers: slot 0..`[0x46ccbc]`, gate ALIVE(+0x7C);
+      tile from Q13 ((v>>8)+0x10)>>5; sprite **0x55** when
+      (mode `[0x4edb88]`==0: slot == selected `[0x46cbdc]`; else
+      slot == player type `[0x4edb90]`), else **0x56**; GENERAL.BIN
+      (ESI `[0x4edd7c]`) FUN_00401e39 transp=1 at
+      x = 2*(tx−ty)+0xf0−0xc, y = tx+ty+0x80−0x1e−(z_dword>>4).
+   e. Mode != 2 only: per-player (0..5) PAD/order markers
+      0x57/0x58 (player 0 → 0x57) from the staging at
+      0x4eaaee+0x20*p — either the single staged marker (word@
+      0x4eab0c+0x20p indexes the 8-byte records {?,x,y,z} at
+      0x4e44f8+8*i) or the count@0x4eaaee>>16 walk of the
+      0x14-stride records at `[0x46cbf4]` + 0x4dedf2 type geometry
+      (0x408c94..0x408dc4, the order-target loop) — then the
+      active-order sprite **0x59** at 2x−2y+0xf0−0xc,
+      x+y+0x80−0x1e−2z from `[0x4eb8d0/d4/d8]` (writer
+      FUN_00425261).
+   f. The tail is `JMP 0x4072b8` (the FUN_00403938 epilogue) —
+      **the overlay draw NEVER RETURNS**: on an overlay frame the
+      sidebar passes, the countdown consumers and the button chrome
+      below 0x4071e3 are all skipped. This CORRECTS the 6c.8d
+      reading (the passes are not "run with the overlay off" by an
+      else-branch; they are skipped by the non-return).
+2. **FUN_00402ab8@0x402ab8 = the 4×4 territory stamp** [verified]:
+   dest = backbuffer + row'*0x280 + col'; mask =
+   `byte[16]@([0x4edd9c] + cw*0x10)`; for r,c in 4×4: if
+   mask[r*4+c] != 0: `dest[r*640+c] = ramp[mask[r*4+c]]` (XLAT
+   through EBX = the ramp base). The mask bank `[0x4edd9c]` =
+   ArenaAlloc(0x7530=30000 B) in FUN_0041d954@0x41dac7, filled by
+   load_mission with the mission's **`.MIN` file** (FUN_0041dbed
+   ".MIN" concat @0x41dcd8 + FUN_0041cc7f post-process) — MIN = the
+   mini-map mask bank, 16 B per LNK-resolved word.
+3. **The territory variant bytes 0x4c420c** [verified]: zeroed
+   0x27d8 bytes by MissionShell@0x4479e8; then FUN_00408dcc
+   (0x408dcc..0x408e98, called from robots()@0x40bc52 per robot in
+   state 2) max-stamps an 11×11-tile square around each robot's
+   tile: `variant[tile] = max(variant[tile], ring121[k])` with
+   ring121 = the 121 dwords at 0x454cf8 (Chebyshev-diamond rings:
+   7 center → 1 corners, PE bytes verified). So the variant = the
+   robot-proximity ring 0..7 = the MAPTRAN ramp selector.
+4. **MAPTRAN/PALTRAN loaders** [verified]:
+   - FUN_00422171: for i in 0..7 `LoadFile("GAMEGFX\MAPTRAN"+i+
+     ".TRN", u32@(0x4dd464+4i))` — 8 × 256-byte ramps
+     (MAPTRAN0..7.TRN each exactly 256 B, shipped).
+   - FUN_0042209b: same for "GAMEGFX\PALTRAN"+i+".TRN" into
+     u32@(0x4dd444+4i), and after the i=7 load `_DAT_004dd444 = 0`
+     (slot 0 NULLed). **This closes the MISSIONVIEW §8.2 producer
+     question for u32[0x4dd444]: the PALTRAN ramp pointers.**
+   - Both slot arrays allocated 8 × 0x100 in FUN_0041d954
+     (0x41db2d/0x41db45 loops).
+5. **The toggle family** [verified]:
+   - Strip (6c.1) writes `[0x4eb8dc] = 5` + toggles `[0x4edba0]`;
+     MissionShell decrements `[0x4eb8dc]` per frame while nonzero
+     (0x44871d..0x44872a) — a pure 5-frame re-fire lockout, no
+     other consumer.
+   - MissionShell entry zeroes `[0x4edba0]` (0x44786b, with
+     `[0x4ede34]` zoom and siblings).
+   - Present FUN_00401107 map mode (0x40110c): presents the
+     backbuffer top-left **480×480** (stride 640) directly — no
+     camera window, no zoom.
+   - mouse_l_click@0x40b868: overlay on + click x < 0x1e0 → the
+     game-area dispatch is SKIPPED (clicks swallowed); x ≥ 0x1e0
+     still reaches sidebar_control (so the toggle strip works while
+     the map is open).
+   - The button chrome in the FUN_00403938 tail (0x40724e..0x4072b2,
+     only reached when the overlay did NOT draw): mode ∈ {1,7} →
+     GENERAL.BIN sprite **0x8f**; else overlay on → **0x5f**; else
+     **0x5e**; at (0x213, 0x1b5) via FUN_00401ca2 — the exact strip
+     rect [0x213,0x24D]×[0x1B5,0x1CF].
+   - Sibling (open): FUN_0044874b = the camera-fly-to helper reading
+     the same 0x4e44f8 staging (map-click follow), gated by
+     `[0x4eb9f4] != -1`; FUN_00408dc6-family map click routing not
+     needed for the toggle slice.
+
+Engine seam (this unit): the overlay draw lives on the PRESENTATION
+half (D17): the toggle strip + the 5-frame lockout + the overlay bit
+in MissionScene; the draw = backdrop (TABLE.BIN image 0) + territory
+stamps (MIN masks × LNK words × MAPTRAN ramps × the variant rings
+around live robots) + markers (GENERAL 0x55..0x59); the map present
+presents the composed backbuffer; sim state untouched (never in the
+hash). Order-target markers 0x57..0x59 need the order staging (not
+modeled) — deliberately unwired (D50 never-invent).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -739,6 +857,13 @@ default + set_order_availability seam are removed. See DECISIONS D51.
 | sidebar order rows | x[0x1E9,0x275] × y[0x57,0xB8]; row=(y-0x57)/14 clamp ≤6; keys 1..7 latches 0x4edc18+4k | §6c.3/4 |
 | sidebar redraw flag | DAT_0046ccec countdown: set 2/3 by producers, dec+FUN_00408403 in the FUN_00403938 tail | 0x407205 |
 | map-toggle strip | x[0x213,0x24D] × y[0x1B5,0x1CF]; MSpace latch 0x4edc08; writes 0x4eb8dc=5, toggles 0x4edba0 | §6c.1 |
+| map overlay draw | FUN_004089b1: clear 0x4b000, TABLE.BIN img0 480×480 @(0,0), stamps row'=0x80+r+c−2z / col'=0xf0−2r+2c, markers 0x55..0x59; non-returning tail | §7e |
+| territory variant | byte@0x4c420c+tile; zeroed 0x27d8 by MissionShell; 11×11 max-stamp rings 7..1 (dwords 0x454cf8) around robots (FUN_00408dcc ← robots() state 2) | §7e |
+| MAPTRAN ramps | u32@(0x4dd464+4i) ← GAMEGFX\MAPTRAN{i}.TRN (256 B each, i 0..7); ramp[mask byte] = palette byte | §7e |
+| PALTRAN ramps | u32@(0x4dd444+4i) ← GAMEGFX\PALTRAN{i}.TRN, slot 0 NULLed after load (MISSIONVIEW §8.2 producer closed) | §7e |
+| LNK map lookup | cw = word@(0x45cdda + 2*w) — the LNK image doubles as the map type→mask index; masks = .MIN bank [0x4edd9c] (16 B/cw) | §7e |
+| map present | FUN_00401107 map mode: 480×480 from backbuffer base, stride 640; button chrome 0x8f/0x5f/0x5e @ (0x213,0x1b5) | §7e |
+| backbuffer | [0x4ede18] = ArenaAlloc(0x64000) = 640×640; overlay clears 0x4b000 (480 rows) | §7e |
 | order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
 | DAT tables | z-base@0x4eaacc, y-line@0x4ea900 | 0041eb28 |
 | loader | load_mission@0041dc5a; paths@0x44670c; sweep ≥0x80→0 planes 0..6; PAD→DAT 0xFF @ plane=kind | 7c |

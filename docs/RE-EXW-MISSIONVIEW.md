@@ -268,11 +268,12 @@ entity/overlay banks + game palette (GAMEPAL 0x4edbf8; 7c's 0x302-B
 copy target). TABLE.BIN identity pinned 2026-08-21 (RE-EXW-SIM 7d):
 a draw_IMG-family bank whose image 0 is the strategic-map backdrop —
 sole reader FUN_004089b1 (the map overlay); the per-tile map colors
-come from the 0x45cdd8+2*type word table (PALTRAN/MAPTRAN .TRN kin).
-The 0x64000 tile buffer is NOT cleared by init_tiles
-beyond the rep-stos in init_tiles itself (0x64000 bytes — full clear
-each mission start; per-frame the terrain pass overwrites everything
-the present window reads).
+are LNK-image words (0x45cdda + 2*type — the §7e correction of the
+"0x45cdd8 table" gloss) feeding .MIN 4×4 masks through the MAPTRAN
+ramps. The shared backbuffer [0x4ede18] = ArenaAlloc(0x64000)
+(640×640); init_tiles clears all 0x64000 bytes each mission start,
+the overlay draw clears the top 0x4b000 (640×480) per frame; the
+terrain pass overwrites everything the present window reads.
 
 ## 7. Present: FUN_00401107 → FUN_00401010/FUN_004012f7 [verified]
 
@@ -297,8 +298,12 @@ the present window reads).
    height bias, anim window). Zero-filled on ZONEA → no effect on the
    P4 corpus gate; find the writer (editor? BIN-side fixup?) later.
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
-   sequence: producers unfound (likely BIN/TABLE.BIN parse);
-   ZONEA/M1 LNK identity cells make frames irrelevant there.
+   sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
+   u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader
+   FUN_0042209b, slot 0 NULLed after load); u32[0x4dd464+4i] the 8
+   MAPTRAN ramp pointers (FUN_00422171). The `u32[0x456ca8]` anim
+   sequence producer is still open; ZONEA/M1 LNK identity cells make
+   frames irrelevant there.
 3. ~~FUN_00403938's entity loops~~ **CLOSED 2026-08-21**: the robot
    entity loop + FUN_0040798e/0179b enqueue/flush are decoded (§5b–§5d)
    and wired into bedlam-render. Remaining out-of-scope tail: the
