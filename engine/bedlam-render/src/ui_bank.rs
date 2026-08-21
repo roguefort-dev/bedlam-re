@@ -63,6 +63,74 @@ pub fn sprite_geometry(bank: &[u8], id: u16) -> Option<(i32, i32, i32, i32)> {
     Some((s.w, s.h, s.xhot, s.yhot))
 }
 
+/// The SMLFONT glyph fill `FUN_00402884(glyph, color, x, y)` [asm
+/// 0x402884..0x402964, verified 2026-08-21]: resolve glyph `id` (the
+/// caller passes `ch - 0x21`), add the record hotspot to (x, y), then
+/// walk the RLE control words — bit15 = skip run (word & 0xFFF), bit14
+/// = end-of-line, else a literal run whose bytes are each consumed
+/// from the record and each write the SOLID `color` byte (the source
+/// bytes are a mask the EXW never reads). Bit14 ends the line in BOTH
+/// word forms — a literal word with bit14 set paints its run AND ends
+/// the line [asm 0x40293e] (the shipped SMLFONT glyphs use exactly
+/// that form). The EXW checks NO raw-mode
+/// flag here: the walk is unconditional (the shipped SMLFONT glyphs
+/// are all RLE, flags 3); this implementation is faithful to that —
+/// a raw record would be walked as controls exactly like the original.
+/// Zero w or h draws nothing (the early-outs at 0x4028d6/0x4028e9);
+/// off-plane pixels clip; running off the record stops the decode.
+pub fn draw_glyph(
+    plane: &mut [u8],
+    stride: usize,
+    bank: &[u8],
+    id: u16,
+    color: u8,
+    x: i32,
+    y: i32,
+) {
+    let Some(s) = UiSprite::resolve(bank, id) else {
+        return;
+    };
+    if s.w == 0 || s.h == 0 {
+        return;
+    }
+    let rows = plane.len() / stride;
+    let x0 = x + s.xhot;
+    let y0 = y + s.yhot;
+    let get = |p: usize| -> Option<u8> { s.data.get(p).copied() };
+    let mut p = 0usize;
+    'rows: for row in 0..s.h {
+        let mut col = 0i32;
+        loop {
+            let (Some(lo), Some(hi)) = (get(p), get(p + 1)) else {
+                break 'rows;
+            };
+            p += 2;
+            let w = u16::from_le_bytes([lo, hi]);
+            if w & 0x8000 != 0 {
+                if w & 0x4000 != 0 {
+                    break; // end of line
+                }
+                col += i32::from(w & 0x0FFF);
+            } else {
+                for _ in 0..usize::from(w & 0x0FFF) {
+                    let Some(_mask) = get(p) else {
+                        break 'rows;
+                    };
+                    p += 1; // the mask byte is consumed, never read
+                    let (px, py) = (x0 + col, y0 + row);
+                    if px >= 0 && py >= 0 && (px as usize) < stride && (py as usize) < rows {
+                        plane[py as usize * stride + px as usize] = color;
+                    }
+                    col += 1;
+                }
+                if w & 0x4000 != 0 {
+                    break; // literal run + end of line [asm 0x40293e]
+                }
+            }
+        }
+    }
+}
+
 /// Draw sprite `id` from `bank` onto `plane` (`stride` wide, row
 /// major) at (x, y) plus the record hotspot, honoring the EXW
 /// transp flag. Returns whether the sprite resolved with a nonzero
@@ -93,7 +161,16 @@ pub fn draw_sprite(
     let get = |p: usize| -> Option<u8> { s.data.get(p).copied() };
     if s.flags & 1 != 0 {
         // RLE: control int16 — bit15 skip (word & 0xFFF), bit14
-        // end-of-line, else literal run [FUN_00401ca2, verified].
+        // end-of-line, else a literal run of (word & 0xFFF) bytes
+        // [FUN_00401ca2 asm 0x401d78..0x401e38, RE-VERIFIED
+        // 2026-08-21]. The bit14 check runs in BOTH branches — a
+        // literal word with bit14 set paints its run AND ends the
+        // line (every shipped sidebar sprite row is exactly one
+        // `0x4000|w` word). Transparency does NOT filter in RLE
+        // mode: transp != 0 copies literal bytes verbatim
+        // (0x401d82's rep movsb) while skip runs leave the plane;
+        // transp == 0 writes ZEROS on skip runs (0x401df8's
+        // rep stos) and copies literals verbatim.
         let mut p = 0usize;
         'rows: for row in 0..s.h {
             let mut col = 0i32;
@@ -107,17 +184,25 @@ pub fn draw_sprite(
                     if w & 0x4000 != 0 {
                         break; // end of line
                     }
-                    col += i32::from(w & 0x0FFF);
+                    let run = i32::from(w & 0x0FFF);
+                    if !transparent {
+                        // opaque: a skip paints zeros (rep stos)
+                        for k in 0..run {
+                            set(x0 + col + k, y0 + row, 0);
+                        }
+                    }
+                    col += run; // transp: leave the plane untouched
                 } else {
                     for _ in 0..usize::from(w & 0x0FFF) {
                         let Some(b) = get(p) else {
                             break 'rows;
                         };
                         p += 1;
-                        if b != 0 || !transparent {
-                            set(x0 + col, y0 + row, b);
-                        }
+                        set(x0 + col, y0 + row, b); // verbatim
                         col += 1;
+                    }
+                    if w & 0x4000 != 0 {
+                        break; // literal run + end of line
                     }
                 }
             }
@@ -307,6 +392,87 @@ mod tests {
         assert!(draw_sprite(&mut plane, 4, &bank, 0, 0, 0, true));
         assert_eq!(plane[0], 0x77);
         assert_eq!(plane.iter().filter(|&&b| b != 0).count(), 1);
+    }
+
+    #[test]
+    fn glyph_fill_paints_solid_color_runs() {
+        // FUN_00402884: literal runs write the COLOR byte (the mask
+        // bytes are consumed unread); skips advance; a literal word
+        // with bit14 set paints its run AND ends the line (the
+        // shipped-glyph form); the hotspot shifts. 4x2 glyph,
+        // hotspot (+1, 0):
+        // row 0: skip 1, literal 2 (mask 0x4D 0x4D), EOL
+        // row 1: literal 3 + EOL as one 0x4003 word (shipped form)
+        let rows: &[u8] = &[
+            0x01, 0x80, // skip 1
+            0x02, 0x00, 0x4D, 0x4D, // literal 2
+            0x00, 0xC0, // EOL
+            0x03, 0x40, 0x4D, 0x4D, 0x4D, // literal 3 + EOL
+        ];
+        let bank = synth_bank(
+            1,
+            &[SynthSprite {
+                id: 0,
+                flags: 3,
+                xhot: 1,
+                yhot: 0,
+                w: 4,
+                h: 2,
+                rows,
+            }],
+        );
+        let mut plane = vec![0u8; 8 * 4];
+        draw_glyph(&mut plane, 8, &bank, 0, 0x24, 5, 2);
+        // (5,2) + hotspot (1,0) = (6,2). Row 0: skip 1, literal 2 ->
+        // (7,2) + (8,2) CLIPPED (stride 8). Row 1: literal 3 ->
+        // (6,3),(7,3) + (8,3) clipped.
+        assert_eq!(plane[2 * 8 + 7], 0x24);
+        assert_eq!(plane[3 * 8 + 6], 0x24);
+        assert_eq!(plane[3 * 8 + 7], 0x24);
+        assert_eq!(
+            plane.iter().filter(|&&b| b == 0x24).count(),
+            3,
+            "2 + 3 literal bytes, the two px-8 ones clipped"
+        );
+        // Zero-extent glyph: nothing.
+        let empty = synth_bank(
+            1,
+            &[SynthSprite {
+                id: 0,
+                flags: 3,
+                xhot: 0,
+                yhot: 0,
+                w: 0,
+                h: 0,
+                rows: &[],
+            }],
+        );
+        let mut plane = vec![7u8; 16];
+        draw_glyph(&mut plane, 4, &empty, 0, 0x24, 0, 0);
+        assert!(plane.iter().all(|&b| b == 7), "w=0 draws nothing");
+    }
+
+    #[test]
+    fn shipped_smlfont_glyph_decodes_as_a_color_mask() {
+        // The shipped SMLFONT.BIN: 63 glyphs (chars 0x21..0x5E),
+        // flags 3, literal bytes 0x4D as the mask [RE-EXW-SIM 6c.8c].
+        let Ok(smlfont) = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../game-data/BEDLAM/GAMEGFX/SMLFONT.BIN"),
+        ) else {
+            eprintln!("corpus absent - skipping (CI)");
+            return;
+        };
+        let count = u16::from_le_bytes([smlfont[0], smlfont[1]]);
+        assert_eq!(count, 63);
+        // Glyph 0 ('!') is 4x7 with hotspot x=1 (y=0) and paints 0x24.
+        assert_eq!(sprite_geometry(&smlfont, 0), Some((4, 7, 1, 0)));
+        let mut plane = vec![0u8; 16 * 16];
+        draw_glyph(&mut plane, 16, &smlfont, 0, 0x24, 0, 0);
+        let painted = plane.iter().filter(|&&b| b == 0x24).count();
+        assert!(painted > 0 && painted < 4 * 7, "'!' paints {painted} px");
+        // The underscore (glyph 62) is w=0: pure advance marker.
+        assert_eq!(sprite_geometry(&smlfont, 62), Some((0, 0, 6, 7)));
     }
 
     /// The shipped banks (corpus-gated, skipped on CI): the sidebar

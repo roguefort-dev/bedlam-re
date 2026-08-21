@@ -477,6 +477,17 @@ impl GameHost {
         self.mission.as_ref()
     }
 
+    /// The mutable mission seam [D51]: in the original the weapon
+    /// loadout (the .bss session table at 0x4de664) is written by
+    /// the shop FUN_00440e45 / a save-load / the MP lobby BEFORE the
+    /// mission [RE-EXW-SIM 7d]; those shells are not modeled, so the
+    /// host stands in for them via
+    /// [`MissionScene::set_weapon_loadout`]. Nothing else should
+    /// reach through here.
+    pub fn mission_mut(&mut self) -> Option<&mut MissionScene> {
+        self.mission.as_mut()
+    }
+
     /// Type one character into the active name entry (the explicit
     /// shell text path, D42.6). False when no name entry is active.
     pub fn menu_type_char(&mut self, c: u8) -> bool {

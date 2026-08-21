@@ -29,7 +29,7 @@ use bedlam_core::rng::Pcg32;
 use bedlam_render::mission_view::{
     present_window, DrawParams, MissionView, RobotView, VIEW_BUF_LEN,
 };
-use bedlam_render::ui_bank::draw_sprite;
+use bedlam_render::ui_bank::{draw_glyph, draw_sprite, sprite_geometry};
 use bedlam_render::Vga6;
 
 use crate::loading::Plane;
@@ -62,52 +62,121 @@ pub const SIDEBAR_ROW_SPRITES: [(u16, u16); 2] = [(0x47, 0x4A), (0x49, 0x4C)];
 pub const SIDEBAR_PORTRAIT_IDS: (u16, u16) = (0x12, 0x15);
 /// Select-portrait x base + pitch (the strip x positions) + y.
 pub const SIDEBAR_PORTRAIT_XY: (i32, i32, i32) = (0x1E7, 0x32, 5);
+/// Order-row NAME text x + COUNT text x [sec 6c.8a, asm 0x408507/
+/// 0x408539], both at y = 0x5B + 14*i (the row body +2), color
+/// 0x24 [asm 0x4084f8/0x40853e], drawn through SMLFONT
+/// (FUN_00408913, 5x7 glyphs).
+pub const SIDEBAR_ROW_TEXT: (i32, i32, i32, i32, u8) = (0x1ED, 0x25C, 0x5B, 14, 0x24);
+
+/// The compiled-in weapon-name switch `FUN_00420260` [verified
+/// decompile + PE string bytes 0x4589DD..0x458C11, RE-EXW-SIM 7d.5]:
+/// group word0 (the name index) -> the row label. Every unlisted
+/// index (incl. 0, 1, 5, 0xD, 0xF, 0x17, 0x1A, 0x24, 0x29) falls to
+/// "ERROR"; index 0 never reaches a draw (it is the row gate).
+pub fn weapon_name(index: u16) -> &'static str {
+    match index {
+        2 => "NEEDLER CANNON #1",
+        3 => "NEEDLER CANNON #2",
+        4 => "NEEDLER CANNON #3",
+        6 => "PLASMA CANNON X1",
+        7 => "PLASMA CANNON X2",
+        8 => "PLASMA CANNON X3",
+        9 => "HADES BOMB #1",
+        10 => "HADES BOMB #2",
+        0xB => "HADES BOMB #3",
+        0xE => "FLAME BOMB",
+        0x10 => "PROXIMITY MINE X2",
+        0x11 => "PROXIMITY MINE X4",
+        0x12 => "PROXIMITY MINE X6",
+        0x14 => "PRESSURE MINE X2",
+        0x15 => "PRESSURE MINE X4",
+        0x16 => "PRESSURE MINE X6",
+        0x18 => "FRAG GRENADE #1",
+        0x19 => "FRAG GRENADE #2",
+        0x1B => "BOUNCY GRENADE X4",
+        0x1C => "BOUNCY GRENADE X6",
+        0x1D => "STICKY GRENADE X4",
+        0x1E => "STICKY GRENADE X6",
+        0x20 => "ROCKET PACK X1",
+        0x21 => "ROCKET PACK X3",
+        0x22 => "ROCKET PACK X6",
+        0x23 => "ROCKET PACK X9",
+        0x25 => "REAPER PACK X1",
+        0x26 => "REAPER PACK X2",
+        0x27 => "REAPER PACK X4",
+        0x28 => "REAPER PACK X6",
+        0x2A => "AUTO SHIELDING",
+        0x2B => "BATTERY PACK",
+        0x2C => "THERMAL DAMPER",
+        0x2D => "SCANNER LEVEL 2",
+        0x2E => "SCANNER LEVEL 3",
+        _ => "ERROR",
+    }
+}
+
+/// One weapon-table group: the two words the mission reads. Word0 =
+/// the weapon NAME index into [`weapon_name`] (0 = no weapon in the
+/// group — the row gate). Word1 = the AMMO count (the click/key
+/// gate + the displayed count, clamped 9999 at draw). The other
+/// five words of the EXW group (price/category/item/stock/owned)
+/// are shop-side state the mission never reads [RE-EXW-SIM 7d.2].
+pub type WeaponGroup = (u16, u16);
+
+/// The per-robot weapon table row: 7 groups [sec 6c.6 — the
+/// 0x62-stride table row the spawn stats-copy reads].
+pub type WeaponLoadout = [WeaponGroup; 7];
 
 /// The sidebar presentation half [RE-EXW-SIM sec 6c; D17 split —
 /// none of this enters the sim state hash]: the selected squad slot
 /// (`DAT_0046cbdc`), the redraw countdown (`DAT_0046ccec`: producers
 /// set 2, the draw tail decrements while nonzero and runs the sidebar
 /// redraw pass FUN_00408403 — modeled here as the countdown alone),
-/// and the per-robot order-bits word (+0x6E) with its 7-bit
-/// availability mask (the +0x38+8k gate words; the type-table file
-/// source is open, so availability defaults to all-7 [design] and a
-/// host seam installs the real mask when the table lands).
+/// the per-robot order-bits word (+0x6E), and the per-robot WEAPON
+/// LOADOUT — the 7 groups of the 0x62-stride session table at
+/// 0x4de664 [7d: .bss session state written by the shop/save/MP
+/// paths, NOT file-loaded; the fresh-campaign default is EMPTY]. The
+/// host stages a loadout through [`MissionScene::set_weapon_loadout`]
+/// (the D51 seam) exactly when a test wants rows on screen.
 #[derive(Debug, Default)]
 struct Sidebar {
     selected: usize,
     redraw: i32,
     order_bits: Vec<u16>,
-    order_avail: Vec<u8>,
+    weapons: Vec<WeaponLoadout>,
 }
 
 impl Sidebar {
-    /// Per-robot state at spawn [sec 6c.6]: availability default
-    /// 0x7F [design], order bits `1 << first available` (= bit 0
-    /// under the default mask), selected slot 0 (load_markers
-    /// 0x40ce0e), redraw 0 (the MissionShell entry reset 0x4478bf).
+    /// Per-robot state at spawn [sec 6c.6 over the real table rule,
+    /// 7d.4]: loadout EMPTY (the fresh-campaign default — the shop
+    /// runs before every mission and only purchases fill groups), so
+    /// the spawn stats-copy arms NO bit; selected slot 0
+    /// (load_markers 0x40ce0e), redraw 0 (the MissionShell entry
+    /// reset 0x4478bf).
     fn new(robots: usize) -> Sidebar {
         Sidebar {
             selected: 0,
             redraw: 0,
-            order_bits: (0..robots)
-                .map(|_| default_order_bits(ALL_ORDERS))
-                .collect(),
-            order_avail: vec![ALL_ORDERS; robots],
+            order_bits: vec![0; robots],
+            weapons: vec![[(0, 0); 7]; robots],
         }
     }
 }
 
-/// Default availability until the type table lands [design].
-const ALL_ORDERS: u8 = 0x7F;
-
-/// `1 << first available group` [sec 6c.6]; 0 when nothing is
-/// available (matches the EXW: no group word0 nonzero -> no bit).
-const fn default_order_bits(avail: u8) -> u16 {
-    if avail == 0 {
-        0
-    } else {
-        1u16 << avail.trailing_zeros()
+/// The spawn stats-copy armer over a loadout row [sec 6c.6, verified
+/// asm 0x40ceb2..0x40cf70]: `1 << first group whose word0 != 0`,
+/// 0 when no group carries a weapon (the fresh-campaign case — the
+/// EXW `found` flag simply never sets).
+const fn spawn_order_bits(groups: &WeaponLoadout) -> u16 {
+    let mut bits = 0u16;
+    let mut i = 0;
+    while i < 7 {
+        if groups[i].0 != 0 {
+            bits = 1 << i;
+            break;
+        }
+        i += 1;
     }
+    bits
 }
 
 /// Robots spawned per player from the MRK records
@@ -417,16 +486,18 @@ impl MissionScene {
             }
         }
         // Order rows [sec 6c.4]: row = (y - 0x57)/14 clamped to 6,
-        // gate = the selected robot's availability bit, toggle the
-        // bit in its order-bits word.
+        // gate = the selected robot's group AMMO word (record
+        // +0x38+8k — the count word, NOT the name gate; sec 6c.3),
+        // toggle the bit in its order-bits word.
         let (x0, x1, y0, y1) = SIDEBAR_ORDER_RECT;
         if (x0..=x1).contains(&x) && (y0..=y1).contains(&y) {
             let row = (((y - SIDEBAR_ORDER_ROW.0) / SIDEBAR_ORDER_ROW.1) as usize).min(6);
             let robot = self.sidebar.selected;
-            let avail = self.sidebar.order_avail.get(robot).copied().unwrap_or(0);
-            if avail >> row & 1 != 0 {
-                self.sidebar.order_bits[robot] ^= 1 << row;
-                self.sidebar.redraw = 2;
+            if let Some(groups) = self.sidebar.weapons.get(robot) {
+                if groups[row].1 != 0 {
+                    self.sidebar.order_bits[robot] ^= 1 << row;
+                    self.sidebar.redraw = 2;
+                }
             }
         }
     }
@@ -512,25 +583,30 @@ impl MissionScene {
         Some(&self.plane)
     }
 
-    /// The FUN_00408403 order-row chrome pass [sec 6c.8a]: 7 rows
-    /// over the SELECTED robot, row i drawn iff its availability
-    /// bit is set (the name-index gate analog), armed rows (the
-    /// order-bits word bit i) drawing sprites 0x47 + 0x4A, unarmed
-    /// rows 0x49 + 0x4C, at (0x1EB, 0x59+14i) and (0x25A, 0x59+14i)
-    /// from GENERAL.BIN. Presentation half only.
+    /// The FUN_00408403 order-row pass [sec 6c.8a]: 7 rows over the
+    /// SELECTED robot, row i drawn iff its group word0 (the NAME
+    /// index) is nonzero — no weapon, no row; armed rows (the
+    /// order-bits word bit i) draw sprites 0x47 + 0x4A, unarmed rows
+    /// 0x49 + 0x4C at (0x1EB, 0x59+14i) and (0x25A, 0x59+14i) from
+    /// GENERAL.BIN; then the NAME text [`weapon_name`] at (0x1ED,
+    /// 0x5B+14i) and the COUNT as "%04i" of the ammo word clamped
+    /// 9999 (the 4-digit template @0x457A28/0x457A2E) at (0x25C,
+    /// 0x5B+14i), both color 0x24 through SMLFONT [asm
+    /// 0x4084f4..0x408549]. Presentation half only.
     fn draw_sidebar_rows(&mut self) {
         let robot = self.sidebar.selected;
-        let Some(&avail) = self.sidebar.order_avail.get(robot) else {
+        let Some(groups) = self.sidebar.weapons.get(robot) else {
             return;
         };
         let bits = self.sidebar.order_bits.get(robot).copied().unwrap_or(0);
         let (y0, pitch) = SIDEBAR_ROW_SPRITE_Y;
-        for i in 0..7u8 {
-            if avail >> i & 1 == 0 {
+        let (name_x, count_x, text_y, text_pitch, color) = SIDEBAR_ROW_TEXT;
+        for (i, &(name_idx, ammo)) in groups.iter().enumerate() {
+            if name_idx == 0 {
                 continue; // no weapon in this group
             }
             let armed = usize::from(bits >> i & 1 == 0);
-            let y = y0 + pitch * i32::from(i);
+            let y = y0 + pitch * i as i32;
             let (body, well) = SIDEBAR_ROW_SPRITES[armed];
             draw_sprite(
                 &mut self.plane,
@@ -550,6 +626,19 @@ impl MissionScene {
                 y,
                 true,
             );
+            let ty = text_y + text_pitch * i as i32;
+            let bank = &self.smlfont;
+            draw_smlfont_text(
+                &mut self.plane,
+                bank,
+                weapon_name(name_idx),
+                color,
+                name_x,
+                ty,
+            );
+            let count = ammo.min(9999);
+            let text = format!("{:04}", count);
+            draw_smlfont_text(&mut self.plane, bank, &text, color, count_x, ty);
         }
     }
 
@@ -625,15 +714,48 @@ impl MissionScene {
         self.sidebar.order_bits.get(robot).copied().unwrap_or(0)
     }
 
-    /// Install a robot's order-availability mask (the +0x38+8k gate
-    /// words, sec 6c.6) — the host seam standing in for the
-    /// runtime-loaded per-type order table at 0x4de664 until its
-    /// file source is decoded; the default is all-7 [design]. The
-    /// robot's order bits keep their current value (the EXW writes
-    /// the mask once at spawn).
-    pub fn set_order_availability(&mut self, robot: usize, mask: u8) {
-        if let Some(slot) = self.sidebar.order_avail.get_mut(robot) {
-            *slot = mask;
+    /// The robot's weapon-loadout row (the 0x4de664+type*0x62 groups
+    /// the spawn stats-copy read; 7d — host-staged session state).
+    pub fn weapon_loadout(&self, robot: usize) -> Option<&WeaponLoadout> {
+        self.sidebar.weapons.get(robot)
+    }
+
+    /// Stage a robot's WEAPON LOADOUT — the D51 host seam for the
+    /// .bss session table at 0x4de664 [RE-EXW-SIM 7d.2]: in the
+    /// original the shop FUN_00440e45 / a save-load / the MP lobby
+    /// write the row before the mission; here the host stands in for
+    /// them. Group word0 = the weapon NAME index (0 = empty group),
+    /// word1 = the AMMO count. Runs the exact §6c.6 spawn-copy
+    /// arithmetic over the new row — the robot's order-bits word
+    /// re-derives as `1 << first group with word0 != 0` (0 when the
+    /// row is empty), exactly what load_markers would have written.
+    pub fn set_weapon_loadout(&mut self, robot: usize, groups: &WeaponLoadout) {
+        if let Some(slot) = self.sidebar.weapons.get_mut(robot) {
+            *slot = *groups;
+            self.sidebar.order_bits[robot] = spawn_order_bits(groups);
+        }
+    }
+}
+
+/// The SMLFONT text draw `FUN_00408913(str, x, y, color)` [verified
+/// decompile, RE-EXW-SIM 6c.8c]: chars < 0x21 advance 6 px without
+/// drawing (the space), any other char draws glyph `ch - 0x21`
+/// filled with `color` (FUN_00402884) and advances `w + 1`. Chars
+/// at or above 0x7F remap through the FUN_00410493 codepage family
+/// in the EXW — the weapon names and "%04i" counts are pure ASCII,
+/// so the remap is unreachable here and the byte is skipped
+/// defensively.
+fn draw_smlfont_text(plane: &mut [u8], bank: &[u8], text: &str, color: u8, x: i32, y: i32) {
+    let mut cx = x;
+    for &b in text.as_bytes() {
+        let ch = u32::from(b);
+        if ch < 0x21 {
+            cx += 6;
+        } else if ch < 0x7F {
+            let id = (ch - 0x21) as u16;
+            draw_glyph(plane, 640, bank, id, color, cx, y);
+            let w = sprite_geometry(bank, id).map_or(0, |g| g.0);
+            cx += w + 1;
         }
     }
 }
@@ -644,9 +766,9 @@ impl MissionScene {
 /// stay put), SINTABLE-shaped angle words, an empty DANTE bank, a
 /// 770-B synth GAMEPAL, and synth sidebar banks (GENERAL: tiny
 /// solid sprites for the portraits 0x12..0x17 + row chrome
-/// 0x47/0x49/0x4A/0x4C; SMLFONT: 63 empty glyphs — no text draws).
-/// Files in [`MissionScene::stage`] parameter order (MRK 5th,
-/// GENERAL + SMLFONT after GAMEPAL).
+/// 0x47/0x49/0x4A/0x4C; SMLFONT: 63 uniform 2x2 glyphs — text
+/// draws as solid runs). Files in [`MissionScene::stage`] parameter
+/// order (MRK 5th, GENERAL + SMLFONT after GAMEPAL).
 #[cfg(test)]
 pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     let w = 4usize;
@@ -728,9 +850,24 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     for (id, color) in [(0x47u16, 0xA7u8), (0x49, 0xB9), (0x4A, 0xCA), (0x4C, 0xDC)] {
         put(&mut general, id, color);
     }
-    // SMLFONT: 63 entries, all empty (no text draws this slice).
+    // SMLFONT: 63 glyphs, every one a 2x2 solid mask in the shipped
+    // one-word-per-row form (`0x4002|mask,mask`) so the row TEXT
+    // draws land (each glyph advances w+1 = 3 px; chars < 0x21
+    // advance 6).
     let mut smlfont = vec![0u8; 2 + 4 * 63];
     smlfont[0..2].copy_from_slice(&63u16.to_le_bytes());
+    for id in 0..63u16 {
+        let entry = 2 + 4 * id as usize;
+        let start = smlfont.len();
+        smlfont.extend_from_slice(&3u16.to_le_bytes()); // flags: hotspot + RLE
+        smlfont.extend_from_slice(&[0, 0, 0, 0]); // yhot, xhot
+        smlfont.extend_from_slice(&2u16.to_le_bytes()); // w
+        smlfont.extend_from_slice(&2u16.to_le_bytes()); // h
+        smlfont.extend_from_slice(&[0x02, 0x40, 0x4D, 0x4D]); // literal 2 + EOL
+        smlfont.extend_from_slice(&[0x02, 0x40, 0x4D, 0x4D]); // literal 2 + EOL
+        let off = (start as u32) - entry as u32;
+        smlfont[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
+    }
     vec![
         tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont,
     ]
@@ -962,7 +1099,7 @@ mod tests {
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
         assert_eq!(m.sidebar_selected(), 0, "slot 0 selected at spawn");
-        assert_eq!(m.order_bits(0), 1, "spawn default = 1<<first available");
+        assert_eq!(m.order_bits(0), 0, "fresh-campaign loadout: no bit [7d.4]");
         assert_eq!(
             m.sidebar_redraw(),
             2,
@@ -993,13 +1130,25 @@ mod tests {
     #[test]
     fn sidebar_order_rows_toggle_the_selected_robot() {
         // Row click on the SELECTED robot's bits word: row = (y -
-        // 0x57)/14 clamp 6, gate = availability, toggle + redraw = 2
-        // [sec 6c.4, asm 0x40d659..0x40d712].
+        // 0x57)/14 clamp 6, gate = the group AMMO word (record
+        // +0x38+8k, sec 6c.3), toggle + redraw = 2 [sec 6c.4, asm
+        // 0x40d659..0x40d712]. Stage a full 7-group loadout on both
+        // robots (the D51 seam; the fresh default is empty).
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
+        let full = |ammo0: u16| {
+            let mut g = [(0u16, 0u16); 7];
+            for (i, slot) in g.iter_mut().enumerate() {
+                *slot = ((2 + i as u16) * 3, if i == 0 { ammo0 } else { 5 });
+            }
+            g
+        };
+        m.set_weapon_loadout(0, &full(4));
+        m.set_weapon_loadout(1, &full(1));
+        assert_eq!(m.order_bits(0), 1, "spawn armer = 1<<first group");
+        assert_eq!(m.order_bits(1), 1);
         // Select slot 1, then click row 0 of the order rect.
         sidebar_click(&mut m, 0x219, 5);
-        assert_eq!(m.order_bits(1), 1, "robot 1 spawn default");
         sidebar_click(&mut m, 0x200, 0x57);
         assert_eq!(m.order_bits(1), 0, "bit 0 toggled off");
         assert_eq!(m.order_bits(0), 1, "robot 0 untouched");
@@ -1019,12 +1168,26 @@ mod tests {
         sidebar_click(&mut m, 0x276, 0x57);
         assert_eq!(m.order_bits(1), 0b1000011, "out-of-rect clicks no-op");
         assert_eq!(m.sidebar_redraw(), 0);
-        // Availability gate: clear row 3 -> its click neither toggles
-        // nor redraws (the +0x38+8k gate word == 0 path).
-        m.set_order_availability(1, 0x7F & !(1 << 3));
+        // Ammo gate: group 3 with a NAME but AMMO 0 — the sec 6c.3
+        // gate word is the count, so its click neither toggles nor
+        // redraws (a name-only group still DRAWS).
+        let mut g = full(1);
+        g[3].1 = 0;
+        m.set_weapon_loadout(1, &g);
         sidebar_click(&mut m, 0x200, 0x57 + 3 * 14);
-        assert_eq!(m.order_bits(1), 0b1000011, "gated row untouched");
+        assert_eq!(
+            m.order_bits(1),
+            1,
+            "gated row untouched (bits re-derived 1<<first)"
+        );
         assert_eq!(m.sidebar_redraw(), 0, "gate fail -> no redraw");
+        // The empty default: no gate ever passes.
+        m.set_weapon_loadout(1, &[(0, 0); 7]);
+        for row in 0..7 {
+            sidebar_click(&mut m, 0x200, 0x57 + 14 * row);
+        }
+        assert_eq!(m.order_bits(1), 0, "empty loadout: every row gated");
+        assert_eq!(m.sidebar_redraw(), 0);
     }
 
     #[test]
@@ -1044,13 +1207,22 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_art_draws_rows_and_portraits() {
-        // The FUN_00408403 row chrome + the FUN_004072bf portraits
-        // [sec 6c.8]: synth GENERAL sprites carry distinct colors
-        // (0x12+k -> 0x32+k portraits, 0x47/0x4A armed, 0x49/0x4C
-        // unarmed), so the plane pins which sprite landed where.
+    fn sidebar_art_draws_rows_portraits_and_text() {
+        // The FUN_00408403 row pass (chrome + NAME + COUNT text) +
+        // the FUN_004072bf portraits [sec 6c.8]: synth GENERAL
+        // sprites carry distinct colors (0x12+k -> 0x32+k portraits,
+        // 0x47/0x4A armed, 0x49/0x4C unarmed), synth SMLFONT glyphs
+        // are 2x2 solid masks, so the plane pins which sprite, glyph
+        // run and count landed where. Rows need a STAGED loadout
+        // (D51: the fresh-campaign default is empty).
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
+        let mut g = [(0u16, 0u16); 7];
+        g[0] = (2, 30); // NEEDLER CANNON #1, 30 rounds
+        g[1] = (9, 3); // HADES BOMB #1
+        g[2] = (5, 7); // unlisted index -> "ERROR" text still draws
+        m.set_weapon_loadout(0, &g);
+        m.set_weapon_loadout(1, &g);
         let plane = m.present().expect("the entry frame draws (countdown 2)");
         let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
         // Portraits: 2-robot squad -> slots 0 (selected, 0x12 ->
@@ -1059,55 +1231,137 @@ mod tests {
         assert_eq!(px(plane, 0x1E7, 5), 0x32);
         assert_eq!(px(plane, 0x219, 5), 0x36);
         assert_eq!(px(plane, 0x24B, 5), 0, "slot 2 gated (squad < 3)");
-        // Rows (robot 0 selected, avail 0x7F, bits = 1): row 0
-        // ARMED -> body 0x47 (0xA7) at (0x1EB,0x59) + well 0x4A
-        // (0xCA) at (0x25A,0x59); rows 1..6 unarmed -> 0xB9/0xDC.
+        // Rows (robot 0 selected, groups 0..2 present, bits = 1):
+        // row 0 ARMED -> body 0x47 (0xA7) at (0x1EB,0x59) + well 0x4A
+        // (0xCA) at (0x25A,0x59); rows 1/2 unarmed -> 0xB9/0xDC;
+        // rows 3..6 carry no weapon -> nothing.
         assert_eq!(px(plane, 0x1EB, 0x59), 0xA7, "row 0 armed body");
         assert_eq!(px(plane, 0x25A, 0x59), 0xCA, "row 0 armed well");
-        for i in 1..7 {
+        for i in 1..3 {
             let y = 0x59 + 14 * i;
             assert_eq!(px(plane, 0x1EB, y as usize), 0xB9, "row {i} unarmed body");
             assert_eq!(px(plane, 0x25A, y as usize), 0xDC, "row {i} unarmed well");
         }
-        // Gated row: clear availability bit 6 -> after a redraw
-        // trigger, row 6 draws nothing (the plane keeps its old
-        // pixels, so wipe the row first).
-        m.set_order_availability(0, 0x7F & !(1 << 6));
-        for y in 0x59 + 14 * 6..0x59 + 14 * 6 + 2 {
-            for x in 0x1EB..0x1EB + 2 {
-                m.plane[y as usize * 640 + x] = 0;
-            }
-        }
-        m.sidebar.redraw = 2;
-        m.present();
+        // The NAME text starts at (0x1ED, 0x5B): the synth glyphs
+        // paint color 0x24 — glyph 0 ('N') at x 0x1ED, then advance
+        // w+1 = 3 per char (space = 6).
+        assert_eq!(px(plane, 0x1ED, 0x5B), 0x24, "name glyph 0 paints 0x24");
+        assert_eq!(px(plane, 0x1ED + 3, 0x5B), 0x24, "advance w+1 = 3");
+        assert_eq!(px(plane, 0x1ED + 2, 0x5B), 0, "inside-advance gap");
+        // "NEEDLER CANNON #1": N E E D L E R <sp> C A ... — the
+        // space at index 7 advances 6, so glyph 8 ('C') lands at
+        // 7*3 + 6 = 27 px in.
+        assert_eq!(px(plane, 0x1ED + 27, 0x5B), 0x24, "space advances 6");
+        // The COUNT text at (0x25C, 0x5B): 30 -> "0030".
+        assert_eq!(px(plane, 0x25C, 0x5B), 0x24, "count glyph 0 ('0')");
+        assert_eq!(px(plane, 0x25C + 3, 0x5B), 0x24, "count digit 2");
         assert_eq!(
-            px(&m.plane, 0x1EB, (0x59 + 14 * 6) as usize),
-            0,
-            "row 6 gated"
+            px(plane, 0x25C + 9, 0x5B),
+            0x24,
+            "count digit 4 ('0' of 30)"
         );
+        // Group row 1's count "0003".
+        assert_eq!(px(plane, 0x25C, 0x5B + 14), 0x24);
+        // Empty row 3: no body, no well, no text.
+        assert_eq!(
+            px(plane, 0x1EB, 0x59 + 14 * 3),
+            0,
+            "row 3 empty (no weapon)"
+        );
+        assert_eq!(px(plane, 0x1ED, 0x5B + 14 * 3), 0, "row 3 no text");
         // Selecting slot 1 moves the rows to robot 1 and the armed
-        // portrait to slot 1 (bit 0 default armed).
+        // portrait to slot 1 (both staged identically).
         sidebar_click(&mut m, 0x219, 5);
         m.present();
         assert_eq!(px(&m.plane, 0x1E7, 5), 0x35, "slot 0 now unselected (0x15)");
         assert_eq!(px(&m.plane, 0x219, 5), 0x33, "slot 1 selected (0x13)");
         assert_eq!(px(&m.plane, 0x1EB, 0x59), 0xA7, "robot 1 row 0 armed body");
-        // The countdown drains: present again (1 -> 0, still draws),
-        // wipe row 0, then one more present draws NO rows.
-        m.present();
-        for y in 0x59..0x59 + 2 {
-            for x in 0x1EB..0x1EB + 2 {
+        // The empty default draws NOTHING in the rows band: wipe and
+        // re-trigger with an empty loadout.
+        m.set_weapon_loadout(1, &[(0, 0); 7]);
+        m.sidebar.redraw = 2;
+        for y in 0x59..0x59 + 14 * 7 {
+            for x in 0x1EB..0x276 {
                 m.plane[y as usize * 640 + x] = 0;
             }
         }
         m.present();
-        assert_eq!(px(&m.plane, 0x1EB, 0x59), 0, "no countdown -> no row draw");
-        // The staged font bank rides along (63 synth glyphs) — the
-        // text slice's input.
+        assert!(
+            (0x59..0x59 + 14 * 7)
+                .all(|y| (0x1EB..0x276).all(|x| m.plane[y as usize * 640 + x] == 0)),
+            "empty loadout: no rows, no text"
+        );
+        // The staged font bank rides along (63 synth glyphs).
         assert_eq!(
             u16::from_le_bytes([m.sidebar_font_bank()[0], m.sidebar_font_bank()[1]]),
             63
         );
+    }
+
+    #[test]
+    fn weapon_names_follow_the_compiled_in_switch() {
+        // FUN_00420260 [RE 7d.5]: spot rows of the exact index ->
+        // string mapping, straight off the PE bytes.
+        assert_eq!(weapon_name(2), "NEEDLER CANNON #1");
+        assert_eq!(weapon_name(4), "NEEDLER CANNON #3");
+        assert_eq!(weapon_name(8), "PLASMA CANNON X3");
+        assert_eq!(weapon_name(0xE), "FLAME BOMB");
+        assert_eq!(weapon_name(0x16), "PRESSURE MINE X6");
+        assert_eq!(weapon_name(0x19), "FRAG GRENADE #2");
+        assert_eq!(weapon_name(0x1E), "STICKY GRENADE X6");
+        assert_eq!(weapon_name(0x23), "ROCKET PACK X9");
+        assert_eq!(weapon_name(0x28), "REAPER PACK X6");
+        assert_eq!(weapon_name(0x2A), "AUTO SHIELDING");
+        assert_eq!(weapon_name(0x2B), "BATTERY PACK");
+        assert_eq!(weapon_name(0x2C), "THERMAL DAMPER");
+        assert_eq!(weapon_name(0x2D), "SCANNER LEVEL 2");
+        assert_eq!(weapon_name(0x2E), "SCANNER LEVEL 3");
+        // Unlisted indices fall to "ERROR" (0 included).
+        for i in [0u16, 1, 5, 0xD, 0xF, 0x17, 0x1A, 0x24, 0x29, 0x2F, 0x99] {
+            assert_eq!(weapon_name(i), "ERROR", "index {i:#x}");
+        }
+    }
+
+    #[test]
+    fn spawn_armer_picks_the_first_armed_group() {
+        // The sec 6c.6 stats-copy armer over staged rows.
+        assert_eq!(spawn_order_bits(&[(0, 0); 7]), 0, "empty row -> no bit");
+        let mut g = [(0, 0); 7];
+        g[4] = (0x20, 9);
+        assert_eq!(spawn_order_bits(&g), 1 << 4, "first (and only) group");
+        g[0] = (2, 3);
+        assert_eq!(spawn_order_bits(&g), 1, "the FIRST group wins");
+        // A name-only group (ammo 0) still counts for the armer
+        // (the spawn copy keys on word0; the CLICK gate is word1).
+        let mut h = [(0, 0); 7];
+        h[2] = (9, 0);
+        assert_eq!(spawn_order_bits(&h), 1 << 2);
+    }
+
+    #[test]
+    fn smlfont_text_draws_the_exw_advances() {
+        // FUN_00408913 over the synth bank: glyph advance w+1, the
+        // space advance 6, chars >= 0x7F skipped.
+        let mut plane = vec![0u8; 640 * 8];
+        let bank = {
+            let f = synth_mission_files();
+            f[11].clone()
+        };
+        draw_smlfont_text(&mut plane, &bank, "A B", 0x24, 10, 1);
+        let px = |x: usize| plane[640 + x];
+        assert_eq!(px(10), 0x24, "'A' at x");
+        assert_eq!(px(11), 0x24, "glyph 2 wide");
+        assert_eq!(px(12), 0, "advance gap");
+        assert_eq!(px(13), 0, "the space draws nothing");
+        assert_eq!(px(19), 0x24, "'B' at 10 + 3 + 6 (w+1 + space)");
+        assert_eq!(px(20), 0x24);
+        // A high byte draws nothing and does not advance (the EXW
+        // remap FUN_00410493 is unreachable for the ASCII names).
+        let mut plane2 = vec![0u8; 640 * 8];
+        draw_smlfont_text(&mut plane2, &bank, "\u{7F}A", 0x24, 0, 0);
+        assert_eq!(plane2[0], 0x24, "'A' paints at x=0 (0x7F skipped)");
+        assert_eq!(plane2[1], 0x24);
+        assert_eq!(plane2[2], 0, "advance gap after the 2-px glyph");
     }
 
     #[test]
@@ -1119,6 +1373,12 @@ mod tests {
         let mut b = staged(&[(3, 1, 1)]);
         a.activate();
         b.activate();
+        // Both carry a staged loadout (row 0 exists) so the toggle
+        // actually fires on a's second click.
+        let mut g = [(0, 0); 7];
+        g[0] = (2, 30);
+        a.set_weapon_loadout(1, &g);
+        b.set_weapon_loadout(1, &g);
         // a: strip-1 select + row-0 toggle; b: clicks in the sidebar
         // dead zone (map-toggle rect, sec 6c.1 — wired regions are
         // disjoint from it).

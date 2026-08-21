@@ -36,12 +36,26 @@
 //!
 //! PIN REGENERATION 2026-08-21 (SIDEBAR ART unit): the two FRAME
 //! pins moved AGAIN, once, when the [480,640) strip stopped being
-//! black - the sidebar now carries the select portraits + the
+//! black - the sidebar then carried the select portraits + the
 //! order-row chrome from the real GAMEGFX\GENERAL.BIN
 //! (FUN_004072bf/FUN_00408403, RE-EXW-SIM 6c.8; GENERAL.BIN +
 //! SMLFONT.BIN joined the staged chain). The SIM pins
-//! (spawn/click) and every observation pin are UNCHANGED - the
+//! (spawn/click) and every observation pin were UNCHANGED - the
 //! sidebar art is presentation-only (D17).
+//!
+//! PIN REGENERATION 2026-08-21 (WEAPON TABLE unit, D51): the two
+//! FRAME pins moved ONCE more, for two verified reasons: (a) the
+//! ui_bank RLE codec was corrected to the FUN_00401ca2 asm - a
+//! literal control word with bit14 set ends the line (every shipped
+//! sidebar sprite row is one 0x4000|w word; the old decode painted
+//! each sprite as a single row), and RLE transparency copies
+//! literal bytes verbatim rather than filtering zeros; (b) the
+//! weapon table is now the REAL data (RE-EXW-SIM 7d: host-staged
+//! session state, fresh-campaign default EMPTY), so the default
+//! path draws portraits but NO rows - rows + NAME/COUNT text draw
+//! only under a staged loadout, pinned separately by the new
+//! ARMED spawn-frame pin. The SIM pins (spawn/click) and every
+//! observation pin are UNCHANGED.
 //!
 //! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
@@ -83,7 +97,13 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
 /// 0's projection, click (arm), then three walk pumps. Returns the
 /// observation chain (spawn frame hash, sim hash at spawn, click
 /// sim hash, walker state/anim after the walk, mid-walk frame hash).
-fn scripted_run(files: &[Vec<u8>]) -> (u64, u64, u64, (u16, u16, i32), u64) {
+/// `arm_loadout` stages robot 0's weapon loadout (the D51 seam)
+/// before the scene activates - the fresh-campaign default is EMPTY
+/// [RE-EXW-SIM 7d.4].
+fn scripted_run(
+    files: &[Vec<u8>],
+    loadout: Option<&[(u16, u16); 7]>,
+) -> (u64, u64, u64, (u16, u16, i32), u64) {
     let mut host = GameHost::new(
         &GameConfig::default(),
         &bedlam_core::sim::SimConfig::default(),
@@ -108,6 +128,11 @@ fn scripted_run(files: &[Vec<u8>]) -> (u64, u64, u64, (u16, u16, i32), u64) {
         &[(18, 73, 1)],
     )
     .expect("ZONEA/MISSION1 stages");
+    if let Some(groups) = loadout {
+        host.mission_mut()
+            .expect("staged")
+            .set_weapon_loadout(0, groups);
+    }
     while host.scene() == Scene::Boot {
         host.pump_frame(4, &InputFrame::default());
     }
@@ -183,7 +208,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         return;
     };
 
-    let (spawn_frame, spawn_sim, click_sim, walker_obs, walk_frame) = scripted_run(&files);
+    let (spawn_frame, spawn_sim, click_sim, walker_obs, walk_frame) = scripted_run(&files, None);
     eprintln!(
         "scene pins: spawn_frame {spawn_frame:016x} spawn_sim {spawn_sim:016x} \
          click_sim {click_sim:016x} walker {walker_obs:?} walk_frame {walk_frame:016x}"
@@ -230,24 +255,32 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         viewport_nonzero > 50_000,
         "the viewport window carries real content ({viewport_nonzero})"
     );
-    // The sidebar columns [480,640) now carry REAL art at the spawn
-    // frame (the sidebar art unit, RE-EXW-SIM 6c.8): the entry
-    // trigger (MissionShell 0x447c74) set the redraw countdown 2, so
-    // the first present drew the 7 order rows (robot 0, all-7
-    // availability: row 0 armed, rows 1..6 unarmed — 108+27 px
-    // wide, 11 tall each) and the portraits for both alive robots
-    // (48x48 at (0x1E7,5) and (0x219,5)).
-    let sidebar: usize = (0..480)
-        .map(|r| {
-            frame.indices[r * 640 + 480..(r + 1) * 640]
-                .iter()
-                .filter(|&&b| b != 0)
-                .count()
-        })
-        .sum();
+    // The sidebar columns [480,640) carry the select portraits from
+    // the real GENERAL.BIN at the spawn frame (FUN_004072bf — 48x48
+    // sprites for both alive robots), and — the faithful
+    // fresh-campaign default (RE-EXW-SIM 7d.4, D51) — NO order
+    // rows: the weapon table starts EMPTY until the pre-mission
+    // shop fills it, so the rows band (y 0x57..0xB8, the 7 order
+    // rects) stays black.
+    let band = |y0: usize, y1: usize| -> usize {
+        (y0..y1)
+            .map(|r| {
+                frame.indices[r * 640 + 480..(r + 1) * 640]
+                    .iter()
+                    .filter(|&&b| b != 0)
+                    .count()
+            })
+            .sum()
+    };
+    let portraits = band(5, 0x36);
     assert!(
-        sidebar > 3_000,
-        "the sidebar carries the GENERAL.BIN art ({sidebar})"
+        portraits > 2_000,
+        "the portrait band carries the GENERAL.BIN art ({portraits})"
+    );
+    assert_eq!(
+        band(0x57, 0xB9),
+        0,
+        "the order-rows band stays black (empty loadout)"
     );
 
     // The GAMEPAL present tail: the frame palette IS the folded
@@ -275,14 +308,29 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     assert_eq!(folded[1], [0x3E, 0x3A, 0x39]);
 
     // --- the sidebar producer on real corpus bytes (sec 6c) ----------
-    // State after the entry pump: slot 0 selected, countdown 1 (the
-    // MissionShell entry trigger 0x447c74 set 2, the entry pump's
-    // one present decremented it), both robots carry the spawn
-    // default order bits 1<<0 [sec 6c.6].
+    // Stage both robots' loadouts (the D51 seam) so the producer has
+    // rows to gate on: robot 0 NEEDLER CANNON #1 (30) + HADES BOMB
+    // #1 (3), robot 1 the same. State after the entry pump: slot 0
+    // selected, countdown 1 (the MissionShell entry trigger 0x447c74
+    // set 2, the entry pump's one present decremented it), both
+    // robots carry the spawn default bits 1<<0 [sec 6c.6].
+    let mut loadout = [(0u16, 0u16); 7];
+    loadout[0] = (2, 30); // NEEDLER CANNON #1
+    loadout[1] = (9, 3); // HADES BOMB #1
+    host.mission_mut()
+        .expect("staged on Mission")
+        .set_weapon_loadout(0, &loadout);
+    host.mission_mut()
+        .expect("staged on Mission")
+        .set_weapon_loadout(1, &loadout);
     {
         let mission = host.mission().expect("staged on Mission");
         assert_eq!(mission.sidebar_selected(), 0);
-        assert_eq!(mission.sidebar_redraw(), 1, "2 armed - 1 present");
+        assert_eq!(
+            mission.sidebar_redraw(),
+            1,
+            "2 armed - 1 present (seam adds none)"
+        );
         assert_eq!(mission.order_bits(0), 1, "spawn default bit 0");
         assert_eq!(mission.order_bits(1), 1);
     }
@@ -377,14 +425,14 @@ fn zonea_mission1_scene_frames_hash_pinned() {
 
     // The hash pins (extend the render-gate family: these are the
     // SCENE-composed frames — host pipeline + fixed spawn camera +
-    // one render per pump). Regenerated ONCE for the GAMEPAL present
-    // tail and ONCE for the sidebar art unit (see the header): the
-    // frame pins moved each time with the presentation change, the
-    // sim pins did not.
+    // one render per pump). Regenerated ONCE per presentation unit
+    // (GAMEPAL, sidebar art, and this unit: the codec fix + the
+    // faithful empty loadout - see the header); the sim pins did
+    // not move across any of them.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "018eba568d9b3bae",
-        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + sidebar art)"
+        "9f20732f29a5baf2",
+        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits, empty loadout)"
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
@@ -398,15 +446,101 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "4a3abd2de43f31df",
-        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + sidebar art)"
+        "27494d6ab505bcf3",
+        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits, empty loadout)"
+    );
+
+    // The ARMED path: robot 0 carries a staged loadout, so the entry
+    // frames draw the order rows AND the NAME/COUNT text through the
+    // real SMLFONT glyphs (FUN_00408403 + FUN_00420260, RE 7d.5).
+    // Structural pins: the rows band now carries chrome, the name
+    // column carries color-0x24 text pixels, and the sim hash at the
+    // spawn moment is IDENTICAL to the default run (the loadout is
+    // presentation-only state, D17/D51).
+    let (armed_frame, armed_sim, _, _, _) = scripted_run(&files, Some(&loadout));
+    eprintln!("armed pins: spawn_frame {armed_frame:016x} spawn_sim {armed_sim:016x}");
+    {
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        host.load_mission(
+            &files[0],
+            &files[1],
+            &files[2],
+            &files[3],
+            &files[4],
+            &files[5],
+            &files[6],
+            &files[7],
+            &files[8],
+            &files[9],
+            &files[10],
+            &files[11],
+            None,
+            &[(18, 73, 1)],
+        )
+        .unwrap();
+        host.mission_mut()
+            .expect("staged")
+            .set_weapon_loadout(0, &loadout);
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+        let frame = host.frame();
+        let rows_band: usize = (0x57..0xB9)
+            .map(|r| {
+                frame.indices[r * 640 + 480..(r + 1) * 640]
+                    .iter()
+                    .filter(|&&b| b != 0)
+                    .count()
+            })
+            .sum();
+        assert!(
+            rows_band > 1_000,
+            "the rows band carries the 2-row chrome ({rows_band})"
+        );
+        // Rows 0/1 exist (armed + unarmed); row 2+ empty. Row 0
+        // body y 0x59..0x63, name text x 0x1ED.., count x 0x25C...
+        let text_px = (0x5B..0x5B + 7)
+            .flat_map(|y| (0x1ED..0x258).map(move |x| (x, y)))
+            .filter(|&(x, y)| frame.indices[y * 640 + x] == 0x24)
+            .count();
+        assert!(
+            text_px > 20,
+            "the NAME text paints color-0x24 glyphs ({text_px})"
+        );
+        let count_px = (0x5B..0x5B + 7)
+            .flat_map(|y| (0x25C..0x276).map(move |x| (x, y)))
+            .filter(|&(x, y)| frame.indices[y * 640 + x] == 0x24)
+            .count();
+        assert!(count_px > 8, "the COUNT text '0030' paints ({count_px})");
+        let mission = host.mission().expect("armed run");
+        assert_eq!(mission.order_bits(0), 1, "row 0 armed by the spawn armer");
+        assert_eq!(
+            mission.state_hash().0,
+            spawn_sim,
+            "the loadout never reaches the sim hash"
+        );
+    }
+    assert_eq!(
+        format!("{armed_frame:016x}"),
+        "51ebd515bc638e81",
+        "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text)"
     );
 
     // Determinism: two independent runs are identical.
-    let again = scripted_run(&files);
+    let again = scripted_run(&files, None);
     assert_eq!(spawn_frame, again.0, "spawn frame reproducible");
     assert_eq!(spawn_sim, again.1, "spawn sim hash reproducible");
     assert_eq!(click_sim, again.2, "click sim hash reproducible");
     assert_eq!(walker_obs, again.3, "walker observation reproducible");
     assert_eq!(walk_frame, again.4, "walk frame reproducible");
+    let armed_again = scripted_run(&files, Some(&loadout));
+    assert_eq!(armed_frame, armed_again.0, "armed frame reproducible");
 }
