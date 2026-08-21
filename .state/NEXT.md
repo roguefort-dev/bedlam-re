@@ -135,32 +135,6 @@
   (the 7j.13/7j.14 push debt cleared too — secret service back
   after the session restart). Queued: the FOURTH HOP (the .TRT
   consumer trio + FUN_004190bc).
-- 2026-08-21: P4 7j.15 weapon-fire family THIRD HOP unit COMPLETE
-  (worker efff097c claim 1, commit 52b1ebd, D63, docs-only):
-  FUN_00419aff = the WEAPON/PROJECTILE DAMAGE TABLE — a pure
-  id switch (NO table walk): 2/3/4→20/30/40, 5→75, 0xc→5000,
-  0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50,
-  0x66→(d+1)·300, 0x67/0x68→(d+1)·75, else 1; d = DAT_0046cbf8
-  = the DIFFICULTY dword (0..2; d=2 flat overrides
-  200/1200/300), pinned: cycled (d+1)%3 at NameEntryScreen,
-  save-persisted, 500·d money delta, zone-7 temporarily forces
-  2. ERRATUM 7j.13: no field arg (EDX passes through; the push 1
-  only arms the score flag). 28 callers = FUN_00410823×16,
-  FUN_004190bc×6 (0x4cff98 bank - second consumer),
-  FUN_00412010×4, FUN_004197d4, FUN_00418fca. The 0x4cccf8
-  PRODUCER = FUN_004170a6 = the ".TRT" mission-section loader
-  (sole caller FUN_00416458 0x416487): clears 250×0x20 (full
-  capacity), count→[0x46ccd4], rec {+0=1,+4 active,+8 scratch 0,
-  +0xC hp=250+(250·mission)/27 → 259..490, +0x10 x,+0x14 y,
-  +0x18 z} at stager base 0x4cccfc (7j.14 resolver frame +4 —
-  offsets stand); ALSO stamps tile byte 0x66 into the 3D tile
-  bank [[0x4edd58]+x+y·w+z·w·h] + word 1 into the 3D word bank
-  [[0x4ede20]+2(x+y·w+z·w·h)] (both new, consumers open).
-  FORMATS-MISSION §14 ANCHORED: TRT third u32 = z LEVEL (0..6),
-  not a type enum; "turrets?" retired. No engine change (D63).
-  Manifest verified. PUSHED 27f5def..52b1ebd (the 7j.13/7j.14
-  push debt cleared too — secret service back after the session
-  restart). Queued: the .TRT consumer hop.
 - 2026-08-21: P4 7j.14 weapon-fire family SECOND HOP unit
   COMPLETE (worker d37fb3a2 claim 1, commit 7b9ce05, D62,
   docs-only): FUN_0041bc1c = the TERRAIN-STRUCTURE damage
