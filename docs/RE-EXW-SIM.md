@@ -3837,6 +3837,89 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
    none (weapons/traps stay unwired engine-side). Engine
    seam: NONE (docs-only, D73).
 
+## 7j.26 Amendment 2026-08-21 (worker 7658328a, the MISSIONVIEW
+§5d DRAW TAILS — effects + platform consumer passes; docs-only,
+D74; sources: exw-missionrender2/3.txt + exw-brfdrop.txt
+(FUN_00401e39) + exw-simtail.txt (mover/tick/loader) + fresh
+objdump of FUN_0041a225/FUN_0041a4cc 0x41a225..0x41a4f2)
+
+The two last-undecoded §5d consumer passes of the FUN_00403938
+render tail, closing the 7j.25 queue item:
+
+1. **The effects loop consumer (0x4cf638) DECODED** [verified asm
+   0x406c86..0x406d60]: draws every record with u16@+0x18 != 0 ∧
+   u16@+0x1A == 0 via the DIRECT blit FUN_00401e39 — img =
+   u16@+0x16 * 8 + (u16@+0x1C & 7) (DEBRIS.BIN images 0..23), the
+   frame counter u16@+0x1C is incremented IN THE DRAW, bank ESI =
+   [0x4eddb4] = DEBRIS.BIN, dest EDI = [0x4ede18] (640×640
+   backbuffer, row stride 0x280). sy base 0x100 (−0xC vs the
+   robot loop) + the SECOND shake table 0x454518 (robots use
+   0x45450c; both indexed by the DAT_0046cce4 quake countdown);
+   z@+0x08 is Q13 (px = z>>8). Clip 0≤sx<0x23f, 0≤sy<0x23e.
+2. **The 7j.25 producer field map CORRECTED** [verified objdump
+   0x41a225..0x41a319]: the "+0x14 ttl RandB&0x7FF+0x1770" is the
+   **vz** (rising, 6000..12069/frame) — its high word u16@+0x16
+   (0..2) IS the sprite group (the producer never writes +0x16
+   separately); "+0x18 = FUN_0041ec59(3)" is the ACTIVE word only
+   (≈8% stillborn, freed by the next alloc scan); **u16@+0x1A =
+   the producer's 4th register arg ECX = SPAWN DELAY** (the
+   destroy-tail delay counter), decremented by the mover before
+   any physics/draw. Full map in RE-EXW-MISSIONVIEW §5e.
+3. **The mover FUN_00419f62 pinned** (MissionShell tick call
+   0x44813d): delayed → +0x1A−−; else x+=vx, y+=vy, z+=vz, kill
+   (+0x18 := 0) iff x/y/z < 0 ∨ x>>13 ≥ [0x4eddec] ∨ y>>13 ≥
+   [0x4eddf0] ∨ z>>13 > 0xB — rising sparks die at the z=12
+   ceiling in ~8..16 ticks. FUN_0041a4cc = plain first-fit scan
+   for +0x18 == 0 (the "12 tries" is the caller's spawn loop).
+4. **FUN_0041ec59 identity PINNED** [verified decomp 0x41ec59]:
+   `RandB() / (0x8000/n − 1)` clamped to n−1 — a bounded-uniform
+   random helper on the 15-bit RandB. In the effects producer it
+   only arms the active word (value never read otherwise).
+5. **The platform loop consumer (0x4eb638) DECODED** [verified
+   decomp 0x4067a1..0x406832]: draws via the ENQUEUE path
+   FUN_0040798e (not the direct blit!) with bank **DAT_0046af54 =
+   GAMEGFX\SMOKER.BIN** (stager FUN_0041df10 @0x41dfb1): base =
+   SMOKER frame 0, mode 300 at (sx, sy); smoke column = SMOKER
+   frame d@+0x10+1, **mode 0x12d (DARKPAL flush)** at sy−0x20;
+   enqueue coords (px+0xb, py+0xb), layer z>>5 — the exact §5d
+   robot-loop form (z@+0x08 raw Q5). The anim tick FUN_004238af
+   (MissionShell call 0x447fff) cycles d@+0x10: ++ and wrap
+   0x10→4 — drawn column sequence 2..16 intro then 5..16 loop;
+   the claim word d@+0x0C never clears (slot reuse = the 7j.24
+   MIN-age allocator). So the "platform" records ARE the robot-
+   death blast: ground puff + darkening smoke column.
+6. **The FUN_00401e39 direct draw_IMG codec DECODED** [verified
+   decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer`
+   now re-anchored]: same .BIN container as the enqueue path
+   (int32 dir at bank+4+4*img, img = &dirslot + *dirslot; hdr
+   u16 flags {bit1 → two s16 hotspot words, order (y,x); bit0 =
+   RLE}, u16 w, u16 h) but a plain consumer: arg2 = 0/≠0 opaque/
+   transparent flag, dest EDI + y*0x280 + x, NO palette modes.
+   RLE control words: bit15 = skip run (word&0xFFF) — painted as
+   ZERO bytes when opaque; else literal raw copy (no per-byte
+   zero test); bit14 = EOL. Uncoded: plain copy vs per-byte
+   zero-skip. Byte-granular transparency ONLY via RLE skips
+   (coded) or zero-skip (uncoded) — same rule as the §5 flush
+   codec. Callers: render tail ×4 (0x406d56/0x406eee/0x407077/
+   0x4071ce), map overlay FUN_004089b1, boot/attract + title/
+   menus — the game's general UI/direct blitter.
+7. **BONUS context — the three DROPSHIP ring passes** (same asm
+   block, recorded for the pod-descent/P4.2 work): per-robot bank
+   0x4e64c0 (robot-count bound) + 6 standalone rings
+   0x4e6610..0x4e66b8 (drawn as 1 + 5), records 0x1C {active d@+0,
+   x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14}; each active
+   ring draws a 7×7 grid of 0x40-stride tiles, img =
+   group*0x23 + 7*row + col, bank [0x4edd64] = **GAMEGFX\
+   DROPSHIP.BIN** (ArenaAlloc(0x25990)); sx/sy bases 0x90/0xd0;
+   robot-indexed sy subtracts the robot z as well. Bank
+   geography: 12×0x1C robot rings + 6×0x1C standalone = ends
+   exactly at the trail-ring bank 0x4e66b8 (7j.22/23). Ring
+   producers (pod-descent stagger) remain open.
+8. **Corpus verdict: unchanged** — both passes consume records
+   whose producers sit off the corpus path (no deaths, no
+   destroy-tail, no pod descent in the crop gates). Engine seam:
+   NONE (docs-only, D74).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -3880,7 +3963,7 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
 | object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870 — map §7j.25), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c; +0x46/+0x4A = the saved under-terrain consumed by the destroy restore §7j.25; +0x3E/+0x42 readers open) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | destroy-tail effect entries | 5 × 8B @type+0x16+8m (m 0..4, exit @+0x28): selector word@entry+0 ∈ 1..9 → jump table 0x41a870 idx sel−1; payload w2/w4/w6 @entry+2/+4/+6 = x/y TILE + z-level offsets off the 0x46cbf4 record; sel1→k14(+0xF,+0xF)+FUN_0041a225+5 splashes, sel2..5→k18/k17/k16/k19 single gibs at (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0)+4-splash loop, sel6/7→k10 at (+0x10,+0x20)/(+0x20,+0x10)+DEADMAN SFX (delay 0, param −1), sel8→k14 ×25 demolition shower @water z (±3-tile RandA&7−3 jitter, delay ctr+2m+i>>3), sel9→k20+3×3 splash ring (delay ctr+2+RandA&3); stager delay = chain-ctr+m (sel1/8/9); PRECEDED by the footprint W×H×D terrain RESTORE (TOT-mirror z-words ← bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear (z·H+i)·W+j); GER gate: type 0xb ∧ GER skips the whole restore/effect/score/chain tail (record still marked destroyed + triggers fired) | §7j.25 |
-| effects-bank stager | FUN_0041a225(x,y,z tiles) — FIRST producer of the MISSIONVIEW §5d "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (allocator FUN_0041a4cc, 12 tries); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, ttl RandB&0x7FF+0x1770, active/sprite word FUN_0041ec59(3), variant RandB&7}; callers: destroy-tail cases 1/8 | §7j.25 |
+| effects-bank stager | FUN_0041a225(x,y,z tiles, delay ECX) — FIRST producer of the MISSIONVIEW §5d/§5e "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (first-fit allocator FUN_0041a4cc, 12-try spawn loop); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, vz@+0x14 RandB&0x7FF+0x1770 RISING (high word = sprite group 0..2 → DEBRIS.BIN img group*8+frame&7), active u16@+0x18 = FUN_0041ec59(3) (~8% stillborn), delay u16@+0x1A = ECX arg, frame u16@+0x1C = RandB&7}; callers: destroy-tail cases 1/8; mover FUN_00419f62 (kill off-map/ceiling z>>13>0xB); consumer = the §5e direct draw (7j.26) | §7j.25, §7j.26 |
 | .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each; +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
@@ -3899,7 +3982,12 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
 | debris-crush death dispatcher | FUN_0040dce0(idx, mag, heading, dmg), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x02 ∉ {7,2} ∧ mag > 2 ∧ dmg ≠ 0; damage FUN_0040eb3c; sin/cos·mag knock + move FUN_00412998 (kind 7 ∨ wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24 |
 | critter-death SFX trio | FUN_00421f4c(x,y): [0x4ede58]≠0, RandB()%3 → banks 0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank,0,x,y,2); twin of the impact trio FUN_00421fc2 (0x4edf7c/80/84) | §7j.24 |
 | effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16 | §7j.24 |
-| robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age d@+0xC, d@+0x10} — the MISSIONVIEW §5d "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age) | §7j.24 |
+| robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age/claim d@+0xC, frame d@+0x10} — the MISSIONVIEW §5d/§5e "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age); anim tick FUN_004238af (frame ++ wrap 0x10→4); CONSUMER (7j.26) = enqueue pair SMOKER.BIN frame 0 mode 300 + frame d@+0x10+1 mode 0x12d (DARKPAL) at sy−0x20 | §7j.24, §7j.26 |
+| direct blit codec | FUN_00401e39(img, transp 0/≠0, x, y; ESI bank, EDI dest) — the shared draw_IMG consumer: .BIN dir at bank+4+4*img, hdr {flags u16 (bit1 hotspot (y,x) s16×2, bit0 RLE), w, h}; RLE words bit15=skip(→zero-paint when opaque)/literal raw copy, bit14=EOL; dest EDI+y*0x280+x stride 0x280; NO palette modes (vs the §5 flush codec FUN_00401471) | §7j.26 |
+| effects mover | FUN_00419f62 (MissionShell @0x44813d): delay −− else x+=vx/y+=vy/z+=vz; kill +0x18:=0 iff x/y/z<0 ∨ x>>13≥[0x4eddec] ∨ y>>13≥[0x4eddf0] ∨ z>>13>0xB | §7j.26 |
+| platform anim tick | FUN_004238af (MissionShell @0x447fff): for active 0x4eb638 records d@+0x10++, wrap 0x10→4 (drawn smoke column 2..16 intro, 5..16 loop) | §7j.26 |
+| bounded random helper | FUN_0041ec59(n) = RandB()/(0x8000/n − 1) clamped n−1 — uniform-ish [0,n−1] on the 15-bit RandB | §7j.26 |
+| dropship ring banks | 0x4e64c0 (12 × 0x1C robot-indexed) + 0x4e6610..0x4e66b8 (6 × 0x1C standalone) {active d@+0, x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14}; consumer draws 7×7 grids of 0x40-stride tiles, img = group*0x23 + 7*row+col, bank [0x4edd64] = DROPSHIP.BIN (ArenaAlloc 0x25990); ends at the trail bank 0x4e66b8; producers = pod-descent family (OPEN) | §7j.26 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |

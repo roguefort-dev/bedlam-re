@@ -2399,3 +2399,31 @@ Nudge-Worker: 27e4f048-ad51-4479-a42a-54e91ec114c3
 
 Nudge-Worker: 399aeff4-03bf-4c9c-8569-83f955528215
 
+## 2026-08-21 P4 7j.26 — the §5d draw tails are docs-only (D74); FUN_00401e39 is the shared direct blit; SMOKER.BIN is the blast column bank
+
+1. RE: both remaining MISSIONVIEW §5d consumer passes decoded.
+   The effects loop (0x4cf638) draws DEBRIS.BIN images 0..23
+   (group*8 + frame&7, counter++ in the draw) through the DIRECT
+   blit FUN_00401e39 into the 640 backbuffer, sy base 0x100 with
+   the second shake table 0x454518; the 7j.25 field map
+   corrected: dword@+0x14 is the RISING vz (6000..12069, high
+   word = the sprite group), u16@+0x1A = the spawn delay (ECX
+   arg), and FUN_0041ec59(n) = a bounded-uniform
+   RandB()/(0x8000/n−1) helper. The platform loop (0x4eb638)
+   uses the ENQUEUE path: SMOKER.BIN frame 0 (mode 300) + the
+   smoke column frame d@+0x10+1 in mode 0x12d (DARKPAL flush)
+   at sy−0x20, tick FUN_004238af cycling 2..16 intro / 5..16
+   loop. FUN_00401e39 itself decoded: same .BIN container as
+   the flush codec but a plain 0/≠0 transparency flag, no
+   palette modes, dest stride 0x280 — 8street's
+   draw_IMG_in_buffer re-anchored to EXW. Bonus: the three
+   DROPSHIP ring passes (banks 0x4e64c0 + 0x4e6610..0x4e66b8,
+   img = group*0x23 + 7*row+col over 7×7 0x40-stride grids,
+   bank [0x4edd64] = DROPSHIP.BIN) recorded for the pod-descent
+   work; producers stay open.
+2. ENGINE: no change — both passes consume records whose
+   producers (deaths, destroy-tail, pod descent) sit off the
+   corpus path. They re-open with the P4.2 differential harness.
+
+Nudge-Worker: 7658328a-90b8-4b01-8412-4118fad91579
+

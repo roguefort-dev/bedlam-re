@@ -256,8 +256,146 @@ sprite). `_DAT_004edb88 != 0` additionally queues ROBNUMS
 (DAT_0046cdb0) name-plate digits at `sx + i32[0x4e44c8 + c] + 6*i`
 for name chars < 0x41 (multiplayer; not modeled). Platform
 (0x4eb638) and effects (0x4cf638, the FUN_00401e39 draw_IMG codec
-family) loops follow the same sx/sy form — out of scope for the P4
-robot overlay.
+family) loops follow the same sx/sy form — DECODED 2026-08-21
+(7j.26), see §5e/§5f.
+
+### 5e. The render-tail direct-draw passes [verified 2026-08-21, 7j.26 — decomp+asm 0x4067a1..0x4071d4]
+
+After the robot entity loop (§5d), FUN_00403938 runs FOUR more
+entity passes that all draw through the DIRECT blit FUN_00401e39
+(§5f) instead of the enqueue path — no z-layer nodes, no palette
+modes, straight into the 640×640 backbuffer `_DAT_004ede18`.
+
+**The effects loop — bank 0x4cf638, 80 × 0x1E [verified asm
+0x406c86..0x406d60; mover FUN_00419f62; producer FUN_0041a225]**
+(called from MissionShell tick @0x44813d):
+
+```
+for each record (stride 0x1E):
+  if (u16@+0x18 != 0 && u16@+0x1A == 0):     // active ∧ not delayed
+    dx = (i32@+0x00 >> 8) - camQ5X;  dy = (i32@+0x04 >> 8) - camQ5Y
+    sy = shake2 + ((dx+dy) >> 1) + 0x100 + camRowAdj - (i32@+0x08 >> 8)
+    sx = camColAdj + (dx - dy) + 0x110
+    u16@+0x1C++                                // frame counter (in the DRAW)
+    if (0 <= sx < 0x23f && 0 <= sy < 0x23e):
+      FUN_00401e39(u16@+0x16 * 8 + (u16@+0x1C & 7), 1, sx, sy)
+        with ESI = [0x4eddb4] = DEBRIS.BIN, EDI = [0x4ede18]
+```
+
+Two deltas vs the §5d robot form: the y base is **0x100** (−0xC =
+12 px higher than robots/platforms) and the shake channel is the
+SECOND table (`[0x454518 + quake_idx*4]` = local_17c; robots and
+platforms use `[0x45450c + …]` = local_180 — two independent
+quake ramps indexed by the same countdown `DAT_0046cce4`).
+z@+0x08 is Q13 like x/y (px = z >> 8), unlike the Q5-raw robot/platform z.
+
+Full record map (producer FUN_0041a225 + mover FUN_00419f62 +
+allocator FUN_0041a4cc, all verified this unit):
+
+```
++0x00/+0x04/+0x08  x/y/z Q13 (producer: ((tile<<5)+RandB&0x1F)<<8 - 0x1000,
+                    z = level<<13 + 0xF00)
++0x0C/+0x10         vx/vy Q13/frame ((RandB&0x3F)<<7 - 0x1000)
++0x14 dword         vz = (RandB&0x7FF) + 0x1770  — RISING, 6000..12069;
+                    its high word u16@+0x16 (0..2) IS the sprite group
++0x16 u16           DEBRIS.BIN image group (drawn img = group*8 + frame&7,
+                    i.e. images 0..23; set implicitly by the vz write)
++0x18 u16           ACTIVE gate (0 = free slot; first-fit allocator scans
+                    80 slots for ==0). Producer writes FUN_0041ec59(3)
+                    ∈ {0,1,2} → ~8% of particles are STILLBORN (slot
+                    occupied until the next alloc scan reuses it)
++0x1A u16           spawn DELAY countdown (producer copies its 4th
+                    register arg ECX here; mover decrements while != 0;
+                    no physics, no draw while delayed)
++0x1C u16           frame counter (producer seeds RandB&7; draw ++)
+```
+
+Mover FUN_00419f62 (per tick, only when +0x18≠0): if delayed,
+`+0x1A--`; else `x += vx; y += vy; z += vz`, and the record is
+KILLED (+0x18 := 0) when x<0 ∨ y<0 ∨ z<0 ∨ x>>13 ≥ [0x4eddec]
+(map W) ∨ y>>13 ≥ [0x4eddf0] (map H) ∨ z>>13 > 0xB. With
+vz ≥ 6000 the particles die at the z=12 ceiling in ~8..16 ticks —
+a rising spark burst (the 7j.25 "ttl 6000+" gloss was this vz).
+**FUN_0041ec59(3) identity pinned**: `RandB() / (0x8000/n − 1)`
+clamped to n−1 — a bounded-uniform random helper; here it only
+arms the active word (the 1-vs-2 value is never read).
+
+**The platform loop — bank 0x4eb638, 32 × 0x14 [verified decomp
+0x4067a1..0x406832; tick FUN_004238af; producer FUN_0042382c]**
+(called from MissionShell tick @0x447fff):
+
+```
+for each record (stride 0x14):
+  if (i32@+0x0C != 0):                        // claim/age gate
+    dx = (i32@+0x00 >> 8) - camQ5X; dy = (i32@+0x04 >> 8) - camQ5Y
+    sy = shake1 + ((dx+dy) >> 1) + 0x10c + camRowAdj - i32@+0x08   // z raw Q5
+    sx = camColAdj + (dx - dy) + 0x110
+    if (0 <= sx < 0x23f && 0 <= sy < 0x23f):
+      layer = i32@+0x08 >> 5
+      FUN_0040798e(sx, sy, DAT_0046af54, dxpx+0xb, dypy+0xb, 0, layer, 300)
+      if (sy - 0x20 >= 0):
+        FUN_0040798e(sx, sy-0x20, DAT_0046af54, dxpx+0xb, dypy+0xb,
+                     i32@+0x10 + 1, layer, 0x12d)
+```
+
+Identical sx/sy form to the §5d robot loop (z@+0x08 raw in sy,
+>>5 for the enqueue layer). **DAT_0046af54 = `GAMEGFX\SMOKER.BIN`**
+(stager FUN_0041df10 @0x41dfb1 LoadFile) — the "platform" records
+are the robot-death BLAST/smoke columns of 7j.24: base sprite =
+SMOKER image 0 (mode 300), smoke column = SMOKER image
+`i32@+0x10 + 1` (mode 0x12d = the DARKPAL flush) at sy−0x20.
+The anim tick FUN_004238af cycles the frame word: `+0x10 = +0x10+1;
+if (+0x10 == 0x10) +0x10 = 4` — from the producer's 0 the drawn
+column runs 2,3,…,16 then loops 5…16 forever (record stays claimed;
+slot reuse is the allocator's MIN-age pick). The enqueue args
+`dxpx+0xb/dypy+0xb` mirror the robot loop's wx+0xb hotspot.
+
+**Adjacent context (same asm block, decoded for geography): three
+DROPSHIP ring passes.** The per-robot ring bank at 0x4e64c0 (12
+slots implied by the 0x4e6610 boundary; loop bound = robot count
+`DAT_0046ccbc`), the 6 standalone rings 0x4e6610 (drawn singly) +
+0x4e662c..0x4e66b8 (5 × 0x1C), all 0x1C records
+{active d@+0, x d@+8, y d@+0xC, z/alt d@+0x10, img-group d@+0x14}:
+when active, a **7×7 grid of 0x40-stride tiles** is drawn via
+FUN_00401e39 with `img = group*0x23 + 7*row + col`, bank
+**ESI = [0x4edd64] = `GAMEGFX\DROPSHIP.BIN`** (ArenaAlloc(0x25990)
+loader @0x41c8xx family, exw-simtail 1752) — the dropship hull
+during the 7j.20 mission-start pod descent. Robot-indexed sy also
+subtracts the robot's own z (d@+0x08 of the 0x4c69e4 record); the
+sx/sy bases are 0x90/0xd0 (not 0x110/0x10c) — the grid is 448 px
+wide, centered differently. The trail-ring bank 0x4e66b8 (7j.22/23)
+begins exactly at the end of the 6 standalone records. Producers
+of the ring records = the pod-descent family (open; P4.2 harness).
+
+### 5f. FUN_00401e39 — the direct draw_IMG blit [verified, decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer` re-anchored]
+
+Register args (EAX img, DX transp, EBX x, ECX y, ESI bank, EDI
+dest). Same on-disk .BIN container as the enqueue path (§5/§6:
+int32 directory at `bank + 4 + 4*img`, image data at
+`&dirslot + *dirslot`) — the DIFFERENCE is the consumer: no layer
+buckets, no palette-flush modes, dest = EDI + y*0x280 + x with
+row advance 0x280 (the 640-stride backbuffer), and the second
+arg is a plain 0/≠0 flag:
+
+```
+img hdr: u16 flags; if (flags & 2) { y += s16 word1; x += s16 word2; }
+         u16 w, u16 h
+flags & 1 = RLE coded, else raw
+RLE: per row, u16 control words until bit14 (EOL):
+     bit15 set → run = word & 0xFFF:  transp≠0: skip run bytes
+                                          transp==0: paint run ZERO bytes
+     else      → literal: copy run raw bytes (NO per-byte zero test)
+raw: transp==0 → copy w×h plain;  transp≠0 → per-byte zero-skip copy
+```
+
+So byte-granular transparency exists ONLY as RLE skip words in
+coded images (same rule as the §5 flush codec) and ONLY as
+per-byte zero-skip in uncoded ones; the opaque path paints
+palette-0 in skip runs. Hotspot words are (yoff, xoff) in that
+order. Callers: the four render-tail passes (0x406d56/0x406eee/
+0x407077/0x4071ce), the map overlay FUN_004089b1 (TABLE.BIN —
+7d/7e), the boot/attract + title/menu family (0x41c8xx, 0x43d5xx+),
+FUN_00401ca2 etc. — the game's general-purpose UI/direct blitter.
 
 ## 6. Sprite banks staged by FUN_0041df10 [verified] (context)
 
@@ -265,7 +403,11 @@ DANTE/SCANNER/BLOWUP(/BLOWUPG)/WEAPONS/SHRIKE/REAPER/SMOKE/TELEPORT/
 NUMBERS/FLAGS/VICERA/DEBRIS/SHIELD/ROBNUMS .BIN + TABLE.BIN +
 DIGITS/SMOKER/HUMANS/IDIOTGFX + palettes TXPAL1/GAMEPAL/DARKPAL —
 entity/overlay banks + game palette (GAMEPAL 0x4edbf8; 7c's 0x302-B
-copy target). TABLE.BIN identity pinned 2026-08-21 (RE-EXW-SIM 7d):
+copy target). Bank pins refined 7j.26: **DAT_0046af54 = SMOKER.BIN**
+(the §5e platform/blast smoke loop), **_DAT_004eddb4 = DEBRIS.BIN**
+(the §5e effects-particle loop), and **[0x4edd64] = DROPSHIP.BIN**
+(ArenaAlloc(0x25990), NOT staged here — own loader in the mission
+init family; the §5e ring passes). TABLE.BIN identity pinned 2026-08-21 (RE-EXW-SIM 7d):
 a draw_IMG-family bank whose image 0 is the strategic-map backdrop —
 sole reader FUN_004089b1 (the map overlay); the per-tile map colors
 are LNK-image words (0x45cdda + 2*type — the §7e correction of the
@@ -339,8 +481,13 @@ terrain pass overwrites everything the present window reads.
    frames irrelevant there.
 3. ~~FUN_00403938's entity loops~~ **CLOSED 2026-08-21**: the robot
    entity loop + FUN_0040798e/0179b enqueue/flush are decoded (§5b–§5d)
-   and wired into bedlam-render. Remaining out-of-scope tail: the
-   platform loop (0x4eb638, bank DAT_0046af54), the effects loop
-   (0x4cf638 — the separate draw_IMG/FUN_00401e39 codec family), and
-   the ROBNUMS name plates (§5d).
+   and wired into bedlam-render. **FULLY CLOSED 2026-08-21 (7j.26)**:
+   the platform loop (0x4eb638 → SMOKER.BIN blast/smoke columns, §5e),
+   the effects loop (0x4cf638 → DEBRIS.BIN particles via the
+   FUN_00401e39 direct codec, §5e/§5f), and the codec itself (§5f).
+   Remaining adjacent tail (context §5e): the DROPSHIP ring-record
+   PRODUCERS (pod-descent family) and the ROBNUMS name plates (§5d).
 4. BIN u32[bank+0] directory header word / sprite count sanity.
+   (7j.26 note: the FUN_00401e39 directory base bank+4+4*img is
+   now asm-verified; whether word0 is a u16 count + pad or a u32
+   is still unpinned.)
