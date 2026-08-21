@@ -1,17 +1,19 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The weapon-fire family SECOND HOP — FUN_0041bc1c
-   (312 B, 10 callers): the TERRAIN/ROBOT damage resolver paired
-   at every fire/impact site (0x410ca2/0x4118c2/0x411f24/
-   0x412472/0x4244f3 + the type-2 projectile impact 0x412462):
-   pin its dispatch (robot armor hit? floor/z damage? which
-   banks it writes), + the terrain probe FUN_0041eaa1 and the
-   debris co-stagers FUN_004124a4/FUN_004126dc heads (arg maps
-   only). Bounded: those four functions' heads only. NOTE
-   (7j.13): PUSH RETRY — if origin/main is behind, push the
-   pending 7j.13 commits first (secret service was down at
-   close-out).
+1. [P4] The weapon-fire family THIRD HOP — FUN_00419aff (381 B,
+   28 callers): the per-weapon STAT lookup feeding every damage
+   argument (ids seen: 1/2..5/9..0x29 weapon-anim kinds +
+   0x65..0x68 projectile types; base field 0x46cbf8 per 7j.13
+   census) — pin its table layout (which id → which damage/
+   field), PLUS the 0x4cccf8 terrain-structure array PRODUCER
+   census (who stages {active,hp,x,y,z} there — xrefs to
+   0x4cccf8/0x4ccd08/0x4ccd14 + the count writer 0x46ccd4;
+   mission-load stager suspected). Bounded: FUN_00419aff full +
+   producer xref census only. NOTE (7j.14): PUSH RETRY — if
+   origin/main is behind, push the pending 7j.13/7j.14 commits
+   first (secret service was down again at close-out; retry
+   libsecret wake via any push attempt before work).
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed
@@ -23,15 +25,18 @@
   likely.
 - The weapon-fire family REMAINDER (first hop done 7j.13 —
   FUN_0041a894 head + 17-site census + the object type table
-  0x4dedf2/0x4E/282 pinned; SECOND HOP = the Now item): after
-  it, the FUN_00410823 weapon-anim machine internals (the
-  0x4c71xx record family), the destroy-tail debris-kind map
+  0x4dedf2/0x4E/282 pinned; SECOND HOP done 7j.14 — FUN_0041bc1c
+  terrain-structure resolver + FUN_0041eaa1 height probe + both
+  disburser heads): after the THIRD HOP (the Now item), the
+  FUN_00410823 weapon-anim machine internals (the 0x4c71xx
+  record family), the destroy-tail debris-kind map
   (which id-table type@+0xE stages which kinds — the 7j.11 sites
-  0x41ace7..0x41b67a), FUN_00419aff's per-weapon table layout,
-  FUN_00412f34/FUN_00417e2f, and the 160-vs-0xA8 stride anomaly
-  at 0x4c69e4 (FUN_0040fe93). Unlocking the tail re-opens the
-  water-splash producers (7j.10) and 17 of 20 debris kinds
-  (7j.11) for any future corpus seam.
+  0x41ace7..0x41b67a), FUN_00412f34/FUN_00417e2f, the
+  [0x4edd60] height-bank family, the projectile-record z
+  encoding (7j.14 census open), and the 160-vs-0xA8 stride
+  anomaly at 0x4c69e4 (FUN_0040fe93). Unlocking the tail
+  re-opens the water-splash producers (7j.10) and 17 of 20
+  debris kinds (7j.11) for any future corpus seam.
 - The debris-stager ENGINE widening beyond kind 5 (fed by the
   7j.11 20-kind table + the 11 seq tables): model the k2/k8
   single-center scorch (values 3/4), the k1/k20 shared-tail
@@ -97,6 +102,35 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.14 weapon-fire family SECOND HOP unit
+  COMPLETE (worker d37fb3a2 claim 1, commit 7b9ce05, D62,
+  docs-only): FUN_0041bc1c = the TERRAIN-STRUCTURE damage
+  resolver (x/y Q13, damage): scans the NEW array 0x4cccf8
+  stride 0x20 count [0x46ccd4] {active@+0, hp@+0x10, x tile@+0x14,
+  y@+0x18, z@+0x1C}, externally 1-based (dword[0x4cccd8+id·0x20],
+  guard at 0x4cccd8) — hp−=damage only on survivors; destroy →
+  floor word [0x454a04+4·zone] → TOT mirror 0x4796bc+30·tile+2z,
+  seen @0x4796cc=1, DAT volume byte=0, debris K0xF, splash at
+  first free level. NO robot-armor branch (7j.13 question closed
+  TERRAIN-only). FUN_0041eaa1 = the per-pixel TERRAIN-HEIGHT
+  probe (DAT volume byte 0 → miss; else the 32×32 height bank
+  behind [0x4edd60] entry (h−1)·4+2 +6 header; hit iff z ≤
+  (z>>5)·0x20+byte; 3 sites in FUN_00412010; rec-z encoding left
+  open). FUN_004124a4 = the weapon-anim disburser (rec
+  0x4c71f4+0x36·i, kind word@+0: w2..4→K2 ±3 jitter, 5→K3,
+  0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC, 9..0xB
+  clear-only; z−10; all 9 callers in FUN_00410823).
+  FUN_004126dc = the projectile disburser (rec 0x4cc654+0x22·i,
+  +0 = TYPE word 0=free — refines 7j.13 "active": 1→K2,
+  0x65→K0x14, 0x66→K8, 0x67/0x68→K4, no z−10; robot-hit expiry
+  walker FUN_004197d4 |dx|<0x10 Q8 ∧ |dz|<0x20; projectile type
+  ids = weapon-stat ids). Splash addendum: FUN_00424355 gates
+  (DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58]) + max-age
+  eviction via FUN_0042394a. No engine change (D62). Manifest
+  verified. Push STILL blocked (secret service down, retried
+  twice) — commits 4448a77, 2064e18, 7b9ce05 local; RETRY
+  FIRST. Queued: the family THIRD HOP (FUN_00419aff + the
+  0x4cccf8 producer census).
 - 2026-08-21: P4 7j.13 FUN_0041a894 weapon-impact ray head
   FIRST HOP unit COMPLETE (worker b7f866b6 claim 1, commit
   4448a77, D61, docs-only): FUN_0041a894 = the PER-TILE

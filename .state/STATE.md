@@ -1,3 +1,32 @@
+ - CLOSED 2026-08-21 (P4 7j.14 weapon-fire family SECOND HOP
+   unit COMPLETE, commit 7b9ce05 + state, worker d37fb3a2
+   claim 1, D62, docs-only): RE-EXW-SIM amendment 7j.14 pins the
+   sibling resolver — FUN_0041bc1c(x/y Q13, damage ebx) = the
+   TERRAIN-STRUCTURE damage resolver over the NEW array
+   0x4cccf8 stride 0x20 count [0x46ccd4] {active@+0, hp@+0x10,
+   x@+0x14, y@+0x18, z@+0x1C}, externally 1-based
+   (dword[0x4cccd8+id·0x20], id-0 guard at 0x4cccd8); survivors
+   take hp−=damage only; destroy → zone floor word
+   [0x454a04+4·zone] into the TOT mirror 0x4796bc+30·tile+2z +
+   seen @0x4796cc + DAT volume 0 + debris K0xF + splash — NO
+   robot-armor branch (7j.13's terrain/robot question closes
+   TERRAIN-only; 10 call sites census'd with arg windows).
+   FUN_0041eaa1 = the per-pixel terrain-height probe (DAT volume
+   byte → the 32×32 height banks behind [0x4edd60], entry
+   (h−1)·4+2 +6 header; hit iff z ≤ (z>>5)·0x20 + byte).
+   FUN_004124a4 = the weapon-anim debris disburser (rec
+   0x4c71f4+0x36·i, kind word@+0 → K2/K3/K6/K9/K0xC map, z−10);
+   FUN_004126dc = the projectile disburser (rec 0x4cc654+0x22·i,
+   +0 = TYPE word 0=free: 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→
+   K4; FUN_004197d4 = the robot-hit expiry walker |dx|<0x10 Q8,
+   |dz|<0x20; projectile type ids = weapon-stat ids). Splash
+   gates + max-age eviction pinned (claim byte 0x46af58 third
+   reader). ENGINE: none (D62 — corpus verdict unchanged, all
+   fire/impact sites stay unwired). Pins untouched; manifest
+   verified. Push retried twice, STILL blocked (secret service
+   dead — commits 4448a77, 2064e18, 7b9ce05 safe locally,
+   retry by next run/operator). Queued: the family THIRD HOP
+   (FUN_00419aff stat table + the 0x4cccf8 producer census).
  - CLOSED 2026-08-21 (P4 7j.13 FUN_0041a894 weapon-impact ray
    head FIRST HOP unit COMPLETE, commit 4448a77 + state, worker
    b7f866b6 claim 1, D61, docs-only): RE-EXW-SIM amendment 7j.13
