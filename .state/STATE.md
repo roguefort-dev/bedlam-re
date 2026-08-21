@@ -1,3 +1,33 @@
+ - CLOSED 2026-08-21 (P4 7j.20 the extraction BEACON +
+    POD-COUNTDOWN producers unit COMPLETE, commit c37b8ef,
+    worker c7269abe claim 1, D68, docs-only; 2 × -process
+    BEDLAM.EXW -noanalysis runs, dumps ghidra-project/
+    exw-beacon{,2}*.txt + full-objdump census of all
+    0x4c6a10-displacement sites): FUN_004247b5 = the
+    EXTRACTION-BEACON ARMER — sole caller FUN_00433980
+    @0x433cfb (the zone pad-trigger dispatcher), REVOKING the
+    old "robot-sprite click family ~0x433cbc" attribution
+    (0x433cbc lies inside FUN_00433980's 3185-B body): ~25
+    (zone, .PAD slot) pairs are extraction pads; armer body =
+    guard 0x4eabb0 → countdown 0x197 (0 if the player-0
+    alive-count == 1 = last robot), tile trio 0x4eabb4/6/8
+    (z = dead store), robot state := 3 + spread-teleport +
+    SFX 0x2A. FUN_004248c8 = the SPREAD-CLAIM picker (12×u16
+    0x4eabba, one-shot claims; offsets center + 8 neighbors +
+    (−2,0)/(0,−2)/(+2,0); ≥12 → caller stores UNINITIALIZED
+    locals). w@robot+0x2C = the DROP-POD descent timer: SP
+    producer EXISTS (FUN_0040cca0 spawn tail @0x40d132
+    stagger 1+k·(2000−m·1000/27), m = linear mission) —
+    refutes the "no SP producer known, always 0" gloss; MP
+    respawn 0x28 @0x40e89d; reader FUN_0040b9f6 freezes the
+    whole robot brain while ≠0 → 0-hit fires the pod anim
+    (the 0x4e64c0 pod bank = deploy + respawn + extraction).
+    §6.4/§6.5/§7b.6/§7c.8 corrected; +0x2C record row
+    rewritten; 4 ledger rows + the 0x4c71c4 per-player
+    selected-anchor census. The extraction trigger chain is
+    CLOSED end-to-end (pad script → armer → rally → dropship
+    → sweep). Manifest verified. PUSHED c37b8ef. Next: the
+    0x425xxx arrival-producer family.
  - CLOSED 2026-08-21 (P4 7j.19 the EXIT/ESCAPE RUNTIME unit
    COMPLETE, commit c64c637, worker 90c04773 claim 1, D67
    docs-only; 3 × -process BEDLAM.EXW -noanalysis runs, dumps

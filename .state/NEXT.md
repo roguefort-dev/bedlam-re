@@ -1,31 +1,30 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The extraction BEACON + POD-COUNTDOWN producers — the
-   last open writers of the escape family (7j.19 residuals):
-   FUN_004247b5 (writes beacon 0x4eabb0/0x4eabb2/0x4eabb4/
-   0x4eabb6 — who arms the extraction: objectives done?
-   FUN_00448b80's completion path?), FUN_004248c8 (the
-   beacon-approach probe FUN_0040b9f6 consumes to auto-walk
-   robots to extraction), and the w@0x4c6a10 pod-countdown
-   writers (death core FUN_0040e230 side? decompile the writer
-   sites). Bounded head: decompile the three + fold into
-   RE-EXW-SIM 7j.20 + ledger rows. Closes the extraction
-   trigger chain (objectives → beacon → dropship → robots).
+1. [P4] The 0x425xxx ARRIVAL-PRODUCER family — the top backlog
+   item, now unblocked head: FUN_0042034c's 45-record staging at
+   0x425daf/0x426079/0x42688c + the register-addressed countdown
+   writes + the record draw pass 0x4065f8..0x4066a3 — the
+   delayed-arrival scheduler is decoded (7j.11 item 1: 45 rec
+   @0x4dcdb8 stride 0x24 {active, xy×2, spawn xyz, countdown,
+   robot slot}; epilogue 0x448076; fires FUN_0042394a), its
+   producers are not. NOTE 7j.12: the 45x0x10 rectangle list at
+   0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
+   before the arrival array 0x4dcdb8 — same producer family is
+   likely. NOTE 7j.16: the arrival records ARE drawn (scanner
+   icon 0xB in FUN_0041ee20) — the family has a confirmed
+   consumer. NOTE 7j.20: the FUN_0040cca0 spawn tail already
+   writes a per-player anchor bank at 0x4c71c4 — check whether
+   the arrival producer refreshes it too. Bounded head: decompile
+   FUN_0042034c + the 0x425xxx staging sites → fold into
+   RE-EXW-SIM 7j.21 + ledger rows.
 ## Backlog (not yet started)
-- The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
-  staging at 0x425daf/0x426079/0x42688c + the register-addressed
-  countdown writes + the record draw pass 0x4065f8..0x4066a3) —
-  the delayed-arrival scheduler is decoded (7j.11 item 1), its
-  producers are not. NOTE 7j.12: the 45x0x10 rectangle list at
-  0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
-  before the arrival array 0x4dcdb8 — same producer family is
-  likely. NOTE 7j.16: the arrival records ARE drawn (scanner
-  icon 0xB in FUN_0041ee20) — the family has a confirmed consumer.
 - The weapon-fire family REMAINDER (7j.13/14/15/16/17/18 done): the
   FUN_00410823 weapon-anim machine internals (6102 B — the
   biggest piece; its 0x4c71f4 record family is now 400x0x36
-  with frame + spawners pinned per 7j.17), the destroy-tail
+  with frame + spawners pinned per 7j.17; NOTE 7j.20: the bank's
+  head-adjacent 0x4c71c4 = the per-player selected anchor,
+  spawn-seeded + renderer-updated), the destroy-tail
   debris-kind map (which id-table type@+0xE stages which kinds
   — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
   @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
@@ -47,9 +46,10 @@
   [0x4ede24] 7×7 screen-address table: is the materializer the
   scroll/camera restamp? Bounded head decode.
 - The full per-zone FUN_00433980 case table (≈28 pad ids × 7
-  zones, beyond the §7j.19 head decode) + the FUN_00424a6f
-  message string table — mechanical, decode per zone only when
-  P4.2 needs it.
+  zones, beyond the §7j.19 head decode; 7j.20 item 2 gives the
+  ~25 extraction-pad (zone,slot) pairs as an index) + the
+  FUN_00424a6f message string table — mechanical, decode per
+  zone only when P4.2 needs it.
 - The 0x4787c4/0x47879c hot-rect record (renderer FUN_00403938
   writes it @0x403c93, count [0x46ccd8]; picker reads
   center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
@@ -84,6 +84,7 @@
   NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
+  NOTE 7j.20: the beacon armer's SFX is FUN_004239ef(0x2a,3).
 - The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
   mirror rows + the probe-latch walk + the DAT z-plane consume +
   the 0x454a90 floor-word swap) — unblocks the apply_pickup
@@ -122,7 +123,11 @@
   original state dumps diffed against engine state. Design doc first.
   Also arbitrates the two 7j hypotheses (the debris 2k start delay
   and the blink-cursor-from-spawn question) + the 7j.9 overlap
-  last-write-wins read of the five rings.
+  last-write-wins read of the five rings. NOTE 7j.20: the harness
+  must model the mission-start pod-descent stagger (w@+0x2C =
+  1+k·(2000−m·1000/27)) — the first seconds of any mission have
+  the robots frozen in pods — and arm extraction via a scripted
+  .PAD step-on, not a click.
 - TOT semantics follow-up: FORMATS sec 2 plane 6/7 (the ~2000-slot
   POS linkage) — KNOWN-staged (word mirror at record words 6/7)
   but the drawer treats them as ordinary stack levels - check
@@ -139,6 +144,31 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.20 the extraction BEACON + POD-COUNTDOWN
+  producers unit COMPLETE (worker c7269abe claim 1, commit
+  c37b8ef, D68, docs-only; 2 × -process runs, dumps
+  ghidra-project/exw-beacon{,2}*.txt + full-objdump census of
+  the ten 0x4c6a10 displacement sites). FUN_004247b5 = the
+  EXTRACTION-BEACON ARMER, sole caller FUN_00433980 @0x433cfb
+  (zone pad script; the §6.4/§7c.8 "click family ~0x433cbc"
+  attribution REVOKED — that address is inside FUN_00433980):
+  ~25 (zone,.PAD slot) extraction pads; guard 0x4eabb0,
+  countdown 0x197 (0 when the player-0 alive-count == 1),
+  0x4eabb4/6/8 = tile trio (z dead store), robot state := 3 +
+  spread-teleport + SFX 0x2A. FUN_004248c8 = the SPREAD-CLAIM
+  picker (12×u16 0x4eabba one-shot claims; center + 8
+  neighbors + (−2,0)/(0,−2)/(+2,0); ≥12 leaves caller locals
+  uninitialized). w@robot+0x2C = DROP-POD descent timer: SP
+  producer = FUN_0040cca0 spawn tail stagger 1+k·(2000−
+  m·1000/27) (m = linear mission 0x46ae8c; refutes the "no SP
+  producer" gloss), MP respawn 0x28 @0x40e89d; reader
+  FUN_0040b9f6 freezes the whole brain, 0-hit → pod anim
+  FUN_0041fb4b + msgs 9/10/0xB (0x4e64c0 pod bank = deploy +
+  respawn + extraction). §6.4/§6.5/§7b.6/§7c.8 corrected,
+  +0x2C row rewritten, 4 ledger rows + 0x4c71c4 per-player
+  anchor census. Extraction trigger chain CLOSED end-to-end.
+  Manifest verified. PUSHED c37b8ef. Queued: the 0x425xxx
+  arrival-producer family (7j.21).
 - 2026-08-21: P4 7j.19 the EXIT/ESCAPE RUNTIME unit COMPLETE
   (worker 90c04773 claim 1, commit c64c637, D67, docs-only;
   3 × -process BEDLAM.EXW -noanalysis runs, dumps
