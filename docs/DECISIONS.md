@@ -2495,3 +2495,50 @@ Nudge-Worker: e635cb76-8052-487a-8ac7-ebc65f357947
    watch the WEAPONS/SHRIKE/REAPER/SMOKE blit sequences directly.
 
 Nudge-Worker: ffec42cf-326a-47ae-a396-c02215f5eeb8
+
+## 2026-08-22 P4.2 — the differential-harness architecture is D77: EXD/DOSBox-X is the scripted-differential instrument, EXW stays the canon of record; dumps are runtime-only, fingerprints in git
+
+1. CONTEXT: PLAN sec 6 P4.2 (budgeted ~2 weeks) requires the differential
+   harness design doc before any harness code (queue item 1, 2026-08-22).
+   Written as docs/DESIGN-DIFFHARNESS.md (worker 4d7b9a5b, claim 1,
+   docs-only, no engine change).
+2. THE DECISION (D77): three original-side channels + the engine —
+   O1 = BEDLAM.EXD under the pinned DOSBox-X (D29 sandbox model) is the
+   PRIMARY scripted differential oracle (PLAN names DOSBox-X debugger
+   memory-watches; the sandbox is B2-proven on the same DOS4GW LE class;
+   observation never patches the original binaries). O2 = BEDLAM.EXW under
+   the pinned Wine prefix is the CANON TIEBREAK/spot-check channel (every
+   RE'd address verbatim; host ptrace watcher, ticket W11). O3 =
+   instrumented 8street = second comparator only, late (W10, test-only per
+   PLAN sec 0/1). EXD is the instrument of observation; EXW remains the
+   canon of record — every EXW<->EXD divergence the harness surfaces is
+   classified `original-divergence`, lands in docs/DIVERGENCES.md, and is
+   arbitrated by O2. The differ compares CANONICAL RECORDS (never raw
+   guest bytes) in five modes (STRUCTURAL / T1-exact / T1-timing /
+   T2-tolerant / T3-statistical) per the PLAN 0b budget — the harness is a
+   divergence meter + structural-error catcher + regression tripwire, NOT
+   an all-zone tick-parity gate.
+3. INJECTION DISCIPLINE: no host-level synthetic input ever; the runner
+   writes the game's own seams at the frame trigger — g_keystore
+   0x4edc44 / cursor 0x4eddc4/8 / mouse 0x4dc6e4 (RE-EXW-INPUT), ORDER
+   writes to the 0x4dd484/88/8c target + 0x46cc30/60 move words, COMMAND
+   records at 0x4dd4a0 for weapon fire (the 7j.22 route — never raw
+   input), and .PAD step-on orders for extraction arming (7j.20). Frame
+   alignment = g_frame_count 0x46ae68 <-> engine tick; dump point = the
+   MissionShell epilogue/present tail.
+4. HYGIENE: dumps derive from original memory = asset-derived data: they
+   live only under runtime/harness-out (git-ignored); git carries the
+   watch registry, scenario scripts, and dump-chain FNV-1a-64 fingerprints
+   only (the 6-P4.3 goldens policy).
+5. BUILD ORDER: W1 EXD import + EXW->EXD address map (docs/RE-EXD-MAP.md)
+   -> W2 watch registry (tools/diffharness/watches.toml, every row
+   ledger-anchored with an anchor-resolution test) -> W3 dump schema ->
+   W4 DOSBox-X runner -> W5 injector -> W6 engine canonical dump emitter
+   (parity_harness --canonical) -> W7 differ -> W8 S1/S2 end-to-end ->
+   W9 gates/CI -> W10 O3 -> W11 O2 ptrace channel -> W12 S3-S8 scenario
+   depth. The open-hypothesis dispositions (pod stagger, debris 2k
+   start-delay, blink-cursor-from-spawn, ring overlap = statically moot
+   per 7j.10 + confirming read, mid-flight blits = T2 render-side, out of
+   state-diff scope) are tabulated in the doc sec 8.
+
+Nudge-Worker: 4d7b9a5b-55db-4c69-b440-862e2adc029a
