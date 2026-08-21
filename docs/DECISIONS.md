@@ -2041,3 +2041,40 @@ Nudge-Worker: 5aa2d164-5a28-4d42-805a-7b2f629bd29f
    0x4c69e4, and the type-table's remaining words.
 
 Nudge-Worker: b7f866b6-9b16-4d83-ab08-cc080284ee3b
+
+## D62 - 2026-08-21: the weapon-fire second hop is docs-only - FUN_0041bc1c is the terrain-STRUCTURE resolver (new 0x4cccf8 array); the probe is a per-pixel height test; both disbursers are per-record debris kind maps
+
+1. RE (all [verified] vs ghidra-project/exw-weaponfire2.txt,
+   ExwWeaponFire2.java): FUN_0041bc1c(x Q13 eax, y Q13 edx,
+   damage ebx) resolves damage against the TERRAIN-STRUCTURE
+   array @0x4cccf8 + i*0x20 (i < [0x46ccd4]; {active@+0,
+   hp@+0x10, x@+0x14, y@+0x18, z@+0x1C}; externally 1-based via
+   dword[0x4cccd8+id*0x20], 0x4cccd8 = the id-0 guard). hp -=
+   damage; survivors take NO other write; hp<=0 -> active=0 +
+   the floor word [0x454a04+4*zone] stamped into the TOT mirror
+   (0x4796bc+30*tile+2z) + seen byte (0x4796cc) + DAT volume
+   cleared + debris K0xF + splash at the first free level. NO
+   robot-armor branch, NO platform call - the 7j.13 "terrain/
+   robot" question closes TERRAIN-only. FUN_0041eaa1(x/y Q5, z)
+   = the projectile terrain-height probe: DAT volume byte 0 ->
+   miss; else the 32x32 height bank behind [0x4edd60] entry
+   (h-1)*4+2 (+6 header), hit iff z <= (z>>5)*0x20 + bankbyte;
+   3 sites in FUN_00412010. FUN_004124a4 = the weapon-anim
+   disburser (rec 0x4c71f4+0x36*i, kind word@+0 = weapon id:
+   2..4->K2 jitter, 5->K3, 0x24->K6, 0x29->K9, {0xE,0xF,0x13,
+   0x17,0x1A,0x1F}->K0xC, 9..0xB clear-only, z-10). FUN_004126dc
+   = the projectile disburser (rec 0x4cc654+0x22*i, +0 = TYPE
+   word 0=free - refines 7j.13 "active": 1->K2, 0x65->K0x14,
+   0x66->K8, 0x67/0x68->K4, no z-10; FUN_004197d4 = the
+   robot-hit expiry walker |dx|<0x10 Q8, |dz|<0x20). Projectile
+   type ids = weapon-stat ids. Splash addendum: FUN_00424355
+   gates (DAT-empty AND TOT word 0 AND claim byte[0x46af58]) +
+   max-age eviction via FUN_0042394a.
+2. ENGINE: no change - unchanged corpus verdict from 7j.13
+   (D61); all fire/impact sites stay player/script-driven and
+   unwired. Re-open points: the 0x4cccf8 array PRODUCER
+   (mission-load stager), the [0x4edd60] height-bank family,
+   FUN_00410823 internals, FUN_00419aff's table layout, and the
+   projectile-record z encoding (site-1 arg shape).
+
+Nudge-Worker: d37fb3a2-9df1-482a-88c5-20504c5bb254

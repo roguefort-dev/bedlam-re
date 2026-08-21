@@ -2014,6 +2014,7 @@ loop. All [verified] asm unless tagged.
    - **FUN_0041bc1c** (312 B, 10 callers) = the SIBLING resolver
      (terrain/robot damage) always paired at the fire/impact
      sites - decode deferred (backlog: the family's second hop).
+     [Decoded 7j.14: terrain-STRUCTURE resolver, see §7j.14.]
    - **FUN_00419aff(weapon_id, field)** (381 B, 28 callers) =
      the per-weapon STAT lookup (id-switched, 0x46cbf8 base
      field) feeding every damage argument [census].
@@ -2035,6 +2036,116 @@ the 7j.10/7j.11 producer geography (the debris/splash co-staging
 lives in the destroy tail). Re-opens cleanly at: FUN_0041bc1c
 (the terrain/robot resolver), the FUN_00410823 weapon-anim
 machine, and the type-table's remaining words.
+
+## 7j.14 Amendment 2026-08-21 (worker d37fb3a2, the weapon-fire
+family SECOND HOP: FUN_0041bc1c + FUN_0041eaa1 + the two co-stager
+heads)
+
+Method: `ExwWeaponFire2.java` (-process BEDLAM.EXW -noanalysis),
+dump = `ghidra-project/exw-weaponfire2.txt` (full decompile +
+listing + depth-1 callees + 0x30 pre-call arg windows for all 4
+roots). All facts below [verified] against that dump unless tagged.
+
+1. **FUN_0041bc1c = the TERRAIN-STRUCTURE damage resolver** (312 B,
+   10 callers) — the sibling of FUN_0041a894 paired at every
+   fire/impact site. NOT a robot-armor path, NOT the object grid
+   (0x46cbf4), NOT the platform bank (no FUN_00422693 call):
+   - Register args: EAX x Q13, EDX y Q13, EBX damage. Tile =
+     x>>13, y>>13, bounds-gated by DAT_004eddec/DAT_004eddf0.
+   - Scans the **TERRAIN-STRUCTURE array**: records @0x4cccf8 +
+     i·0x20, i < DAT_0046ccd4 — {+0x00 active dword, +0x10 hp
+     dword, +0x14 x tile, +0x18 y tile, +0x1C z level}. NEW bank
+     (distinct from every array pinned so far).
+   - Match (active≠0 ∧ x ∧ y): hp −= damage; hp > 0 → return
+     (survivor takes NO floor/z/scorch write — pure hp subtract).
+   - Destroyed (hp ≤ 0): active = 0, then the tile is converted
+     back to floor IN ALL THREE RENDER/VOLUME BANKS:
+     (a) TOT mirror word @0x4796bc + 30·tile + 2z ←
+         word[0x454a04 + zone·4] (the zone FLOOR word,
+         _DAT_004edd8c = terrain-set idx, cf. 7j.12 zone bases);
+     (b) seen byte @0x4796cc + 30·tile + z = 1;
+     (c) DAT volume byte @DAT[0x4edd58] + y·W + x + z·
+         _DAT_004eddf4 = 0.
+     Then FUN_00420608(x<<5, y<<5, z<<5, kind 0xF, 0, −1) debris
+     + FUN_0041bd78(x,y,z)→FUN_00424355(x,y,z′,0) splash. The
+     same triple FUN_0042394a writes (7j.10), inlined here with a
+     floor-word source instead.
+   - **ID convention pinned**: external refs are 1-BASED — the
+     fire controller reads dword[0x4cccd8 + id·0x20] (site
+     0x411e41, id = animrec field &0x1FFF) = record id−1's active
+     field; dword@0x4cccd8 itself is the id-0 guard slot. Same
+     id+1 convention as the tile-word grid (7j.12/7j.13).
+   - 10 call sites, uniform args (damage = FUN_00419aff(weapon)):
+     8 in FUN_00410823 (0x410ca2 weapon 5, 0x410e59/0x410e72/
+     0x410e87/0x410e9e = weapon 0x1a ×4 quadrants, 0x4118c2
+     weapon 0x24, 0x411f24 weapon 0x29, 0x410af9 rec-weapon —
+     weapon id = dword[0x4c71f2]>>16 = anim rec 0's kind word),
+     1 in FUN_004244a1 script blast (damage 0x1388), 1 in
+     FUN_00412010 projectile impact (weapon 0x66).
+2. **FUN_0041eaa1 = the projectile TERRAIN-HEIGHT probe** (135 B,
+   3 callers, all in FUN_00412010):
+   - Args EAX x Q5, EDX y Q5, EBX z. h = FUN_0041eb28(x>>5, y>>5,
+     z>>5, DAT) — the DAT volume byte at the containing tile; 0
+     → return 0 (air, no terrain).
+   - h ≠ 0 → per-PIXEL height: bank ptr = [0x4edd60] (a per-level
+     bank-pointer array); entry = (h−1)·4 + 2 → dword, +6 header;
+     height byte = bank[(y&31)·32 + (x&31)]. Return 1 iff
+     z ≤ (z>>5)·0x20 + height (terrain top at that sub-tile pixel
+     reaches z). NEW: the 32×32 byte height-map banks behind
+     [0x4edd60] — same family as the effects/draw_IMG bank
+     arrays (MISSIONVIEW §5d backlog).
+   - Sites: 0x4120dc main post-move test; 0x4121fd/0x4122e1
+     per-axis variants (bounds-gate deactivates word[rec+0]=0
+     when x/y leave [0, W/H<<5)). Hit → FUN_004126dc(idx) +
+     the impact family. [census open] site-1's z arg is
+     ([rec+0xA] − rec[+0x1A clamped ≤7]) << 5 — the projectile
+     record's z encoding is NOT plain Q13 (per-axis sites pass
+     [rec+0xA]>>8); left unpinned, head-bounded unit.
+3. **FUN_004124a4 = the WEAPON-ANIM debris disburser** (568 B, 9
+   callers, ALL in FUN_00410823): arg EAX = anim record idx; rec
+   = 0x4c71f4 + idx·0x36; kind = word[rec+0] (= the weapon/anim
+   id space). Coords x@+0x12, y@+0x16, z@+0x1A (all >>8), param
+   dword@+2 → FUN_00420608(x, y, z−10, K, 0, param). Kind map:
+   - weapons 2..4 → debris K2 with x/y jitter (RandA&7)−3;
+     weapon 5 → K3; weapon 0x24 → K6; weapon 0x29 → K9;
+     weapons {0xE, 0xF, 0x13, 0x17, 0x1A, 0x1F} → K0xC;
+     weapons 9..0xB → NO debris (word still cleared);
+     weapons 0xC/0xD → no-op (word kept); everything else →
+     no-op. Every debris branch clears word[rec+0].
+4. **FUN_004126dc = the PROJECTILE debris disburser** (364 B, 6
+   callers): arg EAX = projectile idx; rec = 0x4cc654 + idx·0x22;
+   type = word[rec+0] — REFINES 7j.13's "active": +0 is the TYPE
+   word, 0 = free. Types pinned: 1 → debris K2, 0x65 → K0x14,
+   0x66 → K8, 0x67 → K4, 0x68 → K4; coords (x>>8, y>>8, z>>8)
+   — NO z−10 here (vs FUN_004124a4); every branch clears the
+   type word. Projectile type ids ARE weapon-stat ids (the 7j.13
+   impact damage FUN_00419aff(0x65/0x66) reads the projectile's
+   own type). Callers: 4 in FUN_00412010 (the 3 probe-hit sites
+   + axis-counter expiry 0x412425/0x41243f) + 2 in FUN_004197d4
+   = the projectile-vs-ROBOT proximity walker (|dx| < 0x10 Q8 ∧
+   |dz| < 0x20 vs robot rec @0x4c69e4+0xA8·i, z@+8 → expire on
+   robot hit, then 0x65 damage lookups) — the ROBOT-HIT arm of
+   the projectile family [census-level].
+5. **7j.10 addendum (splash gates + eviction)** [verified in the
+   depth-1 dumps]: FUN_0041bd78(x,y,z) scans UP from min(z,7)
+   for the first level with DAT byte 0 ∧ seen byte 0 (else 7).
+   FUN_00424355 stages only when the target level is DAT-empty ∧
+   TOT word == 0 ∧ tile-claim byte[0x46af58 + tile] == 0
+   (0x46af58 = the 7j.10 tile-claim bank — third reader found);
+   when all 250 splash records are active it EVICTS the max-age
+   record and flushes it with FUN_0042394a(oldx, oldy, oldz,
+   0, 0).
+
+Corpus-path verdict: unchanged from 7j.13 — no corpus producer
+reaches any fire/impact site, so the engine seam stays NONE
+(D62, docs-only). CLOSED this unit: the sibling resolver's
+dispatch (terrain-structure hp − no robot/floor path), its three
+bank writes + the new 0x4cccf8/0x20 array + 1-based id
+convention, the terrain-height probe semantics (+ the [0x4edd60]
+height-bank array), both disburser arg maps, and the projectile
+type word. Re-opens cleanly at: the 0x4cccf8 array PRODUCER
+(mission-load stager), the FUN_00410823 anim-machine internals,
+and FUN_00419aff's per-weapon table layout.
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
@@ -2076,6 +2187,12 @@ machine, and the type-table's remaining words.
 | robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon stat lookup | FUN_00419aff(weapon_id, field) — 28 callers, feeds every damage arg; its stack arg is the same push that arms FUN_0041a894's score flag | §7j.13 |
+| terrain-structure array | recs @0x4cccf8 + i·0x20, i < [0x46ccd4] — {active@+0, hp@+0x10, x tile@+0x14, y@+0x18, z@+0x1C}; externally 1-based (dword[0x4cccd8+id·0x20] = rec id−1 active; 0x4cccd8 = id-0 guard) | §7j.14 |
+| terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
+| terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |
+| weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i, kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14 |
+| projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4; coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20) | §7j.14 |
+| splash gates/eviction | FUN_0041bd78: first z ≥ min(z,7) with DAT 0 ∧ seen 0; FUN_00424355 gates: DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58+tile]=0; full ring → evict max-age + FUN_0042394a flush | §7j.14 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
 | z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |
