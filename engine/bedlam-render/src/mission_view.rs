@@ -269,6 +269,15 @@ pub struct MissionView {
     /// Entity/robot sprite bank (`GAMEGFX\DANTE.BIN`) staged by the
     /// host [FUN_0041df10 seam, MISSIONVIEW sec 6].
     entity_bank: Vec<u8>,
+    /// The effect-row icon bank (`GAMEGFX\FLAGS.BIN` → 0x46af40)
+    /// [RE-EXW-SIM 7j.4]: the 10 pickup effect rows draw sprite
+    /// `id−1` from it through the sprite-list flush.
+    flags_bank: Vec<u8>,
+    /// The debris/effect bank (`GAMEGFX\BLOWUP.BIN` → 0x4edd6c;
+    /// the region-1 variant BLOWUPG.BIN is a host path choice)
+    /// [RE-EXW-SIM 7j.9]: the debris stager's seq words draw from
+    /// it, layer 0x12c for kinds 3/7/0xA else 0x12e.
+    blowup_bank: Vec<u8>,
     /// The per-frame entity sprite list (empty until
     /// [`MissionView::enqueue_robots`]).
     sprite_list: SpriteList,
@@ -327,6 +336,8 @@ impl MissionView {
             bank: bin.to_vec(),
             lnk: lnk_words.to_vec(),
             entity_bank: Vec::new(),
+            flags_bank: Vec::new(),
+            blowup_bank: Vec::new(),
             sprite_list: SpriteList::new(),
         })
     }
@@ -374,6 +385,20 @@ impl MissionView {
     /// nothing].
     pub fn set_entity_bank(&mut self, bin: &[u8]) {
         self.entity_bank = bin.to_vec();
+    }
+
+    /// Stage the effect-row icon bank (`FLAGS.BIN`, 7j.4). Same
+    /// directory/codec layout as DANTE (the FUN_0040179b entity
+    /// resolve); rows draw nothing until staged (the Shield/Variant
+    /// precedent).
+    pub fn set_flags_bank(&mut self, bin: &[u8]) {
+        self.flags_bank = bin.to_vec();
+    }
+
+    /// Stage the debris/effect bank (`BLOWUP.BIN`, 7j.9; the
+    /// region-1 BLOWUPG.BIN variant is the host's path choice).
+    pub fn set_blowup_bank(&mut self, bin: &[u8]) {
+        self.blowup_bank = bin.to_vec();
     }
 
     /// Queued sprite-list node count (test observability).
@@ -530,6 +555,96 @@ impl MissionView {
         self.sprite_list = list;
     }
 
+    /// Enqueue the pickup effect rows + active debris records into
+    /// the SAME per-frame sprite list [`enqueue_robots`] built (the
+    /// EXW draws both in FUN_00403938's tail passes; bucket order is
+    /// sort-keyed, so the enqueue order does not affect output)
+    /// [RE-EXW-SIM 7j.4 + 7j.9, verified asm 0x40632d..0x4063de and
+    /// 0x4063e3..0x4064f4]:
+    ///
+    /// - rows: `sx = col_adj + (dx−dy) + 0x118`,
+    ///   `sy = row_adj + ((dx+dy)>>1) + 0x124 − z`, viewport bounds
+    ///   `0 ≤ sx < 0x23F`, `0 ≤ sy < 0x266`, then FLAGS.BIN sprite
+    ///   `id−1`, layer `z>>5`, mode `0x12c` (TXPAL1);
+    /// - debris: the same projection with `+0x110` on both axes,
+    ///   bounds `0x23F`/`0x23E`, sprite = the current seq word (the
+    ///   −1 terminator skips), layer `z>>5`, mode `0x12c` for kinds
+    ///   3/7/0xA else `0x12e` (DARKPAL) — both from BLOWUP.BIN.
+    ///
+    /// The fine terms are the robot pass's `col_adj/row_adj`
+    /// [hypothesis: the EXW frame slots `[esp+0x34]/[esp+0x38]/
+    /// [esp+0x4c]` hold those same fine-camera terms — the +8/+0x18
+    /// axis offsets above are the pass constants verbatim; no
+    /// corpus path draws effects yet, so the pins cannot arbitrate].
+    pub fn enqueue_effects(
+        &mut self,
+        rows: &[EffectRowView],
+        debris: &[DebrisSpriteView],
+        cam_q5_x: i32,
+        cam_q5_y: i32,
+    ) {
+        if self.sprite_list.buckets.is_empty() {
+            return; // consumed/default list: nothing to enqueue into
+        }
+        let cam_tx = cam_q5_x >> 5;
+        let cam_ty = cam_q5_y >> 5;
+        let col_adj = ((cam_q5_x & 0x1F) - (cam_q5_y & 0x1F) + 0x20) & 0x3F;
+        let row_adj = ((cam_q5_x & 0x1F) + (cam_q5_y & 0x1F)) >> 1;
+        for r in rows {
+            if r.id <= 0 {
+                continue; // free row (the 7j.1 id word)
+            }
+            let dx = r.x - cam_q5_x;
+            let dy = r.y - cam_q5_y;
+            let sx = col_adj + (dx - dy) + 0x118;
+            let sy = row_adj + ((dx + dy) >> 1) + 0x124 - r.z;
+            if !(0..0x23F).contains(&sx) || !(0..0x266).contains(&sy) {
+                continue;
+            }
+            self.sprite_list.enqueue(
+                sx,
+                sy,
+                NodeBank::Flags,
+                r.x,
+                r.y,
+                cam_tx,
+                cam_ty,
+                (r.id - 1) as u16,
+                r.z >> 5,
+                0x12C,
+            );
+        }
+        for d in debris {
+            if !d.active || d.delay != 0 || d.seq < 0 {
+                continue; // free, still-delayed, or terminator record
+            }
+            let dx = d.x - cam_q5_x;
+            let dy = d.y - cam_q5_y;
+            let sx = col_adj + (dx - dy) + 0x110;
+            let sy = row_adj + ((dx + dy) >> 1) + 0x110 - d.z;
+            if !(0..0x23F).contains(&sx) || !(0..0x23E).contains(&sy) {
+                continue;
+            }
+            let mode = if matches!(d.kind, 3 | 7 | 0xA) {
+                0x12C
+            } else {
+                0x12E
+            };
+            self.sprite_list.enqueue(
+                sx,
+                sy,
+                NodeBank::Blowup,
+                d.x,
+                d.y,
+                cam_tx,
+                cam_ty,
+                d.seq as u16,
+                d.z >> 5,
+                mode,
+            );
+        }
+    }
+
     /// One terrain pass over the viewport: the FUN_00403938 terrain
     /// loop [MISSIONVIEW §3]. Wrong buffer length returns without
     /// drawing. See [`DrawParams`] for the inputs.
@@ -550,6 +665,8 @@ impl MissionView {
         // [MISSIONVIEW sec 5b].
         let list = std::mem::take(&mut self.sprite_list);
         let entity_bank = &self.entity_bank;
+        let flags_bank = &self.flags_bank;
+        let blowup_bank = &self.blowup_bank;
         let (w, h) = (self.width, self.height);
         let cap = DRAW_CAP;
         for ci in 0..self.cache.len() {
@@ -631,6 +748,8 @@ impl MissionView {
                     );
                     match node.bank {
                         NodeBank::Dante => flush_node(buf, node, entity_bank),
+                        NodeBank::Flags => flush_node(buf, node, flags_bank),
+                        NodeBank::Blowup => flush_node(buf, node, blowup_bank),
                         NodeBank::Shield | NodeBank::Variant => {}
                     }
                 }
@@ -730,6 +849,39 @@ pub enum NodeBank {
     Shield,
     /// Variant-equipment bank DAT_0046af44.
     Variant,
+    /// The effect-row icon bank `GAMEGFX\FLAGS.BIN` (0x46af40)
+    /// [RE-EXW-SIM 7j.4] — draws when staged.
+    Flags,
+    /// The debris/effect bank `GAMEGFX\BLOWUP(B/G).BIN` (0x4edd6c)
+    /// [RE-EXW-SIM 7j.9] — draws when staged.
+    Blowup,
+}
+
+/// The flush-facing pickup effect row [RE-EXW-SIM 7j.1]: the 16-B
+/// rows at `0x4dc5d4 + r*0x10` — world Q5 pixel x/y, the rising z,
+/// and the per-case id (1/6/7/0xC/0xD/0xE; 0 = free).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EffectRowView {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub id: i32,
+}
+
+/// The flush-facing debris record [RE-EXW-SIM 7j.5/7j.7]: the
+/// active/`delay`/`seq` gates of the draw pass plus the world
+/// position and kind (kinds 3/7/0xA draw mode 0x12c, else 0x12e).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DebrisSpriteView {
+    pub active: bool,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub kind: i32,
+    /// The current sequence word (sprite id); −1 = the terminator
+    /// (the tick frees the record before this can draw).
+    pub seq: i32,
+    pub delay: i32,
 }
 
 /// One queued sprite [FUN_0040798e node, verified]: the EXW node is
@@ -744,8 +896,8 @@ struct SpriteNode {
     layer: u8,
     /// Painter sort key `wx + wy` (the +0xb-adjusted pixel coords).
     sort: i32,
-    /// Blit mode (`300` plain, `0x130` mask, `0x12d/0x12e/0x12f`
-    /// remaps — see [`flush_node`]).
+    /// Blit mode (`300`/`0x12c` plain, `0x130` mask,
+    /// `0x12d/0x12e/0x12f` remaps — see [`flush_node`]).
     mode: i32,
 }
 
@@ -907,8 +1059,9 @@ impl RobotView {
 /// 0xFFF)`, sprite at `entry + u32[entry]`, header read SKIPS the fmt
 /// word (dy, dx, gate-unchecked, rows), ALWAYS u16-RLE decode, and —
 /// unlike the terrain blit — literal runs copy RAW bytes with no
-/// zero-skip. Mode dispatch: `0x130` paints 0xFF; the remap modes
-/// `0x12d/0x12e/0x12f` are the EXW's water-ON paths (TXPAL1 64-KiB
+/// zero-skip. Mode dispatch: `0x130` paints 0xFF; `0x12c` is plain
+/// copy [MISSIONVIEW sec 5c]; the remap modes `0x12d/0x12e/0x12f`
+/// are the EXW's water-ON paths (TXPAL1 64-KiB
 /// composition / DARKPAL XLAT) and degrade to plain copy while the
 /// water flag is off [asm: `CMP [0x4edbd4],0; JZ plain`], which is
 /// the behavior modeled here (water flag producer unfound, §8.2).
@@ -1085,6 +1238,110 @@ mod entity_tests {
         // Negative bucket coords drop the node (the EXW early-out).
         list.enqueue(0, 0, NodeBank::Dante, -320, 0, 0, 0, 9, 0, 300);
         assert_eq!(list.len(), 4);
+    }
+
+    #[test]
+    fn enqueue_effects_projects_rows_and_gates_them() {
+        // RE-EXW-SIM 7j.4: camera (0,0) → col_adj 0x20, row_adj 0.
+        // Row (x 100, y 100, z 0x20, id 6):
+        //   sx = 0x20 + (100-100) + 0x118 = 0x138,
+        //   sy = 0 + (200>>1) + 0x124 - 0x20 = 360 — both in bounds,
+        //   FLAGS sprite id-1 = 5, layer z>>5 = 1, mode 0x12c.
+        let mut view = tiny_view();
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        let rows = [EffectRowView {
+            x: 100,
+            y: 100,
+            z: 0x20,
+            id: 6,
+        }];
+        view.enqueue_effects(&rows, &[], 0, 0);
+        let list = view.sprite_list_for_test();
+        let nodes: Vec<&SpriteNode> = list.bucket(12, 12, 1).iter().collect();
+        assert_eq!(nodes.len(), 1, "one row node in bucket (12,12) layer 1");
+        assert_eq!(nodes[0].bank, NodeBank::Flags);
+        assert_eq!(nodes[0].frame, 5, "sprite id - 1");
+        assert_eq!(nodes[0].mode, 0x12C);
+        assert_eq!(nodes[0].dest, 0x138 + 360 * VIEW_STRIDE as i32);
+        // Gates: free row (id 0) and off-screen rows never enqueue.
+        let bad = [
+            EffectRowView {
+                x: 100,
+                y: 100,
+                z: 0x20,
+                id: 0,
+            },
+            EffectRowView {
+                x: 4000,
+                y: 4000,
+                z: 0x20,
+                id: 7,
+            },
+        ];
+        view.enqueue_effects(&bad, &[], 0, 0);
+        assert_eq!(view.sprite_list_for_test().len(), 1);
+    }
+
+    #[test]
+    fn enqueue_effects_debris_modes_and_gates() {
+        // RE-EXW-SIM 7j.9: kind 5 → mode 0x12e, kind 3 → 0x12c;
+        // sx = 0x20 + (dx-dy) + 0x110, sy = ((dx+dy)>>1) + 0x110 - z.
+        let mut view = tiny_view();
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        let d = |kind: i32| DebrisSpriteView {
+            active: true,
+            x: 100,
+            y: 60,
+            z: 0x20,
+            kind,
+            seq: 7,
+            delay: 0,
+        };
+        let debris = [d(5), d(3)];
+        view.enqueue_effects(&[], &debris, 0, 0);
+        let list = view.sprite_list_for_test();
+        let layer1: Vec<&SpriteNode> = list.bucket(12, 10, 1).iter().collect();
+        assert_eq!(layer1.len(), 2, "both debris in bucket (12,10) layer 1");
+        assert_eq!(layer1[0].bank, NodeBank::Blowup);
+        assert_eq!(layer1[0].frame, 7, "the current seq word");
+        assert_eq!(layer1[0].mode, 0x12E, "kind 5 draws DARKPAL");
+        assert_eq!(layer1[1].mode, 0x12C, "kind 3 draws the composite mode");
+        let sy = ((100 + 60) >> 1) + 0x110 - 0x20;
+        let sx = 0x20 + (100 - 60) + 0x110;
+        assert_eq!(layer1[0].dest, sx + sy * VIEW_STRIDE as i32);
+        // Gates: inactive, still-delayed, and terminator records skip.
+        let skipped = [
+            DebrisSpriteView {
+                active: false,
+                ..d(5)
+            },
+            DebrisSpriteView { delay: 4, ..d(5) },
+            DebrisSpriteView { seq: -1, ..d(5) },
+        ];
+        view.enqueue_effects(&[], &skipped, 0, 0);
+        assert_eq!(view.sprite_list_for_test().len(), 2);
+    }
+
+    #[test]
+    fn enqueue_effects_into_a_consumed_list_drops() {
+        // The Default/consumed sprite list drops nodes exactly like
+        // the EXW post-flush tail [SpriteList contract] — a
+        // draw_terrain consumes the built list; a later enqueue
+        // into the taken state adds nothing.
+        use bedlam_core::rng::Pcg32;
+        let mut view = tiny_view();
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        let mut rng = Pcg32::new(0x1E240, 0);
+        let mut buf = vec![0u8; VIEW_BUF_LEN];
+        view.draw_terrain(&mut buf, &mut DrawParams::new(0, 0, 0, &mut rng));
+        let rows = [EffectRowView {
+            x: 100,
+            y: 100,
+            z: 0x20,
+            id: 6,
+        }];
+        view.enqueue_effects(&rows, &[], 0, 0);
+        assert_eq!(view.sprite_list_for_test().len(), 0);
     }
 
     const Q13: i32 = 0x2000;

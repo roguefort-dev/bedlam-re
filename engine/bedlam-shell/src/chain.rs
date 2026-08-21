@@ -148,7 +148,8 @@ pub fn stage_scene(
         // Fetch order = load_mission order: TOT, DAT, PAD, CGR, BIN,
         // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
         // TABLE, MAPTRAN0..7, MIN, NUMBERS (the map-overlay family
-        // tail, RE-EXW-SIM 7e; the score-strip bank, 7f.9). Single
+        // tail, RE-EXW-SIM 7e; the score-strip bank, 7f.9), FLAGS +
+        // BLOWUP (the effect banks, 7j). Single
         // player: no robots override, no staged markers (the
         // 0x46cbe0 network seam).
         Scene::Mission => {
@@ -166,6 +167,8 @@ pub fn stage_scene(
                 &bytes[9],
                 &bytes[10],
                 &bytes[11],
+                &bytes[23],
+                &bytes[24],
                 &bytes[12],
                 &maptran,
                 &bytes[21],
@@ -267,6 +270,8 @@ mod tests {
                 "MAPTRAN7.TRN".to_string(),
                 "ZONEA/MISSIONA.MIN".to_string(),
                 "NUMBERS.BIN".to_string(),
+                "FLAGS.BIN".to_string(),
+                "BLOWUP.BIN".to_string(),
             ]
         );
         for scene in [
@@ -301,7 +306,7 @@ mod tests {
             mission.first().map(String::as_str),
             Some("ZONEA/MISSION1.TOT")
         );
-        assert_eq!(mission.len(), 23);
+        assert_eq!(mission.len(), 25);
         assert!(
             scene_assets(host.scene(), cfg, &cutscene, briefing.as_deref(), &mission).is_empty(),
             "boot transition fetches nothing"

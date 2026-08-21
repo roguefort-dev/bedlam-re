@@ -449,6 +449,8 @@ impl GameHost {
         general: &[u8],
         smlfont: &[u8],
         mrk: &[u8],
+        flags: &[u8],
+        blowup: &[u8],
         table: &[u8],
         maptran: &[&[u8]],
         min: &[u8],
@@ -471,6 +473,8 @@ impl GameHost {
             general,
             smlfont,
             numbers,
+            flags,
+            blowup,
             table,
             min,
             maptran,
@@ -2068,6 +2072,8 @@ mod tests {
             &f[10],
             &f[11],
             &f[4],
+            &f[23],
+            &f[24],
             &f[12],
             &maptran,
             &f[13],
@@ -2129,8 +2135,10 @@ mod tests {
         assert_eq!(host.mission_asset_names()[13], "MAPTRAN0.TRN");
         assert_eq!(host.mission_asset_names()[20], "MAPTRAN7.TRN");
         assert_eq!(host.mission_asset_names()[21], "ZONEA/MISSIONA.MIN");
-        assert_eq!(host.mission_asset_names().len(), 23);
+        assert_eq!(host.mission_asset_names().len(), 25);
         assert_eq!(host.mission_asset_names()[22], "NUMBERS.BIN");
+        assert_eq!(host.mission_asset_names()[23], "FLAGS.BIN");
+        assert_eq!(host.mission_asset_names()[24], "BLOWUP.BIN");
         walk_to_first_cutscene(&mut host); // completes zone 1
         host.apply(SceneAction::Advance); // Cutscene -> Select
                                           // Stage 2 now: zone B, still MISSION1 (mask reset).

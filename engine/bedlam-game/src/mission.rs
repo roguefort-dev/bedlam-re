@@ -30,7 +30,8 @@ use bedlam_core::mission::{
 use bedlam_core::rng::Pcg32;
 use bedlam_render::map_overlay::{MapOverlay, OverlayRobot};
 use bedlam_render::mission_view::{
-    present_window, DrawParams, MissionView, RobotView, VIEW_BUF_LEN,
+    present_window, DebrisSpriteView, DrawParams, EffectRowView, MissionView, RobotView,
+    VIEW_BUF_LEN,
 };
 use bedlam_render::ui_bank::{draw_glyph, draw_sprite, sprite_geometry};
 use bedlam_render::Vga6;
@@ -65,6 +66,35 @@ pub const SIDEBAR_ROW_SPRITES: [(u16, u16); 2] = [(0x47, 0x4A), (0x49, 0x4C)];
 pub const SIDEBAR_PORTRAIT_IDS: (u16, u16) = (0x12, 0x15);
 /// Select-portrait x base + pitch (the strip x positions) + y.
 pub const SIDEBAR_PORTRAIT_XY: (i32, i32, i32) = (0x1E7, 0x32, 5);
+/// The blink-cursor sprite family + position [RE-EXW-SIM 7j.6, asm
+/// 0x407420..0x407989]: when the cursor selector `_DAT_004dc5d0` ∈
+/// {1,2,3} the portrait pass tail draws GENERAL.BIN sprite
+/// `(g_frame_count & 3) + 0x51` at (0x1F0 + 0x32*slot, 0xD) — the
+/// four-frame blink over the selected slot's portrait.
+pub const SIDEBAR_BLINK_SPRITE: (u16, i32, i32, i32) = (0x51, 0x1F0, 0x32, 0xD);
+/// The effect-row count + geometry [RE-EXW-SIM 7j.1]: 10 rows of
+/// 16 B at 0x4dc5d4 (boot memset 0xa0, MissionShell 0x447a1a).
+pub const EFFECT_ROWS: usize = 10;
+/// The row tick [7j.3, FUN_0042205c, MissionShell 0x448080]: z
+/// rises this much per frame while at or below the cap, then the
+/// row frees.
+pub const EFFECT_ROW_RISE: i32 = 6;
+/// The row life cap [7j.3]: `z > 0x190` frees the row.
+pub const EFFECT_ROW_Z_MAX: i32 = 0x190;
+/// The debris-stager z clamp [7j.5, FUN_00420608 head]: the staged
+/// z is clamped into `[0x20, 0xFF]` before the record write.
+pub const DEBRIS_Z_CLAMP: (i32, i32) = (0x20, 0xFF);
+/// The debris record count + stride [7j.5]: 128 slots × 0x30 B at
+/// 0x476fbc (cleared 0x1800 B by the reset family FUN_0041a4f8).
+pub const DEBRIS_SLOTS: usize = 128;
+/// The death-debris kind [7g.6/7j.5]: the five staged records the
+/// SP death tail enqueues through FUN_00420608.
+pub const DEBRIS_KIND_DEATH: i32 = 5;
+/// The kind-5 sequence table [7j.7, DGROUP 0x454424, bytes
+/// verified]: sprite ids 5..0x10 then the −1 terminator — a
+/// 13-frame tumble; the tick walks it one step per frame after the
+/// start delay and frees the record at the terminator.
+pub const DEBRIS_KIND5_SEQ: [i16; 13] = [5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 0x10, -1];
 /// The dither noise ring length [RE-EXW-SIM 7i.2]: 0x800 bytes at
 /// 0x4e6ed8 (.bss — runtime state, no EXE bytes).
 pub const DITHER_BANK_LEN: usize = 0x800;
@@ -223,6 +253,15 @@ struct Sidebar {
     redraw: i32,
     order_bits: Vec<u16>,
     weapons: Vec<WeaponLoadout>,
+    /// The blink-cursor selector `_DAT_004dc5d0` [RE-EXW-SIM 7j.6]:
+    /// the SELECTED robot's slot + 1 (1..3), 0 = no cursor.
+    /// MissionShell zeroes it at entry (0x447871); the select-ack
+    /// blocks in the robots() walk (0x40c1ae..0x40c25e) set it when
+    /// the selection lands. [hypothesis: modeled as set-on-select —
+    /// the per-frame ack gating is not fully pinned, so the cursor
+    /// stays 0 until the sidebar select path fires (never-invent:
+    /// the spawn pre-selection may light it from frame 1 in EXW).]
+    cursor: i32,
 }
 
 impl Sidebar {
@@ -239,7 +278,179 @@ impl Sidebar {
             redraw: 0,
             order_bits: vec![0; robots],
             weapons: vec![[(0, 0); 7]; robots],
+            cursor: 0,
         }
+    }
+}
+
+/// The 10 pickup effect rows [RE-EXW-SIM 7j; D17 split — never
+/// enters the sim hash]: the 0xa0-B array at 0x4dc5d4, one row per
+/// pickup fire, rising and vanishing. Staged by the pickup host
+/// seam through [`MissionScene::pickup`] (the case-tail writes at
+/// 0x40ed5e..0x40f26c), ticked by FUN_0042205c each frame
+/// (MissionShell 0x448080), drawn by the FUN_00403938 tail pass
+/// through the sprite list (FLAGS.BIN sprite id−1, 7j.4).
+#[derive(Debug)]
+struct EffectRows {
+    /// `{x, y, z, id}` per row — id 0 = free.
+    rows: [(i32, i32, i32, i32); EFFECT_ROWS],
+}
+
+impl EffectRows {
+    fn new() -> EffectRows {
+        EffectRows {
+            rows: [(0, 0, 0, 0); EFFECT_ROWS],
+        }
+    }
+
+    /// The slot allocator FUN_00422038 [7j.2]: the first row whose
+    /// id word is 0, else 9 when all busy (reuse the last row).
+    fn alloc(&self) -> usize {
+        for (k, r) in self.rows.iter().enumerate() {
+            if r.3 == 0 {
+                return k;
+            }
+        }
+        EFFECT_ROWS - 1
+    }
+
+    /// The case-tail row write [7j.1]: `{pos_x>>8, pos_y>>8,
+    /// z+0x20, id}` into the allocated row.
+    fn stage(&mut self, x: i32, y: i32, z: i32, id: i32) {
+        let r = self.alloc();
+        self.rows[r] = (x, y, z, id);
+    }
+
+    /// The row tick FUN_0042205c [7j.3]: per active row
+    /// `z <= 0x190 → z += 6` else `id = 0`.
+    fn tick(&mut self) {
+        for r in self.rows.iter_mut() {
+            if r.3 == 0 {
+                continue;
+            }
+            if r.2 <= EFFECT_ROW_Z_MAX {
+                r.2 += EFFECT_ROW_RISE;
+            } else {
+                *r = (0, 0, 0, 0);
+            }
+        }
+    }
+}
+
+/// One debris-stager record [7j.5]: the modeled subset of the 0x30-B
+/// EXW record — the draw/tick gates (active, delay, seq) plus the
+/// flush inputs (x, y, z, kind). The +0x10/+0x14 init words (0x40),
+/// the +0x20 physics flag (0 for kind 5 — the FUN_0040de9c callback
+/// never runs on the death-debris path), and the +0x28 param have no
+/// modeled consumer and stay out.
+#[derive(Debug, Clone, Copy, Default)]
+struct DebrisRec {
+    active: bool,
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: i32,
+    /// The sequence counter (+0x18) — also the LRU eviction key.
+    seq: i32,
+    /// The start delay (+0x24): the tick decrements it before the
+    /// seq walk; the draw pass skips delayed records.
+    delay: i32,
+}
+
+/// The 128-slot debris stager [RE-EXW-SIM 7j.5/7j.7; D17 split]:
+/// the 0x1800-B array at 0x476fbc. The death tail stages five
+/// kind-5 records through [`MissionScene::apply_damage`]; the tick
+/// (FUN_00420549, MissionShell 0x448076) walks the per-kind i16
+/// sequence table and frees the record at the −1 terminator; the
+/// FUN_00403938 tail draws active, undelayed records from
+/// BLOWUP.BIN (layer 0x12c for kinds 3/7/0xA, else 0x12e).
+#[derive(Debug)]
+struct DebrisFx {
+    recs: [DebrisRec; DEBRIS_SLOTS],
+}
+
+impl DebrisFx {
+    fn new() -> DebrisFx {
+        DebrisFx {
+            recs: [DebrisRec::default(); DEBRIS_SLOTS],
+        }
+    }
+
+    /// The kind-5 staging [7j.5]: clamp z into `[0x20, 0xFF]`, take
+    /// the first inactive slot else the one with the SMALLEST seq
+    /// counter (the LRU eviction — FUN_00420608 head 0x420666..),
+    /// then the record write (seq 0, the 2k start delay
+    /// [hypothesis: the +0x24 slot aliases the caller's 2k counter —
+    /// the Watcon stack-arg mapping is not fully pinned; flagged
+    /// for the P4.2 differential harness]).
+    fn stage_kind5(&mut self, x: i32, y: i32, z: i32, delay: i32) {
+        let z = z.clamp(DEBRIS_Z_CLAMP.0, DEBRIS_Z_CLAMP.1);
+        let slot = {
+            let mut best = None;
+            for (k, r) in self.recs.iter().enumerate() {
+                if !r.active {
+                    best = Some(k);
+                    break;
+                }
+                if best.is_none() || r.seq < self.recs[best.unwrap()].seq {
+                    best = Some(k);
+                }
+            }
+            best.unwrap_or(DEBRIS_SLOTS - 1)
+        };
+        self.recs[slot] = DebrisRec {
+            active: true,
+            x,
+            y,
+            z,
+            kind: DEBRIS_KIND_DEATH,
+            seq: 0,
+            delay,
+        };
+    }
+
+    /// The tick FUN_00420549 [7j.7]: per active record — delay != 0
+    /// → decrement and hold; else seq += 1 and read the kind-5
+    /// table: the −1 terminator frees the record. (The +0x20
+    /// physics callback is 0 for kind 5 — never invoked here.)
+    fn tick(&mut self) {
+        for r in self.recs.iter_mut() {
+            if !r.active {
+                continue;
+            }
+            if r.delay != 0 {
+                r.delay -= 1;
+                continue;
+            }
+            r.seq += 1;
+            let word = match DEBRIS_KIND5_SEQ.get(r.seq as usize) {
+                Some(&w) => w as i32,
+                None => -1,
+            };
+            if word == -1 {
+                *r = DebrisRec::default();
+            }
+        }
+    }
+
+    /// The flush-facing view of the active records (the draw pass
+    /// gates are the consumer's).
+    fn views(&self) -> Vec<DebrisSpriteView> {
+        self.recs
+            .iter()
+            .map(|r| DebrisSpriteView {
+                active: r.active,
+                x: r.x,
+                y: r.y,
+                z: r.z,
+                kind: r.kind,
+                seq: match DEBRIS_KIND5_SEQ.get(r.seq as usize) {
+                    Some(&w) => w as i32,
+                    None => -1,
+                },
+                delay: r.delay,
+            })
+            .collect()
     }
 }
 
@@ -444,6 +655,13 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
         // mission-init staging, sole consumer FUN_004085ce.
         // Appended last so the established indices hold.
         "NUMBERS.BIN".to_string(),
+        // The effect banks [RE-EXW-SIM 7j.4/7j.9]:
+        // `LoadFile("GAMEGFX\FLAGS.BIN", 0x46af40)` (the 10 pickup
+        // effect rows) + `LoadFile("GAMEGFX\BLOWUP.BIN", 0x4edd6c)`
+        // (the debris stager — the region-1 BLOWUPG.BIN variant is
+        // the host's path choice, unmodeled region wiring).
+        "FLAGS.BIN".to_string(),
+        "BLOWUP.BIN".to_string(),
     ]
     .to_vec()
 }
@@ -480,6 +698,13 @@ pub struct MissionScene {
     /// static bank + its cursor, filled at activate, churned at
     /// the frame epilogue, read by the portrait pass.
     dither: Dither,
+    /// The 10 pickup effect rows [RE-EXW-SIM 7j.1, D17 split]:
+    /// staged by the pickup seam, ticked + drawn per frame.
+    effect_rows: EffectRows,
+    /// The 128-slot debris stager [RE-EXW-SIM 7j.5, D17 split]:
+    /// staged by the damage seam on death, ticked + drawn per
+    /// frame.
+    debris: DebrisFx,
     /// The 0x64000 viewport buffer (DAT_004ede18).
     buf: Vec<u8>,
     /// The 640x480 presentation plane: the 480x480 present window at
@@ -547,7 +772,8 @@ impl MissionScene {
     /// canonical 6-bit palette and owns the plane [MISSIONVIEW
     /// sec 6]. GENERAL.BIN + SMLFONT.BIN stage as the sidebar art
     /// banks [sec 6c.8c] and NUMBERS.BIN as the score-strip bank
-    /// [7f.9]. Malformed bytes -> [`GameError::BadMissionAsset`],
+    /// [7f.9] plus FLAGS.BIN/BLOWUP.BIN as the effect banks [7j].
+    /// Malformed bytes -> [`GameError::BadMissionAsset`],
     /// never a panic (charter); nothing is mutated on error.
     #[allow(clippy::too_many_arguments)]
     pub fn stage(
@@ -564,6 +790,8 @@ impl MissionScene {
         general: &[u8],
         smlfont: &[u8],
         numbers: &[u8],
+        flags: &[u8],
+        blowup: &[u8],
         table: &[u8],
         min: &[u8],
         maptran: &[&[u8]],
@@ -618,6 +846,11 @@ impl MissionScene {
         let mut view = MissionView::from_mission_bytes(tot, &planes, bin, lnk)
             .ok_or_else(|| bad("TOT/BIN/LNK", "malformed viewport bytes"))?;
         view.set_entity_bank(dante);
+        // The effect banks [RE-EXW-SIM 7j.4/7j.9]: FLAGS.BIN (the
+        // pickup effect rows) + BLOWUP.BIN (the debris stager; the
+        // region-1 BLOWUPG.BIN variant is a host path choice).
+        view.set_flags_bank(flags);
+        view.set_blowup_bank(blowup);
         // The strategic-map overlay [RE-EXW-SIM 7e]: the mission's
         // `.MIN` mask bank + the eight 256-byte MAPTRAN ramps over
         // the map dims (malformed ramps are a staging error — the
@@ -636,6 +869,8 @@ impl MissionScene {
             prev_buttons: 0,
             rand_b: Pcg32::new(0x1E240, 0),
             dither: Dither::new(),
+            effect_rows: EffectRows::new(),
+            debris: DebrisFx::new(),
             buf: vec![0u8; VIEW_BUF_LEN],
             plane: vec![0u8; 640 * 480],
             palette,
@@ -800,6 +1035,11 @@ impl MissionScene {
                 if slot < self.sim.robots().len() && self.sim.robots()[slot].alive {
                     self.sidebar.selected = slot;
                     self.sidebar.redraw = 2;
+                    // The select-ack blink cursor [7j.6, the
+                    // robots() blocks 0x40c1ae..0x40c25e]: cursor
+                    // = the selected SLOT + 1 (the SFX pair
+                    // 0xC+k/0xF is the unmodeled mission SFX tier).
+                    self.sidebar.cursor = slot as i32 + 1;
                 }
                 return;
             }
@@ -921,6 +1161,12 @@ impl MissionScene {
                 &self.general,
                 &robots,
             );
+            // The MissionShell frame epilogue runs the effect ticks
+            // on overlay frames too [7j.3/7j.7 — the epilogue calls
+            // at 0x448076/0x448080 precede the overlay branch in
+            // FUN_00403938]: debris first, then the rows.
+            self.debris.tick();
+            self.effect_rows.tick();
             // The MissionShell frame epilogue still churns the
             // dither ring on overlay frames [7i.2] — the sidebar
             // passes are skipped, the churn is not.
@@ -928,9 +1174,18 @@ impl MissionScene {
             self.render_count += 1;
             return Some(&self.plane);
         }
+        // The MissionShell frame epilogue order [7j.3/7j.7, calls
+        // 0x448076/0x448080 → the draw 0x448094]: the debris tick,
+        // then the row tick, then the draw consumes the POST-tick
+        // state.
+        self.debris.tick();
+        self.effect_rows.tick();
         // The terrain pass first [the EXW consumes the shared RandB
         // stream in this order, 7i.4: edge variants → dither draws]:
         // enqueue the robots (camera Q5, shake 0, the sim frame),
+        // then the effect rows + debris records into the SAME list
+        // [7j.4/7j.9 — the tail passes of FUN_00403938; bucket
+        // insertion is sort-keyed, so order does not affect output],
         // run the terrain pass into the 0x64000 buffer, crop the
         // 480x480 present window with the fine-camera offset, and
         // blit it at canonical (0, 0) of the 640x480 plane (the
@@ -939,6 +1194,15 @@ impl MissionScene {
         let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
         self.view
             .enqueue_robots(&robots, self.cam_q5.0, self.cam_q5.1, 0, self.sim.frame());
+        let rows: Vec<EffectRowView> = self
+            .effect_rows
+            .rows
+            .iter()
+            .map(|&(x, y, z, id)| EffectRowView { x, y, z, id })
+            .collect();
+        let debris = self.debris.views();
+        self.view
+            .enqueue_effects(&rows, &debris, self.cam_q5.0, self.cam_q5.1);
         let (cam_x, cam_y) = self.cam_q5;
         let zone = self.zone;
         self.view.draw_terrain(
@@ -1085,6 +1349,27 @@ impl MissionScene {
                 self.dither
                     .blit(&mut self.rand_b, &mut self.plane, 640, x, y, false);
             }
+        }
+        // The blink-cursor tail [RE-EXW-SIM 7j.6, asm
+        // 0x407420..0x407989]: cursor ∈ {1,2,3} → GENERAL.BIN
+        // sprite `(g_frame_count & 3) + 0x51` at
+        // (0x1F0 + 0x32*slot, 0xD) — the render_count drives the
+        // blink (the scene's per-frame rhythm). Any other value
+        // (0 = the MissionShell entry state) draws nothing.
+        let cursor = self.sidebar.cursor;
+        if (1..=3).contains(&cursor) {
+            let (base, x0, pitch, y) = SIDEBAR_BLINK_SPRITE;
+            let frame = base + (self.render_count as u16 & 3);
+            let slot = cursor - 1;
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                frame,
+                x0 + pitch * slot,
+                y,
+                true,
+            );
         }
     }
 
@@ -1257,6 +1542,15 @@ impl MissionScene {
         let outcome = self.sim.apply_damage(robot, damage, killer);
         if outcome.died {
             self.sidebar.redraw = 3;
+            // The five debris stagings [7g.6 + 7j.5]: FUN_00420608
+            // kind 5 per debris k — z = robot.z + 8k clamped
+            // 0x20..0xFF inside the stager, the 2k start delay.
+            // (The six FUN_00422287 scorch-ring writes per debris
+            // are NOT staged — the +0x18 armor-pad interaction
+            // needs the 7j.8 caveat re-verify first.)
+            for (k, &(x, y, z, _)) in outcome.debris.iter().enumerate() {
+                self.debris.stage_kind5(x, y, z, 2 * k as i32);
+            }
         }
         outcome
     }
@@ -1280,6 +1574,22 @@ impl MissionScene {
     /// producers set 2, each present decrements while nonzero.
     pub fn score_strip_countdown(&self) -> i32 {
         self.strip
+    }
+
+    /// Active pickup effect rows (7j.1) — gate observability.
+    pub fn effect_row_count(&self) -> usize {
+        self.effect_rows.rows.iter().filter(|r| r.3 != 0).count()
+    }
+
+    /// Active debris records (7j.5) — gate observability.
+    pub fn debris_active(&self) -> usize {
+        self.debris.recs.iter().filter(|r| r.active).count()
+    }
+
+    /// The blink-cursor selector `_DAT_004dc5d0` (7j.6) — gate
+    /// observability.
+    pub fn sidebar_cursor(&self) -> i32 {
+        self.sidebar.cursor
     }
 
     /// The FUN_0040eba0 case-4 pickup producer [RE-EXW-SIM 7f.6]:
@@ -1308,13 +1618,21 @@ impl MissionScene {
     /// mirror is not modeled), so the host calls this when its own
     /// tile watch fires. Delegates to `MissionSim::apply_pickup`
     /// — the case bodies write only sim fields (no sidebar
-    /// countdowns, no session state; the SFX + 0x4dc5d0 effect
-    /// rows are the unwired presentation the outcome's `effect`
-    /// id stands in for). Case 4 is the separate score/money seam
-    /// above (session state + the strip countdown + the two
-    /// shared-stream draws).
+    /// countdowns, no session state) — and stages the presentation
+    /// half [7j.1]: one 16-B effect row `{pos_x>>8, pos_y>>8,
+    /// z+0x20, effect id}` through the FUN_00422038 allocator,
+    /// exactly the shared case tail (0x40ed5e..0x40f26c). Case 4 is
+    /// the separate score/money seam above (session state + the
+    /// strip countdown + the two shared-stream draws).
     pub fn pickup(&mut self, robot: usize, case: u8) -> PickupOutcome {
-        self.sim.apply_pickup(robot, case)
+        let outcome = self.sim.apply_pickup(robot, case);
+        if outcome.applied {
+            if let Some(r) = self.sim.robots().get(robot) {
+                self.effect_rows
+                    .stage(r.pos_x >> 8, r.pos_y >> 8, r.z + 0x20, outcome.effect);
+            }
+        }
+        outcome
     }
 }
 
@@ -1556,11 +1874,54 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
         let off = (start as u32) - entry as u32;
         numbers[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
     }
+    // FLAGS: the effect-row icon bank (DANTE entity layout —
+    // FUN_0040179b resolve): 0xE tiny 2-row sprites with distinct
+    // per-id colors so effect-row tests can tell ids apart.
+    let flags_count = 0xEu16;
+    let mut flags = vec![0u8; 2 + 4 * flags_count as usize];
+    flags[0..2].copy_from_slice(&flags_count.to_le_bytes());
+    for id in 0..flags_count {
+        let entry = 2 + 4 * id as usize;
+        let start = flags.len();
+        // {fmt, dy, dx, gate, rows} — the fmt word is skipped by
+        // the flush resolve.
+        flags.extend_from_slice(&3u16.to_le_bytes());
+        flags.extend_from_slice(&0u16.to_le_bytes()); // dy
+        flags.extend_from_slice(&0u16.to_le_bytes()); // dx
+        flags.extend_from_slice(&64u16.to_le_bytes()); // gate
+        flags.extend_from_slice(&2u16.to_le_bytes()); // rows
+        let color = 0x40u8 + id as u8 * 2;
+        flags.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        flags.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        let off = (start as u32) - entry as u32;
+        flags[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
+    }
+    // BLOWUP: the debris bank (same layout) — sprites 5..0x10 (the
+    // kind-5 sequence walk) with distinct colors.
+    let blowup_count = 0x11u16;
+    let mut blowup = vec![0u8; 2 + 4 * blowup_count as usize];
+    blowup[0..2].copy_from_slice(&blowup_count.to_le_bytes());
+    for id in 0..blowup_count {
+        let entry = 2 + 4 * id as usize;
+        let start = blowup.len();
+        blowup.extend_from_slice(&3u16.to_le_bytes());
+        blowup.extend_from_slice(&0u16.to_le_bytes()); // dy
+        blowup.extend_from_slice(&0u16.to_le_bytes()); // dx
+        blowup.extend_from_slice(&64u16.to_le_bytes()); // gate
+        blowup.extend_from_slice(&2u16.to_le_bytes()); // rows
+        let color = 0x80u8 + id as u8;
+        blowup.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        blowup.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        let off = (start as u32) - entry as u32;
+        blowup[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
+    }
     let mut files = vec![
         tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont, table, min,
     ];
     files.extend(maptran); // f[14..22] — the eight ramps in slot order
     files.push(numbers); // f[22] — the score-strip bank
+    files.push(flags); // f[23] — the effect-row icon bank
+    files.push(blowup); // f[24] — the debris bank
     files
 }
 
@@ -1574,7 +1935,7 @@ mod tests {
         let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
         MissionScene::stage(
             &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], &f[10], &f[11],
-            &f[22], &f[12], &f[13], &maptran, 0, None, markers,
+            &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
     }
@@ -1617,6 +1978,8 @@ mod tests {
                 "MAPTRAN7.TRN",
                 "ZONEA/MISSIONA.MIN",
                 "NUMBERS.BIN",
+                "FLAGS.BIN",
+                "BLOWUP.BIN",
             ]
         );
         assert_eq!(
@@ -1675,6 +2038,8 @@ mod tests {
                 &f[10],
                 &f[11],
                 &f[22],
+                &f[23],
+                &f[24],
                 &f[12],
                 &f[13],
                 &maptran,
@@ -2509,5 +2874,126 @@ mod tests {
             (0..w * w).all(|t| m.map_territory(t) >= 1),
             "the stamps blanket the small map"
         );
+    }
+
+    // --- RE-EXW-SIM 7j: the effect-row + debris-stager units -----
+
+    #[test]
+    fn effect_rows_alloc_first_free_then_last() {
+        // FUN_00422038 [7j.2]: first id==0 row, else 9 (the last).
+        let mut rows = EffectRows::new();
+        assert_eq!(rows.alloc(), 0);
+        rows.stage(1, 2, 3, 6);
+        assert_eq!(rows.alloc(), 1, "row 0 busy");
+        for _ in 1..EFFECT_ROWS {
+            rows.stage(0, 0, 0, 7);
+        }
+        assert_eq!(rows.alloc(), EFFECT_ROWS - 1, "all busy -> the last");
+    }
+
+    #[test]
+    fn effect_rows_tick_rises_then_frees() {
+        // FUN_0042205c [7j.3]: z += 6 while <= 0x190, then id = 0.
+        let mut rows = EffectRows::new();
+        rows.stage(10, 20, 0x190, 6);
+        rows.tick();
+        assert_eq!(rows.rows[0].2, 0x196, "the cap tick still rises");
+        rows.tick();
+        assert_eq!(rows.rows[0].3, 0, "past the cap the row frees");
+        assert_eq!(rows.rows[0].0, 0, "the freed row is zeroed");
+    }
+
+    #[test]
+    fn debris_stage_clamps_z_and_lru_evicts() {
+        // FUN_00420608 head [7j.5]: the z clamp 0x20..0xFF; the
+        // first inactive slot; all-busy -> the SMALLEST seq.
+        let mut fx = DebrisFx::new();
+        fx.stage_kind5(10, 10, 0x08, 0);
+        assert_eq!(fx.recs[0].z, 0x20, "low clamp");
+        fx.stage_kind5(10, 10, 0x1234, 2);
+        assert_eq!(fx.recs[1].z, 0xFF, "high clamp");
+        // Age record 0 two ticks (delay 0), record 1 held by delay.
+        fx.tick();
+        fx.tick();
+        assert_eq!(fx.recs[0].seq, 2);
+        assert_eq!(fx.recs[1].seq, 0, "delayed records hold seq");
+        // Fill the rest; the LRU (smallest seq) is record 1.
+        for _ in 2..DEBRIS_SLOTS {
+            fx.stage_kind5(0, 0, 0x20, 99);
+        }
+        assert!(fx.recs.iter().all(|r| r.active));
+        fx.stage_kind5(5, 5, 0x20, 0);
+        assert_eq!(fx.recs[1].x, 5, "the min-seq record was evicted");
+        assert_eq!(fx.recs[1].seq, 0, "staged seq resets to 0");
+    }
+
+    #[test]
+    fn debris_tick_walks_the_kind5_table_and_frees() {
+        // FUN_00420549 [7j.7]: delay decrements first; then seq += 1
+        // and the −1 terminator frees the record. 13 table words:
+        // the 14th seq read is past the table -> free.
+        let mut fx = DebrisFx::new();
+        fx.stage_kind5(1, 2, 0x20, 1);
+        assert!(fx.recs[0].active);
+        fx.tick();
+        assert_eq!(fx.recs[0].delay, 0, "delay spent, seq still 0");
+        fx.tick();
+        assert_eq!(fx.recs[0].seq, 1, "the seq walk starts after the delay");
+        assert!(fx.recs[0].active);
+        for _ in 0..13 {
+            fx.tick();
+        }
+        assert!(!fx.recs[0].active, "the -1 terminator freed the record");
+        assert_eq!(fx.recs[0].x, 0, "the freed record is default");
+    }
+
+    #[test]
+    fn damage_death_stages_five_debris_and_pickup_stages_a_row() {
+        // The host seams [7g.6 + 7j.1]: the death outcome's five
+        // rows land as kind-5 records with the 2k delays; the
+        // pickup outcome stages one row at the robot with the
+        // per-case id.
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        // Kill robot 0 (state 0, alive, hp 5000): 6000 damage.
+        let out = m.apply_damage(0, 6000, -1);
+        assert!(out.died);
+        assert_eq!(m.debris_active(), 5, "five kind-5 records");
+        // Delays 0/2/4/6/8 (the 2k stagger).
+        let delays: Vec<i32> = m
+            .debris
+            .recs
+            .iter()
+            .filter(|r| r.active)
+            .map(|r| r.delay)
+            .collect();
+        assert_eq!(delays, vec![0, 2, 4, 6, 8]);
+        // A shield pickup (case 2 -> id 6) at robot 1's position.
+        let outcome = m.pickup(1, 2);
+        assert!(outcome.applied);
+        assert_eq!(outcome.effect, 6);
+        assert_eq!(m.effect_row_count(), 1);
+        let robot = &m.sim().robots()[1];
+        assert_eq!(
+            m.effect_rows.rows[0],
+            (robot.pos_x >> 8, robot.pos_y >> 8, robot.z + 0x20, 6)
+        );
+    }
+
+    #[test]
+    fn select_strip_click_lights_the_blink_cursor() {
+        // The select-ack cursor [7j.6]: 0 until a strip fires, then
+        // slot + 1.
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        assert_eq!(m.sidebar_cursor(), 0, "MissionShell entry zero");
+        // Click on strip 1 (the second portrait band).
+        m.cursor = (0x219, 5);
+        m.tick(&InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        });
+        assert_eq!(m.sidebar.selected, 1);
+        assert_eq!(m.sidebar_cursor(), 2, "selected slot + 1");
     }
 }

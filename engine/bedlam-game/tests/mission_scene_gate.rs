@@ -99,7 +99,8 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
 /// The staged corpus inputs in load_mission order: TOT, DAT, PAD,
 /// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
 /// TABLE, MAPTRAN0..7, MIN, NUMBERS (the map-overlay family tail,
-/// 7e; the score-strip bank, 7f.9).
+/// 7e; the score-strip bank, 7f.9), then FLAGS + BLOWUP (the
+/// effect banks, 7j.4/7j.9).
 fn zonea() -> Option<Vec<Vec<u8>>> {
     Some(vec![
         read(&["EDITOR", "ZONEA", "MISSION1.TOT"])?,
@@ -125,6 +126,8 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
         read(&["GAMEGFX", "MAPTRAN7.TRN"])?,
         read(&["EDITOR", "ZONEA", "MISSIONA.MIN"])?,
         read(&["GAMEGFX", "NUMBERS.BIN"])?,
+        read(&["GAMEGFX", "FLAGS.BIN"])?,
+        read(&["GAMEGFX", "BLOWUP.BIN"])?,
     ])
 }
 
@@ -168,6 +171,8 @@ fn scripted_run(
         &files[9],
         &files[10],
         &files[11],
+        &files[23],
+        &files[24],
         &files[12],
         &maptran_of(files),
         &files[21],
@@ -321,6 +326,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         &files[9],
         &files[10],
         &files[11],
+        &files[23],
+        &files[24],
         &files[12],
         &maptran_of(&files),
         &files[21],
@@ -615,6 +622,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
             &files[9],
             &files[10],
             &files[11],
+            &files[23],
+            &files[24],
             &files[12],
             &maptran_of(&files),
             &files[21],
@@ -723,6 +732,8 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
         &files[9],
         &files[10],
         &files[11],
+        &files[23],
+        &files[24],
         &files[12],
         &maptran_of(&files),
         &files[21],
@@ -862,4 +873,165 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
         "the terrain frame returns ({viewport_redrawn} rows)"
     );
     assert_ne!(reopened[0x1B5 * 640 + 0x213], 0, "the chrome draws again");
+}
+
+/// The effect-row + debris-stager draws on real corpus bytes
+/// [RE-EXW-SIM 7j]: the pickup seam stages a FLAGS.BIN row that
+/// visibly lands in the viewport (the camera sits AT robot 0, so
+/// the icon projects mid-screen), the damage seam's five debris
+/// records draw BLOWUP.BIN tumble sprites until the kind-5
+/// sequence table's −1 terminator frees them (the viewport then
+/// returns to a stable two-frame identity — the dead robot's
+/// missing DANTE body is a constant), and the select-strip click
+/// lights the blink cursor at the selected portrait (GENERAL.BIN
+/// 0x51+ at (0x1F0 + 0x32*slot, 0xD)). The pinned frames of the
+/// other tests are untouched — effects only draw once staged.
+#[test]
+fn zonea_effect_rows_and_debris_draw_and_expire() {
+    let Some(files) = zonea() else {
+        eprintln!("corpus absent - skipping (CI)");
+        return;
+    };
+    fn viewport(f: &[u8; 640 * 480]) -> Vec<u8> {
+        f[..480 * 480].to_vec()
+    }
+    // The scripted effects journey. The CONTROL host runs the
+    // IDENTICAL pump sequence and damage call, so at every capture
+    // index the two hosts carry the same LNK-walk animation frame
+    // and the same (dead) robot set - the only divergence is the
+    // staged effect row. Returns (row_frame, debris_mid_frame,
+    // cursor_pixels).
+    let journey = |with_row: bool, with_cursor: bool| -> (Vec<u8>, Vec<u8>, usize) {
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        host.load_mission(
+            &files[0],
+            &files[1],
+            &files[2],
+            &files[3],
+            &files[4],
+            &files[5],
+            &files[6],
+            &files[7],
+            &files[8],
+            &files[9],
+            &files[10],
+            &files[11],
+            &files[23],
+            &files[24],
+            &files[12],
+            &maptran_of(&files),
+            &files[21],
+            &files[22],
+            None,
+            &[(18, 73, 1)],
+        )
+        .unwrap();
+        while host.scene() == Scene::Boot {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        host.apply(SceneAction::Advance);
+        host.pump_frame(4, &InputFrame::default());
+
+        // --- the debris [7j.5/7j.7]: kill robot 0 - five kind-5
+        // records stage with the 2k delays, tumble for
+        // 2*4 + 13 + margin ticks, then the -1 terminator frees
+        // every record.
+        let outcome = host
+            .mission_mut()
+            .expect("staged")
+            .apply_damage(0, 6000, -1);
+        assert!(outcome.died, "robot 0 dies (hp 5000)");
+        assert_eq!(host.mission().expect("staged").debris_active(), 5);
+        host.pump_frame(4, &InputFrame::default());
+        host.pump_frame(4, &InputFrame::default());
+        assert!(
+            host.mission().expect("staged").debris_active() > 0,
+            "the tumble still animates"
+        );
+        let debris_mid = viewport(&host.frame().indices);
+        for _ in 0..30 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        assert_eq!(
+            host.mission().expect("staged").debris_active(),
+            0,
+            "the -1 terminator freed every record"
+        );
+
+        // --- the effect row [7j.1/7j.4]: a shield pickup (case 2,
+        // id 6) at ROBOT 1 (the staged marker - robot 0 is dead)
+        // stages one row; the next present draws FLAGS.BIN sprite 5.
+        let row_frame = if with_row {
+            let outcome = host.mission_mut().expect("staged").pickup(1, 2);
+            assert!(outcome.applied);
+            assert_eq!(outcome.effect, 6);
+            assert_eq!(host.mission().expect("staged").effect_row_count(), 1);
+            host.pump_frame(4, &InputFrame::default());
+            viewport(&host.frame().indices)
+        } else {
+            host.pump_frame(4, &InputFrame::default());
+            viewport(&host.frame().indices)
+        };
+
+        // --- the blink cursor [7j.6]: 0 until the select-ack; the
+        // strip click lights GENERAL 0x51+ at (0x222, 0xD).
+        let mut cursor_pixels = 0;
+        if with_cursor {
+            assert_eq!(host.mission().expect("staged").sidebar_cursor(), 0);
+            host.pump_frame(
+                4,
+                &InputFrame {
+                    mouse_dx: 0x219,
+                    mouse_dy: 5,
+                    ..InputFrame::default()
+                },
+            );
+            host.pump_frame(
+                4,
+                &InputFrame {
+                    mouse_buttons: 1,
+                    ..InputFrame::default()
+                },
+            );
+            assert_eq!(host.mission().expect("staged").sidebar_cursor(), 2);
+            let frame = host.frame();
+            cursor_pixels = (0xD..0xD + 10)
+                .map(|r| {
+                    (0x222..0x222 + 10)
+                        .filter(|&c| frame.indices[r * 640 + c] != 0)
+                        .count()
+                })
+                .sum();
+        }
+        (row_frame, debris_mid, cursor_pixels)
+    };
+
+    // Determinism first: two identical journeys agree byte-for-byte
+    // (the effects are deterministic staged state, animation
+    // included).
+    let (row_a, debris_a, cursor_a) = journey(true, true);
+    let (row_b, debris_b, cursor_b) = journey(true, true);
+    assert_eq!(row_a, row_b, "two runs: the row frames are identical");
+    assert_eq!(debris_a, debris_b, "two runs: the debris frames match");
+    assert_eq!(cursor_a, cursor_b, "two runs: the cursor pixels match");
+
+    // The CONTROL comparison: same pumps + same death, no row - the
+    // divergence at the capture index is exactly the FLAGS icon
+    // (robot 1's shield is not drawn anywhere; the LNK animation
+    // state is shared).
+    let (control_row, _, _) = journey(false, false);
+    let row_diff: usize = (0..480 * 480)
+        .filter(|&i| row_a[i] != control_row[i])
+        .count();
+    assert!(
+        row_diff > 10 && row_diff < 2000,
+        "the FLAGS icon lands, and ONLY it ({row_diff} px)"
+    );
+    assert!(cursor_a > 4, "the blink cursor draws ({cursor_a} px)");
 }

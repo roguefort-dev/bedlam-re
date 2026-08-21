@@ -1813,3 +1813,70 @@ Nudge-Worker: 66831068-5861-4218-8409-6b1e3d3f360e
    entered them), MANIFEST verified.
 
 Nudge-Worker: efc8b1e0-9dfb-4f2d-a0ae-1688ac88db6f
+
+## D56 - 2026-08-21: the 0x4dc5d0 effect-row family + the debris stager land as presentation over the landed sim outcomes
+
+1. RE FIRST (RE-EXW-SIM 7j, committed before the code): the 10
+   effect rows are 16-B records {x, y, z, id} at 0x4dc5d4 (ids at
+   0x4dc5e0 + 0x10k — the FUN_00422038 allocator scans those,
+   falls back to row 9); every FUN_0040eba0 case tail stages one
+   via `row = {pos_x>>8, pos_y>>8, z+0x20, id}` with the ids
+   {1,6,7,1,0xE,0xC,0xD} per case {1,2,3,4,7,8,9}; the
+   FUN_0042205c tick rises z += 6 to the 0x190 cap then frees
+   (MissionShell epilogue 0x448080, BEFORE the draw); the draw
+   pass (FUN_00403938 tail) enqueues FLAGS.BIN sprite id−1 at
+   layer 0x12c with its own +0x118/+0x124 projection; the scalar
+   `_DAT_004dc5d0` is a SEPARATE variable — the blink-cursor
+   selector (the selected robot's slot + 1, producers the robots()
+   select-ack blocks 0x40c1ae..0x40c25e + the MissionShell entry
+   zero, consumer the 0x407420 sidebar switch drawing GENERAL
+   0x51+(frame&3) at (0x1F0+0x32k, 0xD)). The debris stager
+   FUN_00420608 = 128 slots × 0x30 B at 0x476fbc, z clamp
+   0x20..0xFF, first-free-else-min-seq eviction, 20-kind jump
+   table; kind 5 (the death tail) writes the record + SIX
+   FUN_00422287 scorch-ring calls (the type-DB per-tile +0x18
+   byte writer — the MISSIONVIEW §8.1-open producer, with the
+   armor-pad interaction caveat recorded); the FUN_00420549 tick
+   walks the per-kind i16 sequence table (kind 5: sprites
+   5..0x10, −1 frees); the draw pass reads BLOWUP(B/G).BIN
+   (region-gated), layer 0x12c for kinds 3/7/0xA else 0x12e.
+2. ENGINE: bedlam-render MissionView gains the Flags/Blowup
+   NodeBanks + set_flags_bank/set_blowup_bank +
+   enqueue_effects(rows, debris, cam) with the verbatim
+   projections/bounds/modes (0x12c is plain copy per MISSIONVIEW
+   5c); bedlam-game MissionScene carries EffectRows (10 rows,
+   alloc/stage/tick) + DebrisFx (128 records, stage_kind5/tick
+   over DEBRIS_KIND5_SEQ) as D17 presentation state; the damage
+   seam stages the five outcome rows (z already +8k in the D53
+   outcome, delay = 2k [hypothesis: the Watcon stack-slot alias
+   maps +0x24 to the caller's 2k counter — flagged for P4.2]),
+   the pickup seam stages the row with the outcome's effect id,
+   present() ticks debris then rows (the 0x448076/0x448080
+   epilogue order, overlay frames included) then enqueues; the
+   blink cursor = Sidebar.cursor (0 until the select-strip
+   select-ack — the MissionShell entry zero; [hypothesis: the
+   EXW per-frame ack may light it from spawn, left 0 per
+   never-invent until a corpus capture arbitrates]) drawn in the
+   portrait-pass tail. FLAGS.BIN + BLOWUP.BIN join the mission
+   chain (23 → 25 files; the BLOWUPG region variant is a host
+   path choice, unmodeled). The six scorch writes are NOT staged
+   (the 7j.8 armor-pad caveat needs its re-verify first).
+3. GATES: every existing pin UNMOVED — the effects draw nothing
+   on the default corpus path and the cursor stays 0 until a
+   select click, so the scene gates pass byte-identical (spawn
+   7fdada56b10f1cad ... armed 6050d20755b2d852, sim pins
+   unchanged) and the smoke is two-run byte-identical AND equal
+   to the recorded baselines (scene 696adb1cd110e062, parity
+   cce30c983b97b16d, audio 110400/158092; the fetch list grows
+   to 25 with FLAGS 14478 B + BLOWUP 150034 B). NEW: three
+   enqueue_effects render units + six game units (alloc/tick,
+   clamp/LRU/seq-walk, the death/pickup stagings, the cursor
+   ack) + the corpus gate zonea_effect_rows_and_debris_draw_and_
+   expire (the LNK walk makes consecutive frames differ, so the
+   draw evidence is a CONTROL-host diff at the same pump index —
+   identical pumps + identical death, the only divergence the
+   FLAGS icon — plus full two-run determinism over the effects
+   journey and the expiry state assertions). 41 suites green,
+   fmt + clippy clean, MANIFEST verified.
+
+Nudge-Worker: 6ab53863-71dc-4010-b6eb-fa9a3f724411
