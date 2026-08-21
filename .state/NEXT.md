@@ -1,26 +1,28 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The weapon-fire family REMAINDER, bounded head: the
-   FUN_00410823 weapon-anim machine internals (6102 B, the
-   biggest piece). Its 0x4c71f4 record family is now 400x0x36
-   with frame + spawners pinned per 7j.17; the bank's
-   head-adjacent 0x4c71c4 = the per-player selected anchor
-   (spawn-seeded + renderer-updated; NOTE 7j.21: the arrival
-   producer does NOT refresh it — CLOSED). Decode
-   FUN_00410823's state machine (frames, anim ids, fire
-   cadence) → fold into RE-EXW-SIM 7j.22 + ledger rows.
+1. [P4] The weapon-fire family TAIL head, promoted by 7j.22:
+   the ACTOR HIT APPLIER internals — FUN_004190bc (the critter
+   hit test/damage applier; the 7j.15 "panel/preview"
+   hypothesis is CORRECTED, it is called (critter, owner, x, y,
+   z, weapon, mode 2) from FUN_0041879d's presence-gated lane;
+   6 FUN_00419aff reads = per-critter damage lookups) +
+   FUN_00418fca (the robot sibling via FUN_0041874c, skips the
+   owner, MP-gated). Decode both (mode semantics, the hit test,
+   damage/hit-flash application, the 0x7E-stride critter-record
+   reads +0xC state/+0x24 word) → fold into RE-EXW-SIM 7j.23 +
+   ledger rows. Small addendum if room: the 0x4e66b8
+   smoke-trail bank slot allocator (writer of the 0x4c71f4
+   record's +0x32 link ≠ −1) — the trail-ring draw pass can
+   stay backlog.
 ## Backlog (not yet started)
-- The weapon-fire family TAIL (after 7j.22): the destroy-tail
+- The weapon-fire family TAIL (after 7j.23): the destroy-tail
    debris-kind map (which id-table type@+0xE stages which kinds
    — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
    @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
    death is now a confirmed non-weapon producer of k1/k6 +
    FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f),
-   FUN_004190bc (the 0x4cff98-family second stat consumer —
-   8 octile + 6 damage reads, a strong panel/preview
-   candidate; 7j.17 gives it the bank layout to check
-   against), and the 160-vs-0xA8 stride anomaly at 0x4c69e4
+   and the 160-vs-0xA8 stride anomaly at 0x4c69e4
    (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
    base, stride 0xA8, count 0x46ccbc — the 160 stride at
    0x4c69e4/0x4c6a60 needs the FUN_0040fe93 view re-anchored;
@@ -28,7 +30,8 @@
    @0x4c69e4+idx·0xA8). CLOSED by 7j.17: the [0x4edd60]
    height-bank family and the projectile z-encoding census.
    OPEN small: projectile type 0x69 vs the FUN_00419aff damage
-   table (7j.17/7j.18 — low priority).
+   table (7j.17/7j.18 — low priority); the trail-ring draw
+   pass consuming the 0x4e66b8 bank (7j.22).
 - The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
   beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
   extraction-pad (zone,slot) pairs and §7j.21 the record
@@ -53,7 +56,10 @@
   ring, and the +0x20 physics classes (0/1/2/3/6 ->
   FUN_0040de9c) — blocked on real producers (weapon family;
   NOTE 7j.17: critter death k1/k6 producers exist but are
-  outside the corpus path until critters load).
+  outside the corpus path until critters load; NOTE 7j.22: the
+  weapon family producers are now fully anchored — bullets/
+  shell/artillery/ballistic/rocket/homing tick semantics +
+  the K0xB/K2/K3/K6/K9 in-flight emissions are pinned).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -115,7 +121,10 @@
   must model the mission-start pod-descent stagger (w@+0x2C =
   1+k·(2000−m·1000/27)) — the first seconds of any mission have
   the robots frozen in pods — and arm extraction via a scripted
-  .PAD step-on, not a click.
+  .PAD step-on, not a click. NOTE 7j.22: weapon fire needs
+  injected COMMAND records (FUN_00449c94/0x4dd4a0) or order
+  dispatch, not raw input — the fire family is fully anchored
+  for it (per-type cadences + damage tables).
 - TOT semantics follow-up: FORMATS sec 2 plane 6/7 (the ~2000-slot
   POS linkage) — KNOWN-staged (word mirror at record words 6/7)
   but the drawer treats them as ordinary stack levels - check
@@ -132,6 +141,46 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.22 the WEAPON-ANIM MACHINE head unit COMPLETE
+  (worker 27e4f048 claim 1, commit 29adbf1, D70, docs-only;
+  3 × -process runs, dumps ghidra-project/exw-weaponanim{,2,3}*
+  .txt/-asm/-data). FUN_00410823 (6102 B) = the WEAPON-ANIM/
+  PROJECTILE TICK over the whole 400×0x36 bank 0x4c71f4,
+  MissionShell 4 calls/frame (phase 0..3; artillery ticks
+  phase-0 only, actor hit-tests odd phases only = 2×/frame).
+  Record layout CLOSED: target sel d@+6 (0x29: 0x1000-bit
+  robot / 0x2000-bit TRT structure / critter idx via
+  FUN_004128ec), tick d@+0xA, class d@+0x2A = LAUNCH DELAY
+  (0x24/0x29) OR DETONATION CYCLES (0xF/0x13), arc d@+0x2E =
+  ballistic z-vel (gravity −0x100/tick; heading byte &0xFF for
+  0x29), trail link d@+0x32. Machines: 2..4 bullets = 2-substep
+  lookahead ray (2 tested, 1 committed — anti-tunnel); 5 shell
+  w/ per-tick K3 trail; 9..0xB ARTILLERY = scripted-burst
+  (durations dword[0x456c78+4·id] = 2/4/7 frames; 7 expanding-
+  ring (Δy,Δx) i16 lists 500-sentinel @0x45687c.. via
+  PTR[0x456bf0]; each pair = FUN_004244a1 5000-blast + 50%
+  RandA K0xB debris; ttl 0x23 life; ttl-24 spotter reveal
+  FUN_004245c9 when the owner is player-typed); the 7j.14 K0xC
+  set {0xE,0xF,0x13,0x17,0x1A,0x1F} = the BALLISTIC bounce
+  family (0xE mortar: full-vertical bounce + 3-cell 5000-blast
+  EVERY contact + the 0x4e66b8 0x68-stride smoke-trail ring
+  bank {active, ring&7, 8×0xC xyz} appended every 2nd tick;
+  0x17 = 3-clone split (rotated damped velocities); 0xF/0x13
+  = ttl-cycle submunitions detonating as the 7j.13
+  four-quadrant "weapon 0x1A" blast — those 4 sites
+  RE-ANCHORED to the detonation path); 0x24 rocket (class =
+  launch delay, straight, no gravity, 400 dmg, ttl 101);
+  0x29 homing (target lock + ±0x40 4-sector heading-search
+  terrain avoidance + z-climb 0x600, ttl 201, target-dead
+  fizzle gates on critter state 7 / TRT active). Front doors:
+  FUN_0041879d = CRITTER lane (3-row presence-grid prefilter →
+  FUN_004190bc mode 2), FUN_0041874c = MP other-robot lane
+  (FUN_00418fca mode 2, skips owner) — the 7j.15 "FUN_004190bc
+  = panel/preview" hypothesis CORRECTED (critter hit applier).
+  RandA = FUN_00402975 re-pinned @0x4116b5. 4 ledger rows
+  (tick rewritten + 3 new). Manifest verified. PUSHED 29adbf1.
+  Queued: the actor hit-applier internals (FUN_004190bc +
+  FUN_00418fca, 7j.23).
 - 2026-08-21: P4 7j.21 the 0x425xxx ARRIVAL-PRODUCER family unit
   COMPLETE (worker b67abe61 claim 1, commit 923668e, D69,
   docs-only; 4 × -process runs, dumps ghidra-project/
@@ -167,134 +216,3 @@
   anchor refresh: NEGATIVE (spawn-seed only, closed). 7 ledger
   rows + 0a rewritten. Manifest verified. PUSHED 923668e.
   Queued: the weapon-fire family head (FUN_00410823, 7j.22).
-- 2026-08-21: P4 7j.20 the extraction BEACON + POD-COUNTDOWN
-  producers unit COMPLETE (worker c7269abe claim 1, commit
-  c37b8ef, D68, docs-only; 2 × -process runs, dumps
-  ghidra-project/exw-beacon{,2}*.txt + full-objdump census of
-  the ten 0x4c6a10 displacement sites). FUN_004247b5 = the
-  EXTRACTION-BEACON ARMER, sole caller FUN_00433980 @0x433cfb
-  (zone pad script; the §6.4/§7c.8 "click family ~0x433cbc"
-  attribution REVOKED — that address is inside FUN_00433980):
-  ~25 (zone,.PAD slot) extraction pads; guard 0x4eabb0,
-  countdown 0x197 (0 when the player-0 alive-count == 1),
-  0x4eabb4/6/8 = tile trio (z dead store), robot state := 3 +
-  spread-teleport + SFX 0x2A. FUN_004248c8 = the SPREAD-CLAIM
-  picker (12×u16 0x4eabba one-shot claims; center + 8
-  neighbors + (−2,0)/(0,−2)/(+2,0); ≥12 leaves caller locals
-  uninitialized). w@robot+0x2C = DROP-POD descent timer: SP
-  producer = FUN_0040cca0 spawn tail stagger 1+k·(2000−
-  m·1000/27) (m = linear mission 0x46ae8c; refutes the "no SP
-  producer" gloss), MP respawn 0x28 @0x40e89d; reader
-  FUN_0040b9f6 freezes the whole brain, 0-hit → pod anim
-  FUN_0041fb4b + msgs 9/10/0xB (0x4e64c0 pod bank = deploy +
-  respawn + extraction). §6.4/§6.5/§7b.6/§7c.8 corrected,
-  +0x2C row rewritten, 4 ledger rows + 0x4c71c4 per-player
-  anchor census. Extraction trigger chain CLOSED end-to-end.
-  Manifest verified. PUSHED c37b8ef. Queued: the 0x425xxx
-  arrival-producer family (7j.21).
-- 2026-08-21: P4 7j.19 the EXIT/ESCAPE RUNTIME unit COMPLETE
-  (worker 90c04773 claim 1, commit c64c637, D67, docs-only;
-  3 × -process BEDLAM.EXW -noanalysis runs, dumps
-  ghidra-project/exw-exitfamily{,2,3}*.txt). FUN_0041fbb1 =
-  the ESCAPE-CRAFT ANIMATOR (MissionShell @0x448012): 3
-  machines over one 0x1C frame {active, PHASE, x, y, altitude,
-  toggle, dwell} — the 5 exit elevators @0x4e662c, the
-  extraction DROPSHIP @0x4e6610 (landing = extraction sweep
-  of robot states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0;
-  departure → _DAT_004dc67c = 1 complete flag), the per-robot
-  ESCAPE PODS @0x4e64c0 (landing = payout 100·w@+0x94+5000;
-  gated [0x46aed4+idx·4] no-extract latch, writers
-  FUN_0040e230/49c94/4a38a/08e99/GameMain). The 7j.17 "+4
-  kind" is a PHASE (1 descend/2 landed-OPEN/3 depart); POI
-  flee gate kind==2 = LANDED elevators. FUN_00433980 = the
-  ZONE PAD-TRIGGER SCRIPT DISPATCHER (caller FUN_0040b9f6
-  @0x40bd58 when state∈{1,4} ∧ order ≠ −1): FUN_00422e5e =
-  the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan
-  @0x4e44f8); per-zone switch on 0x4edd8c = elevator rides
-  (scripted dests 0x4dcdbc..0x4dd330, latch+countdown-10
-  pairs), messages FUN_00424a6f, doors FUN_004223b8 over the
-  45×0x10 rects @0x4dcae8, and case 0x1B = the SOLE
-  exit-pad activation FUN_0041fa51 — the rescue loop is now
-  CLOSED end-to-end (.PAD load → 00433980 script → 0041fa51
-  activator → 0041fbb1 lands → 00412a98 POI flee →
-  [0x4eba0c]++ → 00448b80(5000)). FUN_0041faf0 = dropship
-  deployer (beacon 0x4eabb4/76, MissionShell @0x44832f/75);
-  FUN_0041fb4b = pod spawner (countdown w@0x4c6a10).
-  [0x4eba0c]/[0x4eba10] consumer censuses CLOSED; 4 ledger
-  rows added; open item 0a rewritten. Manifest verified.
-  PUSHED c64c637. Queued: the beacon/pod-countdown producers
-  (FUN_004247b5 + FUN_004248c8 + 0x4c6a10 writers).
-- 2026-08-21: P4 7j.18 the critter/POI/exit LOADER hop unit
-  COMPLETE (worker a840f0af claim 1, commits 7f1c8fb docs +
-  f04681d tooling, D66): FUN_00416458 stages ".NME" (@0x457a57,
-  bytes verified) and reads EIGHT fixed-order count+records
-  sections (widths 10/10/8/8/10/8/6/8; 16 FUN_0041cccb call
-  sites census-verified) — sections 1-7 spawn critter states
-  2/1/5/4/3/6/7 (spawn multipliers by difficulty 0x46cbf8;
-  hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4;
-  +0x02 species word 1/3/6; octile tables 0x4543e4/0x454404
-  @+0x60; S2 DAT z=6-down floor search; S7 z fixed 0xDF);
-  section 8 feeds the POI bank (4 POIs per record, jitter ±31
-  sub-tiles, spawn state 5 ESCAPE — personnel flee from
-  load). Corpus-exact on all 37 files (ZONEA/M1 keeps a 16-B
-  orphan tail no game code reads; FUN_004180b9 = empty stub).
-  FORMATS-MISSION §9 REWRITTEN (grammar CLOSED; old
-  header/section model was a mis-split). FUN_0041fa51 = the
-  EXIT-PAD ACTIVATOR: arg = a 0x4e44f8 .PAD slot index, dedup
-  registry 5×d @0x46cd20, stamps exit rec {1, 1,
-  pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; caller
-  FUN_00433980 @0x43900e = pad trigger handler [open]. 7j.17
-  leftovers folded: FUN_00449c94 = the LOCAL COMMAND-RECORD
-  BUILDER (0x4dd4a0 stride-0x80, cmd codes 1-4, payload
-  words, MP broadcast loop + NETWORK ERROR paths),
-  FUN_0040db9e = the critter ranged-attack APPLIER on robots
-  (0x476fe4 0xC-stride weapon-param table, param_5=−1 → the
-  critter entry @0x476fd8; robot stun word 0xFFFF
-  @0x4c69e4+idx·0xA8 + FUN_0040c536 timed effect scaled by
-  octile dist·mult), [0x4eb8b8+slot·4] census = objective-done
-  flags (MissionShell + FUN_0044425c + FUN_00448b80 only).
-  ENGINE/TOOLING: parse_nme replaced by the exact schedule +
-  corpus exact-consumption test (37/37); fmt+clippy clean,
-  workspace green, manifest verified. PUSHED f04681d. Queued:
-  the exit/escape runtime family (FUN_0041fbb1 +
-  FUN_00433980).
-- 2026-08-21: P4 7j.17 the ROBOT TARGETING/AIM family ADOPT
-  unit COMPLETE (worker 3f4f7c10 claim 1, commit eaf16c0,
-  D65, docs-only): landed the three provider-outage-killed
-  runs' decode (logs agent-31790e94/08f6fa30/0ce3a285, dumps
-  exw-robottarget*.txt/-xrefs/-asm, NO new Ghidra run —
-  every claim re-verified). FUN_00412f34 = the 0x4cff98
-  CRITTER-ACTOR controller (stride 0x7E, Q13 x@+0x36/
-  y@+0x3A/z@+0x3E; states 1 wander / 2 sine-walk shooter
-  (0x65, range (2−d)·−0x40+300) / 3 chase (0x67 3D velocity,
-  pathfinder FUN_0041571c, leash 400) / 4-5-6 mixed-AI
-  (0xB dormant + DAT_00454edc[d] respawn delays; 6 ballistic
-  → k6 debris + FUN_00424355 + splash FUN_0041a14f(0x18);
-  9 seek-steppers; 2 FUN_0040db9e range attack) / 7
-  close-combat (point-blank 0x69 @ 32/16/8-frame cadence,
-  break odds 1/8·1/16·never, leash (d+1)·0x40+600);
-  presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+
-  (x>>13)]:=1 (SAR 0xD asm-verified; the decompile >>5 was
-  an artifact). Difficulty dial amended: 12 objdump sites
-  — drives critter behavior, not only damage.
-  FUN_00417e2f = SUICIDE-BOMB trigger (<0x30 px → 8× k1
-  debris). FUN_00412a98 = the 0x4dabdc POI/PERSONNEL
-  controller (stride 0x1E; flee-to-exit over 5×0x1C slots
-  @0x4e662c via FUN_00417c64; escape → [0x4eba0c]++,
-  [0x4eba10]=0x32, FUN_00448b80(5000)). FUN_00409138 = the
-  COMMAND-RECORD consumer (0x4dd4a0 stride 0x80, count
-  0x46cbe0, builder FUN_00449c94 + MP family; 39-case
-  weapon switch → order dispatchers + projectile spawners
-  into the 400×0x36 bank 0x4c71f4 aimed at the ORDER
-  TARGET; auto-rearm + msgs 0x1C..0x21). FUN_00448b80 =
-  the MISSION-OBJECTIVE RESOLVER (6×0x20 slots @0x4eaaee;
-  msgs 0x26/0x27/0x34, all-done 0x28+0x29 → DAT_0046cd00
-  phase state; zone-7 counter [0x46cce0]).
-  FUN_0041e411 = floor probe (the [0x4edd60]=.CGR
-  height-bank semantics). Residual 0x4dd484 reader census
-  CLOSED; the 47-site/28-site censuses re-read unchanged
-  (both already landed in 7j.11/7j.15 — the queue's "fold"
-  ask was already satisfied; 7j.17 adds critter-death
-  producers k1/k6/FUN_0041a14f on top). No engine change
-  (D65). Manifest verified. PUSHED eaf16c0. Queued: the
-  critter/POI/exit loader section in FUN_00416458.

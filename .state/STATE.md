@@ -1,3 +1,30 @@
+ - CLOSED 2026-08-21 (P4 7j.22 the WEAPON-ANIM MACHINE head
+   unit COMPLETE, commit 29adbf1, worker 27e4f048 claim 1,
+   D70, docs-only; 3 × -process runs, dumps ghidra-project/
+   exw-weaponanim{,2,3}*.txt): FUN_00410823 (6102 B) = the
+   WEAPON-ANIM/PROJECTILE TICK over the whole 400×0x36 bank
+   0x4c71f4 — 4 calls/frame (phase 0..3; artillery phase-0
+   only, actor hit-tests odd phases only); record layout
+   CLOSED (target sel d@+6, class d@+0x2A = launch delay OR
+   detonation cycles, arc d@+0x2E = ballistic z-vel/heading,
+   trail link d@+0x32); per-type machines: bullets 2..4
+   (2-substep lookahead ray), shell 5 (K3 trail), artillery
+   9..0xB (scripted bursts: durations 2/4/7 frames over 7
+   expanding-ring lists @0x45687c via PTR[0x456bf0], 500-
+   sentinel, spotter reveal at ttl 24), the ballistic bounce
+   family {0xE,0xF,0x13,0x17,0x1A,0x1F} (0xE mortar = bounce
+   + 3×5000-blast per contact + the 0x4e66b8 smoke-trail ring
+   bank; 0x17 = 3-clone split; 0xF/0x13 = ttl-cycle
+   submunitions → the four-quadrant 0x1A detonation, 7j.13
+   sites re-anchored), rocket 0x24, homing 0x29 (target lock
+   + heading-search terrain avoidance). Actor hit-test front
+   doors pinned: FUN_0041879d = critter lane (→
+   FUN_004190bc mode 2), FUN_0041874c = MP other-robot lane
+   (→ FUN_00418fca mode 2); the 7j.15 "FUN_004190bc =
+   panel/preview" hypothesis CORRECTED (critter hit applier).
+   RandA = FUN_00402975 re-pinned. 4 ledger rows. Next: the
+   actor hit-applier internals (FUN_004190bc + FUN_00418fca,
+   7j.23).
  - CLOSED 2026-08-21 (P4 7j.21 the 0x425xxx ARRIVAL-PRODUCER
    family unit COMPLETE, commit 923668e, worker b67abe61
    claim 1, D69, docs-only; 4 × -process runs, dumps
