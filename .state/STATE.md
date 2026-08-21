@@ -697,6 +697,49 @@
   Shop/Brief backdrop wiring, then the post-cutscene loading screen.
 # STATE - project snapshot (update when phase changes)
 
+ - CLOSED 2026-08-21 (P4 effect-row seam unit COMPLETE, commits
+   4f858d9 + e706a33 + 9bbf1ac, worker 6ab53863 claim 1, D56):
+   RE-EXW-SIM amendment 7j decodes the whole 0x4dc5d0 producer
+   family the 7f.4 sidebar switch consumed with "producer open":
+   the 10 effect rows are 16-B records {x,y,z,id} at 0x4dc5d4
+   (FUN_00422038 = the id-word allocator, first-free else row 9;
+   FUN_0042205c = the z += 6 rise-tick to the 0x190 cap then
+   free, MissionShell epilogue 0x448080 before the draw; the
+   FUN_00403938 tail draw enqueues FLAGS.BIN sprite id-1 layer
+   0x12c with its own +0x118/+0x124 projection; the effect-id
+   table completed to {1,6,7,1,0xE,0xC,0xD} per pickup case
+   {1,2,3,4,7,8,9}); the scalar _DAT_004dc5d0 is a SEPARATE
+   variable = the blink-cursor selector (the selected robot's
+   slot + 1; producers the robots() select-ack blocks
+   0x40c1ae..0x40c25e + the MissionShell entry zero; consumer
+   the 0x407420 switch drawing GENERAL 0x51+(frame&3) at
+   (0x1F0+0x32k, 0xD)). FUN_00420608 = the 128-slot 0x30-stride
+   debris stager (z clamp 0x20..0xFF, first-free-else-min-seq
+   LRU, 20-kind jump table; kind 5 = the death debris with SIX
+   FUN_00422287 ring writes per debris = the per-tile type-DB
+   +0x18 byte writer, CLOSING the MISSIONVIEW §8.1 producer
+   question with an armor-pad reader caveat; the 0x454424
+   kind-5 i16 seq table {5..0x10, -1} walked by the FUN_00420549
+   tick; the draw pass reads BLOWUP(B/G).BIN, 0x12c for kinds
+   3/7/0xA else 0x12e). ENGINE: bedlam-render NodeBank::
+   {Flags,Blowup} + enqueue_effects (verbatim projections/
+   bounds/modes); bedlam-game EffectRows + DebrisFx presentation
+   state staged by the damage/pickup seams over the D53/D54
+   outcomes, ticked in the epilogue order (overlay frames too),
+   the blink cursor on the select-ack; FLAGS.BIN + BLOWUP.BIN
+   join the 25-file mission chain. Gates: ALL pins UNMOVED (the
+   effects draw nothing on the default corpus path, the cursor
+   is 0 until a select click) — the scene gates pass
+   byte-identical, the smoke two-run byte-identical AT the
+   recorded baselines (scene 696adb1cd110e062, parity
+   cce30c983b97b16d, fetch list 25); new: 3 render units + 6
+   game units + the corpus effects gate (control-host diff at
+   the same pump index — the LNK walk animates every frame, so
+   consecutive-frame identity is not a valid invariant — plus
+   two-run determinism). 41 suites green, fmt/clippy clean,
+   MANIFEST verified before and after the corpus reads. Pushed.
+   Queued: the 7j.8 scorch/armored-pad reader re-verify (+
+   scorch wiring if clean).
 - CLOSED 2026-08-19 (P5 title-movie playback, D31): TITLE.SMK plays
   through GameHost end-to-end - MoviePlayer fixed-step x240-us clock,
   compose-level MovieFrame (scene pipeline replaced while a movie
