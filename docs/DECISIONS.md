@@ -2278,3 +2278,35 @@ docs hop; worker 3f4f7c10)
 
 Nudge-Worker: 3f4f7c10-b73d-4662-8d35-0d770246bdd3
 
+## 2026-08-21 P4 7j.18 — the critter/POI/exit LOADER hop
+(worker a840f0af)
+
+1. RE: FUN_00416458's critter hop decoded — ".NME" (@0x457a57,
+   bytes verified) is the SOLE feeder of both banks: 8
+   fixed-order u16-count sections (widths 10/10/8/8/10/8/6/8)
+   → critter states 2/1/5/4/3/6/7 + 4 POIs per section-8
+   record (personnel spawn in state 5 ESCAPE, flee-to-exit).
+   Corpus-exact on all 37 files (ZONEA/M1 has a 16-B orphan
+   tail no game code reads). FORMATS-MISSION §9 rewritten;
+   the old "header (n1,n2)/(count,type)" grammar was a
+   mis-split of the fixed schedule. FUN_0041fa51 = the
+   EXIT-PAD ACTIVATOR (runtime: .PAD slot index → one of the
+   5 exit slots @0x4e662c, dedup registry @0x46cd20; caller
+   FUN_00433980 = pad trigger handler [open]). 7j.17
+   leftovers folded: FUN_00449c94 (local command-record
+   builder + MP broadcast), FUN_0040db9e (critter ranged
+   attack on robots: 0x476fe4 0xC-stride weapon-param table
+   + robot stun word 0xFFFF @0x4c69e4+idx·0xA8 +
+   FUN_0040c536 timed effect), [0x4eb8b8+slot·4] census
+   (objective-done flags: MissionShell + FUN_0044425c +
+   FUN_00448b80 only). New open: exit consumer FUN_0041fbb1,
+   pad trigger FUN_00433980, projectile 0x69 vs damage
+   table.
+2. ENGINE: tooling change (D66) — the inspector's heuristic
+   NME walker replaced by the exact 8-section schedule
+   (engine/bedlam-assets parse_nme + corpus exact-
+   consumption test). No sim behavior change (critters/POIs
+   still unwired; loader now anchored for P4.2).
+
+Nudge-Worker: a840f0af-b732-44df-ae91-3caaa1de5960
+

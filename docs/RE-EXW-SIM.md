@@ -2735,6 +2735,154 @@ run. All facts [verified] against the dumps unless tagged.
    0x4cff98/0x4dabdc/0x4e662c — is the next bounded head
    [.NME/.POS family candidate, cf. FORMATS §9/§12]).
 
+## 7j.18 Amendment 2026-08-21 (worker a840f0af, the
+critter/POI/exit LOADER hop — .NME grammar CLOSED)
+
+Method: one `-process BEDLAM.EXW -noanalysis` run, dumps =
+`ghidra-project/exw-critterpoi-loader.txt` (full decompile of
+FUN_00416458/FUN_0041fa51/FUN_00449c94/FUN_0040db9e) +
+`exw-critterpoi-xrefs.txt` / `-xrefs2.txt` (censuses) +
+`exw-critterpoi-asm.txt` (asm of the two count writes + the
+exit-slot producer) + `exw-critterpoi-str.txt` (section string
+bytes) + a corpus exact-consumption check
+(/tmp/opencode/nme_check.py, all 37 NME files). All facts
+[verified] against those artifacts unless tagged.
+
+1. **FUN_00416458 = the .NMI-.NME critter+personnel LOADER.**
+   Prologue (@0x416461..0x416496, asm-verified): clears
+   0xAC44 B @0x4cff98 + 0xF00 B @0x4dabdc (FUN_00402965 ×2),
+   resets the critter count `DAT_0046cc2c = 0` @0x41646d (the
+   queue's count write = this RESET; the counter then
+   increments per spawned critter), calls the TRT loader
+   FUN_004170a6, then stages **".NME"** (string @0x457a57,
+   bytes verified `2e 4e 4d 45`) into the shared staging
+   buffer 0x4dca0c and inits the reader FUN_0041cd90. What
+   follows is **8 sequential `u16 count + count×rec`
+   sections in a FIXED order** (16 FUN_0041cccb call sites,
+   census-verified) — the whole .NME file feeds the critter
+   bank (sections 1..7) and the POI bank (section 8):
+   - **S1 (10 B rec)** → critter state 2 (sine-walk shooter):
+     per record spawns `w1 + [0x46cbf8]` (difficulty + spawn
+     base, typ. 4); x = (w3 + scatter(5)−2)·0x2000, y =
+     (w4 + scatter(5)−2)·0x2000 (FUN_0041ec1c jitter); z =
+     0xC000; variant param @+0x18 = scatter(4)+3, NEGATED
+     when w2 (the flag word) ≠ 0; +0x5A = RandA&7; hp
+     base 0xAF.
+   - **S2 (10 B rec)** → state 1 (wander): spawns difficulty+3
+     each; x = w3·0x20+0x10, y = w4·0x20+0x10; z from a DAT
+     volume search: start plane z=6 at (w3,w4), walk DOWN
+     while tile==0 or tile>3, take the first level whose
+     tile ∈ 1..3 AND the cell above is 0; z =
+     level·0x20+0x1F (also @+0x4E); skip if none; +0x56 =
+     scatter(10)+10; hp base 0xC8.
+   - **S3 (8 B rec)** → state 5: spawns `max(difficulty,1)`
+     (d=1 → RandA&1+1); x = w2·0x2000+0xF00, y =
+     w3·0x2000+0xF00; z = floor probe FUN_0041e411(x>>8,
+     y>>8, w1<<5); 8 octile dists @+0x60 via the direction
+     tables 0x4543e4/0x454404 (4 B × 8 entries); +0x0C=8,
+     +0x10=0x72, +0x02=3, +0x0E=5; hp base 0x96.
+   - **S4 (8 B rec)** → state 4 (the seek steppers): spawns
+     (difficulty>>1)+2; x = w2·0x20+0xF, y = w3·0x20+0xF; z
+     = probe (w1); all 8 octiles set = z; +0x0C=9,
+     +0x10=RandA&3, +0x02=6, +0x0E=0; hp base 0xC8.
+   - **S5 (10 B rec)** → state 3 (chase): ONE each; x =
+     w3·0x2000+0xF00, y = w4·0x2000+0xF00 with home stored
+     @+0x42/+0x46 and home z @+0x4A; z = probe (w2<<5);
+     +0x10 = +0x12 = w1<<6 (timer/leash); +0x7A = −1; hp
+     base 0x5DC (1500).
+   - **S6 (8 B rec)** → state 6: one each; x = w2·0x2000+
+     0xF00, y = w3·0x2000+0xF00; z = probe (w1<<5);
+     +0x0C=8, +0x10=0x72, +0x02=3, +0x0E=5; hp base 0x96.
+   - **S7 (6 B rec)** → state 7 (close combat): spawns
+     max(difficulty,1); x = w1·0x2000+0xF00, y =
+     w2·0x2000+0xF00; z FIXED 0xDF; +0x0C=3, +0x10 =
+     scatter(0xFF, y); hp base 0x9C4 (2500).
+   - **S8 (8 B rec) = the POI/personnel section**: resets
+     `DAT_0046cbf0 = 0` @0x416f6e (the queue's POI count
+     write), then per record spawns **4 POIs** at
+     x = ((RandA&0x1F) + w2<<5)·0x100, y = ((RandA&0x1F) +
+     w3<<5)·0x100, z = probe (w1<<5); seeds {+0 active=1,
+     +2 0x32 (50 — same constant as the escape panic
+     [0x4eba10]), +4 5, +6 1, +8 heading RandA&7}. If
+     7j.17's state map (state@+4) holds, **personnel spawn
+     directly in state 5 = ESCAPE** — consistent with the
+     escape counter objective ([0x4eba0c]++, 5000 pts via
+     FUN_00448b80).
+   Every section stamps +0x00 = the 7j.17 state word
+   {1,2,3,4,5,6,7}, +0x02 = species/type word {1,3,6},
+   +0x24 = 1 (word), +0x06 = hp =
+   base+(base·difficulty)/27. Epilogue: FUN_0041cd42
+   (reader close) + FUN_004180b9 (**empty stub**,
+   decompile-verified). The staging buffer 0x4dca0c is
+   shared scratch (TRT/NME/MAP loaders all reuse it).
+2. **Corpus verification [verified]:** the 8-section
+   schedule consumes all 37 shipped .NME files exactly
+   (36/37 byte-exact; ZONEA/MISSION1.NME leaves a 16-B
+   orphan tail, words (1,0,18,0,66,0,1,0), that no game
+   code reads — editor dregs). Field stats: w0 ≡ 1 in every
+   non-empty section (marker, never read); S1 w1 ≤ 8;
+   8-B w1 ≤ 7 (z level); all coords ≤ 99, zone-in-bounds.
+   FORMATS-MISSION §9 rewritten from this decode — the old
+   "header (n1,n2)" = the first two section counts, the old
+   "(count,type)" = count + first word of record 1.
+3. **FUN_0041fa51 = the EXIT-PAD ACTIVATOR** (the 5×0x1C
+   exit-slot producer @0x41fabb): arg = a 0x4e44f8 PAD slot
+   index (the .PAD runtime slots); dedup against the 5-dword
+   id registry @0x46cd20 (skip if already active), else take
+   the first −1 slot and stamp exit rec {+0 = 1, +4 = 1,
+   x@+8 = pad.x·0x20+0xF, y@+0xC = pad.y·0x20+0xF (the pad
+   slot's word x/y@+2/+4, asm-verified), +0x10 = 0x400,
+   +0x14 = 0}. So exits are ELEVATOR PADS switched on at
+   runtime. Sole caller FUN_00433980 @0x43900e (the pad
+   trigger handler — not decoded this unit). Exit-bank
+   consumers (census): FUN_00412a98 (POI flee, 7j.17) +
+   **FUN_0041fbb1** @0x41fcf8 (new consumer — open).
+4. **7j.17 leftovers folded:**
+   - **FUN_00449c94 = the LOCAL COMMAND-RECORD BUILDER**
+     [verified]: builds the 0x4dd4a0 stride-0x80 record for
+     the local player slot (_DAT_004edb90 = robot id):
+     byte@+0 = robot id, byte@+1 = the command code (the
+     switch selector 1..4), then code-specific payload words
+     (case 1: order selector 0x46cbdc, order target
+     0x4dd484/88/8C, flag byte DAT_004ddb20 → optional
+     MP/robot-bank words incl. 0x46cd04/08; case 2/3:
+     network quit/join flavored; case 4: 7×(0x62·slot +
+     0xE·k + 0x4de664) stat pairs + 10 B from 0x4e444c);
+     record length @0x4eba08; then a broadcast loop over
+     all slots (count DAT_0046cbe0) via FUN_00449b60 with
+     network error paths ("NETWORK ERROR", "QUIT FROM
+     NETWORK GAME" strings @0x459af4..0x459b4c,
+     FUN_0044a38a/FUN_00420100 = the send family). The
+     local-input side of the 0x4dd4a0 ring is CLOSED.
+   - **FUN_0040db9e = the critter ranged-attack APPLIER on
+     robots** [verified]: (robot_idx, mult, seed, ecx,
+     param_5): FUN_0040e230(robot, ecx, [0x476fe4 +
+     param_5·0xC]) = the SP damage core (7g) with a
+     0xC-stride weapon-param table @0x476fe4 (param_5 = −1
+     in the 7j.17 critter call → entry @0x476fd8, the
+     critter's own weapon); if mult ≠ 0: robot word
+     [0x4c69f4 + idx·0xA8] = 0xFFFF (a stun/disable mark on
+     the ROBOT bank base word) + FUN_0040c536(idx, …,
+     dist·mult>>7) — a timed effect scaled by the octile
+     distance (FUN_0041eb65/FUN_0041eb77 = the dist family).
+   - **[0x4eb8b8+slot·4] objective-done bank census**
+     [verified]: consumers = MissionShell @0x4486ec,
+     FUN_0044425c ×4 (@0x444775/0x444934/0x44496a/0x444813),
+     FUN_00448b80 @0x448dee — all inside the
+     mission-objective family (the resolver 7j.17 + the
+     shell progress display + a 0x4442xx helper); no other
+     readers. Identity: per-slot objective completion flags.
+   - Projectile type 0x69 vs the FUN_00419aff damage table:
+     NOT folded (would need the damage-table else-path dump;
+     stays open, low priority).
+5. Corpus-path verdict: docs + tooling (D66) — the
+   inspector's heuristic NME walker is replaced by the exact
+   8-section schedule (engine/bedlam-assets parse_nme + a
+   corpus exact-consumption test); no sim/engine behavior
+   change (critters/POIs still do not tick in the gates;
+   their loader is now anchored for the P4.2 differential
+   harness).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -2776,10 +2924,11 @@ run. All facts [verified] against the dumps unless tagged.
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
-| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17 |
+| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
-| POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17 |
-| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, kind d@+4 (==2 exit), x/y d@+8/+0xC, d@+0x18 cleared on escape}; nearest scan FUN_00417c64; producer FUN_0041fa51 @0x41fabb [open] | §7j.17 |
+| POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
+| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, kind d@+4 (==2 exit), x/y d@+8/+0xC, d@+0x18 cleared on escape}; nearest scan FUN_00417c64; producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 @0x43900e = the pad trigger handler [open]; 3rd consumer FUN_0041fbb1 [open]) | §7j.17/§7j.18 |
+| critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
 | command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
 | mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
 | floor probe | FUN_0041e411(px,py,z): level try +1/−2; per-type height entry [0x4edd60+2+(type−1)·4] → in-tile 0x20×0x20 byte map @(x&31)+(y&31)·32 at +6; floor = level·0x20 + byte; 0x1F = top-of-stack (sibling of FUN_0041eaa1 §7j.14) | §7j.17 |
@@ -2829,18 +2978,15 @@ run. All facts [verified] against the dumps unless tagged.
 
 ## 9. Open items (next slices)
 
-0a. The critter/POI/exit LOADER section inside FUN_00416458
-   (writes count DAT_0046cc2c @0x41646d, DAT_0046cbf0
-   @0x416f6e, banks 0x4cff98/0x4dabdc/0x4e662c producer
-   FUN_0041fa51 @0x41fabb) — which mission file section feeds
-   them [.NME/.POS family candidate, FORMATS §9/§12];
-   anchors the critter/POI record producers and the exit
-   markers. Also open from 7j.17: FUN_0040db9e identity (the
-   mode-2 range attack on robots), projectile type 0x69
-   absent from the FUN_00419aff damage table (→ else-1), the
-   [0x4eb8b8+slot·4] objective-done bank consumers, and
-   FUN_00449c94 (the command-record BUILDER — the local-input
-   side of the 0x4dd4a0 ring).
+0a. ~~The critter/POI/exit LOADER section inside FUN_00416458~~ —
+   CLOSED 2026-08-21 §7j.18: .NME is the sole feeder (8 fixed
+   sections → critter states 2/1/5/4/3/6/7 + 4 POIs/record,
+   corpus-exact 37/37); FUN_0041fa51 = the exit-pad activator
+   (runtime, from .PAD slots); FUN_0040db9e + FUN_00449c94 +
+   the 0x4eb8b8 census folded. Still open from that head:
+   the exit consumer FUN_0041fbb1, the pad trigger handler
+   FUN_00433980, and projectile type 0x69 vs the FUN_00419aff
+   damage table.
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
    (full writer/reader census in the ledger row).
 0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,

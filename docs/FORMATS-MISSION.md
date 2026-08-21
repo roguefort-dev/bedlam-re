@@ -186,39 +186,56 @@ What RE must confirm: everything beyond the layout.
   else 3). Remaining open: what consumes word-3=0 records (z −1 seeds)
   and the flag word elsewhere.
 
-## 9. NME — enemy/„NME" placement script (partially decoded)
+## 9. NME — critter + personnel placement script (FULLY DECODED)
 
 - **Sizes:** vary 16–1492 B (28 distinct). 10 files are **16 bytes of zeros**
   (ZONE{B,C,D,E,F}/MISSION{6,7} — no enemies). VERIFIED
 - **No strings anywhere** — all u16 values; records contain in-bounds tile
   coordinates. VERIFIED
-- **Confirmed sub-structure:**
-  1. **Header:** `u16 n1, u16 n2`. VERIFIED existence.
-  2. **Leading record run (VERIFIED for the 9 files with n1=0, n2>0):** exactly
-     `n2` records of **10 bytes** `(1, 4, flag, x, y)` (u16 each), with x ≤ w,
-     y ≤ h. E.g. ZONEB/MISSION1.NME (n2=24): 24×`(1,4,0,7,64)`, `(1,4,0,38,89)`, …
-     consuming bytes 4…243 exactly.
-  3. **Sections:** `(u16 count, u16 type)` followed by `count` records, mostly
-     **8 bytes** = 4 u16, frequently shaped `(type, x, y, flag)` or
-     `(1, n, x, y)` with in-bounds coords.
-  4. **Worked exact decode — ZONEA/MISSION1.NME (120 B, 60 u16), VERIFIED:**
-     ```
-     header (0, 0)
-     section (6, 1): (1,1,18,9) (1,1,18,8) (1,1,18,7) (1,1,7,8) (1,1,7,7) (1,1,7,6)
-     section (6, 5): (1,13,9,1) (1,22,8,1) (1,22,6,1) (2,3,6,1) (2,2,7,0) (0,0,0,1)
-     section (1, 0): (18, 0, 66, 0)          <- x=18≤25, y=66≤75
-     ``` — consumes all 60 u16 exactly with uniform 8-byte section records.
-  5. Files end with zero runs; `(0,0)` appears to terminate section lists.
-- **Honest negative:** no single global grammar was found. A pure
-  "(count,type) + count×8B" model parses ZONEA/M1 and the empty files exactly
-  but misaligns in the other 25 non-empty files (usually where 10-byte
-  `(1,4,…)`-style records recur mid-file); a "header + n2×10B + sections" model
-  gets through the leading run everywhere but breaks later. The true grammar
-  mixes record widths keyed by the type word (4 → 10 B, else 8 B is the best
-  current guess) — HYPOTHESIS, needs disassembly of the loader.
-- **What RE must confirm:** the exact record-width rule, the meaning of
-  n1/n2, record field semantics (enemy type? patrol group? count of spawned
-  units?), and whether sections nest.
+- **Grammar (LOADER-ANCHORED, VERIFIED 2026-08-21 — EXW RE
+  docs/RE-EXW-SIM.md §7j.18):** the file is **8 sequential sections in a
+  FIXED order**, each `u16 count + count × rec` where the record width is
+  fixed per section position — exactly the read schedule of the mission-load
+  dispatcher `FUN_00416458` after it stages ".NME" (@0x457a57) into the
+  0x4dca0c reader:
+
+  | # | width | feeds | critter state (7j.17 controller) | spawn multiplier | record fields (u16) |
+  |---|-------|-------|----------------------------------|------------------|---------------------|
+  | 1 | 10 B | critter bank 0x4cff98 | 2 (sine-walk shooter, 0x65) | `w1 + difficulty` | w0=1 marker, w1 = spawn base (≤8, typ. 4), w2 = mirror flag (negates the variant param), w3 = x tile, w4 = y tile |
+  | 2 | 10 B | 〃 | 1 (wander) | `difficulty + 3` | w3 = x tile, w4 = y tile (DAT tile search z=6→down for a 1..3 floor with empty above) |
+  | 3 | 8 B | 〃 | 5 (mixed-AI) | `difficulty` (min 1, d=1 → rand 1..2) | w1 = probe level (0..7), w2 = x, w3 = y |
+  | 4 | 8 B | 〃 | 4 (mixed-AI, seek steppers) | `(difficulty>>1) + 2` | w1 = probe level, w2 = x, w3 = y |
+  | 5 | 10 B | 〃 | 3 (chase, 0x67; stores home x/y) | 1 | w1 = timer `<<6`, w2 = probe level, w3 = x, w4 = y |
+  | 6 | 8 B | 〃 | 6 (mixed-AI, ballistic) | 1 | w1 = probe level, w2 = x, w3 = y |
+  | 7 | 6 B | 〃 | 7 (close combat, 0x69) | `difficulty` (min 1) | w1 = x, w2 = y; z fixed 0xDF |
+  | 8 | 8 B | POI/personnel bank 0x4dabdc | — (spawns in state 5 = ESCAPE) | **4 POIs per record** (jitter ±31 sub-tiles) | w1 = probe level, w2 = x, w3 = y |
+
+  The old "header (n1,n2)" was just the first two section counts (the 9 files
+  with n1=0 have an empty section 1); the old "(count,type)" pairs were a
+  section count followed by the first word of its first record.
+- **Exact-consumption check (VERIFIED):** the 8-section schedule consumes
+  every one of the 37 shipped files **exactly** — 36/37 byte-exact to EOF;
+  the one exception is ZONEA/MISSION1.NME which leaves a 16-B orphan tail
+  (words `1,0,18,0,66,0,1,0`) the game loader never reads (editor dregs;
+  the dispatcher stops after section 8 and calls only a reader-close +
+  an empty stub FUN_004180b9).
+- **Field stats (VERIFIED, all 37 files):** w0 is always the marker 1 in
+  every non-empty section; section-1 w1 ∈ 0..8; 8-B w1 (probe level) ∈ 0..7;
+  all x/y words ≤ 99 and in-bounds for their zone (matches §2 MAP dims).
+- **Runtime meaning (EXW RE §7j.18):** section 1 places each critter at
+  Q13 `(w3 + scatter(5) − 2)·0x2000` (jitter), z fixed 0xC000, variant
+  param `scatter(4)+3` negated when w2 ≠ 0; sections 3/5/6 at
+  `tile·0x2000 + 0xF00`, section 4 at `tile·0x20 + 0xF`, section 2 at
+  `tile·0x20 + 0x10` with z from a DAT tile search (z=6 downward, floor
+  value 1..3 with an empty cell above), z elsewhere from the floor probe
+  FUN_0041e411 seeded by w1; hp always
+  `base + (base·difficulty)/27` with base 0xAF/0xC8/0x96/0x5DC/0x9C4 by
+  section (175/200/150/1500/2500). Section 8 seeds each POI
+  {+0 active=1, +2 0x32, +4 5 (ESCAPE), +6 1, +8 heading RandA&7} —
+  personnel spawn already fleeing toward the 5 exit slots.
+- **What RE must confirm:** nothing structural. Optional: the exact
+  distribution of FUN_0041ec1c scatter returns (jitter ranges), and the
+  semantic of the marker word w0 (always 1; loader never reads it).
 
 ## 10. PAD — up to 999 pad (elevator/teleporter) records + 0xFF fill
 
@@ -411,6 +428,7 @@ What RE must confirm: everything beyond the layout.
 | TRT/MRK/PAD type enums (0–6 / 0–7 / 0–6) | HYPOTHESIS | similar small vocabularies, may be one family |
 | CGR sprites ↔ MAP/COL rendering | HYPOTHESIS | 128 sprites, 32×32, shared palette |
 | NME n2 = leading 10 B-record count | VERIFIED for all 9 n1=0 non-empty files | exact byte consumption |
+| NME = 8 fixed-order sections, widths 10/10/8/8/10/8/6/8 | VERIFIED (loader FUN_00416458, 36/37 byte-exact; ZONEA/M1 has a 16-B unread orphan tail) | §9 + EXW §7j.18 |
 | MAP dims bound all coordinate files (MRK, TRT, NME, PAD, POS) | VERIFIED | 100 % in-bounds across every check |
 
 Notable **negative** results (things that did NOT fit):
@@ -418,8 +436,9 @@ Notable **negative** results (things that did NOT fit):
   35 missions are 100×100 and ZONEG is 100×25.
 - MAP payload is **not** 16-byte-per-tile records in tile-major order (coherence
   test rejects it); it is 8 plane-major u16 layers.
-- NME has **no fixed record stride** — several global grammar attempts failed;
-  only the partial grammar above survives.
+- NME has **no global heuristic stride rule** — the pre-RE heuristic walkers
+  failed; the true grammar is 8 fixed-order sections with per-position widths
+  (now VERIFIED from the loader, see §9).
 - DAT is **not** u16 planes (u16 view shows doubled bytes); it is u8 planes.
 - PAD↔TXT coordinates do not correspond under any simple transform.
 
@@ -437,7 +456,7 @@ Notable **negative** results (things that did NOT fit):
 | CTG | 16384 (44 files) | sparse category table, parallel to LNK | layout VERIFIED; meaning HYPOTHESIS | class vocabulary |
 | LNG | 16384 (7 zone files) | third permutation table, same space | layout VERIFIED; meaning HYPOTHESIS | everything |
 | MRK | 192 = 12×16 B | spawn markers: (flag, x, y, z-level) — record i spawns robot i | layout VERIFIED; spawn VERIFIED (EXW 7c) | word-3=0 / flag consumers |
-| NME | 16–1492 B | enemy placements: header (n1,n2), 10 B `(1,4,f,x,y)` run, then (count,type)+8 B sections | partial VERIFIED / grammar HYPOTHESIS | full grammar + field semantics |
+| NME | 16–1492 B | critter/personnel placements: 8 fixed sections (10/10/8/8/10/8/6/8 B), §9 | VERIFIED (loader-anchored, EXW 7j.18) | scatter jitter ranges; w0 marker |
 | PAD | 5994 = N×6 B + 0xFF fill (N≤999) | pads: (x, y, z-level) — loader writes DAT[type][y][x]=0xFF | layout + write VERIFIED (EXW 7c) | interactive trigger path |
 | PAL | 770 = 2 + 256×3 (40 files, all identical) | 6-bit VGA palette | VERIFIED | leading 2 bytes |
 | POS | 32000 = 2000×16 B | object placements (x, y, kind 0–5, BLD-index); empty = all-FF | layout VERIFIED; index link LIKELY | index/kind semantics |
@@ -456,8 +475,8 @@ Notable **negative** results (things that did NOT fit):
    RLE schemes against the shared palette to get a ground-truth image.
 2. **BLD/BDG pair** — parse records from the verified name anchors; BDG is
    likely a fixed-stride parallel array once BLD record boundaries are known.
-3. **NME loader** — the only multi-format grammar still open; a disassembly of
-   the editor's NME reader would settle the 8-vs-10-byte record rule.
+3. **NME loader** — CLOSED 2026-08-21: the game loader FUN_00416458 is
+   decoded (§9, EXW §7j.18); no editor disassembly needed.
 4. **TOT writer** — find the code path that produces TOT from MAP (the pad
    "lowers section" mechanics in the TXT notes must be implemented there).
 5. **LNK/CTG/LNG consumers** — one routine likely walks all three; identifying
