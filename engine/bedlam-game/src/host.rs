@@ -17,6 +17,7 @@ use crate::config::GameConfig;
 use crate::fsm::{Scene, SceneAction, SceneFsm};
 use crate::loading::{LoadingFlow, LoadingPhase, TextRow};
 use crate::menu::{MenuAction, TitleMenu};
+use crate::mission::MissionScene;
 use crate::movie::MoviePlayer;
 use crate::music::{self, MusicPump};
 use crate::GameError;
@@ -64,6 +65,10 @@ pub struct GameHost {
     /// Score seed of the menu's last Start action (survives the menu
     /// drop on the Title exit; D42.8).
     menu_start_score: Option<i32>,
+    /// The staged mission (DESIGN-GAME sec 11): sim + viewport
+    /// composition, INERT until the FSM enters Mission and dropped on
+    /// exit (the flow never ends on its own).
+    mission: Option<MissionScene>,
     frame: Frame,
     palette: [Vga6; 256],
 }
@@ -97,6 +102,7 @@ impl GameHost {
             brief: None,
             menu: None,
             menu_start_score: None,
+            mission: None,
             frame: Frame::new(palette),
             palette,
         };
@@ -133,6 +139,17 @@ impl GameHost {
                 self.apply_menu_tick(tick);
                 self.fsm.tick(&InputFrame::default());
             } else {
+                // Mission input (DESIGN-GAME sec 11): while a mission
+                // is active it consumes the SAME frame — the Mission
+                // scene FSM ignores mouse actions, so no neutral-frame
+                // split is needed (unlike Title). Order inside the
+                // mission tick: pointer -> click seam -> phases, the
+                // MissionShell order [RE-EXW-SIM sec 1].
+                if self.fsm.scene() == Scene::Mission {
+                    if let Some(mission) = self.mission.as_mut() {
+                        mission.tick(input);
+                    }
+                }
                 self.fsm.tick(input);
             }
         }
@@ -141,6 +158,7 @@ impl GameHost {
         self.sync_brief();
         self.sync_loading();
         self.sync_menu();
+        self.sync_mission();
         self.sync_music();
         self.pump_movie(dt_subticks);
         self.pump_boot(dt_subticks);
@@ -379,6 +397,76 @@ impl GameHost {
         self.menu_start_score
     }
 
+    /// The mission slot the episode selects for the next Mission
+    /// entry [DESIGN-GAME sec 11; the same lowest-unset-bit arithmetic
+    /// `briefing_name_for_slot` uses]: (zone index, mission number).
+    /// The zone drives the file names, the edge family and the
+    /// robots-per-player count.
+    pub fn mission_slot(&self) -> (i32, i32) {
+        let episode = self.fsm.episode();
+        (
+            crate::mission::zone_for_stage(episode.stage()),
+            crate::mission::mission_number_for_mask(episode.mask()),
+        )
+    }
+
+    /// The mission asset names for the current episode slot, in fetch
+    /// order (see [`crate::mission::mission_asset_names`]).
+    pub fn mission_asset_names(&self) -> Vec<String> {
+        let (zone, mission) = self.mission_slot();
+        crate::mission::mission_asset_names(zone, mission)
+    }
+
+    /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes
+    /// the caller fetched, in [`GameHost::mission_asset_names`]
+    /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, MRK.
+    /// The zone comes from the episode slot (consistent with the
+    /// names the chain fetched); `staged_markers` is the host/test
+    /// seam the network override 0x46cbe0 fills in the original
+    /// (RE-EXW-SIM sec 7c.8) — a staged marker spawns one extra
+    /// robot at activation-free spawn time. The scene is INERT until
+    /// the FSM enters Mission and drops on exit; staging touches no
+    /// hashed state (the movie pattern, D31).
+    #[allow(clippy::too_many_arguments)]
+    pub fn load_mission(
+        &mut self,
+        tot: &[u8],
+        dat: &[u8],
+        pad: &[u8],
+        cgr: &[u8],
+        bin: &[u8],
+        lnk: &[u8],
+        sintable: &[u8],
+        dante: &[u8],
+        mrk: &[u8],
+        robots_override: Option<usize>,
+        staged_markers: &[(i32, i32, i32)],
+    ) -> Result<(), GameError> {
+        let (zone, _) = self.mission_slot();
+        let mission = MissionScene::stage(
+            tot,
+            dat,
+            pad,
+            cgr,
+            mrk,
+            bin,
+            lnk,
+            sintable,
+            dante,
+            zone,
+            robots_override,
+            staged_markers,
+        )?;
+        self.mission = Some(mission);
+        Ok(())
+    }
+
+    /// The staged mission, if any (gate/host introspection: camera,
+    /// cursor, render count, the sim slice).
+    pub fn mission(&self) -> Option<&MissionScene> {
+        self.mission.as_ref()
+    }
+
     /// Type one character into the active name entry (the explicit
     /// shell text path, D42.6). False when no name entry is active.
     pub fn menu_type_char(&mut self, c: u8) -> bool {
@@ -493,6 +581,23 @@ impl GameHost {
                 menu.mark_entered();
             } else if menu.entered() {
                 self.menu = None;
+            }
+        }
+    }
+
+    /// Mission lifecycle (DESIGN-GAME sec 11): entering Mission
+    /// activates the staged scene (fixing the camera at the spawn);
+    /// leaving DROPS it (the flow never ends on its own, like the
+    /// briefing backdrop). A mission staged but never entered stays
+    /// staged (the menu entered/drop pattern). Called once per pump
+    /// AFTER the tick loop, so the entry pump renders but does not
+    /// tick the sim.
+    fn sync_mission(&mut self) {
+        if let Some(mission) = self.mission.as_mut() {
+            if self.fsm.scene() == Scene::Mission {
+                mission.activate();
+            } else if mission.is_active() {
+                self.mission = None;
             }
         }
     }
@@ -853,11 +958,32 @@ impl GameHost {
     /// same way, and a full-screen 640x480 still centers at the origin,
     /// i.e. the 1:1 no-letterbox blit the loading gate pins.
     fn render_now(&mut self) -> Frame {
+        // Menu gate inputs (D41/D42), hoisted before the disjoint
+        // mission/menu plane borrows below.
+        let title_movies_playing = self.title_movie_playing();
+        // Mission plane (DESIGN-GAME sec 11): the active mission owns
+        // the screen — the 480x480 viewport window at (0,0) plus the
+        // black sidebar, under the host palette (GAMEPAL is the next
+        // unit). Highest precedence: scenes are exclusive and the
+        // mission drops when Mission is left.
+        let mission_frame = if self.fsm.scene() == Scene::Mission {
+            self.mission
+                .as_mut()
+                .and_then(|mission| mission.plane(&self.palette))
+                .map(|p| MovieFrame {
+                    width: p.w,
+                    height: p.h,
+                    pixels: p.pixels,
+                    palette: p.palette,
+                })
+        } else {
+            None
+        };
         // Menu plane (D41/D42): the staged menu owns the Title plane
         // whenever no Title movie is playing (the first pass and the
         // attract replay own it instead - the menu is inert behind
         // them and redraws when they end).
-        let menu_frame = if self.title_movie_playing() || self.fsm.scene() != Scene::Title {
+        let menu_frame = if title_movies_playing || self.fsm.scene() != Scene::Title {
             None
         } else {
             self.menu
@@ -902,6 +1028,7 @@ impl GameHost {
                         palette: p.palette,
                     })
             })
+            .or(mission_frame)
             .or(menu_frame)
             .or_else(|| {
                 self.movie
@@ -1884,6 +2011,82 @@ mod tests {
         };
         host.pump_frame(4, &press);
         host.pump_frame(4, &InputFrame::default());
+    }
+
+    #[test]
+    fn mission_lifecycle_stages_inert_activates_and_drops() {
+        // DESIGN-GAME sec 11: staging touches no hashed state; the
+        // mission is INERT until the FSM enters Mission (no tick, no
+        // plane), activates on entry (camera at the spawn), and drops
+        // when the scene is left.
+        let f = crate::mission::synth_mission_files();
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_mission(
+            &f[0],
+            &f[1],
+            &f[2],
+            &f[3],
+            &f[5],
+            &f[6],
+            &f[7],
+            &f[8],
+            &f[4],
+            None,
+            &[(3, 1, 1)],
+        )
+        .expect("synth mission stages");
+        assert!(host.mission().is_some());
+        // Pumps on Title: staged inert - the frame equals a NO-mission
+        // host at the same tick (the mission owns no plane outside
+        // Mission) and the sim never ticks.
+        let mut plain = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        walk_to_title(&mut host);
+        walk_to_title(&mut plain);
+        for _ in 0..3 {
+            let input = InputFrame::default();
+            host.pump_frame(4, &input);
+            plain.pump_frame(4, &input);
+        }
+        assert!(!host.mission().expect("staged").is_active());
+        assert_eq!(
+            host.frame().parity_hash(),
+            plain.frame().parity_hash(),
+            "a staged-but-inert mission changes no pixels"
+        );
+        assert_eq!(host.mission().expect("staged").sim().frame(), 0);
+        // Enter Mission: activation fixes the camera at robot 0 Q5.
+        host.apply(SceneAction::Advance); // Title -> Brief
+        host.apply(SceneAction::Advance); // -> Select
+        host.apply(SceneAction::Advance); // -> Mission
+        host.pump_frame(4, &InputFrame::default());
+        let mission = host.mission().expect("staged");
+        assert!(mission.is_active());
+        assert_eq!(mission.camera(), (47, 47));
+        // The entry pump renders but does not tick; the next pump
+        // does (one advance_frame per executed tick).
+        assert_eq!(mission.sim().frame(), 0);
+        assert_eq!(mission.render_count(), 1);
+        host.pump_frame(4, &InputFrame::default());
+        assert_eq!(host.mission().expect("staged").sim().frame(), 1);
+        // Leaving the scene drops the mission entirely.
+        host.apply(SceneAction::MissionComplete); // -> Debrief
+        host.pump_frame(4, &InputFrame::default());
+        assert!(host.mission().is_none());
+    }
+
+    #[test]
+    fn mission_slot_and_names_follow_the_episode() {
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        // Fresh game: stage 1 boot camp = zone A, no completions =
+        // MISSION1.
+        assert_eq!(host.mission_slot(), (0, 1));
+        assert_eq!(host.mission_asset_names()[0], "ZONEA/MISSION1.TOT");
+        assert_eq!(host.mission_asset_names().len(), 9);
+        walk_to_first_cutscene(&mut host); // completes zone 1
+        host.apply(SceneAction::Advance); // Cutscene -> Select
+                                          // Stage 2 now: zone B, still MISSION1 (mask reset).
+        assert_eq!(host.mission_slot(), (1, 1));
+        assert_eq!(host.mission_asset_names()[3], "ZONEB/MISSIONB.CGR");
     }
 
     #[test]

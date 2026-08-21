@@ -36,15 +36,19 @@ use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::SUBTICKS_PER_PUMP;
 
 /// fs-backed [`ByteSource`] over one install tree (the shipped
-/// BEDLAM directory): a name resolves `GAMEGFX/<name>` first, then
-/// `SOUND/SFX/<name>`, then `<root>/<name>` - the graphics corpus
-/// lives in GAMEGFX, the menu SFX pair in SOUND/SFX (the EXW
+/// BEDLAM directory): a bare name resolves `GAMEGFX/<name>` first,
+/// then `SOUND/SFX/<name>`, then `<root>/<name>` - the graphics
+/// corpus lives in GAMEGFX, the menu SFX pair in SOUND/SFX (the EXW
 /// "SOUND\SFX\MENU1.RAW" path, D42.7), and the LANGUAGE.* files sit
 /// at the install root (EXW reads them from its working directory;
 /// the tiered lookup keeps both the install root and the bare
-/// GAMEGFX dir usable as roots). Bare file names only - separators
-/// / parent hops are rejected, the host only ever emits corpus
-/// names and the source refuses to become a generic file reader.
+/// GAMEGFX dir usable as roots). A name WITH a '/' separator is the
+/// mission-file form (the EXW `EDITOR\ZONE{z}\MISSION{n}` tree,
+/// RE-EXW-SIM sec 7c.1, carried with the host separator): it
+/// resolves ONLY under `EDITOR/<name>` - never the other tiers.
+/// Backslashes and parent hops are rejected everywhere; the host
+/// only ever emits corpus names and the source refuses to become a
+/// generic file reader.
 #[derive(Debug)]
 pub struct GameGfxSource {
     root: PathBuf,
@@ -74,19 +78,24 @@ impl GameGfxSource {
 
 impl ByteSource for GameGfxSource {
     fn load(&mut self, name: &str) -> Result<Vec<u8>, GameError> {
-        if name.is_empty() || name.contains(SEP1) || name.contains(SEP2) || name.contains(PARENT) {
+        if name.is_empty() || name.contains(SEP2) || name.contains(PARENT) {
             return Err(GameError::AssetMissing {
                 name: name.to_string(),
             });
         }
-        let gfx_path = self.root.join("GAMEGFX").join(name);
-        let sfx_path = self.root.join("SOUND").join("SFX").join(name);
-        let path = if gfx_path.is_file() {
-            gfx_path
-        } else if sfx_path.is_file() {
-            sfx_path
+        let path = if name.contains(SEP1) {
+            // Mission-tree name: the EDITOR subtree ONLY.
+            self.root.join("EDITOR").join(name)
         } else {
-            self.root.join(name)
+            let gfx_path = self.root.join("GAMEGFX").join(name);
+            let sfx_path = self.root.join("SOUND").join("SFX").join(name);
+            if gfx_path.is_file() {
+                gfx_path
+            } else if sfx_path.is_file() {
+                sfx_path
+            } else {
+                self.root.join(name)
+            }
         };
         let bytes = std::fs::read(path).map_err(|_| GameError::AssetMissing {
             name: name.to_string(),

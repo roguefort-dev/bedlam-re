@@ -27,6 +27,7 @@ pub mod fsm;
 pub mod host;
 pub mod loading;
 pub mod menu;
+pub mod mission;
 pub mod movie;
 pub mod movies;
 pub mod music;
@@ -39,6 +40,9 @@ pub use fsm::{
 };
 pub use host::{ByteSink, ByteSource, GameHost};
 pub use loading::{LoadingPhase, TextRow};
+pub use mission::{
+    mission_asset_names, mission_number_for_mask, robots_per_player, zone_for_stage, MissionScene,
+};
 pub use movie::MoviePlayer;
 pub use movies::{
     boot_pair, briefing_name, briefing_name_for_slot, cutscene_name, gameover_name, gtlog_name,
@@ -80,6 +84,14 @@ pub enum GameError {
     /// base, bad ramp).
     #[error("title-menu asset {what}: {reason}")]
     BadMenuAsset {
+        what: &'static str,
+        reason: &'static str,
+    },
+    /// A mission asset decoded structurally but the scene cannot be
+    /// staged from it (malformed terrain/viewport bytes, short MRK or
+    /// SINTABLE) — DESIGN-GAME sec 11 staging.
+    #[error("mission asset {what}: {reason}")]
+    BadMissionAsset {
         what: &'static str,
         reason: &'static str,
     },
