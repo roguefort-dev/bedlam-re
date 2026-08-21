@@ -261,7 +261,9 @@ palette with the mission — fetch set 10 files.
   FUN_004085ce score STRIP on its own countdown (icon 0xA + nine
   score digits, icon 0xB + six money digits, campaign session
   state 0/4000 fresh, the case-4 pickup producer seam with two
-  `rand_a` draws from the shared sim stream); then the
+  `rand_a` draws from the shared sim stream; the case-1/2/3/7
+  pickup bodies are the D54 apply_pickup sim seam - the
+  tile-word producer stays host-seamed); then the
   FUN_00408403 row chrome + NAME/COUNT text (armed 0x47+0x4A,
   unarmed 0x49+0x4C at (0x1EB/0x25A, 0x59+14i), names via the
   pinned FUN_00420260 table, counts "%04i", SMLFONT color 0x24)
