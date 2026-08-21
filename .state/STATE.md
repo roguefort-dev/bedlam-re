@@ -1,3 +1,30 @@
+ - CLOSED 2026-08-21 (P4 7j.15 weapon-fire family THIRD HOP
+   unit COMPLETE, commit 52b1ebd + state c8ded44/b50f449,
+   worker efff097c claim 1, D63, docs-only): RE-EXW-SIM
+   amendment 7j.15 pins FUN_00419aff = the WEAPON/PROJECTILE
+   DAMAGE TABLE — a pure id→damage switch, NO table walk
+   (2/3/4→20/30/40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400,
+   0x29→250; projectiles 0x65→(d+1)·50, 0x66→(d+1)·300,
+   0x67/0x68→(d+1)·75 with d=2 flat overrides 200/1200/300; else
+   1). ERRATUM 7j.13: no field arg (EDX passes through; the
+   fire sites' push 1 only arms the score flag). DAT_0046cbf8 =
+   the DIFFICULTY dword 0..2 (cycled (d+1)%3 at NameEntryScreen,
+   save-persisted, 500·d money delta, zone-7 temporarily forces
+   2). Caller census 28 = FUN_00410823×16 + FUN_004190bc×6 +
+   FUN_00412010×4 + FUN_004197d4 + FUN_00418fca. The 0x4cccf8
+   PRODUCER = FUN_004170a6 = the ".TRT" mission-section loader
+   (sole caller FUN_00416458): 250-rec capacity, rec {+0=1,
+   +4 active, +8 scratch 0, +0xC hp=250+(250·mission)/27,
+   +0x10 x, +0x14 y, +0x18 z} at stager base 0x4cccfc (7j.14
+   resolver frame is +4); stamps tile 0x66 + word 1 into two
+   NEW 3D banks ([0x4edd58]/[0x4ede20], consumers open).
+   FORMATS-MISSION §14 anchored: TRT third u32 = z LEVEL;
+   "turrets?" retired. ENGINE: none (D63 — corpus verdict
+   unchanged). Pins untouched; manifest verified. PUSHED
+   27f5def..b50f449 — the 7j.13/7j.14 push debt is CLEARED
+   (secret service recovered after a machine restart). Queued:
+   the family FOURTH HOP (the .TRT consumer trio +
+   FUN_004190bc).
  - CLOSED 2026-08-21 (P4 7j.14 weapon-fire family SECOND HOP
    unit COMPLETE, commit 7b9ce05 + state, worker d37fb3a2
    claim 1, D62, docs-only): RE-EXW-SIM amendment 7j.14 pins the
