@@ -697,13 +697,18 @@ impl MissionSim {
     /// Stage the per-tile armor-pad bytes (the per-tile 0x1E record
     /// +0x18 mirror, 7g.3): linear tile order (`y*width + x`),
     /// shorter arrays read as zero-padded (the all-zero default).
+    /// NOTE [7j.10]: staged bytes are TRANSIENT — the epilogue fade
+    /// in [`MissionSim::advance_frame`] decrements every nonzero
+    /// byte once per frame, exactly like the original (the original
+    /// has no permanent pad producer; host staging is a test seam).
     pub fn set_armor_pads(&mut self, pads: &[u8]) {
         self.armor_pads = pads.to_vec();
     }
 
     /// The armor pad byte for a linear tile (record +0x18, 7g.3):
     /// zero when unstaged/out of range — the shipped ZONEA corpus
-    /// leaves every pad byte 0 until a death scorches (7j.9).
+    /// leaves every pad byte 0 until a death scorches (7j.9), and
+    /// whatever lands fades within `value` frames (7j.10).
     pub fn armor_pad_byte(&self, tile: usize) -> u8 {
         self.armor_pads.get(tile).copied().unwrap_or(0)
     }
@@ -716,8 +721,9 @@ impl MissionSim {
     /// value clamped `≥ 8 → 7`. The engine mirror is zero-padded:
     /// the default all-zero corpus stays zero until the first
     /// write grows the array. Public as the host seam for the
-    /// census'd-but-unwired producers (the FUN_00424051 re-roll
-    /// family, 7j.9 item 5).
+    /// census'd-but-unwired producers (the water-splash event
+    /// tick FUN_00424051, 7j.10 — its five same-tile re-rolls and
+    /// the death ring both fade via the advance_frame tick).
     pub fn scorch_write(&mut self, world_x: i32, world_y: i32, value: u8) {
         let tx = world_x >> 5;
         let ty = world_y >> 5;
@@ -997,6 +1003,18 @@ impl MissionSim {
     pub fn advance_frame(&mut self) {
         for phase in 0..PHASES_PER_FRAME {
             self.robots_phase(phase as i32);
+        }
+        // The mission-epilogue +0x18 fade [7j.10, verified
+        // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue
+        // chain right after the debris tick and decrements EVERY
+        // nonzero armor-pad/scorch byte on the map by 1 — no gate,
+        // every frame. The ring bytes a death writes during the
+        // phases therefore start fading the same frame (a value-4
+        // center arms its pad for exactly four phase-1 passes).
+        for b in &mut self.armor_pads {
+            if *b != 0 {
+                *b -= 1;
+            }
         }
         // The portrait-pass decay (7g.8): clamp 5, decrement, only
         // while alive && hp ≥ 1 && nonzero.
@@ -1959,22 +1977,27 @@ mod tests {
         assert_eq!(sim.robots()[0].armor, 0, "the bleed clamps at 0");
 
         // A staged pad byte under the robot (tile (2,3) on the 8x8
-        // map = linear 26) charges +20/frame instead.
+        // map = linear 26) charges +20/frame instead. The byte is
+        // TRANSIENT (7j.10): the epilogue fade decays it 1/frame,
+        // so stage the max value 7 to keep it armed across these
+        // two frames (7j.9 clamps writes at 7).
         let mut pads = vec![0u8; 64];
-        pads[3 * 8 + 2] = 1;
+        pads[3 * 8 + 2] = 7;
         sim.set_armor_pads(&pads);
         sim.advance_frame();
         assert_eq!(sim.robots()[0].armor, 20);
+        assert_eq!(sim.armor_pad_byte(3 * 8 + 2), 6, "the fade ran");
         // Clamp at 3000 (0xBB8).
         sim.robots_mut()[0].armor = 2995;
         sim.advance_frame();
         assert_eq!(sim.robots()[0].armor, 3000);
 
         // The +0x98 pool drains BEFORE armor charges (7g.4): pool 50
-        // needs three passes (50->30->10->0) before the first +20.
+        // needs three passes (50->30->10->0) before the first +20 —
+        // the value-7 pad outlives the four frames (7j.10 fade).
         let mut sim = damage_sim();
         let mut pads = vec![0u8; 64];
-        pads[3 * 8 + 2] = 1;
+        pads[3 * 8 + 2] = 7;
         sim.set_armor_pads(&pads);
         sim.robots_mut()[0].armor_pool = 50;
         sim.advance_frame();
@@ -2069,6 +2092,54 @@ mod tests {
             sim2.robots()[survivor].armor,
             20,
             "a survivor on a scorched tile charges +20 (the raw reader)"
+        );
+    }
+
+    #[test]
+    fn the_epilogue_fade_decays_every_nonzero_pad_byte_per_frame() {
+        // 7j.10: FUN_00424051's head (0x42405a..0x42409e) runs in
+        // the mission epilogue every frame, unconditionally: every
+        // nonzero +0x18 byte −1. The death ring is therefore
+        // TRANSIENT — a value-4 center arms its pad for exactly
+        // four phase-1 passes, then bleeds.
+        let mut sim = damage_sim();
+        let mut pads = vec![0u8; 64];
+        pads[0] = 1;
+        pads[1] = 7;
+        pads[63] = 3;
+        sim.set_armor_pads(&pads);
+        sim.advance_frame();
+        assert_eq!(
+            (
+                sim.armor_pad_byte(0),
+                sim.armor_pad_byte(1),
+                sim.armor_pad_byte(63)
+            ),
+            (0, 6, 2),
+            "every nonzero byte decays 1/frame; zeros stay 0"
+        );
+        // A value-1 pad arms exactly ONE phase-1 charge: frame 1
+        // charges +20, the fade clears the byte, frame 2 bleeds.
+        let mut sim = damage_sim();
+        let mut pads = vec![0u8; 64];
+        pads[3 * 8 + 2] = 1;
+        sim.set_armor_pads(&pads);
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 20, "the single frame charges");
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 10, "the faded pad bleeds -10");
+        // The death ring fades too: kill, then run value frames.
+        let mut sim = damage_sim();
+        let _ = sim.apply_damage(0, 9999, -1);
+        let peak = (0..64).map(|t| sim.armor_pad_byte(t)).max().unwrap();
+        assert!((1..=7).contains(&peak));
+        for _ in 0..i32::from(peak) {
+            sim.advance_frame();
+        }
+        assert_eq!(
+            (0..64).map(|t| sim.armor_pad_byte(t)).max().unwrap(),
+            0,
+            "the whole ring faded after `peak` frames"
         );
     }
 
