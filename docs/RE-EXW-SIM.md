@@ -1415,7 +1415,10 @@ census (`objdump | grep "call.*0x422287"`). All [verified] asm.
    ring 0x420d89..0x421291], kind 9 [0x42112c..0x421291], kind 11
    [0x420f26..0x420fd2 + tail], kind 20 [0x420a2e..0x421291].
    Kinds 1/13/14/15 (shared body 0x42129b), 2, 7, 8, 10, 16..19
-   stage records with NO ring. Jump table re-verified at 0x4205b8:
+   stage records with NO ring. [CORRECTED by §7j.11 item 3 —
+   kinds 1/13/14/15 DO ring via the k20 tail (jmp 0x4209e9);
+   kinds 2/8 write ONE center tile (values 3/4); only 7/10/
+   16..19 are ring-free.] Jump table re-verified at 0x4205b8:
    k1=0x42129b k2=0x4215dd k3=0x421b11 k4=0x42186f k5=0x421327
    k6=k12=0x420cbf k7=0x420af2 k8=0x421726 k9=0x420fde
    k10=0x420c13 k11=0x420e4a k13=k14=k15=k1 k16=0x4206b1
@@ -1554,6 +1557,163 @@ D57 ring becomes transient exactly like the original). The
 no corpus-path producer exists (weapons never fire in the
 gates); re-open when the weapon family decodes.
 
+## 7j.11 Amendment 2026-08-21 (worker 804e8c9d, the
+FUN_00420608 remaining-kind census + the 0x4203a5 question)
+
+Fresh objdump of 0x42034c..0x421dd0 + a program-wide caller
+census (`grep "call 0x420608"` = 47 sites, kind = the ecx
+immediate at each site, function ownership via
+exw-functions.txt). Answers the 7j.10 tail note and completes
+the 20-kind table. All [verified] asm unless tagged.
+
+1. **The 0x4203a5 FUN_0042394a call is NOT in the debris
+   stager** — it is inside **FUN_0042034c** (0x42034c..0x4204ea,
+   414 B, the function Ghidra lists between the string stubs and
+   the debris tick; its only caller is the MissionShell epilogue
+   **@0x448076**, i.e. right before the effect-row tick
+   FUN_0042205c@0x448080). FUN_0042034c is the **delayed-arrival
+   scheduler**: it walks up to 45 records (esi 0..0x654 step
+   0x24) at 0x4dcdb8, layout `+0x00 active · +0x04/+0x0C two
+   x/y coord pairs (0x4dcdbc/0x4dcdc0) · +0x10/+0x14/+0x18
+   spawn x/y/z (0x4dcdc8/0x4dcdcc/0x4dcdd0) · +0x1C countdown
+   (0x4dcdd4) · +0x20 target robot slot (0x4dcdd8, −1 when
+   fired/skip)`. Per record: active==0 → mark +0x20=−1, next;
+   countdown==0xa → SFX FUN_0043a48e(bank 0x4edfe0, 0, x<<5,
+   y<<5, push 2); decrement; still ≠0 → next; on reaching 0:
+   gate `word[0x465daa + 2*tile] != 0` (a per-tile word bank)
+   → clear BOTH gate words at the tile (0x465daa and 0x460dfa
+   banks) → scan z 0..7 for the FIRST level whose type-DB
+   z-word lies in the per-zone water range
+   `[0x454ae4 + 4*zone, +0xe)` → **FUN_0042394a(x, y, level,
+   0, 0)** = CLEAR that water z-structure (arg order re-pinned
+   from the 0x42394a body: eax=x, edx=y, ebx=z, ecx=z-word
+   value, stack=volume byte; ecx==0 branch clears word+seen) →
+   stage the robot `[0x4dcdd8]` at `(x<<13, y<<13, z<<5−1)` →
+   get_z_pos re-settle (FUN_0041e231, Q13>>8 args) → fill the
+   8 words robot+0x1A..+0x28 with the settled z word, clear the
+   robot+0x0C word → +0x20 = −1. Producers of the 45-record
+   array: the 0x425xxx family (0x425daf/0x426079/0x42688c
+   blocks; register-addressed countdown writes, not decoded —
+   [census-only]). The gate banks: 0x460dfa written by weapon
+   fire (0x41a84f) + the 0x4227xx platform family (0x7d2/0x7d3/
+   0x7d4 tile words), read by the armor pass (0x40fef4/0x410018)
+   + the splash tick (0x41b8xx); 0x465daa written/read by the
+   platform family + read at 0x41f0fd. The records ALSO have a
+   draw pass in the FUN_00403938 tail (0x4065f8..0x4066a3
+   reads +0/+0x1C/+0x04/+0x0C) [census-only]. **Verdict for the
+   queue note: NO debris kind edits terrain — the stager body
+   (0x420608..0x421dd0) contains ZERO references to the
+   0x4796xx type-DB and ZERO FUN_0042394a calls; the only
+   terrain writes are the FUN_00422287 ring calls.**
+2. **The 20-kind table** [verified per body; args eax=x Q5,
+   edx=y Q5, ebx=z (clamped 0x20..0xFF at the head), ecx=kind
+   1..20, [esp+0x1C/0x20/0x24] = stack args feeding +0x24
+   (delay) and +0x28 (param)]:
+
+   | kind | body | seq table | +0x20 phys | +0x10/+0x14 | terrain writes | arrival SFX |
+   |---|---|---|---|---|---|---|
+   | 1 (=13/14/15) | 0x42129b | 0x454424 | 6 | 0x40 | NINE ring (via k20 tail!) | FUN_00421e60 |
+   | 2 | 0x4215dd | 0x4544c2 | 0 | 0x20 | ONE center write, value 3 | FUN_00421dec |
+   | 3 | 0x421b11 | 0x4544e0 | 1 | 0x20 | NINE ring | none |
+   | 4 | 0x42186f | 0x4544ce | 2 | 0x20 | NINE ring | FUN_00421e60 |
+   | 5 | 0x421327 | 0x454424 | 0 | 0x40 | NINE ring | FUN_00421e60 |
+   | 6+12 | 0x420cbf | 0x454424 | 6 | 0x40 | NINE ring | FUN_00421e60 |
+   | 7 | 0x420af2 | 0x4544f0 | 0 | 0x40 | none | none |
+   | 8 | 0x421726 | 0x4544c2 | 2 | 0x20 | ONE center write, value 4 | FUN_00421dec |
+   | 9 | 0x420fde | 0x454424 | 3 | 0x40 | NINE ring | FUN_00421e60 |
+   | 10 | 0x420c13 | 0x4544fe | 0 | 0x40 | none | none |
+   | 11 | 0x420e4a | 0x454424 | 0 | 0x40 | NINE ring | gated (see 4) |
+   | 16 | 0x4206b1 | 0x454472 | 6 | 0x40 | none | FUN_00421e60 |
+   | 17 | 0x420764 | 0x45448c | 6 | 0x40 | none | FUN_00421e60 |
+   | 18 | 0x420812 | 0x454458 | 6 | 0x40 | none | FUN_00421e60 |
+   | 19 | 0x4208ba | 0x45443e | 6 | 0x40 | none | FUN_00421e60 |
+   | 20 | 0x420962 | 0x4544a6 | 6 | 0x40 | NINE ring | FUN_00421e60 |
+
+   Field precision (corrects 7j.5's loose numbering):
+   `+0x1C` stores the kind ARGUMENT verbatim (1..20 — the draw
+   pass layer choice reads it); `+0x20` is a per-kind PHYSICS
+   constant (0 = no physics; 1/2/3/6 = run FUN_0040de9c each
+   tick — likely a physics-class index into the dword table at
+   0x454510+ [census-only]); `+0x24` ← [esp+0x20] (start
+   delay); `+0x28` ← [esp+0x24] (param); `+0x10/+0x14` init
+   0x40 or 0x20; `+0x18` seq = 0; `+0x2C` = the seq-table ptr.
+3. **CORRECTION to 7j.9 item 4**: kinds 1/13/14/15 (shared
+   body 0x42129b) DO write the nine-write ring — the body ends
+   `jmp 0x4209e9`, landing INSIDE the kind-20 tail whose
+   straight-line flow performs the nine FUN_00422287 calls at
+   0x420a2e..0x421291 (slot/param writes then the ring). The
+   ring-producer census is therefore EIGHT kind-bodies / NINE
+   kind numbers (1 [+13/14/15], 3, 4, 5, 6+12, 9, 11, 20), plus
+   TWO single-write kinds (2 → value 3 center, 8 → value 4
+   center; both jump straight onto the shared call site
+   0x421291 with unmodified x/y), plus SIX no-ring kinds
+   (7/10/16..19). The engine's kind-5 death model (D57) is
+   unaffected — kinds 1/2/8 etc. have no engine producers yet.
+4. **FUN_00421e60 = the 3-way arrival-SFX pick** [verified]:
+   gated on dword 0x4ede58 != 0; picks RandA()%3 → plays
+   FUN_0043a48e(bank 0x4edf64/0x4edf68/0x4edf6c, 0, x, y,
+   push 2). **FUN_00421dec = the 4-way variant** [verified]:
+   RandA()&3 (jump table 0x421ddc) → banks 0x4edf98/0x4edf9c/
+   0x4edfa0/0x4edfa4, push 1; sole callers kinds 2+8.
+   **FUN_00402975 = a 16-bit LCG** over the 32-bit state
+   word@0x4ede48 (add tail constants 0x62E9/0x3619), returns
+   the new high word — kind 11 gates its SFX on `al & 1`
+   (call 0x420e82, i.e. a ~50% chance), and the selection
+   chaser uses `& 0x3f` jitter at 0x423f50 [verified shape].
+5. **The seq tables** [bytes verified, DGROUP dump]: eleven
+   distinct −1-terminated i16 walks spanning 0x454424..0x454510:
+   0x454424 {5..16} 13 entries (k1/k5/k6+12/k9/k11) ·
+   0x45443e {44..55} 12 (k19) · 0x454458 {56..67} 12 (k18) ·
+   0x454472 {68..79} 12 (k16) · 0x45448c {80..91} 12 (k17) ·
+   0x4544a6 {92..104} 13 (k20) · 0x4544c2 {0..4} 6 (k2/k8) ·
+   0x4544ce {29..36} 9 (k4) · 0x4544e0 {37..43} 7 (k3) ·
+   0x4544f0 {17..23} 7 (k7) · 0x4544fe {24..28} 5 (k10). The
+   BLOWUP sprite ids therefore partition cleanly: 0..4 =
+   kinds 2/8, 5..16 = the shared tumble family, 17..28 =
+   kinds 7/10/4, 29..43 = kinds 3, 44..104 = the long physics
+   kinds 16..20. The dword block at 0x454510+ ({0,1,0,0,0,1,
+   0x20,0x10,0,0x10,0x20, 0x1D..0x14 descending}) is a
+   DIFFERENT table [census-only — likely FUN_0040de9c physics
+   params indexed by the +0x20 class].
+6. **The complete 47-site caller census** [verified; kind from
+   the ecx immediate at each site]:
+   k1 → 0x417ec3 (FUN_00417e2f), 0x4182b9 (FUN_00418250),
+   0x41887d (FUN_00418835) · k2 → 0x412568 (FUN_004124a4),
+   0x41273a (FUN_004126dc) · k3 → 0x410c19 (FUN_00410823),
+   0x4125a9 (FUN_004124a4) · k4 → 0x4127a8/0x4127df
+   (FUN_004126dc) · k5 → 0x40e771 (FUN_0040e230 — the damage
+   death tail, 7g.6; the ONLY k5 site) · k6 → 0x4125e6
+   (FUN_004124a4), 0x413177 (FUN_00412f34), 0x418b60/
+   0x418bcb/0x418c36 (FUN_00418aa6 ×3), 0x423f6d
+   (FUN_00423e1c — the selection chaser!), 0x424536
+   (FUN_004244a1) · k7 → 0x418a20 (FUN_0041896c), 0x418af5
+   (FUN_00418aa6), 0x418d1c/0x418d94 (FUN_00418ca4),
+   0x418eac/0x418f3c (FUN_00418e26), 0x4227b9 (FUN_00422693 —
+   the platform/destructible family) · k8 → 0x412816
+   (FUN_004126dc) · k9 → 0x412625 (FUN_004124a4) · k10 →
+   0x40dcb7 (FUN_0040dc1b), 0x41a142 (FUN_0041a028),
+   0x41b185/0x41b26e (FUN_0041a894) · k11 → 0x4116dc
+   (FUN_00410823) · k12 → 0x40ff7e (FUN_0040fe93), 0x4100a8
+   (FUN_0040ff92), 0x412674 (FUN_004124a4) · k13 → 0x418919
+   (FUN_004188d0), 0x418a4f (FUN_0041896c) · k14 → 0x41ace7/
+   0x41b002/0x41b0dc (FUN_0041a894 ×3) · k15 → 0x41bd2b
+   (FUN_0041bc1c) · k16..19 → 0x41b554/0x41b42b/0x41b302/
+   0x41b67a (FUN_0041a894 ×4) · k20 → 0x412153 (FUN_00412010),
+   0x412773 (FUN_004126dc), 0x41aebf (FUN_0041a894).
+   **Corpus-path verdict**: every kind except k5 lives in the
+   weapon-fire/impact families (FUN_00410823 cluster +
+   FUN_00412f34 + the 0x417e2f..0x418f3c per-weapon handlers +
+   FUN_0041a894/FUN_0041bc1c), the platform/destructible family
+   (FUN_00422693), the selection chaser (FUN_00423e1c) and
+   FUN_004244a1 — all outside the current corpus path (weapons
+   never fire in the gates; the platform family is unstaged).
+   k5 via apply_damage is the only corpus-reachable producer
+   today, exactly what the engine models.
+
+Engine seam: NONE this unit (census-only, D59) — the kind
+table feeds the LATER debris-stager widening beyond kind 5
+(backlog). Pins untouched by construction (no code change).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -1575,6 +1735,10 @@ gates); re-open when the weapon family decodes.
 | robots per zone | <3|7→1, 3→2, else 3 | FUN_0040cca0 |
 | map size globals | DAT_004eddec (w) / DAT_004eddf0 (h) tiles | 0041e897 |
 | +0x18 fade | every frame, all w*h tiles, nonzero → −1 (FUN_00424051 head) | §7j.10 |
+| debris kinds | 20-kind jump table 0x4205b8; +0x1C=kind, +0x20=physics class 0/1/2/3/6, +0x24←[esp+0x20] delay, +0x28←[esp+0x24] param; ring kinds 1(+13/14/15)/3/4/5/6+12/9/11/20 (nine 3×3), 2/8 single center 3/4, 7/10/16..19 none | §7j.11 |
+| debris seq tables | 11 tables, i16 −1-terminated, DGROUP 0x454424..0x454510 (k5-family {5..16}; k2/k8 {0..4}; …{44..104} = k16..20) | §7j.11 |
+| debris arrival SFX | FUN_00421e60 3-way (banks 0x4edf64/68/6c, push 2) · FUN_00421dec 4-way (0x4edf98/9c/a0/a4, push 1); both gated [0x4ede58]≠0 | §7j.11 |
+| arrival scheduler | FUN_0042034c epilogue 0x448076: 45 rec @0x4dcdb8 stride 0x24 {active, xy×2, spawn xyz, countdown, robot slot}; gate word banks 0x465daa/0x460dfa (2·tile); fires FUN_0042394a(x,y,z,0,0) clearing the first water z-word | §7j.11 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
 | z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |

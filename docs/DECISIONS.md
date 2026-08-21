@@ -1952,3 +1952,28 @@ Nudge-Worker: 11384359-21d7-4dbe-8130-1d504d6c2511
    re-open when the weapon family decodes.
 
 Nudge-Worker: 89d34b53-1d5c-4d36-ab77-7cf704547435
+
+## D59 - 2026-08-21: the FUN_00420608 kind census is docs-only - no debris kind edits terrain beyond the rings; kinds 1/13/14/15 DO ring (7j.9 corrected); the 0x4203a5 z-writer call belongs to the sibling arrival scheduler
+
+1. RE (7j.11): the queue's 0x4203a5 question is answered
+   NEGATIVE for debris - the FUN_0042394a call sits in
+   FUN_0042034c (the delayed-arrival scheduler, epilogue
+   0x448076), NOT in a kind body; the stager contains zero
+   type-DB references and zero z-writer calls. The complete
+   20-kind table is now pinned (seq tables, physics classes,
+   init sizes, per-kind ring behavior, the two arrival-SFX
+   helpers + the k11 LCG gate) plus the full 47-site caller
+   census: every kind except 5 (the death tail) belongs to the
+   weapon-fire/impact families, the platform/destructible
+   family, the selection chaser, or FUN_004244a1 - all off the
+   current corpus path.
+2. ENGINE: no change this unit - the census feeds the LATER
+   debris-stager widening beyond kind 5 (backlog). The landed
+   kind-5 death model (D53/D57) is unaffected by the 7j.9
+   ring-census correction because kinds 1/2/8 etc. have no
+   engine producers yet; when the widening lands it must model
+   the k1/k20 shared-tail ring, the k2/k8 single-center writes
+   (values 3/4), and the +0x20 physics classes (0/1/2/3/6 ->
+   FUN_0040de9c) per the 7j.11 table.
+
+Nudge-Worker: 804e8c9d-76fc-4936-a020-a83282838d7e
