@@ -1430,3 +1430,58 @@ on unstaged paths. All workspace tests green, fmt + clippy -D
 warnings clean, MANIFEST verified after the corpus reads.
 
 Nudge-Worker: 1776dc60-7f7e-4546-b875-fd9210b9836d
+
+## D47 - 2026-08-21: modern device output rates at the audio edge (P4)
+
+Context: NEXT item 1 - D40 opened the cpal output stream at the
+mixer-native 11025 Hz whenever the device allowed it (period-correct
+but the host stack's own resampling then owns the quality, out of
+our control). This moves the rate/format choice to a deliberate
+preference order at the DEVICE BOUNDARY only.
+
+1. RATE POLICY: prefer 48000 Hz, then 44100 Hz, then the mixer-native
+   11025 Hz (resampling still not owed at native), then the device
+   default config. The preference is evaluated over the device's
+   supported-config RANGES (a range containing the rate is pinned via
+   try_with_sample_rate, so a wide 44100-96000 range opens at 48000,
+   not its minimum). RATE DOMINATES the within-rate ranking: 48000
+   mono beats 44100 stereo.
+2. WITHIN A RATE: channels first (stereo, mono, other - D40 order
+   kept), then sample format S16 before F32 before anything else
+   (S16 is a pure widening of the ring's i16; F32 is the float
+   default of modern hosts; the winning range's REAL format is still
+   what gets built - the preference only ranks ranges). Exact ties
+   keep the first-listed range (stable device enumeration).
+3. NEGOTIATION SEAM: cpal 0.18's SupportedStreamConfigRange is not
+   constructible outside the crate, so the choice is a PURE function
+   choose_output_config(&[OutputConfigSpec]) -> Option<(index, rate)>
+   over a neutral spec struct; open_default maps the real ranges into
+   specs and maps the winner back. The fallback matrix (48000/44100/
+   native/wide-range/none/empty) is unit-pinned without a device.
+4. RESAMPLER: the D40 Q16 nearest-neighbor frame stepper is extended
+   with LINEAR INTERPOLATION - output n reads input position
+   n*step/65536 and blends the bracketing frames, round to nearest,
+   ties toward +inf, i64 internally (|delta| up to 65535 times frac
+   up to 0xFFFF overflows i32). A LONE buffered frame edge-HOLDS (the
+   blend never reaches ahead into underrun); an empty ring stays
+   EXACT [0,0] silence; at the native rate the phase residue is
+   always 0, so the passthrough stays EXACT and un-interpolated (the
+   D40 native passthrough pin is unchanged). The mixer bus and the
+   parity stream remain 11025 Hz stereo byte-faithful - nothing
+   upstream of the ring can observe the device rate.
+5. GATES: 428 workspace tests / 0 failed (28 shell lib incl. the
+   new negotiation matrix, 44.1k/48k interpolated-ramp pins with
+   hand-computed literals, downsample blend pin, sample-format
+   mapping pins i16/f32/u8 silence + both full scales, u8 128/255
+   end-to-end through the D31 bus into the ring); fmt + clippy -D
+   warnings clean; headless smoke two runs byte-identical AND
+   byte-identical to the pre-change binary (scene 696adb1cd110e062,
+   frame parity cce30c983b97b16d, audio 110400/158092 unchanged);
+   parity harness IDENTICAL on all four anchors (chain
+   0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame
+   0x87263f149564ad25, audio 0xc862e45d2e95ad29); MANIFEST verified
+   before and after the corpus reads; live-device probe (opt-in
+   --ignored) now opens 48000 Hz 2ch i16 on this machine's default
+   device (was 11025 Hz) and drains it cleanly.
+
+Nudge-Worker: 2cd16045-bf39-46b3-9175-f71326aca6a2

@@ -159,6 +159,11 @@ no new dependencies; `#![forbid(unsafe_code)]`.
 
 - Q1: device backend (cpal vs others) + hardware rate conversion + latency
   budget -> P4 dependency spike (PLAN sec 6 P4 item 1), same slot as wgpu.
+  ANSWERED in two steps: D40 chose cpal 0.18.2 + the ring/stepper feed;
+  D47 set the device-edge policy - prefer 48000 then 44100 Hz device rates
+  (S16 then F32 formats), resample 11025 -> target in the callback with a
+  linear-interpolated Q16 stepper; the mix bus itself stays 11025 Hz u8
+  byte-faithful (sec 5 unchanged).
 - Q2: W1 > 1 multi-channel .MRS layout untested (all shipped files W1 = 1)
   -> RE-EXW-MUSIC open item; affects only the bedlam-game pump, not this
   crate.

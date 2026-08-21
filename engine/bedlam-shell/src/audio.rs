@@ -19,11 +19,19 @@
 //! turn the callback into an error storm).
 //!
 //! Device-feed arithmetic (all integer, all unit-pinned):
-//! - The stream is opened at the mixer-native 11025 Hz whenever any
-//!   supported config range contains it (resampling is NOT owed at
-//!   the native rate); otherwise the default config runs through a
-//!   Q16 nearest-neighbor frame stepper (the classic sample-hold:
-//!   output n reads input floor(n * step / 65536)).
+//! - Rate policy (D47): the stream is opened at the best MODERN
+//!   device rate - 48000 Hz first, then 44100 Hz - falling back to
+//!   the mixer-native 11025 Hz (resampling is NOT owed at the native
+//!   rate) only when no modern rate is offered, and to the device
+//!   default config when not even that. The mixer bus and the
+//!   parity stream stay 11025 Hz byte-faithful; conversion is a
+//!   DEVICE-BOUNDARY concern only, never visible upstream.
+//! - Rate conversion: the Q16 frame stepper (output position
+//!   n * step / 65536) with LINEAR INTERPOLATION between the
+//!   bracketing input frames - round to nearest, ties toward +inf,
+//!   i64 internally (a full-scale delta times frac overflows i32).
+//!   At the native rate the phase residue is always 0, so the
+//!   passthrough stays EXACT and un-interpolated.
 //! - Underrun is EXACT silence ([0, 0] frames), matching the mixer
 //!   bus semantics; a full ring drops the OLDEST frames (lateness
 //!   is skipped, never accumulated).
@@ -78,6 +86,102 @@ fn channel_sample(channels: usize, c: usize, l: i16, r: i16) -> i16 {
     } else {
         l
     }
+}
+
+/// The sample formats the negotiation cares about: prefer the
+/// device-native S16 (a pure widening of the ring's i16), then F32
+/// (the cpal/dasp float default of most modern hosts), then accept
+/// whatever else the winning range offers rather than lose the rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SampleFormatKind {
+    I16,
+    F32,
+    Other,
+}
+
+impl SampleFormatKind {
+    fn of(format: cpal::SampleFormat) -> SampleFormatKind {
+        match format {
+            cpal::SampleFormat::I16 => SampleFormatKind::I16,
+            cpal::SampleFormat::F32 => SampleFormatKind::F32,
+            _ => SampleFormatKind::Other,
+        }
+    }
+
+    /// Preference rank within one rate: S16, then F32, then any.
+    fn pref(self) -> u8 {
+        match self {
+            SampleFormatKind::I16 => 0,
+            SampleFormatKind::F32 => 1,
+            SampleFormatKind::Other => 2,
+        }
+    }
+}
+
+/// A neutralized view of one cpal supported-config range. cpal's
+/// `SupportedStreamConfigRange` is not constructible outside the
+/// crate, so the negotiation is a PURE function over these - the
+/// unit-test "mocked device configs" (D47 task wording).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OutputConfigSpec {
+    pub min_rate: u32,
+    pub max_rate: u32,
+    pub channels: u16,
+    pub format: SampleFormatKind,
+}
+
+impl OutputConfigSpec {
+    fn of_range(range: &cpal::SupportedStreamConfigRange) -> OutputConfigSpec {
+        OutputConfigSpec {
+            min_rate: range.min_sample_rate(),
+            max_rate: range.max_sample_rate(),
+            channels: range.channels(),
+            format: SampleFormatKind::of(range.sample_format()),
+        }
+    }
+
+    fn contains_rate(&self, rate: u32) -> bool {
+        (self.min_rate..=self.max_rate).contains(&rate)
+    }
+}
+
+/// The modern-rate ladder (D47): 48000 Hz first, then 44100 Hz, then
+/// the mixer-native 11025 Hz (exact, no resampling owed). Devices
+/// offering none of these fall back to their default config.
+pub(crate) const PREFERRED_RATES: [u32; 3] = [48_000, 44_100, SAMPLE_RATE];
+
+/// Pick the output config: for each rate in [`PREFERRED_RATES`]
+/// (in order), the best range CONTAINING that rate wins - ranked by
+/// (channel count, sample format), stereo before mono, S16 before
+/// F32 before the rest, first-listed on exact ties (stable, matching
+/// the device's own enumeration order). RATE DOMINATES the ranking:
+/// 48000 mono beats 44100 stereo. Returns `(index into specs, the
+/// concrete rate)` for the caller to pin via `try_with_sample_rate`;
+/// `None` = nothing preferred offered, use the device default.
+pub(crate) fn choose_output_config(specs: &[OutputConfigSpec]) -> Option<(usize, u32)> {
+    for &rate in PREFERRED_RATES.iter() {
+        let mut best: Option<usize> = None;
+        for (i, spec) in specs.iter().enumerate() {
+            if !spec.contains_rate(rate) {
+                continue;
+            }
+            let better = match best {
+                None => true,
+                Some(b) => {
+                    let cur = &specs[b];
+                    (channel_pref(spec.channels), spec.format.pref())
+                        < (channel_pref(cur.channels), cur.format.pref())
+                }
+            };
+            if better {
+                best = Some(i);
+            }
+        }
+        if let Some(i) = best {
+            return Some((i, rate));
+        }
+    }
+    None
 }
 
 /// Bounded FIFO ring of interleaved-stereo i16 frames. Pushes onto
@@ -141,15 +245,28 @@ impl SampleRing {
     }
 }
 
-/// Q16 nearest-neighbor frame stepper: output n reads input frame
-/// floor(n * step / 65536), step = round(src * 65536 / dst). At the
-/// native rate (step 0x10000) this is an exact 1:1 pass-through
-/// with zero phase residue; at 4x (44100) each frame repeats
-/// exactly 4 times; anything else deterministically sample-holds.
+/// Q16 frame stepper with LINEAR INTERPOLATION (D47): output n
+/// reads input position n * step / 65536, step = round(src * 65536 /
+/// dst), blending the bracketing input frames base + ((target -
+/// base) * frac rounded) - round to nearest, ties toward +inf. At
+/// the native rate (step 0x10000) the phase residue is always 0, so
+/// each output IS its input frame exactly (a true 1:1 pass-through);
+/// anything else walks the input at the converted rate.
 #[derive(Debug)]
 pub(crate) struct FrameStepper {
     step_q16: u32,
     phase_q16: u64,
+}
+
+/// Blend two i16 samples at Q16 fractional position. The result is
+/// convex (it can reach, never pass, the target when frac rounds up
+/// from 0xFFFF), so the clamp is purely defensive; the product is
+/// computed in i64 because a full-scale delta (|t-b| up to 65535)
+/// times frac (up to 0xFFFF) overflows i32.
+fn blend(base: i16, target: i16, frac_q16: u32) -> i16 {
+    let delta = i64::from(i32::from(target) - i32::from(base));
+    let v = i32::from(base) + (((delta * i64::from(frac_q16)) + 0x8000) >> 16) as i32;
+    v.clamp(i16::MIN as i32, i16::MAX as i32) as i16
 }
 
 impl FrameStepper {
@@ -162,13 +279,24 @@ impl FrameStepper {
         }
     }
 
-    /// Produce one output frame from the ring head, then consume the
-    /// input frames the output has fully passed. An empty ring
-    /// yields EXACT silence and still advances the phase (a skipped
-    /// stretch stays skipped once the data returns - streaming
-    /// semantics, deterministic).
+    /// Produce one output frame at the current input position, then
+    /// consume the input frames the output cursor has fully passed.
+    /// A bracketing pair interpolates; a LONE frame (its neighbor
+    /// not yet buffered) is held for every output that lands on it
+    /// (edge-hold - never reach ahead into underrun); an EMPTY ring
+    /// yields EXACT silence. Every case still advances the phase (a
+    /// skipped stretch stays skipped once the data returns -
+    /// streaming semantics, deterministic).
     fn next_frame(&mut self, ring: &mut SampleRing) -> [i16; 2] {
-        let frame = ring.peek_frame(0).unwrap_or([0, 0]);
+        let frac = self.phase_q16 as u32;
+        let frame = match (ring.peek_frame(0), ring.peek_frame(1)) {
+            (Some(base), Some(target)) => [
+                blend(base[0], target[0], frac),
+                blend(base[1], target[1], frac),
+            ],
+            (Some(base), None) => base, // edge-hold
+            (None, _) => [0, 0],        // underrun
+        };
         self.phase_q16 += u64::from(self.step_q16);
         let pops = (self.phase_q16 >> 16) as usize;
         self.phase_q16 &= 0xFFFF;
@@ -260,31 +388,25 @@ pub struct AudioDevice {
 }
 
 impl AudioDevice {
-    /// Open the default output device, preferring a config at the
-    /// mixer-native 11025 Hz (stereo, then mono, then any channel
-    /// count whose supported range contains the rate). With no such
-    /// range the device default runs through the frame stepper.
-    /// `None` means no usable audio (the shell continues silent).
+    /// Open the default output device at the best MODERN rate
+    /// (D47): 48000 Hz, then 44100 Hz, then the mixer-native
+    /// 11025 Hz - each pinned exactly inside a supported range
+    /// (`try_with_sample_rate`), ranked within a rate by channels
+    /// (stereo, mono, other) then format (S16, F32, other). No
+    /// preferred rate offered falls back to the device default
+    /// config; either non-native rate runs through the interpolated
+    /// frame stepper. `None` means no usable audio (the shell
+    /// continues silent).
     pub fn open_default() -> Option<AudioDevice> {
         let host = cpal::default_host();
         let device = host.default_output_device()?;
         let mut chosen: Option<cpal::SupportedStreamConfig> = None;
-        if let Ok(ranges) = device.supported_output_configs() {
-            let mut best: Option<cpal::SupportedStreamConfigRange> = None;
-            for range in ranges {
-                if !range.contains_rate(SAMPLE_RATE) {
-                    continue;
-                }
-                let better = match &best {
-                    None => true,
-                    Some(b) => channel_pref(range.channels()) < channel_pref(b.channels()),
-                };
-                if better {
-                    best = Some(range);
-                }
-            }
-            if let Some(range) = best {
-                chosen = range.try_with_sample_rate(SAMPLE_RATE);
+        if let Ok(iter) = device.supported_output_configs() {
+            let ranges: Vec<cpal::SupportedStreamConfigRange> = iter.collect();
+            let specs: Vec<OutputConfigSpec> =
+                ranges.iter().map(OutputConfigSpec::of_range).collect();
+            if let Some((i, rate)) = choose_output_config(&specs) {
+                chosen = ranges[i].try_with_sample_rate(rate);
             }
         }
         let config = chosen.or_else(|| device.default_output_config().ok())?;
@@ -472,50 +594,83 @@ mod tests {
     }
 
     #[test]
-    fn stepper_4x_repeats_each_frame_exactly_four_times() {
+    fn stepper_4x_interpolates_exact_quarter_steps_at_44100() {
+        // step 0x4000: the phase walks 0, 0x4000, 0x8000, 0xC000 -
+        // a [0, 1000, 2000] ramp audibles as exact quarter steps
+        // (delta 1000: (1000*frac + 0x8000) >> 16 = 0/250/500/750).
         let mut ring = SampleRing::new(8);
-        ring.push_frames(&flat(&[frame(1), frame(2)]));
+        let src = flat(&[[0, 0], [1000, 1000], [2000, 2000]]);
+        ring.push_frames(&src);
         let mut step = FrameStepper::new(11025, 44100);
-        for expected in [frame(1), frame(1), frame(1), frame(1)] {
-            assert_eq!(step.next_frame(&mut ring), expected);
+        for want in [0, 250, 500, 750, 1000, 1250, 1500, 1750] {
+            assert_eq!(step.next_frame(&mut ring), [want, want]);
         }
-        for expected in [frame(2), frame(2), frame(2), frame(2)] {
-            assert_eq!(step.next_frame(&mut ring), expected);
+        // The last input frame has no buffered neighbor: edge-hold.
+        // 3 input frames carry exactly 12 outputs at exact 4x; the
+        // final frame owns outputs 8..=11, then the ring is empty.
+        for _ in 0..4 {
+            assert_eq!(step.next_frame(&mut ring), [2000, 2000]);
         }
-        assert_eq!(ring.len(), 0, "both input frames consumed");
+        assert_eq!(
+            step.next_frame(&mut ring),
+            [0, 0],
+            "13th output is underrun silence"
+        );
+        assert_eq!(ring.len(), 0, "all three input frames consumed");
     }
 
     #[test]
-    fn stepper_48k_pins_the_sample_hold_positions() {
-        // Output n reads input floor(n * 15053 / 65536): frames 0 and
-        // 1 each hold 5 outputs, then 4s. 10 input frames carry
-        // exactly 44 outputs (n = 0..=43); output 44 hits underrun.
+    fn stepper_48k_pins_the_interpolated_positions() {
+        // step 15053: output n reads input i = (n * 15053) >> 16 at
+        // frac = (n * 15053) & 0xFFFF. A 4096-per-frame ramp pins the
+        // blend: out = i*4096 + ((4096*frac + 0x8000) >> 16).
         let mut ring = SampleRing::new(32);
-        let input: Vec<[i16; 2]> = (0..10).map(frame).collect();
+        let input: Vec<[i16; 2]> = (0..8).map(|i| [4096 * i, 4096 * i]).collect();
         ring.push_frames(&flat(&input));
         let mut step = FrameStepper::new(11025, 48000);
-        let mut audibled = 0;
-        for n in 0..44usize {
-            let want = (n * 15053) / 65536;
-            assert_eq!(step.next_frame(&mut ring), input[want], "output {n}");
-            audibled += 1;
+        // Hand-computed literals for the first six outputs.
+        let pinned = [0i16, 941, 1882, 2822, 3763, 4704];
+        for (n, want) in pinned.iter().enumerate() {
+            assert_eq!(step.next_frame(&mut ring), [*want, *want], "output {n}");
         }
-        assert_eq!(audibled, 44);
-        assert_eq!(step.next_frame(&mut ring), [0, 0], "44th+ is silence");
+        // Then the closed form through the last bracketed position
+        // (8 input frames = 34.8 outputs; the tail holds frame 7).
+        for n in pinned.len()..35usize {
+            let pos = n * 15053;
+            let i = pos >> 16;
+            let frac = pos & 0xFFFF;
+            let want = if i >= input.len() - 1 {
+                4096 * (input.len() as i16 - 1) // edge-hold on the last frame
+            } else {
+                4096 * i as i16 + (((4096 * frac as i64) + 0x8000) >> 16) as i16
+            };
+            assert_eq!(step.next_frame(&mut ring), [want, want], "output {n}");
+        }
+        assert_eq!(step.next_frame(&mut ring), [0, 0], "35th+ is silence");
         assert_eq!(ring.len(), 0);
     }
 
     #[test]
-    fn stepper_downsample_skips_frames_deterministically() {
-        // step 90317 > 0x10000: some inputs are never emitted.
-        // 80 outputs consume floor(80 * 90317 / 65536) = 110 frames.
+    fn stepper_downsample_interpolates_and_skips_deterministically() {
+        // step 90317 > 0x10000: some inputs are never emitted as a
+        // base position, but every output still blends toward the
+        // next frame. 80 outputs consume floor(80 * 90317 / 65536) =
+        // 110 frames.
         let mut ring = SampleRing::new(256);
         let input: Vec<[i16; 2]> = (0..200).map(frame).collect();
         ring.push_frames(&flat(&input));
         let mut step = FrameStepper::new(11025, 8000);
         for n in 0..80usize {
-            let want = (n * 90317) / 65536;
-            assert_eq!(step.next_frame(&mut ring), input[want], "output {n}");
+            let pos = n * 90317;
+            let i = pos >> 16;
+            let frac = pos & 0xFFFF;
+            let base = frame(i);
+            let target = frame(i + 1);
+            let want = [
+                blend(base[0], target[0], frac as u32),
+                blend(base[1], target[1], frac as u32),
+            ];
+            assert_eq!(step.next_frame(&mut ring), want, "output {n}");
         }
         assert_eq!(ring.peek_frame(0), Some(frame(110)), "consumed exactly 110");
     }
@@ -543,6 +698,174 @@ mod tests {
         // ring), so late data plays immediately at the read cursor:
         ring.push_frames(&flat(&[frame(42)]));
         assert_eq!(step.next_frame(&mut ring), frame(42));
+    }
+
+    #[test]
+    fn negotiation_prefers_48000_then_44100_over_native_11025() {
+        // Rate dominates: 48000 beats 44100 even at worse channel
+        // counts and formats (the D47 preference order).
+        let specs = [
+            OutputConfigSpec {
+                min_rate: 44_100,
+                max_rate: 44_100,
+                channels: 2,
+                format: SampleFormatKind::I16,
+            },
+            OutputConfigSpec {
+                min_rate: 48_000,
+                max_rate: 48_000,
+                channels: 1,
+                format: SampleFormatKind::Other,
+            },
+        ];
+        assert_eq!(choose_output_config(&specs), Some((1, 48_000)));
+        // THE D47 behavior change: a modern rate beats a range that
+        // contains the mixer-native 11025 (D40 preferred 11025).
+        let specs = [
+            OutputConfigSpec {
+                min_rate: 11_025,
+                max_rate: 11_025,
+                channels: 2,
+                format: SampleFormatKind::I16,
+            },
+            OutputConfigSpec {
+                min_rate: 44_100,
+                max_rate: 96_000,
+                channels: 2,
+                format: SampleFormatKind::F32,
+            },
+        ];
+        // 48000 is inside range 1's span too - the WIDE range is
+        // pinned at the modern rate, not left at its minimum.
+        assert_eq!(choose_output_config(&specs), Some((1, 48_000)));
+        // No 48000 anywhere: 44100 wins.
+        let specs = [
+            OutputConfigSpec {
+                min_rate: 11_025,
+                max_rate: 11_025,
+                channels: 2,
+                format: SampleFormatKind::I16,
+            },
+            OutputConfigSpec {
+                min_rate: 44_100,
+                max_rate: 44_100,
+                channels: 1,
+                format: SampleFormatKind::Other,
+            },
+        ];
+        assert_eq!(choose_output_config(&specs), Some((1, 44_100)));
+    }
+
+    #[test]
+    fn negotiation_ranks_channels_then_formats_within_a_rate() {
+        let spec = |channels: u16, format: SampleFormatKind| OutputConfigSpec {
+            min_rate: 48_000,
+            max_rate: 48_000,
+            channels,
+            format,
+        };
+        // Stereo beats mono even at a worse format (channel rank
+        // first - the mix is interleaved stereo).
+        let specs = [
+            spec(1, SampleFormatKind::I16),
+            spec(2, SampleFormatKind::F32),
+        ];
+        assert_eq!(choose_output_config(&specs), Some((1, 48_000)));
+        // S16 beats F32 at the same rate + channels.
+        let specs = [
+            spec(2, SampleFormatKind::F32),
+            spec(2, SampleFormatKind::I16),
+            spec(2, SampleFormatKind::Other),
+        ];
+        assert_eq!(choose_output_config(&specs), Some((1, 48_000)));
+        // F32 beats anything exotic when S16 is not offered.
+        let specs = [
+            spec(2, SampleFormatKind::Other),
+            spec(2, SampleFormatKind::F32),
+        ];
+        assert_eq!(choose_output_config(&specs), Some((1, 48_000)));
+        // Exact tie: first-listed (stable device enumeration order).
+        let specs = [
+            spec(2, SampleFormatKind::I16),
+            spec(2, SampleFormatKind::I16),
+        ];
+        assert_eq!(choose_output_config(&specs), Some((0, 48_000)));
+    }
+
+    #[test]
+    fn negotiation_falls_back_to_native_then_none() {
+        let native = OutputConfigSpec {
+            min_rate: 8_000,
+            max_rate: 11_025,
+            channels: 2,
+            format: SampleFormatKind::Other,
+        };
+        // No modern rate offered, but a range CONTAINS 11025: pin the
+        // mixer-native rate (resampling is not owed at native).
+        assert_eq!(
+            choose_output_config(std::slice::from_ref(&native)),
+            Some((0, 11_025))
+        );
+        // Nothing preferred at all -> None -> the caller uses the
+        // device default config through the frame stepper.
+        let odd = OutputConfigSpec {
+            min_rate: 22_050,
+            max_rate: 22_050,
+            channels: 2,
+            format: SampleFormatKind::F32,
+        };
+        assert_eq!(choose_output_config(&[odd]), None);
+        assert_eq!(choose_output_config(&[]), None);
+    }
+
+    #[test]
+    fn device_edge_sample_format_mapping_is_pinned() {
+        // The callback converts the ring's i16 through cpal's dasp
+        // FromSample: S16 is the identity, F32 is x / 32768, U8 is
+        // (x + 32768) >> 8. Silence and both full-scale ends:
+        use cpal::Sample;
+        assert_eq!(i16::from_sample::<i16>(0), 0);
+        assert_eq!(f32::from_sample::<i16>(0), 0.0);
+        assert_eq!(u8::from_sample::<i16>(0), 128, "u8 silence");
+        assert_eq!(
+            i16::from_sample::<i16>(32767),
+            32767,
+            "s16 positive full scale"
+        );
+        assert_eq!(f32::from_sample::<i16>(32767), 32767.0 / 32768.0);
+        assert_eq!(u8::from_sample::<i16>(32767), 255, "u8 positive full scale");
+        assert_eq!(
+            i16::from_sample::<i16>(-32768),
+            -32768,
+            "s16 negative full scale"
+        );
+        assert_eq!(f32::from_sample::<i16>(-32768), -1.0);
+        assert_eq!(u8::from_sample::<i16>(-32768), 0, "u8 negative full scale");
+    }
+
+    #[test]
+    fn mixer_u8_silence_and_full_scale_reach_the_ring_as_i16() {
+        // The whole device edge in miniature: the mixer bus (11025 Hz
+        // stereo, u8 samples, byte-faithful) -> ring i16. u8 128 is
+        // exact silence; u8 255 is positive full scale (127 << 8 =
+        // 32512 before the default host master Q8 gain 100/256 ->
+        // 32512 * 100 >> 8 = 12700 - the same pinned path as the
+        // u8-200 -> 7200 pin in fill_from_renders_the_deficit).
+        let mut host = GameHost::new(
+            &bedlam_game::GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        host.mixer_mut().queue_pcm_u8(&[128, 255]).unwrap();
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        assert_eq!(feed.fill_from(&mut host, 2).unwrap(), 2);
+        let st = feed.lock();
+        assert_eq!(st.ring.peek_frame(0), Some([0, 0]), "u8 128 = silence");
+        assert_eq!(
+            st.ring.peek_frame(1),
+            Some([12700, 12700]),
+            "u8 255 full scale"
+        );
     }
 
     #[test]
