@@ -170,12 +170,14 @@ corpus-verified halves: bedlam-core `MissionSim` (the sim slice) and
 bedlam-render `MissionView` (the isometric viewport). NO new RE: every
 behavior below is anchored to an already-decoded EXW fact, listed
 inline. Bounded unit: staged-inert lifecycle + per-frame drive + the
-robot-click order seam, hash-pinned headless; GAMEPAL/window/palette
-and sidebar work stay OUT (the following unit).
+robot-click order seam, hash-pinned headless; window/surface and
+sidebar work stay OUT (the following unit). The GAMEPAL present tail
+(added 2026-08-21, this section's PRESENT bullet) stages the mission
+palette with the mission — fetch set 10 files.
 
-- STAGING [RE-EXW-SIM sec 7c]: `load_mission(tot, dat, pad, cgr, mrk,
-  bin, lnk, sintable, dante, zone, robots_override, staged_markers)`
-  builds `Terrain::from_mission_bytes` + `AngleTable` (SINTABLE words
+- STAGING [RE-EXW-SIM sec 7c]: `load_mission(tot, dat, pad, cgr, bin,
+  lnk, sintable, dante, gamepal, mrk, zone, robots_override,
+  staged_markers)` builds `Terrain::from_mission_bytes` + `AngleTable` (SINTABLE words
   2..66), seeds `MissionSim::new(.., 0x1E240)` (the MissionShell
   reseed, sec 1), spawns the first `robots_override.unwrap_or(
   robots_per_player(zone))` MRK records verbatim (`robots_per_player`:
@@ -183,8 +185,10 @@ and sidebar work stay OUT (the following unit).
   `staged_markers` (the host/test seam the 0x46cbe0 network override
   fills in the original — sec 7c.8), builds
   `MissionView::from_mission_bytes(tot, swept dat planes, bin, lnk)`
-  and stages DANTE via `set_entity_bank`. Malformed bytes →
-  `GameError::BadMissionAsset`, never a panic.
+  and stages DANTE via `set_entity_bank`. GAMEPAL folds to the
+  canonical 6-bit palette (`parse_vga770` + `>> 2`, the
+  `loading_palette` rule) and owns the mission plane palette.
+  Malformed bytes → `GameError::BadMissionAsset`, never a panic.
 - LIFECYCLE [movie/brief pattern, D31/D37]: a staged mission is INERT
   until the FSM enters `Scene::Mission`; activation fixes the camera
   at the first robot's Q5 position (the EXW cam pair DAT_004edde4/8
@@ -210,8 +214,15 @@ and sidebar work stay OUT (the following unit).
   [design: zone 0 = ZONEA consumes none]), `present_window`, blit the
   480x480 window at canonical (0, 0) — the EXW mission screen is
   viewport [0,480)x[0,480) + sidebar [480,640) (mouse_l_click
-  x >= 0x1E0 branch), NOT letterbox-centered. Palette = the host
-  palette (GAMEPAL is the NEXT unit).
+  x >= 0x1E0 branch), NOT letterbox-centered. Palette = GAMEPAL:
+  the mission plane carries the folded GAMEGFX\GAMEPAL.PAL (770 B,
+  the parse_vga770 LOADPAL family) staged with the mission
+  [RE-EXW-MISSIONVIEW sec 6 — GAMEPAL loads into the 0x4edbf8
+  0x302-B blob the mission-load pass copies to 0x4ddb34,
+  RE-EXW-SIM sec 7c.3]; the host palette no longer stands in. The
+  plane rides the MovieFrame seam, so the mission frame's palette
+  IS GAMEPAL and palette_dirty every frame (the movie convention);
+  the indexed->RGBA window upload stays platform-side as-is.
 - DETERMINISM: the sim half is hashed (MissionSim::state_hash); the
   LNK memo walk + edge stream are presentation state (D17 bucket b)
   — one render per host frame advances the walk once, matching the
@@ -229,4 +240,9 @@ facts 1-8 (all verified in prior runs), high on the API shape
 
 Section 11 added 2026-08-21 by the item-1 worker (a835cefc) — pure
 composition of RE-EXW-SIM secs 1/6/7c + RE-EXW-MISSIONVIEW secs 5d/7;
-no new binary decoding.
+no new binary decoding. GAMEPAL present tail amended 2026-08-21
+(worker 1776dc60): the palette anchors are RE-EXW-MISSIONVIEW sec 6
+(GAMEPAL → 0x4edbf8) + RE-EXW-SIM sec 7c.3 (the 0x302-B mission-load
+copy) + the parse_vga770 corpus format (RESEARCH-8STREET .PAL row);
+the fold rule and the MovieFrame palette hand-off are the established
+D31/D34 conventions.
