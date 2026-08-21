@@ -1,3 +1,33 @@
+ - CLOSED 2026-08-21 (P4 7j.13 FUN_0041a894 weapon-impact ray
+   head FIRST HOP unit COMPLETE, commit 4448a77 + state, worker
+   b7f866b6 claim 1, D61, docs-only): RE-EXW-SIM amendment 7j.13
+   pins the resolver — FUN_0041a894(x Q13, y Q13, chain ctr ecx,
+   damage ebx, [stack] score flag) is the PER-TILE WEAPON-IMPACT
+   OBJECT RESOLVER, NOT a walk: grid-word dispatch (0/0x7d2/
+   0x7d3 pass-through ret 0; 0x7d4 → FUN_00422693 platform
+   damage; n>0 → rec n−1 hp −= damage; ret 1 only on destroy).
+   The RAY lives in the callers (17-site census): the projectile
+   tick FUN_00412010 (50 rec @0x4cc654 stride 0x22, ballistic
+   x/y/z += v, terrain probe FUN_0041eaa1, damage =
+   FUN_00419aff(0x65/0x66)), the robot fire controller
+   FUN_00410823 (8 sites: weapons 5, 0x1a ×4 quadrant blast,
+   0x24, 0x29; damage FUN_00419aff(id,1)), the tile-0x62 trap
+   pair FUN_0040fe93/FUN_0040ff92 (damage 100 → 5× k12 debris),
+   the script blast FUN_004244a1 (damage 5000, score armed), and
+   4 chain-detonation self-calls (perimeter walks, damage 1000,
+   id-table chain word@+0xC gate). The 7j.12 "object-stamp loop
+   0x41a84f" is FUN_0041a7f0 (footprint stamper, word = rec
+   idx+1 over W×H) invoked from the mission-load restamp pass
+   FUN_0041a4f8@0x447b76, which parses the OBJECT TYPE TABLE
+   (0x4dedf2, 0x4E stride, 282 recs from the mission file: W/H/D
+   @+2/+4/+6, hp@+8, chain@+0xC, type@+0xE — 0xb scores 10,
+   jitter words@+0x16..+0x1C, 4 scratch banks@+0x30..+0x3C).
+   ENGINE: none (D61 — weapons never fire in the gates; resolver/
+   tick/controller/table stay unwired). Pins untouched; manifest
+   verified. Push attempted; origin push blocked by a dead
+   secret service at close-out (commits safe locally, retry by
+   next run/operator). Queued: the weapon-fire family SECOND
+   HOP (FUN_0041bc1c).
  - CLOSED 2026-08-21 (P4 7j.12 FUN_00422693 platform/destructible
    family decode unit COMPLETE, commits f759b3a + state, worker
    5aa2d164 claim 1, D60, docs-only): RE-EXW-SIM amendment 7j.12

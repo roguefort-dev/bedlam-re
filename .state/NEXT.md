@@ -1,16 +1,17 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The weapon-fire family FIRST HOP — the FUN_0041a894
-   projectile ray head (5000 B): the ray stepping + the
-   0x41a84f object-grid stamp loop + the 0x41a8c0..0x41a906
-   object-grid dispatch (context decoded 7j.12; now pin the
-   walk itself, the damage value esi, and which callers feed
-   it), plus a caller census of the 17 sites. Bounded: the
-   ray/head only. Unlocks in one hop: the water-splash
-   producers (7j.10), the platform-damage caller (7j.12),
-   17 of 20 debris kinds (7j.11), and the FUN_00422e0a/
-   00422600 trigger producers.
+1. [P4] The weapon-fire family SECOND HOP — FUN_0041bc1c
+   (312 B, 10 callers): the TERRAIN/ROBOT damage resolver paired
+   at every fire/impact site (0x410ca2/0x4118c2/0x411f24/
+   0x412472/0x4244f3 + the type-2 projectile impact 0x412462):
+   pin its dispatch (robot armor hit? floor/z damage? which
+   banks it writes), + the terrain probe FUN_0041eaa1 and the
+   debris co-stagers FUN_004124a4/FUN_004126dc heads (arg maps
+   only). Bounded: those four functions' heads only. NOTE
+   (7j.13): PUSH RETRY — if origin/main is behind, push the
+   pending 7j.13 commits first (secret service was down at
+   close-out).
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed
@@ -20,15 +21,17 @@
   0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
   before the arrival array 0x4dcdb8 — same producer family is
   likely.
-- The weapon-fire family decode (FUN_0041a894, 5000 B, 17 callers
-  + FUN_00412f34/FUN_00417e2f/FUN_0041bc1c): the 11 splash-stager
-  call sites of 7j.10 + the debris co-staging + the projectile/
-  impact model. Unlocking this re-opens the water-splash event
-  system (the 250-record tick decoded in 7j.10, currently unwired
-  for want of a corpus producer) AND stages 17 of the 20 debris
-  kinds (the 7j.11 census: k1..k4/k6/k7/k8..k20 producers all
-  live here or in the platform family). [NOW ITEM 1 = the first
-  bounded hop of this.]
+- The weapon-fire family REMAINDER (first hop done 7j.13 —
+  FUN_0041a894 head + 17-site census + the object type table
+  0x4dedf2/0x4E/282 pinned; SECOND HOP = the Now item): after
+  it, the FUN_00410823 weapon-anim machine internals (the
+  0x4c71xx record family), the destroy-tail debris-kind map
+  (which id-table type@+0xE stages which kinds — the 7j.11 sites
+  0x41ace7..0x41b67a), FUN_00419aff's per-weapon table layout,
+  FUN_00412f34/FUN_00417e2f, and the 160-vs-0xA8 stride anomaly
+  at 0x4c69e4 (FUN_0040fe93). Unlocking the tail re-opens the
+  water-splash producers (7j.10) and 17 of 20 debris kinds
+  (7j.11) for any future corpus seam.
 - The debris-stager ENGINE widening beyond kind 5 (fed by the
   7j.11 20-kind table + the 11 seq tables): model the k2/k8
   single-center scorch (values 3/4), the k1/k20 shared-tail
@@ -94,6 +97,34 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.13 FUN_0041a894 weapon-impact ray head
+  FIRST HOP unit COMPLETE (worker b7f866b6 claim 1, commit
+  4448a77, D61, docs-only): FUN_0041a894 = the PER-TILE
+  WEAPON-IMPACT OBJECT RESOLVER (eax x Q13, edx y Q13, ecx
+  chain ctr, ebx damage, [stack] score flag) — NO walk: grid
+  word 0/0x7d2/0x7d3 → pass-through ret 0; 0x7d4 →
+  FUN_00422693; n>0 → rec n−1 hp−=damage, destroy (flags 0x40)
+  → tail + ret 1. The tail: trigger producers FUN_00422e0a/
+  FUN_00422600, the 7j.11 debris kinds + 4× splash loop
+  (FUN_0041bd78/FUN_00424355, RandA jitter), score award
+  (type 0xb → +10) gated by the stack flag, and FOUR perimeter
+  CHAIN WALKS (chainable id-table word@+0xC ≠ 0 → recurse
+  damage 1000, RandA&3 → ctr++). The RAY = the callers (17-site
+  census): projectile tick FUN_00412010 (50 rec @0x4cc654
+  stride 0x22, ballistic, probe FUN_0041eaa1, damage
+  FUN_00419aff(0x65/0x66)), fire controller FUN_00410823 (8
+  sites, weapons 5/0x1a×4/0x24/0x29), tile-0x62 trap pair
+  FUN_0040fe93/FUN_0040ff92 (damage 100, 5× k12; NOTE 160-B
+  stride anomaly at 0x4c69e4), script blast FUN_004244a1
+  (damage 5000). The 0x41a84f stamp loop = FUN_0041a7f0
+  (footprint stamper) from the FUN_0041a4f8 mission-load pass
+  — which parses the OBJECT TYPE TABLE 0x4dedf2/0x4E/282
+  (W/H/D, hp, chain, type, jitter words, 4 scratch banks).
+  ERRATUM 7j.12 item 1: the stamp loop is NOT weapon fire's.
+  No engine change (D61). Manifest verified. Push blocked at
+  close-out (secret service down) — commits 4448a77 + the
+  state commit are local; RETRY FIRST. Queued: the family
+  SECOND HOP (FUN_0041bc1c).
 - 2026-08-21: P4 7j.12 FUN_00422693 platform/destructible family
   decode unit COMPLETE (worker 5aa2d164 claim 1, commits f759b3a
   + follow-up, D60, docs-only): the gate banks PINNED —
