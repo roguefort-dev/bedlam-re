@@ -1,29 +1,25 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The 0x4de664 per-type ORDER/WEAPON table loader (RE-EXW-SIM
-   sec 6c.8b + open item 5, STRONG new lead): the table is the
-   7x0x0E WEAPON groups (word0 = name index into the compiled-in
-   FUN_00420260 table, word1 = ammo max) and FUN_0041df10 pins
-   `LoadFile("GAMEGFX\TABLE.BIN", DAT_0046cbbc)` — the hypothesis
-   is now near-certain; verify TABLE.BIN's byte layout against
-   0x62-stride/type*count (file is in game-data/BEDLAM/GAMEGFX)
-   and find the copy INTO 0x4de664 (grep the loader family around
-   FUN_0041df10) + the word@0x4edb90 player-robot TYPE producer
-   (GameMain@0x41c34c). Then replace the all-7 availability
-   default + set_order_availability seam with the real table, and
-   wire the row TEXT (FUN_00420260 names + SMLFONT glyph draw
-   FUN_00408913/FUN_00402884 at (0x1ED,0x5B+14i), count "%04i" at
-   (0x25C,0x5B+14i)) now that every input exists. Commit RE notes
-   first. Frame pins WILL move once (text pixels); sim pins must
-   NOT move. Keep tests, fmt, clippy -D warnings, headless smoke
+1. [P4] The map-overlay family (RE-EXW-SIM sec 6c.1 + the new 7d.1
+   lead): TABLE.BIN's identity is now PINNED (a draw_IMG-family
+   bank whose image 0 is the map backdrop; sole reader
+   FUN_004089b1@0x4089d5) and FUN_004089b1 is half-decoded from the
+   7d run: clear the 0x4b000 map buffer (0x4ede18) -> draw_IMG
+   TABLE.BIN image 0 -> per-tile coloring via the word table at
+   0x45cdd8+2*type over the TOT type-DB mirror (PALTRAN/MAPTRAN
+   .TRN kin, strings 0x458c15..0x458c40) -> robot markers
+   GENERAL.BIN 0x55 (player type)/0x56 per slot alive-gated ->
+   PAD/order markers 0x57/0x58 from the 0x4e44f8 staging. Decode
+   the rest (0x408c94..0x408dc4 order-target loop, the
+   FUN_00402ab8 tile primitive, the MAPTRAN .TRN loader + the
+   0x45cdd8 table producer, the FUN_00401107 map-mode present +
+   the 0x4eb8dc=5 / _DAT_004edba0 toggle family in 6c.1), commit RE
+   notes first, then wire the map-toggle strip + overlay draw into
+   MissionScene (frame pins regenerate once; sim pins must NOT
+   move). Keep tests, fmt, clippy -D warnings, headless smoke
    two-run identity, and the MANIFEST check green.
 ## Backlog (not yet started)
-- The map-overlay family (sec 6c.1): _DAT_004edba0/FUN_004089b1 +
-  the FUN_00401107 present-window map mode - needed before the
-  map-toggle strip can be wired. Includes the deploy-panel
-  backdrop (SCANNER sprite 0x12 @ (0x1EE,0xC3), countdown
-  0x46ccf8) and the blink-cursor producer (0x4dc5d0).
 - Sidebar bars + score strip (RE-EXW-SIM 6c.8d): FUN_0040807f HP
   (0x46 - hp*46/5000) + armor (0x8E - armor*46/2500) bars need the
   +0x78/+0x2E sim fields; FUN_004085ce score/money (NUMBERS.BIN)
@@ -53,7 +49,9 @@
   per RESEARCH-8STREET), ROBNUMS name plates, Shield/Variant bank
   staging (nodes enqueue, flush skips while unstaged).
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity, robots()
-  extra-phase semantics + state-1 producers.
+  extra-phase semantics + state-1 producers. NOTE 7d: FUN_00440e45
+  is THE SHOP (WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK +
+  SOUND\MIDI\SHOP; the weapon-table writer family - see 7d.2).
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DOSBox-X memory-watches + scripted input injection -> per-frame
   original state dumps diffed against engine state. Design doc first.
@@ -69,6 +67,27 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 weapon table COMPLETE (worker 4b75846d claim 1,
+  commits 5af9a70 + 1c7b387, D51): RE-EXW-SIM 7d REFUTES the
+  TABLE.BIN hypothesis - TABLE.BIN is the map-overlay backdrop
+  bank (draw_IMG image 0, sole reader FUN_004089b1); the 0x4de664
+  table is .bss session state (shop FUN_00440e45 / save-load / MP
+  lobby writers, no loader); player TYPE 0x4edb90 = 0 all SP
+  (GameMain 0x41c34c); fresh campaign = money 4000 + EMPTY
+  loadout (shop before every mission); the FUN_00420260 name
+  switch pinned exactly (39 strings 0x4589DD..0x458C11, PE
+  bytes). ENGINE: host-staged per-robot (name_idx, ammo) loadout
+  seam (mission_mut + set_weapon_loadout) with the faithful EMPTY
+  default; the all-7 availability + set_order_availability seam
+  REMOVED; click gate = the ammo word (6c.3); row TEXT wired
+  (names + "%04i" via SMLFONT at 0x1ED/0x25C, 0x5B+14i, 0x24);
+  ui_bank RLE codec fixed to the asm (bit14-in-literal EOL - the
+  shipped sprites are one 0x4000|w word per row - + verbatim
+  transp). Corpus gate: frame pins regenerated once (spawn
+  9f20732f29a5baf2, walk 27494d6ab505bcf3) + new armed pin
+  51ebd515bc638e81; sim pins 36ddc86345c8351c/f35db41f0efb858d
+  UNCHANGED. 441 tests green, fmt/clippy clean, smoke + parity
+  byte-identical at the baselines, MANIFEST verified. Pushed.
 - 2026-08-21: P4 mission sidebar ART COMPLETE (worker 49294e3c
   claim 1, commits 5860fe6 + abcbb37 + 805ed10, D50): RE-EXW-SIM
   sec 6c.8 = the sidebar redraw pass FUN_00408403 fully decoded

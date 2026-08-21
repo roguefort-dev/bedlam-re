@@ -1,3 +1,51 @@
+- CLOSED 2026-08-21 (P4 weapon table COMPLETE, commits 5af9a70 +
+  1c7b387, worker 4b75846d claim 1, D51): RE-EXW-SIM amendment 7d
+  REFUTES the queued TABLE.BIN hypothesis (XRefList whole-program
+  evidence): TABLE.BIN is the strategic-map OVERLAY backdrop bank
+  (draw_IMG-family, image 0 drawn into the 0x4b000 map buffer by
+  the sole reader FUN_004089b1@0x4089d5; per-tile map colors via
+  the 0x45cdd8+2*type word table, PALTRAN/MAPTRAN .TRN kin;
+  robot markers GENERAL 0x55/0x56, PAD/order markers 0x57/0x58) —
+  NOT the weapon table source. The 0x4de664 0x62-stride table is
+  .bss SESSION STATE: written only by the shop FUN_00440e45
+  (buy/sell/auto-buy write 7-word groups name/ammo/price/cat/
+  item/0/owned at type*0x62+group*0xE), the save-load restore, and
+  the MP lobby exchange (0x4dd4a0 0x80-stride staging); player TYPE
+  word@0x4edb90 = 0 all single-player (GameMain 0x41c34c boot
+  write; MP lobby otherwise); fresh campaign = money 4000 SP /
+  0x5DC mode-2 / 4000-500*difficulty, EMPTY loadout, shop before
+  EVERY mission (GameMain loop: map room 0x43e7d4 -> briefing
+  0x43d00b -> SHOP 0x40e45 -> MissionShell). FUN_00420260 name
+  switch pinned exactly (39 strings 0x4589DD..0x458C11 + ERROR
+  default, PE bytes). ENGINE (1c7b387): MissionScene models the
+  loadout as host-staged 7x(name_idx, ammo) groups —
+  GameHost::mission_mut + set_weapon_loadout re-running the exact
+  6c.6 spawn-copy armer (1<<first group with word0!=0, 0 when
+  empty) — with the faithful EMPTY fresh-campaign default
+  (set_order_availability + the all-7 design default REMOVED);
+  order-row click gate corrected to the AMMO word (sec 6c.3 — the
+  +0x38+8k gate); row TEXT wired: weapon_name (the pinned switch
+  embedded) + "%04i" counts through the new ui_bank draw_glyph
+  (FUN_00402884 solid-color mask fill) at (0x1ED/0x25C, 0x5B+14i)
+  color 0x24, FUN_00408913 advance rules (space 6 / glyph w+1).
+  CRITICAL CODEC FIX en route: ui_bank draw_sprite RLE corrected
+  to the FUN_00401ca2 asm — a literal control word with bit14 ends
+  the line (EVERY shipped sidebar sprite row is one 0x4000|w
+  word; the old decode painted each sprite as a single long row)
+  and RLE transparency copies literal bytes VERBATIM (transp==0
+  skip runs write zeros). Corpus gate: frame pins regenerated
+  ONCE (default spawn 9f20732f29a5baf2 / walk 27494d6ab505bcf3,
+  the empty default leaves the rows band black) + the new armed
+  pin 51ebd515bc638e81 (staged NEEDLER#1+HADES#1: rows chrome +
+  >20 name-text px at 0x24 + count pixels); sim pins
+  36ddc86345c8351c / f35db41f0efb858d UNCHANGED (loadout never
+  reaches the hash — pinned). 441 workspace tests / 0 failed,
+  fmt + clippy -D warnings clean; headless smoke two-run
+  byte-identical AT THE RECORDED BASELINE (scene 696adb1cd110e062,
+  parity cce30c983b97b16d, audio 110400/158092); parity harness
+  byte-identical on all four D28 anchors; MANIFEST verified before
+  and after the corpus runs. Next per queue: the map-overlay
+  family (7d.1 pinned its inputs).
 - CLOSED 2026-08-21 (P4 mission sidebar ART COMPLETE, commits
   5860fe6 + abcbb37 + 805ed10, worker 49294e3c claim 1, D50):
   RE-EXW-SIM sec 6c.8 decodes the sidebar redraw pass
