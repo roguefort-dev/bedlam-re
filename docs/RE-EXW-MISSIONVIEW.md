@@ -297,6 +297,17 @@ terrain pass overwrites everything the present window reads.
 1. Producers of type-DB bytes +0x18/+0x1a/+0x1b/+0x1c (static frame,
    height bias, anim window). Zero-filled on ZONEA → no effect on the
    P4 corpus gate; find the writer (editor? BIN-side fixup?) later.
+   **+0x18 PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7j.8)**:
+   FUN_00422287 is a RUNTIME writer — `byte[0x4796d4 + tile*0x1E]
+   = value` (clamped < 8) with the tile from world>>5; its known
+   caller is the debris-stager kind-5 scorch ring (six ±0x20
+   ring writes with values 1/2/4 around each death debris,
+   FUN_00420608 kind 5). CAVEAT: the robots() reader (SIM §7g.3)
+   treats byte != 0 as an ARMOR PAD, so either the scorch values
+   and pad values share the byte through a mask the reader does
+   not apply, or deaths genuinely arm pad tiles — one re-verify
+   of the reader's byte test is owed before wiring scorch marks.
+   The +0x1a/+0x1b/+0x1c producers remain open.
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader
