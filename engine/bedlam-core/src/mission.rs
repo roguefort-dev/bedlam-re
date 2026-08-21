@@ -537,6 +537,25 @@ pub const ARMOR_MAX: i16 = 0xBB8;
 pub const ARMOR_BLEED: i16 = 10;
 /// Armor charge per phase-1 pad pass (robots() 0x40bc72, 7g.3).
 pub const ARMOR_CHARGE: i32 = 0x14;
+/// The kind-5 scorch ring [RE-EXW-SIM 7j.9, verified asm
+/// 0x421465..0x4215d8 + the shared tail 0x421285..0x421291]: the
+/// NINE FUN_00422287 calls the debris stager makes per death
+/// debris, in the EXW write order. Offsets are world Q5 (±0x20 =
+/// one tile after the writer's `>>5`); values are corners 1,
+/// edges 2, center 4. Overlapping rings (the five debris jitter
+/// within ±1 tile of the corpse) are last-write-wins in staging
+/// order — the ring order matters and is pinned as decoded.
+pub const DEBRIS_SCORCH_RING: [(i32, i32, u8); 9] = [
+    (-0x20, -0x20, 1), // TL  0x421476
+    (-0x20, 0, 2),     // L   0x4214a3
+    (-0x20, 0x20, 1),  // BL  0x4214d3
+    (0, -0x20, 2),     // T   0x421500
+    (0, 0, 4),         // C   0x42152a
+    (0, 0x20, 2),      // B   0x421557
+    (0x20, -0x20, 1),  // TR  0x421587
+    (0x20, 0, 2),      // R   0x4215b4
+    (0x20, 0x20, 1),   // BR  0x421291
+];
 /// The reinforcement-staging value FUN_0040eba0 case 1 writes to
 /// `drop_countdown` (+0x80, 7h.2).
 pub const PICKUP_DROP: i32 = 0x3E8;
@@ -602,11 +621,13 @@ pub struct MissionSim {
     rng: Pcg32,
     frame: u64,
     /// Per-tile armor-pad bytes — the +0x18 byte of the per-tile
-    /// 0x1E record at 0x4796bc (7g.3): nonzero = pad. Producers are
-    /// MISSIONVIEW §8.1-open and the zero-fill leaves them 0 on
-    /// ZONEA, so the default (empty = all zero) bleeds armor exactly
-    /// like the shipped corpus; the host stages real bytes through
-    /// [`MissionSim::set_armor_pads`] when the producer is decoded.
+    /// 0x1E record at 0x4796bc (7g.3): nonzero = pad. The runtime
+    /// producer is the scorch-ring writer FUN_00422287 (7j.9) —
+    /// the death tail stages nine writes per debris; the static
+    /// map-load fill leaves them 0 on ZONEA, so the default
+    /// (empty = all zero) bleeds armor exactly like the shipped
+    /// corpus until a death; the host stages real bytes through
+    /// [`MissionSim::set_armor_pads`].
     /// Derived mission data — hashed only through its armor effect.
     armor_pads: Vec<u8>,
     /// The player TYPE word ([0x4edb90]): 0 in all SP games
@@ -682,9 +703,37 @@ impl MissionSim {
 
     /// The armor pad byte for a linear tile (record +0x18, 7g.3):
     /// zero when unstaged/out of range — the shipped ZONEA corpus
-    /// leaves every pad byte 0 (MISSIONVIEW §8.1 open producer).
-    fn armor_pad_byte(&self, tile: usize) -> u8 {
+    /// leaves every pad byte 0 until a death scorches (7j.9).
+    pub fn armor_pad_byte(&self, tile: usize) -> u8 {
         self.armor_pads.get(tile).copied().unwrap_or(0)
+    }
+
+    /// FUN_00422287 [RE-EXW-SIM 7j.9, verified 0x422287..0x4222cd]:
+    /// the per-tile type-DB +0x18 byte writer. `(world_x>>5,
+    /// world_y>>5)` (arithmetic shifts) → tile, dropped when either
+    /// coordinate is negative or ≥ the map w/h, then
+    /// `byte[0x4796d4 + tile*0x1E] = value` with the zero-extended
+    /// value clamped `≥ 8 → 7`. The engine mirror is zero-padded:
+    /// the default all-zero corpus stays zero until the first
+    /// write grows the array. Public as the host seam for the
+    /// census'd-but-unwired producers (the FUN_00424051 re-roll
+    /// family, 7j.9 item 5).
+    pub fn scorch_write(&mut self, world_x: i32, world_y: i32, value: u8) {
+        let tx = world_x >> 5;
+        let ty = world_y >> 5;
+        if tx < 0 || ty < 0 {
+            return;
+        }
+        let (w, h) = self.terrain.size();
+        if tx >= w || ty >= h {
+            return;
+        }
+        let tile = (ty * w + tx) as usize;
+        let value = if u32::from(value) >= 8 { 7 } else { value };
+        if self.armor_pads.len() <= tile {
+            self.armor_pads.resize(tile + 1, 0);
+        }
+        self.armor_pads[tile] = value;
     }
 
     /// Apply damage to robot `idx` — the SP core of
@@ -701,10 +750,14 @@ impl MissionSim {
     /// drop cleared, death flag set, armor zeroed, and five debris
     /// staged from the SHARED stream (2 RandA draws each — y jitter
     /// first, then x — moving the sim hash exactly like the
-    /// original). The SFX/FUN_0042382c/`DAT_0046ccec = 3` sidebar
-    /// redraw signal and the debris sprite staging are presentation —
-    /// the host reads them off [`DamageOutcome`]. The MP kill
-    /// bookkeeping + respawn branch is out of model (SP sim).
+    /// original), each debris also writing the NINE-tile scorch
+    /// ring into the armor-pad mirror [7j.9 — the phase-1 reader
+    /// treats those bytes as pads, so the ring is sim state, not
+    /// presentation]. The SFX/FUN_0042382c/`DAT_0046ccec = 3`
+    /// sidebar redraw signal and the debris sprite staging are
+    /// presentation — the host reads them off [`DamageOutcome`].
+    /// The MP kill bookkeeping + respawn branch is out of model
+    /// (SP sim).
     pub fn apply_damage(&mut self, idx: usize, damage: i32, killer: i32) -> DamageOutcome {
         let mut out = DamageOutcome {
             applied: false,
@@ -767,6 +820,12 @@ impl MissionSim {
             // Five debris, two shared-stream draws each: the y
             // jitter draws FIRST, then the x jitter (asm
             // 0x40e72d/0x40e74f); z walks +8k, the phase param 2k.
+            // Each staged debris also runs the kind-5 SCORCH RING
+            // [7j.9]: the nine FUN_00422287 type-DB +0x18 writes
+            // (3×3 tiles around the debris tile, corners 1 / edges
+            // 2 / center 4) — sim state the phase-1 armor pass
+            // reads as pads, landing in staging order so overlaps
+            // are last-write-wins exactly like the EXW.
             for (k, d) in out.debris.iter_mut().enumerate() {
                 let ry = self.rng.next_u32();
                 let rx = self.rng.next_u32();
@@ -774,6 +833,9 @@ impl MissionSim {
                 d.1 = (ry & 0x1F) as i32 + (pos_y >> 8) - 0x10;
                 d.2 = z + 8 * k as i32;
                 d.3 = 2 * k as i32;
+                for &(dx, dy, value) in DEBRIS_SCORCH_RING.iter() {
+                    self.scorch_write(d.0 + dx, d.1 + dy, value);
+                }
             }
             out.died = true;
         }
@@ -1923,6 +1985,117 @@ mod tests {
         assert_eq!((sim.robots()[0].armor_pool, sim.robots()[0].armor), (0, 0));
         sim.advance_frame();
         assert_eq!(sim.robots()[0].armor, 20, "the drained pool charges");
+    }
+
+    #[test]
+    fn death_stages_the_3x3_scorch_ring_into_the_pad_mirror() {
+        // 7j.9: the death tail writes the NINE-tile scorch ring per
+        // debris (corners 1, edges 2, center 4) into the type-DB
+        // +0x18 mirror, in the EXW order — overlapping rings are
+        // last-write-wins in staging order, and the bytes arm the
+        // phase-1 armor-pad charge exactly like the original.
+        let mut sim = damage_sim();
+        let out = sim.apply_damage(0, 9999, -1);
+        assert!(out.died);
+        let (w, h) = sim.terrain.size();
+
+        // The ring table itself: the 3×3 pattern at tile ±1.
+        let mut pattern = std::collections::HashMap::new();
+        for &(dx, dy, v) in DEBRIS_SCORCH_RING.iter() {
+            pattern.insert((dx / 0x20, dy / 0x20), v);
+        }
+        for (ty, row) in [[1, 2, 1], [2, 4, 2], [1, 2, 1]].iter().enumerate() {
+            for (tx, &v) in row.iter().enumerate() {
+                assert_eq!(
+                    pattern[&(tx as i32 - 1, ty as i32 - 1)],
+                    v,
+                    "ring pattern at ({},{})",
+                    tx as i32 - 1,
+                    ty as i32 - 1
+                );
+            }
+        }
+
+        // Fold the five rings in staging order (the expected final
+        // byte state) and compare every tile in the covered span.
+        let mut expected = std::collections::HashMap::new();
+        for d in out.debris.iter() {
+            for &(dx, dy, v) in DEBRIS_SCORCH_RING.iter() {
+                let tx = (d.0 + dx) >> 5;
+                let ty = (d.1 + dy) >> 5;
+                if tx >= 0 && ty >= 0 && tx < w && ty < h {
+                    expected.insert((tx, ty), v);
+                }
+            }
+        }
+        assert!(
+            expected.len() < 45,
+            "the five jittered rings overlap ({} distinct tiles)",
+            expected.len()
+        );
+        for ty in -1..=6i32 {
+            for tx in -1..=6i32 {
+                let byte = if tx >= 0 && ty >= 0 && tx < w && ty < h {
+                    sim.armor_pad_byte((ty * w + tx) as usize)
+                } else {
+                    continue;
+                };
+                assert_eq!(
+                    i32::from(byte),
+                    i32::from(expected.get(&(tx, ty)).copied().unwrap_or(0)),
+                    "pad byte at tile ({tx},{ty})"
+                );
+            }
+        }
+
+        // A scorched tile charges armor on the next phase-1 pass
+        // (the raw-reader semantics, 7j.9 item 1): kill first, pick
+        // a scorched tile FROM the fold, spawn a live survivor
+        // there, and run one frame — deterministic for the fixed
+        // seed, no jitter assumptions.
+        let mut sim2 = MissionSim::new(flat_terrain(8, 8, 5, zero_heights(8)), sintable_like(), 11);
+        let first = sim2.spawn_robot((2, 3, 0));
+        let _ = sim2.apply_damage(first, 9999, -1);
+        let (sx, sy) = *expected.keys().next().unwrap();
+        let survivor = sim2.spawn_robot((sx, sy, 0));
+        sim2.robots_mut()[survivor].armor = 0;
+        assert_ne!(
+            sim2.armor_pad_byte((sy * w + sx) as usize),
+            0,
+            "the folded tile is scorched in the twin sim too"
+        );
+        sim2.advance_frame();
+        assert_eq!(
+            sim2.robots()[survivor].armor,
+            20,
+            "a survivor on a scorched tile charges +20 (the raw reader)"
+        );
+    }
+
+    #[test]
+    fn scorch_write_bounds_and_clamp_follow_fun_00422287() {
+        // 7j.9: negative/out-of-map world coords are dropped; the
+        // zero-extended byte value clamps >= 8 -> 7; the mirror
+        // grows zero-padded on first write.
+        let mut sim = damage_sim();
+        assert_eq!(sim.armor_pad_byte(0), 0, "no writes yet");
+        sim.scorch_write(2 * 0x20 + 5, 3 * 0x20 + 7, 4);
+        assert_eq!(sim.armor_pad_byte(3 * 8 + 2), 4, "in-tile offsets >>5");
+        sim.scorch_write(2 * 0x20, 3 * 0x20, 9);
+        assert_eq!(sim.armor_pad_byte(3 * 8 + 2), 7, "9 clamps to 7");
+        sim.scorch_write(2 * 0x20, 3 * 0x20, 0xFF);
+        assert_eq!(sim.armor_pad_byte(3 * 8 + 2), 7, "0xFF clamps to 7");
+        // Bounds: x/y < 0 or >= map w/h are dropped.
+        sim.scorch_write(-1, 0, 4);
+        sim.scorch_write(0, -1, 4);
+        sim.scorch_write(8 * 0x20, 0, 4);
+        sim.scorch_write(0, 8 * 0x20, 4);
+        for tile in [0usize, 8, 7 * 8, 63] {
+            assert_eq!(sim.armor_pad_byte(tile), 0, "out-of-map writes dropped");
+        }
+        // The growth is zero-padded: untouched tiles between the
+        // writes read 0.
+        assert_eq!(sim.armor_pad_byte(3 * 8 + 3), 0);
     }
 
     #[test]
