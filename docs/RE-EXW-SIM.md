@@ -1239,6 +1239,133 @@ order: terrain edges → dither draws → churn, boot fill at
 activate). The blit lands in the sidebar portrait pass after the
 portrait sprite, before the bars (7f.3 tail order unchanged).
 
+## 7j. Amendment 2026-08-21 (worker 6ab53863, the 0x4dc5d0 effect-row
+family + the FUN_00420608 debris stager)
+
+Fresh objdump census (`--start-address` slices of BEDLAM.EXW, intel
+syntax, plus DGROUP `-s` dumps of the kind tables at 0x4544xx and the
+mission-chain strings at 0x4588xx). Decodes the whole blink/effect-row
+producer family the 7f.4 sidebar switch consumed with "producer open",
+plus the 128-slot debris stager the 7g.6 death tail feeds. All items
+[verified] against the asm.
+
+1. **The 10 effect rows** [verified writers 0x40ed5e..0x40f26c, the
+   shared per-case tails of FUN_0040eba0]: a 0xa0-byte array of 10
+   rows × 16 B at `0x4dc5d4 + r*0x10`, layout `{ i32 x; i32 y; i32 z;
+   i32 id }` (id at `0x4dc5e0 + r*0x10`). Boot-cleared 0xa0 B at
+   0x4dc5d4 by the MissionShell staging block (memset-family
+   FUN_00402965: ecx=0xa0, edi=0x4dc5d4 @0x447a1a, alongside 0xa00 B
+   @0x4cec38 and 0x960 B @0x4cf638 — two OTHER effect arrays, census
+   only). Rows are staged by EVERY pickup case tail identically:
+   `r = FUN_00422038(); row[r] = { pos_x>>8, pos_y>>8, z(+0x08)+0x20,
+   id }` with the per-case ids [verified]: case 1 reinforcement → 1,
+   case 2 shield → 6, case 3 health → 7, case 4 score/money → 1,
+   case 7 booster → 0xE, case 8 ammo → 0xC, case 9 episode → 0xD
+   (7h.2's "1/6/7/0xE" set completed; case 4 reuses id 1).
+2. **FUN_00422038 = the row slot allocator** [verified whole, 36 B]:
+   scans k = 0..9 (`eax = k*0x10 < 0xa0`) for
+   `dword[0x4dc5e0 + k*0x10] == 0` (a free row — the id word), returns
+   the FIRST free k, else 9 when full (reuse the last row). Note the
+   0xa0 array spans ids at 0x4dc5e0..0x4dc67c while the SCALAR
+   `_DAT_004dc5d0` (4 B below row 0's x) is a SEPARATE variable —
+   the blink-cursor selector, see 6.
+3. **FUN_0042205c = the row tick** [verified whole; sole caller the
+   MissionShell per-frame epilogue @0x448080, i.e. BEFORE the draw
+   call 0x448094]: per row with id != 0: `z <= 0x190 → z += 6` else
+   `id = 0` — the rows RISE 6 z-units/frame to z 400 then vanish
+   (the floating pickup-icon effect).
+4. **The row draw pass** [verified 0x40632d..0x4063de, inside
+   FUN_00403938's tail]: per active row, iso projection
+   `sx = (x−camx + y−camy)/2 + 0x124 + fine_x`,
+   `sy = (x−camx)−(y−camy) + 0x118 + fine_y − z` (camera
+   0x4edde4/0x4edde8, the same 2:1 as robots), viewport bounds
+   0..0x23f / 0..0x266, then `FUN_0040798e(sx, sy, bank 0x46af40,
+   …, stack {0x12c, z>>5, id−1, y})` — sprite-list enqueue, layer
+   0x12c (the TXPAL1 composite mode). Bank 0x46af40 = **FLAGS.BIN**
+   [verified load site 0x41da6d + name string 0x4588c3
+   "GAMEGFX\FLAGS.BIN", staged by the mission LoadFile family
+   FUN_0041df10 alongside NUMBERS 0x46af3c] — so the effect rows
+   draw FLAGS.BIN sprite `id−1` (ids 1..0xE → sprites 0..0xD).
+5. **FUN_00420608 = the 128-slot debris/effect stager** [verified
+   head + kind table + kinds 5/16; Watcon args eax,edx,ebx,ecx then
+   stack]: head = sign/map bounds on the x/y args (`>>5` vs map
+   w/h at 0x4eddec/0x4eddf0), the z arg clamped 0x20..0xFF, then a
+   128-slot scan (`k*0x30 < 0x1800`) over records at `0x476fbc`:
+   first slot with `+0 == 0`, else the slot with the SMALLEST `+0x18`
+   (LRU eviction by sequence age). Record layout (0x30 B, from the
+   kind bodies): `+0x00 active(1); +0x04 x; +0x08 y; +0x0C z
+   (clamped); +0x10 init 0x40; +0x14 init 0x40; +0x18 seq ctr (0 at
+   stage); +0x1C kind; +0x20 physics flag / param; +0x24 start
+   delay (arg9); +0x28 param (arg10); +0x2C ptr to an i16 SEQUENCE
+   table (−1-terminated sprite-id walks in DGROUP)`. Kind dispatch =
+   a 20-entry jump table at 0x4205b8 (kinds 1..20; 7h.2/7g.6
+   confirmed kind 5 = death debris). Kind 5 [0x421327]: writes the
+   record, then SIX FUN_00422287 ring calls at (x±0x20, y±0x20)
+   with values 1/2/4 — the scorch-mark writer, see 8. The death
+   tail's five calls (7g.6) therefore stage five debris + 30 scorch
+   ring writes around the corpse.
+6. **`_DAT_004dc5d0` = the sidebar BLINK-CURSOR selector** [verified
+   all xrefs]: value = the SELECTED robot's SLOT + 1 (1..3).
+   Producers: the robots() per-robot walk 0x40c1ae..0x40c25e — when
+   `idx == [0x46cbd4] + k` (k = 0..2, squad-window base 0x46cbd4)
+   and squad size `0x46cbd8 > k`: select SFX `FUN_004239ef(0xC+k, k)`
+   + `FUN_004239ef(0xF, k, 1)` and `[0x4dc5d0] = k+1`; MissionShell
+   entry zeroes it (0x447871); FUN_00423e1c (the selection chaser,
+   0x423e8c..) re-points the selection when cursor ≠ selected+1, and
+   its exit path 0x423fef clears both the cursor and word 0x4ea240.
+   Consumer = the 7f.4 sidebar switch [0x407420..0x407989, verified]:
+   `edx = [0x4dc5d0]`; edx ∈ {1,2,3} → blink-cursor sprite
+   `FUN_00401ca2((g_frame_count & 3) + 0x51, 1, x, 0xD)` from
+   GENERAL.BIN (0x4edd7c) at x = 0x1F0 / 0x222 / 0x254 (slot k =
+   edx−1); any other value → nothing (0x4072b8 skip).
+7. **FUN_00420549 = the debris tick** [verified whole; MissionShell
+   epilogue @0x448076]: per active record: if `+0x24 (delay) != 0` →
+   decrement, skip; else `+0x18 (seq) += 1`, read
+   `(i16)table[+0x2C][seq]`: `== −1` → `+0 = 0` (done, slot freed);
+   else if `+0x20 (physics flag) != 0` → `FUN_0040de9c(idx)`.
+   FUN_0040de9c [head verified] = the per-frame debris PHYSICS +
+   collision pass (walks ALIVE robots, compares positions in Q13 —
+   the moving-chunk damage family, callers 0x40df45/0x41a515
+   context). The kind-5 table at 0x454424 [bytes verified]:
+   `{5,6,7,8,9,0xA,0xB,0xC,0xD,0xE,0xF,0x10,−1}` — 13-frame debris
+   tumble, then free. The whole array is cleared 0x1800 B at
+   0x476fbc by FUN_0041a4f8 (the full-reset family) alongside
+   0x55ec B @0x4dedf2.
+8. **FUN_00422287 = the per-tile type-DB +0x18 byte writer** [whole
+   verified]: `(world_x>>5, world_y>>5)` → tile, bounds vs map w/h,
+   `byte[0x4796d4 + tile*0x1E] = value` clamped < 8. This CLOSES the
+   MISSIONVIEW §8.1 "+0x18 producer OPEN" question: the byte has a
+   runtime writer — the debris scorch ring (kind 5 passes 1/2/4 at
+   the six ring tiles). CAVEAT [needs one re-verify before wiring]:
+   7g.3's robots() reader treats byte != 0 as an ARMOR PAD
+   (FUN_004100b7(idx,20)); whether scorch values and pad values
+   share the byte or a mask separates them is not yet pinned — the
+   reader at 0x40bbab tests the raw byte != 0, so on the current
+   decode a death WOULD arm 6 armor-pad tiles around the corpse.
+9. **The debris draw pass** [verified 0x4063e3..0x4064f4, inside
+   FUN_00403938]: per active, non-delayed record: the same iso
+   projection with +0x110 offsets, bounds 0x23f/0x23e, sprite =
+   `(i16)table[+0x2C][+0x18]`, `== −1` skip; kind (+0x1C) ∈
+   {3, 7, 0xA} → enqueue layer 0x12c else layer 0x12e (DARKPAL),
+   BOTH from bank 0x4edd6c = **BLOWUP.BIN** (region variant
+   BLOWUPG.BIN when `[0x4eba1c] == 1`, name strings 0x45883b/0x458827
+   [verified]). The earlier "effects loop 0x4cf638 / FUN_00401e39
+   draw_IMG" backlog item is a DIFFERENT family (the 0xa00 @0x4cec38
+   + 0x960 @0x4cf638 arrays, boot-cleared alongside the rows —
+   census only this unit).
+
+Engine seam (this unit): presentation-side effect rows + debris
+stager modeled in the mission scene over the already-landed sim
+outcomes (7g.6 DamageOutcome debris, 7h.2 PickupOutcome ids) — no sim
+hash inputs, pins stay frozen. The blink cursor reads the existing
+selection state (the sidebar already models the select strips +
+selected index). FLAGS.BIN/BLOWUP(B/G).BIN join the mission fetch
+chain; the two new draw passes land in the enqueue/flush order of
+FUN_00403938's tail. NOT modeled: the 0x4cec38/0x4cf638 effect-array
+families, the debris physics/collision FUN_0040de9c (no corpus-path
+producer), the scorch-byte write (pending the 7j.8 caveat re-verify),
+SFX.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
