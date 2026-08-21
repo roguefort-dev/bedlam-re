@@ -1799,7 +1799,9 @@ the type-DB tail producers. All [verified] asm unless tagged.
    FUN_00422cc2@0x448085 and FUN_0042205c@0x448080): 1/32 gate
    (RandA&0x1f == 0), else exit; start from the last damage site
    0x4dc5c8/0x4dc5cc + RandA&7 jitter −3; require
-   word[0x465daa+2·tile] ≠ 0; find the FIRST water level (same
+   word[0x465daa+2·tile] ≠ 0 (gate read 0x422b0d — the queue's
+   third "writer" site is this reader); find the FIRST water
+   level (same
    z-scan); RandA&3 → 4-way direction {up, right, down, left};
    walk the ray while each next tile's z-word is in the water
    range; one step back onto the last water tile; if in bounds →

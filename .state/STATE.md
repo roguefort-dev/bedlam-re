@@ -1,3 +1,26 @@
+ - CLOSED 2026-08-21 (P4 7j.12 FUN_00422693 platform/destructible
+   family decode unit COMPLETE, commits f759b3a + state, worker
+   5aa2d164 claim 1, D60, docs-only): RE-EXW-SIM amendment 7j.12
+   pins the gate banks — 0x460dfa = the tile OBJECT-WORD GRID
+   (0/0x7d2/0x7d3/0x7d4/object-id n → rec n−1 @0x46cbf4
+   {x,y,z,id,flags,hp}), 0x465daa = the PLATFORM STRENGTH word
+   (the §7c "TOT mirror" gloss superseded). FUN_00422693 = the
+   damage entry (weaken/scorch+4/conditional ring spread, or
+   destroy: water z-word cleared via FUN_0042394a@0x422750 +
+   both banks + 5 kind-7 debris@0x4227b9); FUN_00422832/8ce =
+   the spread ring (0x7d4+strength+water z-word create
+   @0x422a54); FUN_00422a9c = the 1/32 creep tick (strength 199,
+   site latch 0x4dc5c8/cc). PRODUCERS CLOSED: 0x7d2/0x7d3
+   (FUN_00422f18, load 0x447b8f, per-zone ranges 0x454a20/
+   0x454a3c — §7g.5), type-DB +0x19/+0x1a (FUN_00422fd1, load
+   0x447ba3, 45×0x10 rect list @0x4dcae8 — MISSIONVIEW §8.1),
+   scorch increment (FUN_0042223c, +v clamp 7). FUN_00422cc2 =
+   the 32-timer delayed-trigger tick → floor-word write via
+   FUN_0041bd54 (fast z-writer; second 0x454a90 context — 7h.3
+   pickup producer still open). ENGINE: none (D60 — all callers
+   off the corpus path; banks/timers stay unwired). Pins
+   untouched (no code change); manifest verified. Pushed.
+   Queued: the weapon-fire family first hop.
  - CLOSED 2026-08-21 (P4 7j.10 FUN_00424051 decode unit COMPLETE,
    commits 782a25b + 54c4109 + d08b51f, worker 89d34b53 claim 1,
    D58): RE-EXW-SIM amendment 7j.10 IDENTIFIES the 7j.9 item-5

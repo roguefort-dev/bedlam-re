@@ -1,22 +1,25 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The FUN_00422693 platform/destructible-terrain family
-   decode (415 B @0x422693 + the 0x4227xx..0x422fxx kin): the
-   0x465daa/0x460dfa per-tile word gate banks (writers incl.
-   0x4227d5/0x422a73/0x422b0d, the 0x7d2/0x7d3/0x7d4 tile
-   words), the two FUN_0042394a calls @0x422750/0x422a54 (the
-   ONLY non-splash, non-arrival z-structure writers), and the
-   k7 debris staging @0x4227b9 — surfaced by 7j.11; feeds the
-   gate-bank semantics the 7h pickup floor-word swap + the
-   D53-noted 0x7d2/0x7d3 tile words both need. Keep it
-   bounded: this family only, census the rest.
+1. [P4] The weapon-fire family FIRST HOP — the FUN_0041a894
+   projectile ray head (5000 B): the ray stepping + the
+   0x41a84f object-grid stamp loop + the 0x41a8c0..0x41a906
+   object-grid dispatch (context decoded 7j.12; now pin the
+   walk itself, the damage value esi, and which callers feed
+   it), plus a caller census of the 17 sites. Bounded: the
+   ray/head only. Unlocks in one hop: the water-splash
+   producers (7j.10), the platform-damage caller (7j.12),
+   17 of 20 debris kinds (7j.11), and the FUN_00422e0a/
+   00422600 trigger producers.
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed
   countdown writes + the record draw pass 0x4065f8..0x4066a3) —
   the delayed-arrival scheduler is decoded (7j.11 item 1), its
-  producers are not.
+  producers are not. NOTE 7j.12: the 45x0x10 rectangle list at
+  0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
+  before the arrival array 0x4dcdb8 — same producer family is
+  likely.
 - The weapon-fire family decode (FUN_0041a894, 5000 B, 17 callers
   + FUN_00412f34/FUN_00417e2f/FUN_0041bc1c): the 11 splash-stager
   call sites of 7j.10 + the debris co-staging + the projectile/
@@ -24,7 +27,8 @@
   system (the 250-record tick decoded in 7j.10, currently unwired
   for want of a corpus producer) AND stages 17 of the 20 debris
   kinds (the 7j.11 census: k1..k4/k6/k7/k8..k20 producers all
-  live here or in the platform family).
+  live here or in the platform family). [NOW ITEM 1 = the first
+  bounded hop of this.]
 - The debris-stager ENGINE widening beyond kind 5 (fed by the
   7j.11 20-kind table + the 11 seq tables): model the k2/k8
   single-center scorch (values 3/4), the k1/k20 shared-tail
@@ -90,6 +94,32 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.12 FUN_00422693 platform/destructible family
+  decode unit COMPLETE (worker 5aa2d164 claim 1, commits f759b3a
+  + follow-up, D60, docs-only): the gate banks PINNED —
+  word[0x460dfa+2·tile] is the tile OBJECT-WORD GRID (0 empty /
+  0x7d2 hazard / 0x7d3 phase-clamp / 0x7d4 platform / n>0 =
+  destructible object rec n−1 @0x46cbf4 stride 0x14
+  {x,y,z,id,flags,hp}); word[0x465daa+2·tile] = PLATFORM
+  STRENGTH. FUN_00422693 = damage entry (weaken: strength−=
+  damage + scorch+4 via the NEW increment writer FUN_0042223c +
+  conditional 8-tile ring spread; destroy: FUN_0042394a
+  (x,y,z,0,0) clears the water z-word @0x422750 + both banks +
+  5× kind-7 debris @0x4227b9); FUN_00422832/8ce = spread ring
+  (writes 0x7d4 @0x422a61 + strength @0x422a73 + water z-word
+  create @0x422a54; needs empty z-word + planeA 0 + planeB 1 +
+  no robot on the SE 2×2); FUN_00422a9c = the 1/32 creep tick
+  (water-ray walk, FUN_00422832(…,199), site latch
+  0x4dc5c8/cc); FUN_00422f18 = the 0x7d2/0x7d3 STAMPER (7g.5
+  producer CLOSED — per-zone ranges 0x454a20/0x454a3c);
+  FUN_00422fd1 = type-DB +0x19/+0x1a stamper from the 45×0x10
+  rect list @0x4dcae8 (MISSIONVIEW 8.1 partially closed;
+  +0x1b/+0x1c still open); FUN_00422cc2 = 32-timer delayed-
+  trigger tick (expiry → SFX 0x4239ef(0x22,3), flags 0x40,
+  z-plane clear, floor-word write via the fast z-writer
+  FUN_0041bd54 — second 0x454a90 context; the 7h.3 PICKUP
+  producer stays open). No engine change (D60 — callers all off
+  the corpus path). Queued: the weapon-fire family first hop.
 - 2026-08-21: P4 7j.11 FUN_00420608 kind census unit COMPLETE
   (worker 804e8c9d claim 1, commit 199fe32, D59, docs-only):
   the 0x4203a5 queue NOTE answered — the FUN_0042394a call is
