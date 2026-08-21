@@ -1,3 +1,34 @@
+- CLOSED 2026-08-21 (P4 sidebar bars + score strip COMPLETE,
+  commits a11e468 + 2035395 + 3f7fad7, worker 36c9e956 claim 1,
+  D52): RE-EXW-SIM amendment 7f decodes the vitals family —
+  FUN_0040807f (HP bar 0x18..0x46 @ (0x1E8+0x32k, 0x3C), armor bar
+  word@+0x30 0x60..0x8E @ (slot_x, 0x49), exact clamps/idiv/cap),
+  FUN_004085ce (NUMBERS.BIN strip: icon 0xA + 9 unsigned score
+  digits / icon 0xB + 6 signed money digits, exact x tables),
+  the CORRECTED FUN_00403938 tail order (bars -> strip countdown ->
+  rows countdown), FUN_004072bf exact gates (+ the +0x2E HIT-FLASH
+  correction — armor is word +0x30), FUN_0040e230 damage
+  application (shield absorb +0x88, death path w/ debris RNG),
+  FUN_0040eba0 cases (health/shield/drop/ammo/score-money), the
+  armor producers (FUN_004100b7 +20 on type-DB +0x18 pad tiles vs
+  -10/frame bleed, clamp 3000), the dropship-landing hp init
+  (5000+battery*100), the score/money + NUMBERS.BIN census (23rd
+  chain asset, sole consumer the strip). ENGINE (2035395):
+  MissionScene draws the bars + strip from HOST-STAGED Vitals
+  {hp,armor} (D52: hp = 5000+100*battery via the BATTERY PACK
+  loadout group; armor 0 — the empty 0x8E bar draws every frame
+  exactly like the original) + campaign session state (0/4000
+  fresh) with the case-4 pickup seam (PICKUP_AWARDS, two rand_a
+  draws from the shared sim stream, countdown 2); portrait hp>=1
+  gate; the corrected tail order. Gates: 41 suites green (2 new
+  unit tests), fmt/clippy -D warnings clean, smoke two-run
+  byte-identical, MANIFEST verified; frame pins regenerated ONCE
+  (spawn 9ecd7691d388bbfa, walk 333d128dc812d547, overlay
+  1504c600819e724c stale-sidebar, armed 86a788ff93bd78a5), sim
+  pins UNCHANGED (36ddc86345c8351c / f35db41f0efb858d /
+  64ef1ddbc65cba47 — the damage path did not land). Pushed. P4
+  sidebar follow-up queued: the damage unit (promote hp/armor to
+  real sim fields + apply_damage + deliberate re-pin).
 - CLOSED 2026-08-21 (P4 map-overlay family COMPLETE, commits 78b2506
   + 9cb8fbe + 59af1b3, worker 6d689cfd claim 1, unit finished across
   an interrupted predecessor run): RE-EXW-SIM amendment 7e decodes
