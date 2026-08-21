@@ -1,18 +1,30 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] mission sidebar: the [480,640) strip (RE-EXW-SIM sec 9 open
-   item 3 - sidebar order buttons + redraw flags). GAMEPAL has
-   landed (7c25bfd), so the mission plane owns its palette and the
-   present path is stable. Decode the EXW sidebar producer(s)
-   first, commit RE notes, then wire the engine side (order buttons
-   hit-test/click feedback inside the existing mission pointer seam,
-   sidebar redraw flags) with corpus-gate pins. Keep tests, fmt,
-   clippy -D warnings, headless smoke two-run identity, and the
-   MANIFEST check green; re-pin corpus gates only with documented
-   regeneration if (and only if) a hashed frame legitimately
-   changes.
+1. [P4] mission sidebar ART: decode the sidebar redraw pass
+   FUN_00408403 (the DAT_0046ccec consumer, RE-EXW-SIM sec 6c.5)
+   + which bank feeds it (GENERAL/WEAPONS.BIN family - the 8street
+   census lists the candidates) and what the [480,640) strip should
+   contain per frame. Commit RE notes first, then wire the present
+   path so the strip stops being black (MissionScene::present +
+   DESIGN-GAME sec 11 SIDEBAR PRODUCER). The redraw countdown
+   landed (490d856); the corpus-gate frame pins WILL legitimately
+   move when sidebar pixels appear - re-pin once with the
+   regeneration documented in the gate header (sim pins must NOT
+   move). Keep tests, fmt, clippy -D warnings, headless smoke
+   two-run identity, and the MANIFEST check green.
 ## Backlog (not yet started)
+- The 0x4de664 per-type ORDER table loader (RE-EXW-SIM sec 9 item 5
+  remainder): find the file source (no static xrefs; [hypothesis]
+  TABLE.BIN) + the word@0x4edb90 player-robot TYPE producer
+  (GameMain@0x41c34c), then replace the all-7 availability default
+  and set_order_availability seam with the real table.
+- The map-overlay family (sec 6c.1): _DAT_004edba0/FUN_004089b1 +
+  the FUN_00401107 present-window map mode - needed before the
+  map-toggle strip can be wired.
+- Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
+  MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
+  button bit-map assignment.
 - Title-menu polish backlog (all optional, none block P4): pin the
   menu BACKDROP content (RE-EXW-TITLEMENU sec 8 - the 0x64000
   PresentCopy buffer), HOF + CREDIT_1..13 page flows (RE sec 6),
@@ -33,9 +45,8 @@
   FUN_00401e39 draw_IMG codec family, a DIFFERENT .BIN sprite layout
   per RESEARCH-8STREET), ROBNUMS name plates, Shield/Variant bank
   staging (nodes enqueue, flush skips while unstaged).
-- RE-EXW-SIM sec 9 open items 2-5: FUN_00440e45 identity, robots()
-  extra-phase semantics + state-1 producers, sidebar order buttons,
-  the 0x62-stride robot-type stats table.
+- RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity, robots()
+  extra-phase semantics + state-1 producers.
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DOSBox-X memory-watches + scripted input injection -> per-frame
   original state dumps diffed against engine state. Design doc first.
@@ -51,6 +62,22 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 mission sidebar producer COMPLETE (worker 6ebe5cff
+  claim 1, commits cfee256 + 490d856): RE-EXW-SIM sec 6c =
+  sidebar_control@0040d197 fully decoded (select strips, 7 order
+  rows + keys 1..7, the order-bits word +0x6E with +0x38+8k gates,
+  the DAT_0046ccec redraw COUNTDOWN consumed by the FUN_00403938
+  tail, the 0x62-stride table = 7x0x0E ORDER groups, alive offset
+  fixed to +0x7C double-anchored) + engine wiring (MissionScene
+  sidebar presentation half: click dispatch, strips with
+  squad/alive gates, rows with per-robot availability mask
+  [design all-7 default + host seam], redraw countdown per
+  present; D17-pinned that none of it arms orders or moves the sim
+  hash). New tools/ghidra-scripts/XRefList.java. 4 unit tests + a
+  real-ZONEA corpus gate pin block, all existing hash pins
+  unchanged. 435 tests green, fmt/clippy clean, headless smoke
+  two-run byte-identical at the recorded baseline, MANIFEST
+  verified. Pushed.
 - 2026-08-21: P4 window-host exit path FIXED (worker 34bd8958 claim
   1, commits 1b45f3c + 246f2a1, D48): Escape in bedlam-shell
   --window exited via SIGSEGV (coredump 422346). Decoded stack

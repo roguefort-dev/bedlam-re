@@ -1,4 +1,40 @@
+- CLOSED 2026-08-21 (P4 mission sidebar producer COMPLETE, commits
+  cfee256 + 490d856, worker 6ebe5cff claim 1): RE-EXW-SIM sec 6c
+  decodes sidebar_control@0040d197 in full (decompile + objdump
+  0x40d197..0x40d712 + a new tools/ghidra-scripts/XRefList.java for
+  xref provenance): map-toggle strip x[0x213,0x24D] y[0x1B5,0x1CF]
+  writes _DAT_004eb8dc=5 + toggles the overlay bit _DAT_004edba0
+  (CORRECTS sec 6.2's old gloss that claimed it wrote DAT_0046cbdc);
+  robot-select strips [0x1E7,0x217]/[0x219,0x249]/[0x24B,0x27B] x
+  y[5,0x35] gated by squad size + the ALIVE dword -> DAT_0046cbdc +
+  redraw DAT_0046ccec=2; order keys 1..7 + the 7-row strip
+  x[0x1E9,0x275] y[0x57,0xB8] (row=(y-0x57)/14 clamp 6) toggle bit k
+  of the ORDER-BITS word +0x6E gated by word +0x38+8k;
+  DAT_0046ccec is a per-frame COUNTDOWN (the FUN_00403938 draw tail
+  decrements it and calls the sidebar redraw pass FUN_00408403);
+  FUN_00424a6e is an empty stub. The 0x62-stride type table at
+  0x4de664 is structurally the 7x0x0E per-type ORDER table (spawn
+  copies group word0->+0x36+8i, word1->+0x38+8i twice; order bits
+  default 1<<first-available; player TYPE from word@0x4edb90);
+  file source open ([hypothesis] TABLE.BIN). Field-table offset fix
+  double-anchored (0x40d269 + 0x424810): alive=+0x7C@0x4c6a60,
+  countdown=+0x80@0x4c6a64. ENGINE (490d856): MissionScene grows the
+  sidebar presentation half (D17 - unit + corpus pinned that sidebar
+  clicks never arm orders and never move the sim hash): click
+  dispatch x>=0x1E0 -> sidebar_control, select strips with the
+  squad/alive gates, 7 order rows with per-robot availability
+  (default all-7 [design], set_order_availability host seam,
+  spawn-default bits 1<<first), redraw countdown set 2 / decremented
+  per present. Map-toggle + keyboard latches documented out of
+  scope. 4 new unit tests + a real-ZONEA corpus gate pin block; all
+  existing hash pins unchanged. 435 workspace tests green, fmt +
+  clippy -D warnings clean, headless smoke two-run byte-identical
+  AND identical to the recorded baseline (scene 696adb1cd110e062,
+  parity cce30c983b97b16d, audio 110400/158092), MANIFEST verified
+  before and after. P4 slice remaining: the sidebar ART producer
+  (FUN_00408403 + its bank - the strip is still black), queued next.
 - CLOSED 2026-08-21 (P4 modern audio output rates COMPLETE, commit
+
   4ed1e26, worker 2cd16045 claim 1): the device edge speaks modern
   rates. DECISIONS D47 + DESIGN-AUDIO Q1 ANSWERED: cpal output
   negotiation prefers 48000 Hz, then 44100 Hz, then mixer-native
