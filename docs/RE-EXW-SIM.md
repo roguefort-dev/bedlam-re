@@ -833,6 +833,124 @@ presents the composed backbuffer; sim state untouched (never in the
 hash). Order-target markers 0x57..0x59 need the order staging (not
 modeled) — deliberately unwired (D50 never-invent).
 
+## 7f. Amendment 2026-08-21 (worker 36c9e956, the sidebar HP/armor
+bars + the score strip — the vitals producers)
+
+New dump `ghidra-project/exw-sidebarbars.txt` (script
+`tools/ghidra-scripts/ExwSidebarBars.java`, -process -noanalysis) +
+full-EXE objdump displacement censuses. Tags [verified] = decompile +
+asm agree; the four draw functions are fully pinned.
+
+1. **FUN_0040807f = the HP + armor bars** [verified, 0x40807f..0x408402]:
+   per slot k (gates `DAT_0046cbd8 > k`), robot idx `DAT_0046cbd4 + k`,
+   GENERAL.BIN (`[0x4edd7c]`), `FUN_00401ca2(id, transp=1, x, y)`:
+   - HP bar @ (0x1E8 + 0x32*k, 0x3C): `hp = min(dword@+0x78, 5000)`
+     (SIGNED); `hp < 1 → sprite 0x46` else
+     `sprite = 0x46 - (hp * 0x2E) / 5000` (idiv, trunc toward 0);
+     i.e. ids 0x18 (full 5000) .. 0x46 (empty ≤ 0), 47 sprites.
+   - Armor bar @ (slot_x, 0x49): gate `word@+0x30 == 0 → sprite 0x8E`;
+     else `armor = SAR16(dword@+0x2E)` — **the armor VALUE is the word
+     at +0x30** (the NEXT.md "+0x2E armor" gloss read the dword AT
+     +0x2E; its HIGH word +0x30 is the value) — clamp ≤ 0x9C4 (2500),
+     `sprite = 0x8E - (armor * 0x2E) / 0x9C4`, then `> 0x8D → 0x8D`;
+     ids 0x60 (full 2500) .. 0x8E (empty), 47 sprites. Armor 0 (no
+     armor) still DRAWS the empty 0x8E bar every frame.
+2. **FUN_004085ce = the score/money strip** [verified, 0x4085ce..0x4085cd?
+   size 837]: NUMBERS.BIN (`DAT_0046af3c`, ESI at every call), transp=1:
+   icon 0xA @ (0x1FE, 0x18E); nine score digits of `_DAT_004dd40c`
+   (UNSIGNED div/mod 10) at x = 0x202, 0x20C, 0x216, 0x222, 0x22C,
+   0x236, 0x242, 0x24C, 0x256 (10^8..10^0 — irregular pitch, thousands
+   groups), y 0x18E; icon 0xB @ (0x20B, 0x1A4); six money digits of
+   `DAT_0046ae70` (SIGNED idiv — SAR/IDIV asm 0x4088b2..0x40890e) at
+   x = 0x211, 0x21B, 0x225, 0x231, 0x23B, 0x245 (10^5..10^0), y
+   0x1A4. Consumed by countdown `0x46ccf0` (decrement-then-draw).
+3. **The FUN_00403938 tail order CORRECTED** [verified,
+   exw-missionrender2 0x4071d5..]: overlay (non-return) →
+   FUN_004072bf portraits → FUN_0040807f bars → `0x46ccf0` strip →
+   `0x46ccec` rows → `0x46ccf8` SCANNER 0x12 → button chrome. The
+   strip pass runs BEFORE the row pass (the 6c.8d listing implied the
+   reverse).
+4. **FUN_004072bf portrait pass exact gates** [verified]: slot k draws
+   iff `ALIVE(+0x7C) != 0 AND hp(+0x78) >= 1`; sprite 0x12+k selected /
+   0x15+k not @ (0x1E7+0x32*k, 5). When dead/hp<1, or while
+   `word@+0x2E != 0`, a PATTERN blit `FUN_00401ae6(5, ..)` (mask bank
+   0x4e6ed8, nonzero bytes only [objdump 0x401b0e..0x401b53]) shades
+   the strip — **word@+0x2E is the HIT-FLASH timer, not armor**: damage
+   bumps it (`word@+0x2E += 1`, FUN_0040e230 0x40e6xx), this pass
+   clamps it to 5 then decrements it per frame while nonzero
+   (0x4073a0 region). The D50 gloss "+0x2E ticks armor" is corrected.
+5. **FUN_0040e230 = damage application** [verified, 0x40e230..0x40eb3c,
+   already dumped in exw-missionrender]: per robot idx (EAX), damage
+   EDX, killer EBX. Gates `DAT_0046cd0c == 0`, `type(+0x2A) != 2`,
+   ALIVE != 0. Type 3 (ordered): shield pool +0x88 = 0x20. Else if
+   `shield_charges(+0x8C) == 0 OR shield(+0x88) != 0` → the damage
+   path: `if shield(+0x88) == 0` → `hit_flash(+0x2E) += 1`,
+   `hp(+0x78) -= dmg` (with low-HP SFX thresholds vs
+   `5000 + battery(+0x94)*100`, half, eighth; the +0xA4 counter += 3,
+   > 100 → +0x34 = 100, shield = 0); else `shield = max(0, shield -
+   dmg)`. Else (auto-shield idle): `charges -= 1; shield = 0x20`.
+   `hp < 1` → DEATH: SP subset clears ALIVE, hp, armor(+0x30),
+   drop(+0x80)=1, the 7 order words, `DAT_0046ccec = 3`, spawns 5
+   debris via FUN_00420608 (2× RandA each — the shared stream!),
+   FUN_0042382c; MP mode-2 does kill bookkeeping + FULL respawn from
+   MRK + the equipment switch. NOT landed engine-side this unit (the
+   death/debris/robot-death-pass FUN_00409138 interplay + the RNG
+   interleaving need their own slice).
+6. **FUN_0040eba0 = the robot-state event consumer** [verified,
+   0x40eba0..0x40f273]: dispatch on a per-zone tile-type word (range
+   tables 0x454a58/0x454a74 indexed by `_DAT_004edd8c`) → cases:
+   1 = reinforcement staging (`drop(+0x80) = 1000`); 2 = shield
+   pickup (`shield(+0x88) = 1000`); 3 = HEALTH pickup
+   (`hp(+0x78) += 0x9C4` clamp 5000); **4 = the score/money pickup**
+   (player-type gate `type(+0x2A) == [0x4edb90]`): `RandA()&1 == 0` →
+   score += 1000/2000/5000/10000 by `RandA()&3`, else money
+   `DAT_0046ae70` += 10/50/100/250; EACH award sets
+   `0x46ccf0 = 2` (2 RandA draws per pickup — shared stream); 7 =
+   `+0xA0 = 200`; 8 = the ammo refill (6c.8b, also
+   `DAT_0046ccec = 2`); 9 = episode staging word `0x46cd30... = 2`.
+   All cases also stage sprite-list effects at the 0x4dc5d0 family.
+7. **The armor producers** [verified, objdump census — all writers of
+   `0x4c6a14`]: `FUN_004100b7(idx, amount)` (0x4100b7, called from
+   robots() 0x40bc72 with amount 0x14 when the robot's tile type-DB
+   byte@+0x18 (0x4796d4+type*0x1E) != 0 — an ARMOR PAD): armor += 20,
+   clamp 3000 (0xBB8); armor ≥ 2500 → FUN_004102b6 (full SFX), <
+   2500 → the charge SFX family. When the +0x18 byte == 0: armor
+   -= 10/frame, clamp ≥ 0 (robots() 0x40bc7d). Death/respawn zero it
+   (FUN_0040e230). So armor = a transient pad-charged shield that
+   BLEEDS 10/frame off-pad; the bar denominates 2500.
+8. **HP init = the dropship landing** [verified, exw-simtail 0x41fc..
+   family]: load_markers zeroes the records (hp 0, ALIVE 0); the
+   dropship-anim state 2 (landing) sets `ALIVE = 1` and
+   `hp = 5000 + battery(+0x94)*100` (0x4c6a5c write @ the landing
+   block); battery comes from the equipment switch (0x2B BATTERY
+   PACK word1, 0 fresh campaign). The engine's spawn collapses the
+   landing (D50 design) — the faithful spawn hp = 5000 + 100*battery.
+9. **Score/money + NUMBERS.BIN census** [verified xrefs]: score
+   `_DAT_004dd40c` writers: GameMain boot 0 (0x41c44e) + campaign
+   restart (0x41c5e2); pickups case 4; the FUN_0041a894 tally tail
+   (0x41b758, + 0x46ccf0 = 2); save-load 6-slot family (0x4188xx);
+   debrief readers. Money `DAT_0046ae70` writers: GameMain campaign
+   init (0x41c5ec — the 4000−500*diff fresh value), the SHOP
+   FUN_00440e45 everywhere, pickups, save-load, NameEntryScreen.
+   NUMBERS.BIN: `ArenaAlloc` 0x41da5e + LoadFile mission-init
+   (FUN_0041df10 @0x41dfae), SOLE consumer FUN_004085ce — stages with
+   the mission exactly like GENERAL/SMLFONT (13-file tail).
+
+Engine seam (this unit, D52): hp/armor stay HOST-STAGED presentation
+state (Sidebar `vitals`: hp i32, armor i16) — the damage path does NOT
+genuinely land this unit (death/debris/RNG interplay = its own slice),
+so the sim hash + pins stay frozen; the bars read the staged vitals
+with the faithful fresh defaults (hp 5000 — battery 0; armor 0 → the
+0x8E empty bar draws every frame exactly like the original);
+`set_weapon_loadout` derives battery from the 0x2B group and sets hp =
+5000 + 100*battery (the landing formula). score/money land as
+MissionScene session state (score 0, money 4000 fresh campaign), the
+case-4 producer as a host-seam method (+ 0x46ccf0 = 2), the strip on
+its own countdown (init 2 at activate, MissionShell 0x447c7a) in the
+corrected tail order. Portrait gate gains the hp ≥ 1 arm (default
+identical). The dither pattern blit + hit-flash stay unwired (never
+invent pixels; FUN_00401ae6/0x4e6ed8 bank decode queued).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
