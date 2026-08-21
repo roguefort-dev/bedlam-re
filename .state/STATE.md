@@ -1,3 +1,41 @@
+- CLOSED 2026-08-21 (P4 map-overlay family COMPLETE, commits 78b2506
+  + 9cb8fbe + 59af1b3, worker 6d689cfd claim 1, unit finished across
+  an interrupted predecessor run): RE-EXW-SIM amendment 7e decodes
+  FUN_004089b1@0x4089b1 END-TO-END (clear 0x4b000 backbuffer ->
+  TABLE.BIN image 0 the 480x480 RLE backdrop -> per-tile territory
+  stamps: the TOT type-DB mirror words destructively advanced through
+  the LNK image at 0x45cdda (the "0x45cdd8 table" of 7d.1 IS the LNK
+  file), mask = MIN bank [0x4edd9c] (load_mission's .MIN load),
+  color = MAPTRAN[variant[tile]] via FUN_00402ab8's 4x4 XLAT stamp at
+  row'=0x80+r+c-2z / col'=0xf0-2r+2c -> GENERAL 0x55/0x56 robot
+  markers at 2(tx-ty)+0xe4 / tx+ty+0x62-(z>>4) -> the PAD/order
+  0x57..0x59 loop 0x408c94..0x408dc4 -> the NON-RETURNING JMP
+  0x4072b8: overlay frames skip the whole sidebar tail). The
+  territory variants = FUN_00408dcc's 11x11 Chebyshev ring max-stamp
+  (dwords 0x454cf8, 7 center -> 1 corners) per moving robot.
+  MAPTRAN/PALTRAN loaders pinned (FUN_00422171/FUN_0042209b - the
+  MISSIONVIEW sec 8 u32[0x4dd444] producer question CLOSED: the
+  PALTRAN ramp pointers, slot 0 NULLed after load). The toggle
+  family: strip writes 0x4eb8dc=5 + toggles 0x4edba0; MissionShell
+  decrements per frame (0x44871d); entry zeroes the bit (0x44786b);
+  FUN_00401107 map mode presents the backbuffer 480x480 stride 640;
+  overlay-on game-area clicks swallowed at 0x40b868; button chrome
+  0x8f/0x5f/0x5e at (0x213,0x1b5), 0x5f dead code. ENGINE
+  (9cb8fbe + 59af1b3): bedlam-render MapOverlay (TERRITORY_RINGS,
+  stamp_territory, the lattice draw) + the mission chain tail
+  (TABLE.BIN, MAPTRAN0..7.TRN, zone-level .MIN - 22 staged assets);
+  MissionScene: the strip + lockout + overlay bit, the overlay frame
+  (clear viewport half only - the sidebar keeps stale pixels,
+  faithful to the screen), markers, chrome 0x5E per non-overlay
+  frame, ring stamps for moving robots; PAD/order markers 0x57..0x59
+  deliberately unwired (unmodeled order staging, never-invent).
+  Gates: 455 tests green, fmt/clippy clean, headless smoke two-run
+  byte-identical with hashes EQUAL to the prior commit; sim pins
+  UNCHANGED (36ddc86345c8351c / f35db41f0efb858d), frame pins moved
+  once (chrome: spawn b19a8034ee001253 / walk 1df4dfcb1e8b3eba /
+  armed 0a22733e37c88a3c) + new overlay pins (frame
+  f47217a154bf93c9, sim 64ef1ddbc65cba47); MANIFEST verified.
+  Pushed. P4 sidebar remaining: HP/armor bars + score strip (queued).
 - CLOSED 2026-08-21 (P4 weapon table COMPLETE, commits 5af9a70 +
   1c7b387, worker 4b75846d claim 1, D51): RE-EXW-SIM amendment 7d
   REFUTES the queued TABLE.BIN hypothesis (XRefList whole-program

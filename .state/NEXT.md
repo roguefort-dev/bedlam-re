@@ -1,30 +1,22 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The map-overlay family (RE-EXW-SIM sec 6c.1 + the new 7d.1
-   lead): TABLE.BIN's identity is now PINNED (a draw_IMG-family
-   bank whose image 0 is the map backdrop; sole reader
-   FUN_004089b1@0x4089d5) and FUN_004089b1 is half-decoded from the
-   7d run: clear the 0x4b000 map buffer (0x4ede18) -> draw_IMG
-   TABLE.BIN image 0 -> per-tile coloring via the word table at
-   0x45cdd8+2*type over the TOT type-DB mirror (PALTRAN/MAPTRAN
-   .TRN kin, strings 0x458c15..0x458c40) -> robot markers
-   GENERAL.BIN 0x55 (player type)/0x56 per slot alive-gated ->
-   PAD/order markers 0x57/0x58 from the 0x4e44f8 staging. Decode
-   the rest (0x408c94..0x408dc4 order-target loop, the
-   FUN_00402ab8 tile primitive, the MAPTRAN .TRN loader + the
-   0x45cdd8 table producer, the FUN_00401107 map-mode present +
-   the 0x4eb8dc=5 / _DAT_004edba0 toggle family in 6c.1), commit RE
-   notes first, then wire the map-toggle strip + overlay draw into
-   MissionScene (frame pins regenerate once; sim pins must NOT
-   move). Keep tests, fmt, clippy -D warnings, headless smoke
-   two-run identity, and the MANIFEST check green.
+1. [P4] Sidebar bars + score strip (RE-EXW-SIM 6c.8d, D52): FUN_0040807f
+   draws the HP bar (0x46 - hp*46/5000) + armor bar (0x8E - armor*46/2500)
+   at the sidebar bottom and FUN_004085ce the score/money strip (NUMBERS.BIN
+   glyphs). Both need sim state the engine does not model yet: the +0x78 hp
+   / +0x2E armor record fields (producers = damage application + the armor
+   pickup) and score/money (producers FUN_0040eba0 case 4: +1000/+2000/
+   +5000/+10000 score, +10/+50/+100/+250 money on pickups; fresh campaign
+   = score 0 + money 4000 per 7d.4). Decode the missing producers first
+   (bounded piece, committed RE notes), then decide the seam: host-staged
+   hp/armor like the D51 loadout vs real sim fields - prefer the REAL sim
+   fields if the damage path is decodable this unit (FUN_004247b5 family),
+   else stage and queue the damage path. Wire the bars + strip, keep the
+   tests/fmt/clippy/smoke/MANIFEST gates green, frame pins regenerate once
+   only, sim pins must NOT move unless the damage path genuinely lands in
+   the sim (then re-pin deliberately with the reason).
 ## Backlog (not yet started)
-- Sidebar bars + score strip (RE-EXW-SIM 6c.8d): FUN_0040807f HP
-  (0x46 - hp*46/5000) + armor (0x8E - armor*46/2500) bars need the
-  +0x78/+0x2E sim fields; FUN_004085ce score/money (NUMBERS.BIN)
-  needs score/money sim state (producers FUN_0040eba0 case 4:
-  +1000/+2000/+5000/+10000 score, +10/+50/+100/+250 money).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -67,6 +59,27 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 map-overlay family COMPLETE (worker 6d689cfd
+  claim 1, commits 78b2506 + 9cb8fbe + 59af1b3, unit finished
+  across an interrupted predecessor run): RE-EXW-SIM 7e =
+  FUN_004089b1 fully decoded (TABLE.BIN backdrop, LNK-word
+  territory stamps x MIN masks x MAPTRAN ramps, the
+  FUN_00408dcc 11x11 ring variants, GENERAL 0x55/0x56 markers,
+  the 0x408c94 order-target loop, the NON-RETURNING tail - the
+  sidebar passes are skipped, not else-branched) + MAPTRAN/
+  PALTRAN loaders (MISSIONVIEW sec 8 u32[0x4dd444] producer
+  CLOSED) + the toggle family (strip 5-frame lockout 0x4eb8dc,
+  bit 0x4edba0, FUN_00401107 480x480 present, click swallow
+  0x40b868, chrome 0x8f/0x5f/0x5e). ENGINE: bedlam-render
+  MapOverlay + the 22-asset mission chain tail (TABLE/MAPTRAN0-7/
+  zone .MIN) + MissionScene toggle strip, overlay frame (stale
+  sidebar half), markers, chrome, ring stamps. PAD/order markers
+  0x57..0x59 unwired (never-invent). Gates: 455 tests, fmt/clippy
+  clean, smoke two-run identical + hashes equal to prior commit,
+  sim pins UNCHANGED (36ddc86345c8351c/f35db41f0efb858d), frame
+  pins moved once (chrome) + new overlay pins
+  (f47217a154bf93c9/64ef1ddbc65cba47), MANIFEST verified.
+  Pushed.
 - 2026-08-21: P4 weapon table COMPLETE (worker 4b75846d claim 1,
   commits 5af9a70 + 1c7b387, D51): RE-EXW-SIM 7d REFUTES the
   TABLE.BIN hypothesis - TABLE.BIN is the map-overlay backdrop
