@@ -3536,6 +3536,167 @@ operand scan for 0x4c7226/0x4e66b8/0x4e66bc). All facts
    link @0x404464; FUN_00412a4a's CMP is the allocator probe
    itself).
 
+## 7j.24 Amendment 2026-08-21 (worker 0f986419, the CRITTER
+DEATH-HANDLER family + the FUN_0040e230 SP-tail addendum)
+
+Method: `DecompList`/`XRefList` + read-only objdump spot-checks
+(0x418835, 0x418aa6 regions), all `-process BEDLAM.EXW
+-noanalysis`. Dumps: `ghidra-project/exw-dead1.txt` (the six
+handlers + FUN_00424355 + FUN_0041a14f — predecessor WIP from
+worker ad591680's 7j.23 session tail, adopted), `exw-dead2.txt`
+(FUN_00421f4c/FUN_0041a494/FUN_0042382c), `exw-dead3.txt`
+(FUN_004238ea), `exw-hitters4.txt` (FUN_0040e230 FULL body —
+7j.23 head dump already contained the whole death tail),
+`exw-dead4.txt` (FUN_00418a9f + the family xref census),
+`exw-dead5.txt` (FUN_0040dce0). All facts [verified] against
+those dumps + objdump unless tagged. Record layout per §7j.23
+(base 0x4cff98 + idx·0x7E: kind w@+0x00, attacker u16@+0x04,
+hp s16@+0x06, state w@+0x0C, sub-timer w@+0x0E, impact d@+0x1C/
++0x20, presence w@+0x24, xyz d@+0x36/+0x3A/+0x3E, timer w@+0x56,
+knock vx/vy w@+0x74/+0x76, flash w@+0x7C).
+
+1. **THE SIX PER-KIND DEATH HANDLERS** [verified; Watcon args
+   EAX = critter idx, EDX = weapon id (k4/k5/6 only); FUN_00420608
+   = the §7j.11 debris stager (px args, kind, delay, owner)]:
+
+   | kind | handler | record writes | debris (FUN_00420608) | rows (FUN_0041a14f) | SFX | bounty |
+   |---|---|---|---|---|---|---|
+   | 1 | FUN_00418835 (155 B) | state := 7, presence := 0, d@+0x52 := 0 | 1× k1 @ (x,y,z raw — k1 px-scale), delay 0 | — | — | +0x1E (30) |
+   | 2 | FUN_004188d0 (156 B) | presence := 0, state := 7 | 1× k0xD @ (x>>8, y>>8, z>>8), delay 0 | — | — | +0x32 (50) |
+   | 3 | FUN_00418aa6 (510 B) | state := 7, timer w@+0x56 := 0, d@+0x52 := 0 | 1× k7 @ (x>>8, y>>8, z RAW Q13 → stager-clamps 0xFF) delay 0; then 3× k6 @ (x>>8±(RandA&0xF)−7, y>>8±(RandA&0xF)−7, z RAW+(RandA&0xF)−7) delays 0/2/4 | — | FUN_00421f4c(x>>8, y>>8) | +500 |
+   | 4 | FUN_00418ca4 (386 B, +weapon) | w@+0x02 := 1 (the §7j.17 "substeps" word — plausibly the death-anim rate [inferred]), hp := 0, state := 6, d@+0x52 := 0, timer w@+0x56 := 6 | 1× k7 @ (x,y,z raw — k4 px-scale) delay 1; weapon ∈ {0x24, 0x29, 0xC} → 3× k7 @ (x±(RandA&0x1F)−0xF, y±…, z+(RandA&0xF)−7) delays 1/2/3 | weapon-gated: 8 rows @ ((x<<8), (y<<8), (z+0x15)·0x100) | FUN_00421f4c(x, y raw) | +0x4B (75) |
+   | 5/6 | FUN_00418e26 (420 B, +weapon) | w@+0x02 := 1, hp := 0, state := 6, sub-timer w@+0x0E := 0, d@+0x52 := 0 | 1× k7 @ (x>>8, y>>8, z RAW → 0xFF) delay 1; weapon ∈ {0x24, 0x29, 0xC} → 3× k7 @ (x>>8±(RandA&0x1F)−0xF, …, z+(RandA&0xF)−7) delays 1/2/3 | weapon-gated: 12 (0xC) rows @ (x, y RAW Q13, (z+0x15)·0x100) | FUN_00421f4c(x>>8, y>>8) | +0x96 (150) |
+   | 7 | FUN_0041896c (307 B) | state := 6, w@+0x78 := 1 (low word of the §7j.17 +0x78 dword — semantics open) | 3× k7 @ (x>>8±(RandA&0x3F)−0x1F, y>>8±…, 0xFF−(RandA&0xF)) delays 1/2/3 — gibs falling from the top; then 1× k0xD @ (x>>8, y>>8, z RAW → 0xFF) delay 0 | — | FUN_0043a48e(_DAT_004edff8, 0, x>>8, y>>8, 3) FIRST | +1000 |
+
+   Kinds 1/2/3 die INSTANTLY (state 7 + presence cleared — no
+   corpse anim); kinds 4..7 enter the DYING anim (state 6, the
+   §7j.17 controller mode 7 runs 0x28 frames). The per-kind
+   coordinate split (k1/k4 px-raw vs others Q13 >>8) confirms
+   §7j.23 item 2 exactly [asm-verified 0x418adc/0x418af2: `sar 8`
+   on x/y, z raw]. Weapon gate {0x24 rocket, 0x29 homing, 0xC
+   5000-blast} = "killed by an explosive" → the 3 extra k7 debris
+   + the 8/12-row splash. Debris-kind census (§7j.11 item 6)
+   unchanged — all these sites were already listed; the kinds now
+   have producers: k1 (small chunk), k6 (chunk), k7 (pure-anim
+   no-ring), k0xD (tumble-family shared body w/ k1).
+2. **THE BOUNTY GATE** [verified, identical in all six]: attacker
+   u16@+0x04 ≠ −1 (0xFFFF) AND robot[attacker].type w@+0x2A
+   (d@robot+0x28 >>0x10) == [0x4edb90] (the player-type word) →
+   score `_DAT_004dd40c` += bounty AND `DAT_0046ccf0 := 2` (the
+   score-strip refresh flag, same mechanism as the §7j.6 item 6
+   pickup awards). Env deaths (attacker −1) and other-player
+   kills award nothing. The §7j.6 item 9 `_DAT_004dd40c` writer
+   census gains these six sites (0x418867/0x4188e6/0x418a92/
+   0x418d3e/0x418f04/0x418955 region).
+3. **SECOND DISPATCHER: FUN_0040dce0 = the DEBRIS-CRUSH death
+   dispatcher** [verified — CORRECTS the §7j.23 implication that
+   FUN_004190bc is the only dispatch site; xref census: sole
+   caller FUN_0040de9c @0x40e13b (the §7j.7 debris
+   physics/collision tick)]. Args (critter idx EAX, mag EDX,
+   heading EBX, dmg ECX). Guards: w@+0x02 ∉ {7,2} [field meaning
+   open — the §7j.17 "substeps" word], mag > 2, dmg ≠ 0. Then
+   FUN_0040eb3c(idx, dmg) applies the damage; FUN_004128ec reads
+   xyz; knock = pos + sin/cos(heading)·mag (FUN_0041eb65/77);
+   move FUN_00412998(idx, x', y', −1) when kind == 7 OR
+   FUN_0041e9a2(x'>>8, y'>>8, idx) ≠ 0 [wall test, census-noted];
+   then hp ≤ 0 (d@+0x04 >>0x10 ≤ 0) → attacker w@+0x04 := −1 and
+   per-kind dispatch: k4 → FUN_00418ca4(idx, 0) (NO weapon → no
+   explosive drops), k5/6 → FUN_00418e26(idx, **0x24**) (as-if
+   rocket → FULL explosive drops) but SKIPPED while state
+   w@+0x0C ∈ {5,6} (stunned/mid-death crush is absorbed — impact
+   x/y d@+0x1C/+0x20 still get the knocked pos), k1/2/3/7 →
+   plain. So flying debris CAN kill critters with attacker −1
+   (no bounty) — a second corpus-independent producer family for
+   the §7j.11 debris kinds.
+4. **FUN_00421f4c(x, y) = the CRITTER-DEATH SFX trio** [verified
+   via exw-dead2]: gated [0x4ede58] ≠ 0, RandB()%3 → one of banks
+   0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank, 0, x, y, 2).
+   Structural twin of the §7j.23 impact trio FUN_00421fc2
+   (0x4edf7c/80/84) — a fourth §7j.17 SFX-bank triple. k7 instead
+   uses the dedicated bank _DAT_004edff8 with push 3 (the only
+   push-3 caller known). A StoreScan for stores to these bank
+   words found none [direct stores absent — runtime pointer
+   init, unresolved; low priority].
+5. **FUN_0041a14f(x Q13, y Q13, z Q13, count) = the 0x4cec38
+   effect-row SPAWNER, fully decoded** [verified]: per row:
+   slot = FUN_0041a494 (ages EVERY row's w@+0 — CORRECTS the
+   §7j.23 knockback gloss "w@+0 0": w@+0 is an AGE word,
+   incremented once per spawn call — then returns the MAX-age
+   row: always-evict LRU over 0x50 = 80 rows × 0x20 = the 0xA00
+   bank, consistent with §7j.1); writes {age w@+0 := 0, x d@+2,
+   y d@+6, z d@+0xA, cos d@+0xE = FUN_0041eb65(rand)>>8, sin
+   d@+0x12 = FUN_0041eb77(rand)>>8, d@+0x16 := (RandA&7)·0x10 +
+   0x80, w@+0x1A := i if i < 8 else FUN_0041ec1c(5,0)+3
+   [inferred: a sprite/variant id — deterministic 0..7 walk for
+   counts ≤ 8, random beyond], w@+0x1C := 0, w@+0x1E := 0}.
+   Callers: FUN_00418ca4 (8 rows), FUN_00418e26 (12 rows),
+   FUN_00412f34 @0x413244 (controller ballistic landing, 0x18
+   rows — §7j.17). FUN_0041a028 (§7j.23 knockback) is a parallel
+   writer with a different +0x16 ttl (RandA&0x3F+0x1F).
+6. **§7j.17 expectation CORRECTED**: the death handlers call
+   FUN_00424355 ZERO times — no splash rings from the death
+   dispatch itself. The critter-path FUN_00424355 producers
+   remain the CONTROLLER's mode-6 ballistic landing (5 chunks,
+   §7j.17 item 1) and the suicide-bomb trigger FUN_00417e2f
+   (8 rings, §7j.17 item 2). FUN_00424355 itself re-verified
+   against exw-dead1: gates = map bounds, z ≤ 7, type-DB
+   z-word 0 + volume 0 (FUN_0041eb28), claim byte
+   [0x46af58-bank+tile] == 0; 250 (0xFA) slots stride 0xA at
+   0x4e9776 {x w@+2, y w@+4, z w@+6, delay w@+8, age w@+0xA};
+   alloc = first age-0 else max-age (FUN_0042394a(old x,y,z,0,0)
+   cancels the evicted record) — matches §7j.10 exactly.
+7. **FUN_00418a9f = a NOP stub** [verified, 0x418a9f..0x418aa6,
+   empty body]: called at the end of the k3 handler AND from
+   FUN_004197d4/FUN_00419943/FUN_00419c7c (+ conditional jump
+   from FUN_00419f62) — a cut-feature/placeholder hook; the k3
+   call does nothing.
+8. **ADDENDUM: the FUN_0040e230 SP tail — CONFIRMED + closed**
+   [verified against the full exw-hitters4 body; extends §7j.7
+   item 6 / §7j.23 item 6]: on hp < 1 the SHARED tail (both
+   modes) = MP-mode scoreboard first (mode 2 only: killer ==
+   victim ∨ killer == −1 → SUICIDE flag 0 + score−− clamp 0;
+   else killer flag 1 + score++ clamp 999; victim always flag 0,
+   score−− clamp 0, state d@+8 := 0xB — the clamp/suicide gate
+   is new vs §7j.23), then FUN_0042382c(idx) + DAT_0046ccec := 3
+   + the seven order words +0x38..+0x68 (step 8) zeroed + 5×
+   kind-5 debris (2× RandA each, z = robot z dword + 8k, delays
+   0/2/4/6/8). SP gate ([0x4edb88]==0 ∨ respawn_ok[idx]): if idx
+   == [0x46cbd4]+[0x46cbdc] → _DAT_004ede34 := 1;
+   alive d@+0x7C := 0, drop d@+0x80 := 0, hp d@+0x78 := 0,
+   d@+0x9C := 1, armor w@+0x30 := 0, death SFX 0x19/0x1A/0x1B per
+   squad slot. MP else-branch = full respawn: selected-robot
+   death-spot marker {0x4ea8ec/f0 := x/y>>8, 0x4ea8f4 := z,
+   0x4ea8f8 := 0x20}; +0xA0 := 0, alive := 0, order slots
+   [0x466cc30+idx·4] := −1, d@+0x9C := 1, [0x466cc60+idx·4] :=
+   −1, d@+0xB0 := 0, shield +0x88 := 0, hp := 0, hit-flash
+   w@+0x2E := 0, state w@+0x0C := 0, armor := 0, w@+0x10 := −1,
+   w@+0x16 := −1, w@+0x5E := 0, variant w@+0x18 := RandA&3, pod
+   timer w@+0x2C := 0x28; mode 2 → random MRK marker
+   (FUN_0041ec1c(0xC)) → pos := marker·0x2000+0xF00, z :=
+   word·0x20−1; 8 z-words +0x1A..+0x28 := z; probe re-seed
+   FUN_0041e897(x>>8, y>>8, idx); 7-slot weapon re-copy from
+   0x4de664 (0x62-stride/type: w@+0x36/+0x38 := table words,
+   first-nonzero sets order-bits w@+0x5E |= 1<<k); 2-entry
+   equipment switch from 0x4deafc (0x1C-stride/type, ids
+   0x2A→+0x8C, 0x2B→+0x94, 0x2C→+0x98 = value·200,
+   0x2D/0x2E→[0x46ae94+type·4] := 1/2).
+9. **FUN_0042382c = the robot-death BLAST-EFFECT stager — first
+   confirmed producer of the 0x4eb638 bank** [verified via
+   exw-dead2/3]: gate = tile claim/reveal byte
+   [0x46af58-bank + [[0x4ea900+(y>>0xD)·4]+[0x46af4c]+x>>0xD]]
+   == 0; slot = FUN_004238ea (32 slots, first d@+0xC == 0 else
+   MIN-d@+0xC — LRU); writes 0x4eb638+slot·0x14
+   {d@+0 := robot.x, d@+4 := robot.y, d@+8 := robot z dword
+   (d@+0x08), d@+0xC := 1 (age), d@+0x10 := 0}. The 0x4eb638
+   32×0x14 bank is the MISSIONVIEW §5d "platform loop" bank —
+   its draw pass consumes robot-death blast records [inferred
+   identity: same base address; the draw-side decode stays
+   backlog].
+
+Engine seam: NONE this unit (docs-only, D72) — critters load
+outside the current corpus gates; the death family re-opens
+when §7j.18's .NME staging lands engine-side. Pins untouched.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -3582,13 +3743,20 @@ operand scan for 0x4c7226/0x4e66b8/0x4e66bc). All facts
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
 | actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
-| critter hit applier | FUN_004190bc(critter,owner,x,y,z,weapon,mode): presence w@+0x24; kind switch w@+0x00 (1..7 = the .NME section states); mode 2 = octile<0x20 on x/y + z-box (kinds 1/4 cell-unit coords, 2/3/5/6/7 Q13; z 0x20/0x24/0x40), mode 1 = x/y only; kinds 3..7 immune while state w@+0x0C ∈ {6,7,0xB}; hit → hp w@+0x06 −= FUN_00419aff(weapon), attacker w@+0x04, flash w@+0x7C, kinds 4..7 state := 5; death per kind 1→FUN_00418835 2→FUN_004188d0 3→FUN_00418aa6 4→FUN_00418ca4(+weapon) 5/6→FUN_00418e26(+weapon) 7→FUN_0041896c | §7j.23 |
+| critter hit applier | FUN_004190bc(critter,owner,x,y,z,weapon,mode): presence w@+0x24; kind switch w@+0x00 (1..7 = the .NME section states); mode 2 = octile<0x20 on x/y + z-box (kinds 1/4 cell-unit coords, 2/3/5/6/7 Q13; z 0x20/0x24/0x40), mode 1 = x/y only; kinds 3..7 immune while state w@+0x0C ∈ {6,7,0xB}; hit → hp w@+0x06 −= FUN_00419aff(weapon), attacker w@+0x04, flash w@+0x7C, kinds 4..7 state := 5; death per kind 1→FUN_00418835 2→FUN_004188d0 3→FUN_00418aa6 4→FUN_00418ca4(+weapon) 5/6→FUN_00418e26(+weapon) 7→FUN_0041896c (§7j.24; the debris-crush dispatcher FUN_0040dce0 is the second dispatch site) | §7j.23 |
 | robot hit applier | FUN_00418fca(robot,x,y,z,weapon,mode): presence d@+0x7C; box test \|dx\|,\|dy\| < 0x20 (d@+4/+8 >>8) + mode-2 \|dz\| < 0x30 (d@+0xC raw); hit → FUN_0040e230(robot, FUN_00419aff(w@rec+0), d@rec+2 owner) + hp d@+0x78 clamp ≥0 | §7j.23 |
-| robot damage applier | FUN_0040e230(robot,damage,owner) [head]: state w@+0x0C==2 skip; state 3 → shield d@+0x88 := 0x20; gate d@+0x8C==0 ∨ d@+0x88≠0; alarm w@+0x34==0 → counter d@+0xA4 += 3, >100 → SFX 0x10/11/12 per player slot + w@+0x34 := 100; shield-down: hitcount w@+0x2E++, hp d@+0x78 −= dmg, tier SFX 0x2B/0x2C/0x2D, 0x13..0x15 (≤50%), 0x16..0x18 (≤12.5%) vs 5000+100·variant d@+0x94; shield-up: d@+0x88 absorb clamp 0; death MP: scoreboard 0xC-stride @0x4ebaa8 {score d@+0, flag d@+4, d@+8 := 0xB}, killer++/victim−− | §7j.23 |
+| robot damage applier | FUN_0040e230(robot,damage,owner): state w@+0x0C==2 skip; state 3 → shield d@+0x88 := 0x20; gate d@+0x8C==0 ∨ d@+0x88≠0; alarm w@+0x34==0 → counter d@+0xA4 += 3, >100 → SFX 0x10/11/12 per player slot + w@+0x34 := 100; shield-down: hitcount w@+0x2E++, hp d@+0x78 −= dmg, tier SFX 0x2B/0x2C/0x2D, 0x13..0x15 (≤50%), 0x16..0x18 (≤12.5%) vs 5000+100·variant d@+0x94; shield-up: d@+0x88 absorb clamp 0; death MP: scoreboard 0xC-stride @0x4ebaa8 {score d@+0, flag d@+4, d@+8 := 0xB} suicide gate killer==victim∨−1, killer++ cap 999/victim−− clamp 0; shared tail: FUN_0042382c blast record + DAT_0046ccec := 3 + 7 order words zeroed + 5× k5 debris; SP tail: selected→[0x4ede34] := 1, alive/drop/hp := 0, +0x9C := 1, armor 0, SFX 0x19/1A/1B; MP respawn: full reset + variant RandA&3, pod 0x28, MRK reposition, weapon/equipment re-copy | §7j.23, §7j.24 |
 | critter knockback juice | kinds 4/5/6 survive-hit 25% (RandA&3==0, owner ≠ −1) → FUN_0041a028(x,y,z Q13, robot x,y Q13): 2nd spawner of the 0x4cec38 0x20-stride effect rows (row {w@+0 0, xyz d@+2/+6/+0xA, cos d@+0xE, sin d@+0x12, ttl d@+0x16 = RandA&0x3F+0x1F, kind w@+0x1A = FUN_0041ec1c(5,0)+3}), heading away-from-shooter ±0x10 jitter + FUN_00420608(x+1,y+1,max(z−0x20,0),10,0,−1); kind 7 in-record knock instead (heading d@+0x10, vx/vy w@+0x74/+0x76 = cos/sin>>6) | §7j.23 |
 | impact SFX trio | FUN_00421fc2(x,y): [0x4ede58]≠0, RandB()%3 → one of banks 0x4edf7c/0x4edf80/0x4edf84 → FUN_0043a48e(bank,0,x,y,2) — the critter-hit spark sound | §7j.23 |
 | octile distance | FUN_0041ebf8(dx,dy) = max(\|dx\|,\|dy\|) + min/2 — the hit metric (and §7j.22 prefilter) | §7j.23 |
 | mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; SLOT ALLOCATOR CLOSED = FUN_00412a4a (20 slots, first active==0, else −1); allocated at spawn by FUN_0040a9ff when the robot slot weapon == 0xE (link := slot, active := 1, ring zeroed; non-mortar link := 0); cleared on free/detonate; draw pass open (FUN_00403938 reads link @0x404464) | §7j.22, §7j.23 |
+| critter death handlers | six per-kind handlers over bank 0x4cff98 (idx EAX; k4/k5-6 take weapon EDX): k1 FUN_00418835 state 7+presence 0+1× k1 debris; k2 FUN_004188d0 state 7+presence 0+1× k0xD; k3 FUN_00418aa6 state 7+timer 0+1× k7+3× k6 (delays 0/2/4)+FUN_00421f4c; k4 FUN_00418ca4 w@+0x02 := 1, hp 0, state 6, timer 6, 1× k7, weapon {0x24,0x29,0xC} → 3× k7 + 8 effect rows; k5/6 FUN_00418e26 w@+0x02 := 1, hp 0, state 6, sub-timer 0, 1× k7, weapon-gated 3× k7 + 12 rows; k7 FUN_0041896c state 6, w@+0x78 := 1, 3× k7 falling gibs (z 0xFF−r) + 1× k0xD, SFX FUN_0043a48e(0x4edff8,…,3); k1/k4 px-raw coords, others Q13 >>8, z raw-Q13 → stager-clamped 0xFF | §7j.24 |
+| critter bounty gate | all six handlers: attacker w@+0x04 ≠ −1 ∧ robot[attacker].type w@+0x2A == [0x4edb90] → score [0x4dd40c] += 30/50/500/75/150/1000 (k1/k2/k3/k4/k5-6/k7) + DAT_0046ccf0 := 2 (score-strip refresh, = the §7j.6 pickup mechanism); env kills award nothing | §7j.24 |
+| debris-crush death dispatcher | FUN_0040dce0(idx, mag, heading, dmg), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x02 ∉ {7,2} ∧ mag > 2 ∧ dmg ≠ 0; damage FUN_0040eb3c; sin/cos·mag knock + move FUN_00412998 (kind 7 ∨ wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24 |
+| critter-death SFX trio | FUN_00421f4c(x,y): [0x4ede58]≠0, RandB()%3 → banks 0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank,0,x,y,2); twin of the impact trio FUN_00421fc2 (0x4edf7c/80/84) | §7j.24 |
+| effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16 | §7j.24 |
+| robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age d@+0xC, d@+0x10} — the MISSIONVIEW §5d "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age) | §7j.24 |
+| NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
