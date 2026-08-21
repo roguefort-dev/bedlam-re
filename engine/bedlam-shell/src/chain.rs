@@ -146,25 +146,32 @@ pub fn stage_scene(
         }
         Scene::Shop => host.load_shop(&bytes[0])?,
         // Fetch order = load_mission order: TOT, DAT, PAD, CGR, BIN,
-        // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK.
-        // Single player: no robots override, no staged markers (the
-        // 0x46cbe0 network seam).
-        Scene::Mission => host.load_mission(
-            &bytes[0],
-            &bytes[1],
-            &bytes[2],
-            &bytes[3],
-            &bytes[4],
-            &bytes[5],
-            &bytes[6],
-            &bytes[7],
-            &bytes[8],
-            &bytes[9],
-            &bytes[10],
-            &bytes[11],
-            None,
-            &[],
-        )?,
+        // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
+        // TABLE, MAPTRAN0..7, MIN (the map-overlay family tail,
+        // RE-EXW-SIM 7e). Single player: no robots override, no
+        // staged markers (the 0x46cbe0 network seam).
+        Scene::Mission => {
+            let maptran: Vec<&[u8]> = bytes[13..21].iter().map(|v| v.as_slice()).collect();
+            host.load_mission(
+                &bytes[0],
+                &bytes[1],
+                &bytes[2],
+                &bytes[3],
+                &bytes[4],
+                &bytes[5],
+                &bytes[6],
+                &bytes[7],
+                &bytes[8],
+                &bytes[9],
+                &bytes[10],
+                &bytes[11],
+                &bytes[12],
+                &maptran,
+                &bytes[21],
+                None,
+                &[],
+            )?
+        }
         _ => unreachable!("scene_assets returned empty for this scene"),
     }
     Ok(names)
@@ -247,6 +254,16 @@ mod tests {
                 "GENERAL.BIN".to_string(),
                 "SMLFONT.BIN".to_string(),
                 "ZONEA/MISSION1.MRK".to_string(),
+                "TABLE.BIN".to_string(),
+                "MAPTRAN0.TRN".to_string(),
+                "MAPTRAN1.TRN".to_string(),
+                "MAPTRAN2.TRN".to_string(),
+                "MAPTRAN3.TRN".to_string(),
+                "MAPTRAN4.TRN".to_string(),
+                "MAPTRAN5.TRN".to_string(),
+                "MAPTRAN6.TRN".to_string(),
+                "MAPTRAN7.TRN".to_string(),
+                "ZONEA/MISSIONA.MIN".to_string(),
             ]
         );
         for scene in [
@@ -281,7 +298,7 @@ mod tests {
             mission.first().map(String::as_str),
             Some("ZONEA/MISSION1.TOT")
         );
-        assert_eq!(mission.len(), 12);
+        assert_eq!(mission.len(), 22);
         assert!(
             scene_assets(host.scene(), cfg, &cutscene, briefing.as_deref(), &mission).is_empty(),
             "boot transition fetches nothing"

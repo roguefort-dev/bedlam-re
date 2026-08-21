@@ -57,6 +57,15 @@
 //! ARMED spawn-frame pin. The SIM pins (spawn/click) and every
 //! observation pin are UNCHANGED.
 //!
+//! PIN REGENERATION 2026-08-21 (MAP OVERLAY unit, RE-EXW-SIM 7e):
+//! the FRAME pins (spawn/walk/armed) moved ONCE when the map button
+//! chrome 0x5E @ (0x213,0x1b5) joined the normal-frame tail draw
+//! (FUN_00403938 0x40724e - the last thing every non-overlay frame
+//! paints). The two NEW overlay pins (frame + sim hash at the
+//! toggle moment) cover the strategic-map compose. The SIM pins
+//! (spawn/click) and every observation pin are UNCHANGED - the
+//! overlay is presentation-only (D17).
+//!
 //! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
 
@@ -74,7 +83,8 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
 }
 
 /// The staged corpus inputs in load_mission order: TOT, DAT, PAD,
-/// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK.
+/// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
+/// TABLE, MAPTRAN0..7, MIN (the map-overlay family tail, 7e).
 fn zonea() -> Option<Vec<Vec<u8>>> {
     Some(vec![
         read(&["EDITOR", "ZONEA", "MISSION1.TOT"])?,
@@ -89,21 +99,39 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
         read(&["GAMEGFX", "GENERAL.BIN"])?,
         read(&["GAMEGFX", "SMLFONT.BIN"])?,
         read(&["EDITOR", "ZONEA", "MISSION1.MRK"])?,
+        read(&["GAMEGFX", "TABLE.BIN"])?,
+        read(&["GAMEGFX", "MAPTRAN0.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN1.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN2.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN3.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN4.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN5.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN6.TRN"])?,
+        read(&["GAMEGFX", "MAPTRAN7.TRN"])?,
+        read(&["EDITOR", "ZONEA", "MISSIONA.MIN"])?,
     ])
+}
+
+/// The MAPTRAN ramp slices in slot order (chain parameter shape).
+fn maptran_of(files: &[Vec<u8>]) -> Vec<&[u8]> {
+    files[13..21].iter().map(|v| v.as_slice()).collect()
 }
 
 /// One scripted run: boot out of Boot, Advance to Mission, stage the
 /// mission, one entry pump (spawn frame), aim the cursor at robot
-/// 0's projection, click (arm), then three walk pumps. Returns the
-/// observation chain (spawn frame hash, sim hash at spawn, click
-/// sim hash, walker state/anim after the walk, mid-walk frame hash).
-/// `arm_loadout` stages robot 0's weapon loadout (the D51 seam)
-/// before the scene activates - the fresh-campaign default is EMPTY
-/// [RE-EXW-SIM 7d.4].
+/// 0's projection, click (arm), then three walk pumps. Then the MAP
+/// OVERLAY moment (RE-EXW-SIM 7e): a click in the map-toggle strip
+/// rect opens the strategic map; the next pump presents the overlay
+/// frame. Returns the observation chain (spawn frame hash, sim hash
+/// at spawn, click sim hash, walker state/anim after the walk,
+/// mid-walk frame hash, overlay frame hash, sim hash at the overlay
+/// moment). `arm_loadout` stages robot 0's weapon loadout (the D51
+/// seam) before the scene activates - the fresh-campaign default is
+/// EMPTY [RE-EXW-SIM 7d.4].
 fn scripted_run(
     files: &[Vec<u8>],
     loadout: Option<&[(u16, u16); 7]>,
-) -> (u64, u64, u64, (u16, u16, i32), u64) {
+) -> (u64, u64, u64, (u16, u16, i32), u64, u64, u64) {
     let mut host = GameHost::new(
         &GameConfig::default(),
         &bedlam_core::sim::SimConfig::default(),
@@ -124,6 +152,9 @@ fn scripted_run(
         &files[9],
         &files[10],
         &files[11],
+        &files[12],
+        &maptran_of(files),
+        &files[21],
         None,
         &[(18, 73, 1)],
     )
@@ -198,7 +229,43 @@ fn scripted_run(
     let walker_obs = (walker.state, walker.anim, walker.pos_x);
     let walk_frame = host.frame().parity_hash();
 
-    (spawn_frame, spawn_sim, click_sim, walker_obs, walk_frame)
+    // --- the map overlay moment (7e) ------------------------------------
+    // Move to the map-toggle strip [0x213,0x24D]x[0x1B5,0x1CF] and
+    // click: the overlay bit flips, the lockout arms 5, and the next
+    // pump presents the strategic map instead of the viewport.
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: 0x230 - 304,
+            mouse_dy: 0x1C0 - 252,
+            ..InputFrame::default()
+        },
+    );
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    {
+        let mission = host.mission().expect("still on Mission");
+        assert!(mission.map_overlay_on(), "the strip opened the map");
+        assert!(mission.map_lockout() > 0, "the 5-frame lockout armed");
+    }
+    host.pump_frame(4, &InputFrame::default());
+    let overlay_frame = host.frame().parity_hash();
+    let overlay_sim = host.mission().expect("still on Mission").state_hash().0;
+
+    (
+        spawn_frame,
+        spawn_sim,
+        click_sim,
+        walker_obs,
+        walk_frame,
+        overlay_frame,
+        overlay_sim,
+    )
 }
 
 #[test]
@@ -208,10 +275,12 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         return;
     };
 
-    let (spawn_frame, spawn_sim, click_sim, walker_obs, walk_frame) = scripted_run(&files, None);
+    let (spawn_frame, spawn_sim, click_sim, walker_obs, walk_frame, overlay_frame, overlay_sim) =
+        scripted_run(&files, None);
     eprintln!(
         "scene pins: spawn_frame {spawn_frame:016x} spawn_sim {spawn_sim:016x} \
-         click_sim {click_sim:016x} walker {walker_obs:?} walk_frame {walk_frame:016x}"
+         click_sim {click_sim:016x} walker {walker_obs:?} walk_frame {walk_frame:016x} \
+         overlay_frame {overlay_frame:016x} overlay_sim {overlay_sim:016x}"
     );
 
     // Structural pins first: the frame carries real terrain + robots
@@ -235,6 +304,9 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         &files[9],
         &files[10],
         &files[11],
+        &files[12],
+        &maptran_of(&files),
+        &files[21],
         None,
         &[(18, 73, 1)],
     )
@@ -431,7 +503,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // not move across any of them.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "9f20732f29a5baf2",
+        "b19a8034ee001253",
         "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits, empty loadout)"
     );
     assert_eq!(
@@ -446,8 +518,22 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "27494d6ab505bcf3",
+        "1df4dfcb1e8b3eba",
         "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits, empty loadout)"
+    );
+    // The overlay pins [7e]: the strategic-map frame after the strip
+    // click, and the sim hash at that moment (the overlay never
+    // touches the sim — the hash differs from click_sim only by the
+    // frames that elapsed).
+    assert_eq!(
+        format!("{overlay_frame:016x}"),
+        "f47217a154bf93c9",
+        "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers)"
+    );
+    assert_eq!(
+        format!("{overlay_sim:016x}"),
+        "64ef1ddbc65cba47",
+        "sim state hash at the overlay moment"
     );
 
     // The ARMED path: robot 0 carries a staged loadout, so the entry
@@ -457,7 +543,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // column carries color-0x24 text pixels, and the sim hash at the
     // spawn moment is IDENTICAL to the default run (the loadout is
     // presentation-only state, D17/D51).
-    let (armed_frame, armed_sim, _, _, _) = scripted_run(&files, Some(&loadout));
+    let (armed_frame, armed_sim, _, _, _, _, _) = scripted_run(&files, Some(&loadout));
     eprintln!("armed pins: spawn_frame {armed_frame:016x} spawn_sim {armed_sim:016x}");
     {
         let mut host = GameHost::new(
@@ -478,6 +564,9 @@ fn zonea_mission1_scene_frames_hash_pinned() {
             &files[9],
             &files[10],
             &files[11],
+            &files[12],
+            &maptran_of(&files),
+            &files[21],
             None,
             &[(18, 73, 1)],
         )
@@ -530,7 +619,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     assert_eq!(
         format!("{armed_frame:016x}"),
-        "51ebd515bc638e81",
+        "0a22733e37c88a3c",
         "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text)"
     );
 
@@ -541,6 +630,162 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     assert_eq!(click_sim, again.2, "click sim hash reproducible");
     assert_eq!(walker_obs, again.3, "walker observation reproducible");
     assert_eq!(walk_frame, again.4, "walk frame reproducible");
+    assert_eq!(overlay_frame, again.5, "overlay frame reproducible");
+    assert_eq!(overlay_sim, again.6, "overlay sim hash reproducible");
     let armed_again = scripted_run(&files, Some(&loadout));
     assert_eq!(armed_frame, armed_again.0, "armed frame reproducible");
+}
+
+/// The strategic-map overlay on real corpus bytes [RE-EXW-SIM 7e]:
+/// the overlay frame is the TABLE.BIN backdrop + the MIN/MAPTRAN
+/// territory stamps + the GENERAL.BIN robot markers — the viewport
+/// half is REPLACED (nothing of the terrain frame survives below
+/// the backdrop's footprint... in fact the backdrop is a full
+/// 480x480 RLE image, so the half is fully owned by the map), the
+/// sidebar half keeps its stale art (the non-returning tail skips
+/// the sidebar passes + the button chrome), consecutive overlay
+/// presents are byte-identical (ZONEA's identity LNK makes the word
+/// consume idempotent), and toggling back redraws the viewport +
+/// the chrome.
+#[test]
+fn zonea_map_overlay_frame_composes_and_toggles() {
+    let Some(files) = zonea() else {
+        eprintln!("corpus absent - skipping (CI)");
+        return;
+    };
+    let mut host = GameHost::new(
+        &GameConfig::default(),
+        &bedlam_core::sim::SimConfig::default(),
+        [[0u8, 0, 0]; 256],
+    );
+    host.load_mission(
+        &files[0],
+        &files[1],
+        &files[2],
+        &files[3],
+        &files[4],
+        &files[5],
+        &files[6],
+        &files[7],
+        &files[8],
+        &files[9],
+        &files[10],
+        &files[11],
+        &files[12],
+        &maptran_of(&files),
+        &files[21],
+        None,
+        &[(18, 73, 1)],
+    )
+    .unwrap();
+    while host.scene() == Scene::Boot {
+        host.pump_frame(4, &InputFrame::default());
+    }
+    host.apply(SceneAction::Advance);
+    host.apply(SceneAction::Advance);
+    host.apply(SceneAction::Advance);
+    host.pump_frame(4, &InputFrame::default());
+    let normal = host.frame().indices.to_vec();
+    // The map button chrome 0x5E from the real GENERAL.BIN draws at
+    // (0x213,0x1b5) on every normal frame [7e.5].
+    assert_ne!(normal[0x1B5 * 640 + 0x213], 0, "chrome pixel nonzero");
+
+    // Open the map: click the strip rect.
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: 0x230,
+            mouse_dy: 0x1C0,
+            ..InputFrame::default()
+        },
+    );
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    assert!(
+        host.mission().expect("staged").map_overlay_on(),
+        "the strip opened the map"
+    );
+    host.pump_frame(4, &InputFrame::default());
+    let map1 = host.frame().indices.to_vec();
+    // The viewport half is fully owned by the backdrop (480x480 RLE
+    // image 0): it carries heavy content and differs from the
+    // terrain frame's half.
+    let map_viewport_nonzero = map1[..480 * 480].iter().filter(|&&b| b != 0).count();
+    assert!(
+        map_viewport_nonzero > 50_000,
+        "the backdrop + stamps own the viewport half ({map_viewport_nonzero})"
+    );
+    let diff: usize = (0..480 * 480).filter(|&i| map1[i] != normal[i]).count();
+    assert!(diff > 10_000, "the overlay replaced the terrain ({diff})");
+    // The territory stamps paint through the MAPTRAN ramps: MAPTRAN0
+    // is a flat 0x6B ramp, so the far-from-robot tiles that stamp
+    // paint 0x6B pixels (the walker moved, so rings 1..7 exist too —
+    // but the flat base dominates by area).
+    let flat = map1[..480 * 480].iter().filter(|&&b| b == 0x6B).count();
+    assert!(flat > 5_000, "MAPTRAN0 flat-color stamps paint ({flat})");
+    // The sidebar half keeps its stale pixels: the portraits band is
+    // byte-identical to the normal frame's (the non-returning tail
+    // skipped the sidebar passes; only [0,480) columns were redrawn).
+    let sidebar_same = (0..480usize)
+        .all(|r| map1[r * 640 + 480..(r + 1) * 640] == normal[r * 640 + 480..(r + 1) * 640]);
+    assert!(sidebar_same, "the sidebar half survives the overlay frame");
+    // The mission keeps ticking under the overlay (the next frame is
+    // a fresh overlay compose — the walker's markers/rings moved, so
+    // the frames legitimately differ in the viewport half while the
+    // sidebar half stays frozen).
+    host.pump_frame(4, &InputFrame::default());
+    let map2 = host.frame().indices.to_vec();
+    assert!(
+        (0..480usize)
+            .all(|r| map2[r * 640 + 480..(r + 1) * 640] == normal[r * 640 + 480..(r + 1) * 640]),
+        "the sidebar half stays frozen across overlay frames"
+    );
+    assert!(
+        map2[..480 * 480].iter().any(|&b| b != 0),
+        "the overlay keeps composing"
+    );
+    assert!(
+        host.mission().expect("staged").sim().frame() >= 4,
+        "the sim kept ticking under the overlay"
+    );
+
+    // Close the map: the strip is still clickable through the
+    // overlay (sidebar dispatch runs at x >= 0x1E0 regardless,
+    // 0x40b85e before the overlay check).
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 0,
+            ..InputFrame::default()
+        },
+    );
+    for _ in 0..6 {
+        host.pump_frame(4, &InputFrame::default()); // spend the lockout
+    }
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    assert!(
+        !host.mission().expect("staged").map_overlay_on(),
+        "the strip closed the map"
+    );
+    host.pump_frame(4, &InputFrame::default());
+    let reopened = host.frame().indices.to_vec();
+    let viewport_redrawn = (0..480usize)
+        .filter(|&r| reopened[r * 640..r * 640 + 480] != map1[r * 640..r * 640 + 480])
+        .count();
+    assert!(
+        viewport_redrawn > 100,
+        "the terrain frame returns ({viewport_redrawn} rows)"
+    );
+    assert_ne!(reopened[0x1B5 * 640 + 0x213], 0, "the chrome draws again");
 }

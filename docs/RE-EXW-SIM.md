@@ -898,9 +898,10 @@ modeled) — deliberately unwired (D50 never-invent).
    portraits, FUN_0040807f bars, FUN_004085ce score strip; banks
    GENERAL/SMLFONT/NUMBERS/SCANNER). Remaining open: the HP/armor
    bar + score-strip ENGINE wiring (needs +0x78/+0x2E sim fields,
-   score/money sim state), the map-overlay family
-   (_DAT_004edba0/FUN_004089b1/FUN_00401107 + the 0x4dc5d0 blink
-   producer), and the keyboard-latch wiring (P2e button map). The
+   score/money sim state), the 0x4dc5d0 blink producer, and the
+   keyboard-latch wiring (P2e button map). The map-overlay family
+   (_DAT_004edba0/FUN_004089b1/FUN_00401107) was DECODED 2026-08-21
+   amendment §7e and wired engine-side the same day. The
    name/count row TEXT landed 2026-08-21 (amendment 7d + D51: the
    loadout is host-staged session state; names via the pinned
    FUN_00420260 table).

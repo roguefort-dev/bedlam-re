@@ -24,8 +24,9 @@
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::dist_octagonal;
-use bedlam_core::mission::{AngleTable, MissionSim, Robot, Terrain};
+use bedlam_core::mission::{AngleTable, MissionSim, Robot, Terrain, STATE_MOVING};
 use bedlam_core::rng::Pcg32;
+use bedlam_render::map_overlay::{MapOverlay, OverlayRobot};
 use bedlam_render::mission_view::{
     present_window, DrawParams, MissionView, RobotView, VIEW_BUF_LEN,
 };
@@ -67,6 +68,22 @@ pub const SIDEBAR_PORTRAIT_XY: (i32, i32, i32) = (0x1E7, 0x32, 5);
 /// 0x24 [asm 0x4084f8/0x40853e], drawn through SMLFONT
 /// (FUN_00408913, 5x7 glyphs).
 pub const SIDEBAR_ROW_TEXT: (i32, i32, i32, i32, u8) = (0x1ED, 0x25C, 0x5B, 14, 0x24);
+/// The map-toggle strip rect, inclusive [sec 6c.1, asm
+/// 0x40d19d..0x40d21a]: fires when the 5-frame lockout is spent
+/// (`_DAT_004eb8dc == 0`; the screen-mode gate ∉ {1,7} is always
+/// true inside the Mission screen).
+pub const MAP_TOGGLE_RECT: (i32, i32, i32, i32) = (0x213, 0x24D, 0x1B5, 0x1CF);
+/// The toggle re-fire lockout [7e.5]: the strip writes 5 into
+/// `_DAT_004eb8dc`, MissionShell decrements it per frame
+/// (0x44871d..0x44872a) — no other consumer.
+pub const MAP_TOGGLE_LOCKOUT: i32 = 5;
+/// The map button chrome [7e.5, asm 0x40724e..0x4072b2]: GENERAL.BIN
+/// sprite 0x5E (map closed) at (0x213, 0x1b5) — the strip's own
+/// rect — drawn every NON-overlay frame at the tail of the sidebar
+/// passes. The 0x5F (open) branch is dead code in the EXW (the
+/// overlay draw never returns to it) and 0x8F is the other-screen
+/// look (modes 1/7), so the mission always draws 0x5E.
+pub const MAP_BUTTON_SPRITE: (u16, i32, i32) = (0x5E, 0x213, 0x1B5);
 
 /// The compiled-in weapon-name switch `FUN_00420260` [verified
 /// decompile + PE string bytes 0x4589DD..0x458C11, RE-EXW-SIM 7d.5]:
@@ -240,6 +257,22 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
         "GENERAL.BIN".to_string(),
         "SMLFONT.BIN".to_string(),
         format!("{per_mission}.MRK"),
+        // The map-overlay family tail [RE-EXW-SIM 7e]: TABLE.BIN
+        // (FUN_0041df10's `GAMEGFX\TABLE.BIN` mission-init staging),
+        // the 8 MAPTRAN ramps (FUN_00422171), and the ZONE `.MIN`
+        // mask bank (load_mission's `.MIN` load at 0x41dcd8 — the
+        // zone-file base, like CGR/BIN/LNK) — appended after MRK so
+        // the established indices hold.
+        "TABLE.BIN".to_string(),
+        "MAPTRAN0.TRN".to_string(),
+        "MAPTRAN1.TRN".to_string(),
+        "MAPTRAN2.TRN".to_string(),
+        "MAPTRAN3.TRN".to_string(),
+        "MAPTRAN4.TRN".to_string(),
+        "MAPTRAN5.TRN".to_string(),
+        "MAPTRAN6.TRN".to_string(),
+        "MAPTRAN7.TRN".to_string(),
+        format!("{zone_dir}/{zone_file}.MIN"),
     ]
     .to_vec()
 }
@@ -285,6 +318,18 @@ pub struct MissionScene {
     /// SMLFONT.BIN (63 glyphs) is the sidebar text bank [6c.8c];
     /// no text draws until the type table lands (never invented).
     smlfont: Vec<u8>,
+    /// `LoadFile("GAMEGFX\TABLE.BIN", [0x46cbbc])` — the strategic
+    /// map backdrop bank, image 0 a 480×480 RLE sprite [7e.1b].
+    table: Vec<u8>,
+    /// The strategic-map overlay half [RE-EXW-SIM 7e; D17 split —
+    /// outside the sim hash]: the `.MIN` mask bank + the 8 MAPTRAN
+    /// ramps + the territory variant bytes.
+    overlay: MapOverlay,
+    /// The overlay draw-mode bit `_DAT_004edba0` [7e.5]: toggled by
+    /// the map strip, zeroed at MissionShell entry (0x44786b).
+    overlay_on: bool,
+    /// The re-fire lockout `_DAT_004eb8dc` [7e.5].
+    map_lockout: i32,
     /// The sidebar presentation half [sec 6c; D17 split — outside
     /// the sim hash].
     sidebar: Sidebar,
@@ -320,6 +365,9 @@ impl MissionScene {
         gamepal: &[u8],
         general: &[u8],
         smlfont: &[u8],
+        table: &[u8],
+        min: &[u8],
+        maptran: &[&[u8]],
         zone: i32,
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
@@ -371,6 +419,13 @@ impl MissionScene {
         let mut view = MissionView::from_mission_bytes(tot, &planes, bin, lnk)
             .ok_or_else(|| bad("TOT/BIN/LNK", "malformed viewport bytes"))?;
         view.set_entity_bank(dante);
+        // The strategic-map overlay [RE-EXW-SIM 7e]: the mission's
+        // `.MIN` mask bank + the eight 256-byte MAPTRAN ramps over
+        // the map dims (malformed ramps are a staging error — the
+        // EXW arena always holds eight).
+        let (mw, mh) = view.size();
+        let overlay = MapOverlay::new(min, maptran, mw, mh)
+            .ok_or_else(|| bad("MIN/MAPTRAN", "not eight 256-byte ramps or bad map size"))?;
         let sidebar = Sidebar::new(sim.robots().len());
         Ok(MissionScene {
             sim,
@@ -385,6 +440,10 @@ impl MissionScene {
             palette,
             general: general.to_vec(),
             smlfont: smlfont.to_vec(),
+            table: table.to_vec(),
+            overlay,
+            overlay_on: false,
+            map_lockout: 0,
             sidebar,
             render_count: 0,
             active: false,
@@ -402,6 +461,10 @@ impl MissionScene {
         }
         self.cam_q5 = self.sim.robots().first().map(Robot::q5).unwrap_or((0, 0));
         self.sidebar.redraw = 2;
+        // MissionShell entry zeroes the overlay bit + the re-fire
+        // lockout family [7e.5, asm 0x44786b / 0x44871d].
+        self.overlay_on = false;
+        self.map_lockout = 0;
         self.active = true;
     }
 
@@ -430,6 +493,18 @@ impl MissionScene {
         &self.sim
     }
 
+    /// The sim half, mutable (the host/test order seam — the D17
+    /// presentation half never needs this).
+    pub fn sim_mut(&mut self) -> &mut MissionSim {
+        &mut self.sim
+    }
+
+    /// The map size in tiles (the TOT header — the overlay's
+    /// territory indexing).
+    pub fn view_size(&self) -> (i32, i32) {
+        self.view.size()
+    }
+
     /// The sim state hash (the D17 hashed half of the composition).
     pub fn state_hash(&self) -> StateHash {
         self.sim.state_hash()
@@ -452,25 +527,55 @@ impl MissionScene {
         if self.prev_buttons == 0 && left != 0 {
             if self.cursor.0 >= 0x1E0 {
                 self.sidebar_control();
+            } else if self.overlay_on {
+                // Overlay on: game-area clicks are swallowed
+                // [7e.5, asm 0x40b868 — the dispatch jumps past the
+                // order seam while `_DAT_004edba0` is set].
             } else {
                 self.click_robot();
             }
         }
         self.prev_buttons = left;
+        // MissionShell's per-frame lockout decrement [7e.5,
+        // 0x44871d..0x44872a].
+        if self.map_lockout > 0 {
+            self.map_lockout -= 1;
+        }
         self.sim.advance_frame();
+        // FUN_00408dcc — the territory ring stamp runs inside
+        // robots() for the moving-family machines [7e.3]; the
+        // engine's mover state word is the analog [design: the EXW
+        // state-2 gate maps to the walking robot].
+        for robot in self.sim.robots() {
+            if robot.alive && robot.state == STATE_MOVING {
+                let tx = ((robot.pos_x >> 8) + 0x10) >> 5;
+                let ty = ((robot.pos_y >> 8) + 0x10) >> 5;
+                self.overlay.stamp_territory(tx, ty);
+            }
+        }
     }
 
     /// The sidebar producer (mouse subset of sidebar_control@0040d197
-    /// [RE-EXW-SIM sec 6c]): robot-select strips + the 7 order rows,
-    /// gated exactly like the asm — alive robots only, squad slot
-    /// within the spawned group, order availability per robot. Sets
-    /// the redraw countdown to 2 on every fire. The map-toggle strip
-    /// [sec 6c.1] is out of scope (screen-mode globals + the overlay
-    /// family) — its rect is disjoint from both wired regions, so
-    /// clicks there stay a no-op, and keyboard latches wait for the
-    /// P2e button map.
+    /// [RE-EXW-SIM sec 6c]): the map-toggle strip FIRST [sec 6c.1,
+    /// asm 0x40d19d — the strip precedes the select strips], then
+    /// robot-select strips + the 7 order rows, gated exactly like
+    /// the asm — alive robots only, squad slot within the spawned
+    /// group, order availability per robot. The strip writes the
+    /// 5-frame lockout and toggles the overlay bit [7e.5]. Keyboard
+    /// latches (incl. the strip's MSpace twin) wait for the P2e
+    /// button map.
     fn sidebar_control(&mut self) {
         let (x, y) = self.cursor;
+        // Map-toggle strip [sec 6c.1]: fires iff the lockout is
+        // spent; toggles the overlay bit + re-arms the lockout.
+        let (x0, x1, y0, y1) = MAP_TOGGLE_RECT;
+        if (x0..=x1).contains(&x) && (y0..=y1).contains(&y) {
+            if self.map_lockout == 0 {
+                self.overlay_on = !self.overlay_on;
+                self.map_lockout = MAP_TOGGLE_LOCKOUT;
+            }
+            return;
+        }
         // Robot-select strips [sec 6c.2]: squad slot = strip index,
         // gated by the spawned group size (the DAT_0046cbd8 analog)
         // and the target's ALIVE word.
@@ -550,15 +655,54 @@ impl MissionScene {
     /// order-row chrome on the redraw countdown (FUN_00408403 —
     /// armed rows 0x47+0x4A, unarmed 0x49+0x4C, rows gated by the
     /// availability bit; the FUN_00408403 decrements-then-draws
-    /// rhythm [asm 0x407205..0x407217]). Name/count text, HP/armor
-    /// bars, the score strip, the deploy panel and the blink cursor
-    /// stay unwired — each needs state the sim does not model (see
-    /// 6c.8, never invented). Advances the LNK walk + edge stream
-    /// once — one render per host frame (D17 bucket b). Inert until
-    /// active.
+    /// rhythm [asm 0x407205..0x407217]), and the map button chrome
+    /// 0x5E at the tail's very end [7e.5]. THE OVERLAY REPLACES ALL
+    /// OF IT when the bit is set [7e.1f]: FUN_004089b1 never
+    /// returns (JMP 0x4072b8), so an overlay frame clears the
+    /// viewport half, draws the strategic map (backdrop + territory
+    /// stamps + robot markers) and skips the sidebar passes + chrome.
+    /// Name/count text, HP/armor bars, the score strip, the deploy
+    /// panel and the blink cursor stay unwired — each needs state
+    /// the sim does not model (see 6c.8, never invented); the
+    /// PAD/order markers 0x57..0x59 need the unmodeled order staging.
+    /// Advances the LNK walk + edge stream once — one render per
+    /// host frame (D17 bucket b). Inert until active.
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
+        }
+        if self.overlay_on {
+            // FUN_004089b1 [7e.1]: clear the presented 480×480 (the
+            // 0x4b000 rep-stos), then the overlay draw. The sidebar
+            // half keeps its stale pixels (the EXW surface is not
+            // cleared past the presented window).
+            for row in 0..480usize {
+                let dst = row * 640;
+                self.plane[dst..dst + 480].fill(0);
+            }
+            let robots: Vec<_> = self
+                .sim
+                .robots()
+                .iter()
+                .enumerate()
+                .filter(|&(_, r)| r.alive)
+                .map(|(slot, r)| OverlayRobot {
+                    x: r.pos_x,
+                    y: r.pos_y,
+                    z: r.z,
+                    selected: slot == self.sidebar.selected,
+                })
+                .collect();
+            self.overlay.draw(
+                &mut self.plane,
+                640,
+                &mut self.view,
+                &self.table,
+                &self.general,
+                &robots,
+            );
+            self.render_count += 1;
+            return Some(&self.plane);
         }
         self.draw_sidebar_portraits();
         if self.sidebar.redraw > 0 {
@@ -579,6 +723,10 @@ impl MissionScene {
             let dst = row * 640;
             self.plane[dst..dst + 480].copy_from_slice(&win[row * 480..(row + 1) * 480]);
         }
+        // The map button chrome [7e.5, asm 0x4072a7]: GENERAL.BIN
+        // 0x5E at (0x213, 0x1b5) — the last tail draw.
+        let (chrome, cx, cy) = MAP_BUTTON_SPRITE;
+        draw_sprite(&mut self.plane, 640, &self.general, chrome, cx, cy, true);
         self.render_count += 1;
         Some(&self.plane)
     }
@@ -702,6 +850,24 @@ impl MissionScene {
         self.sidebar.selected
     }
 
+    /// The overlay draw-mode bit (`_DAT_004edba0`, sec 6c.1/7e.5) —
+    /// the strategic map is being presented.
+    pub fn map_overlay_on(&self) -> bool {
+        self.overlay_on
+    }
+
+    /// The map-toggle re-fire lockout (`_DAT_004eb8dc`, 7e.5): the
+    /// strip arms 5, each tick decrements while nonzero.
+    pub fn map_lockout(&self) -> i32 {
+        self.map_lockout
+    }
+
+    /// The territory variant byte at a row-major tile (FUN_00408dcc's
+    /// 0x4c420c array — presentation-half state, 7e.3).
+    pub fn map_territory(&self, tile: usize) -> u8 {
+        self.overlay.variant(tile)
+    }
+
     /// The sidebar redraw countdown (`DAT_0046ccec`, sec 6c.5):
     /// producers set 2, each present decrements while nonzero.
     pub fn sidebar_redraw(&self) -> i32 {
@@ -791,14 +957,22 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     cgr.extend_from_slice(&0u32.to_le_bytes());
     cgr.extend_from_slice(&[0u8; 2]);
     cgr.extend_from_slice(&[0x1Fu8; 1024]);
-    // TOT: header + 8 zero u16 planes.
+    // TOT: header + 8 zero u16 planes, EXCEPT plane 0 carries word
+    // 1 on every tile (the map-overlay stamp input: LNK[1] = 2, a
+    // stable loop — see the MIN mask below).
     let mut tot = vec![0u8; 4 + 16 * n];
     tot[0..2].copy_from_slice(&(w as u16).to_le_bytes());
     tot[2..4].copy_from_slice(&(h as u16).to_le_bytes());
-    // BIN/LNK/MRK: empty bank, zeroed link table, one record.
+    for i in 0..n {
+        tot[4 + 2 * i..4 + 2 * i + 2].copy_from_slice(&1u16.to_le_bytes());
+    }
+    // BIN/LNK/MRK: empty bank, word-1/word-2 loop link table, one
+    // record.
     let bin = Vec::new();
     let mut lnk = vec![0u8; 0x4000];
     lnk.fill(0);
+    lnk[2..4].copy_from_slice(&2u16.to_le_bytes()); // LNK[1] = 2
+    lnk[4..6].copy_from_slice(&2u16.to_le_bytes()); // LNK[2] = 2 (loop)
     let mut mrk = Vec::new();
     for word in [1u32, 1, 1, 1] {
         mrk.extend_from_slice(&word.to_le_bytes());
@@ -825,10 +999,11 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     }
     assert_eq!(gamepal.len(), 770);
     // GENERAL: a synth UI bank — tiny 2x2 solid sprites for the
-    // portraits (0x12..0x17) and the row chrome (0x47/0x49 body +
-    // 0x4A/0x4C well), distinct pixel values per id so tests can
-    // tell armed from unarmed rows; everything else empty.
-    let general_count = 0x4Du16;
+    // portraits (0x12..0x17), the row chrome (0x47/0x49 body +
+    // 0x4A/0x4C well), the map markers (0x55/0x56) and the map
+    // button chrome (0x5E), distinct pixel values per id so tests
+    // can tell them apart; everything else empty.
+    let general_count = 0x5Fu16;
     let mut general = vec![0u8; 2 + 4 * general_count as usize];
     general[0..2].copy_from_slice(&general_count.to_le_bytes());
     let put = |bank: &mut Vec<u8>, id: u16, color: u8| {
@@ -847,7 +1022,15 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     for id in 0x12u16..0x18 {
         put(&mut general, id, 0x20 + id as u8);
     }
-    for (id, color) in [(0x47u16, 0xA7u8), (0x49, 0xB9), (0x4A, 0xCA), (0x4C, 0xDC)] {
+    for (id, color) in [
+        (0x47u16, 0xA7u8),
+        (0x49, 0xB9),
+        (0x4A, 0xCA),
+        (0x4C, 0xDC),
+        (0x55, 0xE1),
+        (0x56, 0xE3),
+        (0x5E, 0xE5),
+    ] {
         put(&mut general, id, color);
     }
     // SMLFONT: 63 glyphs, every one a 2x2 solid mask in the shipped
@@ -868,9 +1051,38 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
         let off = (start as u32) - entry as u32;
         smlfont[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
     }
-    vec![
-        tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont,
-    ]
+    // TABLE: the strategic-map backdrop bank — one 2x2 raw sprite at
+    // id 0 (pixel 0x77) so the overlay's backdrop visibly lands.
+    let mut table = Vec::new();
+    table.extend_from_slice(&1u16.to_le_bytes()); // count
+    table.extend_from_slice(&4u32.to_le_bytes()); // entry 0: record at 2+4
+    table.extend_from_slice(&0u16.to_le_bytes()); // flags: raw
+    table.extend_from_slice(&2u16.to_le_bytes()); // w
+    table.extend_from_slice(&2u16.to_le_bytes()); // h
+    table.extend_from_slice(&[0x77u8, 0x77, 0x77, 0x77]);
+    // MIN: three 4x4 masks; mask 2 = the diagonal wedge the synth
+    // TOT stamps (word 1 -> LNK[1] = 2, LNK[2] = 2 — a stable loop).
+    let mut min = vec![0u8; 3 * 16];
+    for r in 0..4usize {
+        for c in 0..4usize {
+            min[2 * 16 + r * 4 + c] = if r == c || r + c == 3 { 5 } else { 0 };
+        }
+    }
+    // MAPTRAN: eight ramps; ramp v maps entry e -> 0x60 + 16*v + e
+    // (distinct per ring so territory tests can tell them apart).
+    let mut maptran = Vec::new();
+    for v in 0..8u32 {
+        let mut ramp = vec![0u8; 256];
+        for (e, b) in ramp.iter_mut().enumerate() {
+            *b = (0x60 + 16 * v + e as u32) as u8;
+        }
+        maptran.push(ramp);
+    }
+    let mut files = vec![
+        tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont, table, min,
+    ];
+    files.extend(maptran); // f[14..22] — the eight ramps in slot order
+    files
 }
 
 #[cfg(test)]
@@ -879,9 +1091,10 @@ mod tests {
 
     fn staged(markers: &[(i32, i32, i32)]) -> MissionScene {
         let f = synth_mission_files();
+        let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
         MissionScene::stage(
             &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], &f[10], &f[11],
-            0, None, markers,
+            &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
     }
@@ -913,6 +1126,16 @@ mod tests {
                 "GENERAL.BIN",
                 "SMLFONT.BIN",
                 "ZONEA/MISSION1.MRK",
+                "TABLE.BIN",
+                "MAPTRAN0.TRN",
+                "MAPTRAN1.TRN",
+                "MAPTRAN2.TRN",
+                "MAPTRAN3.TRN",
+                "MAPTRAN4.TRN",
+                "MAPTRAN5.TRN",
+                "MAPTRAN6.TRN",
+                "MAPTRAN7.TRN",
+                "ZONEA/MISSIONA.MIN",
             ]
         );
         assert_eq!(
@@ -922,6 +1145,11 @@ mod tests {
                 "ZONEC/MISSIONC.BIN",
                 "ZONEC/MISSIONC.LNK"
             ]
+        );
+        assert_eq!(
+            mission_asset_names(2, 5)[21],
+            "ZONEC/MISSIONC.MIN",
+            "the .MIN mask bank is zone-level (like CGR/BIN/LNK)"
         );
         assert_eq!(zone_for_stage(1), 0);
         assert_eq!(zone_for_stage(7), 6);
@@ -951,6 +1179,7 @@ mod tests {
         // (dat, mrk, sintable, gamepal) override slices, else the
         // synth files.
         let try_stage = |dat: &[u8], mrk: &[u8], sintable: &[u8], gamepal: &[u8]| {
+            let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
             MissionScene::stage(
                 &f[0],
                 dat,
@@ -964,6 +1193,9 @@ mod tests {
                 gamepal,
                 &f[10],
                 &f[11],
+                &f[12],
+                &f[13],
+                &maptran,
                 0,
                 None,
                 &[],
@@ -1367,8 +1599,8 @@ mod tests {
     #[test]
     fn sidebar_state_never_reaches_the_sim_hash() {
         // D17 split pin: identical tick counts + a sidebar click vs a
-        // dead sidebar click -> identical sim state hashes (the
-        // sidebar half is presentation-only).
+        // map-strip toggle click -> identical sim state hashes (both
+        // halves are presentation-only).
         let mut a = staged(&[(3, 1, 1)]);
         let mut b = staged(&[(3, 1, 1)]);
         a.activate();
@@ -1379,14 +1611,149 @@ mod tests {
         g[0] = (2, 30);
         a.set_weapon_loadout(1, &g);
         b.set_weapon_loadout(1, &g);
-        // a: strip-1 select + row-0 toggle; b: clicks in the sidebar
-        // dead zone (map-toggle rect, sec 6c.1 — wired regions are
-        // disjoint from it).
+        // a: strip-1 select + row-0 toggle; b: two map-strip clicks
+        // (the second is inside the 5-frame lockout, so the overlay
+        // stays on — see the toggle test below).
         sidebar_click(&mut a, 0x219, 5);
         sidebar_click(&mut a, 0x200, 0x57);
         sidebar_click(&mut b, 0x230, 0x1C0);
         sidebar_click(&mut b, 0x230, 0x1C0);
         assert_eq!(a.state_hash(), b.state_hash());
         assert_ne!(a.order_bits(1), b.order_bits(1), "sidebar did change");
+    }
+
+    #[test]
+    fn map_toggle_strip_toggles_with_lockout_and_swallows_clicks() {
+        // [RE-EXW-SIM 7e.5] The strip: lockout gate, 5-frame re-arm,
+        // the overlay bit; clicks in the game area are swallowed
+        // while the overlay is on (asm 0x40b868).
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        assert!(!m.map_overlay_on());
+        sidebar_click(&mut m, 0x230, 0x1C0);
+        assert!(m.map_overlay_on(), "the strip toggles the overlay on");
+        assert_eq!(m.map_lockout(), 4, "click tick + move tick consume 2 of 5");
+        // A click inside the lockout window does not toggle back.
+        sidebar_click(&mut m, 0x230, 0x1C0);
+        assert!(m.map_overlay_on(), "locked out for 5 frames");
+        for _ in 0..4 {
+            m.tick(&InputFrame::default());
+        }
+        assert_eq!(m.map_lockout(), 0);
+        sidebar_click(&mut m, 0x240, 0x1C5);
+        assert!(!m.map_overlay_on(), "toggles back once the lockout spends");
+        // Game-area clicks while the overlay is on are swallowed:
+        // the sim hash is identical to a no-click run.
+        let mut a = staged(&[(3, 1, 1)]);
+        a.activate();
+        sidebar_click(&mut a, 0x230, 0x1C0);
+        assert!(a.map_overlay_on());
+        let mut b = staged(&[(3, 1, 1)]);
+        b.activate();
+        sidebar_click(&mut b, 0x230, 0x1C0);
+        // a clicks at the game area (would arm an order at a robot);
+        // b does nothing.
+        sidebar_click(&mut a, 0x10, 0x10);
+        b.tick(&InputFrame::default());
+        b.tick(&InputFrame::default());
+        assert_eq!(
+            a.state_hash(),
+            b.state_hash(),
+            "overlay-on game-area clicks never reach the sim"
+        );
+    }
+
+    #[test]
+    fn map_overlay_frame_composes_backdrop_stamps_and_markers() {
+        // [RE-EXW-SIM 7e.1] The overlay frame: clear + TABLE.BIN
+        // backdrop at (0,0), per-(tile,z) MIN/MAPTRAN stamps at the
+        // 2:1 lattice, GENERAL 0x55/0x56 robot markers; the sidebar
+        // passes + the button chrome are SKIPPED (the non-returning
+        // tail), so the sidebar half keeps its stale pixels.
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        // One normal frame first: the chrome 0x5E (0xE5) draws at
+        // (0x213,0x1b5), the portraits land.
+        let plane = m.present().expect("normal frame");
+        let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
+        assert_eq!(px(plane, 0x213, 0x1B5), 0xE5, "map button chrome 0x5E");
+        assert_eq!(px(plane, 0x1E7, 5), 0x32, "portrait draws on normal frames");
+        // Toggle the overlay on.
+        sidebar_click(&mut m, 0x230, 0x1C0);
+        let plane = m.present().expect("overlay frame");
+        // Backdrop 0x77 at (0,0).
+        assert_eq!(px(plane, 0, 0), 0x77, "TABLE.BIN image 0 at (0,0)");
+        // Stamps: synth TOT plane 0 = word 1 on every tile, LNK[1]
+        // = 2 (stable loop) -> mask 2 (the X wedge, byte 5) through
+        // ramp 0 (variant 0) -> color 0x60+5 = 0x65 at the lattice
+        // cells; tile (0,0) z 0 lands at (row 0x80, col 0xF0).
+        assert_eq!(
+            px(plane, 0xF0, 0x80),
+            0x65,
+            "territory stamp at the lattice"
+        );
+        assert_eq!(px(plane, 0xF3, 0x83), 0x65, "mask corner");
+        // Row 0x80 is only reachable from tile (0,0)'s local row 0
+        // (every other stamp lands on later rows), so the wedge's
+        // off-cell there stays clear.
+        assert_eq!(px(plane, 0xF1, 0x80), 0, "the wedge's off pixels");
+        // Robot marker: robot 0 spawns at Q13 (1,1)+center, z = 31
+        // (Q5) -> tile (1,1), selected -> sprite 0x55 (0xE1) at px
+        // 2-2+0xF0-0xC = 228, py 1+1+0x80-0x1E-(31>>4) = 99.
+        assert_eq!(px(plane, 228, 99), 0xE1, "selected robot marker 0x55");
+        assert_eq!(px(plane, 229, 100), 0xE1);
+        // The chrome + portraits are SKIPPED on overlay frames (the
+        // stale pixels survive the clear — the clear covers only the
+        // viewport half).
+        assert_eq!(
+            px(plane, 0x213, 0x1B5),
+            0xE5,
+            "chrome pixel survives (stale)"
+        );
+        assert_eq!(px(plane, 0x1E7, 5), 0x32, "portrait pixel survives (stale)");
+        // The viewport half was cleared below the backdrop's 2x2.
+        assert_eq!(px(plane, 5, 5), 0, "cleared viewport half");
+        // The territory rings: no robot has moved yet (state 0), so
+        // every variant is 0 — the stamps all use ramp 0.
+        assert_eq!(m.map_territory(0), 0);
+    }
+
+    #[test]
+    fn moving_robots_stamp_territory_rings() {
+        // FUN_00408dcc runs in the robots() tick for moving machines
+        // [7e.3]: the walker's PATH acquires ring values that persist
+        // after arrival (the variant array is a max-accumulate — the
+        // corpus pattern: the order arms at robot 0, robot 1 walks
+        // from (3,1) to (1,1)).
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        m.sim_mut().arm_order_at_robot(0);
+        for _ in 0..8 {
+            m.tick(&InputFrame::default());
+        }
+        let robots = m.sim().robots();
+        assert_eq!(robots[1].state, 3, "walker arrived (state 3)");
+        let (w, _) = m.view_size();
+        let w = w as usize;
+        // The 4x4 synth map clips every stamp's 11x11 scan to 16
+        // accepted tiles, so the ring values stay small — but the
+        // path tiles all carry rings while untouched tiles stay 0.
+        assert!(
+            m.map_territory(w + 1) >= 3,
+            "arrival tile carries a ring ({})",
+            m.map_territory(w + 1)
+        );
+        assert!(
+            m.map_territory(3 * w + 1) >= 1,
+            "the path start keeps a ring"
+        );
+        // The 11-wide stamps around the path cover the whole 4x4 map
+        // — every tile carries some ring (no untouched tile exists
+        // at this size; the render unit tests cover the unclipped
+        // semantics).
+        assert!(
+            (0..w * w).all(|t| m.map_territory(t) >= 1),
+            "the stamps blanket the small map"
+        );
     }
 }

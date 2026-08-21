@@ -420,10 +420,13 @@ impl GameHost {
     /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes
     /// the caller fetched, in [`GameHost::mission_asset_names`]
     /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL,
-    /// GENERAL, SMLFONT, MRK. GAMEPAL (770 B) is the mission plane
-    /// palette (folds to the canonical 6-bit form; MISSIONVIEW sec
-    /// 6); GENERAL.BIN + SMLFONT.BIN are the sidebar art banks
-    /// (RE-EXW-SIM sec 6c.8c). The zone comes
+    /// GENERAL, SMLFONT, MRK, TABLE, MAPTRAN0..7, MIN. GAMEPAL
+    /// (770 B) is the mission plane palette (folds to the canonical
+    /// 6-bit form; MISSIONVIEW sec 6); GENERAL.BIN + SMLFONT.BIN are
+    /// the sidebar art banks (RE-EXW-SIM sec 6c.8c); TABLE.BIN is
+    /// the strategic-map backdrop bank, the eight MAPTRAN ramps +
+    /// the mission `.MIN` are the map-overlay family (RE-EXW-SIM
+    /// 7e). The zone comes
     /// from the episode slot (consistent with the names the chain
     /// fetched); `staged_markers` is the host/test seam the network
     /// override 0x46cbe0 fills in the original (RE-EXW-SIM sec 7c.8)
@@ -446,6 +449,9 @@ impl GameHost {
         general: &[u8],
         smlfont: &[u8],
         mrk: &[u8],
+        table: &[u8],
+        maptran: &[&[u8]],
+        min: &[u8],
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
     ) -> Result<(), GameError> {
@@ -463,6 +469,9 @@ impl GameHost {
             gamepal,
             general,
             smlfont,
+            table,
+            min,
+            maptran,
             zone,
             robots_override,
             staged_markers,
@@ -2042,6 +2051,7 @@ mod tests {
         // plane), activates on entry (camera at the spawn), and drops
         // when the scene is left.
         let f = crate::mission::synth_mission_files();
+        let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
         let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
         host.load_mission(
             &f[0],
@@ -2056,6 +2066,9 @@ mod tests {
             &f[10],
             &f[11],
             &f[4],
+            &f[12],
+            &maptran,
+            &f[13],
             None,
             &[(3, 1, 1)],
         )
@@ -2109,7 +2122,11 @@ mod tests {
         assert_eq!(host.mission_asset_names()[8], "GAMEPAL.PAL");
         assert_eq!(host.mission_asset_names()[9], "GENERAL.BIN");
         assert_eq!(host.mission_asset_names()[10], "SMLFONT.BIN");
-        assert_eq!(host.mission_asset_names().len(), 12);
+        assert_eq!(host.mission_asset_names().len(), 22);
+        assert_eq!(host.mission_asset_names()[12], "TABLE.BIN");
+        assert_eq!(host.mission_asset_names()[13], "MAPTRAN0.TRN");
+        assert_eq!(host.mission_asset_names()[20], "MAPTRAN7.TRN");
+        assert_eq!(host.mission_asset_names()[21], "ZONEA/MISSIONA.MIN");
         walk_to_first_cutscene(&mut host); // completes zone 1
         host.apply(SceneAction::Advance); // Cutscene -> Select
                                           // Stage 2 now: zone B, still MISSION1 (mask reset).
