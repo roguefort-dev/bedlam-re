@@ -1,27 +1,23 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2] The DIFFERENTIAL-HARNESS DESIGN DOC (PLAN sec 6 P4.2,
-   budgeted ~2 weeks): write docs/DESIGN-DIFFHARNESS.md — the
-   architecture for DOSBox-X memory-watches + scripted input
-   injection -> per-frame original-state dumps diffed against the
-   Rust engine state. The render tail is now fully RE'd (7j.28
-   closed the last consumer block), so the doc arbitrates the
-   accumulated open hypotheses + harness obligations in one place:
-   the pod-descent stagger (w@+0x2C = 1+k·(2000−m·1000/27),
-   descent ≈41 frames, pod phase 2 = one tick, release = state 6),
-   weapon fire via injected COMMAND records (FUN_00449c94/
-   0x4dd4a0) or order dispatch — never raw input (7j.22), the
-   destroy family end-to-end (7j.25), the mid-flight draw blit
-   sequences (WEAPONS/SHRIKE/REAPER/SMOKE banks, 7j.28), the
-   debris 2k start-delay + blink-cursor-from-spawn questions, the
-   7j.9 five-ring overlap last-write-wins read, arm extraction via
-   a scripted .PAD step-on (not a click, 7j.20), and the
-   corpus-off producers that land naturally with the harness
-   (debris-stager widening, SFX families, per-zone case tables).
-   Bounded: DESIGN DOC ONLY (no harness code this unit); anchor
-   every watched address to its ledger row; end with a build-order
-   ticket list (watch points first, runner, differ, gates).
+1. [P4.2/W1] EXD IMPORT + THE EXW->EXD ADDRESS MAP (first ticket of the
+   DESIGN-DIFFHARNESS.md build order, docs/DECISIONS.md D77): import
+   game-data/BEDLAM/BEDLAM.EXD into the BedlamWatcom Ghidra project
+   (LE/DOS4GW class like B2 — check `pgrep -f analyzeHeadless` AND the
+   target log for a prior `Import succeeded` before any import; if one
+   is running, work objdump-only from ghidra-project/ dumps instead),
+   pin the EXD present/frame-tail site (the S0 frame trigger — the
+   MissionShell loop-tail analog; EXW anchors: PresentEnd@0x425a03 +
+   g_frame_count++@0x46ae68), and build the address map for the
+   DESIGN-DIFFHARNESS.md T0/T1 watch rows (anchor by string refs +
+   call-shape + pinned constants; every mapped row gets dual anchors;
+   every EXW<->EXD mismatch found -> docs/DIVERGENCES.md seed).
+   Deliverable: docs/RE-EXD-MAP.md (T0/T1 rows mapped, confidence
+   tagged) + the frame-tail site pinned. Bounded: T0 + T1 rows ONLY
+   (robot bank, selection, orders/beacon/claims, tile word grid,
+   platform bank, type-DB mirror rows, object/TRT arrays, scalars);
+   T2-T4 aliasing stays a later unit.
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -117,10 +113,14 @@
   NOTE 7j.17: it also reads the command count 0x46cbe0 — MP shop
   sync), robots() extra-phase semantics + state-1 producers.
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
-  DOSBox-X memory-watches + scripted input injection -> per-frame
-  original state dumps diffed against engine state. Design doc first.
-  Also arbitrates the two 7j hypotheses (the debris 2k start delay
-  and the blink-cursor-from-spawn question) + the 7j.9 overlap
+  DESIGN DOC LANDED 2026-08-22 (docs/DESIGN-DIFFHARNESS.md, D77, commit
+  7bc2c9d) — oracle topology (O1 EXD/DOSBox-X primary instrument, O2
+  EXW/Wine canon tiebreak, O3 8street second comparator), tiered watch
+  set (every address ledger-anchored), seam injection (COMMAND records/
+  orders/.PAD step-on — never raw input), canonical-record differ, gates
+  DH-G0..G3, build order W1..W12 (W1 = EXD import + address map, now the
+  head item). The doc also arbitrates the two 7j hypotheses (the debris 2k
+  start delay and the blink-cursor-from-spawn question) + the 7j.9 overlap
   last-write-wins read of the five rings. NOTE 7j.20: the harness
   must model the mission-start pod-descent stagger (w@+0x2C =
   1+k·(2000−m·1000/27)) — the first seconds of any mission have
@@ -148,6 +148,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2 the DIFFERENTIAL-HARNESS DESIGN DOC unit COMPLETE
+  (worker 4d7b9a5b claim 1, commit 7bc2c9d, D77, docs-only; no engine
+  change, no Ghidra run needed). docs/DESIGN-DIFFHARNESS.md written:
+  oracle topology decided (O1 = BEDLAM.EXD under pinned DOSBox-X as the
+  PRIMARY scripted-differential instrument — observation never patches
+  the binaries; O2 = EXW under pinned Wine as canon tiebreak with every
+  RE'd address verbatim via a ptrace watcher; O3 = instrumented 8street
+  as late second comparator; E = the engine). Frame model: one dump per
+  MissionShell loop pass at the epilogue/present tail, aligned by
+  g_frame_count@0x46ae68 <-> engine tick. The tiered watch set T0-T4
+  with EVERY address anchored to its RE-EXW-SIM §8 / §7j.x ledger row
+  (robots/orders/terrain T1; projectiles/critters T2; effects/debris/
+  rings/objectives T3; SFX/order/debris/destroy event capture T4).
+  Injection = seam writes only (g_keystore 0x4edc44/cursor/mouse,
+  ORDER target 0x4dd484/88/8c + 0x46cc30/60 words, COMMAND records
+  0x4dd4a0 for fire — the 7j.22 route, .PAD step-on for extraction).
+  Differ compares canonical records in 5 modes per the 0b budget;
+  divergence classes engine-bug/original-divergence(O2-arbitrated)/
+  watch-artifact/accepted-T3. Scenario corpus S0-S8; hypothesis
+  dispositions tabulated (pod stagger S1, debris 2k start-delay S1/S4,
+  blink-cursor-from-spawn S1 via 0x4dc5d0, ring overlap statically
+  MOOT per 7j.10 + confirming read S4, mid-flight blits = T2
+  render-side OUT of state-diff scope). Dumps = asset-derived: live
+  only under runtime/harness-out; git carries fingerprints only.
+  Gates DH-G0..G3; build order W1-W12. DECISIONS.md D77 added.
+  Manifest verified. PUSHED 7bc2c9d. Queued: W1 (EXD import +
+  EXW->EXD address map, T0/T1 rows bounded).
 - 2026-08-22: P4 7j.28 the PROJECTILE MID-FLIGHT DRAW family unit
   COMPLETE (worker ffec42cf claim 1, commits 9a1d205 + 27481c2,
   D76, docs-only; objdump-only from ghidra-project/

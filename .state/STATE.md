@@ -1,3 +1,24 @@
+ - CLOSED 2026-08-22 (P4.2 the DIFFERENTIAL-HARNESS DESIGN DOC unit
+   COMPLETE, worker 4d7b9a5b claim 1, commit 7bc2c9d, D77, docs-only;
+   no engine change): docs/DESIGN-DIFFHARNESS.md landed - the P4.2
+   architecture: O1 = BEDLAM.EXD under pinned DOSBox-X = the PRIMARY
+   scripted-differential instrument (observation never patches the
+   binaries; EXW stays the canon of record, divergences ->
+   docs/DIVERGENCES.md, arbitrated by O2 = EXW/Wine ptrace channel;
+   O3 = instrumented 8street second comparator, late); per-frame dumps
+   at the MissionShell epilogue/present tail aligned by
+   g_frame_count@0x46ae68; tiered watch set T0-T4 with every address
+   ledger-anchored (RE-EXW-SIM sec 8/7j.x); seam-only injection
+   (keystore/orders/COMMAND records 0x4dd4a0/.PAD step-on - never raw
+   input); canonical-record differ in 5 modes per the 0b budget with
+   4 divergence classes; scenario corpus S0-S8 + hypothesis
+   dispositions (pod stagger, debris 2k start-delay,
+   blink-cursor-from-spawn, ring overlap = statically moot per 7j.10 +
+   confirming read, mid-flight blits = T2 render-side, out of
+   state-diff scope); dumps stay runtime-only (asset-derived), git
+   carries fingerprints only; gates DH-G0..G3; build order W1-W12
+   (W1 = EXD import + EXW->EXD address map = the next queue head).
+   DECISIONS.md D77 added. Manifest verified. PUSHED 7bc2c9d.
  - CLOSED 2026-08-22 (P4 7j.28 the PROJECTILE MID-FLIGHT DRAW
    family unit COMPLETE, worker ffec42cf claim 1, commits 9a1d205
    + 27481c2, D76, docs-only; objdump-only from ghidra-project/
