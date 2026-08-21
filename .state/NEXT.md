@@ -1,23 +1,7 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] mission present tail: stage GAMEPAL (0x4edbf8 = the 0x302-B
-   palette blob the EXW copies at mission load, RE-EXW-SIM sec 7c.3;
-   corpus file = GAMEGFX\GAMEPAL.PAL, 770 B - the same VGA-palette
-   format family as LOADPAL) through the shell chain and upload it
-   as the mission plane palette so the mission viewport presents in
-   color (the plane currently presents under the host palette, all
-   black in the corpus gate - D45 choice 3). Indexed->RGBA window
-   upload stays platform-side as-is. Bounded unit: extend the chain
-   fetch set + MissionScene/host palette plumbing, pin the corpus
-   gate frame hashes AGAIN (the palette changes frame parity hashes -
-   regenerate the 4 scene pins once, document in the gate header),
-   headless smoke two-run byte-identical, parity harness anchors
-   unchanged (mission still inert there), fmt/clippy/tests green.
-   Optional stretch (only if trivially small): the mission SFX queue
-   remains RE-EXW-SIM sec 9 open item 5 - do NOT pull it in.
-
-2. [P4] modern audio output rates: prefer 48000 Hz then 44100 Hz device
+1. [P4] modern audio output rates: prefer 48000 Hz then 44100 Hz device
    rates and S16 then F32 sample formats at the output edge of the shell
    audio path (engine/bedlam-shell/src/audio.rs currently opens
    mixer-native 11025 Hz whenever the device allows). The mixer and parity
@@ -32,7 +16,7 @@
    s16 and f32 mapping, headless smoke green, parity harness unchanged
    and green, fmt clean, clippy -D warnings clean. Record the decision in
    DECISIONS.md with the next D number.
-3. [P4] fix the window-host exit path: pressing Escape in bedlam-shell
+2. [P4] fix the window-host exit path: pressing Escape in bedlam-shell
    --window exits via SIGSEGV instead of a clean exit 0 (coredumpctl
    record 422346 at 2026-08-21 00:56). The Escape handler in
    engine/bedlam-shell/src/window.rs around line 343 intends a clean
@@ -52,11 +36,12 @@
   OPTIONS.MRS staging on Title (music track_name wiring), and the
   FUN_00448ef1 multiplayer lobby if ever needed.
 - Mission sidebar: the [480,640) strip (RE-EXW-SIM sec 9 open item 3,
-  sidebar order buttons + redraw flags) - after GAMEPAL lands.
+  sidebar order buttons + redraw flags) - after GAMEPAL lands (now
+  landed, 7c25bfd - next mission-present unit when picked).
 - Mission SFX tier (RE-EXW-SIM sec 9 open item 5; MENU1/MENU2-style
   mixer instruments exist) + the order SFX 0x2A armer click.
 - Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT)
-  - after the GAMEPAL unit.
+  - after the GAMEPAL unit (now landed).
 - RE-EXW-MISSIONVIEW sec 8 open items 1/2/4: type-DB tail producers
   (+0x18/+0x1a/+0x1b/+0x1c), the u32[0x4dd444] remap tables +
   u32[0x456ca8] anim sequence + the water flag producer (needed
@@ -85,6 +70,25 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 GAMEPAL mission present tail COMPLETE (worker
+  1776dc60 claim 1, commits 663ddba + 7c25bfd): DESIGN-GAME sec 11
+  amended then implemented - GAMEGFX\GAMEPAL.PAL (770 B,
+  parse_vga770 family; RE-EXW-MISSIONVIEW sec 6 / RE-EXW-SIM 7c.3)
+  joins the Mission fetch set in the GAMEGFX tail (SINTABLE, DANTE,
+  GAMEPAL, MRK - 10 files), folds with the loading_palette rule
+  (>>2 lossless), and OWNS the mission plane: MissionScene carries
+  palette, plane() returns its own palette, the frame palette IS
+  GAMEPAL (palette_dirty every frame, MovieFrame seam; window
+  indexed->RGBA upload untouched). load_mission/stage/chain
+  signatures grew gamepal; corpus gate re-pinned once - spawn frame
+  a79fcada30ec5e50, mid-walk 1b75b68ce66019e1 (sim pins
+  36ddc86345c8351c/f35db41f0efb858d + render-gate pins unchanged,
+  regeneration documented in the gate header) + structural pins
+  (frame.palette == folded GAMEPAL, 254/256 non-black, entry 1 =
+  0x3E3A39). Headless smoke 25 fetches (GAMEPAL.PAL 770 B) two-run
+  byte-identical exit 0; parity harness byte-identical to the D28
+  anchors; all workspace tests green; fmt + clippy -D warnings
+  clean; release ok; MANIFEST verified; D46. Pushed.
 - 2026-08-21: P4 mission SCENE step COMPLETE (worker 74fa370e claim 1,
   commits 26a11ef + e6de264): DESIGN-GAME sec 11 (predecessor
   a835cefc's design commit a6317c5) implemented as bedlam-game

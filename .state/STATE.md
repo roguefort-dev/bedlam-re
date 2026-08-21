@@ -1,3 +1,31 @@
+- CLOSED 2026-08-21 (P4 GAMEPAL mission present tail COMPLETE, commits
+  663ddba + 7c25bfd, worker 1776dc60 claim 1): the mission viewport
+  presents in color. DESIGN-GAME sec 11 amended (design commit
+  663ddba) then implemented (7c25bfd): GAMEGFX\GAMEPAL.PAL (770 B,
+  the parse_vga770 LOADPAL family; RE-EXW-MISSIONVIEW sec 6 GAMEPAL
+  -> 0x4edbf8, RE-EXW-SIM sec 7c.3 the 0x302-B mission-load copy)
+  joined the Mission fetch set in the GAMEGFX tail - SINTABLE,
+  DANTE, GAMEPAL, then MRK (10 files) - folds with the exact
+  loading_palette rule (>>2 lossless on 6-bit file values) and OWNS
+  the mission plane: MissionScene carries the folded [Vga6; 256],
+  plane() returns its own palette, render_now no longer passes the
+  host stand-in, the frame palette IS GAMEPAL with palette_dirty
+  every frame (MovieFrame seam; the indexed->RGBA window upload
+  stays platform-side). Signatures: MissionScene::stage +
+  GameHost::load_mission grew gamepal; the chain passes bytes[8]
+  GAMEPAL, bytes[9] MRK. Corpus gate re-pinned ONCE (documented in
+  the gate header): spawn frame a79fcada30ec5e50, mid-walk
+  1b75b68ce66019e1; sim pins 36ddc86345c8351c / f35db41f0efb858d and
+  the render-gate pins UNCHANGED; new structural pins frame.palette
+  == folded GAMEPAL + palette_dirty + 254/256 non-black (entry 1 =
+  6-bit 0x3E,0x3A,0x39). Headless smoke 25 fetches (GAMEPAL.PAL
+  770 B) two-run byte-identical exit 0; parity harness
+  byte-identical to the D28 anchors (chain 0xcae25cd08d7cbc08, sim
+  0x72979d5d9dedc832, frame 0x87263f149564ad25, audio
+  0xc862e45d2e95ad29); all workspace tests green; fmt + clippy -D
+  warnings clean; release ok; MANIFEST verified after the corpus
+  reads; D46 records the choices. P4 slice remaining: audio output
+  rates, the Escape-exit window fix (queued next).
 - CLOSED 2026-08-21 (P4 mission SCENE step COMPLETE, commits 26a11ef
   + e6de264, worker 74fa370e claim 1): the playable-slice composition
   landed. bedlam-game/src/mission.rs MissionScene per DESIGN-GAME
