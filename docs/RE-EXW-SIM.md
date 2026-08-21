@@ -3795,7 +3795,24 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
    order around them: …0x4edfa8←0x458f03, 0x4edfb0←0x458f19,
    0x4edfb4←0x458f2d = the MISSILE1/POWERUP/ELEV-adjacent
    run; full name walk left to the SFX unit.)
-7. **Corpus verdict: unchanged** — the effect loop needs a
+7. **The 160-vs-0xA8 stride anomaly at 0x4c69e4 RESOLVED —
+   it was a census arithmetic slip, not a second array**
+   [verified 0x40fe9e..0x40feb6]: FUN_0040fe93 computes its
+   record offset as `shl eax,2; add esi; shl eax,2; add esi`
+   = 21·idx (NOT 20·idx), then loads `[21·idx·8 + 0x4c69e4]`
+   — stride 21·8 = 168 = **0xA8, the canonical robot stride**.
+   The 7j.13 "20·i << 3 = 160" gloss dropped the second
+   `add eax,esi`. FUN_0040fe93 body re-anchored: robot idx arg
+   → x/y = dwords +0/+4 >>13 (tiles), z = dword +8 >>5;
+   FUN_0041eb4c type-DB byte == 0x62 ∧ grid word ≠ 0 →
+   FUN_0041a894(tile·0x2000, ctr 0, damage 100, no score);
+   destroyed → 5× k12 debris at (x·0x20+RandA&0x1F,
+   y·0x20+RandA&0xF, z·0x20+0x10+RandA&0x1F), delays
+   0/2/4/6/8, param −1. Sole callers [verified census]:
+   FUN_0040fe93 ← robots()/FUN_0040b9f6 @0x40bc44 (the
+   phase-1 walk); FUN_0040ff92 ← the critter controller
+   FUN_00412f34 @0x413fd7 — both actors trigger floor traps.
+8. **Corpus verdict: unchanged** — the effect loop needs a
    destroyed destructible object; the corpus gates destroy
    none (weapons/traps stay unwired engine-side). Engine
    seam: NONE (docs-only, D73).
@@ -3863,7 +3880,7 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
 | effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16 | §7j.24 |
 | robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age d@+0xC, d@+0x10} — the MISSIONVIEW §5d "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age) | §7j.24 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
-| tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
+| tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
 | critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
