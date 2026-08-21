@@ -3936,6 +3936,137 @@ render tail, closing the 7j.25 queue item:
    destroy-tail, no pod descent in the crop gates). Engine seam:
    NONE (docs-only, D74).
 
+## 7j.27. The DROPSHIP ring PRODUCERS + pod-descent family CLOSED
+(2026-08-22, worker e635cb76, claim 1 — docs-only, D75; sources:
+the 7j.19 decompile dumps exw-exitfamily.txt (FUN_0041fbb1) +
+exw-exitfamily2.txt (FUN_0040b9f6) + exw-exitfamily3.txt
+(FUN_0041faf0/FUN_0041fb4b) re-read against a fresh FULL .text
+objdump `ghidra-project/exw-text-objdump.txt` (0x401000..0x460000,
+absolute-operand census of 0x4e64c0..0x4e66dc); no Ghidra run
+needed — all sites [verified] against objdump)
+
+Closes the 7j.26 queue item: the writer census for the ring banks
+is COMPLETE (every absolute/displacement reference accounted), the
+per-tick animator write map is decoded, and the 7j.26 consumer
+gloss "7×7 grid" is corrected to the true 5×7 tile grid.
+
+1. **The ring-record writer census** [verified objdump — refs to
+   0x4e64c0..0x4e66b8 are exactly these; the apparent extra site
+   0x40ab21 `[esi+0x4e6658],1` is the 7j.23 mortar trail-ring
+   writer's displacement form (base 0x4e66b8−0x60), not a ring
+   writer]:
+   - **POD BANK 0x4e64c0 (12 × 0x1C, robot-indexed)**:
+     RESET = FUN_0040cca0 @0x40cd3d — memset-0 of 0x150 (12×0x1C)
+     at every mission spawn, immediately after the 0x7e0 robot-bank
+     clear; SPAWN = FUN_0041fb4b(idx); ANIMATE = FUN_0041fbb1
+     machine 3. The trigger chain: FUN_0040b9f6 decrements the
+     w@+0x2C drop-pod countdown per robot per sub-tick (7j.20) →
+     0-hit → FUN_0041fb4b(idx) + msgs FUN_004239ef(9/10/0xB, 0/1/2)
+     for the player's first three robots (idx == selected/selected
+     +1/selected+2, gated by DAT_0046cbd8) [verified decompile
+     0x4c6a10 branch + asm].
+   - **DROPSHIP 0x4e6610 (1 × 0x1C)**: RESET = MissionShell
+     @0x447a7e (memset 0x1C); SPAWN = FUN_0041faf0; ANIMATE =
+     FUN_0041fbb1 machine 2; readers = renderer 0x40707e +
+     MissionShell spawn check 0x44831c.
+   - **EXIT SLOTS 0x4e662c (5 × 0x1C)**: RESET = MissionShell
+     @0x447a8d (memset 0x8C); SPAWN = FUN_0041fa51 (7j.18);
+     ANIMATE = FUN_0041fbb1 machine 1; **NEW writer:
+     FUN_00412a98 @0x412b60 — the POI-rescue path stamps
+     dwell(+0x18) := 0** when a personnel POI escapes ([0x4eba0c]++
+     + SFX 0x4edfa8 + FUN_00448b80(5000) in the same block):
+     the landed elevator's 0x78-tick dwell RESTARTS per rescue, so
+     one elevator can ferry multiple POIs. Readers = renderer
+     0x406f1f, POI flee phase==2 gates 0x412ae2/0x412b94,
+     nearest-exit scan FUN_00417c64 @0x417c90.
+2. **The stamp field maps (all three spawners)** [verified decomp]:
+   - FUN_0041faf0 (dropship): {active=1, phase=1, img-group=0,
+     alt=0x200, x=beacon.x<<5, y=beacon.y<<5} + clears beacon
+     0x4eabb0/0x4eabb2 (the x/y tile words 0x4eabb4/6 SURVIVE —
+     see item 4).
+   - FUN_0041fb4b(idx) (pod): {1, 1, img-group=0, alt=0x400,
+     x=robot.x>>8, y=robot.y>>8} — Q13 → Q5 pixel coords.
+   - FUN_0041fa51 (exit, 7j.18): {1, 1, pad.x·0x20+0xF,
+     pad.y·0x20+0xF, alt=0x400, img-group=0}.
+3. **The animator per-tick write map** (FUN_0041fbb1, MissionShell
+   @0x448012 per FRAME — shared by all three machines over the
+   0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10,
+   img-group@+0x14, dwell@+0x18}) — **the 7j.19 "+0x14 toggle"
+   gloss is superseded: +0x14 is the IMG-GROUP selector of the
+   7j.26 consumer (img = group·0x23 + 7·row + col over
+   DROPSHIP.BIN's 210 = 6×35 images)** [verified decompile +
+   asm 0x41fbc1..0x41fecc]:
+   - phase 1 DESCEND: img-group := (img-group+1)&1 EVERY TICK
+     (a 2-frame animation — groups 0/1); alt := alt−0x20 while
+     alt ≥ 0x101, else alt := (alt>>2)·3; alt < 1 → alt := 0,
+     phase := 2 (exits also dwell := 0; dropship dwell := 10 AND
+     fires the 7j.19 extraction sweep: robots alive ∧ state ∈
+     {3,4} → state 5, timer 0x28, [0x4dc680]++).
+   - phase 2 LANDED: alt := ((RandA()&7)==0) — a 0/1-px vertical
+     jitter; img-group toggles 0↔1; exits: dwell++ > 0x78 →
+     phase 3; dropship: dwell−− == 0 → phase 3; **pods: phase 2
+     lasts exactly ONE TICK** — it fires the 7j.19 POD PAYOUT
+     (robot state := 6 = RELEASED from the pod, timer 0x28,
+     alive := 1, points := 100·w@+0x94+5000, SFX 0x4edfe0, msgs)
+     and immediately sets phase := 3 (no dwell use).
+   - phase 3 DEPART: alt := alt + (alt>>2) + 1 (accelerating
+     rise); **x −= img-group·4** (leftward drift scaled by frame);
+     img-group := (img-group < 5) ? img-group+1 : 4 — ramps
+     2,3,4,5 then oscillates 4↔5; alt > 0x200 → active := 0
+     (dropship also _DAT_004dc67c := 1 = extraction complete).
+     Net: ALL SIX DROPSHIP.BIN groups are reachable — 0/1 =
+     descent/landed flicker, 2..5 = departure frames.
+   - Timing (for the P4.2 harness): descent from alt 0x400 ≈ 24
+     frames (−0x20) + ≈ 17 frames (×0.75 shrink) ≈ 41 frames;
+     dropship 0x200 ≈ 25 frames; depart ≈ 45 frames to 0x201.
+     Robots are brain-frozen (w@+0x2C, 7j.20) until their pod's
+     one-tick phase 2 releases them — the stagger step is
+     1+k·(2000−m·1000/27) SUB-TICKS ≈ 173..327 frames between
+     successive pods, so pods overlap in the air.
+4. **The no-extract latch 0x46aed4 (machine-3 gate) census
+   completed** [verified objdump]: boot RESET = GameMain
+   @0x41c408 (memset 0x30 = 12 dwords) — NOT per-mission; set by
+   FUN_0040e230 (SP death core), FUN_00449c94/FUN_0044a38a (MP),
+   FUN_00408e99. **FUN_0040e230's MP respawn branch @0x40e7a1 is
+   itself gated by the latch (≠0 → skip respawn)** — the latch is
+   a per-robot "no more pods" flag: it freezes a mid-flight pod
+   record (the animator skips it) AND refuses the MP re-drop.
+5. **The 7j.26 ring-grid gloss CORRECTED** [verified asm
+   0x40707e..0x4071d5 + pods 0x406dc6..0x406ec5]: the tile grid is
+   **7 COLUMNS × 5 ROWS of 0x40-px tiles** (448×320 px), not 7×7 —
+   col loop 0..6 (col += 0x40), row loop until sy−0xa0+0x140, row
+   word += 7 per row; img = group·0x23 + 7·row + col with 0x23 =
+   35 = 7·5 EXACTLY one group per ring frame. sx = (dx−dy)+0x90,
+   sy = ((dx+dy)>>1)+0xd0+shake−alt; the dropship sy ALSO
+   subtracts word@0x4eabb8 (the beacon z) — always 0 (the armer
+   never writes it), so the "dead store" 7j.20 note stands but a
+   reader exists at 0x4070c0. Pods' sy additionally subtracts the
+   robot's own z d@+0x08 (the pod shadow tracks the robot's
+   elevation); blit = FUN_00401e39(img, transp=1, sx, sy, bank
+   [0x4edd64] DROPSHIP.BIN, dest [0x4ede18]).
+6. **The 0x4c71f4 "state-machine pass" head-decoded** (the 7j.26
+   open note, bounded add-on) [verified asm 0x404131..0x404182 +
+   0x404d27..0x404d60]: it is the **PROJECTILE MID-FLIGHT DRAW
+   dispatch** inside FUN_00403938 — `ax = type word@+0` of the
+   400×0x36 weapon-anim bank, switch: 5 → 0x404187 (shell,
+   iso-projection of x/y@+0x12/+0x16 Q13), 9..0xB → 0x404567
+   (artillery burst), 0xE → 0x40436e (mortar), 0xF/0x13 → 0x4042a3
+   (damped ballistic family), 0x17 → 0x404d08-side (3-clone
+   split), 0x24 → 0x40464e (rocket), 0x29 → 0x404916 (homing),
+   2..4/6..8/0xC..0x12 → generic 0x40427a. A sibling dispatch at
+   0x404d65 walks the 50×0x22 projectile bank 0x4cc654
+   (FUN_00412010's, weapon-id-keyed) with states 0x65..0x69 →
+   jump table 0x403908 {0x404eb1, 0x404f8a(skip/next),
+   0x404fac, 0x404ffc, 0x404d96} — the "splash/screen-effect
+   sequences" of the 7j.26 note are these per-type draw bodies;
+   full per-type math stays queued (bounded, with the trail-ring
+   draw 0x404464 consumer).
+7. Corpus-path verdict: docs-only (D75) — no engine change; the
+   pod-descent family stays unwired in the gates (no pods deploy
+   in the crop corpus), but the whole deploy→descend→release→
+   depart state machine is now anchored for the P4.2 differential
+   harness, which must model it (first seconds of every mission).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -4003,7 +4134,7 @@ render tail, closing the 7j.25 queue item:
 | effects mover | FUN_00419f62 (MissionShell @0x44813d): delay −− else x+=vx/y+=vy/z+=vz; kill +0x18:=0 iff x/y/z<0 ∨ x>>13≥[0x4eddec] ∨ y>>13≥[0x4eddf0] ∨ z>>13>0xB | §7j.26 |
 | platform anim tick | FUN_004238af (MissionShell @0x447fff): for active 0x4eb638 records d@+0x10++, wrap 0x10→4 (drawn smoke column 2..16 intro, 5..16 loop) | §7j.26 |
 | bounded random helper | FUN_0041ec59(n) = RandB()/(0x8000/n − 1) clamped n−1 — uniform-ish [0,n−1] on the 15-bit RandB | §7j.26 |
-| dropship ring banks | 0x4e64c0 (12 × 0x1C robot-indexed) + 0x4e6610..0x4e66b8 (6 × 0x1C standalone) {active d@+0, x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14}; consumer draws 7×7 grids of 0x40-stride tiles, img = group*0x23 + 7*row+col, bank [0x4edd64] = DROPSHIP.BIN (ArenaAlloc 0x25990); ends at the trail bank 0x4e66b8; producers = pod-descent family (OPEN) | §7j.26 |
+| dropship ring banks | 0x4e64c0 (12 × 0x1C robot-indexed) + 0x4e6610..0x4e66b8 (6 × 0x1C standalone) {active d@+0, PHASE d@+4, x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14, dwell d@+0x18}; consumer draws 7-COL × 5-ROW grids of 0x40 tiles (448×320 px — the 7j.26 "7×7" corrected §7j.27), img = group*0x23 + 7*row+col, bank [0x4edd64] = DROPSHIP.BIN (ArenaAlloc 0x25990; 210 = 6 groups × 35); ends at the trail bank 0x4e66b8; producers CLOSED §7j.27 (resets: FUN_0040cca0 @0x40cd3d pods 0x150 + MissionShell 0x447a7e/0x447a8d; spawners FUN_0041fa51/FUN_0041faf0/FUN_0041fb4b; animator FUN_0041fbb1; + the 0x412b60 exit-dwell reset) | §7j.26, §7j.27 |
 | terrain restamp list | [0x4ede24] ptr + [0x4ede28] count → 3-dword records {dest row (y·0x280 basis), tile-x, tile-y}; render-tail readers 0x4067a6/0x406b32 blit each via FUN_00401471 (border tile FUN_00408030 off-window, full LNK path in-window); writers FUN_00440a2d (= the TOT-mirror materializer = the scroll/camera restamp stager), FUN_0043d00b, FUN_0041d954 — resolves the backlog "7×7 screen-address table" hypothesis | §7j.26 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
@@ -4012,10 +4143,10 @@ render tail, closing the 7j.25 queue item:
 | critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
 | POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
-| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, toggle d@+0x14, dwell d@+0x18 cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19 | §7j.17/§7j.18/§7j.19 |
-| escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, toggle@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the no-extract latch: writers FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99/GameMain); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 + msg | §7j.19 |
-| dropship deployer | FUN_0041faf0: stamps 0x4e6610 {1, 1, beacon.x·0x20, beacon.y·0x20, alt 0x200} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2; caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon armer FUN_004247b5 [§7j.20] | §7j.19 |
-| pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {1, 1, 0, 0x400, robot x/y>>8}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB); the 0x4c6a10 producers [§7j.20] | §7j.19 |
+| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, img-group d@+0x14 (7j.27: the animator's per-tick DROPSHIP.BIN frame selector), dwell d@+0x18 — RESET TO 0 BY FUN_00412a98 @0x412b60 on each POI rescue (multi-POI elevators), cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19; boot reset MissionShell 0x447a8d | §7j.17/§7j.18/§7j.19/§7j.27 |
+| escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012, per frame): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, img-group@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the no-extract latch: boot-clear GameMain 0x41c408, writers FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99 — the latch ALSO gates the MP respawn @0x40e7a1); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 (robot RELEASED) + msg. §7j.27 per-tick write map: phase 1 alt −0x20/(v>>2)·3 + img-group toggles 0↔1; phase 2 alt := (RandA&7)==0 jitter, exits dwell++>0x78, dropship dwell−−, pods ONE TICK then payout; phase 3 alt += (alt>>2)+1, x −= group·4, group ramps 2..5 then oscillates 4↔5, alt>0x200 → active 0 | §7j.19, §7j.27 |
+| dropship deployer | FUN_0041faf0: stamps 0x4e6610 {active 1, phase 1, img-group 0, alt 0x200, x beacon.x<<5, y beacon.y<<5} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2 (x/y words SURVIVE — renderer 0x4070c0 reads the always-0 z word 0x4eabb8 as a no-op sy nudge); caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon armer FUN_004247b5 [§7j.20]; boot reset MissionShell 0x447a7e | §7j.19, §7j.27 |
+| pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {active 1, phase 1, img-group 0, alt 0x400, x/y = robot pos>>8 (Q13→Q5)}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB for the player's first 3 robots); the 0x4c6a10 producers [§7j.20]; bank reset = FUN_0040cca0 @0x40cd3d (memset 0x150 = 12 records, every mission spawn) | §7j.19, §7j.27 |
 | extraction-beacon armer | FUN_004247b5(EAX tx, EDX ty, EBX z, ECX idx): guard 0x4eabb0; 0x4eabb2 = 0x197 (0 if player-0 alive-count == 1); 0x4eabb0 = 1; 0x4eabb4/6/8 = tile trio (z dead store); robot.state = 3; spread-teleport FUN_004248c8; SFX 0x2A. Sole caller FUN_00433980 @0x433cfb = ~25 (zone, .PAD slot) extraction pads | §7j.20 |
 | spread-claim picker | FUN_004248c8(&tx,&ty): first free slot of 12×u16 0x4eabba (bound DAT_0046ccbc), marks 1, returns beacon tile + {center, 8 neighbors, (−2,0),(0,−2),(+2,0)}; ≥12 → out-params untouched (callers store garbage); claims never released; callers FUN_004247b5 @0x424865 + FUN_0040b9f6 @0x40c08f | §7j.20 |
 | pod-deploy countdown writers | w@robot+0x2C (0x4c6a10): FUN_0040cca0 spawn tail @0x40d132 stagger 1+k·(2000−m·1000/27) per player group (m = linear mission 0x46ae8c); FUN_0040e230 MP respawn @0x40e89d = 0x28; reader/decrementer FUN_0040b9f6 (brain gate) | §7j.20 |

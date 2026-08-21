@@ -356,8 +356,10 @@ slots implied by the 0x4e6610 boundary; loop bound = robot count
 `DAT_0046ccbc`), the 6 standalone rings 0x4e6610 (drawn singly) +
 0x4e662c..0x4e66b8 (5 × 0x1C), all 0x1C records
 {active d@+0, x d@+8, y d@+0xC, z/alt d@+0x10, img-group d@+0x14}:
-when active, a **7×7 grid of 0x40-stride tiles** is drawn via
-FUN_00401e39 with `img = group*0x23 + 7*row + col`, bank
+when active, a **7-column × 5-row grid of 0x40-stride tiles**
+(448×320 px — 7j.27 correction of this pass's first "7×7" gloss;
+0x23 = 35 = 7·5 images = exactly one DROPSHIP.BIN group) is drawn
+via FUN_00401e39 with `img = group*0x23 + 7*row + col`, bank
 **ESI = [0x4edd64] = `GAMEGFX\DROPSHIP.BIN`** (ArenaAlloc(0x25990)
 loader @0x41c8xx family, exw-simtail 1752) — the dropship hull
 during the 7j.20 mission-start pod descent. Robot-indexed sy also
@@ -365,7 +367,12 @@ subtracts the robot's own z (d@+0x08 of the 0x4c69e4 record); the
 sx/sy bases are 0x90/0xd0 (not 0x110/0x10c) — the grid is 448 px
 wide, centered differently. The trail-ring bank 0x4e66b8 (7j.22/23)
 begins exactly at the end of the 6 standalone records. Producers
-of the ring records = the pod-descent family (open; P4.2 harness).
+of the ring records = the pod-descent family — **CLOSED §7j.27**
+(writer census complete: resets FUN_0040cca0 0x40cd3d +
+MissionShell 0x447a7e/0x447a8d; spawners FUN_0041fa51/FUN_0041faf0/
+FUN_0041fb4b; per-tick animator FUN_0041fbb1 with +0x14 = the
+img-group selector toggling 0↔1 in phases 1-2 and ramping 2..5 in
+departure; + the 0x412b60 POI-rescue exit-dwell reset).
 
 **Bonus pin: the [0x4ede24/0x4ede28] "7×7 screen-address table"
 of the backlog is NOT a 7×7 table — it is the terrain RESTAMP
@@ -382,7 +389,12 @@ FUN_0041d954 — so the materializer IS the scroll/camera
 restamp stager, confirming the backlog hypothesis. A separate
 state-machine pass over 0x4c71f4 (states <0x13; the splash/
 screen-effect sequences) sits between the platform and effects
-loops — still open, decode with its producers.
+loops — head-decoded §7j.27: it is the projectile mid-flight
+draw dispatch (type word@+0 switch → shell/artillery/mortar/
+damped/rocket/homing draw bodies) + the sibling 0x4cc654
+50×0x22 bank draw (states 0x65..0x69, jump table 0x403908);
+full per-type math still open (with the trail-ring draw
+consumer @0x404464).
 
 ### 5f. FUN_00401e39 — the direct draw_IMG blit [verified, decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer` re-anchored]
 

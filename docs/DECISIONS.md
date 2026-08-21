@@ -2427,3 +2427,40 @@ Nudge-Worker: 399aeff4-03bf-4c9c-8569-83f955528215
 
 Nudge-Worker: 7658328a-90b8-4b01-8412-4118fad91579
 
+
+## 2026-08-22 P4 7j.27 — the DROPSHIP ring producers are docs-only (D75); +0x14 is the img-group selector; the ring grid is 7×5 not 7×7
+
+1. RE: the pod-descent family writer census is COMPLETE against a
+   full .text objdump. Ring banks 0x4e64c0 (12 pods) +
+   0x4e6610 (dropship) + 0x4e662c (5 exits): resets =
+   FUN_0040cca0 @0x40cd3d (memset 0x150, every mission spawn) +
+   MissionShell 0x447a7e/0x447a8d; spawners FUN_0041fb4b(idx)
+   (pods: alt 0x400, x/y = robot pos>>8, from the 7j.20 w@+0x2C
+   countdown 0-hit in FUN_0040b9f6, msgs 9/10/0xB per player),
+   FUN_0041faf0 (dropship: alt 0x200, beacon tile<<5),
+   FUN_0041fa51 (exits, 7j.18); animator FUN_0041fbb1 (all three
+   machines, per frame). The 7j.19 "+0x14 toggle" gloss is
+   superseded: +0x14 is the DROPSHIP.BIN img-group selector the
+   7j.26 consumer reads — toggles 0↔1 every tick during descent/
+   landed (phases 1-2), ramps 2,3,4,5 then oscillates 4↔5 during
+   departure (phase 3) with x −= group·4 and alt += (alt>>2)+1;
+   all six 210-image groups reachable. Pod phase 2 lasts ONE tick
+   and releases the robot (state 6, alive 1, payout
+   100·w@+0x94+5000). New third writer: FUN_00412a98 @0x412b60
+   resets an exit's dwell (+0x18) := 0 per POI rescue (multi-POI
+   elevators). The no-extract latch 0x46aed4: boot-cleared in
+   GameMain 0x41c408 (not per-mission) and ALSO gates the MP
+   respawn (FUN_0040e230 @0x40e7a1). CORRECTION: the ring grid is
+   7 columns × 5 rows of 0x40 tiles (0x23 = 35 = 7·5 = exactly
+   one group), not 7×7; dropship sy subtracts the beacon z word
+   0x4eabb8 (always 0 — the 7j.20 "dead store" has one no-op
+   reader at 0x4070c0). The 0x4c71f4 pass head-decoded: the
+   projectile mid-flight draw dispatch (type switch 0x404141 +
+   the 0x4cc654 50×0x22 sibling, states 0x65..0x69 → jump table
+   0x403908); per-type math queued.
+2. ENGINE: no change — no pods deploy in the corpus gates. The
+   family re-opens with the P4.2 harness, which must model the
+   deploy→descend→release→depart machine (~41-frame pod descent,
+   stagger 173..327 frames between pods).
+
+Nudge-Worker: e635cb76-8052-487a-8ac7-ebc65f357947
