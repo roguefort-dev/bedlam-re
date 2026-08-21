@@ -430,6 +430,16 @@ What RE must confirm: everything beyond the layout.
   +2, offsets relative to their own slot — decoded from EXW FUN_00401e39
   and corpus-verified 24/24 DEBRIS / 160/160 DANTE (docs/RE-EXW-MISSIONVIEW
   §5f). The MISSION*.BIN zone sprite banks follow the same layout.
+ - **Bank census add-on (2026-08-22, 7j.28):** the boot loader's
+   arena→file pairs pinned from the string block 0x45884e..0x4588c3 +
+   corpus headers: WEAPONS 70 imgs (0x4F86 B → [0x4eddbc], alloc
+   0x5208), SHRIKE 64 ([0x46af30], 0x1F40), REAPER 64 ([0x46af2c],
+   0x1770), SMOKE 4 ([0x46af34], 0x7D0), TELEPORT 10 ([0x46af38],
+   0x6D60), NUMBERS ([0x46af3c], 0xFA0), FLAGS ([0x46af40]), GENERAL
+   153 ([0x4edd7c], 0x1F7E8) — SHRIKE/REAPER = exactly the 64
+   direction frames of the rocket/homing mid-flight draws, SMOKE =
+   the 4 exhaust-puff frames (docs/RE-EXW-SIM §7j.28); all
+   exact-consumption arenas like DEBRIS/DANTE.
 
 ---
 

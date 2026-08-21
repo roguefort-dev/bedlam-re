@@ -4173,6 +4173,48 @@ below). Part 1 = the 400×0x36 dispatch family.
    sy, stack: dy, frame, z>>13 tiles, mode 0x12C/0x12D/0x12E)**
    (7j.26's mode words; the 7j.21 "sprite 0x12E" gloss for the
    marker was this same 4th stack arg = MODE).
+9. **The sibling 50×0x22 walk (part 2)** [verified asm
+   0x404d65..0x4050d4 + jump-table read from the binary]: entered
+   when the 400×0x36 loop's offset hits 0x5460 (0x40428b). Walks
+   offsets 0..0x6A4 (= 50·0x22); type word@[0x4cc654+off];
+   `−0x65 cmp 4 ja skip` → jump table **0x403908** (read from
+   file: 0x404eb1 / 0x404f8a / 0x404fac / 0x404ffc / 0x404d96):
+   - **0x65 → 0x404eb1**: single sprite, iso with z d@+0xA as Q13
+     (sy −= z>>8; z-arg z>>13 clamp ≥0), WEAPONS frame
+     **(g_frame_count&3)+0x3C** (60..63), mode 0x12C, +shake.
+   - **0x66 → 0x404f8a = LOOP-NEXT: NOT drawn mid-flight** (the
+     heavy (d+1)·300 TRT bolt is invisible — 7j.16).
+   - **0x67 → 0x404fac**: enters the 0x404eb1 tail — draw IDENTICAL
+     to 0x65 (frames 0x3C..0x3F, mode 0x12C).
+   - **0x68 → 0x404ffc**: same projection (z Q13, shake), frame
+     **(g_frame_count&3)+0x38** (56..59), mode 0x12C.
+   - **0x69 → 0x404d96 — the vertical BEAM column** (the §7j.22/23
+     open-item type): NO shake term; sy base −= (d@+0xA<<5)+8 —
+     **+0xA re-used as the TOP z LEVEL** (not Q13); loop edi from
+     d@+0xA DOWN TO d@+0x1A (the bottom level), one sprite per
+     level, **sy += 0x20 per level**; frame
+     **0x34+((g_frame_count+edi)&3)** (52..55, animated down the
+     column), z-arg = current level (clamped ≥0), bank WEAPONS,
+     mode **0x12E**; per-level screen bounds; skip-any → continue.
+   Shared: dx = (x d@+2 >>8)−[0x4edde4], dy = (y d@+6 >>8)−
+   [0x4edde8]; the call's x/y args read d@+2/d@+6 directly; fields
+   +0x12/+0x16 (vx/vy per the tick) are NOT read by any draw body.
+   Loop-next 0x404f8a: offset += 0x22; == 0x6A4 → the render tail
+   continues at **0x4050d5** (next stage, beyond this unit).
+10. **The 7j.27 "splash/screen-effect sequences" gloss RESOLVED**:
+    the 0x403908 bodies are the four WEAPONS.BIN anim strips
+    0x34..0x37 (beam column), 0x38..0x3B (0x68), 0x3C..0x3F
+    (0x65/0x67) — the bank's 70 images cover strips 0..7 (damped
+    wobble 0x18..0x2F at bases 0x18/0x20/0x28), 1 & 3..7 (shell),
+    8..15 (artillery), 0x10..0x17 (mortar puffs), 0x34..0x3F (the
+    0x4cc654 family) with room to spare. Corpus counts: WEAPONS 70,
+    SHRIKE 64, REAPER 64, SMOKE 4 imgs — all exact-consumption
+    arenas (§7j.26 FORMATS §18 pattern).
+11. Corpus-path verdict: docs-only (D76) — no engine change; the
+    whole mid-flight draw family (both banks) now lands with the
+    P4.2 differential harness, which can watch the WEAPONS/SHRIKE/
+    REAPER/SMOKE blit sequences directly.
+
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
@@ -4222,7 +4264,7 @@ below). Part 1 = the 400×0x36 dispatch family.
 | .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each; +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff |vx|>0x40 ∨ |vy|>0x40, anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
-| projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
+| projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c; the MID-FLIGHT DRAW walk §7j.28 (types 0x65/0x67/0x68 single WEAPONS 0x3C/0x3C/0x38-strip sprites, 0x69 the per-level beam column 0x34-strip, 0x66 NOT drawn) | §7j.13, §7j.28 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201); the per-type MID-FLIGHT DRAW map §7j.28 (types not listed there are NOT drawn mid-flight) | §7j.13, §7j.22, §7j.28 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
 | actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
@@ -4341,8 +4383,9 @@ below). Part 1 = the 400×0x36 dispatch family.
    smoke-trail bank, and the two actor hit-test front doors;
    FUN_004190bc re-identified as the critter hit applier,
    killing the §7j.15 panel hypothesis). Family remainders:
-   FUN_004190bc/FUN_00418fca internals, the 0x4e66b8 slot
-   allocator, and the trail-ring draw pass.
+   the 0x4e66b8 slot allocator CLOSED §7j.23, and the
+   trail-ring draw pass CLOSED §7j.28 (with the whole
+   mid-flight draw family, both banks).
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
    (full writer/reader census in the ledger row).
 0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,

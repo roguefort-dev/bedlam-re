@@ -2464,3 +2464,34 @@ Nudge-Worker: 7658328a-90b8-4b01-8412-4118fad91579
    stagger 173..327 frames between pods).
 
 Nudge-Worker: e635cb76-8052-487a-8ac7-ebc65f357947
+## 2026-08-22 P4 7j.28 — the projectile mid-flight draw family is docs-only (D76); the five projectile banks named; 0x40427a is loop-next not a draw body
+
+1. RE: the last undecoded consumer block of the FUN_00403938 render
+   tail is CLOSED (worker ffec42cf, claim 1, commits 9a1d205+):
+   the 400×0x36 dispatch (0x404141 primary + 0x404d27/0x404d08
+   secondaries) maps types 5/9..0xB/0xE/0xF/0x13/0x17/0x1A/0x1F/
+   0x24/0x29 to draw bodies in WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL
+   .BIN (banks [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/
+   [0x4edd7c], named from the boot loader string block 0x45884e..
+   0x4588c3 + corpus count-verified: SHRIKE/REAPER exactly 64
+   direction frames, SMOKE exactly 4). CORRECTIONS: 0x40427a is
+   the shared LOOP-NEXT (unlisted types are NOT drawn mid-flight —
+   there is no "generic draw body"), and 0x17 draws as a damped
+   variant (WEAPONS base 0x28), not the "3-clone split" (that is
+   tick-side only). The mortar trail-ring consumer CLOSED (8 puffs
+   @ 0x4e66b8+link·0x68+8+i·0xC, WEAPONS frames 0x10+(tick+i)&7,
+   mode 0x12E, active/ring words unread). The homing reticle
+   decode (target word d@+6 → robot/critter/FUN_004128ec classes,
+   GENERAL.BIN frame tick/3+2). The 50×0x22 walk CLOSED (jump
+   table 0x403908 read from file: 0x65/0x67/0x68 single WEAPONS
+   strip sprites 0x3C/0x3C/0x38, 0x69 the per-level beam column
+   strip 0x34 with +0xA re-used as the TOP z level and +0x1A as
+   the bottom, 0x66 NOT drawn). FUN_0040798e call shape pinned
+   (EAX sx, EBX bank, ECX dx, EDX sy, stack: dy, frame, z tiles,
+   mode 0x12C/0x12D/0x12E) — the 7j.21 "sprite 0x12E" gloss was
+   this mode arg.
+2. ENGINE: no change — the corpus gates fire no weapons; the
+   family re-opens with the P4.2 differential harness, which can
+   watch the WEAPONS/SHRIKE/REAPER/SMOKE blit sequences directly.
+
+Nudge-Worker: ffec42cf-326a-47ae-a396-c02215f5eeb8
