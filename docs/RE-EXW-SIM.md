@@ -3697,6 +3697,109 @@ Engine seam: NONE this unit (docs-only, D72) — critters load
 outside the current corpus gates; the death family re-opens
 when §7j.18's .NME staging lands engine-side. Pins untouched.
 
+## 7j.25 Amendment 2026-08-21 (worker 399aeff4, the
+FUN_0041a894 destroy-tail effect-entry map + FUN_0041a225)
+
+Fresh objdump of 0x41a860..0x41bc10 (jump-table bytes +
+destroy tail) + 0x41a225..0x41a310 + 0x41a4cc..0x41a4f2 + the
+0x43a2xx bank-name loader + DGROUP strings 0x458e7b..0x458f9a.
+Closes the 7j.22/7j.23-promised 9-case selector decode. All
+[verified] asm unless tagged.
+
+1. **The destroy tail = TERRAIN RESTORE then a FIVE-EFFECT
+   loop.** Order inside the hp≤0 path (0x41a95d onward):
+   hp:=0/flags|=0x40 → notify [0x46cce4]:=2 → zone≠1 →
+   FUN_00448b80(idx) → FUN_00422e0a(id) → FUN_00422600(id) →
+   **GER gate REFINED (7j.13 gloss corrected)**: the
+   type@+0xE==0xb ∧ [0x4eba1c]==1 test at 0x41a9ac jumps to
+   the `ret 0` epilogue — the record IS already marked
+   destroyed and the trigger producers DID run, but the
+   restore/effect/score/chain tail is SKIPPED whole.
+2. **Terrain restore [verified 0x41a9c3..0x41ac0b]**: nested
+   loops i<H (word@+4), j<W (word@+2) over the footprint,
+   z-level loop clamped to z0+D max 8; per cell (linear
+   template index (z·H+i)·W+j [shape verified]):
+   TOT-mirror z-word [0x4796bc+0x1E·tile+2·z] := template
+   bank ptr@type+0x46 word; seen byte 0x4796cc[tile+z] :=
+   (bank@type+0x4A word == 0); DAT volume byte
+   [0x4edd58-plane] := LOW BYTE of the bank@type+0x4A word.
+   So scratch banks @+0x46/+0x4A are the SAVED UNDER-TERRAIN
+   (the 7j.13 "4 scratch banks" now have their first two
+   consumers; @+0x3E/+0x42 remain unread here [open]).
+3. **The five-effect loop [verified 0x41ac10..0x41b73a]**:
+   m = 0..4 (byte offset [esp+8] = 8m, exit at 0x28), entry =
+   type+0x16+8m (abs 0x4dee08+78·id). Selector word@entry+0;
+   `dec; cmp ax,8; ja` → only 1..9 dispatch (else skip),
+   `jmp [table 0x41a870 + 4·(sel−1)]` — table entries
+   (idx 0..8): 0x41ac77/0x41b298/0x41b3c1/0x41b4ea/0x41b613/
+   0x41b1fe/0x41b11c/0x41af96/0x41ae53. Payload words:
+   w2=word@entry+2 = x TILE offset, w4=word@entry+4 = y TILE
+   offset, w6=word@entry+6 = z-level offset — all relative to
+   the destroyed object's 0x46cbf4 record dwords +0/+4/+8
+   (pinned 0x41a90f..0x41a936). Stage position = (w+base)·0x20
+   (+ sub-tile dx/dy below; Q5: 0x10 = half tile, 0x20 = tile).
+   FUN_00420608 stack args in push order (first push = param
+   → +0x28, last push = delay → +0x24; callee `ret 8` —
+   pinned by the case-6/7 [esp+0x10c]/[esp+0x114] save/reload
+   pattern): param = the outer score flag (cases 1..5,8,9) or
+   −1 (cases 6/7); delay = counter+m (cases 1,8,9 — the chain
+   counter + entry index), 0 (2..7); case 8's shower adds
+   (i>>3) and reads the pre-increment counter+2m slot.
+4. **The 9-case debris-kind map [verified per body]**
+   (counter = the [esp+0x10] chain counter; splashes =
+   FUN_0041bd78 water-z probe (clamp 7) + FUN_00424355):
+
+   | sel | body | kind | (dx,dy) Q5 | delay | extra effects |
+   |---|---|---|---|---|---|
+   | 1 | 0x41ac77 | 14 | (+0xF,+0xF) | ctr+m | FUN_0041a225(rec.x+w2, y+w4, z+w6, ctr+m) + 1+4 splashes @ (x,y) RandA&1 jitter |
+   | 2 | 0x41b298 | 18 | (+0x10,+0x30) | 0 | 4× splash loop |
+   | 3 | 0x41b3c1 | 17 | (+0x30,+0x10) | 0 | 4× splash loop |
+   | 4 | 0x41b4ea | 16 | (+0x20,−0x10) | 0 | 4× splash loop |
+   | 5 | 0x41b613 | 19 | (−0x20,0) | 0 | 4× splash loop |
+   | 6 | 0x41b1fe | 10 | (+0x10,+0x20) | 0 | RandB&1 SFX (below) @ (x,y) |
+   | 7 | 0x41b11c | 10 | (+0x20,+0x10) | 0 | RandB&1 SFX (below) @ (x,y) |
+   | 8 | 0x41af96 | 14 ×(1+24) | (+0xF,+0xF) | ctr+m (+i>>3) | 24-iter shower: k14 AT THE WATER Z (probe), ±3-tile jitter (RandA&7−3) x/y, +RandA&3 z, each + splash + FUN_0041a225 |
+   | 9 | 0x41ae53 | 20 | (+0xF,+0xF,+0xF) | ctr+m | 3×3 splash ring (x−1..x+1 × y−1..y+1), delay ctr+2+RandA&3 |
+
+   Reading: sel 2..5 = four single-gib throws at different
+   sub-tile bearings (k18/k17/k16/k19 — the 7j.11 seq-table
+   kinds {80..104} = the big-chunk walks); 6/7 = quiet k10
+   collapses + thud; 1/8/9 = watery demolitions (splash-heavy);
+   8 = a 24-particle k14 demolition shower. The 7j.11 k14/k16..k20
+   sites inside FUN_0041a894 are ALL this loop (0x41ace7/0x41b002/
+   0x41b0dc case 1/8; 0x41b554/0x41b42b/0x41b302/0x41b67a cases
+   4/3/2/5; 0x41aebf case 9) — the family geography closes.
+5. **FUN_0041a225 = the 0x4cf638 EFFECTS-BANK stager — first
+   producer of the MISSIONVIEW §5d "effects loop" bank
+   [verified 0x41a225..0x41a310]**: args (x tile, y tile, z
+   level); converts x/y<<5, z<<13; 12 iterations of the
+   allocator FUN_0041a4cc (80 slots × 0x1E @0x4cf638 = 0x960 B
+   — matching the 7j.1 boot-clear bound; free iff word@+0x18
+   == 0; −1 = skip); per filled slot:
+   +0x00 = ((x<<5)+RandB&0x1F)<<8 − 0x1000, +0x04 same for y
+   (Q13 + jitter), +0x08 = z<<13 + 0xF00, +0x0C/+0x10 =
+   (RandB&0x3F)<<7 − 0x1000 (±velocities), +0x14 = RandB&0x7FF
+   + 0x1770 (ttl 6000..), +0x18 = word FUN_0041ec59(3) (the
+   ACTIVE/sprite word — 0 = free), +0x1C = word RandB()&7.
+   FUN_0041ec59(3)'s exact role open [census]; callers today:
+   destroy-tail cases 1/8 only.
+6. **The case-6/7 SFX pair = DEADMAN1/DEADMAN2 [verified]**:
+   RandB()&1 → FUN_0043a48e(bank 0x4edfb8 = SOUND\SFX\
+   DEADMAN1.RAW / 0x4edfbc = SOUND\SFX\DEADMAN2.RAW, 0, x, y,
+   push 2). Bank slots are .bss pointers filled by the
+   sequential name loader 0x43a29b..0x43a368 (FUN_0043a39c =
+   name→bank); strings 0x458f41/0x458f58 verified by direct
+   DGROUP byte dump. The SAME pair is the crush SFX of the
+   7j.24 debris-crush dispatcher FUN_0040dce0 (0x40dc62) —
+   the pair is the shared destruction-thud family. (Loader
+   order around them: …0x4edfa8←0x458f03, 0x4edfb0←0x458f19,
+   0x4edfb4←0x458f2d = the MISSILE1/POWERUP/ELEV-adjacent
+   run; full name walk left to the SFX unit.)
+7. **Corpus verdict: unchanged** — the effect loop needs a
+   destroyed destructible object; the corpus gates destroy
+   none (weapons/traps stay unwired engine-side). Engine
+   seam: NONE (docs-only, D73).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -3737,8 +3840,11 @@ when §7j.18's .NME staging lands engine-side. Pins untouched.
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
 | weapon impact resolver | FUN_0041a894(x Q13, y Q13, chain ctr ecx, damage ebx, [stack] score flag): tile from x/y>>13; grid word 0/0x7d2/0x7d3 → ret 0 (pass); 0x7d4 → FUN_00422693; n>0 → rec n−1 hp−=damage, destroyed → flags 0x40 + tail → ret 1; ret 1 only on destroy | §7j.13 |
-| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
+| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870 — map §7j.25), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c; +0x46/+0x4A = the saved under-terrain consumed by the destroy restore §7j.25; +0x3E/+0x42 readers open) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
+| destroy-tail effect entries | 5 × 8B @type+0x16+8m (m 0..4, exit @+0x28): selector word@entry+0 ∈ 1..9 → jump table 0x41a870 idx sel−1; payload w2/w4/w6 @entry+2/+4/+6 = x/y TILE + z-level offsets off the 0x46cbf4 record; sel1→k14(+0xF,+0xF)+FUN_0041a225+5 splashes, sel2..5→k18/k17/k16/k19 single gibs at (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0)+4-splash loop, sel6/7→k10 at (+0x10,+0x20)/(+0x20,+0x10)+DEADMAN SFX (delay 0, param −1), sel8→k14 ×25 demolition shower @water z (±3-tile RandA&7−3 jitter, delay ctr+2m+i>>3), sel9→k20+3×3 splash ring (delay ctr+2+RandA&3); stager delay = chain-ctr+m (sel1/8/9); PRECEDED by the footprint W×H×D terrain RESTORE (TOT-mirror z-words ← bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear (z·H+i)·W+j); GER gate: type 0xb ∧ GER skips the whole restore/effect/score/chain tail (record still marked destroyed + triggers fired) | §7j.25 |
+| effects-bank stager | FUN_0041a225(x,y,z tiles) — FIRST producer of the MISSIONVIEW §5d "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (allocator FUN_0041a4cc, 12 tries); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, ttl RandB&0x7FF+0x1770, active/sprite word FUN_0041ec59(3), variant RandB&7}; callers: destroy-tail cases 1/8 | §7j.25 |
+| destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
