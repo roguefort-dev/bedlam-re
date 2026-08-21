@@ -81,21 +81,30 @@ anchors (two independent evidence pieces) per the W1 ticket.
 
 ## 2. EXD present/frame-tail site (the S0 dump trigger)
 
-EXW canon (DESIGN-DIFFHARNESS §2): one harness frame = one MissionShell
-loop pass; dump point = the epilogue/present tail after the last state
-writer, before the flip. EXW anchors: PresentEnd@0x425a03 (DDRAW flip) +
-`g_frame_count++`@0x46ae68 in the loop tail.
-
-EXD expectations [derived]: the DOS build presents via the VESA banked
-flip family (B2 prior art: PresentFlip = VesaSetWindow 4f05 + 4f07
-display-start + WaitVRetrace double-poll of 0x3da bit 3), NOT DDRAW. The
-frame-tail site therefore = the MissionShell-analog loop tail containing
-(a) the present/flip call and (b) the frame-counter increment, in that
-order or equivalents.
-
-- TODO (filled in §4/§5): EXD MissionShell analog address, the flip
-  helper, the frame counter address + increment site, and the exact
-  dump-point instruction.
+- **Present/flip = FUN_00010670** [verified, 3 anchors]: MOV EAX,0x4f07 ×2
+  (set-display-start flip op) + INT 0x10 ×2 + MOV ECX,0x96 ×2 (the
+  0x96-dword cursor-block copy tail — B2 PresentFlip@0x1066b's exact
+  339-byte shape and tail). Reads banked-video flag 0x1075a0, page state
+  0x107484/0x1074b4, flip lock 0x80088 (B2 twin 0x8008e).
+- **Frame counter = [0x001195f0]** [verified-observation, probe 2]: the
+  ONLY global incremented adjacent to FUN_00010670 call sites, in every
+  screen loop: FUN_0004c80c @0x4d212, FUN_0004f1d1 ×3, FUN_00050953,
+  FUN_0005638d ×8. EXW twin g_frame_count@0x46ae68 (incremented in the
+  MissionShell loop tail after PresentEnd). EXD increments in each
+  screen function's loop — same per-frame semantics for the S0/S1
+  frame index; the differ aligns on the value, not the increment site.
+- **MissionShell analog = FUN_0004c80c** [hypothesis-strong]: 8,488 B,
+  17 PresentFlip calls (the mission screen dispatcher scale), contains
+  the 0x4d212 counter increment. Candidate alternates: FUN_0005638d
+  (4,455 B, 13 flips). The exact dump-point instruction + epilogue call
+  chain (robots ×6 etc.) = probe 3 (instruction window around the
+  0x4d212 increment).
+- WaitVRetrace = FUN_0001085b (MOV EDX,0x3da); VESA family
+  FUN_00012298 (mode init, 4f02) / FUN_00012516 (set window, 4f05) /
+  FUN_00012aca + FUN_00012b46 (page mappers); PIT tick install
+  FUN_0002eb0d (divisor 0x2e9b = 100.01 Hz, same as B2). INT8 handler
+  region ~0x12780-0x127a5 (six counter INCs: 0x801a0, 0x1075e8,
+  0x1075fc, 0x1075b4, 0x1075c8, 0x1075e0 — the B2 seven-counter twin).
 
 ## 3. Mapping method (how EXW rows get EXD aliases)
 
@@ -126,39 +135,62 @@ to docs/DIVERGENCES.md as a seed.
 
 | watch | EXW addr | EXD addr | anchors used | tag |
 |---|---|---|---|---|
-| frame counter | 0x46ae68 | TODO | loop-tail increment near present; PACER | |
-| RNG state A | 0x4ede48 | TODO | seeds 123456/234567; stepper additives | |
-| RNG state B | 0x4ede4c | TODO | ditto | |
-| score | 0x4dd40c | TODO | chain-detonation `score += type` site | |
-| money | 0x46ae70 | TODO | fresh-campaign 4000 plant | |
-| difficulty | 0x46cbf8 | TODO | (d+1)%3 cycle; critter table reads | |
-| zone | 0x4edd8c | TODO | elevator stager reads (values 1..7) | |
-| mission | 0x4edd88 | TODO | elevator stager reads | |
-| mode | 0x4edb88 | TODO | elevator stager reads | |
-| linear mission m | 0x46ae8c | TODO | pod-stagger formula consumer | |
+| frame counter | 0x46ae68 | **0x1195f0** | the only INC beside PresentFlip FUN_00010670 calls (7 sites across the screen fns); EXW loop-tail twin | [verified] |
+| RNG state A | 0x4ede48 | **0x107470** | plant 0x1e240 @0x596f9 + @0x2c7db; stepper FUN_00012216 read/write | [verified] |
+| RNG state B | 0x4ede4c | **0x107474** | plant 0x39447 @0x2c7ba→0x2c7d5; stepper FUN_00012257 read/write | [verified] |
+| score | 0x4dd40c | **0x10da28** | resolver FUN_0002b150 `+= ESI` (type) @0x2bff6 + `+= 0xa` (type-0xb→10) @0x2bfed = the EXW chain-detonation rule; animator payouts += 0x3e8/0x7d0/0x1388/0x2710 | [verified] |
+| money | 0x46ae70 | TODO | fresh-campaign 4000 plant (0xfa0 scan queued) | |
+| difficulty | 0x46cbf8 | TODO | (d+1)%3 cycle site | |
+| zone | 0x4edd8c | TODO | elevator-stager reads 1..7 | |
+| mission | 0x4edd88 | TODO | elevator-stager reads | |
+| mode | 0x4edb88 | TODO | elevator-stager reads | |
+| linear mission m | 0x46ae8c | TODO | pod-stagger formula (2000−m·1000/27) consumer | |
 | SFX master gate | 0x4ede58 | TODO | impact-SFX trio gate | |
 
 ## 5. T1 — the P4 slice (EXW → EXD)
 
 | watch | EXW addr | EXD addr | anchors used | tag |
 |---|---|---|---|---|
-| robot bank | 0x4c69e4, count 0x46ccbc | TODO | robots() manager; stride 0xA8; hit applier | |
+| robot bank | 0x4c69e4, count 0x46ccbc | **base 0xf6d34, count 0x11958c** (stride 0xA8 same) | armer FUN_0003570e: alive loop `DAT_0011958c × 0xA8` over [0xf6db0+i] = presence@+0x7C; state w@+0xC via [0xf6d40 + i·0xA8] := 3; hp@+0x78 via `MOV [EAX+0xf6dac],0x1388` @0x1ff2d (5000 = EXW MP-respawn hp base) | [verified] |
 | selection triple | 0x46cbd4/dc/d8 | TODO | scanner-overlay reads | |
 | blink-cursor selector | 0x4dc5d0 | TODO | 7j.7 producer | |
-| per-player selected anchor | 0x4c71c4 | TODO | renderer writes; pre-0x4c71f4 bank | |
-| order target xyz | 0x4dd484/88/8c | TODO | FUN_00410644 writer | |
+| per-player selected anchor | 0x4c71c4 | TODO | renderer writes | |
+| order target xyz | 0x4dd484/88/8c | TODO | FUN_00410644 writer twin | |
 | move-target words | 0x46cc30/0x46cc60 | TODO | command-record bit0 arm | |
-| extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | TODO | armer 0x197 + alive==1 gate | |
-| spread claims | 0x4eabba | TODO | picker 12×u16 first-free | |
-| no-extract latch | 0x46aed4 | TODO | animator gate; boot-clear | |
-| tile word grid | 0x460dfa+2·tile | TODO | impact resolver; 0x7d2/3/4 words | |
-| platform strength bank | 0x465daa+2·tile | TODO | build 300/199; weaken/destroy | |
-| type-DB mirror rows | 0x4796bc+30·tile | TODO | fast z-writer; TOT materializer | |
-| type-DB +0x18 fade byte | 0x4796d4+0x1E·tile | TODO | FUN_00424051 head fade walk | |
+| extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | **0x119628/0x11962a/0x11962c/0x11962e/0x119630** | armer FUN_0003570e full decode: guard [0x119628], timer := 0x197 @0x11962a (0 if alive-count==1), tile trio 0x11962c/2e/30 | [verified] |
+| spread claims | 0x4eabba | 0x119632 [derived: abuts beacon z] | picker twin FUN_0003581b decode queued | [hypothesis] |
+| no-extract latch | 0x46aed4 | TODO | animator gate | |
+| tile word grid | 0x460dfa+2·tile | **0xfe37c+2·tile** | 0x7d4 store [EAX*2+0xfe37c] @0x33985 + 0x7d2/0x7d3 stores [EBX+0xfe37c] @0x33ea8/0x33ed4 + resolver CMPs | [verified] |
+| platform strength bank | 0x465daa+2·tile | TODO | build 300/199 stamper | |
+| type-DB mirror rows | 0x4796bc+30·tile | TODO | fast z-writer / TOT materializer | |
+| type-DB +0x18 fade byte | 0x4796d4+0x1E·tile | TODO | fade walk | |
 | variant/flag bytes | 0x4796d5/0x4796d6 | TODO | stamper variant<<4 / 0x80 | |
-| object instances | 0x46cbf4, count 0x46cbe8 | TODO | .POS loader; stride 0x14 | |
-| TRT array | 0x4cccf8, count 0x46ccd4 | TODO | .TRT loader; 250×0x20; hp 250+250m/27 | |
+| object instances | 0x46cbf4, count 0x46cbe8 | TODO | .POS loader twin (string ".POS"@0x85094 xref) | |
+| TRT array | 0x4cccf8, count 0x46ccd4 | TODO | .TRT loader twin (string ".TRT"@0x8508c xref; hp 250+250·m/27) | |
 
-## 6. Divergence seeds found while mapping
+EXD↔EXW layout note (divergence seed #1): the beacon armer writes the
+teleported x/y at robot+0x00/+0x04 (dwords, Q13) while EXW robots carry
+x@+4/y@+8 — the EXD record front is shifted 4 bytes vs EXW (state stays
+@+0x0C in both; presence +0x7C and hp +0x78 verified in both). The
+harness normalizes to canonical fields (DESIGN §6), so this affects the
+field map only.
 
-(none yet — every EXW↔EXD mismatch lands here as a DIVERGENCES.md seed)
+## 6. Mission-loader string block (EXD, [verified] raw scan)
+
+.MRK 0x85064 · .NME 0x85087 · .TRT 0x8508c · .POS 0x85094 · .BDG 0x85099
+· .TOT 0x862a9 · .DAT 0x862ae · .CGR 0x862b3 · .BIN 0x862b8 · .MIN
+0x862bd · .PAD 0x862cc · second .TOT/.DAT pair 0x86f85/0x86f8a (the
+EDITOR\ZONE restore-reload twin) · "EDITOR\" 0x86f8f · "ZONE" 0x86f97 ·
+"\MISSION" 0x86f9c. Bank strings: DANTE 0x862d1, SCANNER 0x862e3,
+BLOWUP(G) 0x862f7/0x8630b, WEAPONS 0x8631e, SHRIKE 0x86332, REAPER
+0x86345, SMOKE 0x86358, TELEPORT 0x8636a, NUMBERS 0x8637f, FLAGS
+0x86393, VICERA 0x863a5, DEBRIS 0x863b8, SHIELD 0x863cb, ROBNUMS
+0x863de, TABLE 0x86405, DIGITS 0x8642b, SMOKER 0x86452, IDIOTGFX
+0x86465 — the EXW 7j.26/7j.28 bank family confirmed name-for-name.
+
+## 7. Divergence seeds found while mapping
+
+1. Robot record front: EXD {x@0, y@4, state@0xC} vs EXW {x@4, y@8,
+   state@0xC} (armer decode; presence/hp offsets identical). Field-map
+   only — canonical differ unaffected. → docs/DIVERGENCES.md when that
+   file is next touched.
