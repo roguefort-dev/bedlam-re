@@ -34,6 +34,15 @@
 //! palette, so the pins moved; the SIM pins (spawn/click) and every
 //! observation pin are UNCHANGED (the palette touches no sim state).
 //!
+//! PIN REGENERATION 2026-08-21 (SIDEBAR ART unit): the two FRAME
+//! pins moved AGAIN, once, when the [480,640) strip stopped being
+//! black - the sidebar now carries the select portraits + the
+//! order-row chrome from the real GAMEGFX\GENERAL.BIN
+//! (FUN_004072bf/FUN_00408403, RE-EXW-SIM 6c.8; GENERAL.BIN +
+//! SMLFONT.BIN joined the staged chain). The SIM pins
+//! (spawn/click) and every observation pin are UNCHANGED - the
+//! sidebar art is presentation-only (D17).
+//!
 //! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
 
@@ -51,7 +60,7 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
 }
 
 /// The staged corpus inputs in load_mission order: TOT, DAT, PAD,
-/// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, MRK.
+/// CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK.
 fn zonea() -> Option<Vec<Vec<u8>>> {
     Some(vec![
         read(&["EDITOR", "ZONEA", "MISSION1.TOT"])?,
@@ -63,6 +72,8 @@ fn zonea() -> Option<Vec<Vec<u8>>> {
         read(&["GAMEGFX", "SINTABLE.BIN"])?,
         read(&["GAMEGFX", "DANTE.BIN"])?,
         read(&["GAMEGFX", "GAMEPAL.PAL"])?,
+        read(&["GAMEGFX", "GENERAL.BIN"])?,
+        read(&["GAMEGFX", "SMLFONT.BIN"])?,
         read(&["EDITOR", "ZONEA", "MISSION1.MRK"])?,
     ])
 }
@@ -91,6 +102,8 @@ fn scripted_run(files: &[Vec<u8>]) -> (u64, u64, u64, (u16, u16, i32), u64) {
         &files[7],
         &files[8],
         &files[9],
+        &files[10],
+        &files[11],
         None,
         &[(18, 73, 1)],
     )
@@ -195,6 +208,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         &files[7],
         &files[8],
         &files[9],
+        &files[10],
+        &files[11],
         None,
         &[(18, 73, 1)],
     )
@@ -215,9 +230,13 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         viewport_nonzero > 50_000,
         "the viewport window carries real content ({viewport_nonzero})"
     );
-    // The sidebar columns [480,640) stay black across every row (the
-    // EXW mission screen split, sec 6.2 — sidebar art is a later
-    // unit).
+    // The sidebar columns [480,640) now carry REAL art at the spawn
+    // frame (the sidebar art unit, RE-EXW-SIM 6c.8): the entry
+    // trigger (MissionShell 0x447c74) set the redraw countdown 2, so
+    // the first present drew the 7 order rows (robot 0, all-7
+    // availability: row 0 armed, rows 1..6 unarmed — 108+27 px
+    // wide, 11 tall each) and the portraits for both alive robots
+    // (48x48 at (0x1E7,5) and (0x219,5)).
     let sidebar: usize = (0..480)
         .map(|r| {
             frame.indices[r * 640 + 480..(r + 1) * 640]
@@ -226,7 +245,10 @@ fn zonea_mission1_scene_frames_hash_pinned() {
                 .count()
         })
         .sum();
-    assert_eq!(sidebar, 0, "the sidebar stays black this slice");
+    assert!(
+        sidebar > 3_000,
+        "the sidebar carries the GENERAL.BIN art ({sidebar})"
+    );
 
     // The GAMEPAL present tail: the frame palette IS the folded
     // GAMEGFX\GAMEPAL.PAL (6-bit file values verbatim; the frame
@@ -253,13 +275,14 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     assert_eq!(folded[1], [0x3E, 0x3A, 0x39]);
 
     // --- the sidebar producer on real corpus bytes (sec 6c) ----------
-    // State after the entry pump: slot 0 selected, countdown 0 (the
-    // MissionShell entry reset), both robots carry the spawn default
-    // order bits 1<<0 [sec 6c.6].
+    // State after the entry pump: slot 0 selected, countdown 1 (the
+    // MissionShell entry trigger 0x447c74 set 2, the entry pump's
+    // one present decremented it), both robots carry the spawn
+    // default order bits 1<<0 [sec 6c.6].
     {
         let mission = host.mission().expect("staged on Mission");
         assert_eq!(mission.sidebar_selected(), 0);
-        assert_eq!(mission.sidebar_redraw(), 0);
+        assert_eq!(mission.sidebar_redraw(), 1, "2 armed - 1 present");
         assert_eq!(mission.order_bits(0), 1, "spawn default bit 0");
         assert_eq!(mission.order_bits(1), 1);
     }
@@ -355,12 +378,13 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // The hash pins (extend the render-gate family: these are the
     // SCENE-composed frames — host pipeline + fixed spawn camera +
     // one render per pump). Regenerated ONCE for the GAMEPAL present
-    // tail (see the header): the frame pins moved with the palette,
-    // the sim pins did not.
+    // tail and ONCE for the sidebar art unit (see the header): the
+    // frame pins moved each time with the presentation change, the
+    // sim pins did not.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "a79fcada30ec5e50",
-        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL palette)"
+        "018eba568d9b3bae",
+        "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + sidebar art)"
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
@@ -374,8 +398,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "1b75b68ce66019e1",
-        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL palette)"
+        "4a3abd2de43f31df",
+        "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + sidebar art)"
     );
 
     // Determinism: two independent runs are identical.

@@ -29,6 +29,7 @@ use bedlam_core::rng::Pcg32;
 use bedlam_render::mission_view::{
     present_window, DrawParams, MissionView, RobotView, VIEW_BUF_LEN,
 };
+use bedlam_render::ui_bank::draw_sprite;
 use bedlam_render::Vga6;
 
 use crate::loading::Plane;
@@ -45,6 +46,22 @@ pub const SIDEBAR_ORDER_RECT: (i32, i32, i32, i32) = (0x1E9, 0x275, 0x57, 0xB8);
 /// Order-row pitch/first-row y: `row = (y - 0x57) / 14`, clamped to
 /// 6 (7 rows exactly covering the rect height) [sec 6c.4].
 pub const SIDEBAR_ORDER_ROW: (i32, i32) = (0x57, 14);
+/// Order-row sprite x positions — the row body + the count well
+/// [sec 6c.8a, asm 0x4084c1/0x4084dd: FUN_00401ca2 @ (0x1EB, y) and
+/// (0x25A, y)]. GENERAL.BIN geometry: body 108x11 (x 0x1EB..0x257),
+/// well 27x11 (x 0x25A..0x275).
+pub const SIDEBAR_ROW_SPRITE_X: (i32, i32) = (0x1EB, 0x25A);
+/// First order-row body y + pitch [sec 6c.8a: y = 0x59 + 14*i].
+pub const SIDEBAR_ROW_SPRITE_Y: (i32, i32) = (0x59, 14);
+/// Order-row sprite ids from GENERAL.BIN [sec 6c.8a]: armed rows
+/// draw 0x47 + 0x4A, unarmed rows 0x49 + 0x4C.
+pub const SIDEBAR_ROW_SPRITES: [(u16, u16); 2] = [(0x47, 0x4A), (0x49, 0x4C)];
+/// Select-portrait sprite ids [sec 6c.8d, FUN_004072bf]: slot k
+/// draws `base_sel + k` (selected) or `base_unsel + k`, at
+/// (0x1E7 + 0x32*k, 5) — 48x48 sprites filling strip y 5..0x35.
+pub const SIDEBAR_PORTRAIT_IDS: (u16, u16) = (0x12, 0x15);
+/// Select-portrait x base + pitch (the strip x positions) + y.
+pub const SIDEBAR_PORTRAIT_XY: (i32, i32, i32) = (0x1E7, 0x32, 5);
 
 /// The sidebar presentation half [RE-EXW-SIM sec 6c; D17 split —
 /// none of this enters the sim state hash]: the selected squad slot
@@ -130,11 +147,13 @@ pub fn mission_number_for_mask(mask: u8) -> i32 {
 /// The mission asset names in fetch order [design chain convention:
 /// the load_mission path-1 trio (TOT/DAT/PAD, sec 7c.1), then the
 /// zone-level path-2 pair (CGR/BIN) + LNK, then the GAMEGFX staging
-/// family tail (SINTABLE, DANTE, GAMEPAL — staged after the mission
-/// files in MissionShell, sec 7c header; GAMEPAL is the mission
-/// plane palette, MISSIONVIEW sec 6) and the markers. Names carry
-/// the `EDITOR` tree sub-path with '/' separators; the byte source
-/// resolves them under `EDITOR/` [see bedlam-shell GameGfxSource].
+/// family tail (SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT — staged
+/// after the mission files in MissionShell, sec 7c header; GAMEPAL
+/// is the mission plane palette, MISSIONVIEW sec 6; GENERAL +
+/// SMLFONT are the sidebar art banks, sec 6c.8c) and the markers.
+/// Names carry the `EDITOR` tree sub-path with '/' separators for
+/// the mission files; the byte source resolves them under
+/// `EDITOR/` or `GAMEGFX/` [see bedlam-shell GameGfxSource].
 pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
     let zone_dir = format!("ZONE{}", (b'A' + zone as u8) as char);
     let zone_file = format!("MISSION{}", (b'A' + zone as u8) as char);
@@ -149,6 +168,8 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
         "SINTABLE.BIN".to_string(),
         "DANTE.BIN".to_string(),
         "GAMEPAL.PAL".to_string(),
+        "GENERAL.BIN".to_string(),
+        "SMLFONT.BIN".to_string(),
         format!("{per_mission}.MRK"),
     ]
     .to_vec()
@@ -187,6 +208,14 @@ pub struct MissionScene {
     /// [MISSIONVIEW sec 6: GAMEPAL loads into the 0x4edbf8 0x302-B
     /// blob the mission-load pass copies to 0x4ddb34, SIM sec 7c.3].
     palette: [Vga6; 256],
+    /// GAMEGFX\GENERAL.BIN staged bytes (`_DAT_004edd7c`): the
+    /// sidebar art bank — select portraits 0x12..0x17, order-row
+    /// chrome 0x47/0x49 + 0x4A/0x4C, HP/armor bars [sec 6c.8c].
+    general: Vec<u8>,
+    /// `LoadFile("GAMEGFX\SMLFONT.BIN", _DAT_004ede7c)`.
+    /// SMLFONT.BIN (63 glyphs) is the sidebar text bank [6c.8c];
+    /// no text draws until the type table lands (never invented).
+    smlfont: Vec<u8>,
     /// The sidebar presentation half [sec 6c; D17 split — outside
     /// the sim hash].
     sidebar: Sidebar,
@@ -205,7 +234,8 @@ impl MissionScene {
     /// over TOT + swept DAT planes + BIN + LNK with DANTE staged.
     /// GAMEPAL (770 B, the parse_vga770 family) folds to the
     /// canonical 6-bit palette and owns the plane [MISSIONVIEW
-    /// sec 6]. Malformed bytes -> [`GameError::BadMissionAsset`],
+    /// sec 6]. GENERAL.BIN + SMLFONT.BIN stage as the sidebar art
+    /// banks [sec 6c.8c]. Malformed bytes -> [`GameError::BadMissionAsset`],
     /// never a panic (charter); nothing is mutated on error.
     #[allow(clippy::too_many_arguments)]
     pub fn stage(
@@ -219,6 +249,8 @@ impl MissionScene {
         sintable: &[u8],
         dante: &[u8],
         gamepal: &[u8],
+        general: &[u8],
+        smlfont: &[u8],
         zone: i32,
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
@@ -282,6 +314,8 @@ impl MissionScene {
             buf: vec![0u8; VIEW_BUF_LEN],
             plane: vec![0u8; 640 * 480],
             palette,
+            general: general.to_vec(),
+            smlfont: smlfont.to_vec(),
             sidebar,
             render_count: 0,
             active: false,
@@ -289,13 +323,16 @@ impl MissionScene {
     }
 
     /// Fix the camera at the first robot's Q5 position [DESIGN-GAME
-    /// sec 11 LIFECYCLE; the EXW cam pair points at the spawn].
-    /// Idempotent.
+    /// sec 11 LIFECYCLE; the EXW cam pair points at the spawn] and
+    /// arm the initial sidebar draw (MissionShell 0x447C74 sets the
+    /// redraw countdown 2 after the mission-load calls [6c.8e], so
+    /// the rows draw on the entry frames). Idempotent.
     pub fn activate(&mut self) {
         if self.active {
             return;
         }
         self.cam_q5 = self.sim.robots().first().map(Robot::q5).unwrap_or((0, 0));
+        self.sidebar.redraw = 2;
         self.active = true;
     }
 
@@ -435,20 +472,27 @@ impl MissionScene {
     /// enqueue the robots (camera Q5, shake 0, the sim frame), run
     /// the terrain pass into the 0x64000 buffer, crop the 480x480
     /// present window with the fine-camera offset, and blit it at
-    /// canonical (0, 0) of the 640x480 plane (sidebar stays black
-    /// this slice). Advances the LNK walk + edge stream once — one
-    /// render per host frame (D17 bucket b) — and steps the sidebar
-    /// redraw countdown (the FUN_00403938 tail `DAT_0046ccec`:
-    /// decrement while nonzero, one per frame [RE-EXW-SIM sec 6c.5];
-    /// the sidebar redraw PASS itself — FUN_00408403, the sidebar
-    /// art producer — is a future slice, so only the countdown is
-    /// modeled). Inert until active.
+    /// canonical (0, 0) of the 640x480 plane. Then the SIDEBAR ART
+    /// half [RE-EXW-SIM 6c.8, the FUN_00403938 tail order]: the
+    /// select portraits every present (FUN_004072bf — squad-size +
+    /// alive gates, 0x12+slot selected / 0x15+slot not), and the
+    /// order-row chrome on the redraw countdown (FUN_00408403 —
+    /// armed rows 0x47+0x4A, unarmed 0x49+0x4C, rows gated by the
+    /// availability bit; the FUN_00408403 decrements-then-draws
+    /// rhythm [asm 0x407205..0x407217]). Name/count text, HP/armor
+    /// bars, the score strip, the deploy panel and the blink cursor
+    /// stay unwired — each needs state the sim does not model (see
+    /// 6c.8, never invented). Advances the LNK walk + edge stream
+    /// once — one render per host frame (D17 bucket b). Inert until
+    /// active.
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
         }
+        self.draw_sidebar_portraits();
         if self.sidebar.redraw > 0 {
             self.sidebar.redraw -= 1;
+            self.draw_sidebar_rows();
         }
         let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
         self.view
@@ -468,6 +512,76 @@ impl MissionScene {
         Some(&self.plane)
     }
 
+    /// The FUN_00408403 order-row chrome pass [sec 6c.8a]: 7 rows
+    /// over the SELECTED robot, row i drawn iff its availability
+    /// bit is set (the name-index gate analog), armed rows (the
+    /// order-bits word bit i) drawing sprites 0x47 + 0x4A, unarmed
+    /// rows 0x49 + 0x4C, at (0x1EB, 0x59+14i) and (0x25A, 0x59+14i)
+    /// from GENERAL.BIN. Presentation half only.
+    fn draw_sidebar_rows(&mut self) {
+        let robot = self.sidebar.selected;
+        let Some(&avail) = self.sidebar.order_avail.get(robot) else {
+            return;
+        };
+        let bits = self.sidebar.order_bits.get(robot).copied().unwrap_or(0);
+        let (y0, pitch) = SIDEBAR_ROW_SPRITE_Y;
+        for i in 0..7u8 {
+            if avail >> i & 1 == 0 {
+                continue; // no weapon in this group
+            }
+            let armed = usize::from(bits >> i & 1 == 0);
+            let y = y0 + pitch * i32::from(i);
+            let (body, well) = SIDEBAR_ROW_SPRITES[armed];
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                body,
+                SIDEBAR_ROW_SPRITE_X.0,
+                y,
+                true,
+            );
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                well,
+                SIDEBAR_ROW_SPRITE_X.1,
+                y,
+                true,
+            );
+        }
+    }
+
+    /// The FUN_004072bf select-portrait subset [sec 6c.8d]: slot k
+    /// within the spawned squad draws its 48x48 portrait (0x12+k
+    /// when selected, 0x15+k otherwise) at (0x1E7+0x32*k, 5), gated
+    /// by the target's alive word (the HP gate needs the unmodeled
+    /// +0x78 field). Every present. Presentation half only.
+    fn draw_sidebar_portraits(&mut self) {
+        let selected = self.sidebar.selected;
+        for (slot, alive) in self.sim.robots().iter().map(|r| r.alive).enumerate() {
+            if slot >= 3 || !alive {
+                continue;
+            }
+            let id = if slot == selected {
+                SIDEBAR_PORTRAIT_IDS.0
+            } else {
+                SIDEBAR_PORTRAIT_IDS.1
+            } + slot as u16;
+            let (x0, pitch, y) = SIDEBAR_PORTRAIT_XY;
+            draw_sprite(
+                &mut self.plane,
+                640,
+                &self.general,
+                id,
+                x0 + pitch * slot as i32,
+                y,
+                true,
+            );
+        }
+    }
+
     /// The presentation plane under the mission's OWN palette: the
     /// folded GAMEPAL staged with the mission (the host palette no
     /// longer stands in — DESIGN-GAME sec 11 PRESENT, GAMEPAL unit).
@@ -485,6 +599,13 @@ impl MissionScene {
     /// seam).
     pub fn palette(&self) -> &[Vga6; 256] {
         &self.palette
+    }
+
+    /// The staged GAMEGFX\SMLFONT.BIN bytes (`_DAT_004ede7c`) — the
+    /// sidebar text bank, staged for the row text slice (the
+    /// name/count draws wait on the type table, RE-EXW-SIM 6c.8).
+    pub fn sidebar_font_bank(&self) -> &[u8] {
+        &self.smlfont
     }
 
     /// The selected sidebar squad slot (`DAT_0046cbdc`, sec 6c.2).
@@ -520,9 +641,12 @@ impl MissionScene {
 /// A minimal hermetic mission for host tests: a 4x4 type-1 deck
 /// (CGR slot 0 raw 0x1F heights), one MRK record at (1, 1, z-level
 /// 1), an empty BIN (no terrain sprites draw), a zero LNK (words
-/// stay put), SINTABLE-shaped angle words, an empty DANTE bank, and
-/// a 770-B synth GAMEPAL. Files in [`MissionScene::stage`] parameter
-/// order (MRK 5th, GAMEPAL after DANTE).
+/// stay put), SINTABLE-shaped angle words, an empty DANTE bank, a
+/// 770-B synth GAMEPAL, and synth sidebar banks (GENERAL: tiny
+/// solid sprites for the portraits 0x12..0x17 + row chrome
+/// 0x47/0x49/0x4A/0x4C; SMLFONT: 63 empty glyphs — no text draws).
+/// Files in [`MissionScene::stage`] parameter order (MRK 5th,
+/// GENERAL + SMLFONT after GAMEPAL).
 #[cfg(test)]
 pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
     let w = 4usize;
@@ -578,7 +702,38 @@ pub(crate) fn synth_mission_files() -> Vec<Vec<u8>> {
         }
     }
     assert_eq!(gamepal.len(), 770);
-    vec![tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal]
+    // GENERAL: a synth UI bank — tiny 2x2 solid sprites for the
+    // portraits (0x12..0x17) and the row chrome (0x47/0x49 body +
+    // 0x4A/0x4C well), distinct pixel values per id so tests can
+    // tell armed from unarmed rows; everything else empty.
+    let general_count = 0x4Du16;
+    let mut general = vec![0u8; 2 + 4 * general_count as usize];
+    general[0..2].copy_from_slice(&general_count.to_le_bytes());
+    let put = |bank: &mut Vec<u8>, id: u16, color: u8| {
+        let entry = 2 + 4 * id as usize;
+        let start = bank.len();
+        bank.extend_from_slice(&3u16.to_le_bytes()); // flags: hotspot + RLE
+        bank.extend_from_slice(&[0, 0, 0, 0]); // yhot, xhot
+        bank.extend_from_slice(&2u16.to_le_bytes()); // w
+        bank.extend_from_slice(&2u16.to_le_bytes()); // h
+                                                     // RLE: two rows of literal-2 solid color.
+        bank.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        bank.extend_from_slice(&[0x02, 0x00, color, color, 0x00, 0xC0]);
+        let off = (start as u32) - entry as u32;
+        bank[entry..entry + 4].copy_from_slice(&off.to_le_bytes());
+    };
+    for id in 0x12u16..0x18 {
+        put(&mut general, id, 0x20 + id as u8);
+    }
+    for (id, color) in [(0x47u16, 0xA7u8), (0x49, 0xB9), (0x4A, 0xCA), (0x4C, 0xDC)] {
+        put(&mut general, id, color);
+    }
+    // SMLFONT: 63 entries, all empty (no text draws this slice).
+    let mut smlfont = vec![0u8; 2 + 4 * 63];
+    smlfont[0..2].copy_from_slice(&63u16.to_le_bytes());
+    vec![
+        tot, dat, pad, cgr, mrk, bin, lnk, sintable, dante, gamepal, general, smlfont,
+    ]
 }
 
 #[cfg(test)]
@@ -588,7 +743,8 @@ mod tests {
     fn staged(markers: &[(i32, i32, i32)]) -> MissionScene {
         let f = synth_mission_files();
         MissionScene::stage(
-            &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], 0, None, markers,
+            &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], &f[10], &f[11],
+            0, None, markers,
         )
         .expect("synth mission stages")
     }
@@ -617,6 +773,8 @@ mod tests {
                 "SINTABLE.BIN",
                 "DANTE.BIN",
                 "GAMEPAL.PAL",
+                "GENERAL.BIN",
+                "SMLFONT.BIN",
                 "ZONEA/MISSION1.MRK",
             ]
         );
@@ -667,6 +825,8 @@ mod tests {
                 sintable,
                 &f[8],
                 gamepal,
+                &f[10],
+                &f[11],
                 0,
                 None,
                 &[],
@@ -746,9 +906,12 @@ mod tests {
         m.activate();
         let plane = m.present().expect("active presents");
         assert_eq!(plane.len(), 640 * 480);
-        // The synth TOT has no words and the BIN is empty: the plane
-        // stays all zero but the LNK walk counted one render.
-        assert!(plane.iter().all(|&b| b == 0));
+        // The synth TOT has no words and the BIN is empty: the
+        // VIEWPORT stays all zero but the LNK walk counted one
+        // render...
+        assert!(plane[..640 * 480]
+            .chunks_exact(640)
+            .all(|r| r[..480].iter().all(|&b| b == 0)));
         assert_eq!(m.render_count(), 1);
         m.present();
         assert_eq!(m.render_count(), 2);
@@ -800,7 +963,11 @@ mod tests {
         m.activate();
         assert_eq!(m.sidebar_selected(), 0, "slot 0 selected at spawn");
         assert_eq!(m.order_bits(0), 1, "spawn default = 1<<first available");
-        assert_eq!(m.sidebar_redraw(), 0, "countdown zero at stage");
+        assert_eq!(
+            m.sidebar_redraw(),
+            2,
+            "activate arms the initial draw (MissionShell 0x447c74)"
+        );
         // Strip 1 (x 0x219..0x249): selects slot 1, redraw = 2.
         sidebar_click(&mut m, 0x219, 5);
         assert_eq!(m.sidebar_selected(), 1);
@@ -863,17 +1030,84 @@ mod tests {
     #[test]
     fn sidebar_redraw_counts_down_per_present() {
         // DAT_0046ccec: producers set 2, the draw tail decrements
-        // once per frame while nonzero [sec 6c.5, asm 0x407205].
+        // once per frame while nonzero [sec 6c.5, asm 0x407205];
+        // activate arms the INITIAL draw with 2 (0x447c74, 6c.8e).
         let mut m = staged(&[]);
         m.activate();
-        sidebar_click(&mut m, 0x200, 0x57);
-        assert_eq!(m.sidebar_redraw(), 2);
+        assert_eq!(m.sidebar_redraw(), 2, "the entry trigger");
         m.present().expect("active presents");
         assert_eq!(m.sidebar_redraw(), 1);
         m.present();
         assert_eq!(m.sidebar_redraw(), 0);
         m.present();
         assert_eq!(m.sidebar_redraw(), 0, "sticks at zero");
+    }
+
+    #[test]
+    fn sidebar_art_draws_rows_and_portraits() {
+        // The FUN_00408403 row chrome + the FUN_004072bf portraits
+        // [sec 6c.8]: synth GENERAL sprites carry distinct colors
+        // (0x12+k -> 0x32+k portraits, 0x47/0x4A armed, 0x49/0x4C
+        // unarmed), so the plane pins which sprite landed where.
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        let plane = m.present().expect("the entry frame draws (countdown 2)");
+        let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
+        // Portraits: 2-robot squad -> slots 0 (selected, 0x12 ->
+        // color 0x32) and 1 (not selected, 0x16 -> 0x36) at
+        // (0x1E7,5) and (0x219,5); slot 2 gated (squad < 3).
+        assert_eq!(px(plane, 0x1E7, 5), 0x32);
+        assert_eq!(px(plane, 0x219, 5), 0x36);
+        assert_eq!(px(plane, 0x24B, 5), 0, "slot 2 gated (squad < 3)");
+        // Rows (robot 0 selected, avail 0x7F, bits = 1): row 0
+        // ARMED -> body 0x47 (0xA7) at (0x1EB,0x59) + well 0x4A
+        // (0xCA) at (0x25A,0x59); rows 1..6 unarmed -> 0xB9/0xDC.
+        assert_eq!(px(plane, 0x1EB, 0x59), 0xA7, "row 0 armed body");
+        assert_eq!(px(plane, 0x25A, 0x59), 0xCA, "row 0 armed well");
+        for i in 1..7 {
+            let y = 0x59 + 14 * i;
+            assert_eq!(px(plane, 0x1EB, y as usize), 0xB9, "row {i} unarmed body");
+            assert_eq!(px(plane, 0x25A, y as usize), 0xDC, "row {i} unarmed well");
+        }
+        // Gated row: clear availability bit 6 -> after a redraw
+        // trigger, row 6 draws nothing (the plane keeps its old
+        // pixels, so wipe the row first).
+        m.set_order_availability(0, 0x7F & !(1 << 6));
+        for y in 0x59 + 14 * 6..0x59 + 14 * 6 + 2 {
+            for x in 0x1EB..0x1EB + 2 {
+                m.plane[y as usize * 640 + x] = 0;
+            }
+        }
+        m.sidebar.redraw = 2;
+        m.present();
+        assert_eq!(
+            px(&m.plane, 0x1EB, (0x59 + 14 * 6) as usize),
+            0,
+            "row 6 gated"
+        );
+        // Selecting slot 1 moves the rows to robot 1 and the armed
+        // portrait to slot 1 (bit 0 default armed).
+        sidebar_click(&mut m, 0x219, 5);
+        m.present();
+        assert_eq!(px(&m.plane, 0x1E7, 5), 0x35, "slot 0 now unselected (0x15)");
+        assert_eq!(px(&m.plane, 0x219, 5), 0x33, "slot 1 selected (0x13)");
+        assert_eq!(px(&m.plane, 0x1EB, 0x59), 0xA7, "robot 1 row 0 armed body");
+        // The countdown drains: present again (1 -> 0, still draws),
+        // wipe row 0, then one more present draws NO rows.
+        m.present();
+        for y in 0x59..0x59 + 2 {
+            for x in 0x1EB..0x1EB + 2 {
+                m.plane[y as usize * 640 + x] = 0;
+            }
+        }
+        m.present();
+        assert_eq!(px(&m.plane, 0x1EB, 0x59), 0, "no countdown -> no row draw");
+        // The staged font bank rides along (63 synth glyphs) — the
+        // text slice's input.
+        assert_eq!(
+            u16::from_le_bytes([m.sidebar_font_bank()[0], m.sidebar_font_bank()[1]]),
+            63
+        );
     }
 
     #[test]

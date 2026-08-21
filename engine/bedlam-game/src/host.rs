@@ -420,8 +420,10 @@ impl GameHost {
     /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes
     /// the caller fetched, in [`GameHost::mission_asset_names`]
     /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL,
-    /// MRK. GAMEPAL (770 B) is the mission plane palette (folds to
-    /// the canonical 6-bit form; MISSIONVIEW sec 6). The zone comes
+    /// GENERAL, SMLFONT, MRK. GAMEPAL (770 B) is the mission plane
+    /// palette (folds to the canonical 6-bit form; MISSIONVIEW sec
+    /// 6); GENERAL.BIN + SMLFONT.BIN are the sidebar art banks
+    /// (RE-EXW-SIM sec 6c.8c). The zone comes
     /// from the episode slot (consistent with the names the chain
     /// fetched); `staged_markers` is the host/test seam the network
     /// override 0x46cbe0 fills in the original (RE-EXW-SIM sec 7c.8)
@@ -441,6 +443,8 @@ impl GameHost {
         sintable: &[u8],
         dante: &[u8],
         gamepal: &[u8],
+        general: &[u8],
+        smlfont: &[u8],
         mrk: &[u8],
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
@@ -457,6 +461,8 @@ impl GameHost {
             sintable,
             dante,
             gamepal,
+            general,
+            smlfont,
             zone,
             robots_override,
             staged_markers,
@@ -2036,6 +2042,8 @@ mod tests {
             &f[7],
             &f[8],
             &f[9],
+            &f[10],
+            &f[11],
             &f[4],
             None,
             &[(3, 1, 1)],
@@ -2088,7 +2096,9 @@ mod tests {
         assert_eq!(host.mission_slot(), (0, 1));
         assert_eq!(host.mission_asset_names()[0], "ZONEA/MISSION1.TOT");
         assert_eq!(host.mission_asset_names()[8], "GAMEPAL.PAL");
-        assert_eq!(host.mission_asset_names().len(), 10);
+        assert_eq!(host.mission_asset_names()[9], "GENERAL.BIN");
+        assert_eq!(host.mission_asset_names()[10], "SMLFONT.BIN");
+        assert_eq!(host.mission_asset_names().len(), 12);
         walk_to_first_cutscene(&mut host); // completes zone 1
         host.apply(SceneAction::Advance); // Cutscene -> Select
                                           // Stage 2 now: zone B, still MISSION1 (mask reset).

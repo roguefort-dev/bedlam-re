@@ -146,9 +146,9 @@ pub fn stage_scene(
         }
         Scene::Shop => host.load_shop(&bytes[0])?,
         // Fetch order = load_mission order: TOT, DAT, PAD, CGR, BIN,
-        // LNK, SINTABLE, DANTE, GAMEPAL, MRK. Single player: no
-        // robots override, no staged markers (the 0x46cbe0 network
-        // seam).
+        // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK.
+        // Single player: no robots override, no staged markers (the
+        // 0x46cbe0 network seam).
         Scene::Mission => host.load_mission(
             &bytes[0],
             &bytes[1],
@@ -160,6 +160,8 @@ pub fn stage_scene(
             &bytes[7],
             &bytes[8],
             &bytes[9],
+            &bytes[10],
+            &bytes[11],
             None,
             &[],
         )?,
@@ -227,8 +229,8 @@ mod tests {
             vec!["SHOP.SMK".to_string()]
         );
         // The mission fetch set is EXACTLY the host's selection, in
-        // the host's order (DESIGN-GAME sec 11 staging order, GAMEPAL
-        // in the GAMEGFX tail before the markers).
+        // the host's order (DESIGN-GAME sec 11 staging order, the
+        // GAMEGFX tail GAMEPAL/GENERAL/SMLFONT before the markers).
         let mission: Vec<String> = bedlam_game::mission_asset_names(0, 1);
         assert_eq!(
             scene_assets(Scene::Mission, uk, "ZONEDONE.SMK", None, &mission),
@@ -242,6 +244,8 @@ mod tests {
                 "SINTABLE.BIN".to_string(),
                 "DANTE.BIN".to_string(),
                 "GAMEPAL.PAL".to_string(),
+                "GENERAL.BIN".to_string(),
+                "SMLFONT.BIN".to_string(),
                 "ZONEA/MISSION1.MRK".to_string(),
             ]
         );
@@ -277,7 +281,7 @@ mod tests {
             mission.first().map(String::as_str),
             Some("ZONEA/MISSION1.TOT")
         );
-        assert_eq!(mission.len(), 10);
+        assert_eq!(mission.len(), 12);
         assert!(
             scene_assets(host.scene(), cfg, &cutscene, briefing.as_deref(), &mission).is_empty(),
             "boot transition fetches nothing"
