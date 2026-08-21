@@ -136,7 +136,13 @@ kind=none
 # fell through to client-error (watchdog repair, 2026-08-21).
 if grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
-elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event" "$LOG"; then
+# Provider HTTP 5xx ("Provider request failed with HTTP 502", the
+# 2026-08-21 19:15/19:34 incident) is provider-side overload, not a
+# client error: both 502 deaths fell through to client-error and
+# charged task 1c8526453c786dd5 to 2/3 - one more would have armed
+# the cooldown+notify spiral mid-incident (watchdog repair,
+# 2026-08-21).
+elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event|Provider request failed with HTTP 5[0-9][0-9]" "$LOG"; then
   kind=transport
 elif [ "$reaped" -eq 1 ]; then
   # The idle-log reaper terminated a hung client (2026-08-21 watchdog

@@ -1,16 +1,37 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The ROBOT TARGETING/AIM family (7j.16 leads): FUN_00412f34
-   (the 6102 B robot controller? no — 2577 B, the pathfinder/aimer
-   with 15 FUN_0041ebf8 octile + 4 FUN_00417c00 probe + 13
-   [0x46cbf8] difficulty reads), FUN_00417e2f + FUN_00412a98 (the
-   other FUN_00417c00 callers), and the order-target 0x4dd484/88/8C
-   consumer head FUN_00409138 (×6 reads + 1 write — the robot
-   behaviour state machine that eats the 7j.16 click orders).
-   Answers: how robots pick targets/paths and consume orders.
-   Bounded: those four functions full decode + the 0x4dd484
-   reader census head.
+1. [P4] ADOPT INTERRUPTED WIP, then finish the residual. Three
+   provider-outage-killed runs (2026-08-21 19:15/19:34/19:40, two
+   HTTP 502 + one Transport) already decoded the ROBOT TARGETING/AIM
+   family (7j.16 leads): read .state/agent-31790e94-*.log,
+   .state/agent-08f6fa30-*.log, .state/agent-0ce3a285-*.log (tails
+   hold the conclusions) + the on-disk ghidra-project/exw-robottarget*
+   .txt/-xrefs/-asm dumps (gitignored). FIRST ACTION: write and
+   commit the 7j.17 RE-EXW-SIM notes section FROM THOSE LOGS -
+   re-verify each claim against the dumps, do NOT re-run Ghidra on
+   the four decoded functions. Dead-run headline map (verify then
+   pin provenance): FUN_00412f34 = the 0x4cff98 critter-actor
+   controller (stride 0x7E; Q13 coords x@+0x36/y@+0x3A/z@+0x3E;
+   tile=>>13; its 13 [0x46cbf8] reads = the 0..2 difficulty dial:
+   cycled at NameEntryScreen 0x43ab7e `(d+1)%3`, persisted @0x43c3a6,
+   money 500*d @0x43aaa3, zone-7 forces d=2 @0x41c568, write
+   @0x41c14a; other heavy readers FUN_00403938 x10, FUN_00416458
+   x5); FUN_00412a98 = 0x4dabdc POI-seeker; FUN_00409138 = the
+   click-order consumer over 0x80-stride records @0x4dd4a0 (39-case
+   weapon switch); FUN_00417e2f decoded; FUN_00448b80 =
+   mission-objective resolver (6 slots @0x4eaaee, progress
+   _DAT_004eba0c, msgs 0x26..0x29, complete-state DAT_0046cd00;
+   actor counts DAT_0046cc2c/DAT_0046cbf0 written by FUN_00416458).
+   The 0ce3a285 log also holds a verified 47-site k1..k20
+   debris-kind caller census + a 28-site record-bank census
+   (FUN_00410823 x16, FUN_004190bc x6, FUN_00412010 x4,
+   FUN_004197d4 x1) - fold those into the backlog items they
+   answer. AFTER the notes commit, only the residual 0x4dd484
+   reader census head remains bounded work (skip if the logs
+   already cover it). [Amended by watchdog repair 2026-08-21
+   19:4x; commit trailer Watchdog-Repair: llm-watchdog 761241
+   1787334054.]
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed

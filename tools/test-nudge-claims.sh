@@ -266,6 +266,34 @@ touch -d "10 seconds ago" "$PLAN/.state/claims/13-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/13-owner.claim" ]
 
+# The 2026-08-21 provider-incident signature (opencode2 dying on
+# "Provider request failed with HTTP 502") is classified transport -
+# not client-error - and is never charged to the task. Before the
+# fix both 502 deaths were mislabeled client-error and charged the
+# task twice, one fail away from the 3-strike cooldown spiral.
+cat > "$TMP/mock-5xx" <<EOF
+#!/usr/bin/env bash
+echo "Error: Provider request failed with HTTP 502"
+exit 1
+EOF
+chmod +x "$TMP/mock-5xx"
+echo "14. [P4] provider-5xx mock item" >> "$PLAN/.state/NEXT.md"
+fivexx_hash=$(sed -n "s/^[[:space:]]*14\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/14-823.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-5xx" "$AGENT" 14 823
+fivexx_rc=$?
+set -e
+[ "$fivexx_rc" -eq 1 ]
+grep -q "failed \[transport rc=1 progress=0\] task=$fivexx_hash; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$fivexx_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$fivexx_hash" ]
+[ -e "$PLAN/.state/claims/14-owner.claim" ]
+flock -n "$PLAN/.state/claims/14-owner.claim" true
+touch -d "10 seconds ago" "$PLAN/.state/claims/14-owner.claim"
+DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/claims/14-owner.claim" ]
+
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF
 #!/usr/bin/env bash
