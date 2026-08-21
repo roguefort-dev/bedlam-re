@@ -262,4 +262,20 @@ if [ "$current_identity" = "$claim_identity" ] && grep -q "^lock-v1 worker $slot
     echo "$(date -Is) retaining item $item claim held by a live descendant" >> "$STATE/nudge.log"
   fi
 fi
+
+# Event-driven chaining (2026-08-21): on a clean end, age the heartbeat so
+# the controller freshness gate passes immediately (the same trick the
+# watchdog resume path uses) and fire one instant nudge pass. The 60s timer
+# stays armed as a floor; every pass remains idempotent under the controller
+# lock. Test safety: SYSTEMD_RUN_OVERRIDE marks the hermetic controller run
+# (never touch the real systemd there); SYSTEMCTL_OVERRIDE lets tests
+# record the chained call instead.
+if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
+  touch -d @0 "$STATE/heartbeat"
+  if [ -n "${SYSTEMCTL_OVERRIDE:-}" ]; then
+    "$SYSTEMCTL_OVERRIDE" --user start bedlam-nudge.service >/dev/null 2>&1 || true
+  elif [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ]; then
+    systemctl --user start bedlam-nudge.service >/dev/null 2>&1 || true
+  fi
+fi
 exit "$rc"

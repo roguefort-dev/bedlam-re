@@ -1,0 +1,9 @@
+[Unit]
+Description=bedlam-re event-driven spawn trigger (claims lifecycle)
+
+[Path]
+PathModified=/home/kato/Documents/bedlam-re/.state/claims
+Unit=bedlam-nudge.service
+
+[Install]
+WantedBy=default.target

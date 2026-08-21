@@ -63,11 +63,20 @@ git -C "$PLAN" commit -qm "work" -m "Nudge-Worker: \$slot"
 EOF
 chmod +x "$TMP/mock-client"
 
+# Chain-spawn recorder: nudge-agent fires one instant nudge pass on a clean
+# end (event-driven coordination). Records the call; never touches systemd.
+cat > "$TMP/mock-systemctl-chain" <<EOF
+#!/usr/bin/env bash
+printf "%s\n" "\$*" >> "$TMP/chain-calls"
+EOF
+chmod +x "$TMP/mock-systemctl-chain"
+
 run_nudge() {
   BEDLAM_PLAN_DIR="$PLAN" NUDGE_LOCK="$TMP/nudge.lock" \
   OPENC_OVERRIDE="$TMP/mock-client" \
   NETWORK_WATCHDOG_OVERRIDE="$TMP/mock-network-watchdog" \
   SYSTEMD_RUN_OVERRIDE="$TMP/mock-systemd-run" \
+  SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl-chain" \
   REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" \
   NOTIFY_SEND="$TMP/mock-notify-send" \
   "$ROOT/tools/nudge.sh"
@@ -98,6 +107,8 @@ grep -q "ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
 git -C "$PLAN" log -1 --format=%B | grep -qE "^Nudge-Worker: [0-9a-f-]+$"
 [ ! -e "$PLAN/.state/claims/1-owner.claim" ]
 [ -z "$(ls "$PLAN/.state/claims")" ]
+grep -q -- "start bedlam-nudge.service" "$TMP/chain-calls"
+[ "$(stat -c %Y "$PLAN/.state/heartbeat")" -lt "$(( $(date +%s) - 3600 ))" ]
 [ ! -e "$PLAN/.state/taskfails/$(taskhash 1)" ]
 
 # 2. Second pass while the item is claimed and locked: stand down.
