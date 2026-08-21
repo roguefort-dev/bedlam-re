@@ -1,24 +1,27 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The PROJECTILE MID-FLIGHT DRAW family (7j.28) — the last
-   undecoded consumer block of the FUN_00403938 render tail: the
-   type dispatch at 0x404141 (`ax = word@+0` of the 400×0x36
-   weapon-anim bank 0x4c71f4 → 5 shell @0x404187, 9..0xB
-   artillery @0x404567, 0xE mortar @0x40436e, 0xF/0x13 damped
-   @0x4042a3, 0x17 split, 0x24 rocket @0x40464e, 0x29 homing
-   @0x404916, generic 2..4/6..8/0xC..0x12 @0x40427a) + the
-   sibling 0x4cc654 50×0x22 walk (states 0x65..0x69 → jump table
-   0x403908) + the trail-ring draw consumer @0x404464 (the
-   0x4e66b8 bank link read — 7j.22/23 open item). Head already
-   landed (§7j.27 item 6, dump ghidra-project/exw-text-objdump.txt
-   has the full .text — objdump only, NO Ghidra needed while an
-   analyzeHeadless runs). Bounded: per-type draw bodies (sprite
-   banks + frame selection + the splash/screen-effect sequences)
-   and the 0x403908 jump-table bodies. Closes the render tail;
-   after it, queue the P4.2 differential-harness design doc (the
-   remaining backlog RE items are all corpus-off producers that
-   land naturally with the harness).
+1. [P4.2] The DIFFERENTIAL-HARNESS DESIGN DOC (PLAN sec 6 P4.2,
+   budgeted ~2 weeks): write docs/DESIGN-DIFFHARNESS.md — the
+   architecture for DOSBox-X memory-watches + scripted input
+   injection -> per-frame original-state dumps diffed against the
+   Rust engine state. The render tail is now fully RE'd (7j.28
+   closed the last consumer block), so the doc arbitrates the
+   accumulated open hypotheses + harness obligations in one place:
+   the pod-descent stagger (w@+0x2C = 1+k·(2000−m·1000/27),
+   descent ≈41 frames, pod phase 2 = one tick, release = state 6),
+   weapon fire via injected COMMAND records (FUN_00449c94/
+   0x4dd4a0) or order dispatch — never raw input (7j.22), the
+   destroy family end-to-end (7j.25), the mid-flight draw blit
+   sequences (WEAPONS/SHRIKE/REAPER/SMOKE banks, 7j.28), the
+   debris 2k start-delay + blink-cursor-from-spawn questions, the
+   7j.9 five-ring overlap last-write-wins read, arm extraction via
+   a scripted .PAD step-on (not a click, 7j.20), and the
+   corpus-off producers that land naturally with the harness
+   (debris-stager widening, SFX families, per-zone case tables).
+   Bounded: DESIGN DOC ONLY (no harness code this unit); anchor
+   every watched address to its ledger row; end with a build-order
+   ticket list (watch points first, runner, differ, gates).
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -145,6 +148,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4 7j.28 the PROJECTILE MID-FLIGHT DRAW family unit
+  COMPLETE (worker ffec42cf claim 1, commits 9a1d205 + 27481c2,
+  D76, docs-only; objdump-only from ghidra-project/
+  exw-text-objdump.txt — an analyzeHeadless was running). The
+  400×0x36 dispatch fully mapped (primary 0x404141 + secondaries
+  0x404d27/0x404d08): shell 5 (WEAPONS 3..7, counter d@+0xE wraps
+  7→3), artillery 9..0xB (8..15), mortar 0xE (frame 1 + the
+  8-puff trail), damped {0xF/0x13 base 0x20, 0x17 base 0x28,
+  0x1A/0x1F base 0x18} + wobble gate |vx|∨|vy|>0x40, rocket 0x24
+  (SHRIKE 64-dir + ≤8 SMOKE puffs dist 0x20+0x10·i, count TTL/4),
+  homing 0x29 (REAPER 64-dir + GENERAL reticle on target d@+6
+  {0x1000 robot/0x2000 critter/else FUN_004128ec} + 4 puffs).
+  BANKS NAMED + corpus-verified: WEAPONS/SHRIKE 64/REAPER 64/
+  SMOKE 4/GENERAL 153 imgs (= [0x4eddbc]/[0x46af30]/[0x46af2c]/
+  [0x46af34]/[0x4edd7c], boot string block 0x45884e..). The
+  trail-ring draw consumer @0x404464 CLOSED (puffs @ 0x4e66b8+
+  link·0x68+8+i·0xC, WEAPONS 0x10+(tick+i)&7, mode 0x12E, ring
+  words unread). The 50×0x22 walk CLOSED (jump table 0x403908
+  read from file: 0x65/0x67/0x68 single strip sprites 0x3C/0x3C/
+  0x38, 0x66 NOT drawn, 0x69 the per-level BEAM column 0x34-strip
+  with +0xA = top z level, +0x1A = bottom). CORRECTIONS: 0x40427a
+  = loop-next (unlisted types NOT drawn mid-flight — no "generic
+  draw body"); 0x17 draws damped (the 3-clone split is tick-side).
+  FUN_0040798e call shape pinned (mode 0x12C/0x12D/0x12E = the
+  4th stack arg; the 7j.21 "sprite 0x12E" gloss corrected).
+  Render tail now FULLY decoded. Manifest verified. PUSHED
+  27481c2. Queued: the P4.2 differential-harness design doc.
 - 2026-08-22: P4 7j.27 the DROPSHIP RING PRODUCERS unit COMPLETE
   (worker e635cb76 claim 1, commit 2aa7cb7, D75, docs-only; dump
   ghidra-project/exw-text-objdump.txt = full .text objdump

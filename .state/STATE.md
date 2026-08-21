@@ -1,3 +1,21 @@
+ - CLOSED 2026-08-22 (P4 7j.28 the PROJECTILE MID-FLIGHT DRAW
+   family unit COMPLETE, worker ffec42cf claim 1, commits 9a1d205
+   + 27481c2, D76, docs-only; objdump-only from ghidra-project/
+   exw-text-objdump.txt — an analyzeHeadless was running): the
+   400×0x36 dispatch (0x404141 + secondaries 0x404d27/0x404d08)
+   fully mapped — shell/artillery/mortar/damped {0xF/0x13 base
+   0x20, 0x17 base 0x28 (NOT the "3-clone split" — tick-side
+   only), 0x1A/0x1F base 0x18}/rocket/homing; 0x40427a CORRECTED
+   to loop-next (unlisted types NOT drawn mid-flight); banks
+   NAMED + corpus-verified WEAPONS 70/SHRIKE 64/REAPER 64/
+   SMOKE 4/GENERAL 153 (boot string block 0x45884e..); the
+   0x4e66b8 trail-ring draw consumer CLOSED (8 puffs, WEAPONS
+   0x10+(tick+i)&7, mode 0x12E); the 50×0x22 walk CLOSED (table
+   0x403908: 0x65/0x67/0x68 strip sprites, 0x66 undrawn, 0x69
+   the per-level BEAM column); FUN_0040798e call shape + mode
+   words pinned. THE FUN_00403938 RENDER TAIL IS NOW FULLY
+   DECODED. Manifest verified. PUSHED 27481c2. Next: the P4.2
+   differential-harness design doc.
  - CLOSED 2026-08-22 (P4 7j.27 the DROPSHIP RING PRODUCERS
    unit COMPLETE, worker e635cb76 claim 1, commit 2aa7cb7, D75,
    docs-only; dump ghidra-project/exw-text-objdump.txt = full
