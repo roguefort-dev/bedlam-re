@@ -3396,6 +3396,8 @@ facts [verified] against those dumps unless tagged.
     detonation (d@(0x4e66b8 + link·0x68) := 0, sites
     0x410d51/0x410eac/0x411744-family bounds path). The link
     slot allocation (writer of +0x32 ≠ −1) stays OPEN.
+    [CLOSED by §7j.23 item 8: allocator FUN_00412a4a, 20
+    slots; writer FUN_0040a9ff at mortar spawn.]
 11. Engine verdict: docs-only (D70) — unchanged from §7j.13:
     no corpus producer reaches any fire site; the family stays
     anchored-but-unwired for P4.2. Re-opens cleanly at:
@@ -3403,6 +3405,136 @@ facts [verified] against those dumps unless tagged.
     damage application + the remaining FUN_00419aff reads), the
     0x4e66b8 slot allocator, projectile type 0x69, and the
     draw pass that consumes the trail rings.
+
+## 7j.23 Amendment 2026-08-21 (worker ad591680, the weapon-fire
+family TAIL head: the ACTOR HIT APPLIERS + the trail allocator)
+
+Method: `DecompList`/`DumpRange`/`StoreScan` (new scanner;
+finds computed refs) — all `-process BEDLAM.EXW -noanalysis`;
+dumps = `ghidra-project/exw-hitters.txt` (FUN_004190bc,
+FUN_00418fca, FUN_00419aff, FUN_0041879d, FUN_0041874c) +
+`exw-hitters-asm.txt` (listing 0x418fca..0x419760) +
+`exw-hitters2.txt` (FUN_0041ebf8/00421fc2/0041a028) +
+`exw-hitters3.txt` (FUN_0040a9ff/00412a4a) + `exw-hitters4.txt`
+(FUN_0040e230 head) + `exw-hitters-scan.txt` (whole-program
+operand scan for 0x4c7226/0x4e66b8/0x4e66bc). All facts
+[verified] against those dumps unless tagged.
+
+1. **FUN_004190bc(critter EAX, owner EDX, x EBX, y ECX, z
+   stack, weapon param_6, mode param_7) = the CRITTER HIT
+   APPLIER** over the 0x7E-stride critter bank (§7j.17 base
+   0x4cff98, count [0x46cc2c]). Record words now anchored:
+   **kind w@+0x00** (the .NME section states {2,1,5,4,3,6,7}
+   of §7j.18 ARE the switch cases 1..7), attacker u16@+0x04,
+   **hp s16@+0x06** (dword@+4 >>0x10 = the death test),
+   **state w@+0x0C** (task's "+0xC"), sub-timer w@+0x0E,
+   knock heading d@+0x10, impact x/y d@+0x1C/+0x20, xyz Q13
+   d@+0x36/+0x3A/+0x3E, timer w@+0x56, knock vx/vy w@+0x74/
+   +0x76, **hit flash w@+0x7C**, **presence w@+0x24** (task's
+   "+0x24 word"; ==0 → return 0). Signature confirmed = the
+   §7j.22 lane call; a THIRD caller exists in the renderer:
+   FUN_00403938 @0x4190bc-call `exw-missionrender.txt:4186`
+   = FUN_004190bc(critter, owner −1, x<<5, y<<5, z<<5, weapon
+   0xC, mode 2) — the w0xC=5000 direct blast.
+2. **Mode semantics** [verified]: mode 2 = full 3-D test
+   (octile FUN_0041ebf8(dx,dy) < 0x20 on x/y AND |dz| < kind
+   threshold); mode 1 = x/y test ONLY (z ignored — used by no
+   in-corpus caller found yet; the lanes always pass 2).
+   Per-kind coordinate storage: kinds 1/4 store x/y in CELL
+   units (raw compare vs the caller's >>8 args); kinds 2/3/5/
+   6/7 store Q13 (>>8 at compare). z thresholds: 1/2/4/5/6
+   <0x20, 3 <0x24, 7 <0x40 (tall). Kinds 3..7 additionally
+   hard-guard state w@+0x0C ∉ {6,7,0xB} (dying/ballistic/
+   dormant immunity — same states as the §7j.17 machine).
+3. **Hit application** [verified]: hp@+0x06 −= FUN_00419aff
+   (weapon) (the §7j.15 damage table — the 7j.22 gloss
+   "per-critter damage lookups" is CORRECTED: the lookup is
+   per-WEAPON, critter-kind-independent); attacker@+0x04 :=
+   owner&0xFFFF; flash w@+0x7C := 1; kinds 4/5/6/7 state :=
+   5 (stun) and impact x/y@+0x1C/+0x20 := x/y<<8 (kind 3
+   stores them raw). Death (hp ≤ 0) dispatches per kind:
+   1→FUN_00418835, 2→FUN_004188d0, 3→FUN_00418aa6,
+   4→FUN_00418ca4(critter,weapon), 5/6→FUN_00418e26(critter,
+   weapon), 7→FUN_0041896c — the per-kind death-handler
+   family (kinds 4/5/6 take the weapon id = weapon-dependent
+   drops/effects). Survivors: kinds 3/4/5/6 call FUN_00421fc2
+   (hit juice) and kinds 4/5/6 additionally 25% (RandA&3==0,
+   owner ≠ −1) stage the KNOCKBACK effect FUN_0041a028;
+   kind 7 instead computes its own knock vector IN-RECORD
+   (heading d@+0x10 = angle(impact−critter)+0x80 away-jitter,
+   vx/vy w@+0x74/+0x76 = cos/sin>>6, state := 5, timer@+0x56
+   := 0 — no SFX call, no effect row).
+4. **FUN_00421fc2(x,y) = impact SFX**: gated [0x4ede58]≠0;
+   RandB()%3 picks one of the three banks 0x4edf7c/0x4edf80/
+   0x4edf84 (the §7j.17 critter/POI trio) → FUN_0043a48e
+   (bank, 0, x, y, 2).
+5. **FUN_0041a028(x Q13, y Q13, z Q13, robot_x Q13, robot_y
+   Q13) = KNOCKBACK effect row stager** — a SECOND spawner
+   for the
+   0x20-stride effect rows @0x4cec38 (besides FUN_0041a14f,
+   §7j.17): FUN_0041a494 allocates the row; stores x/y/z Q13;
+   heading = atan2 family (FUN_0041eb7d/0041ebc1 = angle
+   +0x80 flip = AWAY from the shooter) ± RandA&0x1F−0x10;
+   vx/vy = cos/sin (FUN_0041eb65/77) >>8 into w@+0xE/+0x12
+   (row-relative: cos@+0xE, sin@+0x12, ttl d@+0x16 :=
+   RandA&0x3F+0x1F, kind w@+0x1A := FUN_0041ec1c(5,0)+3,
+   w@+0x1C/+0x1E := 0, w@+0 := 0); then FUN_00420608((x>>8)+1,
+   (y>>8)+1, max((z>>8)−0x20,0), 10, 0, −1) — the "critter
+   flies away" juice. FUN_0041ebf8 = OCTILE distance
+   max+min/2 (also the §7j.22 prefilter metric).
+6. **FUN_00418fca(robot EAX, x EDX, y EBX, z ECX, weapon
+   param_5, mode param_6) = the OTHER-ROBOT HIT APPLIER**:
+   presence d@+0x7C≠0; |x−(d@+4>>8)|<0x20 ∧ |y−(d@+8>>8)|<
+   0x20 ∧ (mode 2: |z−d@+0xC|<0x30 — z RAW, no shift, AND no
+   octile: pure box test); on hit FUN_0040e230(robot,
+   FUN_00419aff(w@rec+0), d@rec+2 owner) then clamp hp d@+0x78
+   ≥ 0; returns 1. Owner-damage (own shots) is NOT excluded
+   here — the exclusion is the caller's idx≠owner skip.
+7. **FUN_0040e230(robot, damage, owner) = the ROBOT DAMAGE
+   APPLIER** [head decode, first ~120 of 268 decompile
+   lines]: guards state w@+0x0C == 2 (dying) skip / presence;
+   state 3 (extract/depart, §7j.19) → active-shield d@+0x88
+   := 0x20; damage gated by
+   d@+0x8C==0 ∨ d@+0x88≠0; alarm: w@+0x34==0 → damage-counter
+   d@+0xA4 += 3, >100 ∧ view == [0x4edb90] → per-slot warning
+   SFX 0x10/0x11/0x12 (FUN_004239ef, robot ==
+   [0x46cbd4]+k, k<2 gated [0x46cbd8]) then w@+0x34 := 100
+   (cooldown), counter := 0; shield-down path: hit count
+   w@+0x2E++, hp d@+0x78 −= damage, tier warnings vs 5000+
+   100·variant(d@+0x94): cross → SFX 0x2B/0x2C/0x2D, ≤50% →
+   0x13/0x14/0x15, ≤12.5% → 0x16/0x17/0x18 (per-slot);
+   shield-up path: d@+0x88 −= damage clamp 0 (absorb);
+   death (hp < 1) MP mode [0x4edb88]==2: 0xC-stride
+   scoreboard @0x4ebaa8 per robot {score d@+0, flag d@+4,
+   d@+8 := 0xB} — killer(owner≠victim): flag 1, score++ cap
+   999; victim: score−− clamp 0, flag 0 (SP tail not decoded
+   here; FUN_0040e230 is also a [0x46aed4+idx·4] no-extract
+   latch writer per §7j.19).
+8. **Trail allocator CLOSED (§7j.22 item 10 open point)**:
+   `StoreScan` found the whole-program writer set of the
+   +0x32 link. **FUN_00412a4a = the SMOKE-TRAIL SLOT
+   ALLOCATOR**: linear scan of 20 slots (0x4e66b8 + i·0x68,
+   bound offset 0x820 = 20·0x68), first with d@+0 == 0, else
+   −1. **FUN_0040a9ff(robot, slot, mask, rec_idx) = the MORTAR
+   SPAWNER** (fire dispatcher §7j.17 case 0xC helper): arg3
+   (mask) == −1 = maskless variant (trail alloc, no ammo
+   bookkeeping); else ammo w@(robot·0xA8+8·slot+0x38)--, 0 →
+   weapon mask XOR w@+0x6E; if the slot's weapon id
+   (w@(robot·0xA8+8·slot+0x36)) == 0xE → slot state
+   w@+0x2C := 0xC (slower reload) + allocate trail slot,
+   record d@+0x32 := slot, trail slot d@+0 := 1, ring 8×0xC
+   zeroed; NON-mortar spawns set d@+0x32 := 0 (sentinel —
+   harmless, only type 0xE reads it). Then SFX _DAT_004edf94
+   (§7j.17 robot-fire bank); ballistics = /8-normalized unit
+   vector toward the order target (0x4dd484/88/8C) ×2,
+   ttl 0x32, arc 0x500, spawn +0x15 above the robot; record
+   type := the slot weapon id. (The dispatcher's OWN case 0xE
+   spawns
+   2× type-0xF jittered sub-shells, NOT 0xE — the 0xE record
+   itself comes only from this helper.) Remaining consumer
+   open: the trail-ring DRAW pass (FUN_00403938 reads the
+   link @0x404464; FUN_00412a4a's CMP is the allocator probe
+   itself).
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
@@ -3449,8 +3581,14 @@ facts [verified] against those dumps unless tagged.
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
-| actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x,y,z,weapon,mode 2)); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner); odd phases only (2×/frame); FUN_004190bc = the CRITTER hit applier (NOT a panel — §7j.15 hypothesis corrected) | §7j.22 |
-| mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; cleared on free/detonate; slot allocator open | §7j.22 |
+| actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
+| critter hit applier | FUN_004190bc(critter,owner,x,y,z,weapon,mode): presence w@+0x24; kind switch w@+0x00 (1..7 = the .NME section states); mode 2 = octile<0x20 on x/y + z-box (kinds 1/4 cell-unit coords, 2/3/5/6/7 Q13; z 0x20/0x24/0x40), mode 1 = x/y only; kinds 3..7 immune while state w@+0x0C ∈ {6,7,0xB}; hit → hp w@+0x06 −= FUN_00419aff(weapon), attacker w@+0x04, flash w@+0x7C, kinds 4..7 state := 5; death per kind 1→FUN_00418835 2→FUN_004188d0 3→FUN_00418aa6 4→FUN_00418ca4(+weapon) 5/6→FUN_00418e26(+weapon) 7→FUN_0041896c | §7j.23 |
+| robot hit applier | FUN_00418fca(robot,x,y,z,weapon,mode): presence d@+0x7C; box test \|dx\|,\|dy\| < 0x20 (d@+4/+8 >>8) + mode-2 \|dz\| < 0x30 (d@+0xC raw); hit → FUN_0040e230(robot, FUN_00419aff(w@rec+0), d@rec+2 owner) + hp d@+0x78 clamp ≥0 | §7j.23 |
+| robot damage applier | FUN_0040e230(robot,damage,owner) [head]: state w@+0x0C==2 skip; state 3 → shield d@+0x88 := 0x20; gate d@+0x8C==0 ∨ d@+0x88≠0; alarm w@+0x34==0 → counter d@+0xA4 += 3, >100 → SFX 0x10/11/12 per player slot + w@+0x34 := 100; shield-down: hitcount w@+0x2E++, hp d@+0x78 −= dmg, tier SFX 0x2B/0x2C/0x2D, 0x13..0x15 (≤50%), 0x16..0x18 (≤12.5%) vs 5000+100·variant d@+0x94; shield-up: d@+0x88 absorb clamp 0; death MP: scoreboard 0xC-stride @0x4ebaa8 {score d@+0, flag d@+4, d@+8 := 0xB}, killer++/victim−− | §7j.23 |
+| critter knockback juice | kinds 4/5/6 survive-hit 25% (RandA&3==0, owner ≠ −1) → FUN_0041a028(x,y,z Q13, robot x,y Q13): 2nd spawner of the 0x4cec38 0x20-stride effect rows (row {w@+0 0, xyz d@+2/+6/+0xA, cos d@+0xE, sin d@+0x12, ttl d@+0x16 = RandA&0x3F+0x1F, kind w@+0x1A = FUN_0041ec1c(5,0)+3}), heading away-from-shooter ±0x10 jitter + FUN_00420608(x+1,y+1,max(z−0x20,0),10,0,−1); kind 7 in-record knock instead (heading d@+0x10, vx/vy w@+0x74/+0x76 = cos/sin>>6) | §7j.23 |
+| impact SFX trio | FUN_00421fc2(x,y): [0x4ede58]≠0, RandB()%3 → one of banks 0x4edf7c/0x4edf80/0x4edf84 → FUN_0043a48e(bank,0,x,y,2) — the critter-hit spark sound | §7j.23 |
+| octile distance | FUN_0041ebf8(dx,dy) = max(\|dx\|,\|dy\|) + min/2 — the hit metric (and §7j.22 prefilter) | §7j.23 |
+| mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; SLOT ALLOCATOR CLOSED = FUN_00412a4a (20 slots, first active==0, else −1); allocated at spawn by FUN_0040a9ff when the robot slot weapon == 0xE (link := slot, active := 1, ring zeroed; non-mortar link := 0); cleared on free/detonate; draw pass open (FUN_00403938 reads link @0x404464) | §7j.22, §7j.23 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
