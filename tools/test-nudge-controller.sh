@@ -164,8 +164,8 @@ wait_agent_done
 grep -q "failed \[client-error rc=127 progress=0\]" "$PLAN/.state/nudge.log"
 [ -e "$PLAN/.state/taskfails/$th" ]
 [ "$(cat "$PLAN/.state/taskfails/$th")" = "1" ]
-[ -e "$PLAN/.state/claims/1-owner.claim" ]
-flock -n "$PLAN/.state/claims/1-owner.claim" true
+[ ! -e "$PLAN/.state/claims/1-owner.claim" ]
+grep -q "released item 1 claim for immediate retry" "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/claims/1-owner.claim"
 
 # 7. Provider quota exhaustion is rate-limit, even with the capital-U

@@ -80,15 +80,12 @@ BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-transport" "$AGENT" 5 790
 rc=$?
 set -e
 [ "$rc" -eq 1 ]
-[ -e "$PLAN/.state/claims/5-owner.claim" ]
-flock -n "$PLAN/.state/claims/5-owner.claim" true
+[ ! -e "$PLAN/.state/claims/5-owner.claim" ]
 grep -q "failed \[transport rc=1 progress=0\] task=.*; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
 transport_hash=$(sed -n "s/^[[:space:]]*5\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
 [ ! -e "$PLAN/.state/taskfails/$transport_hash" ]
+[ -e "$PLAN/.state/taskfails/.transport-streak" ]
 [ ! -e "$PLAN/.state/taskcooldown/$transport_hash" ]
-touch -d "10 seconds ago" "$PLAN/.state/claims/5-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
-[ ! -e "$PLAN/.state/claims/5-owner.claim" ]
 
 # A transport failure with a surviving child retains its locked ghost claim.
 cat > "$TMP/mock-ghost" <<EOF
@@ -140,7 +137,7 @@ for nop_slot in 803 812 813; do
   nop_rc=$?
   set -e
   [ "$nop_rc" -eq 0 ]
-  [ -e "$PLAN/.state/claims/8-owner.claim" ]
+  [ ! -e "$PLAN/.state/claims/8-owner.claim" ]
   flock -n "$PLAN/.state/claims/8-owner.claim" true
   rm -f "$PLAN/.state/claims/8-owner.claim"
   grep -q "failed \[no-progress rc=0 progress=0\]" "$PLAN/.state/nudge.log"
@@ -151,7 +148,7 @@ for nop_slot in 803 812 813; do
 done
 grep -q "item 8 failed three consecutive observed runs" "$TMP/notifications"
 [ "$(cat "$PLAN/.state/taskfails/$nop_hash")" = "3" ]
-[ "$(cat "$PLAN/.state/taskcooldown/$nop_hash")" -gt "$(date +%s)" ]
+[ ! -e "$PLAN/.state/taskcooldown/$nop_hash" ]
 
 # A step-cap truncation (opencode2 "Maximum steps" kill, rc=0, no
 # commit) is NOT a task failure: no taskfails bookkeeping, no
@@ -176,10 +173,6 @@ grep -q "item 10 hit the opencode2 step cap \[rc=0 progress=0\] task=$stepcap_ha
 ! grep -q "agent item 10 failed \[" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$stepcap_hash" ]
 [ ! -e "$PLAN/.state/taskcooldown/$stepcap_hash" ]
-[ -e "$PLAN/.state/claims/10-owner.claim" ]
-flock -n "$PLAN/.state/claims/10-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/10-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/10-owner.claim" ]
 
 # The 2026-08-20 provider-incident signature (opencode2 dying on an
@@ -202,10 +195,6 @@ set -e
 grep -q "failed \[transport rc=1 progress=0\] task=$stream_hash; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$stream_hash" ]
 [ ! -e "$PLAN/.state/taskcooldown/$stream_hash" ]
-[ -e "$PLAN/.state/claims/11-owner.claim" ]
-flock -n "$PLAN/.state/claims/11-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/11-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/11-owner.claim" ]
 
 # The 2026-08-21 hang signature (opencode2 prints "Error: Transport"
@@ -234,10 +223,6 @@ grep -q "idle-log reaper: item 12 agent log silent" "$PLAN/.state/nudge.log"
 grep -q "failed \[transport rc=$hang_rc progress=0\] task=$hang_hash; provider-side, not charged to the task (idle-log reaper)" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$hang_hash" ]
 [ ! -e "$PLAN/.state/taskcooldown/$hang_hash" ]
-[ -e "$PLAN/.state/claims/12-owner.claim" ]
-flock -n "$PLAN/.state/claims/12-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/12-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/12-owner.claim" ]
 
 # The silent variant of the same hang (client emits nothing at all,
@@ -260,10 +245,6 @@ grep -q "idle-log reaper: item 13 agent log silent" "$PLAN/.state/nudge.log"
 grep -q "failed \[transport rc=$silent_rc progress=0\] task=$silent_hash; provider-side, not charged to the task (idle-log reaper)" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$silent_hash" ]
 [ ! -e "$PLAN/.state/taskcooldown/$silent_hash" ]
-[ -e "$PLAN/.state/claims/13-owner.claim" ]
-flock -n "$PLAN/.state/claims/13-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/13-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/13-owner.claim" ]
 
 # The 2026-08-21 provider-incident signature (opencode2 dying on
@@ -288,10 +269,6 @@ set -e
 grep -q "failed \[transport rc=1 progress=0\] task=$fivexx_hash; provider-side, not charged to the task" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$fivexx_hash" ]
 [ ! -e "$PLAN/.state/taskcooldown/$fivexx_hash" ]
-[ -e "$PLAN/.state/claims/14-owner.claim" ]
-flock -n "$PLAN/.state/claims/14-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/14-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/14-owner.claim" ]
 
 # A substantive commit is credited only with this wrappers exact trailer.

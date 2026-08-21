@@ -185,6 +185,10 @@ elif [ "$kind" = transport ]; then
   reap_note=""
   [ "$reaped" -eq 1 ] && reap_note=" (idle-log reaper)"
   echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task$reap_note" >> "$STATE/nudge.log"
+  mkdir -p "$STATE/taskfails"
+  touch "$STATE/taskfails/.transport-streak" 2>/dev/null || true
+  # event beacon: the llm-watchdog path unit watches this dir - a transport
+  # storm escalates to the supervisor in seconds, no timer involved.
 elif [ "$kind" = rate-limit ]; then
   # Provider quota exhaustion is provider-side, not a task failure
   # (watchdog repair, 2026-08-21: "Usage limit reached for 5 hour" killed
@@ -227,7 +231,6 @@ elif [ "$kind" != none ]; then
   fail_count=$(( $(cat "$fails_file" 2>/dev/null || echo 0) + 1 ))
   echo "$fail_count" > "$fails_file"
   if [ "$fail_count" -ge 3 ]; then
-    echo $(( $(date +%s) + 900 )) > "$STATE/taskcooldown/$task_hash"
     if [ "$fail_count" -eq 3 ] && [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
       "$NOTIFY_SEND" -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind, task $task_hash); cooling down 15 minutes" 2>/dev/null || true
     fi
@@ -255,8 +258,8 @@ if [ "$current_identity" = "$claim_identity" ] && grep -q "^lock-v1 worker $slot
     if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
       rm -f "$own"
     else
-      touch "$own"
-      echo "$(date -Is) retaining failed item $item claim for retry backoff" >> "$STATE/nudge.log"
+      rm -f "$own"
+      echo "$(date -Is) failed run released item $item claim for immediate retry (no cooldowns - operator 2026-08-21)" >> "$STATE/nudge.log"
     fi
   else
     echo "$(date -Is) retaining item $item claim held by a live descendant" >> "$STATE/nudge.log"
