@@ -425,6 +425,11 @@ What RE must confirm: everything beyond the layout.
 - **Contents:** 36 of 44 files are byte-identical; the 7 zone-level CGRs plus
   ZONEE/MISSION4.CGR differ **only in pixel data** — the 128-entry directory is
   identical in every file. VERIFIED
+- **Cross-ref (2026-08-21, 7j.26):** the GAMEGFX `*.BIN` sprite banks share
+  this exact container grammar — u16 count word0 + u32-offset directory at
+  +2, offsets relative to their own slot — decoded from EXW FUN_00401e39
+  and corpus-verified 24/24 DEBRIS / 160/160 DANTE (docs/RE-EXW-MISSIONVIEW
+  §5f). The MISSION*.BIN zone sprite banks follow the same layout.
 
 ---
 

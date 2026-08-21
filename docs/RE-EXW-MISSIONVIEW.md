@@ -370,12 +370,17 @@ of the ring records = the pod-descent family (open; P4.2 harness).
 ### 5f. FUN_00401e39 — the direct draw_IMG blit [verified, decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer` re-anchored]
 
 Register args (EAX img, DX transp, EBX x, ECX y, ESI bank, EDI
-dest). Same on-disk .BIN container as the enqueue path (§5/§6:
-int32 directory at `bank + 4 + 4*img`, image data at
-`&dirslot + *dirslot`) — the DIFFERENCE is the consumer: no layer
-buckets, no palette-flush modes, dest = EDI + y*0x280 + x with
-row advance 0x280 (the 640-stride backbuffer), and the second
-arg is a plain 0/≠0 flag:
+dest). Same on-disk .BIN container as the enqueue path (§5/§6)
+but with the layout now corpus-verified [7j.26]: **u16 image
+count at word0, then count × int32 directory at `bank + 2 +
+4*img`, each offset RELATIVE TO ITS OWN SLOT** (asm 0x401e40:
+`add eax,eax; inc eax; add eax,eax` = 4·img+2; image data at
+`&dirslot + *dirslot`; verified 24/24 DEBRIS + 160/160 DANTE
+images parse + every RLE stream consumes exactly to the next
+image). The DIFFERENCE vs the enqueue path is the consumer: no
+layer buckets, no palette-flush modes, dest = EDI + y*0x280 + x
+with row advance 0x280 (the 640-stride backbuffer), and the
+second arg is a plain 0/≠0 flag:
 
 ```
 img hdr: u16 flags; if (flags & 2) { y += s16 word1; x += s16 word2; }
@@ -488,6 +493,11 @@ terrain pass overwrites everything the present window reads.
    Remaining adjacent tail (context §5e): the DROPSHIP ring-record
    PRODUCERS (pod-descent family) and the ROBNUMS name plates (§5d).
 4. BIN u32[bank+0] directory header word / sprite count sanity.
-   (7j.26 note: the FUN_00401e39 directory base bank+4+4*img is
-   now asm-verified; whether word0 is a u16 count + pad or a u32
-   is still unpinned.)
+    **RESOLVED 2026-08-21 (7j.26, corpus-verified)**: word0 is a
+    **u16 image count** and the int32 directory starts IMMEDIATELY
+    at bank+2 (no pad): DEBRIS.BIN count 24 (= exactly the effects
+    loop's img range 0..23, ~12×14-px chunks with (y,x) hotspots
+    ≈(40,26)), SMOKER.BIN count 17 (= frames 0..16, the blast
+    base + 2..16/5..16 column), DROPSHIP.BIN count 210 (64×64
+    tiles — matching the 7×7 0x40-stride ring grids; many entries
+    are 0×0 empty stubs that the codec skips instantly).

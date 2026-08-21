@@ -3890,10 +3890,13 @@ render tail, closing the 7j.25 queue item:
    death blast: ground puff + darkening smoke column.
 6. **The FUN_00401e39 direct draw_IMG codec DECODED** [verified
    decomp+asm 0x401e39..0x401f83; 8street `draw_IMG_in_buffer`
-   now re-anchored]: same .BIN container as the enqueue path
-   (int32 dir at bank+4+4*img, img = &dirslot + *dirslot; hdr
-   u16 flags {bit1 → two s16 hotspot words, order (y,x); bit0 =
-   RLE}, u16 w, u16 h) but a plain consumer: arg2 = 0/≠0 opaque/
+   now re-anchored]: same .BIN container as the enqueue path but
+   with the layout CORPUS-VERIFIED: **u16 count at word0, int32
+   dir at bank+2+4*img, offset relative to its own slot** (asm
+   0x401e40 = 4·img+2; 24/24 DEBRIS + 160/160 DANTE images parse,
+   every RLE stream consumes exactly to the next image); hdr u16
+   flags {bit1 → two s16 hotspot words, order (yoff,xoff); bit0 =
+   RLE}, then u16 w, u16 h. Plain consumer: arg2 = 0/≠0 opaque/
    transparent flag, dest EDI + y*0x280 + x, NO palette modes.
    RLE control words: bit15 = skip run (word&0xFFF) — painted as
    ZERO bytes when opaque; else literal raw copy (no per-byte
@@ -3902,7 +3905,10 @@ render tail, closing the 7j.25 queue item:
    (coded) or zero-skip (uncoded) — same rule as the §5 flush
    codec. Callers: render tail ×4 (0x406d56/0x406eee/0x407077/
    0x4071ce), map overlay FUN_004089b1, boot/attract + title/
-   menus — the game's general UI/direct blitter.
+   menus — the game's general UI/direct blitter. Bank counts
+   pinned: DEBRIS 24 imgs, SMOKER 17 (= blast frames 0..16),
+   DROPSHIP 210 (64×64 tiles for the 7×7 ring grids; many 0×0
+   stubs skipped instantly by the w/h==0 guard).
 7. **BONUS context — the three DROPSHIP ring passes** (same asm
    block, recorded for the pod-descent/P4.2 work): per-robot bank
    0x4e64c0 (robot-count bound) + 6 standalone rings
@@ -3983,7 +3989,7 @@ render tail, closing the 7j.25 queue item:
 | critter-death SFX trio | FUN_00421f4c(x,y): [0x4ede58]≠0, RandB()%3 → banks 0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank,0,x,y,2); twin of the impact trio FUN_00421fc2 (0x4edf7c/80/84) | §7j.24 |
 | effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16 | §7j.24 |
 | robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age/claim d@+0xC, frame d@+0x10} — the MISSIONVIEW §5d/§5e "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age); anim tick FUN_004238af (frame ++ wrap 0x10→4); CONSUMER (7j.26) = enqueue pair SMOKER.BIN frame 0 mode 300 + frame d@+0x10+1 mode 0x12d (DARKPAL) at sy−0x20 | §7j.24, §7j.26 |
-| direct blit codec | FUN_00401e39(img, transp 0/≠0, x, y; ESI bank, EDI dest) — the shared draw_IMG consumer: .BIN dir at bank+4+4*img, hdr {flags u16 (bit1 hotspot (y,x) s16×2, bit0 RLE), w, h}; RLE words bit15=skip(→zero-paint when opaque)/literal raw copy, bit14=EOL; dest EDI+y*0x280+x stride 0x280; NO palette modes (vs the §5 flush codec FUN_00401471) | §7j.26 |
+| direct blit codec | FUN_00401e39(img, transp 0/≠0, x, y; ESI bank, EDI dest) — the shared draw_IMG consumer: .BIN = u16 count word0 + int32 dir at bank+2+4*img (offset rel. own slot; corpus-verified 24/24 DEBRIS, 160/160 DANTE), hdr {flags u16 (bit1 hotspot (yoff,xoff) s16×2, bit0 RLE), w, h; w/h==0 → instant skip}; RLE words bit15=skip(→zero-paint when opaque)/literal raw copy, bit14=EOL; dest EDI+y*0x280+x stride 0x280; NO palette modes (vs the §5 flush codec FUN_00401471); counts: DEBRIS 24, SMOKER 17, DROPSHIP 210 | §7j.26 |
 | effects mover | FUN_00419f62 (MissionShell @0x44813d): delay −− else x+=vx/y+=vy/z+=vz; kill +0x18:=0 iff x/y/z<0 ∨ x>>13≥[0x4eddec] ∨ y>>13≥[0x4eddf0] ∨ z>>13>0xB | §7j.26 |
 | platform anim tick | FUN_004238af (MissionShell @0x447fff): for active 0x4eb638 records d@+0x10++, wrap 0x10→4 (drawn smoke column 2..16 intro, 5..16 loop) | §7j.26 |
 | bounded random helper | FUN_0041ec59(n) = RandB()/(0x8000/n − 1) clamped n−1 — uniform-ish [0,n−1] on the 15-bit RandB | §7j.26 |
