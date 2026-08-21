@@ -1298,3 +1298,45 @@ verified post-fix: fresh glm-5.3 probe PROBE-OK rc=0, both nudge test
 harnesses PASS.
 
 Watchdog-Repair: llm-watchdog 86278 1787260264
+
+## D44 - 2026-08-21: idle-log reaper for hung opencode2 clients
+
+Provider stream death has a second, quieter failure mode beyond the
+2026-08-20 instant-exit signatures (D43): the opencode2 client can
+print `Error: Transport` and then NEVER exit. Observed 2026-08-21
+01:32: worker 82523e41 on queue item 1 (task 230a7a38b991ed5f) wrote
+its first ~110KB of log in 75s, hit the provider transport error, and
+then sat in do_epoll_wait at zero CPU with a frozen agent log for 30+
+minutes. The process was alive, so: the controller saw a live locked
+claim and logged "concurrency full - standing down" every minute; the
+documented provider-side 300s zero-stream watchdog never fired (the
+stream was already dead); only the outer `timeout 3900` could clear
+it - one provider hiccup burning the entire 65-minute single-slot
+budget. Two earlier llm-watchdog checks (01:28, 01:38, 01:52) read
+this same stall as healthy; the 02:02 check proved the hang (fd
+positions all at EOF, 0 CPU ticks over 5s, no file modified anywhere
+since 01:35) and requested repair.
+
+CHOICE: nudge-agent.sh now supervises the client itself. The
+`timeout 3900 opencode2 run` invocation moved into the background and
+a poll loop watches the agent-log mtime while the process lives: once
+the log has been silent >= NUDGE_IDLE_LIMIT (default 900s - far above
+any legitimate silent stretch like a cold cargo build, and
+env-overridable for tests) the wrapper TERMs then KILLs the client
+and marks the run `reaped`. Reaped runs classify as `kind=transport`
+via an explicit `reaped` branch (they may carry no log signature at
+all), so a hang gets exactly the D43 accounting: provider-side, not
+charged to taskfails/taskcooldown, claim retained for the
+DEAD_CLAIM_TTL retry backoff, transport log line annotated with
+"(idle-log reaper)". A provider hiccup now costs <= ~15 min of the
+slot instead of 65, and the llm-watchdog keeps owning incident
+escalation. The interrupted predecessor WIP (mission scene step, 4x
+E0308 in bedlam-core) was preserved untouched for the next worker to
+adopt, per the stand-down rules. Verified: test-nudge-claims.sh with
+two new hang-signature mocks (with and without the `Error: Transport`
+line), plus controller/queue/network harnesses, all PASS. Known
+pre-existing, out of scope here: test-llm-watchdog.sh has a rare
+pause-release timing flake under load (llm-watchdog.sh itself is
+unchanged by this repair).
+
+Watchdog-Repair: llm-watchdog 776518 1787270729

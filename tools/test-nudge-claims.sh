@@ -16,6 +16,9 @@ printf "%s\n" "\$*" >> "$TMP/notifications"
 EOF
 chmod +x "$TMP/mock-notify-send"
 export NOTIFY_SEND="$TMP/mock-notify-send"
+# The 2026-08-21 idle-log reaper polls its supervised client; poll fast
+# in tests so the pre-existing short-lived mocks stay quick.
+export NUDGE_IDLE_POLL=1
 CLAIMS="$TMP/claims"
 LOG="$TMP/nudge.log"
 mkdir -p "$CLAIMS"
@@ -204,6 +207,64 @@ flock -n "$PLAN/.state/claims/11-owner.claim" true
 touch -d "10 seconds ago" "$PLAN/.state/claims/11-owner.claim"
 DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/11-owner.claim" ]
+
+# The 2026-08-21 hang signature (opencode2 prints "Error: Transport"
+# and then never exits - zero CPU, frozen agent log, epoll-wait) must
+# not burn the whole 65-minute slot budget: the wrapper's idle-log
+# reaper terminates the hung client quickly and the run classifies
+# provider-side transport - never charged to the task - with the claim
+# retained for the normal retry backoff.
+cat > "$TMP/mock-hang" <<EOF
+#!/usr/bin/env bash
+echo "Error: Transport"
+exec sleep 600
+EOF
+chmod +x "$TMP/mock-hang"
+echo "12. [P4] transport-hang mock item" >> "$PLAN/.state/NEXT.md"
+hang_hash=$(sed -n "s/^[[:space:]]*12\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/12-821.claim"
+hang_start=$(date +%s)
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-hang" NUDGE_IDLE_LIMIT=3 NUDGE_IDLE_POLL=1 "$AGENT" 12 821
+hang_rc=$?
+set -e
+[ "$hang_rc" -ne 0 ]
+[ $(( $(date +%s) - hang_start )) -lt 60 ]
+grep -q "idle-log reaper: item 12 agent log silent" "$PLAN/.state/nudge.log"
+grep -q "failed \[transport rc=$hang_rc progress=0\] task=$hang_hash; provider-side, not charged to the task (idle-log reaper)" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$hang_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$hang_hash" ]
+[ -e "$PLAN/.state/claims/12-owner.claim" ]
+flock -n "$PLAN/.state/claims/12-owner.claim" true
+touch -d "10 seconds ago" "$PLAN/.state/claims/12-owner.claim"
+DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/claims/12-owner.claim" ]
+
+# The silent variant of the same hang (client emits nothing at all,
+# not even an error line) is also reaped and classified provider-side
+# via the explicit reaped branch rather than any log signature.
+cat > "$TMP/mock-hang-silent" <<EOF
+#!/usr/bin/env bash
+exec sleep 600
+EOF
+chmod +x "$TMP/mock-hang-silent"
+echo "13. [P4] silent-hang mock item" >> "$PLAN/.state/NEXT.md"
+silent_hash=$(sed -n "s/^[[:space:]]*13\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/13-822.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-hang-silent" NUDGE_IDLE_LIMIT=3 NUDGE_IDLE_POLL=1 "$AGENT" 13 822
+silent_rc=$?
+set -e
+[ "$silent_rc" -ne 0 ]
+grep -q "idle-log reaper: item 13 agent log silent" "$PLAN/.state/nudge.log"
+grep -q "failed \[transport rc=$silent_rc progress=0\] task=$silent_hash; provider-side, not charged to the task (idle-log reaper)" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$silent_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$silent_hash" ]
+[ -e "$PLAN/.state/claims/13-owner.claim" ]
+flock -n "$PLAN/.state/claims/13-owner.claim" true
+touch -d "10 seconds ago" "$PLAN/.state/claims/13-owner.claim"
+DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/claims/13-owner.claim" ]
 
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF

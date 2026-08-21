@@ -73,7 +73,47 @@ set +e
 # no commit possible) and denied the edit tool (workers resorted to
 # shell+python file surgery, wasting steps). The build agent has no
 # step cap and full tools; the outer timeout 3900 stays the bound.
-timeout 3900 "$OPENC" run --standalone --agent build --model "$MODEL" --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1
+#
+# Idle-log reaper (watchdog repair, 2026-08-21): the opencode2 client
+# can print "Error: Transport" and then never exit - observed hung in
+# do_epoll_wait at zero CPU with its agent log frozen for 30+ minutes
+# (worker 82523e41, item 1, task 230a7a38b991ed5f), invisible to the
+# controller (a live locked claim) and unaffected by the provider's
+# own 300s zero-stream watchdog, burning the whole 65-minute slot
+# budget on a single provider hiccup while every controller tick
+# logged "concurrency full - standing down". So supervise the client
+# ourselves: if the agent log stays silent past NUDGE_IDLE_LIMIT while
+# the process lives, terminate it and let the run classify as
+# provider-side transport (not charged to the task), same as any
+# other stream death. A healthy run emits tool/text output far more
+# often than the limit; long silent tool calls (cold cargo builds)
+# stay safe at the 900s default.
+IDLE_LIMIT=${NUDGE_IDLE_LIMIT:-900}
+IDLE_POLL=${NUDGE_IDLE_POLL:-5}
+reaped=0
+timeout 3900 "$OPENC" run --standalone --agent build --model "$MODEL" --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1 &
+agent_pid=$!
+while kill -0 "$agent_pid" 2>/dev/null; do
+  sleep "$IDLE_POLL"
+  kill -0 "$agent_pid" 2>/dev/null || break
+  now=$(date +%s)
+  log_mtime=$(stat -c %Y "$LOG" 2>/dev/null || echo "$now")
+  idle=$(( now - log_mtime ))
+  if [ "$idle" -ge "$IDLE_LIMIT" ]; then
+    reaped=1
+    echo "$(date -Is) idle-log reaper: item $item agent log silent ${idle}s >= ${IDLE_LIMIT}s; terminating hung client pid $agent_pid" >> "$STATE/nudge.log"
+    echo "$(date -Is) idle-log reaper: terminating after ${idle}s with no agent-log output" >> "$LOG"
+    kill -TERM "$agent_pid" 2>/dev/null
+    for _ in $(seq 1 10); do
+      kill -0 "$agent_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -KILL "$agent_pid" 2>/dev/null
+    pkill -KILL -P "$agent_pid" 2>/dev/null
+    break
+  fi
+done
+wait "$agent_pid"
 rc=$?
 set -e
 cat "$LOG" >> "$STATE/nudge-run.log" 2>/dev/null || true
@@ -94,6 +134,12 @@ kind=none
 if grep -aqE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
 elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event" "$LOG"; then
+  kind=transport
+elif [ "$reaped" -eq 1 ]; then
+  # The idle-log reaper terminated a hung client (2026-08-21 watchdog
+  # repair): a provider-side stream death that never exited on its
+  # own. Same accounting exemption as transport so a hang never feeds
+  # the taskfails/cooldown spiral.
   kind=transport
 elif grep -aq "Maximum steps for this agent" "$LOG"; then
   # opencode2 truncated the run at the agent step budget. Distinct
@@ -127,7 +173,9 @@ elif [ "$kind" = transport ]; then
   # DEAD_CLAIM_TTL retry backoff (which throttles spawn churn during a
   # live incident), never punish the task; the llm-watchdog owns
   # provider-incident escalation.
-  echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task" >> "$STATE/nudge.log"
+  reap_note=""
+  [ "$reaped" -eq 1 ] && reap_note=" (idle-log reaper)"
+  echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task$reap_note" >> "$STATE/nudge.log"
 elif [ "$kind" != none ]; then
   # Failures are scoped to this task, not to the whole controller, so
   # unrelated items can never be blamed for (or cleared by) this run.
