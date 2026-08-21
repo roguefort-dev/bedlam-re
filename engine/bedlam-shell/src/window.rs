@@ -32,7 +32,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bedlam_game::{GameConfig, GameError, GameHost, Scene};
 use bedlam_platform::scale::PresentConfig;
@@ -81,6 +81,15 @@ pub struct WindowOptions {
     pub size: (u32, u32),
     /// Presentation config (PARITY defaults if unchanged).
     pub present: PresentConfig,
+    /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
+    /// first resume, through the SAME exit path as Escape/Close
+    /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
+    /// the shell binary wires it from `BEDLAM_WINDOW_EXIT_MS` so an
+    /// unattended run can exercise the window teardown end to end.
+    /// The deadline check is the one extra wall-clock read in this
+    /// module - it decides only WHEN the loop stops, never any
+    /// hashed host state (the headless path stays the gate).
+    pub auto_exit_after: Option<Duration>,
 }
 
 impl WindowOptions {
@@ -93,6 +102,7 @@ impl WindowOptions {
             title: String::from("Bedlam (1996) - re shell"),
             size: (960, 720),
             present: PresentConfig::default(),
+            auto_exit_after: None,
         }
     }
 }
@@ -141,6 +151,7 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
         clock: FixedStepClock::host(),
         gfx: None,
         audio,
+        exit_deadline: None,
         fatal: None,
     };
     event_loop
@@ -243,6 +254,8 @@ struct ShellApp {
     /// The audio output (step 2, D40), absent when no device
     /// exists - the shell runs silent then, never fatal.
     audio: Option<AudioDevice>,
+    /// When the auto-exit hook (D48) fires; absent when disabled.
+    exit_deadline: Option<Instant>,
     fatal: Option<ShellError>,
 }
 
@@ -312,7 +325,15 @@ impl ApplicationHandler for ShellApp {
             return;
         }
         match WindowHost::open(event_loop, &self.opts) {
-            Ok(gfx) => self.gfx = Some(gfx),
+            Ok(gfx) => {
+                self.gfx = Some(gfx);
+                // Arm the auto-exit hook (D48) from the first live
+                // frame; a stale deadline can never predate resume.
+                self.exit_deadline = self
+                    .opts
+                    .auto_exit_after
+                    .map(|d| Instant::now() + d);
+            }
             Err(err) => {
                 self.fatal = Some(err);
                 event_loop.exit();
@@ -369,6 +390,15 @@ impl ApplicationHandler for ShellApp {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // 0. Auto-exit hook (D48, test repro): fire the SAME exit
+        //    path as Escape once the deadline passes. Checked before
+        //    any pump so the teardown sees a settled loop.
+        if let Some(deadline) = self.exit_deadline {
+            if Instant::now() >= deadline {
+                event_loop.exit();
+                return;
+            }
+        }
         // 1. Measure the inter-frame delta (the ONLY clock read) and
         //    decide how many identical pumps are due (short-lived
         //    borrow: the pump/stage calls need the whole self).

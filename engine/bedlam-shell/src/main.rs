@@ -38,6 +38,7 @@ fn main() -> ExitCode {
             },
             "--help" | "-h" => {
                 println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--pumps N]");
+                println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -53,9 +54,17 @@ fn main() -> ExitCode {
     let gfx_dir = gfx_dir.unwrap_or_else(|| PathBuf::from(DEFAULT_GFX));
 
     let result: Result<Option<HeadlessReport>, Box<dyn std::error::Error>> = if window {
-        run_window(WindowOptions::new(&gfx_dir))
-            .map(|()| None)
-            .map_err(Into::into)
+        let mut opts = WindowOptions::new(&gfx_dir);
+        // D48 test/repro hook: exit the window loop after N ms
+        // through the same path as Escape (teardown verification
+        // without a human at the keyboard).
+        if let Some(ms) = std::env::var("BEDLAM_WINDOW_EXIT_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+        {
+            opts.auto_exit_after = Some(std::time::Duration::from_millis(ms));
+        }
+        run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {
