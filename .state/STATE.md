@@ -1,3 +1,51 @@
+ - CLOSED 2026-08-21 (P4 7j.17 the ROBOT TARGETING/AIM family
+   ADOPT unit COMPLETE, commit eaf16c0, worker 3f4f7c10 claim
+   1, D65, docs-only): adopted the three provider-outage-
+   killed runs (19:15/19:34/19:40; logs agent-31790e94/
+   08f6fa30/0ce3a285) — re-verified their on-disk Ghidra
+   dumps (ghidra-project/exw-robottarget*.txt/-xrefs/-asm)
+   and landed RE-EXW-SIM amendment 7j.17 + ledger rows +
+   open items, NO new Ghidra run: FUN_00412f34 = the 0x4cff98
+   CRITTER-ACTOR controller (stride 0x7E, count
+   DAT_0046cc2c<-FUN_00416458@0x41646d, sole caller
+   MissionShell@0x447fe1; states 1 wander/2 sine-walk
+   shooter (0x65, range (2−d)·−0x40+300)/3 chase (0x67 full
+   3D velocity, pathfinder FUN_0041571c, home leash 400)/
+   4-5-6 mixed-AI (mode 0xB dormant, respawn-delay table
+   DAT_00454edc[d]; mode 6 ballistic landing → 8× k6 debris
+   + FUN_00424355 + splash FUN_0041a14f(0x18); mode 9 seek-
+   steppers; mode 2 range FUN_0040db9e)/7 close-combat
+   (point-blank 0x69, fire rate 32/16/8 by d, break odds
+   1/8·1/16·never, leash (d+1)·0x40+600); presence byte mark
+   [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)]:=1, SAR 0xD
+   asm-verified; Q13 x@+0x36/y@+0x3A/z@+0x3E confirmed).
+   DIFFICULTY dial amended: 12 objdump sites — drives
+   critter behavior, not only damage. FUN_00417e2f =
+   SUICIDE-BOMB trigger (<0x30 px → k1 debris ×8).
+   FUN_00412a98 = the 0x4dabdc POI/PERSONNEL controller
+   (stride 0x1E, count DAT_0046cbf0@0x416f6e; flee-to-exit
+   over 5×0x1C exit slots 0x4e662c via FUN_00417c64;
+   escape → [0x4eba0c]++, [0x4eba10]=0x32,
+   FUN_00448b80(5000); producer FUN_0041fa51 open).
+   FUN_00409138 = the COMMAND-RECORD consumer (0x4dd4a0
+   stride 0x80 count DAT_0046cbe0; builder FUN_00449c94 +
+   MP lobby/SHOP family; 39-case weapon switch: order
+   dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/
+   0xa9ff + projectile spawners into the 400×0x36 bank
+   0x4c71f4 aimed at the ORDER TARGET 0x4dd484/88/8C;
+   auto-rearm + msgs 0x1C..0x21). FUN_00448b80 = the
+   MISSION-OBJECTIVE RESOLVER (6×0x20 slots 0x4eaaee,
+   type 5000 rescue vs kill-stats [0x46cbf4]+type·0x14 +
+   mirror wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done
+   0x28+0x29 → DAT_0046cd00 phase state; zone-7 counter
+   [0x46cce0]). FUN_0041e411 = floor probe (the
+   [0x4edd60]=.CGR height-bank semantics — per-type entries
+   + in-tile 0x20×0x20 byte maps). Residual 0x4dd484
+   reader census CLOSED (folded into ledger). ENGINE: none
+   (D65 — families stay unwired). Manifest verified.
+   PUSHED eaf16c0. Queued: the critter/POI/exit LOADER
+   section inside FUN_00416458 (which mission file feeds
+   0x4cff98/0x4dabdc/0x4e662c — .NME/.POS candidate).
  - CLOSED 2026-08-21 (P4 7j.16 the .TRT CONSUMER hop unit
    COMPLETE, commit f7262ea, worker 16f43187 claim 1, D64,
    docs-only): RE-EXW-SIM amendment 7j.16 pins the three

@@ -1,37 +1,25 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] ADOPT INTERRUPTED WIP, then finish the residual. Three
-   provider-outage-killed runs (2026-08-21 19:15/19:34/19:40, two
-   HTTP 502 + one Transport) already decoded the ROBOT TARGETING/AIM
-   family (7j.16 leads): read .state/agent-31790e94-*.log,
-   .state/agent-08f6fa30-*.log, .state/agent-0ce3a285-*.log (tails
-   hold the conclusions) + the on-disk ghidra-project/exw-robottarget*
-   .txt/-xrefs/-asm dumps (gitignored). FIRST ACTION: write and
-   commit the 7j.17 RE-EXW-SIM notes section FROM THOSE LOGS -
-   re-verify each claim against the dumps, do NOT re-run Ghidra on
-   the four decoded functions. Dead-run headline map (verify then
-   pin provenance): FUN_00412f34 = the 0x4cff98 critter-actor
-   controller (stride 0x7E; Q13 coords x@+0x36/y@+0x3A/z@+0x3E;
-   tile=>>13; its 13 [0x46cbf8] reads = the 0..2 difficulty dial:
-   cycled at NameEntryScreen 0x43ab7e `(d+1)%3`, persisted @0x43c3a6,
-   money 500*d @0x43aaa3, zone-7 forces d=2 @0x41c568, write
-   @0x41c14a; other heavy readers FUN_00403938 x10, FUN_00416458
-   x5); FUN_00412a98 = 0x4dabdc POI-seeker; FUN_00409138 = the
-   click-order consumer over 0x80-stride records @0x4dd4a0 (39-case
-   weapon switch); FUN_00417e2f decoded; FUN_00448b80 =
-   mission-objective resolver (6 slots @0x4eaaee, progress
-   _DAT_004eba0c, msgs 0x26..0x29, complete-state DAT_0046cd00;
-   actor counts DAT_0046cc2c/DAT_0046cbf0 written by FUN_00416458).
-   The 0ce3a285 log also holds a verified 47-site k1..k20
-   debris-kind caller census + a 28-site record-bank census
-   (FUN_00410823 x16, FUN_004190bc x6, FUN_00412010 x4,
-   FUN_004197d4 x1) - fold those into the backlog items they
-   answer. AFTER the notes commit, only the residual 0x4dd484
-   reader census head remains bounded work (skip if the logs
-   already cover it). [Amended by watchdog repair 2026-08-21
-   19:4x; commit trailer Watchdog-Repair: llm-watchdog 761241
-   1787334054.]
+1. [P4] The critter/POI/exit LOADER section inside
+   FUN_00416458 (the mission-load dispatcher): which mission
+   file section feeds the critter bank 0x4cff98 (count write
+   DAT_0046cc2c @0x41646d), the POI bank 0x4dabdc (count
+   DAT_0046cbf0 @0x416f6e) and the 5×0x1C exit slots
+   0x4e662c (producer FUN_0041fa51 @0x41fabb — decode its
+   caller chain instead if cheaper). [.NME/.POS/.BDG
+   candidate, FORMATS §9/§12 — would anchor more
+   FORMATS-MISSION sections and the critter/POI record
+   producers.] Bounded head: dump FUN_00416458's two
+   count-write neighborhoods + FUN_0041fa51; fold into
+   FORMATS-MISSION + a small RE-EXW-SIM 7j.18 note. NOTE
+   7j.17 also left: FUN_0040db9e identity (critter mode-2
+   range attack on robots), projectile type 0x69 absent
+   from the FUN_00419aff damage table, the
+   [0x4eb8b8+slot·4] objective-done bank consumers, and
+   FUN_00449c94 (the command-record BUILDER — the
+   local-input side of the 0x4dd4a0 ring). Fold any that
+   fall out of the same dumps; do not chase the rest.
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed
@@ -42,20 +30,32 @@
   before the arrival array 0x4dcdb8 — same producer family is
   likely. NOTE 7j.16: the arrival records ARE drawn (scanner
   icon 0xB in FUN_0041ee20) — the family has a confirmed consumer.
-- The weapon-fire family REMAINDER (7j.13/14/15/16 done): the
-  FUN_00410823 weapon-anim machine internals (the 0x4c71xx record
-  family, 6102 B — the biggest piece), the destroy-tail debris-kind
-  map (which id-table type@+0xE stages which kinds — the 7j.11
-  sites 0x41ace7..0x41b67a; NOTE 7j.16: the 9-case jump table
-  @0x41a870 + selectors@+0x16+8k are now pinned), FUN_004190bc
-  (the 0x4cff98 record family — 8 octile + 6 damage reads, a
-  strong panel/preview candidate), the [0x4edd60] height-bank
-  family, the projectile-record z encoding (7j.14 census open),
-  and the 160-vs-0xA8 stride anomaly at 0x4c69e4 (FUN_0040fe93;
-  7j.16: 0x4c69e4 confirmed the ROBOT bank base, stride 0xA8,
-  count 0x46ccbc — the 160 stride at 0x4c69e4/0x4c6a60 needs the
-  FUN_0040fe93 view re-anchored). Unlocking the tail re-opens the
-  water-splash producers (7j.10) and 17 of 20 debris kinds (7j.11).
+- The weapon-fire family REMAINDER (7j.13/14/15/16/17 done): the
+  FUN_00410823 weapon-anim machine internals (6102 B — the
+  biggest piece; its 0x4c71f4 record family is now 400x0x36
+  with frame + spawners pinned per 7j.17), the destroy-tail
+  debris-kind map (which id-table type@+0xE stages which kinds
+  — the 7j.11 sites 0x41ace7..0x41b67a; the 9-case jump table
+  @0x41a870 + selectors@+0x16+8k pinned; NOTE 7j.17: critter
+  death is now a confirmed non-weapon producer of k1/k6 +
+  FUN_00424355 + the 0x4cec38 effect rows via FUN_0041a14f),
+  FUN_004190bc (the 0x4cff98-family second stat consumer —
+  8 octile + 6 damage reads, a strong panel/preview
+  candidate; 7j.17 gives it the bank layout to check
+  against), and the 160-vs-0xA8 stride anomaly at 0x4c69e4
+  (FUN_0040fe93; 7j.16: 0x4c69e4 confirmed the ROBOT bank
+  base, stride 0xA8, count 0x46ccbc — the 160 stride at
+  0x4c69e4/0x4c6a60 needs the FUN_0040fe93 view re-anchored).
+  CLOSED by 7j.17: the [0x4edd60] height-bank family
+  (FUN_0041e411 floor-probe semantics pinned; the bank =
+  the .CGR loader target per 7j.16) and the projectile
+  z-encoding census (the 400x0x36 frame is pinned:
+  vxyz@+0x1E/+0x22/+0x26, class@+0x2A, arc@+0x2E).
+  Unlocking the tail re-opens the water-splash producers
+  (7j.10 — NOTE 7j.17: FUN_0041a14f(0x18) is now a
+  reachable producer via critter death) and 17 of 20 debris
+  kinds (7j.11 — NOTE 7j.17: k1/k6 now have non-weapon
+  producers).
 - FUN_00440dc2 (the 7j.16 TOT-materializer caller) + the
   [0x4ede24] 7×7 screen-address table: is the materializer the
   scroll/camera restamp? Bounded head decode.
@@ -64,17 +64,20 @@
   center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
   z@+0x10 + type@+0x1C — [hypothesis] one 0x20-stride record with
   both views). Anchors the click-target rect semantics.
-- The FUN_00416458 mission-load DISPATCHER chain (7j.15/7j.16
+- The FUN_00416458 mission-load DISPATCHER chain (7j.15/16/17
   progress: .TOT/.DAT/.CGR/.BIN/.MIN/.LNG/.LNK/.PAD loader
-  FUN_0041dc5a pinned @0x447b3a; still open: the .MOFO/.NME/.POS/
-  .BDG sibling loaders @0x457a4c..0x457a65) — decoding the
-  siblings anchors more FORMATS-MISSION sections (NME partially
-  known; POS/BDG/MOFO open).
+  FUN_0041dc5a pinned @0x447b3a; the critter/POI counts are
+  ITS writes per 7j.17 — see Now item 1; still open: the
+  .MOFO/.NME/.POS/.BDG sibling loaders @0x457a4c..0x457a65) —
+  decoding the siblings anchors more FORMATS-MISSION sections
+  (NME partially known; POS/BDG/MOFO open).
 - The debris-stager ENGINE widening beyond kind 5 (fed by the
   7j.11 20-kind table + the 11 seq tables): model the k2/k8
   single-center scorch (values 3/4), the k1/k20 shared-tail
   ring, and the +0x20 physics classes (0/1/2/3/6 ->
-  FUN_0040de9c) — blocked on real producers (weapon family).
+  FUN_0040de9c) — blocked on real producers (weapon family;
+  NOTE 7j.17: critter death k1/k6 producers exist but are
+  outside the corpus path until critters load).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -90,6 +93,9 @@
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
   entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
   debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4).
+  NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
+  _DAT_004edfe4/_DAT_004edfac (robot fire) and
+  _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
 - The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
   mirror rows + the probe-latch walk + the DAT z-plane consume +
   the 0x454a90 floor-word swap) — unblocks the apply_pickup
@@ -110,15 +116,19 @@
   (0x4eb638, bank DAT_0046af54), effects loop (0x4cf638 - the
   FUN_00401e39 draw_IMG codec family, a DIFFERENT .BIN sprite layout
   per RESEARCH-8STREET; the 0xa00 @0x4cec38 + 0x960 @0x4cf638 arrays
-  boot-cleared alongside the effect rows per 7j.1), ROBNUMS name
-  plates, Shield/Variant bank staging (nodes enqueue, flush skips
-  while unstaged). The debris physics/collision FUN_0040de9c (7j.7
-  head decode) lives here too (+ the 0x454510+ physics-param dword
-  table census-noted in 7j.11 item 5; 3 octile reads per 7j.16).
+  boot-cleared alongside the effect rows per 7j.1 — NOTE 7j.17:
+  0x4cec38 is 0x20-stride effect rows with a reachable spawner
+  FUN_0041a14f), ROBNUMS name plates, Shield/Variant bank staging
+  (nodes enqueue, flush skips while unstaged). The debris
+  physics/collision FUN_0040de9c (7j.7 head decode) lives here too
+  (+ the 0x454510+ physics-param dword table census-noted in 7j.11
+  item 5; 3 octile reads per 7j.16; NOTE 7j.17: it reads BOTH the
+  critter and POI counts — collision family).
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
   per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
-  weapon-table writer family - see 7d.2; 1 octile read per 7j.16),
-  robots() extra-phase semantics + state-1 producers.
+  weapon-table writer family - see 7d.2; 1 octile read per 7j.16;
+  NOTE 7j.17: it also reads the command count 0x46cbe0 — MP shop
+  sync), robots() extra-phase semantics + state-1 producers.
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DOSBox-X memory-watches + scripted input injection -> per-frame
   original state dumps diffed against engine state. Design doc first.
@@ -141,6 +151,46 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.17 the ROBOT TARGETING/AIM family ADOPT
+  unit COMPLETE (worker 3f4f7c10 claim 1, commit eaf16c0,
+  D65, docs-only): landed the three provider-outage-killed
+  runs' decode (logs agent-31790e94/08f6fa30/0ce3a285, dumps
+  exw-robottarget*.txt/-xrefs/-asm, NO new Ghidra run —
+  every claim re-verified). FUN_00412f34 = the 0x4cff98
+  CRITTER-ACTOR controller (stride 0x7E, Q13 x@+0x36/
+  y@+0x3A/z@+0x3E; states 1 wander / 2 sine-walk shooter
+  (0x65, range (2−d)·−0x40+300) / 3 chase (0x67 3D velocity,
+  pathfinder FUN_0041571c, leash 400) / 4-5-6 mixed-AI
+  (0xB dormant + DAT_00454edc[d] respawn delays; 6 ballistic
+  → k6 debris + FUN_00424355 + splash FUN_0041a14f(0x18);
+  9 seek-steppers; 2 FUN_0040db9e range attack) / 7
+  close-combat (point-blank 0x69 @ 32/16/8-frame cadence,
+  break odds 1/8·1/16·never, leash (d+1)·0x40+600);
+  presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+
+  (x>>13)]:=1 (SAR 0xD asm-verified; the decompile >>5 was
+  an artifact). Difficulty dial amended: 12 objdump sites
+  — drives critter behavior, not only damage.
+  FUN_00417e2f = SUICIDE-BOMB trigger (<0x30 px → 8× k1
+  debris). FUN_00412a98 = the 0x4dabdc POI/PERSONNEL
+  controller (stride 0x1E; flee-to-exit over 5×0x1C slots
+  @0x4e662c via FUN_00417c64; escape → [0x4eba0c]++,
+  [0x4eba10]=0x32, FUN_00448b80(5000)). FUN_00409138 = the
+  COMMAND-RECORD consumer (0x4dd4a0 stride 0x80, count
+  0x46cbe0, builder FUN_00449c94 + MP family; 39-case
+  weapon switch → order dispatchers + projectile spawners
+  into the 400×0x36 bank 0x4c71f4 aimed at the ORDER
+  TARGET; auto-rearm + msgs 0x1C..0x21). FUN_00448b80 =
+  the MISSION-OBJECTIVE RESOLVER (6×0x20 slots @0x4eaaee;
+  msgs 0x26/0x27/0x34, all-done 0x28+0x29 → DAT_0046cd00
+  phase state; zone-7 counter [0x46cce0]).
+  FUN_0041e411 = floor probe (the [0x4edd60]=.CGR
+  height-bank semantics). Residual 0x4dd484 reader census
+  CLOSED; the 47-site/28-site censuses re-read unchanged
+  (both already landed in 7j.11/7j.15 — the queue's "fold"
+  ask was already satisfied; 7j.17 adds critter-death
+  producers k1/k6/FUN_0041a14f on top). No engine change
+  (D65). Manifest verified. PUSHED eaf16c0. Queued: the
+  critter/POI/exit loader section in FUN_00416458.
 - 2026-08-21: P4 7j.16 the .TRT CONSUMER hop unit COMPLETE
   (worker 16f43187 claim 1, commit f7262ea, D64, docs-only):
   FUN_00417264 (MissionShell 0x44807b) = the TRT ANIMATION/FIRE
@@ -186,28 +236,3 @@
   unconsumed [open]). Load-pass counts corroborated
   (0x55EC=282·78, 0x9C40=2000·0x14) + the x/y==−1 forced-dead
   rule. No engine change.
-- 2026-08-21: P4 7j.15 weapon-fire family THIRD HOP unit COMPLETE
-  (worker efff097c claim 1, commit 52b1ebd, D63, docs-only):
-  FUN_00419aff = the WEAPON/PROJECTILE DAMAGE TABLE — a pure id
-  switch (NO table walk): 2/3/4→20/30/40, 5→75, 0xc→5000,
-  0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50,
-  0x66→(d+1)·300, 0x67/0x68→(d+1)·75, else 1; d = DAT_0046cbf8
-  = the DIFFICULTY dword (0..2; d=2 flat overrides
-  200/1200/300), pinned: cycled (d+1)%3 at NameEntryScreen,
-  save-persisted, 500·d money delta, zone-7 temporarily forces
-  2. ERRATUM 7j.13: no field arg (EDX passes through; the
-  push 1 only arms the score flag). 28 callers = FUN_00410823×16,
-  FUN_004190bc×6 (0x4cff98 bank - second consumer),
-  FUN_00412010×4, FUN_004197d4, FUN_00418fca. The 0x4cccf8
-  PRODUCER = FUN_004170a6 = the ".TRT" mission-section loader
-  (sole caller FUN_00416458 0x416487): clears 250×0x20 (full
-  capacity), count→[0x46ccd4], rec {+0=1, +4 active, +8 scratch
-  0, +0xC hp=250+(250·mission)/27 → 259..490, +0x10 x, +0x14 y,
-  +0x18 z} at stager base 0x4cccfc (the 7j.14 resolver frame is
-  +4 — its offsets stand); ALSO stamps tile byte 0x66 into the
-  3D tile bank [[0x4edd58]+x+y·w+z·w·h] + word 1 into the 3D
-  word bank [[0x4ede20]+2(x+y·w+z·w·h)] (both new, consumers
-  open). FORMATS-MISSION §14 ANCHORED: TRT third u32 = z LEVEL
-  (0..6), not a type enum. No engine change (D63). Manifest
-  verified. PUSHED 27f5def..52b1ebd (the 7j.13/7j.14 push debt
-  cleared too — secret service back after the session restart).
