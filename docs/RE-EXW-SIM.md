@@ -2594,7 +2594,8 @@ run. All facts [verified] against the dumps unless tagged.
    2 settle (7 → 1); 3 walk-out (FUN_00415b6c wall-walker);
    4 FLEE-TO-EXIT: nearest of the FIVE 0x1C-stride exit/
    threat slots @0x4e662c {active d@+0, kind d@+4 (== 2 =
-   exit), x/y d@+8/+0xC, d@+0x18} via FUN_00417c64 (octile);
+   exit — §7j.19 reread: the field is the craft PHASE, 2 =
+   landed/OPEN), x/y d@+8/+0xC, d@+0x18} via FUN_00417c64 (octile);
    trigger: exit within 0x180 ∧ 1/16 (state ∉ 4..7);
    arrival < 0x10 → state 5; 5 ESCAPE: active=0, rescue
    progress _DAT_004eba0c++, quota _DAT_004eba10 = 0x32,
@@ -2883,6 +2884,126 @@ bytes) + a corpus exact-consumption check
    their loader is now anchored for the P4.2 differential
    harness).
 
+## 7j.19 Amendment 2026-08-21 (worker 90c04773, the
+EXIT/ESCAPE RUNTIME family — rescue loop CLOSED end-to-end)
+
+Method: three `-process BEDLAM.EXW -noanalysis` runs; dumps =
+`ghidra-project/exw-exitfamily.txt` (FUN_0041fbb1 +
+FUN_00433980 full decompile) + `exw-exitfamily2.txt`
+(FUN_0040b9f6/FUN_00422e5e/FUN_004223b8) + `exw-exitfamily3.txt`
+(FUN_0041faf0/FUN_0041fb4b/FUN_00424a6f) + `-xrefs` censuses +
+`-asm` windows; cross-reads of the 7j.16/7j.17 artifacts
+(exw-simtail, exw-missionrender2, exw-critterpoi-*). All facts
+[verified] against those artifacts unless tagged.
+
+1. **FUN_0041fbb1 = the ESCAPE-CRAFT ANIMATION RUNTIME**
+   (MissionShell @0x448012, every frame, between FUN_004238af
+   and FUN_004204ea). Three machines over one shared 0x1C
+   record frame {active d@+0, PHASE d@+4, x d@+8, y d@+0xC,
+   altitude d@+0x10, toggle d@+0x14, dwell d@+0x18}:
+   - Machine 1: the 5 exit slots @0x4e662c. **REINTERPRETS
+     the 7j.17 "+4 kind" field — it is a PHASE**: 1
+     descending (altitude 0x400 → −0x20/frame while ≥0x101,
+     then (v>>2)·3 shrink → land), 2 LANDED (flicker word =
+     (RandA&7)==0, toggle ^=1, dwell++ > 0x78 → depart), 3
+     departing (altitude += alt>>2+1, x −= toggle·4; > 0x200
+     → active=0). The POI flee gate "kind==2" (7j.17) =
+     flee only to LANDED elevators.
+   - Machine 2: the extraction DROPSHIP, single slot
+     @0x4e6610..0x4e6628 (same frame). Phase-1 landing fires
+     the EXTRACTION SWEEP: every robot (count DAT_0046ccbc)
+     with alive@+0x7C ≠ 0 ∧ state w@+0xC ∈ {3,4} → state :=
+     5, timer@+0x90 := 0x28, _DAT_004dc680++ (extracted-robot
+     counter), order target@+0x74 := 10000000, SFX
+     FUN_0043a48e(_DAT_004edfe0,0,x>>8,y>>8,2). Phase-2 dwell
+     starts at 10 (vs 0x78 for exits). Phase-3 end →
+     active=0 ∧ _DAT_004dc67c := 1 = the extraction-complete
+     flag (readers MissionShell 0x4486d5 + FUN_0044425c ×2
+     @0x444aff/0x444b88; reset MissionShell 0x4478b3).
+   - Machine 3: per-robot ESCAPE-POD bank @0x4e64c0 stride
+     0x1C (one per robot, count DAT_0046ccbc), gated by
+     latch [0x46aed4+idx·4]==0 — the per-robot no-extract
+     latch (writers FUN_0040e230 = the SP death core (7g),
+     FUN_00449c94/0044a38a (MP), FUN_00408e99, GameMain
+     0x41c40d). Phase-1 landing fires the POD PAYOUT once:
+     robot state := 6, timer@+0x90 := 0x28, alive@+0x7C := 1,
+     +0x78 := 100·word@+0x94+5000 (points), SFX
+     _DAT_004edfe0, per-player FUN_004239ef(p,p) msg.
+2. **FUN_0041faf0 = the DROPSHIP DEPLOYER**: stamps
+   {active=1, phase=1, toggle=0, altitude=0x200, x =
+   beacon.x·0x20, y = beacon.y·0x20} from the extraction
+   beacon words 0x4eabb4/0x4eabb6; clears the beacon display
+   0x4eabb0/0x4eabb2. Sole caller MissionShell @0x44832f ∧
+   0x448375 (asm-verified): when the beacon countdown word
+   0x4eabb2 hits 0, OR every robot is dead/state-3. Beacon
+   writer = FUN_004247b5 (residual; FUN_004248c8 is the
+   beacon-approach probe FUN_0040b9f6 consumes to auto-walk
+   robots to extraction).
+3. **FUN_0041fb4b(idx) = the POD SPAWNER**: stamps pod slot
+   {1, phase 1, 0, altitude 0x400, x/y = robot pos>>8}.
+   Sole caller FUN_0040b9f6 when the per-robot countdown
+   w@+0x2C (0x4c6a10) hits 0 (msgs 9/10/0xB per player, then
+   the pod anim). The 0x4c6a10 producer = residual (death
+   family).
+4. **FUN_00433980 = the ZONE PAD-TRIGGER SCRIPT DISPATCHER**
+   (3185 B): arg = robot idx; sole caller FUN_0040b9f6
+   @0x40bd58, invoked when robot state ∈ {1,4} ∧ order word
+   DAT_0046cc30[idx] ≠ −1. Head: **FUN_00422e5e(x>>8, y>>8,
+   z) = the PAD-TILE PROBE** — DAT-volume byte == 0xFF (a
+   .PAD mark, 7j.16 loader) → scan the 999×8B .PAD slot bank
+   @0x4e44f8 for an {x,y,z} tile match → slot index (with
+   the 0x4eb9fc revisit-latch + 0x4eb9f4 counter), else −1.
+   The slot id indexes a giant switch on zone _DAT_004edd8c:
+   - ELEVATOR/TELEPORT ids (0x13..0x18, 0x5, 0xE, …): robot
+     state := 2 (in transit), target := 1000000, order words
+     −1, pos := scripted coords·0x2000+0x1000 (dword tables
+     0x4dcdbc..0x4dd330), arrival platform +0x84 := 0..6,
+     event latch −1-pair + countdown 10 (per-destination
+     dwords 0x4dcdd4..0x4dd330);
+   - message ids (≥0x3d range per zone) → FUN_00424a6f(id) =
+     the zone MESSAGE SHOWER (string table @0x458ca7 "BOOT
+     CAMP"…, SFX _DAT_004edfd0, per-id latch 0x4eb5f8);
+   - door ids → FUN_004223b8(rect, 1|2) = the DOOR toggler
+     over the 45×0x10 trigger-rect bank @0x4dcae8 (TOT
+     stamps FUN_004235e4/FUN_004235bf over the rect W×H, SFX
+     0x23/0x24);
+   - **case 0x1B → FUN_004223b8(0x13, 2) + FUN_0041fa51(slot)
+     — the SOLE exit-pad activation**: robot steps on the
+     scripted pad → exit elevator deploys. The personnel-
+     rescue loop is now CLOSED end-to-end: .PAD load (7j.16)
+     → FUN_00433980 script → FUN_0041fa51 activator (7j.18)
+     → FUN_0041fbb1 lands it (phase 2) → FUN_00412a98 POI
+     flee (7j.17) → [0x4eba0c]++ → FUN_00448b80(5000)
+     objective resolver (7j.17).
+5. **Consumer censuses CLOSED:**
+   - [0x4eba0c] rescue progress: writers MissionShell
+     0x447933 (reset), FUN_00412a98 0x412b58 (++); readers
+     MissionShell 0x448402 (display), FUN_00412a98 0x412b4a,
+     FUN_00448b80 0x448ce1 (progress ≥ quota). No others.
+   - [0x4eba10] rescue quota word: writers MissionShell
+     0x44792d (reset) + 0x4483ac, FUN_00412a98 0x412b32
+     (=0x32); reader MissionShell 0x448386 ONLY — display
+     state; the objective check reads the slot quota
+     w@+0x1E (0x4eaaee+slot·0x20), not this word.
+   - 0x4e6610 dropship: renderer FUN_00403938 0x40707e
+     (draws it) + MissionShell 0x44831c (spawn check);
+     producer FUN_0041faf0, animator FUN_0041fbb1.
+   - 0x4e64c0 pods: spawner FUN_0041fb4b, animator
+     FUN_0041fbb1, renderer FUN_00403938 (the
+     exw-missionrender2 0x406d6c loop: iso projection with
+     the altitude/shadow math).
+6. Residuals (small, queued): the beacon writer FUN_004247b5
+   + the approach probe FUN_004248c8 body; the 0x4c6a10 pod-
+   countdown producers (death core FUN_0040e230 side); the
+   full per-zone FUN_00433980 case table beyond the head
+   (≈28 pad ids × 7 zones — mechanical, decode per zone only
+   when P4.2 needs it); FUN_00424a6f string table contents.
+7. Corpus-path verdict: docs-only (D67) — no engine change;
+   the escape family stays unwired like the rest of the
+   mission runtime (nothing escapes in the gates; all
+   producers/consumers are now anchored for the P4.2
+   differential harness).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -2927,7 +3048,11 @@ bytes) + a corpus exact-consumption check
 | critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
 | POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
-| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, kind d@+4 (==2 exit), x/y d@+8/+0xC, d@+0x18 cleared on escape}; nearest scan FUN_00417c64; producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 @0x43900e = the pad trigger handler [open]; 3rd consumer FUN_0041fbb1 [open]) | §7j.17/§7j.18 |
+| exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, toggle d@+0x14, dwell d@+0x18 cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19 | §7j.17/§7j.18/§7j.19 |
+| escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, toggle@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the no-extract latch: writers FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99/GameMain); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 + msg | §7j.19 |
+| dropship deployer | FUN_0041faf0: stamps 0x4e6610 {1, 1, beacon.x·0x20, beacon.y·0x20, alt 0x200} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2; caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon writer FUN_004247b5 [open] | §7j.19 |
+| pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {1, 1, 0, 0x400, robot x/y>>8}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB); the 0x4c6a10 producer [open — death family] | §7j.19 |
+| pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides (state 2, pos := dwords 0x4dcdbc..0x4dd330 ·0x2000+0x1000, arrival platform +0x84, latch+countdown-10 pairs), messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19 |
 | critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
 | command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
 | mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
@@ -2983,10 +3108,18 @@ bytes) + a corpus exact-consumption check
    sections → critter states 2/1/5/4/3/6/7 + 4 POIs/record,
    corpus-exact 37/37); FUN_0041fa51 = the exit-pad activator
    (runtime, from .PAD slots); FUN_0040db9e + FUN_00449c94 +
-   the 0x4eb8b8 census folded. Still open from that head:
-   the exit consumer FUN_0041fbb1, the pad trigger handler
-   FUN_00433980, and projectile type 0x69 vs the FUN_00419aff
-   damage table.
+   the 0x4eb8b8 census folded. The exit runtime CLOSED
+   2026-08-21 §7j.19: FUN_0041fbb1 = the escape-craft animator
+   (exits + dropship + pods; the "+4 kind" is a PHASE),
+   FUN_00433980 = the zone pad-trigger script dispatcher (case
+   0x1B = the exit activation; elevator rides/messages/doors),
+   FUN_0041faf0/FUN_0041fb4b = the dropship/pod spawners, and
+   the [0x4eba0c]/[0x4eba10] censuses are CLOSED (§7j.19 item
+   5). Still open from that head: the beacon writer
+   FUN_004247b5 + probe FUN_004248c8, the 0x4c6a10 pod-countdown
+   producers, and the full per-zone FUN_00433980 case table.
+   Projectile type 0x69 vs the FUN_00419aff damage table
+   remains open (low priority).
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
    (full writer/reader census in the ledger row).
 0. ~~The isometric viewport draw chain~~ — DECODED 2026-08-21,
