@@ -1,3 +1,28 @@
+ - CLOSED 2026-08-21 (P4 7j.8 scorch re-verify unit COMPLETE, commits
+   d436a58 + 982e0fa, worker 11384359 claim 1, D57): RE-EXW-SIM
+   amendment 7j.9 resolves the 7j.8 caveat byte-precisely — the
+   robots() phase-1 armor reader (0x40bc57..0x40bc9f) tests the RAW
+   type-DB +0x18 byte != 0, NO mask; FUN_00422287 (whole re-verified)
+   writes that SAME byte (0x4796d4+tile*0x1E, sar>>5 world->tile, map
+   bounds, zero-extended value >= 8 -> 7) — scorch and armor pads
+   SHARE the byte. The kind-5 ring CORRECTED from "six" to NINE 3x3
+   tile writes (corners 1 / edges 2 / center 4, exact order
+   0x421476..0x421291 incl. the shared tail; a death = 45 writes,
+   overlaps last-write-wins). Full caller census: SEVEN in-family
+   ring producers (kinds 3/4/5/6+12/9/11/20, identical rings; jump
+   table 0x4205b8 re-verified) + ONE external FUN_00424051 (five
+   same-tile re-rolls, values 3..6 then 1..4, census-only/unwired).
+   ENGINE: MissionSim::scorch_write (FUN_00422287 model over the
+   armor_pads mirror, zero-padded growth, public host seam) + the
+   apply_damage death-tail nine ring writes per debris + pub
+   armor_pad_byte + DEBRIS_SCORCH_RING + 2 unit tests (the ring-fold
+   pattern/offsets/overlap + the survivor-charges-on-scorch raw
+   reader semantics; the writer bounds/clamp rules). Gates: EVERY
+   pin UNMOVED — corpus + scene gates green, smoke two-run
+   byte-identical AT the recorded baselines (scene 696adb1cd110e062,
+   parity cce30c983b97b16d, audio 110400/158092), fmt/clippy clean,
+   MANIFEST verified before and after. Pushed. Queued: the
+   FUN_00424051 scorch-family decode.
  - CLOSED 2026-08-21 (P4 dead/hit dither unit COMPLETE, commits
    4f702e1 + 31a4691, worker efc8b1e0 claim 1, D55): RE-EXW-SIM
    amendment 7i decodes the FUN_00401ae6 static blit whole (mode 0

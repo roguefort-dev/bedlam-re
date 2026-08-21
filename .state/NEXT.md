@@ -1,21 +1,20 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The 7j.8 scorch/armored-pad re-verify (small bounded RE):
-   re-read the robots() phase-1 armor reader at asm 0x40bbab..0x40bc9f
-   byte-precisely and decide whether FUN_00422287's scorch values
-   (1/2/4, clamped < 8) and the armor-pad semantics share the
-   type-DB +0x18 byte (the reader tests the RAW byte != 0 per the
-   current decode — meaning a death would arm six armor-pad tiles
-   around the corpse). If the reader is confirmed raw: land the
-   scorch staging in the engine debris seam (the six FUN_00422287
-   ring writes per death debris over the engine's type-DB mirror —
-   the terrain armor-pad consume path already models byte != 0),
-   with a unit test pinning the ring offsets/values; if a mask
-   separates the families instead, document it and keep the scorch
-   unwired. Also census FUN_00422287's OTHER callers (grep call
-   0x422287) — kind-5 may not be the only scorch producer.
+1. [P4] The FUN_00424051 scorch-family decode (small bounded RE):
+   the one remaining FUN_00422287 producer outside the debris
+   stager (7j.9 item 5): identify the function (its guard
+   word@0x4e9780, its tile-word sources 0x4e9776/0x4e9778, the
+   leading FUN_0042394a call, its callers), decide the engine
+   seam (host-seam vs corpus-path), and decode the surrounding
+   0x424051..0x424355 body enough to name it in the docs. If it
+   turns out corpus-path (weapon-fire scorch), land it per D57
+   patterns; else document + keep unwired.
 ## Backlog (not yet started)
+- The FUN_00420608 remaining-kind census (kinds 1/2/7/8/10/16..19
+  record params + which corpus paths stage them; the 7 ring kinds
+  3/4/5/6/9/11/12/20 + jump table are pinned per 7j.9) — feeds a
+  later debris-stager widening beyond kind 5.
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -37,13 +36,13 @@
   MISSIONVIEW sec 8 mirror producers first.
 - Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT).
 - RE-EXW-MISSIONVIEW sec 8 open items: type-DB tail producers
-  (+0x1a/+0x1b/+0x1c — NOTE +0x18 is now KNOWN as the runtime
-  scorch writer FUN_00422287 per 7j.8/§8.1, caveat on the armor-pad
-  reader), the u32[0x456ca8] anim sequence + the water flag
-  producer (needed before the 0x12d/0x12e/0x12f flush remaps can
-  leave water-off semantics), BIN u32[bank+0] header word. CLOSED:
-  u32[0x4dd444] (7e.4 - the PALTRAN ramps); +0x18 producer
-  (7j.8 - FUN_00422287, reader caveat pending).
+  (+0x1a/+0x1b/+0x1c — NOTE +0x18 is CLOSED as the runtime scorch
+  writer FUN_00422287 per 7j.8/7j.9, reader verified raw), the
+  u32[0x456ca8] anim sequence + the water flag producer (needed
+  before the 0x12d/0x12e/0x12f flush remaps can leave water-off
+  semantics), BIN u32[bank+0] header word. CLOSED: u32[0x4dd444]
+  (7e.4 - the PALTRAN ramps); +0x18 producer (7j.8/7j.9 -
+  FUN_00422287, reader raw, ring landed D57).
 - MISSIONVIEW sec 5d tail (robots only are wired): platform loop
   (0x4eb638, bank DAT_0046af54), effects loop (0x4cf638 - the
   FUN_00401e39 draw_IMG codec family, a DIFFERENT .BIN sprite layout
@@ -51,8 +50,7 @@
   boot-cleared alongside the effect rows per 7j.1), ROBNUMS name
   plates, Shield/Variant bank staging (nodes enqueue, flush skips
   while unstaged). The debris physics/collision FUN_0040de9c (7j.7
-  head decode) + the other 19 FUN_00420608 kinds (explosions,
-  projectiles) live here too.
+  head decode) lives here too.
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
   per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
   weapon-table writer family - see 7d.2), robots() extra-phase
@@ -61,7 +59,8 @@
   DOSBox-X memory-watches + scripted input injection -> per-frame
   original state dumps diffed against engine state. Design doc first.
   Also arbitrates the two 7j hypotheses (the debris 2k start delay
-  and the blink-cursor-from-spawn question).
+  and the blink-cursor-from-spawn question) + the 7j.9 overlap
+  last-write-wins read of the five rings.
 - TOT semantics follow-up: FORMATS-MISSION sec 2 plane 6/7 (the
   ~2000-slot POS linkage) is now KNOWN-staged (word mirror at
   record words 6/7) but the drawer treats them as ordinary stack
@@ -74,6 +73,24 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.8 scorch re-verify unit COMPLETE (worker
+  11384359 claim 1, commits d436a58 + 982e0fa, D57): RE-EXW-SIM
+  7j.9 = the armor reader 0x40bc57..0x40bc9f re-verified RAW (byte
+  != 0, no mask — scorch and pads share the type-DB +0x18 byte) +
+  FUN_00422287 re-verified (same 0x4796d4+tile*0x1E byte, sar>>5,
+  bounds, value >= 8 -> 7) + the kind-5 ring CORRECTED to NINE 3x3
+  writes (corners 1/edges 2/center 4, exact order incl. the shared
+  0x421291 tail) + FULL caller census: SEVEN in-family ring
+  producers (kinds 3/4/5/6+12/9/11/20, identical rings, jump table
+  0x4205b8 re-verified) + ONE external FUN_00424051 (five
+  same-tile re-rolls, census-only). ENGINE: MissionSim::scorch_write
+  (FUN_00422287 model over the armor_pads mirror, zero-padded
+  growth) + the death-tail nine ring writes per debris + pub
+  armor_pad_byte + DEBRIS_SCORCH_RING + 2 unit tests (ring fold +
+  bounds/clamp). Gates: every pin UNMOVED, smoke two-run
+  byte-identical AT the baselines (scene 696adb1cd110e062, parity
+  cce30c983b97b16d, audio 110400/158092), fmt/clippy clean,
+  MANIFEST verified. Pushed. Queued: the FUN_00424051 decode.
 - 2026-08-21: P4 effect-row seam unit COMPLETE (worker 6ab53863
   claim 1, commits 4f858d9 + e706a33 + 9bbf1ac, D56): RE-EXW-SIM
   7j = the 0x4dc5d0 family decoded (the 10 16-B effect rows at
