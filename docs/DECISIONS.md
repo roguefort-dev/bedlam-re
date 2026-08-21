@@ -1547,3 +1547,41 @@ otherwise, and the fix follows the evidence.
    corpus reads.
 
 Nudge-Worker: 34bd8958-77b4-40c7-a8d0-b1ecf3126b30
+
+## D50 - 2026-08-21: sidebar art pass — wire the bank-faithful chrome, never invent the data
+
+Context: RE-EXW-SIM 6c.8 decoded the whole sidebar art family
+(FUN_00408403 rows, FUN_004072bf portraits, FUN_0040807f bars,
+FUN_004085ce score strip; banks GENERAL/SMLFONT/NUMBERS/SCANNER),
+but the engine sim models none of the data those passes read
+beyond the sidebar state itself (no weapon name indices, no ammo
+counts, no +0x78 HP / +0x2E armor, no score/money).
+
+1. WHAT DRAWS: only passes whose every input exists — the row
+   chrome (sprites 0x47/0x4A armed, 0x49/0x4C unarmed at the EXW
+   positions, gated by the availability mask bit standing in for
+   the name-index word) on the redraw countdown, and the select
+   portraits (0x12+slot / 0x15+slot, squad-size + alive gates;
+   the HP gate is trivially satisfied while HP is unmodeled)
+   every present. The initial countdown is 2 on activate
+   (MissionShell 0x447c74). All from the REAL GENERAL.BIN bytes —
+   the corpus gate pins real shipped pixels, not synth shapes.
+2. WHAT DOES NOT DRAW, deliberately: name/count text (the type
+   table's name indices + ammo counts are open — TABLE.BIN
+   backlog), HP/armor bars, the score strip (score/money sim
+   state), the deploy panel + blink cursor (overlay family /
+   0x4dc5d0 producer open). Never invent pixels for unmodeled
+   data; the plane keeps its persisted pixels between redraws
+   exactly like the EXW back buffer.
+3. SMLFONT.BIN stages with the mission even though no text draws
+   yet (the DESIGN-GAME 12-file tail): the next slice (type
+   table) consumes it, and staging-only costs 4038 B.
+4. GATES: corpus frame pins regenerated ONCE (spawn
+   018eba568d9b3bae, mid-walk 4a3abd2de43f31df; sim pins
+   byte-identical — the D17 presentation-only split holds); the
+   sidebar-black structural pin became a sidebar-carries-art pin.
+   Workspace tests + fmt + clippy -D warnings clean; headless
+   smoke two-run byte-identical with the two new fetches;
+   MANIFEST verified.
+
+Nudge-Worker: 49294e3c-af62-4b24-b2fa-7a12980d8eb6
