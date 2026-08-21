@@ -4067,7 +4067,115 @@ gloss "7×7 grid" is corrected to the true 5×7 tile grid.
    depart state machine is now anchored for the P4.2 differential
    harness, which must model it (first seconds of every mission).
 
+## 7j.28. The PROJECTILE MID-FLIGHT DRAW family CLOSED
+(2026-08-22, worker ffec42cf, claim 1 — docs-only, D76; sources:
+the full-.text objdump `ghidra-project/exw-text-objdump.txt` only (an
+analyzeHeadless was running — no Ghidra per discipline), re-read of the
+§7j.27 item 6 head decode, + corpus .BIN header/count verification of
+the newly-named banks. All facts [verified asm] unless tagged.)
+
+Closes the 7j.27 queue item: the last undecoded consumer block of the
+FUN_00403938 render tail — the 400×0x36 weapon-anim bank's per-type
+draw bodies, the 0x4e66b8 trail-ring draw consumer (the §7j.22 item 10
+/ §7j.23 item 8 open point), and the sibling 50×0x22 walk (part 2
+below). Part 1 = the 400×0x36 dispatch family.
+
+1. **The dispatch, fully mapped** [verified asm 0x404131..0x404182 +
+   0x404d08..0x404d60]: loop `[esp+0xa8]` = record OFFSET 0..0x5460
+   (= 400·0x36, `add 0x36` at 0x404281, end-check `cmp 0x5460` at
+   0x40428b → falls into the 50×0x22 walk at 0x404d65); `ax` = type
+   word@[0x4c71f4+off]. Primary chain: <0x13 → secondary 0x404d27;
+   ==0x13 → damped base 0x20; <0x1F → secondary 0x404d08; ==0x1F →
+   damped base 0x18; <0x24 → 0x40427a; ==0x24 → rocket; ==0x29 →
+   homing; else → 0x40427a. Secondary 0x404d27 (types 0..0x12):
+   5 → shell 0x404187; 9..0xB → artillery 0x404567; 0xE → mortar
+   0x40436e; 0xF → damped base 0x20 (0x4042a3); else → 0x40427a.
+   Secondary 0x404d08 (types 0x14..0x1E): 0x17 → damped base 0x28
+   (0x4042aa); 0x1A → damped base 0x18 (0x40429c); else → 0x40427a.
+   **CORRECTION of the 7j.27 item 6 gloss: 0x40427a is the shared
+   LOOP-NEXT (advance offset / next record), NOT a "generic draw
+   body"** — types 0..4, 6..8, 0xC, 0xD, 0x10..0x12, 0x14..0x16,
+   0x18, 0x19, 0x1B..0x1E, 0x20..0x23, 0x2A+ have NO mid-flight draw
+   (hitscan/instant or drawn only at effect stage). **And 0x17 is
+   NOT a "3-clone split" here — it is a damped-ballistic DRAW variant
+   (base 0x28); the 3-clone split is tick-side only (§7j.13).**
+   Damped family total: 0xF/0x13 → WEAPONS frame base 0x20; 0x17 →
+   base 0x28; 0x1A/0x1F → base 0x18.
+2. **The sprite banks, NAMED + corpus-verified** [verified objdump
+   writer census + string reads + corpus headers]: boot loader
+   (GameMain arena block 0x41d9dc..0x41da54 + FUN_0041cc7f loads
+   0x41df59..0x41dfb4):
+   - **[0x4eddbc] = GAMEGFX\WEAPONS.BIN** (ArenaAlloc 0x5208; corpus
+     file 0x4F86 bytes, header count 70 imgs) — ALL of shell /
+     artillery / mortar / damped bodies + the mortar smoke puffs.
+   - **[0x46af30] = GAMEGFX\SHRIKE.BIN** (0x1F40; 0x1EFF, **exactly
+     64 imgs**) — the rocket body, frame = ((dir+0x7E)&0xFF)>>2 ∈
+     0..63 (64-direction rotation).
+   - **[0x46af2c] = GAMEGFX\REAPER.BIN** (0x1770; 0x1428, **64
+     imgs**) — the homing body, frame = (dir&0xFF)>>2 (no bias).
+   - **[0x46af34] = GAMEGFX\SMOKE.BIN** (0x7D0; 0x676, **exactly 4
+     imgs**) — rocket + homing exhaust puffs, frame min(i>>1,3).
+   - **[0x4edd7c] = GAMEGFX\GENERAL.BIN** (0x1F7E8; 0x1F73A, 153
+     imgs) — the homing TARGET-LOCK RETICLE (item 5) + the whole
+     0x407xxx sidebar/UI reader family (~20 read sites).
+   - (context pins: [0x46af38] TELEPORT.BIN 10 imgs = the §7j.21
+     arrival marker; [0x46af3c] NUMBERS.BIN; [0x46af40] FLAGS.BIN —
+     the boot loader string block 0x45884e..0x4588c3 in order.)
+3. **Shell (type 5, 0x404187)** [verified]: iso project (below);
+   frame = d@+0x0E counter ++ per DRAW (0x404202), wraps 7 → 3 —
+   cycles 3..7; bank WEAPONS, mode 0x12C; call tail 0x404270 shared
+   with artillery.
+4. **Artillery (9..0xB, 0x404567)**: same projection; frame =
+   8 + (d@+0x0E++)&7 — cycles 8..15 (the second 8-frame strip);
+   bank WEAPONS, mode 0x12C. Mortar (0xE, 0x40436e): STATIC frame
+   1, bank WEAPONS, mode 0x12C, then the trail loop (item 6).
+5. **Damped family (0xF/0x13/0x17/0x1A/0x1F, 0x4042af)**: frame =
+   base (0x18/0x20/0x28 by type, item 1) + wobble: iff vx d@+0x1E ≠ 0
+   AND (|vx|>0x40 ∨ |vy|>0x40) → += [0x46ae68]&7 (the global tick
+   counter — animated while flying fast, static when slow/at rest);
+   bank WEAPONS, mode 0x12C; sy anchor 0x108 (not 0x110).
+   **Homing (0x29, 0x404916)**: REAPER frame (dir)>>2, mode 0x12C;
+   then the RETICLE: target word d@+6 — 0 → none; bit 0x1000 →
+   robot idx (w&0xFFF)−1 @0x4c69e4+idx·0xA8 {x,y d@+0/+4, z d@+8<<8};
+   bit 0x2000 → critter idx w&0x1FFF @0x4cccec+idx·0x20 {x,y d@+0/+4
+   <<13 +0x2000, z d@+8<<13 −0x800}; else FUN_004128ec(w−1, &x,&y,&z)
+   out-lookup (the third target class — TRT/structure, per §7j.13
+   0x29 target sel). Reticle drawn at target+(2,2) px, sy anchor
+   0xF0 (floats above), frame = [0x46ae68]/3+2, bank GENERAL,
+   mode 0x12C.
+6. **The trail-ring draw consumer CLOSED** (the §7j.22 item 10
+   open point) [verified asm 0x40442f..0x404562]: after the mortar
+   body, loop i = 0..7, pos = **0x4e66b8 + link(d@+0x32)·0x68 + 8 +
+   i·0xC** {x,y,z Q13} — i.e. the 8 ring positions at record +8
+   (past {active@+0, ring@+4}); each projected iso (frame =
+   **0x10 + ([0x46ae68]+i)&7** — the 16..23 WEAPONS strip, mode
+   **0x12E**), per-puff screen bounds 0..0x23F/0..0x23E AND map
+   bounds (dx < [0x4eddec]<<5, dy < [0x4eddf0]<<5 — the only body
+   family that map-clips). The slot's active/ring words are NOT
+   read — all 8 positions always drawn (the producer ring-zeroes
+   them, §7j.22). Skip-any → continue loop.
+7. **Rocket (0x24) + exhaust (0x40464e + 0x404717)**: SHRIKE body
+   frame ((dir+0x7E)&0xFF)>>2, mode 0x12C; then up to 8 exhaust
+   puffs at dist 0x20+0x10·i along **dir+0x7E** (≈ opposite travel —
+   behind; FUN_0041eb65/77 = **COS/SIN byte-angle Q15** lookups of
+   table [0x46cbd0], ×dist >>15 <<8 added to x/y then >>8), count
+   gated by **d@+0xA (the tick/TTL) /4 > i** (the §7j.13 "+0xA
+   tick" — TTL quartiles: the trail shortens as the rocket ages),
+   each ±(RandA&3−2) px jitter, frame min(i>>1,3), bank SMOKE,
+   mode 0x12D, screen+map bounds. Homing's variant: 4 puffs, dist
+   0x10+0x08·i, dir+0x80, same bank/frame/mode (0x404b22 loop).
+8. Shared math: dx = (x d@+0x12 >>8) − [0x4edde4] (camX Q5), dy =
+   (y d@+0x16 >>8) − [0x4edde8]; sx = dx−dy+0x110+[esp+0x34],
+   sy = (dx+dy)>>1 + anchor(0x110; damped 0x108; reticle 0xF0) +
+   [esp+0x38] − (z d@+0x1A >>8) + [esp+0x48] (the renderer's
+   scroll/shake offsets); bounds sx∈[0,0x23F], sy∈[0,0x23E].
+   Draw call shape: **FUN_0040798e(EAX sx, EBX bank, ECX dx, EDX
+   sy, stack: dy, frame, z>>13 tiles, mode 0x12C/0x12D/0x12E)**
+   (7j.26's mode words; the 7j.21 "sprite 0x12E" gloss for the
+   marker was this same 4th stack arg = MODE).
+
 ## 8. Constants ledger (all [verified] unless tagged)
+
 
 | constant | value | anchor |
 |---|---|---|
@@ -4113,8 +4221,9 @@ gloss "7×7 grid" is corrected to the true 5×7 tile grid.
 | effects-bank stager | FUN_0041a225(x,y,z tiles, delay ECX) — FIRST producer of the MISSIONVIEW §5d/§5e "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (first-fit allocator FUN_0041a4cc, 12-try spawn loop); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, vz@+0x14 RandB&0x7FF+0x1770 RISING (high word = sprite group 0..2 → DEBRIS.BIN img group*8+frame&7), active u16@+0x18 = FUN_0041ec59(3) (~8% stillborn), delay u16@+0x1A = ECX arg, frame u16@+0x1C = RandB&7}; callers: destroy-tail cases 1/8; mover FUN_00419f62 (kill off-map/ceiling z>>13>0xB); consumer = the §5e direct draw (7j.26) | §7j.25, §7j.26 |
 | .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each; +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
+| projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff |vx|>0x40 ∨ |vy|>0x40, anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
-| weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
+| weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201); the per-type MID-FLIGHT DRAW map §7j.28 (types not listed there are NOT drawn mid-flight) | §7j.13, §7j.22, §7j.28 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
 | actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
 | critter hit applier | FUN_004190bc(critter,owner,x,y,z,weapon,mode): presence w@+0x24; kind switch w@+0x00 (1..7 = the .NME section states); mode 2 = octile<0x20 on x/y + z-box (kinds 1/4 cell-unit coords, 2/3/5/6/7 Q13; z 0x20/0x24/0x40), mode 1 = x/y only; kinds 3..7 immune while state w@+0x0C ∈ {6,7,0xB}; hit → hp w@+0x06 −= FUN_00419aff(weapon), attacker w@+0x04, flash w@+0x7C, kinds 4..7 state := 5; death per kind 1→FUN_00418835 2→FUN_004188d0 3→FUN_00418aa6 4→FUN_00418ca4(+weapon) 5/6→FUN_00418e26(+weapon) 7→FUN_0041896c (§7j.24; the debris-crush dispatcher FUN_0040dce0 is the second dispatch site) | §7j.23 |
@@ -4123,7 +4232,7 @@ gloss "7×7 grid" is corrected to the true 5×7 tile grid.
 | critter knockback juice | kinds 4/5/6 survive-hit 25% (RandA&3==0, owner ≠ −1) → FUN_0041a028(x,y,z Q13, robot x,y Q13): 2nd spawner of the 0x4cec38 0x20-stride effect rows (row {w@+0 0, xyz d@+2/+6/+0xA, cos d@+0xE, sin d@+0x12, ttl d@+0x16 = RandA&0x3F+0x1F, kind w@+0x1A = FUN_0041ec1c(5,0)+3}), heading away-from-shooter ±0x10 jitter + FUN_00420608(x+1,y+1,max(z−0x20,0),10,0,−1); kind 7 in-record knock instead (heading d@+0x10, vx/vy w@+0x74/+0x76 = cos/sin>>6) | §7j.23 |
 | impact SFX trio | FUN_00421fc2(x,y): [0x4ede58]≠0, RandB()%3 → one of banks 0x4edf7c/0x4edf80/0x4edf84 → FUN_0043a48e(bank,0,x,y,2) — the critter-hit spark sound | §7j.23 |
 | octile distance | FUN_0041ebf8(dx,dy) = max(\|dx\|,\|dy\|) + min/2 — the hit metric (and §7j.22 prefilter) | §7j.23 |
-| mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; SLOT ALLOCATOR CLOSED = FUN_00412a4a (20 slots, first active==0, else −1); allocated at spawn by FUN_0040a9ff when the robot slot weapon == 0xE (link := slot, active := 1, ring zeroed; non-mortar link := 0); cleared on free/detonate; draw pass open (FUN_00403938 reads link @0x404464) | §7j.22, §7j.23 |
+| mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; SLOT ALLOCATOR CLOSED = FUN_00412a4a (20 slots, first active==0, else −1); allocated at spawn by FUN_0040a9ff when the robot slot weapon == 0xE (link := slot, active := 1, ring zeroed; non-mortar link := 0); cleared on free/detonate; DRAW PASS CLOSED §7j.28: FUN_00403938 @0x40442f draws all 8 ring positions (base +8+i·0xC, active/ring words unread) as WEAPONS.BIN frames 0x10+(tick+i)&7, mode 0x12E, screen+map clipped | §7j.22, §7j.23, §7j.28 |
 | critter death handlers | six per-kind handlers over bank 0x4cff98 (idx EAX; k4/k5-6 take weapon EDX): k1 FUN_00418835 state 7+presence 0+1× k1 debris; k2 FUN_004188d0 state 7+presence 0+1× k0xD; k3 FUN_00418aa6 state 7+timer 0+1× k7+3× k6 (delays 0/2/4)+FUN_00421f4c; k4 FUN_00418ca4 w@+0x02 := 1, hp 0, state 6, timer 6, 1× k7, weapon {0x24,0x29,0xC} → 3× k7 + 8 effect rows; k5/6 FUN_00418e26 w@+0x02 := 1, hp 0, state 6, sub-timer 0, 1× k7, weapon-gated 3× k7 + 12 rows; k7 FUN_0041896c state 6, w@+0x78 := 1, 3× k7 falling gibs (z 0xFF−r) + 1× k0xD, SFX FUN_0043a48e(0x4edff8,…,3); k1/k4 px-raw coords, others Q13 >>8, z raw-Q13 → stager-clamped 0xFF | §7j.24 |
 | critter bounty gate | all six handlers: attacker w@+0x04 ≠ −1 ∧ robot[attacker].type w@+0x2A == [0x4edb90] → score [0x4dd40c] += 30/50/500/75/150/1000 (k1/k2/k3/k4/k5-6/k7) + DAT_0046ccf0 := 2 (score-strip refresh, = the §7j.6 pickup mechanism); env kills award nothing | §7j.24 |
 | debris-crush death dispatcher | FUN_0040dce0(idx, mag, heading, dmg), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x02 ∉ {7,2} ∧ mag > 2 ∧ dmg ≠ 0; damage FUN_0040eb3c; sin/cos·mag knock + move FUN_00412998 (kind 7 ∨ wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24 |
