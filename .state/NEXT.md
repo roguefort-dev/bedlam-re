@@ -1,19 +1,16 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The .TRT terrain-structure CONSUMER hop (7j.15 re-open):
-   the three 0x4cccf8-array scanners — FUN_00417264 (reads the
-   +0x08 scratch dword + y; calls FUN_00417652/FUN_00417210),
-   FUN_00419943 (RandA/IDIV scatter vs map globals 0x4edde4/
-   0x4edde8 — a placement search), FUN_0041ee20 (active scan) —
-   PLUS the consumers of the two new 3D banks the producer
-   stamps (tile byte 0x66 bank behind [0x4edd58], word bank
-   behind [0x4ede20]) and the +0x08 scratch dword producer.
-   Answers: do TRT structures shoot/move/animate (the retired
-   "turrets?" question) and what the two 3D banks feed.
-   Bounded: those three functions full + 3D-bank xref census.
-   NOTE: push debt is CLEARED (27f5def..52b1ebd landed 21 aug
-   ~19:0x after the session came back).
+1. [P4] The ROBOT TARGETING/AIM family (7j.16 leads): FUN_00412f34
+   (the 6102 B robot controller? no — 2577 B, the pathfinder/aimer
+   with 15 FUN_0041ebf8 octile + 4 FUN_00417c00 probe + 13
+   [0x46cbf8] difficulty reads), FUN_00417e2f + FUN_00412a98 (the
+   other FUN_00417c00 callers), and the order-target 0x4dd484/88/8C
+   consumer head FUN_00409138 (×6 reads + 1 write — the robot
+   behaviour state machine that eats the 7j.16 click orders).
+   Answers: how robots pick targets/paths and consume orders.
+   Bounded: those four functions full decode + the 0x4dd484
+   reader census head.
 ## Backlog (not yet started)
 - The 0x425xxx arrival-producer family (FUN_0042034c's 45-record
   staging at 0x425daf/0x426079/0x42688c + the register-addressed
@@ -22,26 +19,35 @@
   producers are not. NOTE 7j.12: the 45x0x10 rectangle list at
   0x4dcae8 (the type-DB tail stamper input) sits IMMEDIATELY
   before the arrival array 0x4dcdb8 — same producer family is
-  likely.
-- The weapon-fire family REMAINDER (first hop 7j.13, second 7j.14,
-  THIRD 7j.15 — FUN_00419aff damage switch + difficulty 0x46cbf8 +
-  the .TRT producer FUN_004170a6 pinned): after the consumer hop,
-  the FUN_00410823 weapon-anim machine internals (the 0x4c71xx
-  record family, 6102 B — the biggest piece), the destroy-tail
-  debris-kind map (which id-table type@+0xE stages which kinds —
-  the 7j.11 sites 0x41ace7..0x41b67a), FUN_00412f34/FUN_00417e2f
-  (both 0x46cbf8 readers), the FUN_004190bc 0x4cff98 record
-  family (the second stat consumer — panel/preview candidate),
-  the [0x4edd60] height-bank family, the projectile-record z
-  encoding (7j.14 census open), and the 160-vs-0xA8 stride
-  anomaly at 0x4c69e4 (FUN_0040fe93). Unlocking the tail
-  re-opens the water-splash producers (7j.10) and 17 of 20
-  debris kinds (7j.11) for any future corpus seam.
-- The FUN_00416458 mission-load DISPATCHER chain (7j.15: sole
-  caller of the .TRT loader; clears 0x4cff98/0xac44 +
-  0x4dabdc/0xf00, then opens .NME; sibling tags .MOFO/.NME/.TRT/
-  .POS/.BDG @0x457a4c..0x457a65) — decoding the sibling loaders
-  anchors more FORMATS-MISSION sections (NME semantics partially
+  likely. NOTE 7j.16: the arrival records ARE drawn (scanner
+  icon 0xB in FUN_0041ee20) — the family has a confirmed consumer.
+- The weapon-fire family REMAINDER (7j.13/14/15/16 done): the
+  FUN_00410823 weapon-anim machine internals (the 0x4c71xx record
+  family, 6102 B — the biggest piece), the destroy-tail debris-kind
+  map (which id-table type@+0xE stages which kinds — the 7j.11
+  sites 0x41ace7..0x41b67a; NOTE 7j.16: the 9-case jump table
+  @0x41a870 + selectors@+0x16+8k are now pinned), FUN_004190bc
+  (the 0x4cff98 record family — 8 octile + 6 damage reads, a
+  strong panel/preview candidate), the [0x4edd60] height-bank
+  family, the projectile-record z encoding (7j.14 census open),
+  and the 160-vs-0xA8 stride anomaly at 0x4c69e4 (FUN_0040fe93;
+  7j.16: 0x4c69e4 confirmed the ROBOT bank base, stride 0xA8,
+  count 0x46ccbc — the 160 stride at 0x4c69e4/0x4c6a60 needs the
+  FUN_0040fe93 view re-anchored). Unlocking the tail re-opens the
+  water-splash producers (7j.10) and 17 of 20 debris kinds (7j.11).
+- FUN_00440dc2 (the 7j.16 TOT-materializer caller) + the
+  [0x4ede24] 7×7 screen-address table: is the materializer the
+  scroll/camera restamp? Bounded head decode.
+- The 0x4787c4/0x47879c hot-rect record (renderer FUN_00403938
+  writes it @0x403c93, count [0x46ccd8]; picker reads
+  center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
+  z@+0x10 + type@+0x1C — [hypothesis] one 0x20-stride record with
+  both views). Anchors the click-target rect semantics.
+- The FUN_00416458 mission-load DISPATCHER chain (7j.15/7j.16
+  progress: .TOT/.DAT/.CGR/.BIN/.MIN/.LNG/.LNK/.PAD loader
+  FUN_0041dc5a pinned @0x447b3a; still open: the .MOFO/.NME/.POS/
+  .BDG sibling loaders @0x457a4c..0x457a65) — decoding the
+  siblings anchors more FORMATS-MISSION sections (NME partially
   known; POS/BDG/MOFO open).
 - The debris-stager ENGINE widening beyond kind 5 (fed by the
   7j.11 20-kind table + the 11 seq tables): model the k2/k8
@@ -74,7 +80,9 @@
   writer FUN_00422287 per 7j.8/7j.9, reader verified raw), the
   u32[0x456ca8] anim sequence + the water flag producer (needed
   before the 0x12d/0x12e/0x12f flush remaps can leave water-off
-  semantics), BIN u32[bank+0] header word. CLOSED: u32[0x4dd444]
+  semantics), BIN u32[bank+0] header word (NOTE 7j.16: the ".BIN"
+  load is pinned — header word -> 0x46cdb8; the [0x4ede1c] bank's
+  CONTENT consumers still open). CLOSED: u32[0x4dd444]
   (7e.4 - the PALTRAN ramps); +0x18 producer (7j.8/7j.9 -
   FUN_00422287, reader raw, ring landed D57).
 - MISSIONVIEW sec 5d tail (robots only are wired): platform loop
@@ -85,22 +93,26 @@
   plates, Shield/Variant bank staging (nodes enqueue, flush skips
   while unstaged). The debris physics/collision FUN_0040de9c (7j.7
   head decode) lives here too (+ the 0x454510+ physics-param dword
-  table census-noted in 7j.11 item 5).
+  table census-noted in 7j.11 item 5; 3 octile reads per 7j.16).
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
   per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
-  weapon-table writer family - see 7d.2), robots() extra-phase
-  semantics + state-1 producers.
+  weapon-table writer family - see 7d.2; 1 octile read per 7j.16),
+  robots() extra-phase semantics + state-1 producers.
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DOSBox-X memory-watches + scripted input injection -> per-frame
   original state dumps diffed against engine state. Design doc first.
   Also arbitrates the two 7j hypotheses (the debris 2k start delay
   and the blink-cursor-from-spawn question) + the 7j.9 overlap
   last-write-wins read of the five rings.
-- TOT semantics follow-up: FORMATS-MISSION sec 2 plane 6/7 (the
-  ~2000-slot POS linkage) is now KNOWN-staged (word mirror at
-  record words 6/7) but the drawer treats them as ordinary stack
-  levels - check whether plane 6/7 words ever draw on shipped maps
-  (ZONEA tile 642 is the only cell) before touching FORMATS.
+- TOT semantics follow-up: FORMATS sec 2 plane 6/7 (the ~2000-slot
+  POS linkage) — KNOWN-staged (word mirror at record words 6/7)
+  but the drawer treats them as ordinary stack levels - check
+  whether plane 6/7 words ever draw on shipped maps (ZONEA tile
+  642 is the only cell) before touching FORMATS. NOTE 7j.16: the
+  .TOT volume->mirror materializer FUN_00440a2d copies ALL 8
+  planes' nonzero words — the plane semantics now have their
+  runtime reader; re-check the mirror-word consumers (0x4796bc)
+  for plane-specific behavior.
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -108,6 +120,51 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 7j.16 the .TRT CONSUMER hop unit COMPLETE
+  (worker 16f43187 claim 1, commit f7262ea, D64, docs-only):
+  FUN_00417264 (MissionShell 0x44807b) = the TRT ANIMATION/FIRE
+  machine — rec {active@+0, state@+4, anim_frame@+8 (the
+  "+0x08 scratch" CLOSED — this machine is its runtime
+  producer), fire_ctr@+0xC, hp@+0x10, x/y/z}; states
+  1 idle → 2 alert (frames 0..7 → TOT mirror word frame+1) →
+  5/6/7/8 aim S/N/W/E (octant vs nearest robot, FUN_00417c00
+  octile probe dist<0x81) → FUN_00417698 FIRE (0x28px lane,
+  ≤2 levels → projectile TYPE 0x66, damage (d+1)·300, via
+  free-slot FUN_0041286f) + 4-frame muzzle (words 0x17..0x1E);
+  3/4 death/settle. TURRETS RESTORED (animate+shoot, never
+  move); FORMATS §14 re-anchored. The two 3D banks = the map
+  FILE VOLUMES: FUN_0041dc5a loads .TOT→[0x4ede20] (u16 W,H
+  header + 8 word planes; corpus-verified 30004/160004) and
+  .DAT→[0x4edd58] (u8 planes, ≥0x80→0 sanitize) + .CGR/.BIN/
+  .MIN/.LNG-.LNK/.PAD (999 slots 0x4e44f8 stamping 0xFF);
+  FUN_00440a2d = the TOT-volume→mirror MATERIALIZER (the word-1
+  bridge); FUN_0044661b = the EDITOR\ZONE restore reload.
+  FUN_00419943 = map-click pick (rects 0x4787c4 by renderer
+  FUN_00403938, ret (idx+1)|0x2000 structures); FUN_00410644 =
+  click ORDER dispatcher → 0x4dd484/88/8C order target;
+  FUN_0041ec81/FUN_0041ee20 = the SCANNER widget (icons 1..0xD
+  via 128×128 blitter FUN_00402572). FUN_0041ebf8 = octile
+  distance (51 sites). The uncommitted 22c1c14b 7j.13-erratum
+  draft corrected + landed: W/H/D stay @+2/+4/+6 (dword>>16
+  anchors prove it), word@+0 unconsumed, its 5×8B entries
+  @+0x16/count@+0x12/banks@+0x3E..4A/0x4E closure CONFIRMED.
+  No engine change (D64). Manifest verified. PUSHED f7262ea.
+  Queued: the robot targeting/aim family (7j.16 leads).
+- 2026-08-21: P4 7j.13 ERRATUM unit (worker 22c1c14b, claim 1
+  pre-restart, docs-only, landed by 7j.16 with corrections):
+  an independent full re-decode of the first-hop region
+  (FUN_0041a4f8/7f0/1a894 + all 17 sites) cross-checked 7j.13 —
+  everything confirmed EXCEPT the item-4 object-type field
+  offsets, which mixed two bases and were geometrically
+  impossible (ptrs +0x30 collide with the effect entries).
+  Corrected: 5×8B entries @+0x16+8k, count@+0x12, template
+  banks @+0x3E/+0x42/+0x46/+0x4A — exact 0x4E record fit.
+  Its W/H/D +0/+2/+4 shift was itself WRONG (dword>>16 anchors
+  consume +2/+4/+6 — proven by 7j.16 at 0x41a857/0x41aa02/
+  0x41aaf9/0x41a6fc; original 7j.13 offsets restored, word@+0
+  unconsumed [open]). Load-pass counts corroborated
+  (0x55EC=282·78, 0x9C40=2000·0x14) + the x/y==−1 forced-dead
+  rule. No engine change.
 - 2026-08-21: P4 7j.15 weapon-fire family THIRD HOP unit COMPLETE
   (worker efff097c claim 1, commit 52b1ebd, D63, docs-only):
   FUN_00419aff = the WEAPON/PROJECTILE DAMAGE TABLE — a pure id
@@ -130,34 +187,6 @@
   3D tile bank [[0x4edd58]+x+y·w+z·w·h] + word 1 into the 3D
   word bank [[0x4ede20]+2(x+y·w+z·w·h)] (both new, consumers
   open). FORMATS-MISSION §14 ANCHORED: TRT third u32 = z LEVEL
-  (0..6), not a type enum; "turrets?" retired as primary. No
-  engine change (D63). Manifest verified. PUSHED 27f5def..52b1ebd
-  (the 7j.13/7j.14 push debt cleared too — secret service back
-  after the session restart). Queued: the FOURTH HOP (the .TRT
-  consumer trio + FUN_004190bc).
-- 2026-08-21: P4 7j.14 weapon-fire family SECOND HOP unit
-  COMPLETE (worker d37fb3a2 claim 1, commit 7b9ce05, D62,
-  docs-only): FUN_0041bc1c = the TERRAIN-STRUCTURE damage
-  resolver (x/y Q13, damage): scans the NEW array 0x4cccf8
-  stride 0x20 count [0x46ccd4] {active@+0, hp@+0x10, x tile@+0x14,
-  y@+0x18, z@+0x1C}, externally 1-based (dword[0x4cccd8+id·0x20],
-  guard at 0x4cccd8) — hp−=damage only on survivors; destroy →
-  floor word [0x454a04+4·zone] → TOT mirror 0x4796bc+30·tile+2z,
-  seen @0x4796cc=1, DAT volume byte=0, debris K0xF, splash at
-  first free level. NO robot-armor branch (7j.13 question closed
-  TERRAIN-only). FUN_0041eaa1 = the per-pixel TERRAIN-HEIGHT
-  probe (DAT volume byte 0 → miss; else the 32×32 height bank
-  behind [0x4edd60] entry (h−1)·4+2 +6 header; hit iff z ≤
-  (z>>5)·0x20+byte; 3 sites in FUN_00412010; rec-z encoding left
-  open). FUN_004124a4 = the weapon-anim disburser (rec
-  0x4c71f4+0x36·i, kind word@+0: w2..4→K2 ±3 jitter, 5→K3,
-  0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC, 9..0xB
-  clear-only; z−10; all 9 callers in FUN_00410823).
-  FUN_004126dc = the projectile disburser (rec 0x4cc654+0x22·i,
-  +0 = TYPE word 0=free — refines 7j.13 "active": 1→K2,
-  0x65→K0x14, 0x66→K8, 0x67/0x68→K4, no z−10; robot-hit expiry
-  walker FUN_004197d4 |dx|<0x10 Q8 ∧ |dz|<0x20; projectile type
-  ids = weapon-stat ids). Splash addendum: FUN_00424355 gates
-  (DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58]) + max-age
-  eviction via FUN_0042394a. No engine change (D62). Manifest
-  verified. Push landed with the 7j.15 batch (52b1ebd).
+  (0..6), not a type enum. No engine change (D63). Manifest
+  verified. PUSHED 27f5def..52b1ebd (the 7j.13/7j.14 push debt
+  cleared too — secret service back after the session restart).

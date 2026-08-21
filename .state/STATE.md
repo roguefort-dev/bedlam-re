@@ -1,3 +1,34 @@
+ - CLOSED 2026-08-21 (P4 7j.16 the .TRT CONSUMER hop unit
+   COMPLETE, commit f7262ea, worker 16f43187 claim 1, D64,
+   docs-only): RE-EXW-SIM amendment 7j.16 pins the three
+   0x4cccf8 scanners — FUN_00417264 (MissionShell tick
+   0x44807b) = the TRT ANIMATION/FIRE machine (rec frame
+   active@0x4cccf8: {active@+0, state@+4, anim_frame@+8,
+   fire_ctr@+0xC, hp@+0x10, x@+0x14, y@+0x18, z@+0x1C}; states
+   idle→alert→aim S/N/W/E→fire/death; the "+0x08 scratch"
+   producer CLOSED = this machine); FUN_00417698 = FIRE
+   (0x28px lane, ≤2 levels → projectile type 0x66, damage
+   (d+1)·300, free-slot FUN_0041286f) — TURRETS RESTORED,
+   structures animate+shoot, never move; FORMATS §14
+   re-anchored. FUN_00419943 = the map-click pick (ret
+   (idx+1)|0x2000 = structure), FUN_00410644 = the click
+   ORDER dispatcher (order target 0x4dd484/88/8C),
+   FUN_0041ec81/FUN_0041ee20 = the SCANNER widget overlay,
+   FUN_00417c00 = nearest-robot octile probe, FUN_0041ebf8 =
+   octile distance (51 sites). The two 3D banks = the map
+   FILE VOLUMES (FUN_0041dc5a: .TOT→[0x4ede20] with u16
+   W,H header + 8 word planes, corpus-verified; .DAT→
+   [0x4edd58] u8 planes ≥0x80 sanitize; + .CGR/.BIN/.MIN/
+   .LNG-.LNK/.PAD 999 slots 0x4e44f8 stamping 0xFF);
+   FUN_00440a2d = the TOT-volume→mirror MATERIALIZER (the
+   TRT word-1→sprite bridge); FUN_0044661b = the EDITOR\ZONE
+   restore reload. The uncommitted 22c1c14b erratum draft
+   landed CORRECTED (W/H/D stay @+2/+4/+6; its 5×8B entries/
+   count/banks/0x4E closure confirmed). ENGINE: none (D64 —
+   corpus verdict unchanged, turret fire stays unwired).
+   Manifest verified. PUSHED f7262ea. Queued: the robot
+   targeting/aim family (FUN_00412f34/FUN_00417e2f/
+   FUN_00412a98 + the 0x4dd484 order consumer FUN_00409138).
  - CLOSED 2026-08-21 (P4 7j.15 weapon-fire family THIRD HOP
    unit COMPLETE, commit 52b1ebd + state c8ded44/b50f449,
    worker efff097c claim 1, D63, docs-only): RE-EXW-SIM
