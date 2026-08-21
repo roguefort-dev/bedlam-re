@@ -1883,6 +1883,159 @@ context, §7h item 8 above — the 7h.3 pickup producer stays
 open), and the "non-splash non-arrival z-writer" pair (both are
 platform water-word writes at 0x422750 clear / 0x422a54 create).
 
+## 7j.13 Amendment 2026-08-21 (worker b7f866b6, the
+FUN_0041a894 weapon-impact ray head - first hop)
+
+Fresh objdump (PE32, `objdump -d -M intel --section=BEGTEXT
+game-data/BEDLAM/BEDLAM.EXW`) of 0x41a4f8..0x41bc60 + all 17
+call sites of FUN_0041a894 + FUN_00419aff's head. NOTE: objdump's
+linear sweep desyncs just before 0x41a894 (`00 56 57` eaten as
+one instruction); the true prologue bytes are `56 57 55 81 ec 18
+01 00 00` (push esi/edi/ebp; sub esp,0x118) - Ghidra's
+FUN_0041a894 boundary is right. Answers the queue item: the head
+dispatch, the damage source, the callers, and the 0x41a84f stamp
+loop. All [verified] asm unless tagged.
+
+1. **FUN_0041a894 = the per-tile WEAPON-IMPACT OBJECT RESOLVER -
+   it does NOT walk.** Calling convention [verified 0x41a894 +
+   all sites]: `eax` = x Q13, `edx` = y Q13, `ecx` = chain/step
+   counter (homed to [esp+0x10], incremented per chained
+   detonation), `ebx` = DAMAGE, `[stack]` = score-award flag
+   (read at [esp+0x128]; 0x41b73f `cmp [esp+0x128],0` gates the
+   destroy-tail score award). The stack word is the SAME push
+   that FUN_00419aff consumes at the fire sites (Watcom cdecl
+   leaves it on the stack), so the fire sites' `push 0x1`
+   simultaneously selects the weapon-stat field and arms the
+   score. Return value: **0 = pass-through (keep flying), 1 =
+   object destroyed (0x41a8c7 `xor eax,eax` vs 0x41bc0b
+   `mov eax,1`)**. The ray STEP lives in the callers (see 5).
+2. **Head dispatch [verified 0x41a8a3..0x41a9c3]** (extends
+   7j.12 item 1): x<0 ∨ x>>13 ≥ map_w ∨ y<0 ∨ y>>13 ≥ map_h →
+   return 0; tile = (y>>13)·w + (x>>13); word =
+   grid[0x460dfa+2·tile] (read via the dword-at-0x460df8>>16
+   idiom): **0 / 0x7d2 / 0x7d3 → return 0** (pass-through: empty,
+   hazard, phase-clamp); **0x7d4 → FUN_00422693(x_tile, y_tile,
+   damage)** (call 0x41a8ff, ebx=esi=entry ebx) → return 0;
+   **n → destructible object rec n−1 @0x46cbf4**: flags byte
+   (id dword high byte) & 0x40 → already destroyed → return 0;
+   hp == −1 → immune → return 0; hp −= damage: >0 → store,
+   return 0; ≤0 → destroy (hp=0, flags |= 0x40) → destroy tail →
+   return 1. So the platform word and objects both STOP nothing -
+   only a DESTROYED object returns 1 (the callers that check it
+   stop their walk; FUN_00412010 does not).
+3. **Destroy tail [verified 0x41a95d..0x41bc06]**: notify
+   [0x46cce4]=2; zone [0x4edd8c] ≠ 1 → FUN_00448b80(rec idx);
+   FUN_00422e0a(id dword) (the 7j.12 delayed-trigger payload
+   producer) and FUN_00422600(id dword) (the per-zone trigger
+   dispatcher - destroying the right object builds a bridge);
+   id-table dword@+0xE == 0xb AND language latch [0x4eba1c] == 1
+   (GER) gate; the 7j.11 debris kinds (k10 0x41a142-family sites
+   live here: k14 0x41ace7/0x41b002/0x41b0dc, k16..19
+   0x41b554/0x41b42b/0x41b302/0x41b67a, k20 0x41aebf) with the
+   counter+2 as delay base ([esp+0x68]); a 4-iteration loop
+   (0x41b699..0x41b73a) staging the water-splash records
+   (FUN_0041bd78 = the 7j.10 stager) + FUN_00424355 per corner
+   with RandA jitter (the 7j.10 "one co-staging debris" is this
+   loop); score award gated by the stack flag: type 0xb →
+   [0x4dd40c] += 10 else += type value, [0x46ccf0] = 2; then the
+   **four PERIMETER CHAIN WALKS** (0x41b771..0x41bc06): the N row
+   (y−1, x from −1 to id-table W), and the W/S/E edges (walks at
+   0x41b8d5, 0x41b9da, 0x41ba1e): each tile reads the grid word;
+   a neighbor object (word−1 > 0) that is alive (id dword <
+   0x4000) and CHAINABLE (id-table word@+0xC = [0x4dedfe+78·id]
+   ≠ 0) is recursively detonated: RandA&3 == 0 → counter++, then
+   `FUN_0041a894(edge pos Q13, counter, damage 0x3E8 = 1000,
+   forwarded flag)` (self-calls 0x41b895/0x41b9d0/0x41badf/
+   0x41bc01 - the 4 "self" sites of the 17). Destroying an
+   object chain-detonates its chainable neighbors at damage
+   1000 regardless of the RandA roll (the roll only bumps the
+   delay counter).
+4. **The 0x41a84f stamp loop is FUN_0041a7f0, a separate
+   function (125 B)** [verified 0x41a7f0..0x41a86c, single
+   caller 0x41a7df]: args (eax = rec+0 spawn x, edx = rec+4
+   spawn y, ecx = rec_index+1, ebx = id dword); stamps
+   `word[0x460dfa + 2·(yline[0x4ea900+4·(y+i)] + x + j)] = si`
+   for j in 0..W−1, i in 0..H−1 (W/H = id-table words@+2/+4) -
+   the object's FOOTPRINT into the object grid. Its caller block
+   (0x41a7ad..0x41a7e6, the tail of FUN_0041a4f8, mission-load
+   call 0x447b76) re-stamps every 0x46cbf4 record whose id dword
+   ≠ −1 and sets `hp = id-table dword@+8` first. **The OBJECT
+   TYPE TABLE [verified 0x41a5d6..0x41a7a8]**: base 0x4dedf2,
+   stride 0x4E (78), 0x11A (282) records, parsed from the mission
+   file by FUN_0041a4f8 (word reads via FUN_0041cccb; record
+   parsed only when control word@+0 == 1): W word@+2, H word@+4,
+   D word@+6, hp dword@+8, CHAIN word@+0xC, type dword@+0xE
+   (0x4dee00+78·id; 0xb = score-10 type), jitter words@+0x16/
+   +0x18/+0x1A/+0x1C, count word@+0x12, FOUR scratch bank ptrs
+   @+0x30/+0x34/+0x38/+0x3C each W·H·D words (arena pointer
+   0x46ad5c). This is the mission-file destructible-object DB
+   that 7j.12's 0x46cbf4 array instantiates.
+5. **The ray stepping - caller census of all 17 sites**
+   [verified]:
+   - **FUN_00412010 = the PROJECTILE TICK** (the actual ray
+     walk): 50 records @0x4cc654 stride 0x22 {word@+0 active,
+     x@+2, y@+6, z@+0xA, vx@+0xE, vy@+0x12, vz@+0x16} -
+     per-frame x+=vx, y+=vy, z+=vz (z Q13, 0x2000 = 1 level),
+     deactivate on bounds exit; terrain probe FUN_0041eaa1(z);
+     impact branches: type-1 (0x41222d) → FUN_004126dc(idx) +
+     FUN_0041a894(damage = FUN_00419aff(0x65)); type-2
+     (0x41245d) → FUN_004126dc + FUN_0041a894(FUN_00419aff(0x66))
+     + FUN_0041bc1c(same) + deactivate; type-3 (0x41241f) →
+     FUN_004126dc + deactivate. eax ignored (projectile dies on
+     terrain, not on objects).
+   - **FUN_00410823 = the robot FIRE controller** (6102 B,
+     per-weapon anim state machine; weapon id = word@ rec+0xE,
+     0x4c71f4-family records): 8 sites, all `push 1` (score
+     armed), all damage = FUN_00419aff(weapon_id, 1):
+     0x410ae0 (anim state 2, weapon from rec, muzzle-offset
+     target), 0x410c8d (weapon 5, + FUN_0041bc1c +
+     FUN_004124a4), 0x410de1/0x410e08/0x410e27/0x410e42 (weapon
+     0x1a = 26: FOUR quadrant hits at ±0x1000 Q13 half-tile
+     offsets - a blast), 0x4118ad (weapon 0x24 = 36, +
+     FUN_0041bc1c), 0x411f3f (weapon 0x29 = 41, +
+     FUN_0041bc1c + FUN_004124a4).
+   - **FUN_0040fe93 / FUN_0040ff92 = the tile-0x62 TRAP
+     resolvers**: FUN_0040fe93(idx) checks the CURRENT tile of a
+     0x4c69e4-array record (x/y/z @+0/+4/+8), FUN_0040ff92
+     checks a FUN_004128ec-probed position; both require type-DB
+     tile byte == 0x62 (FUN_0041eb4c) AND grid word ≠ 0 →
+     FUN_0041a894(damage 100, flag 0); destroyed → 5× kind-12
+     debris (RandA&0xF/&0x1F jitter, delays 0/2/4/6/8 - the
+     7j.11 k12 sites 0x40ff7e/0x4100a8). OPEN: FUN_0040fe93
+     indexes 0x4c69e4 with a 160-byte stride (20·i << 3) while
+     the canonical robot stride is 0xA8 (`imul 0xa8` sites) -
+     either a second array aliasing the base or an original-code
+     quirk; unpinned [census].
+   - **FUN_004244a1 = the script/explosion entry** (site
+     0x424503): tile-coordinate args, FUN_00424355 first, then
+     FUN_0041bc1c(x, y, 5000) + FUN_0041a894(x, y, 0, damage
+     0x1388 = 5000, flag 1) - a kill-anything scripted blast
+     (the 7j.11 k6 site 0x424536's function).
+   - **FUN_0041bc1c** (312 B, 10 callers) = the SIBLING resolver
+     (terrain/robot damage) always paired at the fire/impact
+     sites - decode deferred (backlog: the family's second hop).
+   - **FUN_00419aff(weapon_id, field)** (381 B, 28 callers) =
+     the per-weapon STAT lookup (id-switched, 0x46cbf8 base
+     field) feeding every damage argument [census].
+6. **Erratum to 7j.12 item 1**: "weapon fire's own object-stamp
+   loop (0x41a84f)" - the stamp loop is FUN_0041a7f0 invoked from
+   the mission-load restamp pass (FUN_0041a4f8 tail), not from
+   FUN_0041a894. The §7c "TOT mirror DAT_00460df8" supersession
+   stands.
+
+Corpus-path verdict: weapons never fire in the gates (no corpus
+producer reaches any of the 17 sites - the fire controller,
+projectile tick, trap checks and script blasts are all player/
+script-driven), so the engine seam stays NONE this unit (D61,
+docs-only). What CLOSED: the queue item's three questions (walk
+= the callers' projectile tick; damage = ebx from
+FUN_00419aff/100/1000/5000; callers = the 17-site census), the
+object TYPE TABLE (0x4dedf2/0x4E/282 from the mission file), and
+the 7j.10/7j.11 producer geography (the debris/splash co-staging
+lives in the destroy tail). Re-opens cleanly at: FUN_0041bc1c
+(the terrain/robot resolver), the FUN_00410823 weapon-anim
+machine, and the type-table's remaining words.
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -1916,6 +2069,13 @@ platform water-word writes at 0x422750 clear / 0x422a54 create).
 | delayed trigger timers | 32 rec @0x4ea828 stride 0x18 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
+| weapon impact resolver | FUN_0041a894(x Q13, y Q13, chain ctr ecx, damage ebx, [stack] score flag): tile from x/y>>13; grid word 0/0x7d2/0x7d3 → ret 0 (pass); 0x7d4 → FUN_00422693; n>0 → rec n−1 hp−=damage, destroyed → flags 0x40 + tail → ret 1; ret 1 only on destroy | §7j.13 |
+| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6, hp@+8, chain@+0xC, type@+0xE (0xb = score 10), jitter words@+0x16..+0x1C, 4 banks@+0x30..+0x3C (W·H·D words, arena 0x46ad5c); footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
+| chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
+| projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
+| robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
+| tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
+| weapon stat lookup | FUN_00419aff(weapon_id, field) — 28 callers, feeds every damage arg; its stack arg is the same push that arms FUN_0041a894's score flag | §7j.13 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
 | z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |

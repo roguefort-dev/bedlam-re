@@ -2010,3 +2010,34 @@ Nudge-Worker: 804e8c9d-76fc-4936-a020-a83282838d7e
    0x7d2/0x7d3 stamper.
 
 Nudge-Worker: 5aa2d164-5a28-4d42-805a-7b2f629bd29f
+
+## D61 - 2026-08-21: the weapon-fire first hop is docs-only - FUN_0041a894 is the per-tile impact resolver (no walk); the ray lives in the callers; the object type table closes
+
+1. RE (7j.13): FUN_0041a894(x Q13, y Q13, chain ctr, damage,
+   [stack] score flag) = the WEAPON-IMPACT OBJECT RESOLVER -
+   bounds-check, read grid word[0x460dfa+2*tile], dispatch (0/
+   0x7d2/0x7d3 pass-through ret 0; 0x7d4 -> FUN_00422693
+   platform damage ret 0; n>0 -> object rec n-1: hp -= damage,
+   destroyed -> flags 0x40 + destroy tail ret 1). It does NOT
+   step a ray: the WALK is the projectile tick FUN_00412010 (50
+   rec @0x4cc654 stride 0x22, ballistic x/y/z += v, terrain
+   probe FUN_0041eaa1) plus the robot fire controller
+   FUN_00410823 (8 sites, weapons 5/0x1a blast x4/0x24/0x29,
+   damage = FUN_00419aff(id,1)), the tile-0x62 trap pair
+   FUN_0040fe93/FUN_0040ff92 (damage 100, 5x k12 debris), the
+   script blast FUN_004244a1 (damage 5000), and 4 chain
+   self-calls (perimeter walks, damage 1000). The 7j.12
+   "object-stamp loop 0x41a84f" is FUN_0041a7f0 (footprint
+   stamper) invoked from the mission-load restamp pass
+   FUN_0041a4f8, which also parses the OBJECT TYPE TABLE
+   (0x4dedf2, 0x4E stride, 282 recs from the mission file: W/H/D,
+   hp, chain, type, jitter words, 4 scratch banks).
+2. ENGINE: no change this unit - all 17 call sites are
+   player/script-driven and off the corpus path; the impact
+   resolver, projectile tick, fire controller and type table
+   stay unwired (never-invent). Re-open points: FUN_0041bc1c
+   (the terrain/robot sibling resolver), the FUN_00410823
+   weapon-anim machine, the 160-vs-0xA8 stride anomaly at
+   0x4c69e4, and the type-table's remaining words.
+
+Nudge-Worker: b7f866b6-9b16-4d83-ab08-cc080284ee3b
