@@ -1,3 +1,35 @@
+- CLOSED 2026-08-21 (P4 mission SCENE step COMPLETE, commits 26a11ef
+  + e6de264, worker 74fa370e claim 1): the playable-slice composition
+  landed. bedlam-game/src/mission.rs MissionScene per DESIGN-GAME
+  sec 11 (design committed by predecessor a835cefc as a6317c5, whose
+  WIP - the shared dat_plane_bytes loader + the public
+  project_robot seam - was adopted and landed first as 26a11ef):
+  staging = Terrain::from_mission_bytes + AngleTable(SINTABLE 2..66)
+  + MissionSim seed 0x1E240 + robots_per_player(zone) MRK spawns +
+  staged markers (the 0x46cbe0 network seam) + MissionView over the
+  swept PRE-PAD planes with DANTE staged; lifecycle = movie pattern
+  (inert until Mission, activate fixes the camera at robot 0 Q5,
+  drop after leaving); per-frame = pointer integrate -> left-EDGE
+  click seam (viewport x < 0x1E0, enqueue-projection hit box 0x20,
+  nearest octagonal wins, arm AT the robot) -> advance_frame;
+  present = enqueue_robots -> draw_terrain -> present_window ->
+  480x480 at canonical (0,0) + black sidebar, one render per pump.
+  Host: load_mission/mission_slot/mission_asset_names (episode
+  arithmetic), the tick-loop drive, sync_mission, mission plane
+  first in render_now. Shell chain: the Mission 9-file fetch set +
+  stage_scene wiring + the GameGfxSource EDITOR tier for '/' names;
+  headless smoke = 24 fetches, 20 mission pumps, two runs
+  byte-identical. Corpus gate tests/mission_scene_gate.rs: scene
+  frames pinned spawn 51ef4fe93eaaed77 / mid-walk 7bae11a5c7f34ab6
+  + sim hashes 36ddc86345c8351c / f35db41f0efb858d, scripted
+  click->arm at the projection (tile (21,73), snap to origin,
+  state 3), walker state 4 live anim, sidebar black, two-run
+  identity; the render-gate pins stay untouched. Parity harness
+  output BYTE-IDENTICAL to the D28 anchors (the mission is inert on
+  unstaged paths). D45 records the [design] choices. 422 workspace
+  tests green, fmt+clippy clean, release ok, MANIFEST verified,
+  pushed. P4 slice remaining: the GAMEPAL/window present tail +
+  sidebar (queued next), audio rates, Escape-exit fix.
 - CLOSED 2026-08-21 (P4 mission RENDER half 2 - ENTITIES, commits
   007237e + 186050b, worker e08e64c2 claim 1): the robot entity
   overlay decoded and wired onto the pinned frame. RE notes

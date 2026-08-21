@@ -1,20 +1,48 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] mission SCENE step: compose the corpus-verified halves into
-   the playable slice state. bedlam-game already has Scene::Mission
-   (fsm.rs, reached via Brief Advance) but no scene module: add
-   mission.rs driving bedlam-core MissionSim + bedlam-render
-   MissionView per frame (load ZONEA/MISSION1 TOT/DAT/PAD/CGR/MRK +
-   MISSIONA.BIN/LNK + GAMEGFX/DANTE.BIN through the staged asset
-   chain, advance_frame, enqueue_robots, draw_terrain, present_window
-   into the scene frame, camera centered on the spawned robot). Input
-   seam: mouse_l_click -> arm_order_at_robot at the clicked robot
-   (the EXW order window semantics already in the sim). Bounded unit:
-   headless scene frames hash-pinned on a scripted spawn->order->walk
-   run (extend the render corpus pin, do NOT re-derive), no window/
-   palette work yet (that is the following unit with GAMEPAL present).
+1. [P4] mission present tail: stage GAMEPAL (0x4edbf8 = the 0x302-B
+   palette blob the EXW copies at mission load, RE-EXW-SIM sec 7c.3;
+   corpus file = GAMEGFX\GAMEPAL.PAL, 770 B - the same VGA-palette
+   format family as LOADPAL) through the shell chain and upload it
+   as the mission plane palette so the mission viewport presents in
+   color (the plane currently presents under the host palette, all
+   black in the corpus gate - D45 choice 3). Indexed->RGBA window
+   upload stays platform-side as-is. Bounded unit: extend the chain
+   fetch set + MissionScene/host palette plumbing, pin the corpus
+   gate frame hashes AGAIN (the palette changes frame parity hashes -
+   regenerate the 4 scene pins once, document in the gate header),
+   headless smoke two-run byte-identical, parity harness anchors
+   unchanged (mission still inert there), fmt/clippy/tests green.
+   Optional stretch (only if trivially small): the mission SFX queue
+   remains RE-EXW-SIM sec 9 open item 5 - do NOT pull it in.
 
+2. [P4] modern audio output rates: prefer 48000 Hz then 44100 Hz device
+   rates and S16 then F32 sample formats at the output edge of the shell
+   audio path (engine/bedlam-shell/src/audio.rs currently opens
+   mixer-native 11025 Hz whenever the device allows). The mixer and parity
+   stream must stay 11025 Hz stereo u8 byte-faithful; conversion happens
+   only at the device boundary: u8 to target sample format, 11025 to
+   target rate via the existing Q16 frame stepper extended with linear
+   interpolation, documented in code comments. Query the device for
+   supported output configs, choose the best rate by preference order,
+   fall back to mixer-native only when no modern rate is offered. Unit
+   tests: negotiation fallback matrix with mocked device configs,
+   known-ramp conversion at 44100 and 48000, silence and full-scale u8 to
+   s16 and f32 mapping, headless smoke green, parity harness unchanged
+   and green, fmt clean, clippy -D warnings clean. Record the decision in
+   DECISIONS.md with the next D number.
+3. [P4] fix the window-host exit path: pressing Escape in bedlam-shell
+   --window exits via SIGSEGV instead of a clean exit 0 (coredumpctl
+   record 422346 at 2026-08-21 00:56). The Escape handler in
+   engine/bedlam-shell/src/window.rs around line 343 intends a clean
+   back-out. Suspects: the cpal audio callback racing teardown of shared
+   ring state, or drop order freeing data the stream callback still
+   touches. Fix so both Escape and window close exit 0: stop the audio
+   stream before dropping its shared state, guard the callback against a
+   dead ring, and audit the window surface teardown order. Verify with
+   the manual window repro; keep the headless smoke, full test suite,
+   fmt, and clippy -D warnings green.
 ## Backlog (not yet started)
 - Title-menu polish backlog (all optional, none block P4): pin the
   menu BACKDROP content (RE-EXW-TITLEMENU sec 8 - the 0x64000
@@ -23,10 +51,12 @@
   CONFIG.BDL writer family (FUN_0042540c) for name persistence,
   OPTIONS.MRS staging on Title (music track_name wiring), and the
   FUN_00448ef1 multiplayer lobby if ever needed.
-- P4 slice present tail: GAMEPAL (0x4edbf8) staged from the corpus,
-  indexed->RGBA upload of the mission viewport window, audio tier for
-  the mission (MENU1/MENU2-style mixer instruments exist; mission SFX
-  queue is RE-EXW-SIM sec 9 open item).
+- Mission sidebar: the [480,640) strip (RE-EXW-SIM sec 9 open item 3,
+  sidebar order buttons + redraw flags) - after GAMEPAL lands.
+- Mission SFX tier (RE-EXW-SIM sec 9 open item 5; MENU1/MENU2-style
+  mixer instruments exist) + the order SFX 0x2A armer click.
+- Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT)
+  - after the GAMEPAL unit.
 - RE-EXW-MISSIONVIEW sec 8 open items 1/2/4: type-DB tail producers
   (+0x18/+0x1a/+0x1b/+0x1c), the u32[0x4dd444] remap tables +
   u32[0x456ca8] anim sequence + the water flag producer (needed
@@ -55,6 +85,23 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 mission SCENE step COMPLETE (worker 74fa370e claim 1,
+  commits 26a11ef + e6de264): DESIGN-GAME sec 11 (predecessor
+  a835cefc's design commit a6317c5) implemented as bedlam-game
+  mission.rs MissionScene - staging (Terrain+AngleTable+sim seed
+  0x1E240+robots_per_player MRK spawns+staged markers+MissionView on
+  swept planes+DANTE), movie-pattern lifecycle (inert -> activate
+  camera at robot 0 Q5 -> drop), per-frame pointer->click seam
+  (projection hit box 0x20, arm AT robot)->advance_frame, present
+  480x480@(0,0)+black sidebar one render per pump; host
+  load_mission/mission_slot/mission_asset_names + tick drive +
+  mission plane; shell Mission fetch set + stage_scene + GameGfxSource
+  EDITOR tier (headless smoke 24 fetches, byte-identical x2). Corpus
+  gate mission_scene_gate.rs: scene frames spawn 51ef4fe93eaaed77 /
+  mid-walk 7bae11a5c7f34ab6 + sim hashes, click->arm at the
+  projection, two-run identity, render-gate pins untouched; parity
+  harness BYTE-IDENTICAL to D28 anchors. D45. 422 tests green,
+  fmt+clippy clean, MANIFEST verified, pushed.
 - 2026-08-21: P4 mission RENDER half 2 (ENTITIES) COMPLETE (worker
   e08e64c2 claim 1, commits 007237e + 186050b): RE-EXW-MISSIONVIEW
   sec 5b-5d decoded + wired the robot entity overlay - per-frame

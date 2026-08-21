@@ -1340,3 +1340,52 @@ pause-release timing flake under load (llm-watchdog.sh itself is
 unchanged by this repair).
 
 Watchdog-Repair: llm-watchdog 776518 1787270729
+
+## D45 - 2026-08-21: MissionScene composition choices (P4 scene step)
+
+CONTEXT: DESIGN-GAME sec 11 (commit a6317c5) composes the corpus-
+verified halves - bedlam-core MissionSim + bedlam-render MissionView
+- into the Mission scene state. Every EXW behavior is anchored
+(RE-EXW-SIM secs 1/6/7c, RE-EXW-MISSIONVIEW secs 5d/7); the open
+[freedom]s were reimplementation choices needing one home:
+
+CHOICES (all tagged [design] in the code):
+1. CAMERA: fixed at the first spawned robot's Q5 position on scene
+   activation (the EXW cam pair _DAT_004edde4/8 points at the spawn;
+   scroll input stays out of the slice - the next unit owns it).
+2. CLICK HIT BOX: |dx| <= 0x20 and |dy| <= 0x20 around the enqueue
+   projection, nearest octagonal screen distance wins, ties to the
+   lowest index (the EXW walks the actual sprite outlines
+   ~0x433cbc; half the 64-px sprite cell is the stand-in until an
+   outline test is RE-pinned).
+3. PRESENT PATH: the 480x480 window blits at canonical (0,0) of a
+   640x480 plane (viewport + black sidebar, the sec-6.2 screen
+   split) handed through the MovieFrame seam - a 640x480 movie
+   centers at (0,0), so no new compose path exists; GAMEPAL and
+   sidebar art are the following unit.
+4. FETCH ORDER: the 9-file mission fetch set = the load_mission
+   path families (per-mission TOT/DAT/PAD, zone CGR/BIN/LNK, then
+   the GAMEGFX tail SINTABLE/DANTE, then MRK) - a chain convention
+   for deterministic fetch logs, not a pinned EXW load order (the
+   binary's verified order is TOT, DAT, CGR, BIN, MIN, LNK + the
+   separate PAD/MRK staging).
+5. ZONE/MISSION SELECTION: stage -> zone letter (clamp 0..6),
+   mission = lowest-unset mask bit + 1 - the same arithmetic
+   briefing_name_for_slot uses; the HOST owns it
+   (mission_slot/mission_asset_names) so the chain and the staging
+   zone cannot disagree.
+6. LIFECYCLE: the movie pattern - staged inert (no tick, no plane,
+   parity-identical), activate on Mission entry (the entry pump
+   renders but does not tick), drop on LEAVING after entry, a
+   staged-but-never-entered mission stays staged.
+
+EVIDENCE: 422 workspace tests green; corpus gate
+tests/mission_scene_gate.rs pins the scene-composed ZONEA/MISSION1
+frames (spawn 51ef4fe93eaaed77, mid-walk 7bae11a5c7f34ab6 + the two
+sim hashes) with two-run identity while the render-gate pins stay
+untouched; the parity harness output is BYTE-IDENTICAL to the D28
+anchors (scene 0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832, frame
+0x87263f149564ad25, audio 0xc862e45d2e95ad29) - the mission is
+provably inert on paths that never stage it.
+
+Nudge-Worker: 74fa370e-5260-47d4-8c03-9986e7c86ef3
