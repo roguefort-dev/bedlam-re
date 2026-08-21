@@ -16,7 +16,12 @@
 //! thread) only DRAINS that ring. The ring is the only crossing
 //! point, guarded by a plain mutex whose critical sections are a
 //! few samples wide (poison-tolerant: a panicking producer must not
-//! turn the callback into an error storm).
+//! turn the callback into an error storm). A DEAD-FEED GUARD (D48)
+//! sits in front: once the owning [`AudioDevice`] drops (quiet ->
+//! pause -> stream drop), any late callback invocation writes
+//! EXACT silence without touching the ring, and [`AudioFeed::
+//! fill_from`] renders nothing - teardown of the window host can
+//! never race the realtime thread.
 //!
 //! Device-feed arithmetic (all integer, all unit-pinned):
 //! - Rate policy (D47): the stream is opened at the best MODERN
@@ -42,6 +47,7 @@
 //!   conversions (dasp); no floating point exists on the produce
 //!   path, only inside the device callback.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use bedlam_audio::SAMPLE_RATE;
@@ -318,6 +324,12 @@ pub(crate) struct FeedState {
 #[derive(Debug, Clone)]
 pub struct AudioFeed {
     state: Arc<Mutex<FeedState>>,
+    /// Dead-feed guard (D48): shared with the device callback. The
+    /// owning [`AudioDevice`] clears it on drop; from then on the
+    /// callback writes EXACT silence without touching the ring and
+    /// [`AudioFeed::fill_from`] renders nothing. Sticky - a feed
+    /// never wakes back up (a dropped stream is gone for good).
+    alive: Arc<AtomicBool>,
 }
 
 impl AudioFeed {
@@ -327,7 +339,19 @@ impl AudioFeed {
                 ring: SampleRing::new(cap),
                 step: FrameStepper::new(src_rate, dst_rate),
             })),
+            alive: Arc::new(AtomicBool::new(true)),
         }
+    }
+
+    /// Silence this feed forever (the [`AudioDevice`] drop path).
+    /// Late callback invocations emit exact silence afterwards.
+    fn quiet(&self) {
+        self.alive.store(false, Ordering::Relaxed);
+    }
+
+    /// Whether the feed is still live (diagnostics/tests).
+    fn is_quiet(&self) -> bool {
+        !self.alive.load(Ordering::Relaxed)
     }
 
     /// Poison-tolerant lock: a panicking producer must not turn the
@@ -345,9 +369,13 @@ impl AudioFeed {
     /// Mix from the host until the ring holds `target` frames (the
     /// window-loop watermark fill; chunking-invariant by the mixer
     /// contract). Returns the frames actually rendered (0 when the
-    /// ring is already at target). A render error propagates - the
+    /// ring is already at target, or the feed is dead - a dropped
+    /// device never consumes more). A render error propagates - the
     /// caller decides whether that is fatal (it is not, for audio).
     pub fn fill_from(&self, host: &mut GameHost, target: usize) -> Result<usize, GameError> {
+        if self.is_quiet() {
+            return Ok(0);
+        }
         let deficit = target.saturating_sub(self.buffered_frames());
         if deficit == 0 {
             return Ok(0);
@@ -418,66 +446,67 @@ impl AudioDevice {
         let stream_config: cpal::StreamConfig = config.into();
         let feed = AudioFeed::new(RING_CAP_FRAMES, SAMPLE_RATE, stream_config.sample_rate);
         let state = feed.state.clone();
+        let alive = feed.alive.clone();
         let channels = usize::from(stream_config.channels);
         let report_error = |err| eprintln!("bedlam-shell: audio stream error: {err}");
         let stream = match format {
             cpal::SampleFormat::F32 => device.build_output_stream(
                 stream_config,
-                callback::<f32>(state, channels),
+                callback::<f32>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::F64 => device.build_output_stream(
                 stream_config,
-                callback::<f64>(state, channels),
+                callback::<f64>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::I8 => device.build_output_stream(
                 stream_config,
-                callback::<i8>(state, channels),
+                callback::<i8>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::I16 => device.build_output_stream(
                 stream_config,
-                callback::<i16>(state, channels),
+                callback::<i16>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::I32 => device.build_output_stream(
                 stream_config,
-                callback::<i32>(state, channels),
+                callback::<i32>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::I64 => device.build_output_stream(
                 stream_config,
-                callback::<i64>(state, channels),
+                callback::<i64>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::U8 => device.build_output_stream(
                 stream_config,
-                callback::<u8>(state, channels),
+                callback::<u8>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::U16 => device.build_output_stream(
                 stream_config,
-                callback::<u16>(state, channels),
+                callback::<u16>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::U32 => device.build_output_stream(
                 stream_config,
-                callback::<u32>(state, channels),
+                callback::<u32>(state, alive, channels),
                 report_error,
                 None,
             ),
             cpal::SampleFormat::U64 => device.build_output_stream(
                 stream_config,
-                callback::<u64>(state, channels),
+                callback::<u64>(state, alive, channels),
                 report_error,
                 None,
             ),
@@ -504,29 +533,58 @@ impl AudioDevice {
 }
 
 impl Drop for AudioDevice {
-    /// Stop the stream deterministically (the field is also what
-    /// keeps cpal pumping - this just makes the lifetime contract
-    /// explicit at the drop site).
+    /// Ordered stream stop (D48): quiet the feed FIRST - the
+    /// dead-feed guard makes any late callback invocation write
+    /// exact silence without touching the ring - then pause, then
+    /// the fields drop (stream before feed by declaration, which
+    /// releases the callback closure and its ring Arc).
     fn drop(&mut self) {
+        self.feed.quiet();
         let _ = self.stream.pause();
     }
 }
 
 /// The device callback: drain ring frames into the interleaved
 /// device buffer through the stepper + channel mapping + sample
-/// conversion. Underrun frames are exact silence.
+/// conversion. Underrun frames are exact silence. The dead-feed
+/// guard (D48) is checked BEFORE the lock: a dropped device's
+/// stream must never touch the shared ring again.
 fn callback<S: cpal::SizedSample + cpal::FromSample<i16>>(
     state: Arc<Mutex<FeedState>>,
+    alive: Arc<AtomicBool>,
     channels: usize,
 ) -> impl FnMut(&mut [S], &cpal::OutputCallbackInfo) + Send + 'static {
     move |data, _info| {
+        if !alive.load(Ordering::Relaxed) {
+            silence(data);
+            return;
+        }
         let mut st = state.lock().unwrap_or_else(|p| p.into_inner());
-        let FeedState { ring, step } = &mut *st;
-        for chunk in data.chunks_mut(channels.max(1)) {
-            let frame = step.next_frame(ring);
-            for (c, out) in chunk.iter_mut().enumerate() {
-                *out = S::from_sample::<i16>(channel_sample(channels, c, frame[0], frame[1]));
-            }
+        drain(&mut st, data, channels);
+    }
+}
+
+/// Fill the buffer with EXACT silence - each format's zero, so u8
+/// lands at the 128 midpoint, f32/i* at 0 (the same dasp mapping
+/// the device-edge pin test asserts).
+fn silence<S: cpal::SizedSample + cpal::FromSample<i16>>(data: &mut [S]) {
+    for out in data.iter_mut() {
+        *out = S::from_sample::<i16>(0);
+    }
+}
+
+/// The live-drain half of the callback (factored so the ring walk
+/// is unit-testable without a device).
+fn drain<S: cpal::SizedSample + cpal::FromSample<i16>>(
+    state: &mut FeedState,
+    data: &mut [S],
+    channels: usize,
+) {
+    let FeedState { ring, step } = state;
+    for chunk in data.chunks_mut(channels.max(1)) {
+        let frame = step.next_frame(ring);
+        for (c, out) in chunk.iter_mut().enumerate() {
+            *out = S::from_sample::<i16>(channel_sample(channels, c, frame[0], frame[1]));
         }
     }
 }
@@ -897,6 +955,66 @@ mod tests {
         // At target: nothing more is rendered.
         assert_eq!(feed.fill_from(&mut host, 3).unwrap(), 0);
         assert_eq!(feed.buffered_frames(), 3);
+    }
+
+    #[test]
+    fn quiet_feed_renders_nothing_and_the_guard_is_sticky() {
+        // D48 dead-feed guard, producer side: once the owning device
+        // quiets the feed, fill_from renders NOTHING (a dropped
+        // stream never consumes), the ring stays empty, and the
+        // guard never wakes back up.
+        let mut host = GameHost::new(
+            &bedlam_game::GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        host.mixer_mut().queue_pcm_u8(&[200, 200]).unwrap();
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        assert!(!feed.is_quiet(), "a fresh feed is live");
+        feed.quiet();
+        assert!(feed.is_quiet());
+        assert_eq!(
+            feed.fill_from(&mut host, 4).unwrap(),
+            0,
+            "quiet feed renders nothing"
+        );
+        assert_eq!(feed.buffered_frames(), 0);
+        feed.quiet(); // idempotent
+        assert!(feed.is_quiet(), "the guard is sticky");
+    }
+
+    #[test]
+    fn dead_feed_callback_writes_exact_silence_without_the_ring() {
+        // D48 dead-feed guard, callback side: a late invocation on a
+        // quieted feed writes each format's EXACT zero (u8 midpoint
+        // 128) and never drains the ring.
+        let mut state = FeedState {
+            ring: SampleRing::new(8),
+            step: FrameStepper::new(SAMPLE_RATE, SAMPLE_RATE),
+        };
+        state.ring.push_frames(&flat(&[frame(7), frame(9)]));
+        let mut buf = [0u8; 4];
+        silence(&mut buf);
+        assert_eq!(buf, [128, 128, 128, 128], "u8 silence is the midpoint");
+        assert_eq!(state.ring.len(), 2, "the ring was not touched");
+    }
+
+    #[test]
+    fn live_drain_maps_ring_frames_into_the_device_buffer() {
+        // The factored live half of the callback (i16 device format,
+        // native rate: identity stepper, stereo passthrough).
+        let mut state = FeedState {
+            ring: SampleRing::new(8),
+            step: FrameStepper::new(SAMPLE_RATE, SAMPLE_RATE),
+        };
+        state.ring.push_frames(&flat(&[frame(7), frame(9)]));
+        let mut buf = [0i16; 4];
+        drain(&mut state, &mut buf, 2);
+        assert_eq!(buf, [7, -7, 9, -9]);
+        assert_eq!(state.ring.len(), 0, "drained exactly the two frames");
+        // Further drains are underrun silence.
+        drain(&mut state, &mut buf, 2);
+        assert_eq!(buf, [0, 0, 0, 0]);
     }
 
     /// LIVE-DEVICE PROBE - explicitly opt-in (`cargo test -- --ignored`),

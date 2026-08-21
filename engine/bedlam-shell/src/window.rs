@@ -24,6 +24,14 @@
 //! a fixed watermark - the ONLY producer. No audio device means
 //! the shell runs silent (stderr note), never fatal.
 //!
+//! EXIT CONTRACT (D48): after the loop ends (Escape, window close,
+//! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
+//! audio stream parked first, then every wgpu/EGL object while the
+//! winit window is still alive (the lazy wgpu Global teardown
+//! marshals Wayland requests through the window's proxies and
+//! SEGVs if they are gone) - so the process exits 0 instead of
+//! dumping core.
+//!
 //! winit 0.30 shape (D39): the window is created inside resumed()
 //! through ActiveEventLoop::create_window (the pre-run EventLoop
 //! form is deprecated) and held behind an Arc, because wgpu needs an
@@ -157,6 +165,23 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
     event_loop
         .run_app(&mut app)
         .map_err(|e| ShellError::EventLoop(e.to_string()))?;
+
+    // --- Ordered teardown (D48; fixes the Escape SIGSEGV, coredumps
+    // 422346 + 1150695) ---
+    // 1. Stop the audio stream FIRST: AudioDevice::drop quiets the
+    //    feed (the callback's dead-feed guard - exact silence, no
+    //    ring touch), pauses, and drops the stream, so the cpal
+    //    callback thread is parked before anything else dies.
+    drop(app.audio.take());
+    // 2. All wgpu/EGL objects die HERE, while the winit window is
+    //    still alive: the LAST wgpu-object drop runs the lazy wgpu
+    //    Global teardown (eglTerminate through Mesa), which
+    //    marshals Wayland requests through the window's proxies -
+    //    those proxies must not be freed yet. WindowHost declares
+    //    `window` last, so its field-order drop already honors this;
+    //    taking gfx out makes the contract explicit at the exit
+    //    site. The window Arc is released only after the teardown.
+    drop(app.gfx.take());
     match app.fatal.take() {
         Some(err) => Err(err),
         None => Ok(()),
@@ -171,14 +196,26 @@ fn wgpu_like_srgb(format: &bedlam_platform::wgpu::TextureFormat) -> bool {
 
 /// The live window half (everything that only exists once a window
 /// does). Built once, inside resumed().
+///
+/// FIELD ORDER IS LOAD-BEARING (D48): Rust drops fields in
+/// declaration order, and every wgpu/EGL object (`surface`, `gpu`,
+/// `pipeline`) wraps this window's Wayland/X proxies. The wgpu
+/// Global tears EGL down LAZILY, at the drop of the LAST wgpu
+/// object (the pipeline's bind group in the crash stacks 422346 /
+/// 1150695), and that teardown (`eglTerminate` through Mesa)
+/// marshals Wayland requests THROUGH THE WINDOW'S PROXIES - which
+/// SEGVs if the winit window died first. Declaring `window` last
+/// keeps the window (and its proxies) alive through the entire wgpu
+/// teardown in a plain field-order drop.
 struct WindowHost {
-    window: Arc<Window>,
     surface: bedlam_platform::wgpu::Surface<'static>,
     gpu: ParityGpu,
     pipeline: ParityPipeline,
     surface_cfg: bedlam_platform::wgpu::SurfaceConfiguration,
     cursor: Option<PhysicalPosition<f64>>,
     last_frame: Instant,
+    /// The winit window - ALWAYS dropped last (see the struct doc).
+    window: Arc<Window>,
 }
 
 impl WindowHost {
@@ -222,13 +259,13 @@ impl WindowHost {
 
         window.request_redraw();
         Ok(WindowHost {
-            window,
             surface,
             gpu,
             pipeline,
             surface_cfg,
             cursor: None,
             last_frame: Instant::now(),
+            window,
         })
     }
 
@@ -242,6 +279,12 @@ impl WindowHost {
 }
 
 /// The live window host state.
+///
+/// FIELD ORDER IS LOAD-BEARING (D48): `audio` precedes `gfx` so a
+/// plain struct drop stops the audio stream BEFORE any wgpu/EGL
+/// object begins dying (the cpal callback thread must never outlive
+/// the start of teardown). `run_window` additionally performs the
+/// teardown explicitly - see its ordered-teardown block.
 struct ShellApp {
     opts: WindowOptions,
     source: GameGfxSource,
@@ -249,11 +292,14 @@ struct ShellApp {
     scene: Scene,
     input: ShellInput,
     clock: FixedStepClock,
-    /// The window half, absent until resumed() builds it.
-    gfx: Option<WindowHost>,
     /// The audio output (step 2, D40), absent when no device
-    /// exists - the shell runs silent then, never fatal.
+    /// exists - the shell runs silent then, never fatal. Dropped
+    /// BEFORE `gfx` (declaration order).
     audio: Option<AudioDevice>,
+    /// The window half, absent until resumed() builds it. Its drop
+    /// runs the whole wgpu/EGL teardown, which must see a live
+    /// window (see WindowHost).
+    gfx: Option<WindowHost>,
     /// When the auto-exit hook (D48) fires; absent when disabled.
     exit_deadline: Option<Instant>,
     fatal: Option<ShellError>,
@@ -329,10 +375,7 @@ impl ApplicationHandler for ShellApp {
                 self.gfx = Some(gfx);
                 // Arm the auto-exit hook (D48) from the first live
                 // frame; a stale deadline can never predate resume.
-                self.exit_deadline = self
-                    .opts
-                    .auto_exit_after
-                    .map(|d| Instant::now() + d);
+                self.exit_deadline = self.opts.auto_exit_after.map(|d| Instant::now() + d);
             }
             Err(err) => {
                 self.fatal = Some(err);

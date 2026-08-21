@@ -1485,3 +1485,65 @@ preference order at the DEVICE BOUNDARY only.
    device (was 11025 Hz) and drains it cleanly.
 
 Nudge-Worker: 2cd16045-bf39-46b3-9175-f71326aca6a2
+
+## D48 - 2026-08-21: ordered window-host teardown (the Escape SIGSEGV)
+
+Context: NEXT item 1 - pressing Escape in `bedlam-shell --window`
+exited via SIGSEGV (operator coredump 422346, 2026-08-21 00:56).
+The queue named cpal teardown as a suspect; the coredump stack says
+otherwise, and the fix follows the evidence.
+
+1. ROOT CAUSE (decoded from coredumps 422346 + the live repro
+   1150695, identical stacks): the crash is on the MAIN thread
+   inside wgpu/EGL teardown, not audio - ShellApp drop -> WindowHost
+   drop -> CoreBindGroup::drop_slow (the LAST wgpu object, from the
+   parity pipeline) -> wgpu_core Global::drop_slow ->
+   wgpu_hal::gles::egl::Instance drop -> libEGL_mesa ->
+   wl_proxy_marshal_flags, SEGV_MAPERR. wgpu tears EGL down LAZILY,
+   at the drop of the last object holding an Arc<Global>; that
+   teardown (eglTerminate through Mesa) marshals Wayland requests
+   THROUGH THE WINDOW'S PROXIES. The old WindowHost declared
+   `window: Arc<Window>` FIRST, so field-order drop released it
+   before `pipeline` - the proxies were dead by the time the lazy
+   Global drop walked them.
+2. TEARDOWN CONTRACT: after the winit loop ends (Escape,
+   CloseRequested, staging-fatal, or the auto-exit hook - all the
+   same ActiveEventLoop::exit path), teardown is ORDERED in
+   run_window: (a) the AudioDevice drops FIRST, (b) then every
+   wgpu/EGL object (the whole WindowHost) while the winit window is
+   still alive, (c) the window Arc is released only afterwards.
+   Field orders back the contract structurally: WindowHost declares
+   `window` LAST (drop-last), ShellApp declares `audio` BEFORE
+   `gfx`; the explicit take/drop block in run_window makes the
+   order load-bearing at the exit site even if fields are later
+   reordered.
+3. DEAD-FEED GUARD (the cpal half of the queue item, belt-and-
+   braces): AudioFeed carries an Arc<AtomicBool> alive flag shared
+   with the device callback. AudioDevice::drop quiets the feed,
+   pauses, then drops the stream; a LATE callback invocation (some
+   hosts fire during teardown) checks the flag BEFORE locking and
+   writes EXACT silence (u8 midpoint 128) without touching the
+   ring; fill_from renders nothing once quiet. The guard is
+   sticky - memory safety was never in question (the callback holds
+   its own Arc to the ring state), this pins determinism: a dead
+   stream can neither play stale samples nor race the teardown.
+   The callback body is factored into silence()/drain() so both
+   halves are unit-testable without a device.
+4. REPRO/REGRESSION GATE: WindowOptions::auto_exit_after (shell
+   binary: env BEDLAM_WINDOW_EXIT_MS=<millis>) fires the same exit
+   path as Escape after a deadline, so the window teardown is
+   exercisable without a human. Live A/B on this machine (Wayland +
+   Mesa EGL + PipeWire, device 48000 Hz 2ch i16): pre-fix binary
+   exit 139 + coredump 1150695 (stack == 422346); fixed binary exit
+   0 twice, no new coredump. Escape, window-close, and the hook
+   share the one post-loop teardown block, so the close path is
+   covered by the same verification.
+5. GATES: 431 workspace tests / 0 failed (31 shell lib: +3 dead-
+   feed guard tests - quiet feed renders nothing + sticky, dead
+   callback exact u8/128 silence with ring untouched, live drain
+   identity map); fmt + clippy -D warnings clean; headless smoke
+   two runs byte-identical (frame parity cce30c983b97b16d, audio
+   110400/158092 - the D47 baseline); MANIFEST verified after the
+   corpus reads.
+
+Nudge-Worker: 34bd8958-77b4-40c7-a8d0-b1ecf3126b30
