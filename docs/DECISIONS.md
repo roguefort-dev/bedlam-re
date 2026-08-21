@@ -2310,3 +2310,28 @@ Nudge-Worker: 3f4f7c10-b73d-4662-8d35-0d770246bdd3
 
 Nudge-Worker: a840f0af-b732-44df-ae91-3caaa1de5960
 
+## 2026-08-21 P4 7j.20 — the extraction beacon + pod-countdown producers
+(worker c7269abe)
+
+1. RE (docs-only, RE-EXW-SIM §7j.20): the extraction beacon armer
+   FUN_004247b5 is called ONLY by the zone pad-trigger dispatcher
+   FUN_00433980 @0x433cfb — the §6.4/§7c.8 "robot-sprite click
+   family ~0x433cbc" attribution is REVOKED (0x433cbc lies inside
+   FUN_00433980's body; the pre-7j.19 enclosing-function guess was
+   never re-checked). ~25 (zone, .PAD slot) pairs are extraction
+   pads. FUN_004248c8 = spread-claim picker (slots 9/10/11 =
+   (−2,0)/(0,−2)/(+2,0); ≥12 leaves caller locals uninitialized).
+   The w@robot+0x2C pod countdown: an SP producer EXISTS — the
+   FUN_0040cca0 spawn stagger 1+k·(2000−m·1000/27) (m = linear
+   mission) — refuting the "no SP producer known, always 0" gloss;
+   MP respawn writes 0x28. +0x2C = drop-pod descent timer; the
+   0x4e64c0 pod bank serves deploy + respawn + extraction.
+   P4.2 consequence: the differential harness must inject a pad
+   step-on (not a click) to arm extraction; mission-start frames
+   must model the staggered pod landings (the first seconds of a
+   mission are pod descent, robots frozen).
+2. ENGINE: no change (D68) — the extraction family stays
+   anchored-but-unwired.
+
+Nudge-Worker: c7269abe-e8c7-4c92-9a9b-568763c70e8f
+

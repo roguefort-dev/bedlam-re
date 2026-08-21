@@ -105,7 +105,7 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x18 | u16 | random at spawn: RandA()&3 (variant) | 0x4c69fc |
 | +0x1A..+0x29 | 8×u16 | per-probe floor z cache (written by move_is_possible; +0x1A doubles as the climb-compare z: `dword@+0x18 >> 16`) | 0x4c69fe |
 | +0x2A | u16 | robot TYPE (indexes the 0x62-stride ORDER/stats table at 0x4de664; all player robots take the global word@0x4edb90) | via 0x4c6a0c>>16, 0x40cdf3 |
-| +0x2C | u16 | reinforcement/deploy timer slot (1, 1+(2000-m*1000/27), ...) | 0x4c6a10 |
+| +0x2C | u16 | DROP-POD descent timer: ≠0 freezes the whole robot brain per sub-tick (FUN_0040b9f6); 0-hit → pod anim FUN_0041fb4b + msgs 9/10/0xB. Writers: spawn stagger `1+k·(2000−m·1000/27)` (FUN_0040cca0 @0x40d132), MP respawn 0x28 (FUN_0040e230 @0x40e89d) | 0x4c6a10, §7j.20 |
 | +0x36/+0x38/+0x3A | u16×3 | per-order stats-group copy i (8-byte groups, i=0..6): word0 = group availability (spawn default probe), word1 = the sidebar order gate (copied twice) [§6c.6] | 0x4c6a1a/1c/1e, spawn 0x40cf05..0x40cf42 |
 | +0x6E | u16 | ORDER BITS (bit i = order i active; bits 0..6 toggled by keys 1..7 / the 7 sidebar order rows; spawn default = 1 << first available) | 0x4c6a52, §6c |
 | +0x70 | i32 | deploy-delay counter (vs table DAT_00454ee8[DAT_0046cbf8]) | 0x4c6a54 |
@@ -254,31 +254,43 @@ byte) [verified decompile + asm]:
    selection): serialized by FUN_00449c94 into the replay/network packet
    buffer (`DAT_004eba04` stream with a RandA()&0xF sequence marker) and
    cleared — the multiplayer input channel [verified 0x44a1df region].
-4. **Click-on-robot arm**: the robot-sprite click handler (~0x433cbc,
-   robot hit-test family) calls **FUN_004247b5(pos_x>>13, pos_y>>13, z,
-   robot_idx)** — i.e. the order is armed AT THE CLICKED ROBOT'S TILE:
+4. **Beacon arm** [CORRECTED 2026-08-21 §7j.20 — provenance was wrong]:
+   the arm is NOT a click path: **FUN_00433980 @0x433cfb (the zone
+   pad-trigger script dispatcher, §7j.19 item 4)** calls
+   **FUN_004247b5(pos_x>>13, pos_y>>13, z, robot_idx)** — i.e. the
+   extraction beacon is armed AT THE TRIGGERING ROBOT'S TILE when it
+   steps on one of the ~25 scripted (zone, .PAD slot) extraction pads
+   (the old "~0x433cbc robot hit-test family" gloss mis-identified the
+   enclosing function):
    ```
-   if (word@0x4eabb0 != 0) return          // one pending order at a time
-   word@0x4eabb2 = 0x197                    // validity window (407 frames)
-   word@0x4eabb0 = 1                        // ARM (also: if alive==1, window=0)
-   word@0x4eabb4/6/8 = order tile trio      // x, y, z
-   robot[idx].state = 3
+   if (word@0x4eabb0 != 0) return          // one beacon at a time
+   word@0x4eabb2 = 0x197                    // dropship countdown (407)
+   word@0x4eabb0 = 1                        // ARM
+   if (alive-count of player-0 group == 1)  // last robot standing
+       word@0x4eabb2 = 0                    // deploy NOW
+   word@0x4eabb4/6/8 = tile trio            // x, y, z (z = dead store)
+   robot[idx].state = 3                     // halt (sweepable)
    FUN_004248c8(&tx,&ty); robot.pos = (tx<<13, ty<<13)   // spread-assign
    SFX 0x2A
    ```
+   Full decode + the trigger-chain closure: §7j.20.
    **FUN_004248c8** = spread/claim search: finds a free slot in the 12×u16
    claim array 0x4eabba, then a 12-case jumptable (table@0x424898) offsets
    the order tile by {0, ±1 on x, ±1 on y — the 8 neighbors + center
    variants} → each consumer gets a distinct destination tile near the
    click [verified asm 0x4248ca..0x424985].
-5. **Consumption** (robots() §5): every robot within 6 tiles of the order
-   tile (state ∉ {3,4,5}) gets state 4 + its own spread-tile target + stop
-   distance 1e6 → walks per §5. The order expires via the MissionShell
-   timer (or early once all robots are state-3/dead) → **FUN_0041faf0**
-   clears 0x4eabb0/2 and stages the dropship animation target
-   (0x4e6610-family = the reinforcement-drop visual) [verified].
-   Net effect: one click = nearby robots converge + a reinforcement drop
-   marker at the site [inferred semantics].
+5. **Consumption** (robots() §5): every robot within 6 tiles of the
+   beacon tile (state ∉ {3,4,5}) gets state 4 + its own spread-tile
+   target + stop distance 1e6 → walks per §5. The beacon expires via
+   the MissionShell timer (or early once all robots are state-3/dead)
+   → **FUN_0041faf0** clears 0x4eabb0/2 and stages the dropship
+   animation target (0x4e6610 = the EXTRACTION dropship, §7j.19)
+   [verified].
+   Net effect [CORRECTED §7j.20]: stepping on a scripted extraction
+   pad = the squad rallies at the pad (spread claims) until the
+   countdown expires or the squad is halted, then the extraction
+   dropship lands and sweeps them (states 3/4 → 5) — no click is
+   involved anywhere in this family.
 
 ## 6c. sidebar_control@0040d197 — full decode (2026-08-21, worker 6ebe5cff)
 
@@ -517,7 +529,8 @@ move_is_possible, move_is_possible2} on the robot record + globals:
 
 - pos_x, pos_y (Q13), pos_z/floor (Q5), state, facing, dir byte, anim
   phase, the 8-word probe-z cache (+0x1A..), stop distance (+0x74),
-  move-target pair (DAT_0046cc30/60[idx]), order globals 0x4eabb0/2/4/6/8
+  move-target pair (DAT_0046cc30/60[idx]), extraction-beacon globals
+  0x4eabb0/2/4/6/8
   + the 12-slot claim array 0x4eabba, RNG (RandA — spawn variant, scatter
   jitter), selection (DAT_0046cbd4/cbdc/cbd8), and g_frame_count (drives
   the 6-phase sub-tick position in-frame). Presentation-side (cursor,
@@ -563,6 +576,9 @@ mission.rs seam green; corrects/refines §§3-4 and the spawn-settle gloss)
    (+1,−1),(−1,+1),(+1,+1) — matches the seam's SPREAD_OFFSETS order.
    The free-slot scan runs over the first `DAT_0046ccbc` (robot count)
    slots; slot > 0xB → no assignment (caller skips the pos write).
+   [Completed §7j.20: slots 9/10/11 = (−2,0)/(0,−2)/(+2,0), and the
+   ≥12 case actually leaves the caller's out-params UNINITIALIZED —
+   both callers store them, so a 13th+ consumer gets a garbage tile.]
 
 ## 7c. Amendment 2026-08-21 (worker d8c46c88, objdump re-read of the
 mission file-load + table-build pass — closes open item 1)
@@ -632,10 +648,14 @@ was where the tables filled: 0x41d954 only allocates.)
    marker seeds z −1 and only settles on a height-≤3 ground tile
    (amendment 7b.4). The 0x62-stride stats copy, variant RandA()&3, the
    probe seeding, and the one settle probe match §§3/7b exactly.
-8. **Order armer callers** [verified 0x433cfb]: the only call site of
-   FUN_004247b5 is the robot-sprite click family ~0x433cbc (sprite hit
-   test → arm at the clicked robot's tile, robot state 2 = selected
-   writers nearby at 0x433c7f/0x433cab). FUN_00424a6f (the nearby call
+8. **Beacon armer callers** [verified 0x433cfb; RE-IDENTIFIED §7j.20]:
+   the only call site of FUN_004247b5 is inside **FUN_00433980** (the
+   zone pad-trigger script dispatcher, §7j.19 item 4) — this §7c.8
+   note originally mis-attributed the enclosing function to a
+   "robot-sprite click family ~0x433cbc" (0x433cbc lies inside
+   FUN_00433980's 3185-byte body); the arm is a scripted extraction
+   pad, and "robot state 2 = selected" is wrong — the armer writes
+   state 3 (halt). FUN_00424a6f (the nearby call
    with small immediates 0..0xA) is a message/popup builder, NOT a move
    producer [verified negative]. The verified move producer remains the
    §5/§6 order-consumption path; on real shipped maps no two MRK spawn
@@ -991,7 +1011,8 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
 3. **The armor pass CORRECTED — it is PHASE 1, not robot state 1**
    [verified asm 0x40bbab..0x40bc9f]: in the per-robot walk,
    after the alive gate (and the outer `word@+0x2C == 0` gate —
-   MP respawn sets +0x2C = 0x28; no SP producer known, always 0),
+   producers decoded §7j.20: the SP spawn stagger writes
+   1+k·(2000−m·1000/27), so it is NOT always 0; MP respawn 0x28),
    `if (phase == 1)`: tile = `tile_x + y_line[tile_y]`
    (`pos>>13` + dword@0x4ea900+4*ty); pad byte =
    `byte@(0x4796d4 + 0x1E*tile)` = the PER-TILE 0x1E record's
@@ -2936,15 +2957,16 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
    0x4eabb0/0x4eabb2. Sole caller MissionShell @0x44832f ∧
    0x448375 (asm-verified): when the beacon countdown word
    0x4eabb2 hits 0, OR every robot is dead/state-3. Beacon
-   writer = FUN_004247b5 (residual; FUN_004248c8 is the
-   beacon-approach probe FUN_0040b9f6 consumes to auto-walk
-   robots to extraction).
+   writer = FUN_004247b5 — CLOSED §7j.20 (zone pad script
+   FUN_00433980 @0x433cfb arms it; FUN_004248c8 = the spread-claim
+   picker FUN_0040b9f6 consumes to auto-walk robots to the beacon).
 3. **FUN_0041fb4b(idx) = the POD SPAWNER**: stamps pod slot
    {1, phase 1, 0, altitude 0x400, x/y = robot pos>>8}.
    Sole caller FUN_0040b9f6 when the per-robot countdown
    w@+0x2C (0x4c6a10) hits 0 (msgs 9/10/0xB per player, then
-   the pod anim). The 0x4c6a10 producer = residual (death
-   family).
+   the pod anim). The 0x4c6a10 producers — CLOSED §7j.20: the
+   FUN_0040cca0 spawn stagger (SP+MP) + the FUN_0040e230 MP
+   respawn (0x28).
 4. **FUN_00433980 = the ZONE PAD-TRIGGER SCRIPT DISPATCHER**
    (3185 B): arg = robot idx; sole caller FUN_0040b9f6
    @0x40bd58, invoked when robot state ∈ {1,4} ∧ order word
@@ -2992,17 +3014,120 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
      FUN_0041fbb1, renderer FUN_00403938 (the
      exw-missionrender2 0x406d6c loop: iso projection with
      the altitude/shadow math).
-6. Residuals (small, queued): the beacon writer FUN_004247b5
-   + the approach probe FUN_004248c8 body; the 0x4c6a10 pod-
-   countdown producers (death core FUN_0040e230 side); the
-   full per-zone FUN_00433980 case table beyond the head
-   (≈28 pad ids × 7 zones — mechanical, decode per zone only
-   when P4.2 needs it); FUN_00424a6f string table contents.
+6. Residuals (small, queued): CLOSED 2026-08-21 by §7j.20 (the
+   beacon writer FUN_004247b5, the spread-claim picker
+   FUN_004248c8 body, the 0x4c6a10 pod-countdown producers).
+   Still open: the full per-zone FUN_00433980 case table beyond
+   the head (≈28 pad ids × 7 zones — mechanical, decode per zone
+   only when P4.2 needs it; §7j.20 item 2 gives the ~25 armer
+   pairs as an index); FUN_00424a6f string table contents.
 7. Corpus-path verdict: docs-only (D67) — no engine change;
    the escape family stays unwired like the rest of the
    mission runtime (nothing escapes in the gates; all
    producers/consumers are now anchored for the P4.2
    differential harness).
+
+## 7j.20. The extraction BEACON + POD-COUNTDOWN producers (2026-08-21,
+worker c7269abe, claim 1 — closes the 7j.19 residuals; docs-only D68)
+
+Sources: `-process BEDLAM.EXW -noanalysis` DecompList/XRefList runs
+(ghidra-project/exw-beacon.txt, exw-beacon2.txt, exw-beacon-xrefs.txt,
+process-exw-beacon*.log) + the 7j.19 dumps (exw-exitfamily2.txt =
+FUN_0040b9f6/FUN_00433980) + a full-objdump census of every
+`0x4c6a10`-displacement site (no absolute 0x4c6a10 reference exists).
+
+1. **FUN_004247b5 = the EXTRACTION-BEACON ARMER** [verified decompile
+   0x4247b5..0x424882 + xref census]: sole caller is
+   **FUN_00433980 @0x433cfb — the zone pad-trigger script dispatcher**
+   (7j.19 item 4). NOT a click handler: the old §6.4 "~0x433cbc
+   robot-sprite click family" guess predated 7j.19's identification of
+   the enclosing function — 0x433cbc lies inside FUN_00433980's body.
+   Register args (EAX/EDX/EBX/ECX) = (robot pos_x>>13, pos_y>>13,
+   robot z word@+0x08, robot idx): the beacon is armed AT THE
+   TRIGGERING ROBOT'S TILE. Body:
+   ```
+   if (word@0x4eabb0 != 0) return          // one beacon at a time
+   word@0x4eabb2 = 0x197                   // dropship countdown (407)
+   word@0x4eabb0 = 1                       // ARM
+   alive = # of first DAT_0046cbd8 robots with alive@+0x7C != 0
+                                           // player-0 group (SP: the
+                                           // whole squad; MP: 1 robot)
+   if (alive == 1) word@0x4eabb2 = 0       // last robot: deploy NOW
+   0x4eabb4/6/8 = tile x / tile y / z      // 0x4eabb8 z is a DEAD
+                                           // STORE (xref census: zero
+                                           // readers; the dropship
+                                           // stamps only x/y)
+   robot[idx].state = 3                    // halt (sweepable)
+   FUN_004248c8(&tx,&ty)                   // spread claim
+   robot.pos = (tx<<13, ty<<13)            // teleport to tile origin,
+                                           // no +0xF00 offset (7b.5)
+   FUN_004239ef(0x2a,3)                    // SFX 0x2A
+   ```
+2. **The armer call sites = ~25 (zone, .PAD slot) pairs** [mechanical
+   parse of the FUN_00433980 decompile — the shared tail label
+   switchD_00439754_caseD_15 + the common pad-switch slot-6 body; the
+   exact per-zone table stays the deferred decode]: zone 1 slots
+   {8, 0x10, 0x12, 0x18}, zone 2 {4, 5, 7, 0xE, 0x11}, zone 3
+   {0, 1, 6, 0xF, 0x15}, zone 4 {0, 2, 0x10, 0x15, 0x16}, zone 5
+   {8, 9 ×2, 0x3D}, + the shared pad-switch tail (slot 6) for the
+   zones that reach it. Semantics: stepping a robot onto one of those
+   scripted pad tiles arms the extraction beacon there — the zone's
+   extraction pad. **The extraction trigger chain is now CLOSED
+   end-to-end**: pad script (FUN_00433980) → armer FUN_004247b5
+   (stations the trigger robot, state 3) → FUN_0040b9f6 auto-walks
+   squad robots within 6 tiles to spread claims → MissionShell expiry
+   gate (0x4eabb2 == 0 ∨ all robots dead/state-3, 7j.19 item 2) →
+   FUN_0041faf0 dropship → FUN_0041fbb1 landing sweep (states 3/4 → 5)
+   → _DAT_004dc680++ / _DAT_004dc67c complete.
+3. **FUN_004248c8 = the SPREAD-CLAIM picker** [verified decompile
+   0x4248c8..0x4249bd; callers FUN_004247b5 @0x424865 +
+   FUN_0040b9f6 @0x40c08f]: scans the 12×u16 claim array 0x4eabba for
+   the first free slot (scan bound DAT_0046ccbc = robot count), marks
+   it 1 (claims are NEVER released — one-shot per mission, no clear
+   site exists), and returns the beacon tile offset by slot:
+   0 (0,0), 1 (+1,0), 2 (−1,0), 3 (0,−1), 4 (0,+1), 5 (−1,−1),
+   6 (+1,−1), 7 (−1,+1), 8 (+1,+1), **9 (−2,0), 10 (0,−2), 11 (+2,0)**
+   [completes 7b.6's slots 0..8]. Slot ≥ 12 → returns WITHOUT writing
+   the out-params — both callers then store UNINITIALIZED locals into
+   robot pos/target (a 13th+ consumer gets a garbage tile; faithful).
+4. **The w@+0x2C (0x4c6a10) pod-countdown writers** [verified objdump
+   census — all 10 displacement sites accounted]:
+   - **FUN_0040cca0 spawn tail @0x40d132 = the mission-start DEPLOY
+     STAGGER** [verified decompile]: after staging the squad, for each
+     player (outer bound DAT_0046cbe0; 1 in SP) and each of that
+     player's DAT_0046cbd8 robots: `w@+0x2C = 1 + k·(2000 −
+     m·1000/27)`, k = robot index within the group, m = DAT_0046ae8c
+     (linear mission number clamp((zone−2)·5 + level − 1, 1, 26)) →
+     step 1037..1963 sub-ticks (≈173..327 frames at 6 sub-ticks/frame)
+     between successive pod landings; each group's first robot lands
+     at 1.
+   - **FUN_0040e230 death-core MP branch @0x40e89d**: respawn re-drop
+     `w@+0x2C = 0x28` (40 sub-ticks ≈ 6.7 frames) before the MRK /
+     FUN_0041ec1c scatter reseed.
+   - Reader/decrementer = FUN_0040b9f6's per-robot walk [7j.19 item 3
+     + exw-exitfamily2.txt]: `w@+0x2C != 0` REPLACES the entire robot
+     brain (movement, armor pass, pad scripts, beacon approach — all
+     skipped) per sub-tick; hitting 0 fires FUN_0041fb4b(idx) pod-anim
+     + msgs 9/10/0xB. The six 0x4073xx..0x4078xx dword reads are NOT
+     +0x2C consumers — `sar edx,0x10` takes word@+0x2E (anim clamp ≤ 5
+     for the SELECTED robot, idx DAT_0046cbd4) [verified asm 0x407377].
+   Net semantics: **+0x2C = the per-robot DROP-POD descent timer** —
+   robots deploy inactive-in-pod, staggered per group; the 0x4e64c0
+   pod bank (7j.19 machine 3) is therefore the mission-start deploy
+   pod AND the MP respawn pod, on top of its extraction role.
+   [Corrections folded: §7g.3's "MP respawn sets +0x2C = 0x28; no SP
+   producer known, always 0" — the SP producer IS this spawn stagger;
+   the record-table row's "(1, 1+(2000−m·1000/27), …)" ellipsis was
+   the per-robot k multiples.]
+5. Bonus census [asm one-liner]: the FUN_0040cca0 tail also stamps
+   4×0xC records at **0x4c71c4** (ending exactly at the 0x4c71f4 bank
+   base) with the SELECTED robot's {x>>8, y>>8, z}; the renderer
+   FUN_00403938 writes the same bank (0x403994/0x4039d2/0x403a27,
+   dword-indexed per player) — 0x4c71c4 = the per-player selected-
+   robot anchor records, spawn-seeded + renderer-updated.
+6. Corpus-path verdict: docs-only (D68) — no engine change; the
+   extraction family stays anchored-but-unwired for the P4.2
+   differential harness (nothing escapes in the gates).
 
 ## 8. Constants ledger (all [verified] unless tagged)
 
@@ -3050,8 +3175,12 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
 | POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
 | exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, toggle d@+0x14, dwell d@+0x18 cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19 | §7j.17/§7j.18/§7j.19 |
 | escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, toggle@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the no-extract latch: writers FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99/GameMain); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 + msg | §7j.19 |
-| dropship deployer | FUN_0041faf0: stamps 0x4e6610 {1, 1, beacon.x·0x20, beacon.y·0x20, alt 0x200} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2; caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon writer FUN_004247b5 [open] | §7j.19 |
-| pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {1, 1, 0, 0x400, robot x/y>>8}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB); the 0x4c6a10 producer [open — death family] | §7j.19 |
+| dropship deployer | FUN_0041faf0: stamps 0x4e6610 {1, 1, beacon.x·0x20, beacon.y·0x20, alt 0x200} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2; caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon armer FUN_004247b5 [§7j.20] | §7j.19 |
+| pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {1, 1, 0, 0x400, robot x/y>>8}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB); the 0x4c6a10 producers [§7j.20] | §7j.19 |
+| extraction-beacon armer | FUN_004247b5(EAX tx, EDX ty, EBX z, ECX idx): guard 0x4eabb0; 0x4eabb2 = 0x197 (0 if player-0 alive-count == 1); 0x4eabb0 = 1; 0x4eabb4/6/8 = tile trio (z dead store); robot.state = 3; spread-teleport FUN_004248c8; SFX 0x2A. Sole caller FUN_00433980 @0x433cfb = ~25 (zone, .PAD slot) extraction pads | §7j.20 |
+| spread-claim picker | FUN_004248c8(&tx,&ty): first free slot of 12×u16 0x4eabba (bound DAT_0046ccbc), marks 1, returns beacon tile + {center, 8 neighbors, (−2,0),(0,−2),(+2,0)}; ≥12 → out-params untouched (callers store garbage); claims never released; callers FUN_004247b5 @0x424865 + FUN_0040b9f6 @0x40c08f | §7j.20 |
+| pod-deploy countdown writers | w@robot+0x2C (0x4c6a10): FUN_0040cca0 spawn tail @0x40d132 stagger 1+k·(2000−m·1000/27) per player group (m = linear mission 0x46ae8c); FUN_0040e230 MP respawn @0x40e89d = 0x28; reader/decrementer FUN_0040b9f6 (brain gate) | §7j.20 |
+| per-player selected anchor | 0x4c71c4: 4×0xC {x>>8, y>>8, z}, spawn-seeded by FUN_0040cca0 tail (selected robot idx DAT_0046cbd4), renderer-updated FUN_00403938 @0x403994/0x4039d2/0x403a27; sits immediately before the 0x4c71f4 bank base | §7j.20 |
 | pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides (state 2, pos := dwords 0x4dcdbc..0x4dd330 ·0x2000+0x1000, arrival platform +0x84, latch+countdown-10 pairs), messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19 |
 | critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
 | command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
@@ -3115,9 +3244,11 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
    0x1B = the exit activation; elevator rides/messages/doors),
    FUN_0041faf0/FUN_0041fb4b = the dropship/pod spawners, and
    the [0x4eba0c]/[0x4eba10] censuses are CLOSED (§7j.19 item
-   5). Still open from that head: the beacon writer
-   FUN_004247b5 + probe FUN_004248c8, the 0x4c6a10 pod-countdown
-   producers, and the full per-zone FUN_00433980 case table.
+   5). The beacon writer FUN_004247b5 + probe FUN_004248c8 +
+   the 0x4c6a10 pod-countdown producers are CLOSED §7j.20
+   (pad-script armer + spread picker + deploy stagger). Still
+   open from that head: the full per-zone FUN_00433980 case
+   table (deferred until P4.2 needs it).
    Projectile type 0x69 vs the FUN_00419aff damage table
    remains open (low priority).
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
