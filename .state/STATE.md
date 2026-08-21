@@ -1,3 +1,30 @@
+ - CLOSED 2026-08-21 (P4 pickup consumer unit COMPLETE, commits
+   e10fdb5 + d8e03a7 + 5a3a419 + 81fd558, worker 66831068 claim 1,
+   D54): RE-EXW-SIM amendment 7h decodes the FUN_0040eba0 pickup
+   family - the tile-word dispatch (DGROUP range tables
+   0x454a58/0x454a74 per the _DAT_004edd8c terrain set; A values
+   CORRECTED to [0x4e,0x75,0x75,0x358,0x75,0xa3,0xa3] by a
+   byte-precise re-dump after the first read was off one dword;
+   closed 4-word groups -> A cases 1/3/2/4, B cases 9/7/8; the
+   9-entry jump table), the case bodies 1/2/3/7 (drop +0x80=1000,
+   shield +0x88=1000, hp +0x78 +=0x9C4 clamp 0x1388, shield_boost
+   +0xA0=200; SFX 0x43a48e head + the 0x4dc5d0 16-B effect-row
+   tail with ids 1/6/7/0xE), the robots() caller consume block
+   (probe-latch mirror-word read, DAT z-plane zero, the 0x454a90
+   floor-word swap), and the _DAT_004edd8c producers (GameMain
+   boot 1; the mission-number->set family 0x43edb0+). ENGINE:
+   pickup_case(word, set) pure decode + PICKUP_RANGE_A/B consts
+   (bedlam-core), MissionSim::apply_pickup(idx, case) writing
+   the hash-covered D53 fields, PickupOutcome exposing the
+   effect id, the thin MissionScene::pickup host seam (game);
+   case 4 kept as the D52 pickup_score_money producer. The
+   tile-word producer stays host-seamed (the 0x4796bc mirror is
+   not modeled - queued). Gates: workspace tests green (+4),
+   fmt/clippy clean, smoke two-run byte-identical AND equal to
+   the recorded baselines (scene 696adb1cd110e062, parity
+   cce30c983b97b16d - pins UNMOVED, the seam is off the corpus
+   path), MANIFEST verified. Pushed. Queued: the dead/hit dither
+   overlay unit (FUN_00401ae6 + the 0x4e6ed8 mask bank).
 - CLOSED 2026-08-21 (P4 damage unit COMPLETE, commit d9032d9,
   worker 416ca029 claim 1, D53 — unit finished across an
   interrupted predecessor run that committed the 7g pre-decode

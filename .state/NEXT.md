@@ -1,25 +1,24 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The pickup consumer unit (RE-EXW-SIM 7f.6 + the damage-unit
-   follow-through): decode the FUN_0040eba0 tile-type dispatch
-   (range tables 0x454a58/0x454a74 indexed by `_DAT_004edd8c` —
-   which tile types map to which case) as committed RE notes FIRST,
-   then land cases 1-3 + 7 as sim/host seams on the now-real
-   vitals fields: case 1 reinforcement staging (drop 1000), case 2
-   shield pickup (shield pool = 1000), case 3 health pickup
-   (hp += 0x9C4 clamp 5000), case 7 the shield-booster arming
-   (shield_boost = 200 — the field already decays it in the
-   phase-0 pre-walk). The case-4 score/money seam already landed
-   (D52); keep it. Bounded: the dispatch decode is the RE piece;
-   if the tile-type producer (the TOT mirror word range tables)
-   proves entangled, land the case bodies as pure sim seams
-   (apply_pickup-style) and leave the dispatch host-seamed.
+1. [P4] The dead/hit dither overlay unit (RE-EXW-SIM 7f.4 + the
+   7g.8 decay follow-through): decode the FUN_00401ae6 blit +
+   the 0x4e6ed8 512-B mask bank (the dither codec — how the mask
+   selects/blends pixels over the 48x48 portrait) as committed RE
+   notes FIRST, then wire the portrait dither in the sidebar
+   portrait pass reading the now-real sim hit_flash field (the
+   7g.8 decay already runs per frame; clamp>5 then -1 per alive
+   hp>=1 frame). Keep the 0x4dc5d0 blink producer OUT of this
+   unit unless trivially adjacent (it is the FUN_00422038 slot
+   family the pickup tails also stage at — 7h.2 notes the row
+   layout). Bounded: the codec decode is the RE piece; frame
+   pins may move ONCE (the dither draws on the portrait plane)
+   — re-pin with the reason, sim pins must NOT move.
 ## Backlog (not yet started)
-- The dead/hit dither overlay (FUN_00401ae6 + the 0x4e6ed8 512-B
-  mask bank; RE-EXW-SIM 7f.4) + the 0x4dc5d0 blink producer —
-  hit_flash is now a real field, so the portrait dither can read
-  it directly once the codec is decoded.
+- The 0x4dc5d0 blink/effect-row producer family (FUN_00422038
+  slot alloc + the 16-B rows; the DamageOutcome debris rows and
+  the 7h.2 PickupOutcome effect ids 1/6/7/0xE are its staged
+  inputs) + the FUN_00420608 128-slot debris stager consumer.
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -32,7 +31,13 @@
   FUN_00448ef1 multiplayer lobby if ever needed.
 - Mission SFX tier (RE-EXW-SIM sec 9 open item 5; MENU1/MENU2-style
   mixer instruments exist) + the order SFX 0x2A armer click + the
-  damage/alarm SFX families now decoded (7g.1 presentation sets).
+  damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
+  entries (7h.2).
+- The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
+  mirror rows + the probe-latch walk + the DAT z-plane consume +
+  the 0x454a90 floor-word swap) — unblocks the apply_pickup
+  dispatch from host-seamed to corpus-real; needs the
+  MISSIONVIEW sec 8 mirror producers first.
 - Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT).
 - RE-EXW-MISSIONVIEW sec 8 open items 1/2/4: type-DB tail producers
   (+0x18/+0x1a/+0x1b/+0x1c — NOTE +0x18 is now KNOWN as the
@@ -44,10 +49,8 @@
 - MISSIONVIEW sec 5d tail (robots only are wired): platform loop
   (0x4eb638, bank DAT_0046af54), effects loop (0x4cf638 - the
   FUN_00401e39 draw_IMG codec family, a DIFFERENT .BIN sprite layout
-  per RESEARCH-8STREET) + the FUN_00420608 128-slot debris stager
-  (the DamageOutcome rows are its inputs, 7g.6), ROBNUMS name
-  plates, Shield/Variant bank staging (nodes enqueue, flush skips
-  while unstaged).
+  per RESEARCH-8STREET), ROBNUMS name plates, Shield/Variant bank
+  staging (nodes enqueue, flush skips while unstaged).
 - RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
   per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
   weapon-table writer family - see 7d.2), robots() extra-phase
@@ -67,6 +70,24 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-21: P4 pickup consumer unit COMPLETE (worker 66831068
+  claim 1, commits e10fdb5 + d8e03a7 + 5a3a419 + 81fd558, D54):
+  RE-EXW-SIM 7h = the FUN_0040eba0 dispatch decoded (range tables
+  0x454a58/0x454a74 — CORRECTED A values [0x4e,0x75,0x75,0x358,
+  0x75,0xa3,0xa3] after a byte-precise re-dump; closed 4-word
+  groups → cases A:1/3/2/4 B:9/7/8; the jump table; the case
+  bodies with effect ids 1/6/7/0xE; the caller consume block
+  (DAT z-plane zero + 0x454a90 floor-word swap + probe-latch
+  walk); the _DAT_004edd8c producers). ENGINE: pickup_case pure
+  decode + MissionSim::apply_pickup cases 1/2/3/7 (drop 1000,
+  shield 1000, hp +=2500 clamp 5000, shield_boost 200 — writes
+  hash-covered D53 fields) + PickupOutcome (effect-id seam) +
+  the MissionScene::pickup host seam; case 4 kept as the D52
+  seam. Gates: workspace green (+4 tests), fmt/clippy clean,
+  smoke two-run byte-identical AND at the recorded baselines
+  (scene 696adb1cd110e062, parity cce30c983b97b16d — pins
+  UNMOVED, the seam is off the corpus path), MANIFEST verified.
+  Pushed.
 - 2026-08-21: P4 damage unit COMPLETE (worker 416ca029 claim 1,
   commit d9032d9, D53; unit finished across an interrupted
   predecessor run that committed the 7g pre-decode 5e10768 + the
