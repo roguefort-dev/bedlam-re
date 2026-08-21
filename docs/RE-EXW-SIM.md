@@ -1598,14 +1598,18 @@ the 20-kind table. All [verified] asm unless tagged.
    **@0x448076**, i.e. right before the effect-row tick
    FUN_0042205c@0x448080). FUN_0042034c is the **delayed-arrival
    scheduler**: it walks up to 45 records (esi 0..0x654 step
-   0x24) at 0x4dcdb8, layout `+0x00 active · +0x04/+0x0C two
-   x/y coord pairs (0x4dcdbc/0x4dcdc0) · +0x10/+0x14/+0x18
+   0x24) at 0x4dcdb8, layout `+0x00 active · +0x04/+0x08/+0x0C
+   marker tile x/y/z [CORRECTED §7j.21 — three words, not two
+   x/y pairs] · +0x10/+0x14/+0x18
    spawn x/y/z (0x4dcdc8/0x4dcdcc/0x4dcdd0) · +0x1C countdown
    (0x4dcdd4) · +0x20 target robot slot (0x4dcdd8, −1 when
-   fired/skip)`. Per record: active==0 → mark +0x20=−1, next;
-   countdown==0xa → SFX FUN_0043a48e(bank 0x4edfe0, 0, x<<5,
-   y<<5, push 2); decrement; still ≠0 → next; on reaching 0:
-   gate `word[0x465daa + 2*tile] != 0` (a per-tile word bank)
+   fired/skip)`. Per record [WALK SEMANTICS CORRECTED §7j.21]:
+   active==0 → the walk STOPS (shared epilogue 0x41e176) — live
+   records must be contiguous from record 0; the −1 store
+   happens only on the fire path; countdown==0 → skip silently
+   (dormant); countdown==0xa → SFX FUN_0043a48e(bank 0x4edfe0,
+   0, marker.x<<5, marker.y<<5, push 2); decrement; on reaching
+   0: gate `word[0x465daa + 2*tile] != 0` (a per-tile word bank)
    → clear BOTH gate words at the tile (0x465daa and 0x460dfa
    banks) → scan z 0..7 for the FIRST level whose type-DB
    z-word lies in the per-zone water range
@@ -1619,7 +1623,9 @@ the 20-kind table. All [verified] asm unless tagged.
    robot+0x0C word → +0x20 = −1. Producers of the 45-record
    array: the 0x425xxx family (0x425daf/0x426079/0x42688c
    blocks; register-addressed countdown writes, not decoded —
-   [census-only]). The gate banks: 0x460dfa written by weapon
+   [census-only]) [CLOSED 2026-08-21 §7j.21: FUN_00425da4 =
+   fixed-address stager, countdown NEVER producer-written;
+   runtime arming = FUN_00433980 ride cases, countdown := 10]. The gate banks: 0x460dfa written by weapon
    fire (0x41a84f) + the 0x4227xx platform family (0x7d2/0x7d3/
    0x7d4 tile words), read by the armor pass (0x40fef4/0x410018)
    + the splash tick (0x41b8xx); 0x465daa written/read by the
@@ -1629,7 +1635,9 @@ the 20-kind table. All [verified] asm unless tagged.
    strength word; the arrival "clear both" burns the platform.]
    The records ALSO have a
    draw pass in the FUN_00403938 tail (0x4065f8..0x4066a3
-   reads +0/+0x1C/+0x04/+0x0C) [census-only]. **Verdict for the
+   reads +0/+0x1C/+0x04/+0x0C) [census-only] [DECODED §7j.21:
+   sprite 0x12E marker flash, width clamp(11−countdown,0,9),
+   drawn only while the ride countdown runs]. **Verdict for the
    queue note: NO debris kind edits terrain — the stager body
    (0x420608..0x421dd0) contains ZERO references to the
    0x4796xx type-DB and ZERO FUN_0042394a calls; the only
@@ -3129,6 +3137,128 @@ FUN_0040b9f6/FUN_00433980) + a full-objdump census of every
    extraction family stays anchored-but-unwired for the P4.2
    differential harness (nothing escapes in the gates).
 
+## 7j.21. The ARRIVAL-PRODUCER family decoded: FUN_00425da4 = the
+ELEVATOR-RIDE STAGER (2026-08-21, worker b67abe61, claim 1 — docs-only D69)
+
+Sources: `-process BEDLAM.EXW -noanalysis` runs (dumps
+ghidra-project/exw-arrival1.txt = DecompList 0042034c+00425da4,
+exw-arrival1-asm.txt = DumpRange 425d90..426200/426800..426a00/
+4065c0..406700, exw-arrival2.txt = DecompList 0041a4f8+004223b8,
+exw-arrival2-asm.txt = 41a4f8..41a590, exw-arrival3-asm.txt =
+447760..4478c0/447a40..447c00/42034c..4204ea/402965..402976,
+process-exw-arrival*.log) + the 7j.19 exitfamily dumps. All
+[verified] asm/decompile unless tagged.
+
+1. **FUN_00402965 = memset-0** [asm 0x402965..0x402974]: EAX:=0,
+   ECX = byte count, EDI = dst; the SHR/STOSB/STOSW/REP STOSD
+   unroll. 176 callers. Anchors every "clear bank" in this family.
+2. **FUN_00425da4 (0x425da4..0x42c41e, 26 234 B, sole caller
+   MissionShell @0x447b4e) = the ARRIVAL/ELEVATOR RECORD STAGER**,
+   run once in the mission-load block (between FUN_00422171 and
+   FUN_0041ec68, i.e. right before the robot spawn FUN_0040cca0
+   and the .NME loader FUN_00416458) [verified boot asm
+   0x447b3a..0x447b94]:
+   - head: `FUN_00402965(0x4dcdb8, 0x654)` — clear all 45 records
+     (45 × 0x24 = 0x654, the §7j.11 walk bound confirmed).
+   - dispatch: `zone = [0x4edd8c]−1`; > 6 → return; jump table
+     0x425d88 (7 zone cases). Per-zone branches gate on mode
+     `[0x4edb88]` (== 2 → MP/present variant or skip) and mission
+     `[0x4edd88]` (sub-switches; e.g. zone 1 stages ONLY for
+     SP mission 1).
+   - staging = straight-line FIXED-ADDRESS stores (the §7j.11
+     "register-addressed" gloss was a Watcom-scheduling artifact;
+     every site is a literal `[0x004dcXXX]` store). Per record:
+     `+0x00 := 1` (active), `+0x04/+0x08/+0x0C` marker tile ←
+     .PAD slot words (u16 x/y/z at `0x4e44f8 + slot·8 + 2`;
+     slot +0 word skipped), `+0x10/+0x14/+0x18` destination :=
+     immediates (tile x, tile y, level z), `+0x20 := −1`.
+     **The countdown `+0x1C` is NEVER written by any producer**
+     — records stage DORMANT (0 = skipped silently by the
+     scheduler and the draw pass). The queue's "register-addressed
+     countdown writes" premise is REFUTED; all arming is runtime
+     (see 5).
+   - record layout CORRECTION vs §7j.11: `+0x04` x, `+0x08` y,
+     `+0x0C` z — three tile words (not "two x/y coord pairs").
+   - worked example, zone 1 (mode ≠ 2 ∧ mission == 1): records
+     0..6 — rec0 dest (8,0x39,2) marker .PAD slot 0; rec1..rec5
+     dest (8,0x1A,5) markers .PAD slots 10..14; rec6 dest
+     (0xE,0x20,1) marker .PAD slot 15.
+   - per-zone record high-water marks (mission branches stage
+     contiguous subsets from record 0): Z1 0..6 · Z2 0..16 ·
+     Z3 0..16 · Z4 0..8 · Z5 0..9 · Z6 0..14 · Z7 0..6.
+   - does NOT touch 0x4c71c4 — the §7j.20 per-player anchor bank
+     is spawn-seed only (question CLOSED).
+3. **The 0x4dcae8 rect-list boundary RESOLVED** (refutes the
+   7j.12 "same producer family" hypothesis): the MissionShell
+   boot block AFTER FUN_00425da4 sets ECX=0x2d0/EDI=0x4dcae8 at
+   0x447b6c/0x447b71, calls FUN_0041a4f8 (the .BIN object loader;
+   its own ECX/EDI uses are push/pop-guarded, so the caller's
+   pair survives), then `FUN_00402965` @0x447b7b clears
+   0x2d0 bytes at 0x4dcae8 — ending EXACTLY AT 0x4dcdb8
+   (0x4dcae8 + 45·0x10 = 0x4dcdb8). The 45×0x10 door-rect list
+   is a separate, adjacent bank; the arrival staging is untouched
+   by the clear. Door-rect consumers use indexes 0..0x24 (slot 44
+   never used as a door).
+4. **FUN_004223b8 = the DOOR OPEN/CLOSE stepper** [decompile;
+   re-anchored from §7j.19]: arg1 = rect index, arg2 = wanted
+   state (1 open / 2 close); rect at 0x4dcae8+idx·0x10 =
+   {+0 state, +2 x, +4 w, +6 y, +8 h, +0xA type}; guard
+   state ≠ wanted ∧ state < 3; redraws the wall strip
+   (FUN_004245c9, (x·0x20+w·0x10, y·0x20+h·0x10)); per cell tests
+   the type-DB door-tile words (0x4796d5/0x4796d6 & 0x7f) and
+   stamps/clears type<<4 via FUN_004235e4/FUN_004235bf; state
+   word written back; SFX FUN_004239ef(0x23/0x24, 3) + bank
+   0x4edfb0 once per transition. 86 callers (FUN_00433980 door
+   pads).
+5. **FUN_0042034c walk semantics CORRECTED** [asm
+   0x42034c..0x4204ea]: the walk STOPS at the first inactive
+   record — `CMP [ESI+0x4dcdb8],0; JZ 0x41e176` (0x41e176 = the
+   shared Watcom pop-epilogue, also the 0x654-bound exit), so
+   live records must be a contiguous active run from record 0
+   (exactly what the stager produces). §7j.11's "active==0 →
+   mark +0x20=−1, next" is wrong: −1 @0x4203fb is written only
+   on the FIRE path. Countdown==0 records are skipped silently
+   (not decremented, not drawn). Fire path re-verified: SFX at
+   countdown==0xA (FUN_0043a48e bank 0x4edfe0, x<<5/y<<5 from the
+   MARKER); on reaching 0 the robot@[+0x20] is teleported to the
+   DEST (+0x10/+0x14/+0x18 → x<<13, y<<13, z·0x20−1), the DEST
+   tile's platform burns (both gate banks 0x465daa/0x460dfa
+   zeroed) and its first water level is cleared
+   (FUN_0042394a(x,y,z,0,0)); z resettled via FUN_0041e231; the
+   8 robot z-words +0x18..+0x26 filled; robot+0x0C word := 0
+   (XOR-at-loop-end, exits the riding state); +0x20 := −1.
+6. **The RUNTIME ARMER = FUN_00433980's elevator-ride cases**
+   (§7j.19 family, now bound to the record structure; decompile
+   exw-exitfamily.txt): each case targets ONE record: guard
+   `+0x20 != −1` (ride busy) → return; else rider robot's state
+   word@+0x0C := 2 (riding), +0x74/+0x84 order fields zeroed,
+   pre-position the rider at the record's own MARKER
+   (marker.x·0x2000+0x1000, marker.y·0x2000+0x1000), then
+   `countdown := 10` and `+0x20 := rider`. Every armed countdown
+   in the program is 10 (census of the `= 10` sites: records
+   0..~23 across the zones). Net semantics: **the 45-record
+   array = the ELEVATOR/TELEPORT RIDE PIPELINE** — the boot
+   stager writes the per-(zone, mode, mission) elevator table
+   (marker = boarding pad, dest = scripted arrival cell); a pad
+   step arms a record; 10 ticks later the scheduler materializes
+   the robot at the dest, burning the platform tile there.
+7. **The record DRAW PASS decoded** (was census-only) [asm
+   0x4065e5..0x4066e3]: loops the records; active==0 → exit the
+   loop (consistent with the scheduler's stop); countdown==0 →
+   skip; projects the MARKER tile isometrically
+   (x' = [ESP+0x34] + (u−v) + 0x10d, y' = [ESP+0x4c] +
+   ((u+v)>>1) + 0xac − (z<<5), u = (x<<5)+0x10−camera[0x4edde4],
+   v = (y<<5)+0x10−camera[0x4edde8]); screen-bounds 0x23F/0x1FD;
+   draws sprite 0x12E (FUN_0040798e, bank [0x46af38]) with
+   width **w = clamp(11−countdown, 0, 9)** — the marker flashes
+   only during the 10-tick ride and grows to full width just
+   before materialization. The §7j.16 scanner-icon consumer
+   (FUN_0041ee20 icon 0xB) is unchanged, second consumer.
+8. Engine verdict: docs-only (D69) — the elevator ride pipeline
+   stays anchored-but-unwired for the P4.2 differential harness
+   (which must step a robot onto a scripted elevator pad to
+   exercise it).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -3153,7 +3283,13 @@ FUN_0040b9f6/FUN_00433980) + a full-objdump census of every
 | debris kinds | 20-kind jump table 0x4205b8; +0x1C=kind, +0x20=physics class 0/1/2/3/6, +0x24←[esp+0x20] delay, +0x28←[esp+0x24] param; ring kinds 1(+13/14/15)/3/4/5/6+12/9/11/20 (nine 3×3), 2/8 single center 3/4, 7/10/16..19 none | §7j.11 |
 | debris seq tables | 11 tables, i16 −1-terminated, DGROUP 0x454424..0x454510 (k5-family {5..16}; k2/k8 {0..4}; …{44..104} = k16..20) | §7j.11 |
 | debris arrival SFX | FUN_00421e60 3-way (banks 0x4edf64/68/6c, push 2) · FUN_00421dec 4-way (0x4edf98/9c/a0/a4, push 1); both gated [0x4ede58]≠0 | §7j.11 |
-| arrival scheduler | FUN_0042034c epilogue 0x448076: 45 rec @0x4dcdb8 stride 0x24 {active, xy×2, spawn xyz, countdown, robot slot}; gate word banks 0x465daa/0x460dfa (2·tile); fires FUN_0042394a(x,y,z,0,0) clearing the first water z-word | §7j.11 |
+| arrival ride tick | FUN_0042034c epilogue 0x448076: 45 rec @0x4dcdb8 stride 0x24 {active, marker xyz tile, dest xyz, countdown, robot slot}; walk STOPS at first inactive (contiguous run from rec 0); countdown 0 = dormant skip; ==0xA SFX bank 0x4edfe0 at marker; →0 teleport robot to dest + burn platform (both gate banks) + FUN_0042394a(x,y,z,0,0) water clear | §7j.11, §7j.21 |
+| elevator stager | FUN_00425da4 (MissionShell boot @0x447b4e): clear 45 records then per-(zone [0x4edd8c] 1..7, mode [0x4edb88], mission [0x4edd88]) fixed-address staging; marker ← .PAD slot u16 x/y/z @0x4e44f8+slot·8+2; dest := immediates; +0x20:=−1; countdown never written (dormant); Z1 0..6, Z2/Z3 0..16, Z4 0..8, Z5 0..9, Z6 0..14, Z7 0..6 | §7j.21 |
+| elevator ride armer | FUN_00433980 ride cases: guard +0x20≠−1; rider state@+0x0C:=2, pre-position at marker+0x1000, countdown:=10, +0x20:=rider; all armed countdowns = 10 | §7j.19, §7j.21 |
+| arrival marker draw | FUN_00403938 tail 0x4065e5..0x4066e3: skip inactive/countdown-0; isometric marker tile; sprite 0x12E (FUN_0040798e, bank [0x46af38]) width clamp(11−countdown, 0, 9) | §7j.21 |
+| memset-0 | FUN_00402965(EAX=0, ECX=len bytes, EDI=dst); 176 callers | §7j.21 |
+| door-rect list boundary | 0x4dcae8..0x4dcdb8 = 45×0x10 door rects (0x2d0); MissionShell clears it @0x447b7b AFTER the stager — ends EXACTLY at the arrival base, no overlap; door consumers use idx 0..0x24 | §7j.21 |
+| door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x,+4 w,+6 y,+8 h,+0xA type}; type-DB door-tile test → FUN_004235e4/FUN_004235bf stamp type<<4; FUN_004245c9 wall redraw; SFX 0x23/0x24 bank 0x4edfb0; 86 callers | §7j.21 |
 | tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
 | platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via trigger / 199 via creep; weaken −damage; <0 → destroy: clear water z-word + both banks + 5× k7 debris); ring spread when ≥100 ∧ (hit <200 ∨ new <100) | §7j.12 |
 | platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; spread ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word + planeA 0 + planeB 1 + no robot, writes water z-word + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (1/32, ray over water, tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc | §7j.12 |
@@ -3181,7 +3317,7 @@ FUN_0040b9f6/FUN_00433980) + a full-objdump census of every
 | spread-claim picker | FUN_004248c8(&tx,&ty): first free slot of 12×u16 0x4eabba (bound DAT_0046ccbc), marks 1, returns beacon tile + {center, 8 neighbors, (−2,0),(0,−2),(+2,0)}; ≥12 → out-params untouched (callers store garbage); claims never released; callers FUN_004247b5 @0x424865 + FUN_0040b9f6 @0x40c08f | §7j.20 |
 | pod-deploy countdown writers | w@robot+0x2C (0x4c6a10): FUN_0040cca0 spawn tail @0x40d132 stagger 1+k·(2000−m·1000/27) per player group (m = linear mission 0x46ae8c); FUN_0040e230 MP respawn @0x40e89d = 0x28; reader/decrementer FUN_0040b9f6 (brain gate) | §7j.20 |
 | per-player selected anchor | 0x4c71c4: 4×0xC {x>>8, y>>8, z}, spawn-seeded by FUN_0040cca0 tail (selected robot idx DAT_0046cbd4), renderer-updated FUN_00403938 @0x403994/0x4039d2/0x403a27; sits immediately before the 0x4c71f4 bank base | §7j.20 |
-| pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides (state 2, pos := dwords 0x4dcdbc..0x4dd330 ·0x2000+0x1000, arrival platform +0x84, latch+countdown-10 pairs), messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19 |
+| pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides [§7j.21: arm the matching 0x4dcdb8 record — rider state@+0x0C := 2, pos := the record's own marker x/y ·0x2000+0x1000 (dwords 0x4dcdbc..0x4dd330), countdown := 10, +0x20 := rider], messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19, §7j.21 |
 | critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
 | command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
 | mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
@@ -3246,9 +3382,13 @@ FUN_0040b9f6/FUN_00433980) + a full-objdump census of every
    the [0x4eba0c]/[0x4eba10] censuses are CLOSED (§7j.19 item
    5). The beacon writer FUN_004247b5 + probe FUN_004248c8 +
    the 0x4c6a10 pod-countdown producers are CLOSED §7j.20
-   (pad-script armer + spread picker + deploy stagger). Still
+   (pad-script armer + spread picker + deploy stagger). The
+   0x425xxx arrival-producer family is CLOSED §7j.21
+   (FUN_00425da4 = the elevator-ride stager; the ride armer +
+   walk + marker draw bound to the record structure). Still
    open from that head: the full per-zone FUN_00433980 case
-   table (deferred until P4.2 needs it).
+   table and the per-zone record↔pad arm mapping (deferred
+   until P4.2 needs it).
    Projectile type 0x69 vs the FUN_00419aff damage table
    remains open (low priority).
 0b. ~~The residual 0x4dd484 reader census~~ — CLOSED 7j.17
