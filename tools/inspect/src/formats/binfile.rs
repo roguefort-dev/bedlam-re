@@ -401,17 +401,10 @@ pub fn nme_file(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
     let mut sections: Vec<serde_json::Value> = Vec::new();
     for sec in &n.sections {
         let v = match sec {
-            assets::misc::NmeSection::Zero { sec, at } => serde_json::json!({
-                "sec": sec, "count": 0, "at": at
-            }),
-            assets::misc::NmeSection::Tail { sec, count, at } => serde_json::json!({
-                "sec": sec, "count": count, "at": at, "note": "tail"
-            }),
-            assets::misc::NmeSection::Records {
-                sec,
-                count,
-                rec,
+            assets::misc::NmeSection::Section {
+                kind,
                 at,
+                count,
                 sample,
             } => {
                 let recs: Vec<serde_json::Value> = sample
@@ -420,13 +413,23 @@ pub fn nme_file(path: &Path, out_dir: &Path, rel: &str) -> (String, String) {
                     .map(|(i, w)| serde_json::json!({ "i": i, "w": w }))
                     .collect();
                 serde_json::json!({
-                    "sec": sec, "count": count, "rec": rec, "at": at, "sample": recs
+                    "kind": format!("{:?}", kind),
+                    "width": kind.width(),
+                    "count": count,
+                    "at": at,
+                    "sample": recs,
                 })
             }
         };
         sections.push(v);
     }
-    let doc = serde_json::json!({ "file": rel, "size": n.size, "sections": sections });
+    let doc = serde_json::json!({
+        "file": rel,
+        "size": n.size,
+        "consumed": n.consumed,
+        "orphan_tail": n.orphan_tail,
+        "sections": sections,
+    });
     let ok = write_json(out_dir, &format!("{}.nme.json", stem_of(rel)), &doc);
     (
         if ok {

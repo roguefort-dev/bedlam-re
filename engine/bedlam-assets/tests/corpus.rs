@@ -296,7 +296,25 @@ fn corpus_parses_rebuilds_and_round_trips() {
                 _ => ok += 1,
             },
             "nme" => {
-                let _ = assets::misc::parse_nme(&data);
+                // EXW 7j.18: the 8-section loader schedule must consume every
+                // shipped .nme with no overrun; only ZONEA/MISSION1.NME is
+                // allowed an orphan tail (16 B no game code reads).
+                let n = assets::misc::parse_nme(&data);
+                let s = p.display().to_string().replace('\\', "/");
+                assert!(
+                    n.consumed <= n.size,
+                    "nme overrun {} (consumed {} > {})",
+                    p.display(),
+                    n.consumed,
+                    n.size
+                );
+                let expect = if s.ends_with("ZONEA/MISSION1.NME") {
+                    16
+                } else {
+                    0
+                };
+                assert_eq!(n.orphan_tail, expect, "nme orphan tail {}", p.display());
+                assert_eq!(n.sections.len(), 8);
                 ok += 1;
             }
             "bdg" => {
@@ -474,5 +492,65 @@ fn corpus_free_fuzz_no_panics() {
     assert_eq!(
         AssetsError::WrongSize { len: 3 },
         AssetsError::WrongSize { len: 3 }
+    );
+}
+
+/// EXW 7j.18: the .nme loader schedule (FUN_00416458 — eight fixed-order
+/// count+records sections, widths 10/10/8/8/10/8/6/8) must consume EVERY
+/// shipped .nme file without overrun; only ZONEA/MISSION1.NME may keep an
+/// orphan tail (16 B the game never reads).
+#[test]
+fn nme_loader_schedule_is_corpus_exact() {
+    let root = corpus_root();
+    if !root.is_dir() {
+        eprintln!("corpus not found - skipping");
+        return;
+    }
+    let mut all = Vec::new();
+    walk_sorted(&root, &mut all);
+    let nmes: Vec<&PathBuf> = all.iter().filter(|p| ext_of(p) == "nme").collect();
+    assert!(
+        nmes.len() >= 30,
+        "expected >=30 .nme files, got {}",
+        nmes.len()
+    );
+    let mut nonempty = 0;
+    for p in &nmes {
+        let data = fs::read(p).expect("read nme");
+        let n = assets::misc::parse_nme(&data);
+        assert_eq!(n.sections.len(), 8, "{} sections", p.display());
+        assert!(
+            n.consumed <= n.size,
+            "nme overrun {} (consumed {} > {})",
+            p.display(),
+            n.consumed,
+            n.size
+        );
+        let s = p.display().to_string().replace('\\', "/");
+        let expect = if s.ends_with("ZONEA/MISSION1.NME") {
+            16
+        } else {
+            0
+        };
+        assert_eq!(n.orphan_tail, expect, "nme orphan tail {}", p.display());
+        if n.sections.iter().any(|sec| {
+            matches!(
+                sec,
+                assets::misc::NmeSection::Section { count, .. } if *count > 0
+            )
+        }) {
+            nonempty += 1;
+        }
+    }
+    eprintln!(
+        "nme schedule exact on {}/{} files (non-empty: {})",
+        nmes.len(),
+        nmes.len(),
+        nonempty
+    );
+    assert!(
+        nonempty >= 20,
+        "expected >=20 non-empty nme files, got {}",
+        nonempty
     );
 }

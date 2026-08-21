@@ -2,7 +2,7 @@
 //! name tables, .bdg badge/badge-art records, and the ascii-percentage
 //! helper for text files. (.MRW lives in music.rs with .MRS.)
 
-use crate::{hex_head, i16le, u16le, AssetsError};
+use crate::{hex_head, u16le, AssetsError};
 
 /// .min file: `n*16` bytes of per-tile color data. Kept raw (the only parsed
 /// fact is the size divisibility and the tile count).
@@ -68,20 +68,68 @@ pub fn parse_lnk_lng(data: &[u8]) -> Result<LnkRemap, AssetsError> {
     Ok(LnkRemap { entries })
 }
 
+/// One of the eight fixed .nme sections, in loader order — the read schedule
+/// of the EXW mission-load dispatcher FUN_00416458 (RE-EXW-SIM §7j.18):
+/// after staging ".NME" it reads exactly eight `u16 count + count*rec`
+/// sections; each feeds the critter bank 0x4cff98 (sections 1-7, one
+/// critter-ACTOR state each) or the POI/personnel bank 0x4dabdc (section 8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NmeSectionKind {
+    /// 10 B records: critter state 2 (sine-walk shooter). Fields:
+    /// w1 = spawn base (adds difficulty), w2 = mirror flag, w3/w4 = x/y tile.
+    Shooters,
+    /// 10 B records: critter state 1 (wander). w3/w4 = x/y tile; the loader
+    /// searches the DAT volume downward from z=6 for the standing level.
+    Wanderers,
+    /// 8 B records: critter state 5 (mixed-AI). w1 = probe level, w2/w3 = x/y.
+    MixedState5,
+    /// 8 B records: critter state 4 (mixed-AI seek steppers).
+    SeekSteppers,
+    /// 10 B records: critter state 3 (chase; stores home x/y).
+    Chasers,
+    /// 8 B records: critter state 6 (mixed-AI, ballistic).
+    BallisticState6,
+    /// 6 B records: critter state 7 (close combat). w1/w2 = x/y tile.
+    CloseCombat,
+    /// 8 B records: personnel/POI bank — spawns FOUR POIs per record (state 5
+    /// ESCAPE, flee to the exit slots). w1 = probe level, w2/w3 = x/y.
+    Personnel,
+}
+
+impl NmeSectionKind {
+    /// The loader order — also the order of `NmeFile::sections`.
+    pub const ALL: [NmeSectionKind; 8] = [
+        NmeSectionKind::Shooters,
+        NmeSectionKind::Wanderers,
+        NmeSectionKind::MixedState5,
+        NmeSectionKind::SeekSteppers,
+        NmeSectionKind::Chasers,
+        NmeSectionKind::BallisticState6,
+        NmeSectionKind::CloseCombat,
+        NmeSectionKind::Personnel,
+    ];
+
+    /// Record width in bytes, fixed per section position.
+    pub fn width(self) -> usize {
+        match self {
+            NmeSectionKind::Shooters | NmeSectionKind::Wanderers | NmeSectionKind::Chasers => 10,
+            NmeSectionKind::CloseCombat => 6,
+            _ => 8,
+        }
+    }
+}
+
 /// One walked .nme section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NmeSection {
-    /// Zero-count section that ends the file exactly.
-    Zero { sec: usize, at: usize },
-    /// Unparseable tail: neither 10-byte nor 8-byte records fit.
-    Tail { sec: usize, count: usize, at: usize },
-    /// Records section; `sample` holds up to 32 records as `i16` word vectors.
-    Records {
-        sec: usize,
-        count: usize,
-        rec: usize,
+    /// A section in the fixed schedule: `count` records of the kind's width;
+    /// `sample` holds up to 32 records as u16 word vectors (words past EOF
+    /// read as 0, mirroring the zero-filled staging buffer).
+    Section {
+        kind: NmeSectionKind,
         at: usize,
-        sample: Vec<Vec<i16>>,
+        count: usize,
+        sample: Vec<Vec<u16>>,
     },
 }
 
@@ -89,71 +137,58 @@ pub enum NmeSection {
 pub struct NmeFile {
     pub size: usize,
     pub sections: Vec<NmeSection>,
+    /// Bytes consumed by the 8-section schedule (can exceed `size` only if a
+    /// count overruns the file, which no shipped file does).
+    pub consumed: usize,
+    /// Bytes after section 8 that the game loader never reads
+    /// (ZONEA/MISSION1.NME carries 16 orphan bytes; the shipped corpus is
+    /// otherwise byte-exact).
+    pub orphan_tail: usize,
 }
 
-fn next_count_plausible(d: &[u8], p: usize) -> bool {
-    if p + 2 > d.len() {
-        return p == d.len();
-    }
-    let c = u16le(d, p) as usize;
-    c < 4000
-}
-
-/// Walk an .nme file as a sequence of `u16 count` + `count*rec` sections,
-/// with the 8street rec8/rec10 heuristic: prefer 10-byte records when the
-/// following section's count looks plausible, else 8-byte. Never fails; at
-/// most 16 sections are walked.
+/// Walk an .nme file with the EXW loader's exact fixed schedule: eight
+/// `u16 count + count*width` sections in the order of `NmeSectionKind::ALL`.
+/// Counts read past EOF are 0 (the staging buffer is zero-filled .bss), so
+/// the walk never fails.
 pub fn parse_nme(data: &[u8]) -> NmeFile {
     let mut p = 0usize;
-    let mut sections = Vec::new();
-    let mut sec = 0usize;
-    while p + 2 <= data.len() && sec < 16 {
-        let count = u16le(data, p) as usize;
-        if count == 0 && p + 2 == data.len() {
-            sections.push(NmeSection::Zero { sec, at: p });
-            break;
-        }
-        let rec10 = p + 2 + count * 10 <= data.len();
-        let rec8b = p + 2 + count * 8 <= data.len();
-        let chosen = if rec10 && rec8b {
-            if next_count_plausible(data, p + 2 + count * 10) {
-                10
-            } else {
-                8
-            }
-        } else if rec10 {
-            10
-        } else if rec8b {
-            8
+    let mut sections = Vec::with_capacity(8);
+    for kind in NmeSectionKind::ALL {
+        let w = kind.width();
+        let at = p;
+        let count = if p + 2 <= data.len() {
+            u16le(data, p) as usize
         } else {
             0
         };
-        if chosen == 0 {
-            sections.push(NmeSection::Tail { sec, count, at: p });
-            break;
-        }
+        p += 2;
         let mut sample = Vec::new();
         for i in 0..count.min(32) {
-            let b = p + 2 + i * chosen;
-            let mut words = Vec::new();
-            for k in 0..chosen / 2 {
-                words.push(i16le(data, b + k * 2));
+            let b = p + i * w;
+            let mut words = Vec::with_capacity(w / 2);
+            for k in 0..w / 2 {
+                let off = b + k * 2;
+                words.push(if off + 2 <= data.len() {
+                    u16le(data, off)
+                } else {
+                    0
+                });
             }
             sample.push(words);
         }
-        sections.push(NmeSection::Records {
-            sec,
+        p += count * w;
+        sections.push(NmeSection::Section {
+            kind,
+            at,
             count,
-            rec: chosen,
-            at: p,
             sample,
         });
-        p += 2 + count * chosen;
-        sec += 1;
     }
     NmeFile {
         size: data.len(),
         sections,
+        consumed: p,
+        orphan_tail: data.len().saturating_sub(p),
     }
 }
 
@@ -257,36 +292,60 @@ mod tests {
     }
 
     #[test]
-    fn nme_walks_rec10_then_zero() {
-        // section: count=1, 10-byte record, then zero count at exact end
-        let mut d = 1u16.to_le_bytes().to_vec();
-        d.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-        d.extend_from_slice(&0u16.to_le_bytes());
-        let n = parse_nme(&d);
-        assert_eq!(n.sections.len(), 2);
-        match &n.sections[0] {
-            NmeSection::Records {
-                count, rec, sample, ..
-            } => {
-                assert_eq!(*count, 1);
-                assert_eq!(*rec, 10);
-                assert_eq!(sample[0], vec![0x0201, 0x0403, 0x0605, 0x0807, 0x0A09]);
+    fn nme_fixed_schedule_consumes_exactly() {
+        // one record in each of the eight fixed sections (10/10/8/8/10/8/6/8)
+        let mut d = Vec::new();
+        for (i, kind) in NmeSectionKind::ALL.iter().enumerate() {
+            d.extend_from_slice(&(1u16 + i as u16).to_le_bytes()); // nonzero count
+            for _ in 0..(1 + i) {
+                d.extend(std::iter::repeat_n(0xA0 | i as u8, kind.width()));
             }
-            other => panic!("expected Records, got {other:?}"),
         }
-        assert!(matches!(n.sections[1], NmeSection::Zero { .. }));
+        let n = parse_nme(&d);
+        assert_eq!(n.sections.len(), 8);
+        assert_eq!(n.consumed, d.len());
+        assert_eq!(n.orphan_tail, 0);
+        for (i, sec) in n.sections.iter().enumerate() {
+            let NmeSection::Section {
+                kind,
+                count,
+                sample,
+                ..
+            } = sec;
+            assert_eq!(*kind, NmeSectionKind::ALL[i]);
+            assert_eq!(*count, 1 + i);
+            assert_eq!(sample.len(), 1 + i);
+            assert_eq!(sample[0].len(), kind.width() / 2);
+            let fill = (0xA0 | i as u8) as u16;
+            assert!(sample[0].iter().all(|w| *w == (fill << 8) | fill));
+        }
     }
 
     #[test]
-    fn nme_tail_when_nothing_fits() {
-        // count=5000: neither 5000*10 nor 5000*8 fits in 6 bytes
-        let d = (5000u16).to_le_bytes().to_vec();
+    fn nme_counts_past_eof_read_zero() {
+        // seven zero counts + an 8th section of 2 records, nothing more:
+        // the schedule stops cleanly at EOF (staging buffer reads as 0)
+        let mut d = vec![0u8; 14];
+        d.extend_from_slice(&2u16.to_le_bytes());
+        d.extend_from_slice(&[0x11; 16]);
         let n = parse_nme(&d);
-        assert_eq!(n.sections.len(), 1);
-        assert!(matches!(
-            n.sections[0],
-            NmeSection::Tail { count: 5000, .. }
-        ));
+        assert_eq!(n.consumed, d.len());
+        assert_eq!(n.orphan_tail, 0);
+        assert_eq!(n.sections.len(), 8);
+        let last = n.sections.last().unwrap();
+        let NmeSection::Section { kind, count, .. } = last;
+        assert_eq!(*kind, NmeSectionKind::Personnel);
+        assert_eq!(*count, 2);
+    }
+
+    #[test]
+    fn nme_orphan_tail_is_reported() {
+        // section 8 leaves unread trailing bytes
+        let mut d = vec![0u8; 16];
+        d.extend_from_slice(&[0xEE; 4]);
+        let n = parse_nme(&d);
+        assert_eq!(n.orphan_tail, 4);
+        assert_eq!(n.consumed, 16);
     }
 
     #[test]
