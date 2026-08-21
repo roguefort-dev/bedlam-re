@@ -1,3 +1,24 @@
+ - CLOSED 2026-08-22 (P4 7j.27 the DROPSHIP RING PRODUCERS
+   unit COMPLETE, worker e635cb76 claim 1, commit 2aa7cb7, D75,
+   docs-only; dump ghidra-project/exw-text-objdump.txt = full
+   .text objdump, no Ghidra run — one was already running): the
+   pod-descent family writer census COMPLETE (resets
+   FUN_0040cca0 0x40cd3d pods memset 0x150 + MissionShell
+   0x447a7e/0x447a8d; spawners FUN_0041faf0/FUN_0041fb4b/
+   FUN_0041fa51; animator FUN_0041fbb1; third writer
+   FUN_00412a98 0x412b60 = per-rescue exit-dwell reset);
+   +0x14 = the DROPSHIP.BIN img-group selector (7j.19 "toggle"
+   superseded — 0↔1 flicker phases 1-2, ramp 2..5 oscillating
+   4↔5 departing, x −= group·4); pod phase 2 = ONE tick =
+   robot RELEASE (state 6, payout 100·w@+0x94+5000); latch
+   0x46aed4 boot-clear GameMain 0x41c408 + gates MP respawn
+   0x40e7a1; 7j.26 "7×7 grid" CORRECTED to 7×5 (0x23 = 35 =
+   one group); the 0x4c71f4 pass head-decoded = projectile
+   mid-flight draw dispatch (+ 0x4cc654 sibling, states
+   0x65..0x69). 4 ledger rows updated + MISSIONVIEW §5e
+   corrected. Manifest verified. PUSHED 2aa7cb7. Next: the
+   projectile mid-flight draw family (7j.28), then the P4.2
+   harness design doc.
  - CLOSED 2026-08-22 (P4 7j.26 the MISSIONVIEW §5d DRAW TAILS
    unit COMPLETE, worker 7658328a claim 1, commits 753f0a2 +
    2d124e6 + d9bb40f, D74, docs-only; dump ghidra-project/

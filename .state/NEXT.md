@@ -1,23 +1,29 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4] The DROPSHIP RING PRODUCERS (7j.27) — the pod-descent
-   family: who writes the 7j.26-pinned ring records (12 × 0x1C
-   robot-indexed @0x4e64c0 + 6 × 0x1C standalone @0x4e6610..
-   0x4e66b8, {active d@+0, x d@+8, y d@+0xC, alt d@+0x10,
-   img-group d@+0x14}) and the pod-descent stagger state (the
-   7j.20 w@+0x2C = 1+k·(2000−m·1000/27) countdown). Bounded:
-   find writers of 0x4e64c0/0x4e6610/0x4e661c/0x4e6620/0x4e6624
-   words, decode the staging family head. Consumers + bank
-   (DROPSHIP.BIN, img = group*0x23 + 7·row+col over 7×7 0x40
-   grids) already landed (7j.26, MISSIONVIEW §5e). Needed by the
-   P4.2 harness (the first seconds of every mission have robots
-   frozen in pods). Bounded add-on if quick: the 0x4c71f4
-   state-machine pass (states <0x13, splash/screen-effect
-   sequences, sits between the platform and effects loops).
+1. [P4] The PROJECTILE MID-FLIGHT DRAW family (7j.28) — the last
+   undecoded consumer block of the FUN_00403938 render tail: the
+   type dispatch at 0x404141 (`ax = word@+0` of the 400×0x36
+   weapon-anim bank 0x4c71f4 → 5 shell @0x404187, 9..0xB
+   artillery @0x404567, 0xE mortar @0x40436e, 0xF/0x13 damped
+   @0x4042a3, 0x17 split, 0x24 rocket @0x40464e, 0x29 homing
+   @0x404916, generic 2..4/6..8/0xC..0x12 @0x40427a) + the
+   sibling 0x4cc654 50×0x22 walk (states 0x65..0x69 → jump table
+   0x403908) + the trail-ring draw consumer @0x404464 (the
+   0x4e66b8 bank link read — 7j.22/23 open item). Head already
+   landed (§7j.27 item 6, dump ghidra-project/exw-text-objdump.txt
+   has the full .text — objdump only, NO Ghidra needed while an
+   analyzeHeadless runs). Bounded: per-type draw bodies (sprite
+   banks + frame selection + the splash/screen-effect sequences)
+   and the 0x403908 jump-table bodies. Closes the render tail;
+   after it, queue the P4.2 differential-harness design doc (the
+   remaining backlog RE items are all corpus-off producers that
+   land naturally with the harness).
 
 ## Backlog (not yet started)
-- CLOSED by 7j.26: the [0x4ede24]/[0x4ede28] "7×7 screen-address
+- CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
+   animator map, 7×5 grid correction, latch census, the 0x4c71f4
+   pass head). CLOSED by 7j.26: the [0x4ede24]/[0x4ede28] "7×7 screen-address
   table" question — it is the terrain RESTAMP list (count + 3-dword
   {dest row, tile-x, tile-y} records, blitted via FUN_00401471;
   writer FUN_00440a2d = the scroll/camera restamp stager, confirming
@@ -29,10 +35,7 @@
   effect-entry map + the 160-vs-0xA8 stride anomaly + the
   .POS/.BDG loaders + the .BDG grammar (FORMATS §12/§16).
   OPEN small: projectile type 0x69 vs the FUN_00419aff
-  damage table (7j.17/7j.18 — low priority); the trail-ring
-  DRAW pass consuming the 0x4e66b8 bank (7j.22/7j.23:
-  FUN_00403938 reads the record link @0x404464 — bounded
-  decode when needed).
+  damage table (7j.17/7j.18 — low priority).
 - The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
   beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
   extraction-pad (zone,slot) pairs and §7j.21 the record
@@ -118,7 +121,8 @@
   last-write-wins read of the five rings. NOTE 7j.20: the harness
   must model the mission-start pod-descent stagger (w@+0x2C =
   1+k·(2000−m·1000/27)) — the first seconds of any mission have
-  the robots frozen in pods — and arm extraction via a scripted
+  the robots frozen in pods (7j.27: descent ≈41 frames, pod phase
+  2 = one tick, release = state 6) — and arm extraction via a scripted
   .PAD step-on, not a click. NOTE 7j.22: weapon fire needs
   injected COMMAND records (FUN_00449c94/0x4dd4a0) or order
   dispatch, not raw input — the fire family is fully anchored
@@ -141,6 +145,32 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4 7j.27 the DROPSHIP RING PRODUCERS unit COMPLETE
+  (worker e635cb76 claim 1, commit 2aa7cb7, D75, docs-only; dump
+  ghidra-project/exw-text-objdump.txt = full .text objdump
+  0x401000..0x460000, no Ghidra run — one was already running).
+  The pod-descent family writer census COMPLETE: resets
+  FUN_0040cca0 0x40cd3d (pods memset 0x150 every spawn) +
+  MissionShell 0x447a7e/0x447a8d (dropship/exits); spawners
+  FUN_0041faf0 (dropship {1,1,group 0,alt 0x200,beacon<<5}),
+  FUN_0041fb4b(idx) (pods {1,1,group 0,alt 0x400,robot>>8}, from
+  the w@+0x2C 0-hit in FUN_0040b9f6 + msgs 9/10/0xB), 7j.18's
+  FUN_0041fa51 (exits); animator FUN_0041fbb1 3-machine per-tick
+  write map decoded — +0x14 = the DROPSHIP.BIN IMG-GROUP selector
+  (7j.19 "toggle" superseded): 0↔1 flicker phases 1-2, ramps
+  2..5 oscillating 4↔5 in departure with x −= group·4, alt +=
+  (alt>>2)+1; pod phase 2 = ONE tick = robot RELEASE (state 6,
+  alive 1, payout 100·w@+0x94+5000, SFX 0x4edfe0). NEW third
+  writer FUN_00412a98 0x412b60 = per-rescue exit-dwell reset
+  (multi-POI elevators). Latch 0x46aed4: boot-clear GameMain
+  0x41c408 (NOT per-mission) + gates the MP respawn 0x40e7a1.
+  CORRECTION 7j.26: ring grid = 7 cols × 5 rows (0x23 = 35 = one
+  group), not 7×7; dropship sy −= beacon z word 0x4eabb8 (always
+  0, one no-op reader 0x4070c0). The 0x4c71f4 pass head-decoded =
+  projectile mid-flight draw dispatch + the 0x4cc654 50×0x22
+  sibling (states 0x65..0x69 → table 0x403908). 4 ledger rows
+  updated + MISSIONVIEW §5e corrected. Manifest verified. PUSHED
+  2aa7cb7. Queued: the projectile mid-flight draw family (7j.28).
 - 2026-08-22: P4 7j.26 the MISSIONVIEW §5d DRAW TAILS unit
   COMPLETE (worker 7658328a claim 1, commits 753f0a2 + 2d124e6
   + d9bb40f, D74, docs-only; dump ghidra-project/
@@ -164,12 +194,9 @@
   DANTE exact-consumption; DEBRIS 24/SMOKER 17/DROPSHIP 210
   imgs — MISSIONVIEW open item 4 RESOLVED, FORMATS §18
   cross-ref). BONUS: the three DROPSHIP ring passes recorded
-  (7×7 0x40-stride grids, img = group*0x23+7·row+col, bank
-  [0x4edd64] = DROPSHIP.BIN; producers open → 7j.27) + the
-  [0x4ede24/28] backlog "7×7 screen-address table" re-pinned
-  as the terrain RESTAMP list (FUN_00440a2d = the scroll/
-  camera restamp stager — hypothesis confirmed). 7 new + 2
-  rewritten ledger rows. Manifest verified. PUSHED d9bb40f.
+  (producers → 7j.27) + the [0x4ede24/28] backlog re-pinned
+  as the terrain RESTAMP list. 7 new + 2 rewritten ledger
+  rows. Manifest verified. PUSHED d9bb40f.
   Queued: the DROPSHIP ring producers (7j.27).
 - 2026-08-21: P4 7j.25 the WEAPON-FIRE FAMILY TAIL unit COMPLETE
   (worker 399aeff4 claim 1, commits 3bfd400 + 1016123 + b4950a8
@@ -180,90 +207,41 @@
   bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear
   (z·H+i)·W+j), then the FIVE-EFFECT loop over the type-table
   entries @+0x16+8m — selector word 1..9 → jump table
-  0x41a870 (idx sel−1): 1→k14+FUN_0041a225+5 splashes,
-  2/3/4/5→k18/k17/k16/k19 single gibs at sub-tile bearings
-  (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0),
-  6/7→k10+(+0x10,+0x20)/(+0x20,+0x10)+DEADMAN1/2 SFX (banks
-  0x4edfb8/0x4edfbc = SOUND\SFX\DEADMAN1/2.RAW, loader
-  0x43a29b, shared with the 7j.24 crush dispatcher),
-  8→k14×25 water-level demolition shower (RandA&7−3 jitter,
-  delay ctr+2m+i>>3), 9→k20+3×3 splash ring (delay
-  ctr+2+RandA&3); payload words = tile offsets off the
+  0x41a870 (idx sel−1); payload words = tile offsets off the
   0x46cbf4 record; stager stack = (delay, param=score|−1),
   callee ret 8. GER gate REFINED (skips the whole tail for
   type 0xb, record still dies). FUN_0041a225 = FIRST producer
-  of the MISSIONVIEW §5d effects bank 0x4cf638 (80×0x1E,
-  free-slot word@+0x18, allocator FUN_0041a4cc, jittered Q13
-  particles ttl 6000+). The 160-vs-0xA8 stride anomaly CLOSED
-  (21·idx·8 = 0xA8 canonical — 7j.13 census slip); trap-pair
-  callers pinned (robots()@0x40bc44 + critter FUN_00412f34@
-  0x413fd7). BONUS: FUN_0041a4f8 = the .POS loader (2000×0x10
-  → the 0x46cbf4 object array) + the .BDG loader (the
-  0x4dedf2 type table) — .BDG grammar CLOSED (no header, ≤282
-  variable records, 4 on-disk template banks; census 37/37
-  EOF-exact, exactly 282 recs/file, selectors ONLY 1..9
-  ×11098/1490/1385/402/330/304/316/178/56); FORMATS §12/§16/
-  §19 rewritten. 4 new + 2 rewritten ledger rows. Manifest
-  verified. PUSHED 6183be5. Queued: the MISSIONVIEW §5d draw
-  tails (7j.26).
+  of the MISSIONVIEW §5d effects bank 0x4cf638. The
+  160-vs-0xA8 stride anomaly CLOSED (21·idx·8 = 0xA8 canonical
+  — 7j.13 census slip). BONUS: FUN_0041a4f8 = the .POS loader
+  (2000×0x10 → the 0x46cbf4 object array) + the .BDG loader
+  (the 0x4dedf2 type table) — .BDG grammar CLOSED; FORMATS
+  §12/§16/§19 rewritten. 4 new + 2 rewritten ledger rows.
+  Manifest verified. PUSHED 6183be5. Queued: 7j.26.
 - 2026-08-21: P4 7j.24 the CRITTER DEATH-HANDLER family unit
   COMPLETE (worker 0f986419 claim 1, commit 3819586, D72,
-  docs-only; dumps ghidra-project/exw-dead1..5*.txt — 1..3
-  adopted from predecessor ad591680's session tail, 4/5 +
-  objdump spot-checks this unit). The six per-kind handlers
-  decoded: k1 FUN_00418835 (state 7+presence 0, 1× k1 debris,
-  +30), k2 FUN_004188d0 (state 7+presence 0, 1× k0xD, +50),
-  k3 FUN_00418aa6 (1× k7 + 3× k6 delays 0/2/4 + SFX trio
-  FUN_00421f4c, +500, tail call = NOP stub FUN_00418a9f), k4
-  FUN_00418ca4(+weapon) (w@+0x02 := 1, hp 0, state 6, timer 6,
-  1× k7; weapon {0x24,0x29,0xC} → 3× k7 + 8 rows, +75), k5/6
-  FUN_00418e26(+weapon) (sub-timer 0; weapon-gated 3× k7 + 12
-  rows, +150), k7 FUN_0041896c (3 falling gibs + 1× k0xD, SFX
-  FUN_0043a48e(0x4edff8,…,3), w@+0x78 := 1, +1000). BOUNTY
-  GATE: attacker ≠ −1 ∧ robot[killer].type == [0x4edb90] →
-  score [0x4dd40c] += N + DAT_0046ccf0 := 2 (score-strip
-  refresh). SECOND DISPATCHER: FUN_0040dce0 = debris crush
-  (sole caller FUN_0040de9c; k4 weapon 0, k5/6 weapon 0x24,
-  k5/6 state {5,6} absorbed; knock via FUN_00412998 +
-  FUN_0041e9a2). FUN_0041a14f/FUN_0041a494 = the 0x4cec38
-  effect-row spawner + age-LRU allocator (w@+0 = AGE word —
-  7j.23 gloss corrected). 7j.17 CORRECTED: death handlers
-  never call FUN_00424355 (splashes = controller landing/
-  suicide paths only). ADDENDUM: FUN_0040e230 SP tail
-  CONFIRMED + MP respawn completed (suicide gate/clamps, MRK
-  reposition, 7-slot weapon + 2-entry equipment re-copy);
-  FUN_0042382c = FIRST producer of the 0x4eb638 platform bank
-  (claim-byte gated, 32×0x14, LRU). 8 new + 2 rewritten
-  ledger rows. Manifest verified. PUSHED 3819586.
-  Queued: the weapon-fire family TAIL (7j.25).
+  docs-only; dumps ghidra-project/exw-dead1..5*.txt). The six
+  per-kind handlers decoded (k1 FUN_00418835 .. k7
+  FUN_0041896c); BOUNTY GATE (killer robot type == [0x4edb90]
+  → score += 30/50/500/75/150/1000); SECOND DISPATCHER
+  FUN_0040dce0 = debris crush (via physics tick FUN_0040de9c);
+  FUN_0041a14f/FUN_0041a494 = the 0x4cec38 effect-row spawner
+  + age-LRU allocator; 7j.17 CORRECTED (death handlers never
+  call FUN_00424355); FUN_0040e230 SP tail CONFIRMED + MP
+  respawn completed; FUN_0042382c = FIRST producer of the
+  0x4eb638 platform bank. 8 new + 2 rewritten ledger rows.
+  Manifest verified. PUSHED 3819586. Queued: 7j.25.
 - 2026-08-21: P4 7j.23 the ACTOR HIT APPLIERS unit COMPLETE
   (worker ad591680 claim 1, commit 45329e9, D71, docs-only;
-  4 × -process runs, dumps ghidra-project/exw-hitters{,2,3,4}
-  *.txt + exw-hitters-scan.txt via the NEW StoreScan.java
-  operand scanner). FUN_004190bc = the CRITTER hit applier:
-  presence w@+0x24, KIND switch w@+0x00 (the 7j.18 .NME
-  section states {2,1,5,4,3,6,7} = cases 1..7), attacker
-  w@+0x04, hp s16 w@+0x06, state w@+0x0C (6/7/0xB immune for
-  k3..7), hit-flash w@+0x7C, impact x/y +0x1C/+0x20; mode 2 =
-  octile<0x20 + z-box (k1/4 cell-unit coords, others Q13; z
-  0x20, k3 0x24, k7 0x40), mode 1 = x/y only; damage =
-  FUN_00419aff(weapon) — the 7j.22 "per-critter" gloss
-  CORRECTED (per-WEAPON); 6 per-kind death handlers
-  (FUN_00418835/d0/aa6/ca4/e26/96c); k4/5/6 survivors 25%
-  knockback FUN_0041a028 (2nd spawner of the 0x4cec38 effect
-  rows, heading away-from-shooter ±jitter) + impact SFX
-  FUN_00421fc2 (RandB%3 → banks 0x4edf7c/80/84); k7 does its
-  own in-record knock (vx/vy w@+0x74/+0x76). FUN_0041ebf8 =
-  octile distance. FUN_00418fca = robot box-test applier (|dx|
-  |dy|<0x20, |dz|<0x30) → FUN_0040e230 [head-decoded: shield
-  d@+0x88 absorb, hp d@+0x78, alarm d@+0xA4→SFX 0x10..12,
-  tier SFX 0x2B/0x13/0x16 per 5000+100·variant, MP frags
-  0x4ebaa8 0xC-stride] + hp clamp. TRAIL ALLOCATOR CLOSED:
-  FUN_00412a4a (20 slots @0x4e66b8, first active==0), writer
-  FUN_0040a9ff (mortar spawner: slot weapon w@+0x36+8k==0xE →
-  link := slot, active := 1, ring zeroed; else link := 0;
-  ballistics /8-unit ×2 at the order target, ttl 0x32, arc
-  0x500). Third caller of the critter applier found
-  (FUN_00403938, weapon 0xC=5000 blast, owner −1). 7 new +
-  2 rewritten ledger rows. Manifest verified. PUSHED 45329e9.
-  Queued: the critter death-handler family (7j.24).
+  dumps ghidra-project/exw-hitters{,2,3,4}*.txt + the NEW
+  StoreScan.java operand scanner). FUN_004190bc = the CRITTER
+  hit applier (kind switch w@+0x00, damage =
+  FUN_00419aff(weapon) per-WEAPON, 6 per-kind death handlers,
+  25% knockback FUN_0041a028 + impact SFX FUN_00421fc2);
+  FUN_00418fca = robot box-test applier → FUN_0040e230;
+  TRAIL ALLOCATOR CLOSED (FUN_00412a4a 20 slots, writer
+  FUN_0040a9ff mortar spawner, link/active/ring-zero
+  protocol); third critter-applier caller found
+  (FUN_00403938 weapon 0xC=5000 blast, owner −1). 7 new + 2
+  rewritten ledger rows. Manifest verified. PUSHED 45329e9.
+  Queued: 7j.24.
