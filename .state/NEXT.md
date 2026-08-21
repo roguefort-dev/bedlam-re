@@ -1,23 +1,22 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/W1] EXD IMPORT + THE EXW->EXD ADDRESS MAP (first ticket of the
-   DESIGN-DIFFHARNESS.md build order, docs/DECISIONS.md D77): import
-   game-data/BEDLAM/BEDLAM.EXD into the BedlamWatcom Ghidra project
-   (LE/DOS4GW class like B2 — check `pgrep -f analyzeHeadless` AND the
-   target log for a prior `Import succeeded` before any import; if one
-   is running, work objdump-only from ghidra-project/ dumps instead),
-   pin the EXD present/frame-tail site (the S0 frame trigger — the
-   MissionShell loop-tail analog; EXW anchors: PresentEnd@0x425a03 +
-   g_frame_count++@0x46ae68), and build the address map for the
-   DESIGN-DIFFHARNESS.md T0/T1 watch rows (anchor by string refs +
-   call-shape + pinned constants; every mapped row gets dual anchors;
-   every EXW<->EXD mismatch found -> docs/DIVERGENCES.md seed).
-   Deliverable: docs/RE-EXD-MAP.md (T0/T1 rows mapped, confidence
-   tagged) + the frame-tail site pinned. Bounded: T0 + T1 rows ONLY
-   (robot bank, selection, orders/beacon/claims, tile word grid,
-   platform bank, type-DB mirror rows, object/TRT arrays, scalars);
-   T2-T4 aliasing stays a later unit.
+1. [P4.2/W2] WATCH REGISTRY (second ticket of the DESIGN-DIFFHARNESS.md
+   build order, docs/DECISIONS.md D77): commit the DESIGN §4 watch set
+   as data at tools/diffharness/watches.toml — per row: id, exw_addr,
+   exd_addr, extent, layout ref, tier, anchor ref (ledger row heading).
+   Fill exd_addr from docs/RE-EXD-MAP.md §4/§5/§5b (T0/T1 rows mapped
+   2026-08-22; carry the `indirect` flag for the pointer-cell rows:
+   object bank *(0x119584), TOT/DAT/CGR/BIN/MIN volumes, claim bank
+   *(0x119564); leave exd_addr empty for the 6 tagged gaps — difficulty,
+   SFX gate, blink-cursor, order target, no-extract latch, selection
+   cursor/squad — the schema makes gaps explicit, never guess). Include
+   the S0 trigger row (EXD 0x5a6eb / EXW PresentEnd tail) + the
+   static-after-load one-shot rows (§5b). Add the validation test
+   asserting every anchor string resolves to a ledger row heading
+   (mechanical anti-ghost guard, same spirit as the B2
+   ghost-fabrication lesson). Bounded: registry + test ONLY; T2-T4 rows
+   stay exd-empty; W3 schema is a later unit.
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -148,6 +147,36 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W1 the EXD IMPORT + EXW->EXD ADDRESS MAP unit COMPLETE
+  (worker d06341cf claim 1, commits 350b53a + 10aea57 + f6e067a + 8447ba7,
+  docs + 8 Ghidra probe scripts). BEDLAM.EXD imported ONCE into
+  BedlamWatcom (LeLoader, x86:LE:32:default + openwatcomcpp; object1
+  0x10000-0x72800 23225 fixups, object2 0x80000-0x12583e, entry 0x5fbb0;
+  analysis green; manifest verified before AND after). 8 probe passes
+  (-process BEDLAM.EXD -noanalysis, never re-imported; dumps
+  ghidra-project/exd-probe*.txt). HEADLINES: MissionShell = FUN_000596ed
+  (mission load chain in EXW order; robots x6 FUN_0001c7dc(i,i+1); enemy
+  x4; P-pause spin key 0x19); S0 DUMP POINT = instruction 0x5a6eb (CALL
+  PresentFlip FUN_00010670, counter [0x1195f0]++ @0x5a6f0-fd after the
+  flip — EXW tail order exact); PresentFlip = FUN_00010670 (339 B = B2
+  twin exact). T0/T1 + static-after-load aliases ALL mapped in
+  docs/RE-EXD-MAP.md with dual anchors: RNG A/B 0x107470/0x107474, score
+  0x10da28, money 0x119600, zone 0x107500, mission+linear-m 0x119610
+  (TRT-hp + pod-stagger formulas byte-exact), mode 0x1075d8, frame
+  counter 0x1195f0; robot bank 0xf6d34/count 0x11958c (stagger w@+0x2C
+  formula exact), selected idx 0x11954c, per-player anchor 0x971a4,
+  move-target arrays 0xf75ec/0xf761c, beacon family 0x119628-0x119630,
+  claims 0x119632, tile grid 0xfe37c, platform bank 0xf93cc, type-DB
+  mirror 0xac1e4, object bank *(0x119584) + count 0x119554, TRT array
+  0x95264 + count 0x11949c, type table 0x108428 (stride 0x4E/282
+  recs/banks +0x3E-4A — EXW layout byte-exact), all volume pointer
+  cells + PAD 0xf63c + LNK 0x10336c + map w/h 0x1074b8/0x10748c, order
+  table 0x91ee4, player type 0x1075c0, dither 0x8ded4. 5 divergence
+  seeds logged (robot-front x/y shifted -4; EXD's 3 merged monoliths;
+  single mission scalar for EXW's two; indirect pointer-cell banks;
+  /KARMA switch). 6 explicit gaps tagged with anchor methods
+  (difficulty, SFX gate, blink-cursor, order target, no-extract latch,
+  selection cursor/squad). PUSHED 8447ba7. Queued: W2 (watch registry).
 - 2026-08-22: P4.2 the DIFFERENTIAL-HARNESS DESIGN DOC unit COMPLETE
   (worker 4d7b9a5b claim 1, commit 7bc2c9d, D77, docs-only; no engine
   change, no Ghidra run needed). docs/DESIGN-DIFFHARNESS.md written:

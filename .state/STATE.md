@@ -1,3 +1,25 @@
+ - CLOSED 2026-08-22 (P4.2/W1 the EXD IMPORT + EXW->EXD ADDRESS MAP
+   unit COMPLETE, worker d06341cf claim 1, commits 350b53a + 10aea57 +
+   f6e067a + 8447ba7): BEDLAM.EXD imported ONCE into BedlamWatcom
+   (LeLoader LE/DOS4GW, x86:LE:32:default + openwatcomcpp, analysis
+   green, manifest verified both sides). 8 bounded probe passes
+   (-process BEDLAM.EXD -noanalysis; dumps ghidra-project/
+   exd-probe{,2..8}.txt; scripts tools/ghidra-scripts/EXDProbe*.java).
+   docs/RE-EXD-MAP.md = the W1 deliverable: MissionShell = FUN_000596ed,
+   S0 dump point = 0x5a6eb (flip FUN_00010670, frame counter
+   [0x1195f0]++ after — EXW order exact), PresentFlip/WaitVRetrace/
+   VESA/PIT/RNG-stepper twins pinned; T0/T1 + static-after-load rows
+   all dual-anchored (robot bank 0xf6d34/count 0x11958c with the
+   stagger formula byte-exact, tile grid 0xfe37c, type table 0x108428
+   layout-exact, TRT 0x95264, beacon family 0x119628-32, money
+   0x119600, mission 0x119610, zone 0x107500, mode 0x1075d8, RNG
+   0x107470/74, score 0x10da28, order table 0x91ee4, volume pointer
+   cells, PAD 0xf63c); 5 divergence seeds (robot-front shift, merged
+   monoliths, single mission scalar, indirect banks, /KARMA); 6 tagged
+   gaps with anchor methods (difficulty, SFX gate, blink-cursor, order
+   target, no-extract latch, selection cursor/squad). PUSHED 8447ba7.
+   Next P4.2 head: W2 (watch registry tools/diffharness/watches.toml +
+   the anti-ghost anchor-resolution test).
  - CLOSED 2026-08-22 (P4.2 the DIFFERENTIAL-HARNESS DESIGN DOC unit
    COMPLETE, worker 4d7b9a5b claim 1, commit 7bc2c9d, D77, docs-only;
    no engine change): docs/DESIGN-DIFFHARNESS.md landed - the P4.2
