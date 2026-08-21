@@ -23,6 +23,7 @@
 pub mod blit;
 pub mod compose;
 pub mod frame;
+pub mod map_overlay;
 pub mod mission_view;
 pub mod ui_bank;
 

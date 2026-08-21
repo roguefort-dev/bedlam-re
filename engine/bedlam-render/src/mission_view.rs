@@ -357,6 +357,18 @@ impl MissionView {
         self.lnk[w as usize]
     }
 
+    /// The map-overlay word consume [RE-EXW-SIM 7e.1c, asm
+    /// 0x408aa1..0x408ab5]: read the mirror word at `(tile, z)`,
+    /// advance it one LNK step, memoize it back (the same
+    /// destructive walk `draw_terrain` does), and return the new
+    /// word — 0 means "no stamp".
+    pub fn overlay_word_step(&mut self, tile: usize, z: usize) -> u16 {
+        let i = 8 * tile + z;
+        let cw = self.lnk[self.words[i] as usize];
+        self.words[i] = cw;
+        cw
+    }
+
     /// Stage the entity bank (`GAMEGFX\DANTE.BIN` bytes) [the
     /// FUN_0041df10 staging seam; unstaged ⇒ entity flushes draw
     /// nothing].
