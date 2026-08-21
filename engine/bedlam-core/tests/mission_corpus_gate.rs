@@ -158,21 +158,26 @@ fn zonea_mission1_loader_spawn_walk_hash_pinned() {
     // 1/8-tile strides — the EXW frame cadence on real terrain).
     let n = trace.len();
     assert_eq!(frames, 7, "EXW cadence: 6x 1/8-tile sub-ticks per frame");
+    eprintln!(
+        "corpus pins: post-spawn {:016x} post-arm {:016x} arrival {:016x}",
+        trace[0],
+        trace[1],
+        trace[n - 1]
+    );
+    // Sim pins RE-PINNED ONCE 2026-08-21 (the damage unit, D52
+    // follow-up): the state hash now covers the Robot damage fields
+    // (hp/armor/hit_flash/alarm/kind/shield family — spawn hp 5000
+    // is the only nonzero new value, so every downstream pin moves
+    // while the FRAME pins stay put).
     assert_eq!(
         format!("{:016x}", trace[0]),
-        "36ddc86345c8351c",
+        "1cc7b8e125165988",
         "post-spawn"
     );
-    assert_eq!(format!("{:016x}", trace[1]), "b19ef94c372750c0", "post-arm");
+    assert_eq!(format!("{:016x}", trace[1]), "5b9c2fd5d85f9adc", "post-arm");
     assert_eq!(
         format!("{:016x}", trace[n - 1]),
-        "4073faae1c72d8d4",
-        "arrival"
-    );
-    assert_eq!(format!("{:016x}", trace[1]), "b19ef94c372750c0", "post-arm");
-    assert_eq!(
-        format!("{:016x}", trace[n - 1]),
-        "4073faae1c72d8d4",
+        "d8eeb3e608af0be4",
         "arrival"
     );
     let (trace2, frames2) = scripted_walk(&dat, &pad, &cgr, &sintable);

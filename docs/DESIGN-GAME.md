@@ -253,10 +253,11 @@ palette with the mission — fetch set 10 files.
   not, at (0x1E7+0x32·slot, 5), gated by squad size + alive + hp
   ≥ 1) every present; the FUN_0040807f HP/armor BARS every present
   (hp 0x18..0x46 denominating 5000 @ (0x1E8+0x32k, 0x3C), armor
-  0x60..0x8E denominating 2500 @ (slot_x, 0x49), over host-staged
-  vitals D52 — hp = 5000 + 100·battery from the BATTERY PACK
-  group, armor 0; the damage path is decoded but NOT landed, so
-  the vitals stay presentation state and the sim pins hold); the
+  0x60..0x8E denominating 2500 @ (slot_x, 0x49), over the SIM
+  robot fields — D53: hp/armor are hash-covered sim state (spawn
+  hp = 5000 + 100·battery via set_battery, armor 0), the
+  FUN_0040e230 damage core + the armor pad charge/bleed + the
+  shield family landed in the sim; the bars read them directly);
   FUN_004085ce score STRIP on its own countdown (icon 0xA + nine
   score digits, icon 0xB + six money digits, campaign session
   state 0/4000 fresh, the case-4 pickup producer seam with two

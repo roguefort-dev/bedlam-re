@@ -522,8 +522,12 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // SCENE-composed frames — host pipeline + fixed spawn camera +
     // one render per pump). Regenerated ONCE per presentation unit
     // (GAMEPAL, sidebar art, the codec fix, the faithful empty
-    // loadout, and the bars + score strip unit - see the header);
-    // the sim pins did not move across any of them.
+    // loadout, and the bars + score strip unit - see the header).
+    // Sim pins RE-PINNED ONCE 2026-08-21 (the damage unit, D52
+    // follow-up): the state hash now covers the Robot damage fields
+    // (hp/armor/hit_flash/alarm/kind/shield family — spawn hp 5000
+    // is the only nonzero new value, so the sim pins move while the
+    // FRAME pins stay put: the bars draw the same 5000/0 values).
     assert_eq!(
         format!("{spawn_frame:016x}"),
         "9ecd7691d388bbfa",
@@ -531,12 +535,12 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{spawn_sim:016x}"),
-        "36ddc86345c8351c",
+        "1cc7b8e125165988",
         "sim state hash at the spawn moment"
     );
     assert_eq!(
         format!("{click_sim:016x}"),
-        "f35db41f0efb858d",
+        "0bf4fb534d6b3bd5",
         "sim state hash after the click arm"
     );
     assert_eq!(
@@ -558,7 +562,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{overlay_sim:016x}"),
-        "64ef1ddbc65cba47",
+        "78a16ba63607d197",
         "sim state hash at the overlay moment"
     );
 
@@ -567,8 +571,10 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // real SMLFONT glyphs (FUN_00408403 + FUN_00420260, RE 7d.5).
     // Structural pins: the rows band now carries chrome, the name
     // column carries color-0x24 text pixels, and the sim hash at the
-    // spawn moment is IDENTICAL to the default run (the loadout is
-    // presentation-only state, D17/D51).
+    // spawn moment is IDENTICAL to the default run (this loadout has
+    // NO battery group: set_battery(0, 0) rewrites the spawn
+    // defaults, so the hash does not move — a BATTERY PACK group
+    // would land hp through the sim, D52 follow-up).
     let (armed_frame, armed_sim, _, _, _, _, _) = scripted_run(&files, Some(&loadout));
     eprintln!("armed pins: spawn_frame {armed_frame:016x} spawn_sim {armed_sim:016x}");
     {
@@ -641,7 +647,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         assert_eq!(
             mission.state_hash().0,
             spawn_sim,
-            "the loadout never reaches the sim hash"
+            "this battery-less loadout leaves the sim hash at the spawn defaults"
         );
     }
     assert_eq!(

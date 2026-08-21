@@ -420,6 +420,53 @@ pub struct Robot {
     /// is `phase < 4 || phase*32 < drop_countdown` [verified
     /// expression; offset label corrected 2026-08-21, sec 6c.7].
     pub drop_countdown: i32,
+    /// HP (+0x78): spawn `5000 + 100*battery` (the dropship-landing
+    /// init, RE-EXW-SIM 7f.8); damage subtracts here behind the
+    /// shield gate (FUN_0040e230, 7g.1); `< 1` is the death gate.
+    pub hp: i32,
+    /// Armor word (+0x30): the pad-charged shield that bleeds 10 per
+    /// phase-1 pass off-pad (7g.3), charges +20 on pads behind the
+    /// +0x98 pool (7g.4), clamps [0, 3000]; the bar denominates 2500.
+    pub armor: i16,
+    /// Hit-flash word (+0x2E): damage bumps it (before the hp write,
+    /// 7g.1); the portrait pass clamps to 5 then decrements per
+    /// frame while the robot is alive with hp ≥ 1 (7g.8).
+    pub hit_flash: u16,
+    /// Under-attack alarm word (+0x34): set 100 when the +0xA4
+    /// accumulator trips (7g.1), decays 1/frame in the phase-0
+    /// pre-walk (7g.2).
+    pub alarm: u16,
+    /// Alarm accumulator (+0xA4): +3 per damaging hit while the alarm
+    /// word is 0; `> 100` on a player-type robot trips the alarm and
+    /// resets this to 0 (7g.1).
+    pub alarm_ctr: i32,
+    /// Shield pool (+0x88): absorbs damage before hp (`max(0, s-d)`),
+    /// decays 2 per frame, set 0x20 by the ordered/auto-shield
+    /// conversions and 10000/150 by the +0xA0 booster (7g.1/7g.2).
+    pub shield: i32,
+    /// Auto-shield charges (+0x8C): equipment stat 0x2A; a damaging
+    /// hit with charges > 0 and shield == 0 spends one charge for a
+    /// 0x20 shield instead of taking damage (7g.1).
+    pub shield_charges: i32,
+    /// Shield booster countdown (+0xA0): pickup case 7 arms 200;
+    /// while nonzero the pool is forced 10000 and on expiry set 150
+    /// (7g.2).
+    pub shield_boost: i32,
+    /// Battery stat (+0x94): equipment stat 0x2B; the landing HP
+    /// formula is `5000 + 100*battery` (7f.8).
+    pub battery: i32,
+    /// Armor-charge pool (+0x98): equipment stat 0x2C × 200; a pad
+    /// pass drains it by the charge amount BEFORE armor charges
+    /// (FUN_004100b7, 7g.4 — mechanics verified, design intent
+    /// unclear).
+    pub armor_pool: i32,
+    /// Robot TYPE word (+0x2A): 0 = the player type in SP
+    /// (`[0x4edb90]` = 0, GameMain 0x41c34c); gates the alarm trip
+    /// and the case-4 pickup.
+    pub kind: u16,
+    /// Death flag (+0x9C): set 1 by the SP death subset (7g.6);
+    /// readers not yet census'd.
+    pub death_flag: u16,
 }
 
 impl Robot {
@@ -446,6 +493,37 @@ pub struct Order {
     pub claims: [bool; 12],
 }
 
+/// What [`MissionSim::apply_damage`] did — the presentation half of
+/// FUN_0040e230 the host stages (7g.6): `died` drives the sidebar
+/// redraw countdown (`DAT_0046ccec = 3`) + the death SFX family, and
+/// the five debris rows are the FUN_00420608 staging inputs
+/// (x, y in Q5, z, the phase param) exactly as computed in EXW.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DamageOutcome {
+    /// The hit passed the gates (not dead/state-2).
+    pub applied: bool,
+    /// The robot died this hit (the SP subset ran).
+    pub died: bool,
+    /// The five debris staging rows `(x_q5, y_q5, z, phase_param)`.
+    pub debris: [(i32, i32, i32, i32); 5],
+}
+
+/// Shield tick granted by the ordered/auto-shield conversions
+/// (+0x88 = 0x20, 7g.1).
+pub const SHIELD_TICK: i32 = 0x20;
+/// Shield decay per frame in the phase-0 pre-walk (7g.2).
+pub const SHIELD_DECAY: i32 = 2;
+/// The pool override while the +0xA0 booster counts down (7g.2).
+pub const SHIELD_BOOST_POOL: i32 = 10_000;
+/// The pool left when the booster expires (7g.2).
+pub const SHIELD_BOOST_LEFTOVER: i32 = 150;
+/// Armor clamp on pad charges (FUN_004100b7, 7g.4).
+pub const ARMOR_MAX: i16 = 0xBB8;
+/// Armor bleed per phase-1 pass off-pad (7g.3).
+pub const ARMOR_BLEED: i16 = 10;
+/// Armor charge per phase-1 pad pass (robots() 0x40bc72, 7g.3).
+pub const ARMOR_CHARGE: i32 = 0x14;
+
 /// The mission simulation slice: terrain + robots + one pending order.
 ///
 /// Driven by [`MissionSim::advance_frame`], which mirrors one
@@ -460,18 +538,31 @@ pub struct MissionSim {
     angles: AngleTable,
     rng: Pcg32,
     frame: u64,
+    /// Per-tile armor-pad bytes — the +0x18 byte of the per-tile
+    /// 0x1E record at 0x4796bc (7g.3): nonzero = pad. Producers are
+    /// MISSIONVIEW §8.1-open and the zero-fill leaves them 0 on
+    /// ZONEA, so the default (empty = all zero) bleeds armor exactly
+    /// like the shipped corpus; the host stages real bytes through
+    /// [`MissionSim::set_armor_pads`] when the producer is decoded.
+    /// Derived mission data — hashed only through its armor effect.
+    armor_pads: Vec<u8>,
+    /// The player TYPE word ([0x4edb90]): 0 in all SP games
+    /// (GameMain 0x41c34c) — gates the alarm trip + case-4 pickup.
+    player_type: u16,
 }
 
 impl MissionSim {
     /// Create with terrain, the angle table, and a PRNG seed.
     pub fn new(terrain: Terrain, angles: AngleTable, seed: u64) -> Self {
         MissionSim {
-            terrain,
             robots: Vec::new(),
             order: None,
             angles,
             rng: Pcg32::new(seed, STREAM_MISSION),
             frame: 0,
+            armor_pads: Vec::new(),
+            player_type: 0,
+            terrain,
         }
     }
 
@@ -506,12 +597,139 @@ impl MissionSim {
         self.rng.next_u32()
     }
 
+    /// Stage the battery stat (+0x94) — the equipment stats-copy
+    /// switch case 0x2B seam [7g.4]: writes the stat and re-runs the
+    /// dropship-landing HP init `5000 + 100*battery` (7f.8). Staging
+    /// models the pre-mission shop point, exactly like the D52
+    /// host-side landing did.
+    pub fn set_battery(&mut self, idx: usize, battery: i32) {
+        let Some(r) = self.robots.get_mut(idx) else {
+            return;
+        };
+        r.battery = battery;
+        r.hp = 5000 + 100 * battery;
+    }
+
+    /// Stage the per-tile armor-pad bytes (the per-tile 0x1E record
+    /// +0x18 mirror, 7g.3): linear tile order (`y*width + x`),
+    /// shorter arrays read as zero-padded (the all-zero default).
+    pub fn set_armor_pads(&mut self, pads: &[u8]) {
+        self.armor_pads = pads.to_vec();
+    }
+
+    /// The armor pad byte for a linear tile (record +0x18, 7g.3):
+    /// zero when unstaged/out of range — the shipped ZONEA corpus
+    /// leaves every pad byte 0 (MISSIONVIEW §8.1 open producer).
+    fn armor_pad_byte(&self, tile: usize) -> u8 {
+        self.armor_pads.get(tile).copied().unwrap_or(0)
+    }
+
+    /// Apply damage to robot `idx` — the SP core of
+    /// FUN_0040e230@0x40e230 [RE-EXW-SIM 7f.5 + 7g.1/7g.6, verified
+    /// decompile + asm]. Gates: `state == 2` and `!alive` return
+    /// untouched. `state == 3` (ordered) converts the hit into a
+    /// shield tick `shield = 0x20` and returns. A live auto-shield
+    /// (`shield_charges > 0 && shield == 0`) spends a charge for the
+    /// 0x20 shield instead. Otherwise the damage path: the alarm
+    /// accumulator (+3 while the alarm word is 0, trip at > 100 on a
+    /// player-type robot → alarm 100, accumulator 0), then `shield >
+    /// 0` absorbs (`max(0, s-d)`) else `hit_flash += 1` BEFORE
+    /// `hp -= damage`. `hp < 1` runs the SP death subset: alive/hp/
+    /// drop cleared, death flag set, armor zeroed, and five debris
+    /// staged from the SHARED stream (2 RandA draws each — y jitter
+    /// first, then x — moving the sim hash exactly like the
+    /// original). The SFX/FUN_0042382c/`DAT_0046ccec = 3` sidebar
+    /// redraw signal and the debris sprite staging are presentation —
+    /// the host reads them off [`DamageOutcome`]. The MP kill
+    /// bookkeeping + respawn branch is out of model (SP sim).
+    pub fn apply_damage(&mut self, idx: usize, damage: i32, killer: i32) -> DamageOutcome {
+        let mut out = DamageOutcome {
+            applied: false,
+            died: false,
+            debris: [(0, 0, 0, 0); 5],
+        };
+        let (state, alive) = {
+            let Some(r) = self.robots.get(idx) else {
+                return out;
+            };
+            (r.state, r.alive)
+        };
+        if !alive || state == 2 {
+            return out;
+        }
+        out.applied = true;
+        if state == STATE_ORDERED {
+            // The ordered conversion: damage becomes a shield tick.
+            self.robots[idx].shield = 0x20;
+            return out;
+        }
+        if self.robots[idx].shield_charges != 0 && self.robots[idx].shield == 0 {
+            // The auto-shield idle: spend a charge, raise 0x20.
+            self.robots[idx].shield_charges -= 1;
+            self.robots[idx].shield = 0x20;
+            return out;
+        }
+        // The damage path: alarm first, then the absorb/subtract.
+        if self.robots[idx].alarm == 0 {
+            self.robots[idx].alarm_ctr += 3;
+        }
+        if self.robots[idx].alarm_ctr > 100 && self.robots[idx].kind == self.player_type {
+            self.robots[idx].alarm = 100;
+            self.robots[idx].alarm_ctr = 0;
+        }
+        if self.robots[idx].shield == 0 {
+            let r = &mut self.robots[idx];
+            r.hit_flash = r.hit_flash.wrapping_add(1);
+            r.hp -= damage;
+        } else {
+            let s = self.robots[idx].shield - damage;
+            self.robots[idx].shield = if s < 0 { 0 } else { s };
+        }
+        if self.robots[idx].hp < 1 {
+            // The SP death subset [7g.6]: the seven order words
+            // (+0x38..+0x68) are not modeled — noted in 7g.6; every
+            // modeled write below is the verified sequence.
+            let (pos_x, pos_y, z) = {
+                let r = &self.robots[idx];
+                (r.pos_x, r.pos_y, r.z)
+            };
+            {
+                let r = &mut self.robots[idx];
+                r.alive = false;
+                r.drop_countdown = 0;
+                r.hp = 0;
+                r.death_flag = 1;
+                r.armor = 0;
+            }
+            // Five debris, two shared-stream draws each: the y
+            // jitter draws FIRST, then the x jitter (asm
+            // 0x40e72d/0x40e74f); z walks +8k, the phase param 2k.
+            for (k, d) in out.debris.iter_mut().enumerate() {
+                let ry = self.rng.next_u32();
+                let rx = self.rng.next_u32();
+                d.0 = (rx & 0x1F) as i32 + (pos_x >> 8) - 0x10;
+                d.1 = (ry & 0x1F) as i32 + (pos_y >> 8) - 0x10;
+                d.2 = z + 8 * k as i32;
+                d.3 = 2 * k as i32;
+            }
+            out.died = true;
+        }
+        // `killer` reaches only the MP bookkeeping (7g.6) — kept in
+        // the signature for the callers' fidelity, unused in SP.
+        let _ = killer;
+        out
+    }
+
     /// Spawn a robot from an MRK marker record [FUN_0040cca0,
     /// verified]: `pos = tile*0x2000 + 0xF00`, `z = level*0x20 - 1`,
     /// probe cache seeded with z, variant = rng&3, then one
     /// move_is_possible pass settles the floor.
     pub fn spawn_robot(&mut self, marker: (i32, i32, i32)) -> usize {
         let z = marker.2 * 0x20 - 1;
+        // HP = the dropship-landing init over the CURRENT battery
+        // (7f.8): the record spawns with battery 0 → 5000; a battery
+        // staged before spawn lands in one write, after spawn
+        // re-runs the landing formula through set_battery.
         let robot = Robot {
             pos_x: marker.0 * Q13_PER_TILE + SPAWN_CENTER,
             pos_y: marker.1 * Q13_PER_TILE + SPAWN_CENTER,
@@ -526,6 +744,18 @@ impl MissionSim {
             target: None,
             alive: true,
             drop_countdown: 0,
+            hp: 5000,
+            armor: 0,
+            hit_flash: 0,
+            alarm: 0,
+            alarm_ctr: 0,
+            shield: 0,
+            shield_charges: 0,
+            shield_boost: 0,
+            battery: 0,
+            armor_pool: 0,
+            kind: 0,
+            death_flag: 0,
         };
         let idx = self.robots.len();
         self.robots.push(robot);
@@ -587,10 +817,21 @@ impl MissionSim {
     /// (MissionShell order, verified): decrement the window when
     /// nonzero, then clear the order if the window hit 0 or every
     /// robot is dead or state-3 (the window=0 single-robot armer case
-    /// therefore clears on the next frame's tick).
+    /// therefore clears on the next frame's tick). After the phases,
+    /// the portrait-pass hit_flash decay (7g.8) runs for every alive
+    /// robot with hp ≥ 1 — the EXW does it inside the FUN_004072bf
+    /// sidebar draw for the SLOT robots; every corpus robot is a
+    /// slot robot (single squad, base 0).
     pub fn advance_frame(&mut self) {
         for phase in 0..PHASES_PER_FRAME {
             self.robots_phase(phase as i32);
+        }
+        // The portrait-pass decay (7g.8): clamp 5, decrement, only
+        // while alive && hp ≥ 1 && nonzero.
+        for r in &mut self.robots {
+            if r.alive && r.hp >= 1 && r.hit_flash != 0 {
+                r.hit_flash = r.hit_flash.min(5) - 1;
+            }
         }
         if let Some(order) = &mut self.order {
             if order.window != 0 {
@@ -622,10 +863,55 @@ impl MissionSim {
     /// One unit-manager pass over all robots (the modeled subset of
     /// FUN_0040b9f6): order consumption + move-toward-target.
     fn robots_phase(&mut self, phase: i32) {
+        // The phase-0 pre-walk (7g.2): over ALL records with NO
+        // alive gate — the alarm word/counter decay, the shield
+        // pool's 2/frame decay, and the +0xA0 booster family. (The
+        // EXW also decays word@+0x32 here; its producer is unknown
+        // and it is always 0 — deliberately unmodeled, 7g.2.)
+        if phase == 0 {
+            for r in &mut self.robots {
+                if r.alarm != 0 {
+                    r.alarm -= 1;
+                }
+                if r.alarm_ctr != 0 {
+                    r.alarm_ctr -= 1;
+                }
+                if r.shield != 0 {
+                    r.shield -= SHIELD_DECAY;
+                    if r.shield < 0 {
+                        r.shield = 0;
+                    }
+                }
+                if r.shield_boost != 0 {
+                    r.shield = SHIELD_BOOST_POOL;
+                    r.shield_boost -= 1;
+                    if r.shield_boost < 1 {
+                        r.shield_boost = 0;
+                        r.shield = SHIELD_BOOST_LEFTOVER;
+                    }
+                }
+            }
+        }
         for idx in 0..self.robots.len() {
             let robot = &self.robots[idx];
             if !robot.alive || !Self::phase_gate(phase, robot) {
                 continue;
+            }
+            // The armor pass (7g.3): PHASE 1, alive robots only —
+            // the pad byte of the tile under the robot center decides
+            // charge (+20 behind the +0x98 pool, FUN_004100b7) vs
+            // bleed (-10, clamp ≥ 0). The 0x7d2/0x7d3 tile-word gates
+            // around it in EXW are unmodeled (7g.5 open producer).
+            if phase == 1 {
+                let (tx, ty) = self.robots[idx].tile();
+                let (w, _) = self.terrain.size();
+                let pad = self.armor_pad_byte((ty * w + tx).max(0) as usize);
+                if pad != 0 {
+                    self.armor_charge(idx, ARMOR_CHARGE);
+                } else {
+                    let a = self.robots[idx].armor.wrapping_sub(ARMOR_BLEED);
+                    self.robots[idx].armor = if a < 0 { 0 } else { a };
+                }
             }
             // Order consumption: pending order, state outside {3,4,5},
             // robot within ORDER_RADIUS of the order tile center.
@@ -680,6 +966,31 @@ impl MissionSim {
                 let vy = ((dy_q5 << 16) / dist) << 2;
                 self.robot_move(idx, vx, vy, angle);
             }
+        }
+    }
+
+    /// FUN_004100b7 mechanics [7g.4, verified 0x4100b7..0x4102b6]:
+    /// `amount == 0` returns; a nonzero +0x98 pool absorbs the call
+    /// (pool -= amount, return while > 0, clamp 0 + the "pool empty"
+    /// slot SFX on the transition — presentation); only a zero pool
+    /// charges the armor word `+= amount` (i16 wrapping) clamped
+    /// ≤ 3000. The old/new SFX families are presentation.
+    fn armor_charge(&mut self, idx: usize, amount: i32) {
+        if amount == 0 {
+            return;
+        }
+        if self.robots[idx].armor_pool != 0 {
+            self.robots[idx].armor_pool -= amount;
+            if self.robots[idx].armor_pool > 0 {
+                return;
+            }
+            self.robots[idx].armor_pool = 0;
+            return;
+        }
+        let new = self.robots[idx].armor.wrapping_add(amount as i16);
+        self.robots[idx].armor = new;
+        if i32::from(new) > i32::from(ARMOR_MAX) {
+            self.robots[idx].armor = ARMOR_MAX;
         }
     }
 
@@ -963,6 +1274,23 @@ impl MissionSim {
                 }
             }
             h.write_i32(r.drop_countdown);
+            // The damage-unit fields (7g, D52 follow-up): appended in
+            // record-offset order after the modeled set — hp, armor,
+            // hit_flash, alarm, kind, shield, shield_charges,
+            // shield_boost, battery, armor_pool, alarm_ctr,
+            // death_flag.
+            h.write_i32(r.hp);
+            h.write_i16(r.armor);
+            h.write_u16(r.hit_flash);
+            h.write_u16(r.alarm);
+            h.write_u16(r.kind);
+            h.write_i32(r.shield);
+            h.write_i32(r.shield_charges);
+            h.write_i32(r.shield_boost);
+            h.write_i32(r.battery);
+            h.write_i32(r.armor_pool);
+            h.write_i32(r.alarm_ctr);
+            h.write_u16(r.death_flag);
         }
         match self.terrain.last_trigger {
             None => h.write_u8(0),
@@ -1327,5 +1655,249 @@ mod tests {
         assert_ne!(sim.state_hash().0, base.0, "pos_x covered");
         sim.robots_mut()[a].anim ^= 1;
         assert_ne!(sim.state_hash().0, base.0, "anim covered");
+    }
+
+    /// A sim with one robot staged for damage tests (state IDLE, all
+    /// vitals at the spawn defaults unless the test overrides them).
+    fn damage_sim() -> MissionSim {
+        let hs = zero_heights(8);
+        let mut sim = MissionSim::new(flat_terrain(8, 8, 5, hs), sintable_like(), 11);
+        sim.spawn_robot((2, 3, 0));
+        sim
+    }
+
+    #[test]
+    fn damage_core_follows_fun_0040e230() {
+        // 7g.1: state-3 robots convert damage into a shield tick.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].state = STATE_ORDERED;
+        let out = sim.apply_damage(0, 100, -1);
+        assert!(out.applied && !out.died);
+        assert_eq!(sim.robots()[0].shield, 0x20);
+        assert_eq!(
+            sim.robots()[0].hp,
+            5000,
+            "the ordered conversion takes nothing"
+        );
+
+        // The auto-shield idle: charges > 0 with shield == 0 spends
+        // one charge for the 0x20 tick.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].shield_charges = 2;
+        sim.apply_damage(0, 100, -1);
+        assert_eq!(
+            (sim.robots()[0].shield_charges, sim.robots()[0].shield),
+            (1, 0x20)
+        );
+        assert_eq!(sim.robots()[0].hp, 5000);
+
+        // The shield absorbs before hp and clamps at 0 on overflow.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].shield = 100;
+        sim.apply_damage(0, 30, -1);
+        assert_eq!((sim.robots()[0].shield, sim.robots()[0].hp), (70, 5000));
+        sim.apply_damage(0, 80, -1);
+        assert_eq!((sim.robots()[0].shield, sim.robots()[0].hp), (0, 5000));
+
+        // The hp path: hit_flash bumps BEFORE the hp subtract.
+        let mut sim = damage_sim();
+        sim.apply_damage(0, 100, -1);
+        assert_eq!((sim.robots()[0].hit_flash, sim.robots()[0].hp), (1, 4900));
+
+        // Gates: dead and state-2 robots are untouched.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].alive = false;
+        assert!(!sim.apply_damage(0, 100, -1).applied);
+        sim.robots_mut()[0].alive = true;
+        sim.robots_mut()[0].state = 2;
+        assert!(!sim.apply_damage(0, 100, -1).applied);
+        assert_eq!(sim.robots()[0].hp, 5000);
+    }
+
+    #[test]
+    fn damage_alarm_accumulator_trips_at_100() {
+        // 7g.1: +3 per un-alarm'd hit; > 100 on a player-type robot
+        // trips the alarm word to 100 and resets the accumulator.
+        // 34 hits x 3 = 102 > 100 with hp raised first.
+        let mut sim = damage_sim();
+        sim.set_battery(0, 90); // hp 14000 — survives 34 x 100
+        for _ in 0..33 {
+            sim.apply_damage(0, 100, -1);
+        }
+        assert_eq!((sim.robots()[0].alarm, sim.robots()[0].alarm_ctr), (0, 99));
+        sim.apply_damage(0, 100, -1);
+        assert_eq!((sim.robots()[0].alarm, sim.robots()[0].alarm_ctr), (100, 0));
+        // While the alarm word is nonzero the accumulator idles.
+        sim.apply_damage(0, 100, -1);
+        assert_eq!(sim.robots()[0].alarm_ctr, 0);
+    }
+
+    #[test]
+    fn death_subset_clears_vitals_and_draws_ten_stream_values() {
+        // 7g.6: hp < 1 clears alive/hp/drop/armor, sets the death
+        // flag, and stages five debris from the SHARED stream (two
+        // draws each — the y jitter first).
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].armor = 1234;
+        sim.robots_mut()[0].drop_countdown = 77;
+        let hash_before = sim.state_hash().0;
+        let out = sim.apply_damage(0, 9999, -1);
+        assert!(out.applied && out.died);
+        let r = sim.robots()[0];
+        assert!(!r.alive);
+        assert_eq!(
+            (r.hp, r.armor, r.drop_countdown, r.death_flag),
+            (0, 0, 0, 1)
+        );
+        // Ten draws left the stream (the hash covers the rng state).
+        assert_ne!(sim.state_hash().0, hash_before);
+        // The debris jitter: (rand & 0x1f) + pos>>8 - 0x10 — the y
+        // (row 1) uses the FIRST draw of each pair, x the second.
+        let (px, py, z) = (r.pos_x, r.pos_y, r.z);
+        let mut replay = damage_sim();
+        replay.robots_mut()[0].armor = 1234;
+        replay.robots_mut()[0].drop_countdown = 77;
+        replay.apply_damage(0, 9999, -1);
+        for (k, d) in out.debris.iter().enumerate() {
+            assert_eq!(d.2, z + 8 * k as i32, "debris z walks +8k");
+            assert_eq!(d.3, 2 * k as i32, "the phase param is 2k");
+            assert!(
+                ((px >> 8) - 0x10..=(px >> 8) + 0x1F).contains(&d.0),
+                "x jitter window k={k}"
+            );
+            assert!(
+                ((py >> 8) - 0x10..=(py >> 8) + 0x1F).contains(&d.1),
+                "y jitter window k={k}"
+            );
+        }
+        // A second lethal hit on the corpse does nothing.
+        assert!(!sim.apply_damage(0, 9999, -1).applied);
+    }
+
+    #[test]
+    fn armor_bleeds_off_pad_and_charges_on_pads() {
+        // 7g.3: phase 1 bleeds -10/frame (clamp 0) with the default
+        // all-zero pad bytes — the shipped ZONEA behavior.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].armor = 100;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 90);
+        sim.robots_mut()[0].armor = 5;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 0, "the bleed clamps at 0");
+
+        // A staged pad byte under the robot (tile (2,3) on the 8x8
+        // map = linear 26) charges +20/frame instead.
+        let mut pads = vec![0u8; 64];
+        pads[3 * 8 + 2] = 1;
+        sim.set_armor_pads(&pads);
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 20);
+        // Clamp at 3000 (0xBB8).
+        sim.robots_mut()[0].armor = 2995;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 3000);
+
+        // The +0x98 pool drains BEFORE armor charges (7g.4): pool 50
+        // needs three passes (50->30->10->0) before the first +20.
+        let mut sim = damage_sim();
+        let mut pads = vec![0u8; 64];
+        pads[3 * 8 + 2] = 1;
+        sim.set_armor_pads(&pads);
+        sim.robots_mut()[0].armor_pool = 50;
+        sim.advance_frame();
+        assert_eq!((sim.robots()[0].armor_pool, sim.robots()[0].armor), (30, 0));
+        sim.advance_frame();
+        assert_eq!((sim.robots()[0].armor_pool, sim.robots()[0].armor), (10, 0));
+        sim.advance_frame();
+        assert_eq!((sim.robots()[0].armor_pool, sim.robots()[0].armor), (0, 0));
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].armor, 20, "the drained pool charges");
+    }
+
+    #[test]
+    fn shield_decay_and_booster_follow_the_phase0_pre_walk() {
+        // 7g.2: the pool decays 2/frame, clamped at 0.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].shield = 5;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].shield, 3);
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].shield, 1);
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].shield, 0, "-1 clamps to 0");
+
+        // The +0xA0 booster: 10000 while counting down, 150 left on
+        // expiry.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].shield_boost = 2;
+        sim.advance_frame();
+        assert_eq!(
+            (sim.robots()[0].shield, sim.robots()[0].shield_boost),
+            (10000, 1)
+        );
+        sim.advance_frame();
+        assert_eq!(
+            (sim.robots()[0].shield, sim.robots()[0].shield_boost),
+            (150, 0)
+        );
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].shield, 148, "normal decay resumes");
+    }
+
+    #[test]
+    fn alarm_and_hit_flash_decay_per_frame() {
+        // 7g.2: the alarm word/counter decay in the phase-0 pre-walk.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].alarm = 3;
+        sim.robots_mut()[0].alarm_ctr = 7;
+        sim.advance_frame();
+        assert_eq!((sim.robots()[0].alarm, sim.robots()[0].alarm_ctr), (2, 6));
+
+        // 7g.8: hit_flash clamps to 5 then decrements, only while
+        // alive with hp >= 1; dead robots freeze.
+        let mut sim = damage_sim();
+        sim.robots_mut()[0].hit_flash = 9;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].hit_flash, 4, "clamp 5 then -1");
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].hit_flash, 3);
+        sim.robots_mut()[0].hit_flash = 4;
+        sim.robots_mut()[0].alive = false;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].hit_flash, 4, "dead robots freeze");
+        sim.robots_mut()[0].alive = true;
+        sim.robots_mut()[0].hp = 0;
+        sim.advance_frame();
+        assert_eq!(sim.robots()[0].hit_flash, 4, "hp < 1 freezes");
+    }
+
+    #[test]
+    fn battery_seam_runs_the_landing_formula() {
+        // 7f.8: the landing HP init is 5000 + 100*battery.
+        let mut sim = damage_sim();
+        assert_eq!(sim.robots()[0].hp, 5000);
+        sim.set_battery(0, 7);
+        assert_eq!((sim.robots()[0].battery, sim.robots()[0].hp), (7, 5700));
+        sim.set_battery(0, 0);
+        assert_eq!(sim.robots()[0].hp, 5000);
+        // Out-of-range idx is a no-op (charter).
+        sim.set_battery(9, 7);
+    }
+
+    #[test]
+    fn hash_covers_the_damage_fields() {
+        let mut sim = damage_sim();
+        let base = sim.state_hash();
+        sim.robots_mut()[0].hp -= 1;
+        assert_ne!(sim.state_hash().0, base.0, "hp covered");
+        sim.robots_mut()[0].armor = 40;
+        assert_ne!(sim.state_hash().0, base.0, "armor covered");
+        sim.robots_mut()[0].shield = 30;
+        assert_ne!(sim.state_hash().0, base.0, "shield covered");
+        sim.robots_mut()[0].hit_flash = 2;
+        assert_ne!(sim.state_hash().0, base.0, "hit_flash covered");
+        sim.robots_mut()[0].death_flag = 1;
+        assert_ne!(sim.state_hash().0, base.0, "death_flag covered");
     }
 }

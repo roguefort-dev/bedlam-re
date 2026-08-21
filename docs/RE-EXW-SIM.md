@@ -1131,11 +1131,15 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    GENERAL/SMLFONT/NUMBERS/SCANNER). The HP/armor bars + the score
    strip were DECODED 2026-08-21 amendment §7f and WIRED the same
    day (host-staged vitals + campaign session state, D52); the
-   vitals PRODUCERS land with the damage unit: the damage
-   application FUN_0040e230 + its death/debris/RNG interplay
-   (7f.5), the armor pad charge/bleed (7f.7), the health/shield
-   pickups (7f.6 cases 2/3) — promoting hp/armor to real sim fields
-   then re-pins the sim hashes deliberately. Remaining open after
+   vitals PRODUCERS LANDED 2026-08-21 (amendment 7g + D53): hp/
+   armor/hit_flash/alarm/shield family are hash-covered sim
+   fields, `MissionSim::apply_damage` is the FUN_0040e230 SP core
+   (the debris/death RNG interleaving included — 10 shared draws),
+   the armor pad charge/bleed + the phase-0 shield family run per
+   frame, and the sim hashes were re-pinned ONCE for that reason.
+   Still host-seamed: the health/shield pickups (7f.6 cases 2/3 —
+   FUN_0040eba0 producers), the 0x7d2 hazard caller, and the
+   projectile callers. Remaining open after
    that: the 0x4dc5d0 blink producer, the dead/hit dither
    (FUN_00401ae6 + the 0x4e6ed8 bank), and the keyboard-latch
    wiring (P2e button map). The map-overlay family

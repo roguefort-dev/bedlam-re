@@ -24,7 +24,7 @@
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::dist_octagonal;
-use bedlam_core::mission::{AngleTable, MissionSim, Robot, Terrain, STATE_MOVING};
+use bedlam_core::mission::{AngleTable, DamageOutcome, MissionSim, Robot, Terrain, STATE_MOVING};
 use bedlam_core::rng::Pcg32;
 use bedlam_render::map_overlay::{MapOverlay, OverlayRobot};
 use bedlam_render::mission_view::{
@@ -183,25 +183,6 @@ pub type WeaponGroup = (u16, u16);
 /// `+100*battery` in the dropship-landing formula.
 pub const WEAPON_BATTERY_PACK: u16 = 0x2B;
 
-/// The per-robot HOST-STAGED vitals the bars read [RE-EXW-SIM 7f,
-/// D52]: `hp` = the record dword +0x78 (spawn 5000 + 100*battery —
-/// the dropship-landing init 7f.8; the damage path FUN_0040e230 is
-/// decoded but NOT landed: its death/debris/RNG interplay is its
-/// own slice, so these stay presentation-half state and the sim
-/// hash does not move), `armor` = the record word +0x30 (spawn 0 —
-/// the pad-charge producers 7f.7 are not landed either).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Vitals {
-    pub hp: i32,
-    pub armor: i16,
-}
-
-impl Vitals {
-    /// The fresh-campaign spawn vitals [7f.8]: battery 0 → hp 5000,
-    /// armor 0 (nothing charges it before the pads do).
-    pub const FRESH: Vitals = Vitals { hp: 5000, armor: 0 };
-}
-
 /// The per-robot weapon table row: 7 groups [sec 6c.6 — the
 /// 0x62-stride table row the spawn stats-copy reads].
 pub type WeaponLoadout = [WeaponGroup; 7];
@@ -223,9 +204,6 @@ struct Sidebar {
     redraw: i32,
     order_bits: Vec<u16>,
     weapons: Vec<WeaponLoadout>,
-    /// Host-staged per-robot vitals (D52): the bars + the portrait
-    /// HP gate read these; FRESH = (hp 5000, armor 0).
-    vitals: Vec<Vitals>,
 }
 
 impl Sidebar {
@@ -234,14 +212,14 @@ impl Sidebar {
     /// runs before every mission and only purchases fill groups), so
     /// the spawn stats-copy arms NO bit; selected slot 0
     /// (load_markers 0x40ce0e), redraw 0 (the MissionShell entry
-    /// reset 0x4478bf), vitals FRESH (7f.8).
+    /// reset 0x4478bf). hp/armor live on the SIM robots now (the
+    /// damage unit, D52 follow-up: spawn 5000/0, 7f.8).
     fn new(robots: usize) -> Sidebar {
         Sidebar {
             selected: 0,
             redraw: 0,
             order_bits: vec![0; robots],
             weapons: vec![[(0, 0); 7]; robots],
-            vitals: vec![Vitals::FRESH; robots],
         }
     }
 }
@@ -903,17 +881,14 @@ impl MissionScene {
     /// slot k within the spawned squad draws its 48x48 portrait
     /// (0x12+k when selected, 0x15+k otherwise) at
     /// (0x1E7+0x32*k, 5), gated by the target's alive word AND the
-    /// staged hp ≥ 1 (the FUN_004072bf gates — hp defaults 5000, so
-    /// the fresh-campaign frames are unchanged). Every present.
+    /// SIM hp ≥ 1 (the FUN_004072bf gates — hp spawns 5000, so the
+    /// fresh-campaign frames are unchanged). Every present.
     /// Presentation half only. The dead/hit dither overlay
     /// (FUN_00401ae6) stays unwired (bank decode queued).
     fn draw_sidebar_portraits(&mut self) {
         let selected = self.sidebar.selected;
-        for (slot, alive) in self.sim.robots().iter().map(|r| r.alive).enumerate() {
-            if slot >= 3 || !alive {
-                continue;
-            }
-            if self.sidebar.vitals.get(slot).is_none_or(|v| v.hp < 1) {
+        for (slot, robot) in self.sim.robots().iter().enumerate() {
+            if slot >= 3 || !robot.alive || robot.hp < 1 {
                 continue;
             }
             let id = if slot == selected {
@@ -942,21 +917,18 @@ impl MissionScene {
     /// `0 == word → 0x8E` else `0x8E - min(armor,2500)*46/2500`
     /// clamped ≤ 0x8D. The armor-0 case DRAWS the empty 0x8E bar —
     /// the fresh campaign shows both bars every frame exactly like
-    /// the original. Every present; presentation half only (the
-    /// vitals are host-staged, D52).
+    /// the original. Every present; reads the SIM robot fields (the
+    /// damage unit, D52 follow-up).
     fn draw_sidebar_bars(&mut self) {
         let (x0, pitch) = SIDEBAR_BAR_X;
         let (hp_y, armor_y) = SIDEBAR_BAR_Y;
-        for slot in 0..self.sim.robots().len().min(3) {
-            let Some(vitals) = self.sidebar.vitals.get(slot) else {
-                continue;
-            };
+        for (slot, robot) in self.sim.robots().iter().enumerate().take(3) {
             let x = x0 + pitch * slot as i32;
             draw_sprite(
                 &mut self.plane,
                 640,
                 &self.general,
-                hp_bar_sprite(vitals.hp),
+                hp_bar_sprite(robot.hp),
                 x,
                 hp_y,
                 true,
@@ -965,7 +937,7 @@ impl MissionScene {
                 &mut self.plane,
                 640,
                 &self.general,
-                armor_bar_sprite(vitals.armor),
+                armor_bar_sprite(robot.armor),
                 x,
                 armor_y,
                 true,
@@ -1075,8 +1047,8 @@ impl MissionScene {
     /// arithmetic over the new row — the robot's order-bits word
     /// re-derives as `1 << first group with word0 != 0` (0 when the
     /// row is empty), exactly what load_markers would have written.
-    /// The BATTERY PACK group (0x2B) also re-derives the staged HP
-    /// via the dropship-landing formula `5000 + 100*battery`
+    /// The BATTERY PACK group (0x2B) also re-derives the SIM hp via
+    /// the dropship-landing formula `5000 + 100*battery`
     /// [RE-EXW-SIM 7f.8] — staging models the pre-mission point, so
     /// re-staging mid-mission re-runs the landing init (D52).
     pub fn set_weapon_loadout(&mut self, robot: usize, groups: &WeaponLoadout) {
@@ -1089,33 +1061,25 @@ impl MissionScene {
                     .find(|&&(name, _)| name == WEAPON_BATTERY_PACK)
                     .map_or(0, |&(_, ammo)| ammo),
             );
-            let vitals = self
-                .sidebar
-                .vitals
-                .get_mut(robot)
-                .expect("vitals parallel the robots");
-            vitals.hp = 5000 + 100 * battery;
+            self.sim.set_battery(robot, battery);
         }
     }
 
-    /// The robot's staged vitals (D52): hp = record +0x78, armor =
-    /// record word +0x30 [RE-EXW-SIM 7f]. Read seam for the tests.
-    pub fn vitals(&self, robot: usize) -> Vitals {
-        self.sidebar
-            .vitals
-            .get(robot)
-            .copied()
-            .unwrap_or(Vitals::FRESH)
-    }
-
-    /// Stage the vitals directly (D52): the damage/pad dynamics
-    /// (FUN_0040e230 / FUN_004100b7, 7f.5/7f.7) are decoded but not
-    /// landed — the host or a test stands in for them until the
-    /// damage slice promotes hp/armor to real sim fields.
-    pub fn set_vitals(&mut self, robot: usize, vitals: Vitals) {
-        if let Some(slot) = self.sidebar.vitals.get_mut(robot) {
-            *slot = vitals;
+    /// Apply damage through the SIM — the FUN_0040e230 host seam
+    /// [RE-EXW-SIM 7f.5 + 7g, the damage unit]: delegates to
+    /// [`MissionSim::apply_damage`] (state-2/alive gates, the
+    /// ordered/auto-shield conversions, the alarm accumulator, the
+    /// shield absorb vs the hit_flash-then-hp subtract, and the SP
+    /// death subset with the five shared-stream debris draws), and
+    /// stages the presentation half the original performs inline:
+    /// the sidebar redraw countdown `DAT_0046ccec = 3` on death (the
+    /// FUN_0042382c call + the death SFX family stay host-seamed).
+    pub fn apply_damage(&mut self, robot: usize, damage: i32, killer: i32) -> DamageOutcome {
+        let outcome = self.sim.apply_damage(robot, damage, killer);
+        if outcome.died {
+            self.sidebar.redraw = 3;
         }
+        outcome
     }
 
     /// The campaign session state the strip reads [7f.9]: score
@@ -1884,8 +1848,8 @@ mod tests {
         // two RandA draws advance the shared sim stream.
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
-        // Fresh vitals + campaign defaults.
-        assert_eq!(m.vitals(0), Vitals { hp: 5000, armor: 0 });
+        // Fresh sim vitals + campaign defaults.
+        assert_eq!((m.sim.robots()[0].hp, m.sim.robots()[0].armor), (5000, 0));
         assert_eq!(m.campaign(), (0, 4000), "FRESH_CAMPAIGN (7d.4)");
         let plane = m.present().expect("entry frame");
         let px = |p: &[u8], x: usize, y: usize| p[y * 640 + x];
@@ -1904,17 +1868,18 @@ mod tests {
         assert_eq!(px(plane, 0x20B, 0x1A4), 0xFB, "money icon 0xB");
         assert_eq!(px(plane, 0x225, 0x1A4), 0xF4, "money 10^3 = '4'");
         assert_eq!(px(plane, 0x245, 0x1A4), 0xF0, "money units '0'");
-        // Re-staged vitals re-map the bars every present; hp 0 gates
-        // the portrait but the stale pixels persist (the dither
-        // overlay is unwired — the plane keeps its pixels).
-        m.set_vitals(
-            0,
-            Vitals {
-                hp: 2500,
-                armor: 1250,
-            },
-        );
-        m.set_vitals(1, Vitals { hp: 0, armor: 3000 });
+        // Re-staged sim vitals re-map the bars every present; hp 0
+        // gates the portrait but the stale pixels persist (the
+        // dither overlay is unwired — the plane keeps its pixels).
+        // robots_mut is the verified test seam for direct state
+        // setup (the damage path lands in the core tests).
+        {
+            let robots = m.sim.robots_mut();
+            robots[0].hp = 2500;
+            robots[0].armor = 1250;
+            robots[1].hp = 0;
+            robots[1].armor = 3000;
+        }
         let plane = m.present().expect("bars redraw every present");
         assert_eq!(px(plane, 0x1E8, 0x3C), 0x91, "hp 2500 -> 0x2F");
         assert_eq!(px(plane, 0x1E8, 0x49), 0x94, "armor 1250 -> 0x77");
@@ -1960,9 +1925,9 @@ mod tests {
         let mut g = [(0u16, 0u16); 7];
         g[2] = (WEAPON_BATTERY_PACK, 7);
         m.set_weapon_loadout(0, &g);
-        assert_eq!(m.vitals(0).hp, 5700, "the landing formula");
+        assert_eq!(m.sim.robots()[0].hp, 5700, "the landing formula");
         m.set_weapon_loadout(1, &[(0, 0); 7]);
-        assert_eq!(m.vitals(1).hp, 5000, "battery 0 -> plain 5000");
+        assert_eq!(m.sim.robots()[1].hp, 5000, "battery 0 -> plain 5000");
     }
 
     #[test]

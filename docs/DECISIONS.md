@@ -1664,3 +1664,64 @@ seam:
    byte-identical, MANIFEST verified.
 
 Nudge-Worker: 36c9e956-335d-48f4-b6f8-a988c6eba472
+
+## D53 - 2026-08-21: hp/armor + damage land as real sim fields; the sim pins move once for that reason
+
+Context: D52 staged the bars over presentation vitals precisely so
+the sim pins would hold until the damage path genuinely landed.
+This unit lands it (RE-EXW-SIM 7g pre-decode committed first by the
+interrupted predecessor run that also wrote the implementation WIP;
+this run validated the WIP against the exw-missionrender decompile
+line-by-line - the alarm accumulator placement (before the shield
+absorb, at the top of the damage path), the auto-shield gate
+`charges != 0 && shield == 0`, the debris draw order (RandA#1 -> y,
+RandA#2 -> x), drop = 0 (not 1) on the SP death clear, and the
+death writes all match - then finished the pins/docs):
+
+1. WHAT LANDED (bedlam-core): the Robot damage fields - hp (+0x78),
+   armor (+0x30), hit_flash (+0x2E), alarm (+0x34), alarm_ctr
+   (+0xA4), shield (+0x88), shield_charges (+0x8C), shield_boost
+   (+0xA0), battery (+0x94), armor_pool (+0x98), kind (+0x2A),
+   death_flag (+0x9C) - all hash-covered; spawn hp = the
+   dropship-landing 5000 + 100*battery (set_battery seam re-runs
+   it); `MissionSim::apply_damage` = the FUN_0040e230 SP core
+   (state-2/alive gates, the ordered state-3 -> shield 0x20
+   conversion, the auto-shield idle, the alarm trip at ctr > 100 on
+   the player type, shield absorb vs hit_flash-then-hp subtract,
+   and the SP death subset incl. the five debris staged from the
+   SHARED stream - 10 RandA draws; DamageOutcome carries the
+   presentation half); the phase-0 pre-walk (alarm/alarm_ctr decay,
+   shield -2 clamp, the +0xA0 booster 10000/150 family); the
+   phase-1 armor pass (pad byte -> FUN_004100b7 +20 behind the
+   +0x98 pool else -10 bleed, clamp 3000/0, set_armor_pads seam for
+   the MISSIONVIEW sec 8.1-open producer - all-zero on the shipped
+   corpus, so armor bleeds); the portrait-pass hit_flash clamp-5
+   decay in advance_frame.
+2. WHAT LANDED (bedlam-game): the Sidebar Vitals staging DROPPED -
+   the bars/portraits read the sim robot fields directly;
+   set_weapon_loadout lands battery through sim.set_battery (so a
+   BATTERY PACK group now moves the sim hash - the armed gate test
+   documents the battery-less case stays at the spawn defaults);
+   the apply_damage host seam stages the death sidebar-redraw
+   countdown (DAT_0046ccec = 3). set_campaign/pickup seams kept.
+3. DELIBERATELY NOT MODELED: the +0x32 word decay (producer
+   unknown, always 0), the 0x7d2/0x7d3 tile-word hazard/phase-clamp
+   family (producer open - never-invent), the seven order-word
+   clears on death, the MP respawn branch, and all SFX/FUN_0042382c
+   presentation. The damage producers themselves (the projectile
+   callers, the 0x7d2 hazard) stay host-seamed - apply_damage is
+   the seam they will call.
+4. GATES: sim pins RE-PINNED ONCE with this reason (post-spawn
+   1cc7b8e125165988 / post-arm 5b9c2fd5d85f9adc / arrival
+   d8eeb3e608af0be4; scene spawn 1cc7b8e125165988 / click
+   0bf4fb534d6b3bd5 / overlay 78a16ba63607d197 - spawn hp 5000 is
+   the only nonzero new hash input); FRAME pins byte-identical
+   (9ecd7691d388bbfa / 333d128dc812d547 / 1504c600819e724c /
+   86a788ff93bd78a5 - the bars draw the same 5000/0 values); 41
+   suites green (465 tests, 8 new damage/armor/shield/hash unit
+   tests), fmt + clippy -D warnings clean, headless smoke two-run
+   byte-identical AND equal to the recorded baselines (scene
+   696adb1cd110e062, frame parity cce30c983b97b16d), MANIFEST
+   verified.
+
+Nudge-Worker: 416ca029-3c29-4b69-b978-09fb4222af4d
