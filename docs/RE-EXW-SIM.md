@@ -2037,6 +2037,52 @@ lives in the destroy tail). Re-opens cleanly at: FUN_0041bc1c
 (the terrain/robot resolver), the FUN_00410823 weapon-anim
 machine, and the type-table's remaining words.
 
+### 7j.13 Erratum 2026-08-21 (worker 22c1c14b - independent
+cross-check; the object-type field map re-anchored)
+
+An independent decode of the same region (FUN_0041a4f8/
+FUN_0041a7f0/FUN_0041a894 + all 17 sites, objdump) confirms all
+of 7j.13's findings EXCEPT the item-4 field offsets, which mix
+two bases. The 7j.13 W@+2/H@+4/D@+6 and ptrs@+0x30..+0x3C are
+inconsistent with the runtime consumers (the +0x30 ptrs would
+collide with the effect entries). Corrected map [verified, every
+field double-anchored on a runtime read], base B = 0x4dedf2 +
+78·id — CORRECTED AGAIN by the 7j.16 verification pass: the
+draft's W/H/D anchors below are dword reads SAR'd 16, so they
+consume word@+2/+4/+6, NOT +0/+2/+4 (see 7j.16 item 7 for the
+instruction proofs; the ORIGINAL 7j.13 W/H/D offsets were right):
+
+| field | offset | anchor |
+|---|---|---|
+| gap (unconsumed) | word@B+0x00 | no runtime consumer found [open] |
+| W = X-extent | word@B+0x02 | stamper column-run bound (0x41a857 `[0x4dedf2+78id]` dword>>16) + scanner x-center (7j.16) |
+| H = Y-extent | word@B+0x04 | restore row count (0x41aa02 dword>>16) + scanner y-center (7j.16) |
+| D = Z depth (levels) | word@B+0x06 | restore level addend spawn_z+D cap 8 (0x41aaf9 `[0x4dedf6]` dword>>16); loader bank size 2·W·H·D (0x41a6fc..0x41a723) |
+| default hp | dword@B+0x08 | hp init read 0x41a7d3 `[0x4dedfa+78id]` |
+| chainable flag | word@B+0x0C | `[0x4dedfe+78id]` reads in the perimeter walks |
+| type/score value | dword@B+0x0E | `[0x4dee00+78id]` reads (0xB = score-10 class) |
+| effect-entry count | word@B+0x12 | loader's nonzero-selector count `[0x4dee04+78n]` |
+| gap | word@B+0x14 | no consumer found |
+| FIVE 8-B destroy-effect entries | B+0x16..B+0x3E | selectors at B+0x16+8k (k=0..4): destroy tail 0x41ac58 reads word@`[0x4dee08+78id]`, steps +8, exits at +0x28; selector 1..9 → jump table @0x41a870 (cases 0x41ac77/0x41b298/0x41b3c1/0x41b4ea/0x41b613/0x41b1fe/0x41b11c/0x41af96/0x41ae53); entry payload words = the per-case staging args |
+| four W·H·D-word template bank ptrs | dwords@B+0x3E/+0x42/+0x46/+0x4A | loader writes `[0x4dee30/34/38/3c]+78n`; the restore consumes t2@B+0x46 (per-level z words) + t3@B+0x4A (seen/empty markers) |
+
+Proof of fit: 0x16 + 5·8 = 0x3E, and 0x3E + 4·4 = 0x4E = the
+stride — the record closes exactly with no overlap. The 7j.13
+"jitter words@+0x16/+0x18/+0x1A/+0x1C" label mis-strides the
+selector words (they sit at +0x16/+0x1E/+0x26/+0x2E/+0x36).
+Why the original erred: the loader's parse gate reads a dword at
+`[78n+0x4dedf0]` (2 below B) == 1 — a parse-cursor artifact that
+suggests a 0x4dedf0-anchored record; but hp/chain/type/effects/
+banks all anchor at B under BOTH maps, and only the B anchor
+closes the record at 0x4E.
+
+Corroborations from the same pass [verified]: the FUN_0041a4f8
+memsets confirm the counts exactly — type array 0x55EC = 282·78,
+object array 0x9C40 = 2000·0x14 at [0x46cbf4], grid 0x460dfa and
+strength 0x465daa 0x4FB0 each, robot bank 0x476fbc 0x1800; and
+the load pass forces a record DEAD (id dword = −1) when its
+spawn x or y dword == −1, with [0x46cbe8] = last-live-index+1.
+
 ## 7j.14 Amendment 2026-08-21 (worker d37fb3a2, the weapon-fire
 family SECOND HOP: FUN_0041bc1c + FUN_0041eaa1 + the two co-stager
 heads)
@@ -2259,6 +2305,189 @@ All facts below [verified] against those dumps unless tagged.
    FUN_0041ee20 structure consumers, the two 3D banks' other
    consumers, and the FUN_004190bc 0x4cff98 record family.
 
+## 7j.16 Amendment 2026-08-21 (worker 16f43187, the .TRT
+CONSUMER hop — the three scanners + the two 3D banks + the
++0x08 scratch producer)
+
+Method: `XRefList`/`DecompList`/new `DumpAscii`/`DumpRange`
+(-process BEDLAM.EXW -noanalysis), dumps =
+`ghidra-project/exw-trtconsumers.txt` / `exw-trtcallees.txt` /
+`exw-trtcallees2.txt` / `exw-trtxref{,2,3}.txt` /
+`exw-objtypewords.txt` / `exw-trtstrings.txt` / `exw-pickret.txt`
+(+ corpus size/byte checks on game-data). All facts [verified]
+against those dumps unless tagged.
+
+1. **FUN_00417264 = the TRT structure ANIMATION/FIRE state
+   machine — "turrets?" RESTORED as the primary reading.**
+   Sole caller MissionShell @0x44807b (the mission tick loop —
+   it runs every frame). Canonical record frame (active base
+   0x4cccf8 + i·0x20, 7j.14's): `{active@+0, state@+4,
+   anim_frame@+8, fire_ctr@+0xC, hp@+0x10, x@+0x14, y@+0x18,
+   z@+0x1C}` — the "+0x08 scratch dword" of 7j.15 is the
+   ANIMATION FRAME and its runtime producer is THIS function
+   (no file producer exists; the loader just zeroes it —
+   closes 7j.15 item (d)/D63's open point). Machine:
+   - state 1 = idle. Active records probe the nearest robot
+     via FUN_00417c00(px, py, &dist) (octile, below); dist
+     < 0x81 → state 2. Inactive (destroyed) records skip to
+     the death branch: ≠1/≠4 → (frame==7 ? 4 : 3).
+   - state 2 = alert: frame 0→7, each step writing TOT mirror
+     word = frame+1 (FUN_00417210); at frame 7 → state 6.
+   - states 5/6/7/8 = AIM south/north/west/east (octant by
+     dominant |dx|/|dy| toward the probed robot, recomputed
+     live): frames ramp to a per-direction top (0xB/7/9/0xD),
+     at the top call FUN_00417698 = FIRE, then a 4-step
+     muzzle flash (mirror words 0x17..0x1A s / 0xF..0x12 n /
+     0x13..0x16 w / 0x1B..0x1E e — word = ctr+base, ctr
+     1..4), then ramp back down. Lost target → ramp down.
+   - state 3 = death anim (frame 8..0xB ramps), state 4 =
+     settle-to-0 → state 1 (destroyed structures idle out).
+   - FUN_00417210(idx, n): TOT mirror word @0x4796bc +
+     2z + (rowoff[y] + x)·0x1E = n+1 (rowoff = the
+     0x4ea900 pitch table). FUN_00417652(idx) = frame remap
+     0xF→7, 6→0xE (skip frames).
+2. **FUN_00417698 = the FIRE routine** [verified]: per aim
+   state, scans the robot bank 0x4c69e4/0xA8 (count
+   DAT_0046ccbc, active@0x4c6a60): target iff |lateral
+   offset| < 0x28 px in the aimed lane AND robot is beyond
+   the structure in that direction AND |(z_struct −
+   (z_robot>>8 + 0x1F))>>5| < 2 (≈2 levels). No target →
+   fire_ctr(+0xC)=0, restore frame word. Target: fire_ctr
+   0→1 (arm), and on odd ctr → FUN_0041286f (free-projectile
+   slot: first rec @0x4cc654+i·0x22 with type word 0, ~50
+   slots, ret −1 — confirms 7j.14's free convention) then
+   stages **projectile type 0x66**: x = tile·0x2000 + 0xF00,
+   y likewise, z = tile<<0xD, +0x16 dword = 0x14, vx/vy words
+   = unit direction (S/N/W/E per the 0x00/0x80/0x40/0xC0
+   lane flag). Projectile 0x66 = damage (d+1)·300 (7j.15) —
+   the heaviest enemy projectile: structures ARE shooting
+   sentry turrets. They never move (x/y/z are never written
+   after load).
+3. **The two 3D banks are the mission map FILE VOLUMES**
+   [verified, FUN_0041dc5a = the map loader, sole caller
+   MissionShell @0x447b3a]:
+   - `[0x4ede20]` ← **".TOT"** (tag @0x4587d9; path builder
+     FUN_0041dbed(mission-dir 0x4dca0c, tag) → static
+     0x4dca4c; opener FUN_0041cd90 → global handle
+     0x4eba20): word-per-voxel volume, header **u16 W,
+     u16 H** (4 B, verified: ZONEA/M1.TOT `19 00 4b 00` =
+     25×75; 30004 = 4 + 2·25·75·8) then 8 z-planes of W·H
+     u16. W→_DAT_004eddec, H→_DAT_004eddf0, plane pitch
+     W·H→_DAT_004eddf4; ptr skips +4.
+   - `[0x4edd58]` ← **".DAT"**: byte-per-voxel volume, same
+     4-byte {W,H} header skipped (+4), 8 planes of W·H u8
+     (ZONEA 15004 = 4 + 25·75·8). Post-load sanitize: any
+     tile byte > 0x7F → 0. ArenaAlloc sizes (FUN_0041d954):
+     word 0x27104, byte 0x13884 → max map 100×100×8 (ZONEB
+     TOT 160004 = exactly that).
+   - Same loader also fills: `[0x4edd60]` ← ".CGR" (the 3D
+     height banks), `[0x4ede1c]` ← ".BIN" (header word →
+     DAT_0046cdb8), `[0x4edd9c]` ← ".MIN", 0x45cdda ←
+     ".LNG"/".LNK" variant by _DAT_004eba1c, then opens
+     ".PAD" and parses up to 999 records {x@+2, y@+4,
+     z@+6} into the 0x4e44f8 8-byte slots (active word@+0
+     set 1; x==0xFFFF ends) stamping **0xFF into the DAT
+     volume at (x,y,z)** — the §7c.5/FORMATS §10 pad
+     materializer, now anchored from the loader side.
+   - **FUN_00440a2d (caller FUN_00440dc2) = the TOT-volume →
+     TOT-mirror MATERIALIZER** — the key consumer of the
+     word bank: for a 7×7 tile block × 8 z: word≠0 ∧ DAT
+     byte==0 → mirror word@0x4796bc(+row pitch 0x1E) =
+     word, seen@0x4796cc = 1. This is how the TRT word-1
+     stamp becomes the visible structure sprite (frame 1);
+     the animator then drives the mirror directly. The
+     [0x4ede20] census: producer FUN_004170a6, loader
+     FUN_0041dc5a, restore FUN_0044661b (re-loads .TOT/
+     .BIN/.DAT, tags @0x459795 — the "EDITOR\ZONE" restore
+     path), materializer FUN_00440a2d, boot census
+     FUN_00407e11. The [0x4edd58] byte-volume census: ~30
+     readers (renderer FUN_00403938 ×many, TOT-writer
+     family FUN_00423xxx/FUN_00422xxx, probes FUN_0041eaa1/
+     FUN_0041e2xx, resolvers FUN_0041a894/FUN_0041bc1c/
+     FUN_0041bd78, splash FUN_00424355, trap pair
+     FUN_0040fe93/FUN_0040ff92) + the 0x62/0x66 tile
+     semantics pinned earlier.
+4. **FUN_00419943 = the map-click PICK** [verified; sole
+   caller FUN_00410644 @0x41068e, itself MissionShell
+   @0x448021]: (a) hit-tests the screen RECT list 0x4787c4
+   stride 0x20 {center-x@+8, center-y@+0xC, w@+0x14} (count
+   [0x46ccd8]; the list is WRITTEN by the renderer
+   FUN_00403938 @0x403c93 — the on-screen hot-rect list)
+   with octile cost FUN_0041ebf8, early-out < 4, best wins;
+   (b) else screen→iso IDIV ((p−0xF0)·[0x4ede54])/0x1E0 vs
+   camera [0x4edde4]/[0x4edde8], then a TRT-array scan in
+   iso space (±0x10..0x30 box). Return: 0 = open ground,
+   k+1 = rect k, **(idx+1)|0x2000 = TRT structure**
+   (0x419aed `LEA EAX,[ESI+1]; OR AH,0x20`); tail-call
+   FUN_00418a9f = an EMPTY stub (patch vestige).
+   FUN_00410644 = the click ORDER dispatcher: writes the
+   order target {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c
+   (ground iso / rect corner+type / structure tile-center —
+   the 0x2000 branch reads rec x/y/z at 0x4cccec+0x20·idx =
+   the canonical +0x14/+0x18/+0x1C), consumed by the robot
+   behaviour family (FUN_00409138 ×6, FUN_0040a56f/
+   0xa7a1/0xace8/0xaf98/0xb615/0xa9ff — see leads).
+5. **FUN_0041ee20 = the SCANNER overlay drawer** [verified;
+   sole caller FUN_0041ec81 @0x41edcd, itself MissionShell
+   @0x48142]: FUN_0041ec81 = the corner scanner widget
+   (cursor box x 0x1EE..0x272 × y 0xC3..0x147 + scroll
+   flags → active flag 0x46ccb8; grow animation
+   [0x4edd68] 0→0x40 step 4; asset "GAMEGFX\SCANNER.BIN",
+   tag string right after the file tags). When fully open
+   it calls FUN_0041ee20(cx, cy) with the SELECTED ROBOT
+   position ([0x46cbd4]+[0x46cbdc] robot) and draws marker
+   icons via FUN_00402572 (128×128 transparent blitter →
+   the [0x4eddb8] overlay, clip 0x80) around anything
+   within 0x80: **8 = TRT structure** (first loop — the
+   task's "active scan"), 4 = 0x4cffbc bank, 1/2 =
+   robots (selected-group vs rest, gate [0x46cbd4]/
+   [0x46cbd8]), 5/6 = linked object pairs (blink), 7/0xD
+   = tile markers (strength 0x465daa ≠ 0 vs claim byte
+   0x46af58), 9/0xA = objects (alive flags), 0xB = the
+   0x4dcdb8 arrival records, 0xC = the 0x4e44f8 pads.
+6. **FUN_00417c00 = nearest-active-robot octile probe**
+   (robot bank 0x4c69e4/0xA8, returns idx + dist out) —
+   callers besides the turret machine: FUN_00412a98,
+   FUN_00412f34 ×4, FUN_00417e2f (both [0x46cbf8] readers
+   from the 7j.15 backlog = the robot targeting family).
+   **FUN_0041ebf8 = octile distance** max(|dx|,|dy|) +
+   min/2 — 51 sites (FUN_00412f34 ×15 pathfinder,
+   FUN_004190bc ×8, FUN_0040de9c debris ×3, FUN_00440e45,
+   FUN_0041a028, FUN_0040b9f6 ×3, …).
+7. **7j.13-erratum correction (the object-type table field
+   map — supersedes the uncommitted 22c1c14b draft's +0/+2/
+   +4 shift)**: the draft's own anchors disprove it — every
+   dword read is SAR'd 16 (0x41a857 `MOV EDX,[EBX+
+   0x4dedf2]; SAR EDX,0x10` = word@B+2, NOT word@B+0;
+   likewise 0x41aa02 → word@B+4; 0x41aaf9 `[EDX+0x4dedf6]`
+   SAR → word@B+6; bank size 0x41a6fc..0x41a71a = word@+2 ·
+   word@+4 · word@+6). So the ORIGINAL 7j.13 W/H/D offsets
+   stand: **W=X-extent word@B+2, H=Y-extent word@B+4,
+   D=z-depth word@B+6, word@B+0 unconsumed [open], hp
+   dword@B+8** (0x41a7d3, plain dword — no shift). The
+   draft's CONFIRMED contributions: count word@+0x12, the
+   5×8B destroy-effect entries @+0x16..+0x3E (selector word
+   @+0x16+8k — `MOV AX,[EAX+0x4dee08]` @0x41ac58, 9-case
+   jump table @0x41a870), the 4 W·H·D-word template-bank
+   ptrs @+0x3E/+0x42/+0x46/+0x4A, and the exact 0x4E
+   closure. Corroboration: FUN_0041ee20's object icon
+   centers use word@+2 for x and word@+4 for y.
+8. Corpus-path verdict: unchanged (D64, docs-only — no
+   engine write sites reached; the turret animator/fire
+   stays unwired like the rest of the weapon family).
+   CLOSED this unit: the task's three scanners, both 3D
+   banks (identity + consumers), the +0x08 producer, the
+   "turrets?" question (YES: animate + shoot, never move).
+   New leads for the queue: FUN_00412a98/FUN_00412f34/
+   FUN_00417e2f (the robot targeting/aim family — probe +
+   0x46cbf8 readers), the order-target 0x4dd484 robot
+   behaviour family, FUN_00440dc2 (the materializer's
+   caller — scroll restamp?), the 0x4787c4/0x47879c rect
+   record (corner@+0/+4 vs center@+8/+0xC, z@+0x10,
+   w@+0x14, type@+0x1C — [hypothesis] from the two views),
+   FUN_0044661b's EDITOR\ZONE restore context, and the
+   [0x4ede24] 7×7 screen-address table (FUN_00440a2d head).
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 | constant | value | anchor |
@@ -2293,14 +2522,22 @@ All facts below [verified] against those dumps unless tagged.
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
 | weapon impact resolver | FUN_0041a894(x Q13, y Q13, chain ctr ecx, damage ebx, [stack] score flag): tile from x/y>>13; grid word 0/0x7d2/0x7d3 → ret 0 (pass); 0x7d4 → FUN_00422693; n>0 → rec n−1 hp−=damage, destroyed → flags 0x40 + tail → ret 1; ret 1 only on destroy | §7j.13 |
-| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6, hp@+8, chain@+0xC, type@+0xE (0xb = score 10), jitter words@+0x16..+0x1C, 4 banks@+0x30..+0x3C (W·H·D words, arena 0x46ad5c); footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
+| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
 | robot fire controller | FUN_00410823 (6102 B): per-weapon anim machine, 8 FUN_0041a894 sites (weapons 5/0x1a×4 quadrants/0x24/0x29 + rec-weapon), damage = FUN_00419aff(id, 1), paired FUN_0041bc1c + FUN_004124a4/FUN_004126dc | §7j.13 |
 | tile-0x62 trap pair | FUN_0040fe93 (current tile) / FUN_0040ff92 (FUN_004128ec probe): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris. NOTE 0x4c69e4 accessed at 160-B stride here (vs 0xA8) [census open] | §7j.13 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales only projectile damage 0x65..0x68 | §7j.15 |
-| terrain-structure loader | FUN_004170a6 (call 0x416487 in the dispatcher FUN_00416458): ".TRT" section @staging buf 0x4dca0c; clears 250×0x20 @0x4cccf8; count→[0x46ccd4]; rec {+0=1, +4 active=1, +8=0, +0xC hp=250+(250·mission)/27, +0x10 x, +0x14 y, +0x18 z} (stager base 0x4cccfc); stamps tile 0x66 @byte[[0x4edd58]+x+y·w+z·w·h] + word 1 @word[[0x4ede20]+2(x+y·w+z·w·h)] | §7j.15 |
+| terrain-structure loader | FUN_004170a6 (call 0x416487 in the dispatcher FUN_00416458): ".TRT" section @staging buf 0x4dca0c; clears 250×0x20 @0x4cccf8; count→[0x46ccd4]; rec (canonical frame, active@0x4cccf8): active=1, state=1, frame=0, fire=0, hp=250+(250·mission)/27, x/y/z tiles; stamps tile 0x66 @byte[[0x4edd58]+x+y·w+z·w·h] + word 1 @word[[0x4ede20]+2(x+y·w+z·w·h)] (the .DAT/.TOT file volumes) | §7j.15 |
+| TRT anim/fire machine | FUN_00417264 (MissionShell @0x44807b, every frame): states 1 idle→2 alert (frames 0..7→TOT word frame+1)→5/6/7/8 aim S/N/W/E (octant vs nearest robot FUN_00417c00 dist<0x81)→FUN_00417698 fire at frame top + 4-frame muzzle (words 0x17..0x1E); 3/4 = death/settle; FUN_00417210(idx,n) = mirror word n+1; FUN_00417652 = frame remap 0xF→7, 6→0xE | §7j.16 |
+| TRT fire routine | FUN_00417698: lane test |lateral|<0x28 px + direction + ≤2 levels vs robot bank 0x4c69e4/0xA8; arms fire_ctr@+0xC; odd ctr → FUN_0041286f free slot → projectile type 0x66 (damage (d+1)·300) @0x4cc654+slot·0x22 {x,y tile·0x2000+0xF00, z<<0xD, +0x16=0x14, unit vx/vy}; structures never move | §7j.16 |
+| map volume loader | FUN_0041dc5a (MissionShell @0x447b3a): ".TOT"→[0x4ede20] (u16 W,u16 H header + 8 planes W·H u16 → [0x4eddec]/[0x4eddf0]/[0x4eddf4]), ".DAT"→[0x4edd58] (same header, u8 planes, >0x7F sanitized→0), ".CGR"→[0x4edd60], ".BIN"→[0x4ede1c] (word→[0x46cdb8]), ".MIN"→[0x4edd9c], .LNG/.LNK→0x45cdda, ".PAD"→999×8B slots 0x4e44f8 stamping 0xFF; FUN_0044661b = the EDITOR\ZONE restore reload; FUN_0041dbed/FUN_0041cd90 = path/section opener (handle 0x4eba20) | §7j.16 |
+| TOT materializer | FUN_00440a2d (caller FUN_00440dc2): 7×7 tiles × 8 z: TOT word≠0 ∧ DAT byte==0 → mirror word@0x4796bc = word + seen@0x4796cc; bridges the .TOT volume into the runtime mirror (how TRT word-1 stamps become visible) | §7j.16 |
+| map-click pick | FUN_00419943 (caller FUN_00410644 ← MissionShell @0x448021): rect list 0x4787c4/{center@+8/+0xC, w@+0x14} count [0x46ccd8] (written by renderer FUN_00403938) with octile cost FUN_0041ebf8; else screen→iso ((p−0xF0)·[0x4ede54])/0x1E0 + TRT scan; ret 0=ground / k+1=rect / (idx+1)\|0x2000=structure; FUN_00418a9f = empty stub | §7j.16 |
+| click order target | {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c written by FUN_00410644 (ground iso / rect / structure tile-center), read by the robot behaviour family (FUN_00409138 ×6, FUN_0040a56f/0xa7a1/0xace8/0xaf98/0xb615/0xa9ff) | §7j.16 |
+| scanner overlay | FUN_0041ec81 (MissionShell @0x48142): corner widget box 0x1EE..0x272×0xC3..0x147, grow [0x4edd68]→0x40, asset GAMEGFX\SCANNER.BIN; FUN_0041ee20(cx,cy) around the SELECTED robot ([0x46cbd4]+[0x46cbdc]): icons via FUN_00402572 (128×128 blitter→[0x4eddb8]) — 1/2 robots sel/rest, 4=0x4cffbc, 5/6 linked blink, 7/0xD tiles, 8=TRT, 9/0xA objects, 0xB arrivals, 0xC pads | §7j.16 |
+| nearest-robot probe | FUN_00417c00(px,py,&dist): octile over robot bank, ret idx; callers: turret machine + FUN_00412a98, FUN_00412f34 ×4, FUN_00417e2f (the robot targeting family). FUN_0041ebf8 = octile distance max+min/2 (51 sites) | §7j.16 |
 | terrain-structure array | recs @0x4cccf8 + i·0x20, i < [0x46ccd4] — {active@+0, hp@+0x10, x tile@+0x14, y@+0x18, z@+0x1C}; externally 1-based (dword[0x4cccd8+id·0x20] = rec id−1 active; 0x4cccd8 = id-0 guard) | §7j.14 |
 | terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
 | terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |

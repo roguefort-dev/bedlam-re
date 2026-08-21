@@ -2122,3 +2122,76 @@ Nudge-Worker: d37fb3a2-9df1-482a-88c5-20504c5bb254
 
 Nudge-Worker: efff097c-b4e9-41a0-b4ce-fcdc7fbf713e
 
+
+## D64 - 2026-08-21: the .TRT consumer hop is docs-only - TRT structures are SHOOTING SENTRY TURRETS (animate + fire, never move); the two 3D banks are the ".TOT"/".DAT" map file volumes
+
+1. RE-EXW-SIM 7j.16 pins the three 0x4cccf8-array scanners and
+   closes every open point of the 7j.15 unit:
+   - FUN_00417264 (MissionShell tick 0x44807b) = the TRT
+     ANIMATION/FIRE state machine. Canonical rec frame
+     (active@0x4cccf8): {active@+0, state@+4, anim_frame@+8,
+     fire_ctr@+0xC, hp@+0x10, x@+0x14, y@+0x18, z@+0x1C}. The
+     "+0x08 scratch dword" IS the animation frame; its runtime
+     producer is this machine (no file producer - 7j.15/D63
+     open point closed). States: 1 idle -> 2 alert (frames 0..7
+     -> TOT mirror word frame+1 via FUN_00417210) -> 5/6/7/8
+     aim S/N/W/E (octant toward the nearest robot,
+     FUN_00417c00 octile probe, dist<0x81) -> FUN_00417698
+     FIRE at the frame top + a 4-frame muzzle flash (mirror
+     words 0x17..0x1E); 3/4 = death/settle for destroyed
+     structures. FUN_00417652 = frame remap 0xF->7, 6->0xE.
+   - FUN_00417698 = FIRE: per aim lane, target iff
+     |lateral|<0x28 px beyond the structure AND <=2 z-levels
+     (robot bank 0x4c69e4/0xA8, count 0x46ccbc); arms
+     fire_ctr@+0xC, on odd ctr stages PROJECTILE TYPE 0x66
+     (damage (d+1)*300, the heaviest enemy projectile) into
+     the 0x4cc654 bank via FUN_0041286f (free-slot finder -
+     confirms 7j.14's type-word-0-free convention). The
+     7j.15 "turrets? retired" note is itself retired:
+     FORMATS-MISSION sec 14 re-anchored - TRT = turret
+     placements. Structures NEVER move.
+   - The two 3D banks are the mission map FILE VOLUMES
+     (FUN_0041dc5a = the map loader, MissionShell 0x447b3a):
+     [0x4ede20] = ".TOT" (u16 W, u16 H header + 8 planes W*H
+     u16; corpus-verified ZONEA 30004 = 4+2*25*75*8, ZONEB
+     160004 = the 100x100x8 arena max), [0x4edd58] = ".DAT"
+     (same header, u8 planes, >=0x80 sanitized to 0, 0xFF =
+     pad stamps, 0x66 = turret tile). Same loader: .CGR ->
+     height banks, .BIN -> [0x4ede1c] (word -> 0x46cdb8),
+     .MIN, .LNG/.LNK variant, .PAD -> 999x8B slots 0x4e44f8.
+     KEY CONSUMER FUN_00440a2d (caller FUN_00440dc2) = the
+     TOT-volume -> TOT-mirror MATERIALIZER (7x7 tiles x 8 z:
+     word!=0 AND DAT byte==0 -> mirror word + seen) - how the
+     TRT word-1 stamp becomes the visible sprite frame;
+     FUN_0044661b = the save/EDITOR\ZONE restore reload.
+   - FUN_00419943 = the map-click PICK (rect list 0x4787c4
+     written by the renderer FUN_00403938, octile cost
+     FUN_0041ebf8, else screen->iso IDIV + TRT box test;
+     ret 0 = ground / k+1 = rect / (idx+1)|0x2000 =
+     structure; FUN_00418a9f = an EMPTY stub). FUN_00410644
+     (MissionShell 0x448021) = the click ORDER dispatcher ->
+     order target {x,y,z} 0x4dd484/88/8C consumed by the
+     robot behaviour family. FUN_0041ec81/FUN_0041ee20 = the
+     corner SCANNER widget (GAMEGFX\SCANNER.BIN) drawing
+     marker icons (8 = TRT structures) around the selected
+     robot via FUN_00402572 (128x128 blitter -> 0x4eddb8).
+   - 7j.13-erratum correction: the uncommitted 22c1c14b
+     draft's W/H/D +0/+2/+4 shift is WRONG (its dword>>16
+     anchors consume word@+2/+4/+6 - instruction-proven at
+     0x41a857/0x41aa02/0x41aaf9/0x41a6fc); original 7j.13
+     offsets stand, word@+0 = unconsumed [open]. The draft's
+     5x8B effect-entry block (+0x16 selectors, 9-case table
+     0x41a870), count@+0x12, template banks @+0x3E..+0x4A and
+     the 0x4E closure are CONFIRMED and kept.
+2. ENGINE: no change - corpus verdict unchanged (the turret
+   animator/fire stays unwired like the rest of the weapon
+   family). Re-open leads queued: the robot targeting family
+   (FUN_00412a98/FUN_00412f34/FUN_00417e2f - the other
+   FUN_00417c00 callers and both 0x46cbf8 readers), the
+   0x4dd484 order-target robot behaviour family,
+   FUN_00440dc2 (materializer caller - scroll restamp?),
+   the 0x4787c4 hot-rect record layout, and the FUN_00410823
+   anim machine (unchanged from 7j.13).
+
+Nudge-Worker: 16f43187-a265-44ee-8a03-96137fcb721a
+

@@ -58,6 +58,18 @@ Recurring engine constants seen across formats: **128** (CGR sprite count),
 
 - **Sizes:** identical distribution to MAP (30004/40004/160004). VERIFIED
 - **Layout:** same `u16 w + u16 h + 8 × w·h u16 planes`. VERIFIED
+- **EXW loader ANCHORED (2026-08-21, RE-EXW-SIM §7j.16):** FUN_0041dc5a
+  (MissionShell mission-load call @0x447b3a) loads ".TOT" into the heap
+  volume behind [0x4ede20] (word/voxel, arena 0x27104 → max 100×100×8),
+  reads the `u16 w, u16 h` header into the map dims ([0x4eddec]/[0x4eddf0],
+  plane pitch w·h → [0x4eddf4]) and skips 4 bytes. FUN_00440a2d
+  (caller FUN_00440dc2) is the runtime consumer: it walks 7×7 tiles × 8
+  levels and copies every nonzero TOT word whose DAT byte is 0 into the
+  TOT MIRROR (0x4796bc word@[row·0x1E]+2z) + seen flag 0x4796cc — i.e.
+  **the .TOT file volume is the persistent word state; the mirror is the
+  per-frame runtime view** (where the TRT structure animation frames
+  1..0x1E live). FUN_0044661b re-loads .TOT/.BIN/.DAT on the
+  save/EDITOR\ZONE restore path.
 - **Relationship to MAP — VERIFIED, with a caveat:**
   - MAP and TOT are **never** byte-identical (0/37).
   - Across all 37 missions and all 8 planes there are exactly **0** cells where
@@ -109,6 +121,12 @@ Recurring engine constants seen across formats: **128** (CGR sprite count),
   the CGR height sprites (slot = type−1). The loader sweeps planes 0..6
   clearing bytes ≥0x80, then overwrites `DAT[kind][y][x] = 0xFF` for every
   PAD record — the PAD "effect" is stored IN the DAT type grid.
+- **Loader side ANCHORED (2026-08-21, RE-EXW-SIM §7j.16):** FUN_0041dc5a
+  loads ".DAT" into the volume behind [0x4edd58] (byte/voxel, skips the
+  same `u16 w, u16 h` 4-byte header; arena 0x13884), runs the ≥0x80→0
+  sweep, then the ".PAD" parse stamps `0xFF`; the ".TRT" loader
+  FUN_004170a6 additionally stamps tile **0x66** (the terrain-structure/
+  turret tile, sibling of the 0x62 trap tile) at each turret's (x,y,z).
 
 ## 5. LNK — u16[8192] rotation/permutation link table
 
@@ -219,7 +237,12 @@ What RE must confirm: everything beyond the layout.
   get_from_dat_file reads 0xFF back as tile type 1 — a CGR slot-0
   0x1F-height deck block at level `kind`. So **`type` is the z LEVEL the
   pad materialises its tile at**, matching the TXT "lowers section two
-  levels" phrasing (a level change re-marks the DAT cell). Open: the
+  levels" phrasing (a level change re-marks the DAT cell). Loader side
+  ANCHORED (RE-EXW-SIM §7j.16): FUN_0041dc5a parses the ".PAD" section
+  into the 0x4e44f8 runtime slots — 8 B each (word@+0 = active, written
+  1 after load; x@+2, y@+4, z@+6 = the 3×u16 file record), x==0xFFFF
+  terminates, then `DAT[z][y][x] = 0xFF`. The 0x4e44f8 slots are drawn as
+  scanner icon 0xC (FUN_0041ee20). Open: the
   interactive side (when a pad fires) lives in TOT/NME consumers.
 - **Honest negative (kept):** the TXT coordinates (e.g. `0/006/005`) still
   do not match PAD records under simple transforms; the TXT `L/x/y` frame
@@ -276,20 +299,23 @@ What RE must confirm: everything beyond the layout.
     bounds (no out-of-bounds record found); type ∈ 0…6 (1×265, 2×212, 3×64,
     4×24, 5×5, 6×6, 0×1).
   - 11 files have count = 0 (2-byte file).
-- **Interpretation (ANCHORED 2026-08-21 to RE-EXW-SIM §7j.15):** the
+- **Interpretation (ANCHORED 2026-08-21 to RE-EXW-SIM §7j.15,
+  consumers CLOSED §7j.16):** the
   third u32 is the **z LEVEL** (values 0..6 = map levels; per-zone bands:
   ZONEA records all level 1, ZONEB all 2), not a type enum. The records are
-  destructible **terrain-structure placements** — the consumer array
-  (base 0x4cccfc/0x4cccf8 per §7j.15 frames, 250-rec capacity, stride 0x20
-  {=1, active, scratch 0, hp, x, y, z})
-  staged by the ".TRT" mission-section loader FUN_004170a6 at mission load
-  and damaged by the terrain resolver FUN_0041bc1c (hp = 250+(250·linear
-  mission)/27). The earlier "turrets?" reading is retired as primary;
-  turret-vs-static behaviour, if any, would live in the still-open consumers
-  FUN_00417264 / FUN_00419943 / FUN_0041ee20.
-- **What RE must confirm:** the open consumers above (esp. whether any
-  structure shoots — FUN_004190bc's 0x4cff98 record family is a candidate),
-  and the +0x08 scratch dword producer.
+  destructible **terrain-structure placements — SHOOTING SENTRY TURRETS**
+  (consumer hop §7j.16): runtime record (active@0x4cccf8 frame, stride 0x20)
+  = {active, state, anim_frame, fire_ctr, hp, x, y, z}; the MissionShell
+  animator FUN_00417264 runs an 8-state machine (idle→alert→aim S/N/W/E by
+  octant toward the nearest robot) that animates the TOT mirror word
+  (frame+1, muzzle frames up to 0x1E) and, via FUN_00417698, fires
+  **projectile type 0x66** (damage (d+1)·300) at robots within a 40px
+  directional lane and ≤2 z-levels. Structures never move; the 250-rec
+  capacity bank is staged by the ".TRT" loader FUN_004170a6 and damaged by
+  the resolver FUN_0041bc1c (hp = 250+(250·linear mission)/27). The
+  7j.15 "turrets? retired" note is itself retired — turrets is the right
+  primary reading. The +0x08 scratch dword = the animation frame, runtime
+  producer FUN_00417264 (loader zeroes it; no file producer exists).
 
 ## 15. TXT — ASCII designer/mission notes (two known documents)
 
