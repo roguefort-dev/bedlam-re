@@ -1336,12 +1336,12 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    `byte[0x4796d4 + tile*0x1E] = value` clamped < 8. This CLOSES the
    MISSIONVIEW §8.1 "+0x18 producer OPEN" question: the byte has a
    runtime writer — the debris scorch ring (kind 5 passes 1/2/4 at
-   the six ring tiles). CAVEAT [needs one re-verify before wiring]:
+   the ring tiles). CAVEAT [RESOLVED by §7j.9 below — the reader is
+   raw, no mask; the ring is NINE 3×3 writes, not six]:
    7g.3's robots() reader treats byte != 0 as an ARMOR PAD
-   (FUN_004100b7(idx,20)); whether scorch values and pad values
-   share the byte or a mask separates them is not yet pinned — the
-   reader at 0x40bbab tests the raw byte != 0, so on the current
-   decode a death WOULD arm 6 armor-pad tiles around the corpse.
+   (FUN_004100b7(idx,20)); the reader at 0x40bbab tests the raw
+   byte != 0, so a death DOES arm 3×3 armor-pad tiles around each
+   of the five debris — verified original semantics, now wired.
 9. **The debris draw pass** [verified 0x4063e3..0x4064f4, inside
    FUN_00403938]: per active, non-delayed record: the same iso
    projection with +0x110 offsets, bounds 0x23f/0x23e, sprite =
@@ -1363,8 +1363,84 @@ selected index). FLAGS.BIN/BLOWUP(B/G).BIN join the mission fetch
 chain; the two new draw passes land in the enqueue/flush order of
 FUN_00403938's tail. NOT modeled: the 0x4cec38/0x4cf638 effect-array
 families, the debris physics/collision FUN_0040de9c (no corpus-path
-producer), the scorch-byte write (pending the 7j.8 caveat re-verify),
-SFX.
+producer), SFX. The scorch-byte write WAS the pending 7j.8 caveat —
+resolved + landed by 7j.9 below.
+
+## 7j.9 Amendment 2026-08-21 (worker 11384359, the 7j.8 scorch/
+armor-pad re-verify)
+
+Byte-precise re-dump of the reader + the writer + a FULL caller
+census (`objdump | grep "call.*0x422287"`). All [verified] asm.
+
+1. **The armor reader is RAW — no mask** [re-verified
+   0x40bc57..0x40bc9f]: `imul ecx,ecx,0x1e; cmp BYTE PTR
+   [ecx+0x4796d4],0; je bleed` — the phase-1 pass tests the RAW
+   per-tile record +0x18 byte against zero, nothing else. Scorch
+   values and pad values SHARE the byte; a death genuinely arms
+   armor-pad tiles around the corpse (a survivor standing on a
+   scorched tile charges +20/frame instead of bleeding −10).
+2. **The writer hits the SAME byte** [re-verified
+   0x422287..0x4222cd]: FUN_00422287 computes the tile as
+   `line[y>>5] + (x>>5)` (bounds 0 ≤ t < map w/h, both coords
+   `sar 5`), then `tile*0x1E` via `shl 4/sub/add` (= ×30, the same
+   scale the reader's `imul 0x1e` applies) and writes
+   `byte[0x4796d4 + tile*0x1E] = bl`; the clamp reads the ZERO-
+   extended byte back as u32 (`mov dl,bl; cmp edx,8`) — `≥ 8 →
+   write 7`, so stored values are always 0..7. Reader and writer
+   address the identical array byte. No value family, no bit
+   separation.
+3. **The kind-5 ring is NINE 3×3 writes, not six** [verified
+   0x421465..0x4215d8 + shared tail 0x421285..0x421291]: each ring
+   call re-loads the record x/y (+0x04/+0x08) and passes world
+   coords ± 0x20 (one tile in Q5); since `(x±0x20)>>5` is always
+   `tile±1`, the ring is the full 3×3 TILE neighborhood of the
+   debris tile, written in this exact order (call sites): TL
+   0x421476 (x−0x20,y−0x20)=1 · L 0x4214a3 (x−0x20,y)=2 · BL
+   0x4214d3 (x−0x20,y+0x20)=1 · T 0x421500 (x,y−0x20)=2 · C
+   0x42152a (x,y)=4 · B 0x421557 (x,y+0x20)=2 · TR 0x421587
+   (x+0x20,y−0x20)=1 · R 0x4215b4 (x+0x20,y)=2 · BR 0x421291
+   (x+0x20,y+0x20)=1 (entered via `jmp 0x421285` with ebx=1 from
+   0x4215d8). Pattern = corners 1, edges 2, center 4. A death
+   stages FIVE debris (7g.6) → 45 ring writes; adjacent rings
+   overlap (the ±0x10 jitter keeps debris within ±1 tile of the
+   corpse tile), last-write-wins in staging order k=0..4.
+4. **Caller census — kind 5 is NOT the only producer**: SEVEN
+   in-family producers inside FUN_00420608, all writing the
+   IDENTICAL 3×3 ring (same order, corners 1 / edges 2 / center
+   4; corner values verified per kind: k3 edi=1 @0x421bc0, k4
+   edi=1 @0x42192a, k5 const 1, k6/12 ebx=1 @0x420d38, k9 ecx=1
+   @0x421098, k11 esi=1 @0x420eb9, k20 edi=1 @0x4209ef):
+   kind 3 [0x421c50..0x421db9], kind 4 [0x4219bf..0x421aeb],
+   kind 5 [0x421476..0x421291], kinds 6+12 [shared body 0x420cbf,
+   ring 0x420d89..0x421291], kind 9 [0x42112c..0x421291], kind 11
+   [0x420f26..0x420fd2 + tail], kind 20 [0x420a2e..0x421291].
+   Kinds 1/13/14/15 (shared body 0x42129b), 2, 7, 8, 10, 16..19
+   stage records with NO ring. Jump table re-verified at 0x4205b8:
+   k1=0x42129b k2=0x4215dd k3=0x421b11 k4=0x42186f k5=0x421327
+   k6=k12=0x420cbf k7=0x420af2 k8=0x421726 k9=0x420fde
+   k10=0x420c13 k11=0x420e4a k13=k14=k15=k1 k16=0x4206b1
+   k17=0x420764 k18=0x420812 k19=0x4208ba k20=0x420962.
+5. **ONE external producer — FUN_00424051** [census-only,
+   0x424209..0x424269]: guarded by `word@[0x4e9780] != 0`; reads
+   tile words at 0x4e9776/0x4e9778 (high words), scales `<<5` to
+   world, then FIVE calls: center value `(RandA&3)+3` (3..6), and
+   four "neighbors" via `inc/dec` of the WORLD coord by ONE unit —
+   which after the writer's `>>5` floor is the SAME tile as the
+   center, so the four later calls simply re-roll the one tile
+   (final stored value 1..4 from the y−1 call). Either an original
+   bug (intended ±0x20) or deliberate re-roll jitter; function
+   purpose unidentified (calls FUN_0042394a first — SFX family).
+   NOT the death path; stays unwired (host-seamed if ever needed).
+
+Engine seam (this unit): `MissionSim::scorch_write` models
+FUN_00422287 (world>>5, map bounds, value ≥ 8 → 7) over the
+existing `armor_pads` type-DB mirror (growing it zero-padded on
+first write); the death tail stages the NINE ring writes per
+debris row in the EXW order. No hash input moves: `armor_pads`
+is hashed only through its armor effect, the corpus gates stage
+no deaths before their pins, and the default corpus pads stay
+all-zero until a death. The scene's DebrisFx is untouched — the
+scorch is sim state, not presentation.
 
 ## 8. Constants ledger (all [verified] unless tagged)
 

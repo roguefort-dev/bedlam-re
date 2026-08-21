@@ -300,14 +300,16 @@ terrain pass overwrites everything the present window reads.
    **+0x18 PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7j.8)**:
    FUN_00422287 is a RUNTIME writer — `byte[0x4796d4 + tile*0x1E]
    = value` (clamped < 8) with the tile from world>>5; its known
-   caller is the debris-stager kind-5 scorch ring (six ±0x20
-   ring writes with values 1/2/4 around each death debris,
-   FUN_00420608 kind 5). CAVEAT: the robots() reader (SIM §7g.3)
-   treats byte != 0 as an ARMOR PAD, so either the scorch values
-   and pad values share the byte through a mask the reader does
-   not apply, or deaths genuinely arm pad tiles — one re-verify
-   of the reader's byte test is owed before wiring scorch marks.
-   The +0x1a/+0x1b/+0x1c producers remain open.
+   callers are the debris-stager scorch rings — SEVEN kinds write
+   the IDENTICAL 3×3 ring per debris (corners 1, edges 2, center
+   4, offsets ±0x20; kind 5 = death debris), plus one external
+   census-only producer (FUN_00424051). CAVEAT RESOLVED 2026-08-21
+   (RE-EXW-SIM §7j.9): the robots() reader (SIM §7g.3) tests the
+   RAW byte != 0 — no mask — so scorch values and armor pads SHARE
+   the byte and a death genuinely arms 3×3 pad tiles around each
+   debris. The engine wires the ring writes on the death path
+   (MissionSim::scorch_write). The +0x1a/+0x1b/+0x1c producers
+   remain open.
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader

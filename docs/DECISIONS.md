@@ -1880,3 +1880,37 @@ Nudge-Worker: efc8b1e0-9dfb-4f2d-a0ae-1688ac88db6f
    fmt + clippy clean, MANIFEST verified.
 
 Nudge-Worker: 6ab53863-71dc-4010-b6eb-fa9a3f724411
+
+## D57 - 2026-08-21: the scorch ring lands in the sim death tail - the +0x18 reader is raw, no mask
+
+1. RE FIRST (RE-EXW-SIM 7j.9, committed before the code): the
+   7j.8 caveat is RESOLVED. The robots() phase-1 armor reader
+   (0x40bc57..0x40bc9f) tests the RAW record +0x18 byte != 0 -
+   no mask, no value family; FUN_00422287 (0x422287, whole
+   re-verified) writes that SAME byte (same 0x4796d4 + tile*0x1E
+   addressing, sar>>5 tile from world, map bounds, value >= 8
+   clamped to 7). Scorch values and armor pads SHARE the byte:
+   a death genuinely arms 3x3 armor-pad tiles around each debris
+   - quirky but verified original semantics.
+2. CORRECTION to 7j.5/D56: the kind-5 ring is NINE 3x3 tile
+   writes, not six - TL/L/BL/T/C/B/TR/R/BR at world +-0x20
+   (= tile +-1 after the writer's >>5) with corners 1, edges 2,
+   center 4, in that exact order (0x421476..0x421291 incl. the
+   shared tail entry); a death = 5 debris x 9 = 45 writes,
+   overlapping rings last-write-wins in staging order. Census:
+   SEVEN in-family producers (kinds 3, 4, 5, 6+12 shared, 9, 11,
+   20 - identical rings, corner value 1 per kind) + ONE external
+   census-only producer FUN_00424051 (five same-tile re-rolls,
+   values 3..6 then 1..4 - unidentified purpose, unwired).
+3. ENGINE: MissionSim::scorch_write models FUN_00422287 over the
+   existing armor_pads type-DB mirror (zero-padded growth on
+   first write - the default corpus stays all-zero until a
+   death); the apply_damage death tail stages the nine ring
+   writes per debris row in the EXW order. armor_pads remains
+   hashed only through its armor effect; no corpus gate stages a
+   death before its pins, so EVERY pin stays unmoved. The
+   scene's DebrisFx is untouched - scorch is sim state, not
+   presentation; the other six ring kinds + FUN_00424051 stay
+   unwired (no corpus-path producer yet).
+
+Nudge-Worker: 11384359-21d7-4dbe-8130-1d504d6c2511
