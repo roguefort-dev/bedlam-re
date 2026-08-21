@@ -129,6 +129,13 @@ env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/stale.lock" "$ROOT/tools/llm-watchdog
 [ ! -e "$PLAN/.state/llm-watchdog-pause" ]
 grep -q "recovered stale watchdog-owned pause" "$PLAN/.state/llm-watchdog.log"
 
+# A lone watchdog-format PAUSE (marker lost in a crash window) is recovered
+# under the singleton lock - the orphan-token path.
+printf "llm-watchdog 999 1\n" > "$PLAN/.state/PAUSE"
+env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/orphan.lock" "$ROOT/tools/llm-watchdog.sh"
+[ ! -e "$PLAN/.state/PAUSE" ]
+grep -q "orphan token" "$PLAN/.state/llm-watchdog.log"
+
 # repair agent timeout still releases only its own pause and records cooldown.
 MOCK_SUPERVISE=repair MOCK_REPAIR_SLEEP=1 env "${common[@]}" REPAIR_TIMEOUT=1 LLM_WATCHDOG_LOCK="$TMP/timeout.lock" "$ROOT/tools/llm-watchdog.sh"
 [ ! -e "$PLAN/.state/PAUSE" ]

@@ -141,6 +141,19 @@ if [ -e "$MARKER" ]; then
   fi
 fi
 
+# Under the singleton lock any leftover watchdog-format PAUSE is provably
+# stale (no other watchdog instance can be live). Covers crash windows
+# where the marker was lost or mismatched - e.g. PAUSE written but the
+# process died before the marker, or files from different generations.
+if [ -e "$PAUSE" ]; then
+  cur=$(cat "$PAUSE" 2>/dev/null || true)
+  mk=$(cat "$MARKER" 2>/dev/null || true)
+  if [[ "$cur" == llm-watchdog\ * ]] && { [ ! -e "$MARKER" ] || [ "$mk" != "$cur" ]; }; then
+    rm -f "$PAUSE" "$MARKER"
+    log "recovered stranded watchdog-owned pause (orphan token)"
+  fi
+fi
+
 # A human pause is authoritative and is never bypassed.
 if [ -e "$PAUSE" ]; then
   log "human PAUSE present; watchdog standing down"

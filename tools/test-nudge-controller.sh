@@ -142,6 +142,17 @@ run_nudge
 [ "$(wc -l < "$TMP/run-calls")" -eq "$before" ]
 rm -f "$PLAN/.state/PAUSE"
 
+# 3b. A stranded watchdog-owned PAUSE (dead pid, e.g. reboot mid-repair)
+# rings the supervisor bell (event-driven recovery) and spawns nothing.
+: > "$TMP/chain-calls"
+printf "llm-watchdog 999999 1000\n" > "$PLAN/.state/PAUSE"
+touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
+run_nudge
+grep -q "watchdog-owned PAUSE stranded (pid=999999)" "$PLAN/.state/nudge.log"
+grep -q -- "start bedlam-llm-watchdog.service" "$TMP/chain-calls"
+! grep -q "spawning agent" "$PLAN/.state/nudge.log"
+rm -f "$PLAN/.state/PAUSE"
+
 # 4. A cooling-down task is not spawned; other free items still are.
 th=$(taskhash 1)
 mkdir -p "$PLAN/.state/taskcooldown"

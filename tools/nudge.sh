@@ -30,7 +30,29 @@ SYSTEMD_RUN=${SYSTEMD_RUN_OVERRIDE:-systemd-run}
 
 mkdir -p "$STATE" "$CLAIMS"
 [ -f "$STATE/PLAN-COMPLETE" ] && exit 0
-[ -f "$STATE/PAUSE" ] && exit 0
+# A watchdog-owned PAUSE whose owning pid is dead (e.g. reboot mid-repair)
+# strands the loop: PAUSE blocks workers, no workers means no taskfails events,
+# and with the watchdog timer gone nothing would ever run its stale-token
+# recovery. Detect it here and ring the supervisor bell (event-driven; the
+# watchdog itself stays the recovery authority under its singleton lock).
+if [ -f "$STATE/PAUSE" ]; then
+  pb=$(cat "$STATE/PAUSE" 2>/dev/null || true)
+  case "$pb" in
+    llm-watchdog\ *)
+      wp=$(printf "%s\n" "$pb" | awk "{print \$2}")
+      wts=$(printf "%s\n" "$pb" | awk "{print \$3}")
+      if ! kill -0 "$wp" 2>/dev/null || [ $(( $(date +%s) - ${wts:-0} )) -gt 2700 ]; then
+        echo "$(date -Is) watchdog-owned PAUSE stranded (pid=$wp); triggering supervisor recovery" >> "$STATE/nudge.log"
+        if [ -n "${SYSTEMCTL_OVERRIDE:-}" ]; then
+          "$SYSTEMCTL_OVERRIDE" --user start bedlam-llm-watchdog.service >/dev/null 2>&1 || true
+        elif [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ]; then
+          systemctl --user start bedlam-llm-watchdog.service >/dev/null 2>&1 || true
+        fi
+      fi
+      ;;
+  esac
+  exit 0
+fi
 
 # Per-task failure state expires after a day regardless of queue rewrites.
 find "$STATE/taskfails" "$STATE/taskcooldown" -type f -mtime +1 -delete 2>/dev/null || true
