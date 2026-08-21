@@ -329,11 +329,13 @@ consumed unconditionally at the tail (`= -1`, 0x40d70d).
 5. **Redraw flag semantics** [asm 0x4071ed..0x407217, in the
    FUN_00403938 draw tail]: `DAT_0046ccec` is a per-frame COUNTDOWN:
    when nonzero, decrement and call the sidebar redraw pass
-   `FUN_00408403`. Producers set 2 (sidebar_control) or 3
-   (MissionShell 0x4478bf/0x447c74/0x448117; robot-damage path
-   0x40a483; other sidebar producers FUN_0040e230/FUN_004102b6/
-   FUN_0040eba0). Sibling countdowns in the same tail: `0x46ccf0` →
-   FUN_004085ce, `0x46ccf8` → FUN_00401ca2 (rect (0x12,1,0x1EE,0xC3)).
+   `FUN_00408403`. Producers: sidebar_control sets 2; the robot-death
+   path FUN_00409138 sets 3 (0x40a483 region, alongside clearing the
+   dead record's 7 order-gate words at 0x4c6a1c+8k — full sidebar
+   refresh); MissionShell entry ZEROES both countdowns with the other
+   mission-state globals (0x4478bf/0x4478c5). Sibling countdowns in
+   the same tail: `0x46ccf0` → FUN_004085ce, `0x46ccf8` →
+   FUN_00401ca2 (rect (0x12,1,0x1EE,0xC3)).
 6. **Spawn-side order init** [asm 0x40ceb2 + 0x40cef1..0x40cf70, in
    load_markers' record init]: order bits word (+0x6E) starts 0, then
    the stats-copy loop runs 7 iterations (i = 0..6, stats byte offset

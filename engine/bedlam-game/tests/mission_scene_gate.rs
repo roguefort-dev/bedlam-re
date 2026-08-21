@@ -252,6 +252,106 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(folded[1], [0x3E, 0x3A, 0x39]);
 
+    // --- the sidebar producer on real corpus bytes (sec 6c) ----------
+    // State after the entry pump: slot 0 selected, countdown 0 (the
+    // MissionShell entry reset), both robots carry the spawn default
+    // order bits 1<<0 [sec 6c.6].
+    {
+        let mission = host.mission().expect("staged on Mission");
+        assert_eq!(mission.sidebar_selected(), 0);
+        assert_eq!(mission.sidebar_redraw(), 0);
+        assert_eq!(mission.order_bits(0), 1, "spawn default bit 0");
+        assert_eq!(mission.order_bits(1), 1);
+    }
+    // Select strip 1 (x 0x219, squad of 2: MRK[0] + the staged
+    // marker) -> slot 1, countdown set 2 then decremented by this
+    // pump's present (1 left).
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: 0x219,
+            mouse_dy: 5,
+            ..InputFrame::default()
+        },
+    );
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    {
+        let mission = host.mission().expect("still on Mission");
+        assert_eq!(mission.sidebar_selected(), 1, "strip 1 selects slot 1");
+        assert_eq!(
+            mission.sidebar_redraw(),
+            1,
+            "2 set, 1 decremented by the present"
+        );
+    }
+    // Strip 2 is gated off (squad 2 < 3, the DAT_0046cbd8 analog):
+    // no select, no redraw. (Cursor is at (0x219,5); moving to
+    // (0x24B,0x35) crosses no wired region on the way — motion never
+    // fires, only edges.)
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: 0x24B - 0x219,
+            mouse_dy: 0x35 - 5,
+            ..InputFrame::default()
+        },
+    );
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    {
+        let mission = host.mission().expect("still on Mission");
+        assert_eq!(mission.sidebar_selected(), 1, "strip 2 gated (squad < 3)");
+        assert_eq!(
+            mission.sidebar_redraw(),
+            0,
+            "countdown ran out, no new fire"
+        );
+    }
+    // Order row 0 on the SELECTED robot: bit 0 toggles off, countdown
+    // 2 -> 1 after the click pump, and NO order is armed (sidebar
+    // clicks are presentation-only, D17).
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: 0x200 - 0x24B,
+            mouse_dy: 0x57 - 0x35,
+            ..InputFrame::default()
+        },
+    );
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        },
+    );
+    {
+        let mission = host.mission().expect("still on Mission");
+        assert_eq!(mission.order_bits(1), 0, "row 0 toggled robot 1's bit 0");
+        assert_eq!(mission.order_bits(0), 1, "robot 0 untouched");
+        assert_eq!(mission.sidebar_redraw(), 1);
+        assert!(mission.sim().order().is_none(), "sidebar click never arms");
+        assert_eq!(mission.sim().robots()[0].state, 0, "robot 0 stays idle");
+    }
+    host.pump_frame(4, &InputFrame::default());
+    host.pump_frame(4, &InputFrame::default());
+    assert_eq!(
+        host.mission().expect("still on Mission").sidebar_redraw(),
+        0,
+        "countdown drains to zero and sticks"
+    );
+
     // The hash pins (extend the render-gate family: these are the
     // SCENE-composed frames — host pipeline + fixed spawn camera +
     // one render per pump). Regenerated ONCE for the GAMEPAL present

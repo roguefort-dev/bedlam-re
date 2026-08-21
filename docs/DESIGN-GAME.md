@@ -227,6 +227,25 @@ palette with the mission — fetch set 10 files.
   LNK memo walk + edge stream are presentation state (D17 bucket b)
   — one render per host frame advances the walk once, matching the
   render corpus gate's one-draw-per-frame rhythm at 1 tick/frame.
+- SIDEBAR PRODUCER (added 2026-08-21, RE-EXW-SIM sec 6c): clicks at
+  `x >= 0x1E0` run `sidebar_control` (the mouse subset of
+  FUN_0040d197) INSTEAD of the robot arm — the robot-select strips
+  (`SIDEBAR_SELECT_STRIPS` × y[5,0x35], gated by the spawned squad
+  size and the target's alive word), the 7 order rows
+  (`SIDEBAR_ORDER_RECT`, `row = (y-0x57)/14` clamp 6, gated by a
+  per-robot availability mask, toggling the per-robot order-bits
+  word), and the `DAT_0046ccec` redraw COUNTDOWN (producers set 2,
+  every present decrements while nonzero — the sidebar redraw PASS
+  FUN_00408403 itself is a future slice). All of it lives on the
+  presentation half: none of it enters the sim state hash (unit
+  pinned + corpus pinned — sidebar clicks never arm orders).
+  Availability defaults to all-7 [design: the per-type order table
+  at 0x4de664 is runtime-loaded and its file source is open];
+  `set_order_availability` is the host seam for the real table.
+  Order bits default `1 << first available` at spawn [sec 6c.6].
+  Out of scope: the map-toggle strip (screen-mode globals + the
+  0x4edba0 overlay family) and the keyboard latches (P2e button
+  map).
 
 ## Provenance
 

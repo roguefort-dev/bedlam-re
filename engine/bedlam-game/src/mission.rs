@@ -13,7 +13,8 @@
 //!   runs before `advance_frame`;
 //! - the click seam: robot-sprite click family ~0x433cbc arms the
 //!   order AT the clicked robot [sec 6.4]; viewport clicks are
-//!   x < 0x1E0, x >= 0x1E0 is the sidebar [sec 6.2];
+//!   x < 0x1E0, x >= 0x1E0 runs the sidebar producer [sec 6c —
+//!   select strips + order rows + the redraw countdown];
 //! - present: the viewport pass order enqueue -> terrain -> window
 //!   [RE-EXW-MISSIONVIEW secs 5d/7].
 //!
@@ -32,6 +33,65 @@ use bedlam_render::Vga6;
 
 use crate::loading::Plane;
 use crate::GameError;
+
+/// Sidebar robot-select strip x-ranges `[lo, hi]` per squad slot
+/// (inclusive; slot 2's `[0x24B,0x27B]` is the asm's [0x24A< x <0x27C]
+/// encoding) [RE-EXW-SIM sec 6c.2, asm 0x40d220..0x40d3b0].
+pub const SIDEBAR_SELECT_STRIPS: [(i32, i32); 3] = [(0x1E7, 0x217), (0x219, 0x249), (0x24B, 0x27B)];
+/// Sidebar robot-select strip y-range, inclusive [sec 6c.2].
+pub const SIDEBAR_SELECT_STRIP_Y: (i32, i32) = (5, 0x35);
+/// Sidebar order-row button rect, inclusive [sec 6c.4, asm 0x40d659].
+pub const SIDEBAR_ORDER_RECT: (i32, i32, i32, i32) = (0x1E9, 0x275, 0x57, 0xB8);
+/// Order-row pitch/first-row y: `row = (y - 0x57) / 14`, clamped to
+/// 6 (7 rows exactly covering the rect height) [sec 6c.4].
+pub const SIDEBAR_ORDER_ROW: (i32, i32) = (0x57, 14);
+
+/// The sidebar presentation half [RE-EXW-SIM sec 6c; D17 split —
+/// none of this enters the sim state hash]: the selected squad slot
+/// (`DAT_0046cbdc`), the redraw countdown (`DAT_0046ccec`: producers
+/// set 2, the draw tail decrements while nonzero and runs the sidebar
+/// redraw pass FUN_00408403 — modeled here as the countdown alone),
+/// and the per-robot order-bits word (+0x6E) with its 7-bit
+/// availability mask (the +0x38+8k gate words; the type-table file
+/// source is open, so availability defaults to all-7 [design] and a
+/// host seam installs the real mask when the table lands).
+#[derive(Debug, Default)]
+struct Sidebar {
+    selected: usize,
+    redraw: i32,
+    order_bits: Vec<u16>,
+    order_avail: Vec<u8>,
+}
+
+impl Sidebar {
+    /// Per-robot state at spawn [sec 6c.6]: availability default
+    /// 0x7F [design], order bits `1 << first available` (= bit 0
+    /// under the default mask), selected slot 0 (load_markers
+    /// 0x40ce0e), redraw 0 (the MissionShell entry reset 0x4478bf).
+    fn new(robots: usize) -> Sidebar {
+        Sidebar {
+            selected: 0,
+            redraw: 0,
+            order_bits: (0..robots)
+                .map(|_| default_order_bits(ALL_ORDERS))
+                .collect(),
+            order_avail: vec![ALL_ORDERS; robots],
+        }
+    }
+}
+
+/// Default availability until the type table lands [design].
+const ALL_ORDERS: u8 = 0x7F;
+
+/// `1 << first available group` [sec 6c.6]; 0 when nothing is
+/// available (matches the EXW: no group word0 nonzero -> no bit).
+const fn default_order_bits(avail: u8) -> u16 {
+    if avail == 0 {
+        0
+    } else {
+        1u16 << avail.trailing_zeros()
+    }
+}
 
 /// Robots spawned per player from the MRK records
 /// [load_markers, RE-EXW-SIM sec 7c.7, verified]: zones {0,1,2,7} -> 1,
@@ -127,6 +187,9 @@ pub struct MissionScene {
     /// [MISSIONVIEW sec 6: GAMEPAL loads into the 0x4edbf8 0x302-B
     /// blob the mission-load pass copies to 0x4ddb34, SIM sec 7c.3].
     palette: [Vga6; 256],
+    /// The sidebar presentation half [sec 6c; D17 split — outside
+    /// the sim hash].
+    sidebar: Sidebar,
     /// Presents executed (the one-render-per-host-frame rhythm).
     render_count: u64,
     active: bool,
@@ -207,6 +270,7 @@ impl MissionScene {
         let mut view = MissionView::from_mission_bytes(tot, &planes, bin, lnk)
             .ok_or_else(|| bad("TOT/BIN/LNK", "malformed viewport bytes"))?;
         view.set_entity_bank(dante);
+        let sidebar = Sidebar::new(sim.robots().len());
         Ok(MissionScene {
             sim,
             view,
@@ -218,6 +282,7 @@ impl MissionScene {
             buf: vec![0u8; VIEW_BUF_LEN],
             plane: vec![0u8; 640 * 480],
             palette,
+            sidebar,
             render_count: 0,
             active: false,
         })
@@ -267,9 +332,10 @@ impl MissionScene {
     /// One executed 60 Hz tick [DESIGN-GAME sec 11 PER FRAME; the
     /// MissionShell order, RE-EXW-SIM sec 1]: integrate the pointer
     /// from mouse deltas (clamp 0..=639 / 0..=479), run the click
-    /// seam on a left-button EDGE, then `advance_frame` (the six
-    /// unit-manager phases + the order-window tick). Inert until
-    /// [`MissionScene::activate`].
+    /// seam on a left-button EDGE — the sidebar producer at
+    /// `x >= 0x1E0` [sec 6c], the robot arm below it [sec 6.4] —
+    /// then `advance_frame` (the six unit-manager phases + the
+    /// order-window tick). Inert until [`MissionScene::activate`].
     pub fn tick(&mut self, input: &InputFrame) {
         if !self.active {
             return;
@@ -278,15 +344,60 @@ impl MissionScene {
         self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(0, 479);
         let left = input.mouse_buttons & 0x01;
         if self.prev_buttons == 0 && left != 0 {
-            self.click_robot();
+            if self.cursor.0 >= 0x1E0 {
+                self.sidebar_control();
+            } else {
+                self.click_robot();
+            }
         }
         self.prev_buttons = left;
         self.sim.advance_frame();
     }
 
+    /// The sidebar producer (mouse subset of sidebar_control@0040d197
+    /// [RE-EXW-SIM sec 6c]): robot-select strips + the 7 order rows,
+    /// gated exactly like the asm — alive robots only, squad slot
+    /// within the spawned group, order availability per robot. Sets
+    /// the redraw countdown to 2 on every fire. The map-toggle strip
+    /// [sec 6c.1] is out of scope (screen-mode globals + the overlay
+    /// family) — its rect is disjoint from both wired regions, so
+    /// clicks there stay a no-op, and keyboard latches wait for the
+    /// P2e button map.
+    fn sidebar_control(&mut self) {
+        let (x, y) = self.cursor;
+        // Robot-select strips [sec 6c.2]: squad slot = strip index,
+        // gated by the spawned group size (the DAT_0046cbd8 analog)
+        // and the target's ALIVE word.
+        for (slot, &(lo, hi)) in SIDEBAR_SELECT_STRIPS.iter().enumerate() {
+            if (lo..=hi).contains(&x)
+                && (SIDEBAR_SELECT_STRIP_Y.0..=SIDEBAR_SELECT_STRIP_Y.1).contains(&y)
+            {
+                if slot < self.sim.robots().len() && self.sim.robots()[slot].alive {
+                    self.sidebar.selected = slot;
+                    self.sidebar.redraw = 2;
+                }
+                return;
+            }
+        }
+        // Order rows [sec 6c.4]: row = (y - 0x57)/14 clamped to 6,
+        // gate = the selected robot's availability bit, toggle the
+        // bit in its order-bits word.
+        let (x0, x1, y0, y1) = SIDEBAR_ORDER_RECT;
+        if (x0..=x1).contains(&x) && (y0..=y1).contains(&y) {
+            let row = (((y - SIDEBAR_ORDER_ROW.0) / SIDEBAR_ORDER_ROW.1) as usize).min(6);
+            let robot = self.sidebar.selected;
+            let avail = self.sidebar.order_avail.get(robot).copied().unwrap_or(0);
+            if avail >> row & 1 != 0 {
+                self.sidebar.order_bits[robot] ^= 1 << row;
+                self.sidebar.redraw = 2;
+            }
+        }
+    }
+
     /// The robot click seam [DESIGN-GAME sec 11; RE-EXW-SIM sec 6.4
     /// click-on-robot arm]: clicks land in the viewport
-    /// (`x < 0x1E0`; the sidebar is out of scope -> no-op), hit-test
+    /// (`x < 0x1E0`; `tick` dispatches `x >= 0x1E0` to the sidebar
+    /// producer — the guard below is belt-and-braces), hit-test
     /// every alive robot by the enqueue projection (MISSIONVIEW
     /// sec 5d) inside a 0x20-px box [design: half the 64-px sprite
     /// cell; the EXW walks the sprite outlines ~0x433cbc], nearest
@@ -295,7 +406,7 @@ impl MissionScene {
     /// robot's tile — one pending order, spread-assign, state 3).
     fn click_robot(&mut self) {
         if self.cursor.0 >= 0x1E0 {
-            return; // sidebar: no-op for this slice
+            return; // sidebar: the tick dispatcher owns this half
         }
         let cam = self.cam_q5;
         let (cx, cy) = self.cursor;
@@ -326,10 +437,18 @@ impl MissionScene {
     /// present window with the fine-camera offset, and blit it at
     /// canonical (0, 0) of the 640x480 plane (sidebar stays black
     /// this slice). Advances the LNK walk + edge stream once — one
-    /// render per host frame (D17 bucket b). Inert until active.
+    /// render per host frame (D17 bucket b) — and steps the sidebar
+    /// redraw countdown (the FUN_00403938 tail `DAT_0046ccec`:
+    /// decrement while nonzero, one per frame [RE-EXW-SIM sec 6c.5];
+    /// the sidebar redraw PASS itself — FUN_00408403, the sidebar
+    /// art producer — is a future slice, so only the countdown is
+    /// modeled). Inert until active.
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
+        }
+        if self.sidebar.redraw > 0 {
+            self.sidebar.redraw -= 1;
         }
         let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
         self.view
@@ -366,6 +485,35 @@ impl MissionScene {
     /// seam).
     pub fn palette(&self) -> &[Vga6; 256] {
         &self.palette
+    }
+
+    /// The selected sidebar squad slot (`DAT_0046cbdc`, sec 6c.2).
+    pub fn sidebar_selected(&self) -> usize {
+        self.sidebar.selected
+    }
+
+    /// The sidebar redraw countdown (`DAT_0046ccec`, sec 6c.5):
+    /// producers set 2, each present decrements while nonzero.
+    pub fn sidebar_redraw(&self) -> i32 {
+        self.sidebar.redraw
+    }
+
+    /// The robot's order-bits word (+0x6E, sec 6c.3/6c.6): bit i =
+    /// order i active.
+    pub fn order_bits(&self, robot: usize) -> u16 {
+        self.sidebar.order_bits.get(robot).copied().unwrap_or(0)
+    }
+
+    /// Install a robot's order-availability mask (the +0x38+8k gate
+    /// words, sec 6c.6) — the host seam standing in for the
+    /// runtime-loaded per-type order table at 0x4de664 until its
+    /// file source is decoded; the default is all-7 [design]. The
+    /// robot's order bits keep their current value (the EXW writes
+    /// the mask once at spawn).
+    pub fn set_order_availability(&mut self, robot: usize, mask: u8) {
+        if let Some(slot) = self.sidebar.order_avail.get_mut(robot) {
+            *slot = mask;
+        }
     }
 }
 
@@ -624,5 +772,127 @@ mod tests {
         assert_eq!(m.palette(), &want);
         let plane = m.plane().expect("active plane");
         assert_eq!(plane.palette, want, "the plane palette IS GAMEPAL");
+    }
+
+    /// Sidebar click helper: aim + click, mirroring the EXW
+    /// mouse_l_click -> sidebar_control dispatch (sec 6c).
+    fn sidebar_click(m: &mut MissionScene, x: i32, y: i32) {
+        let (cx, cy) = m.cursor();
+        m.tick(&InputFrame {
+            mouse_dx: (x - cx) as i16,
+            mouse_dy: (y - cy) as i16,
+            mouse_buttons: 0,
+            ..InputFrame::default()
+        });
+        m.tick(&InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        });
+    }
+
+    #[test]
+    fn sidebar_select_strips_follow_the_asm_gates() {
+        // Two-robot squad (MRK[0] + one staged marker): strips 0/1
+        // select, strip 2 is gated off (DAT_0046cbd8 analog < 3),
+        // out-of-strip clicks keep state [sec 6c.2, asm
+        // 0x40d220..0x40d3b0].
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        assert_eq!(m.sidebar_selected(), 0, "slot 0 selected at spawn");
+        assert_eq!(m.order_bits(0), 1, "spawn default = 1<<first available");
+        assert_eq!(m.sidebar_redraw(), 0, "countdown zero at stage");
+        // Strip 1 (x 0x219..0x249): selects slot 1, redraw = 2.
+        sidebar_click(&mut m, 0x219, 5);
+        assert_eq!(m.sidebar_selected(), 1);
+        assert_eq!(m.sidebar_redraw(), 2);
+        // Strip 2 with a 2-robot squad: gated off, nothing changes.
+        m.sidebar.redraw = 0;
+        sidebar_click(&mut m, 0x24B, 0x35);
+        assert_eq!(m.sidebar_selected(), 1, "slot 2 gated (squad < 3)");
+        assert_eq!(m.sidebar_redraw(), 0, "no fire -> no redraw");
+        // Strip bounds: x = 0x218 is between strips 0/1 -> no-op;
+        // y = 0x36 is one past the strip bottom -> no-op.
+        sidebar_click(&mut m, 0x218, 5);
+        sidebar_click(&mut m, 0x1E7, 0x36);
+        assert_eq!(m.sidebar_selected(), 1);
+        assert_eq!(m.sidebar_redraw(), 0);
+        // Strip 0 bottom-left corner (0x1E7, 5) is INSIDE [asm
+        // inclusive]: fires, back to slot 0.
+        sidebar_click(&mut m, 0x1E7, 5);
+        assert_eq!(m.sidebar_selected(), 0);
+        assert_eq!(m.sidebar_redraw(), 2);
+    }
+
+    #[test]
+    fn sidebar_order_rows_toggle_the_selected_robot() {
+        // Row click on the SELECTED robot's bits word: row = (y -
+        // 0x57)/14 clamp 6, gate = availability, toggle + redraw = 2
+        // [sec 6c.4, asm 0x40d659..0x40d712].
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        // Select slot 1, then click row 0 of the order rect.
+        sidebar_click(&mut m, 0x219, 5);
+        assert_eq!(m.order_bits(1), 1, "robot 1 spawn default");
+        sidebar_click(&mut m, 0x200, 0x57);
+        assert_eq!(m.order_bits(1), 0, "bit 0 toggled off");
+        assert_eq!(m.order_bits(0), 1, "robot 0 untouched");
+        assert_eq!(m.sidebar_redraw(), 2);
+        // Row boundaries: y 0x57..0x64 = row 0, 0x65 = row 1;
+        // y 0xB8 = row 6 (in), 0xB9 = out; x 0x1E9 in / 0x1E8 out /
+        // 0x275 in / 0x276 out.
+        sidebar_click(&mut m, 0x200, 0x64);
+        assert_eq!(m.order_bits(1), 1, "y=0x64 still row 0");
+        sidebar_click(&mut m, 0x200, 0x65);
+        assert_eq!(m.order_bits(1) >> 1 & 1, 1, "y=0x65 is row 1");
+        sidebar_click(&mut m, 0x275, 0xB8);
+        assert_eq!(m.order_bits(1) >> 6 & 1, 1, "y=0xB8 is row 6");
+        m.sidebar.redraw = 0;
+        sidebar_click(&mut m, 0x275, 0xB9);
+        sidebar_click(&mut m, 0x1E8, 0x57);
+        sidebar_click(&mut m, 0x276, 0x57);
+        assert_eq!(m.order_bits(1), 0b1000011, "out-of-rect clicks no-op");
+        assert_eq!(m.sidebar_redraw(), 0);
+        // Availability gate: clear row 3 -> its click neither toggles
+        // nor redraws (the +0x38+8k gate word == 0 path).
+        m.set_order_availability(1, 0x7F & !(1 << 3));
+        sidebar_click(&mut m, 0x200, 0x57 + 3 * 14);
+        assert_eq!(m.order_bits(1), 0b1000011, "gated row untouched");
+        assert_eq!(m.sidebar_redraw(), 0, "gate fail -> no redraw");
+    }
+
+    #[test]
+    fn sidebar_redraw_counts_down_per_present() {
+        // DAT_0046ccec: producers set 2, the draw tail decrements
+        // once per frame while nonzero [sec 6c.5, asm 0x407205].
+        let mut m = staged(&[]);
+        m.activate();
+        sidebar_click(&mut m, 0x200, 0x57);
+        assert_eq!(m.sidebar_redraw(), 2);
+        m.present().expect("active presents");
+        assert_eq!(m.sidebar_redraw(), 1);
+        m.present();
+        assert_eq!(m.sidebar_redraw(), 0);
+        m.present();
+        assert_eq!(m.sidebar_redraw(), 0, "sticks at zero");
+    }
+
+    #[test]
+    fn sidebar_state_never_reaches_the_sim_hash() {
+        // D17 split pin: identical tick counts + a sidebar click vs a
+        // dead sidebar click -> identical sim state hashes (the
+        // sidebar half is presentation-only).
+        let mut a = staged(&[(3, 1, 1)]);
+        let mut b = staged(&[(3, 1, 1)]);
+        a.activate();
+        b.activate();
+        // a: strip-1 select + row-0 toggle; b: clicks in the sidebar
+        // dead zone (map-toggle rect, sec 6c.1 — wired regions are
+        // disjoint from it).
+        sidebar_click(&mut a, 0x219, 5);
+        sidebar_click(&mut a, 0x200, 0x57);
+        sidebar_click(&mut b, 0x230, 0x1C0);
+        sidebar_click(&mut b, 0x230, 0x1C0);
+        assert_eq!(a.state_hash(), b.state_hash());
+        assert_ne!(a.order_bits(1), b.order_bits(1), "sidebar did change");
     }
 }
