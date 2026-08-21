@@ -290,6 +290,14 @@ What RE must confirm: everything beyond the layout.
   record count (e.g. ZONEA: max 196 vs ≈285 BLD records; ZONEB/M1: max 230 vs
   ≈344; ZONEF/M5: max 273 vs ≈473) — consistent with *index = BLD record
   (scenery object type)*. Not yet proven.
+- **EXW ANCHOR (2026-08-21, RE-EXW-SIM §7j.25):** FUN_0041a4f8 (mission load
+  @0x447b76) opens ".POS" (string 0x457a64) and reads EXACTLY 2000 × 0x10 B
+  via FUN_0041cccb into the 0x46cbf4 object-instance array (stride 0x14 =
+  x,y,kind?,index→id dword), then scans id ≠ −1 for the count 0x46cbe8 and
+  re-stamps footprints via FUN_0041a7f0. So `.POS` = the DESTRUCTIBLE-OBJECT
+  INSTANCE list (4 × u32 per record); the semantics of words 2/3 refine the
+  kind/index gloss — word 3 lands in the record id dword consumed as the
+  .BDG/type-table row index (the 7j.12/7j.13 family).
 - **TOT planes 6/7** have values ≤ 1868 < 2000 (see §2) — a POS-slot linkage is
   plausible but unconfirmed.
 - **What RE must confirm:** field semantics, the kind vocabulary, and whether
@@ -347,23 +355,29 @@ What RE must confirm: everything beyond the layout.
 - **What RE must confirm:** nothing structural — but these notes are the best
   semantic Rosetta stones in the corpus.
 
-## 16. BDG — binary companion of BLD (per-building data)
+## 16. BDG — the destructible-object spec library (loader-anchored 2026-08-21)
 
-- **Sizes:** 26 distinct values, 17100–43644, **all divisible by 4** (u32-array
-  friendly). VERIFIED
-- **Content:** sparse — mostly zero u32s with small values; long zero tail
-  (ZONEA/M1: last nonzero u32 at offset 21808 of 21988). ZONEA/MISSION1.BDG
-  @0x0000: `01 00 01 00 01 00 01 00 96 00 00 00 01 00 0F 00 …` — as u16:
-  (1,1,1,1,**150**,0,1,**15**).
-- **Cross-file (VERIFIED correlation / LIKELY linkage):**
-  - Mission-level BDG size vs BLD size: **Pearson r = 0.985** (n=37).
-  - BDG's opening u16s (…150, 0, 1, 15) exactly mirror BLD record 0's u32
-    fields (1, **150**, 1, **15**) — ZONEB/M1 shows the same with (…50, 0, 0, 5)
-    vs BLD rec0 (1, **50**, 0, **5**). The two files describe the same
-    object list.
-- **What RE must confirm:** whether BDG is indexed by BLD record (parallel
-  array) and what its fields encode (graphics/flags/score codes per building?).
-  Name guess: "BuiLDinG" data or "badges".
+- **Sizes:** 26 distinct values, 17100–43644 (37 mission files). All consumed
+  exactly by the grammar below.
+- **GRAMMAR VERIFIED (EXW §7j.25; census 37/37 files, byte-exact
+  consumption, exactly 282 records per file):** records start at offset 0 —
+  **NO header** (the old "12-B header mirroring BLD rec0" read was a
+  mis-frame; the `(1,1,1,1,150,0,1,15)` opening u16s ARE record 0). Record =
+  - `u16 control` — ≠1: the record is just these 2 bytes (empty library row);
+  - ==1: `u16 W, u16 H, u16 D` (footprint; corpus mostly (1,1,1)..(1,1,4),
+    max (3,3,3)), `i32 hp` (e.g. 150), `u16 chain` (chain-detonation gate,
+    EXW 7j.13), `i32 type` (objective/score code; corpus 15/5/30/11/120/90/
+    20/40/10/60/180/270…; 0xb = score-10), `5 × 8 B` effect entries
+    (`u16 selector, u16 x_off, u16 y_off, u16 z_off` — tile offsets staged
+    relative to the instance; selector 1..9 → the destroy-tail debris/effect
+    cases, EXW §7j.25; corpus uses ONLY 1..9: ×11098/1490/1385/402/330/304/
+    316/178/56), then **four template banks of `2·W·H·D` bytes each**
+    (the saved under-terrain restored when the object dies).
+- **Cross-file:** mission-level BDG size vs BLD size Pearson r = 0.985 — BLD
+  carries the same object list's NAMES/graphics; BDG carries the gameplay
+  spec. .POS word 3 (index) selects the BDG/BLD row (§12).
+- **What RE must confirm:** nothing structural; remaining open — the BLD-side
+  record walk (§17) and which template-bank plane maps to which mirror word.
 
 ## 17. BLD — scenery/building object library with names
 
@@ -421,7 +435,7 @@ What RE must confirm: everything beyond the layout.
 | MAP ⊂ TOT (support superset) | VERIFIED | 0 counterexamples in 37×8 planes; 85 758 added + 4 292 rewritten cells |
 | TOT plane 6/7 values < 2000 = POS slots | LIKELY | max 1868; but ZONEA/M1 tile 642→1355/1356 while POS[1355] is empty ⇒ indirect |
 | POS.index → BLD record | LIKELY | index max per mission < BLD record estimate in all sampled missions |
-| BDG ↔ BLD same object list | LIKELY (strong) | size correlation r=0.985; BDG header mirrors BLD record 0 fields exactly |
+| BDG ↔ BLD same object list | VERIFIED linkage (EXW 7j.25: same library — BDG = the loader-parsed gameplay spec incl. selector entries + template banks; BLD = names/graphics; .POS word 3 indexes the row) | size correlation r=0.985 + the loader opens ".POS"/".BDG" back-to-back (FUN_0041a4f8) |
 | LNK ↔ CTG same index space | LIKELY | LNK cycles ⊆ CTG nonzero ranges (partial overlap only) |
 | LNK, CTG, LNG: three 8192-entry tables | VERIFIED layout / HYPOTHESIS semantics | all exactly 16384 B, near-identity or sparse |
 | PAD ↔ TXT pad notes | LIKELY | TXT explicitly describes "pads" with effects; coordinate transform unresolved |

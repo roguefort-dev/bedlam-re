@@ -3812,7 +3812,27 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
    FUN_0040fe93 ← robots()/FUN_0040b9f6 @0x40bc44 (the
    phase-1 walk); FUN_0040ff92 ← the critter controller
    FUN_00412f34 @0x413fd7 — both actors trigger floor traps.
-8. **Corpus verdict: unchanged** — the effect loop needs a
+8. **.BDG grammar CLOSED + corpus census [verified, python
+   framing per the parse; 37/37 files EOF-exact]**: NO
+   header — records start at offset 0. Per record: control
+   u16; ≠1 → record is JUST 2 B (empty row); ==1 → W/H/D
+   u16×3, hp i32, chain u16, type i32 (objective/score code),
+   5×8B effect entries (selector u16 + x/y/z u16 tile
+   offsets), then FOUR on-disk template banks of 2·W·H·D
+   bytes each (the arena banks are FILE data, not
+   runtime-built — refines 7j.13). The loader caps at 0x11A
+   (282) records. Corpus: every file carries exactly 282
+   records (10434 total, 7907 active) and my walk consumes
+   every file to the last byte. Selector census (nonzero
+   entries): sel1 ×11098, sel2 ×1490, sel3 ×1385, sel4 ×402,
+   sel5 ×330, sel6 ×304, sel7 ×316, sel8 ×178, sel9 ×56 —
+   ZERO out-of-range selectors (the dispatcher's 1..9 gate
+   covers the whole shipped vocabulary). Type dword top:
+   15/5/30/11/120/90/20/40/10/60/180/270; W/H/D mostly
+   (1,1,1)..(1,1,4), max (3,3,3). Reading: sel 1 (plain k14
+   puff + effects) is the default debris; sel 2/3 (k18/k17)
+   the common single-gib variants; sel 4..9 rare specials.
+9. **Corpus verdict: unchanged** — the effect loop needs a
    destroyed destructible object; the corpus gates destroy
    none (weapons/traps stay unwired engine-side). Engine
    seam: NONE (docs-only, D73).
@@ -3861,6 +3881,7 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | destroy-tail effect entries | 5 × 8B @type+0x16+8m (m 0..4, exit @+0x28): selector word@entry+0 ∈ 1..9 → jump table 0x41a870 idx sel−1; payload w2/w4/w6 @entry+2/+4/+6 = x/y TILE + z-level offsets off the 0x46cbf4 record; sel1→k14(+0xF,+0xF)+FUN_0041a225+5 splashes, sel2..5→k18/k17/k16/k19 single gibs at (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0)+4-splash loop, sel6/7→k10 at (+0x10,+0x20)/(+0x20,+0x10)+DEADMAN SFX (delay 0, param −1), sel8→k14 ×25 demolition shower @water z (±3-tile RandA&7−3 jitter, delay ctr+2m+i>>3), sel9→k20+3×3 splash ring (delay ctr+2+RandA&3); stager delay = chain-ctr+m (sel1/8/9); PRECEDED by the footprint W×H×D terrain RESTORE (TOT-mirror z-words ← bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear (z·H+i)·W+j); GER gate: type 0xb ∧ GER skips the whole restore/effect/score/chain tail (record still marked destroyed + triggers fired) | §7j.25 |
 | effects-bank stager | FUN_0041a225(x,y,z tiles) — FIRST producer of the MISSIONVIEW §5d "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (allocator FUN_0041a4cc, 12 tries); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, ttl RandB&0x7FF+0x1770, active/sprite word FUN_0041ec59(3), variant RandB&7}; callers: destroy-tail cases 1/8 | §7j.25 |
+| .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each; +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c | §7j.13 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201) | §7j.13, §7j.22 |
