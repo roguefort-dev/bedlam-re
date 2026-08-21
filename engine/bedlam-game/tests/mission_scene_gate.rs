@@ -1,31 +1,32 @@
 //! Mission scene corpus gate (P4 scene step, DESIGN-GAME sec 11).
 //! Skips when the corpus is absent (CI); when present it drives the
-//! composed MissionScene — bedlam-core MissionSim + bedlam-render
-//! MissionView through GameHost — over the REAL shipped ZONEA/
+//! composed MissionScene - bedlam-core MissionSim + bedlam-render
+//! MissionView through GameHost - over the REAL shipped ZONEA/
 //! MISSION1 bytes staged via host.load_mission, and EXTENDS the
 //! render corpus pin family (the terrain pin 90a9e929eea24ced and
 //! the entity pins 8d2c559df035b75b / 8804f9deec6b1fee live in
 //! bedlam-render tests/mission_view_gate.rs and are NOT re-derived
-//! here — this gate pins the SCENE-composed frames):
+//! here - this gate pins the SCENE-composed frames):
 //!
-//! 1. STAGING: the 9-file chain (TOT/DAT/PAD/CGR/BIN/LNK + SINTABLE
-//!    + DANTE + MRK) stages the ZONEA/MISSION1 mission; MRK record 0
-//!    (21, 73, z-level 1) + the staged second marker (18, 73, 1) —
-//!    the host/test seam the network override 0x46cbe0 fills in the
-//!    original (RE-EXW-SIM sec 7c.8). Entering Mission activates the
-//!    camera at robot 0's Q5 spawn.
+//! 1. STAGING: the 9-file chain (TOT/DAT/PAD/CGR/BIN/LNK plus the
+//!    GAMEGFX tail SINTABLE and DANTE, then MRK) stages the
+//!    ZONEA/MISSION1 mission; MRK record 0 is (21, 73, z-level 1)
+//!    plus the staged second marker (18, 73, 1) - the host/test seam
+//!    the network override 0x46cbe0 fills in the original
+//!    (RE-EXW-SIM sec 7c.8). Entering Mission activates the camera
+//!    at robot 0's Q5 spawn.
 //! 2. SPAWN FRAME: the entry pump presents the 480x480 viewport at
-//!    canonical (0,0) — real terrain + both DANTE robots; frame
+//!    canonical (0,0) - real terrain + both DANTE robots; frame
 //!    parity hash pinned.
 //! 3. CLICK SEAM: a scripted left-click at robot 0's projected
 //!    screen position arms the order AT robot 0 (tile (21,73), snap
-//!    to tile origin, state 3) — the sec 6.4 semantics.
+//!    to tile origin, state 3) - the sec 6.4 semantics.
 //! 4. WALK: three advance frames later the second robot is mid-walk
 //!    (state 4, live anim); frame parity hash pinned.
 //! 5. DETERMINISM: two independent full runs produce identical hash
 //!    traces.
 //!
-//! game-data access is read-only. No game bytes enter git — only
+//! game-data access is read-only. No game bytes enter git - only
 //! hashes and counts are asserted.
 
 use std::path::PathBuf;
