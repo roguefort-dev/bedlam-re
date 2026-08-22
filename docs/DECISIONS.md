@@ -3285,3 +3285,40 @@ Nudge-Worker: 7faaeb53-0c41-43f2-abe2-1ae7228eace0
    present; manifest clean around the corpus-touching runs.
 
 Nudge-Worker: cd3ebd73-10b5-4032-a085-6a30022ce8ea
+
+
+## D93 — 2026-08-22: P4/FORMATS — the ".MOFO loader" RETIRED; the loader-tag family CLOSED at four members (worker 0a08a5e1 claim 2)
+
+1. ANSWERED (queue item 2, negative result with proof): there is NO
+   .MOFO loader, file, or grammar. The premise traced to a misparse:
+   0x457a4c "MOFO\0" is the dead tail of the fatal string "Buggered
+   direction in MOFO" @0x457a3c — ZERO code references (full .text
+   immediate scan of ghidra-project/exw-text-objdump.txt + the
+   earlier empty Ghidra XREF block); ".MOFO" bytes absent from BOTH
+   BEDLAM.EXW and BEDLAM.EXD; no *.MOFO file anywhere in game-data
+   (corpus walked read-only, MANIFEST verified clean both sides).
+2. The extension-tag family in that DGROUP block is exactly .NME
+   @0x457a57 / .TRT @0x457a5c / .POS @0x457a64 / .BDG @0x457a69,
+   one reference each at the four CLOSED loaders (0x41648c /
+   0x4170c3 / 0x41a55d / 0x41a5d6 = §7j.18/§7j.15/§7j.25). The 7j.15
+   gloss "section strings .MOFO/.NME/.TRT/.POS/.BDG" is corrected
+   (erratum landed in §7j.15 text + §7j.29).
+3. BONUS PIN (the string's sole consumer): FUN_00415490(idx) = the
+   mode-9 SEEK per-step target-acquisition dispatcher — dword@+0x10
+   is dual-purpose (wander heading 0..255 in the steer paths; the
+   2-bit seek direction 0..3 in mode 9, seeded RandA()&3 at the
+   0xB-dormant wake); `cmp 3; ja fatal` → "Buggered direction in
+   MOFO" via the standard fatal idiom (fade-cancel 0x420100 + print
+   0x44d2ac + FATAL EXIT 0x44d2da); 4-way table 0x415480 = four
+   directional forward-acquisition probes vs the robot bank (tight
+   −4..+0xF ahead on the walk axis, |Δ|<0x18 cross + z; case 3
+   reads robot y RAW — faithful quirk); hit → target w@+0x7A,
+   mode w@+0xC := 2 (RANGE-ATTACK), anim w@+0x56 := 0. A second
+   table 0x412ef8 dispatches the four axis-steppers
+   (0x417f2c/0x417fe8/0x4180c0/0x41813d = y−1/x+1/y+1/x−1).
+4. Corpus-path verdict: docs-only; no engine change (the fatal is
+   a crash path by construction; no corpus gate reaches mode 9
+   with a corrupted direction). FORMATS §0.1 landed; 2 new ledger
+   rows + 1 erratum in RE-EXW-SIM §7j.29 (commit 03e8c3b).
+
+Nudge-Worker: 0a08a5e1-c1ab-431b-880b-094e6ba40017

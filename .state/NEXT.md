@@ -78,21 +78,16 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. [P4/FORMATS] THE .MOFO LOADER unit (unattended, bounded RE): pin
-   FUN_00416458's last unparsed sibling @0x457a4c (the .MOFO loader —
-   .NME/.TRT/.POS/.BDG all CLOSED per 7j.15/7j.18/7j.25). Objdump-first
-   from existing dumps (ghidra-project/exw-text-objdump.txt covers
-   0x401000..0x460000; run analyzeHeadless -process ONLY if the range
-   needs decompile and nothing is already running). Deliverable: the
-   FORMATS §entry + the ledger row + RE-EXW note; corpus-verify the
-   .MOFO file grammar (game-data read-only, manifest bracket).
-3. [P4/RE] THE SFX BANK-NAME WALK unit (unattended, bounded RE):
+2. [P4/RE] THE SFX BANK-NAME WALK unit (unattended, bounded RE):
    7j.25 pinned the destroy-thud pair 0x4edfb8/0x4edfbc =
    DEADMAN1/DEADMAN2.RAW via loader strings 0x43a29b..0x43a368 — walk
    the FUN_0043a48e bank-name block 0x45884e.. fully (string-table
    read + the bank-pointer cells 0x4edfXX/0x46afXX census) and land
    the complete bank→name map (RE-EXW-SIM sec 9 item 5's data
-   prerequisite; pure decode, no engine change).
+   prerequisite; pure decode, no engine change). NOTE: the former
+   queue-mate ".MOFO loader" unit was RETIRED by D93/§7j.29
+   (string-tail misparse — no .MOFO loader or file exists; the
+   loader-tag family is CLOSED at .NME/.TRT/.POS/.BDG).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -125,9 +120,9 @@
   center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
   z@+0x10 + type@+0x1C — [hypothesis] one 0x20-stride record with
   both views). Anchors the click-target rect semantics.
-- The .MOFO loader (the last of the FUN_00416458 sibling
-  loaders @0x457a4c; .NME/.TRT/.POS/.BDG all CLOSED —
-  7j.15/7j.18/7j.25) + the .BLD record walk (names/graphics
+- RETIRED 2026-08-22 (D93/§7j.29): the ".MOFO loader" — never
+  existed (string-tail misparse). REMAINING from this bullet:
+  the .BLD record walk (names/graphics
   side; FORMATS §17 — the 201-B/64-B-extension hypothesis
   still unanchored) + the .BDG template-bank plane↔mirror-word
   mapping (which bank feeds which restore word — 7j.25 pinned
@@ -227,6 +222,28 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/FORMATS THE .MOFO LOADER unit COMPLETE as a
+  NEGATIVE RESULT (worker 0a08a5e1 claim 2, commit 03e8c3b, D93,
+  docs-only; objdump-only from the existing exw-text-objdump.txt, no
+  Ghidra run). THE .MOFO LOADER DOES NOT EXIST: 0x457a4c "MOFO\0"
+  is the dead tail of the fatal string "Buggered direction in
+  MOFO" @0x457a3c (DGROUP bytes re-read from the binary; ZERO code
+  refs — full .text immediate scan + the empty Ghidra XREF block);
+  no ".MOFO" byte sequence in EXW or EXD; no *.MOFO file in the
+  corpus (manifest verified both sides). The extension-tag family
+  is CLOSED at .NME/.TRT/.POS/.BDG @0x457a57..0x457a6d (one ref
+  each → the four CLOSED loaders 7j.15/7j.18/7j.25; the 7j.15
+  ".MOFO" gloss corrected). BONUS PIN: the string's sole consumer
+  FUN_00415490 = the mode-9 SEEK per-step target-acquisition
+  dispatcher — dword@+0x10 dual-purpose (wander heading 0..255 /
+  mode-9 direction 0..3 seeded RandA()&3 at the 0xB-dormant wake),
+  `cmp 3; ja fatal` → the standard fatal idiom (fade-cancel
+  0x420100 + print 0x44d2ac + FATAL EXIT 0x44d2da); 4-way tables
+  0x415480 (acquisition: tight −4..+0xF ahead on the walk axis,
+  |Δ|<0x18 cross + z; c3 robot-y-RAW quirk) + 0x412ef8 (steppers
+  y−1/x+1/y+1/x−1); hit → target w@+0x7A + mode := 2 + anim := 0.
+  Deliverables: RE-EXW-SIM §7j.29 + 2 ledger rows + FORMATS §0.1.
+  Queued: the SFX bank-name walk (item 2).
 - 2026-08-22: P4.2/W9 GATES/CI WIRING unit COMPLETE (worker cd3ebd73
   claim 2, commit 5026afc, D92). (a) CI LEG: the named
   `diffharness` job in .github/workflows/ci.yml (`cargo test -p

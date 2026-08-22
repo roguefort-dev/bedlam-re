@@ -1,5 +1,22 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/FORMATS THE .MOFO LOADER unit COMPLETE as a
+    NEGATIVE RESULT, worker 0a08a5e1 claim 2, commit 03e8c3b, D93,
+    docs-only): the suspected fifth mission extension .MOFO NEVER
+    EXISTED — 0x457a4c "MOFO\0" is the dead tail of the fatal
+    string "Buggered direction in MOFO" @0x457a3c (zero code refs;
+    no ".MOFO" bytes in EXW/EXD; no *.MOFO corpus file; manifest
+    clean both sides). The loader-tag family is CLOSED at
+    .NME/.TRT/.POS/.BDG @0x457a57..0x457a6d (the 7j.15 gloss
+    corrected; FORMATS §0.1 + RE-EXW-SIM §7j.29 + 2 ledger rows
+    landed). BONUS: the string's sole consumer FUN_00415490 pinned
+    = the mode-9 SEEK per-step target-acquisition dispatcher
+    (dual-purpose +0x10 heading/direction, tables 0x415480 +
+    0x412ef8, four forward-acquisition cases, the standard fatal
+    idiom on direction > 3). NEXT: the SFX bank-name walk (queue
+    item 2) — the last unattended P4 slice before the
+    operator-adjacent W10/W11/W12 tail.
+
   - OPEN 2026-08-22 (P4.2/W9 GATES/CI WIRING unit COMPLETE, worker
     cd3ebd73 claim 2, commit 5026afc, D92): the W-series unattended
     tail is CLOSED — the corpus-gated harness set runs in CI as a
