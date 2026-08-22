@@ -1,0 +1,14 @@
+# S0 — boot → mission start (DESIGN-DIFFHARNESS.md §7).
+#
+# No injection; run to ZONEA/MISSION1 first frame, then `frames`
+# steady-state captures. Proves: loader parity (TS statics hashes),
+# frame-trigger stability, the W1 EXD address map on real memory.
+# NOTE (W4): live execution is [BLOCKED]-on-DH-G0-channel-repin — the
+# pinned flathub DOSBox-X has no debugger (RUNTIME.md channel audit).
+# The menu walk to mission start needs W5 BOOT/KEYSTATE steps; the
+# grammar pins them as a W5 extension (keystore/order/command/pad).
+scenario = "S0"
+tiers = T0,TS
+anchor = mission-start
+frames = 2
+launch = "DOS4GW.EXE BEDLAM.EXD"

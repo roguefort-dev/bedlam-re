@@ -10,6 +10,10 @@
 //! shared by O1/O2/O3/E with the FNV-1a-64 frame digests + D28-style
 //! dump chain, and the mirrored hash util (`hash`) it is built on.
 //!
+//! W4: the runner formats (`runner`) — scenario grammar v1 + the
+//! channel-agnostic DBXCAP capture transcript + the stitcher that
+//! produces the W3 dump + digest manifest (DESIGN-DIFFHARNESS §3/§10).
+//!
 //! The parser below understands only the TOML subset the registry uses:
 //! comments, `[[watch]]` table headers, and `key = "quoted string"` /
 //! `key = true|false` pairs. Anything else is a hard error — the registry is
@@ -17,6 +21,7 @@
 
 pub mod dump;
 pub mod hash;
+pub mod runner;
 
 use std::collections::BTreeSet;
 use std::fmt;

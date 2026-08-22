@@ -1,0 +1,40 @@
+DBXCAP v1
+# SYNTHETIC replay fixture for the W4 stitch pipeline (NOT game data).
+# Byte values below are fabricated test vectors chosen to exercise the
+# grammar (empty blobs, multi-word payloads, injected frames); they carry
+# NO claim about the original game's memory (anti-ghost: real captures
+# come only from the re-pinned DH-G0 channel and stay under runtime/).
+# Shape: anchor frame (TS statics ride here) + 2 post-anchor frames,
+# matching scenarios/S0.scen (frames = 2).
+frame 7
+watch static-map-wh 40030000
+watch static-type-table 0102030405060708
+watch frame-counter 07000000
+watch rng-state-a 4ee60200
+watch rng-state-b f93a0300
+watch score 00000000
+watch money 00000000
+watch zone 00000000
+watch mission 00000000
+watch mode 00000000
+watch linear-mission-m 00000000
+frame 8
+watch frame-counter 08000000
+watch rng-state-a 4ff60200
+watch rng-state-b 063b0300
+watch score 00000000
+watch money 00000000
+watch zone 00000000
+watch mission 00000000
+watch mode 00000000
+watch linear-mission-m 00000000
+frame 9 1
+watch frame-counter 09000000
+watch rng-state-a 50f60200
+watch rng-state-b 0d3b0300
+watch score 00000000
+watch money 00000000
+watch zone 00000000
+watch mission 00000000
+watch mode 00000000
+watch linear-mission-m 00000000

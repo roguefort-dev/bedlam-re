@@ -1,0 +1,13 @@
+# S1 — mission-start passive (DESIGN-DIFFHARNESS.md §7/§8).
+#
+# No injection; ~400 frames from mission start. Arbitrates the
+# pod-descent stagger (pod timer w@+0x2C vs 1+k*(2000-m*1000/27),
+# descent ~41 frames, pod phase 2 = one tick, release = state 6),
+# the blink-cursor-from-spawn question (EXD alias pending — the row is
+# an explicit gap in the registry until W1 extension), and the debris
+# 2k start-delay (T3 watch, needs the T3 tier + EXD aliasing pass).
+scenario = "S1"
+tiers = T0,T1,TS
+anchor = mission-start
+frames = 400
+launch = "DOS4GW.EXE BEDLAM.EXD"
