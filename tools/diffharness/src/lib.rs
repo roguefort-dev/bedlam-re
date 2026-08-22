@@ -1,15 +1,22 @@
 //! diffharness — P4.2 differential-harness support code (DESIGN-DIFFHARNESS.md).
 //!
-//! W2 scope: the watch registry (`watches.toml`, the DESIGN §4 watch set as
+//! W2: the watch registry (`watches.toml`, the DESIGN §4 watch set as
 //! data) plus the minimal parser that loads it. The registry's semantic
 //! validity guard (every anchor string resolves to a ledger row heading in
 //! its named doc) lives in `tests/registry_anchors.rs` — the mechanical
 //! anti-ghost guard demanded by the B2 ghost-fabrication lesson.
 //!
+//! W3: the dump schema (`dump`) — the versioned frame-record stream
+//! shared by O1/O2/O3/E with the FNV-1a-64 frame digests + D28-style
+//! dump chain, and the mirrored hash util (`hash`) it is built on.
+//!
 //! The parser below understands only the TOML subset the registry uses:
 //! comments, `[[watch]]` table headers, and `key = "quoted string"` /
 //! `key = true|false` pairs. Anything else is a hard error — the registry is
 //! data with a schema, not free-form prose.
+
+pub mod dump;
+pub mod hash;
 
 use std::collections::BTreeSet;
 use std::fmt;

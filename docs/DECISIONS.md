@@ -2542,3 +2542,48 @@ Nudge-Worker: ffec42cf-326a-47ae-a396-c02215f5eeb8
    state-diff scope) are tabulated in the doc sec 8.
 
 Nudge-Worker: 4d7b9a5b-55db-4c69-b440-862e2adc029a
+
+## 2026-08-22 P4.2/W3 — the dump schema is D78: BDLD-tagged LE records, registry-order canonical, D28-style chain; the FNV util is mirrored not depended-on
+
+Context: DESIGN-DIFFHARNESS §3/W3 — one versioned frame-record stream
+shared by O1/O2/O3/E, pure Rust tools-side, the crate stays
+zero-dependency (offline CI).
+
+1. WIRE GRAMMAR (schema_ver 1, pinned in tools/diffharness/src/dump.rs
+   module docs): Stream := Header Frame* Trailer; Header := "BDLD"
+   u16:schema_ver u8:channel [u8;32]:build_sha256 u8-len scenario
+   u16:pin_count pins; Frame := "BDLD" u64:frame_no u8:injection_applied
+   u16:watch_count (id + u32:len + raw bytes)* u64:frame_digest;
+   Trailer := "BDLT" u64:frame_count u64:chain_digest. All LE. Channel
+   codes: 1=O1 EXD/DOSBox-X, 2=O2 EXW/Wine, 3=O3 8street, 4=E engine.
+2. DIGEST + CHAIN: frame_digest = FNV-1a-64 over the frame's canonical
+   bytes INCLUDING the leading "BDLD" tag (domain separation: a dump
+   digest can never equal the engine's untagged StateHash of the same
+   field bytes). chain_digest = the D28/parity_harness construction
+   verbatim: incremental Fnv1a64 fed write_u64(frame_digest) per frame
+   in order — so a dump chain and a scene-hash chain are comparable
+   fingerprints. Decode recomputes and verifies EVERY frame digest, the
+   frame count, and the chain; integrity violations are hard errors.
+3. CANONICAL ORDER = the committed registry's file order. encode_dump
+   canonicalizes (stable sort by registry index) and rejects ids not in
+   watches.toml + duplicate ids per frame, so identical observed state
+   encodes byte-identically on every channel (verified: frame digests
+   identical across all four Channel values). frame_no must strictly
+   increase (encode AND decode) — the counter never rewinds; gaps are
+   runner/differ business.
+4. HASH UTIL = MIRROR, not a dependency: bedlam-core pulls thiserror,
+   which would break the zero-dep guarantee. The mirror
+   (tools/diffharness/src/hash.rs) is pinned to the engine's PUBLIC
+   expected outputs ("" -> 0xcbf29ce484222325, "a" -> 0xaf63dc4c8601ec8c,
+   "foobar" -> 0x85944171f73967e8, the LE write_u32/u64 vectors) by
+   tests/dump_schema.rs::engine_hash_vectors; either side drifting fails
+   that test.
+5. CONVENTIONS (no extra record types): TS static-after-load rows ride as
+   one frame record at the mission-start frame; TI injection rows hold
+   POST-injection values; T4 event payloads reuse the WatchRecord
+   envelope with per-row payload grammar deferred to W5+; empty watch
+   blobs are LEGAL (count-driven extents hit 0, e.g. empty projectile
+   bank before first fire). Dump blobs stay asset-derived:
+   runtime/harness-out only, fingerprints in git (D77 hygiene).
+
+Nudge-Worker: 6f14cea1-e317-4016-8a1a-55054fed36f0

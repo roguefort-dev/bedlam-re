@@ -119,7 +119,16 @@ engine dump emitter (W6, parity_harness -canonical) ──> same frame-record sc
   len}}, then a trailer digest. Per-frame digest = FNV-1a-64 over the
   canonicalized records (same hash util as the engine's StateHash, tag
   `BDLD`), giving a per-scenario **dump chain** directly comparable to the
-  parity_harness scene-hash chain (D28).
+  parity_harness scene-hash chain (D28). **W3 LANDED** — the byte grammar
+  is pinned in `tools/diffharness/src/dump.rs` (module docs) and D78:
+  `BDLD`-tagged LE records, canonical watch order = registry file order,
+  digest input = tag + canonical frame bytes, chain = the D28
+  construction (incremental FNV, `write_u64` per frame digest), frame_no
+  strictly increasing, `BDLT` trailer {frame_count, chain_digest};
+  encoders validate ids against the committed registry, decode verifies
+  every digest + the chain. The FNV-1a-64 util is mirrored (not
+  depended-on) to keep the crate zero-dep, cross-checked against the
+  engine's public vectors in `tests/dump_schema.rs`.
 - **Dump hygiene (hard rule)**: dumps derive from original game memory, so
   they are asset-derived data — they live under runtime/harness-out
   (git-ignored), NEVER in git. What git carries: the watch registry (W2),
@@ -384,7 +393,9 @@ differ come before any new scenario depth.
    ref) + a validation test asserting every anchor string resolves to a
    ledger row heading (mechanical anti-ghost guard).
 3. **W3 — dump schema.** The versioned frame-record format + FNV-1a-64 chain
-   (pure Rust, tools-side); encoders for raw watch blobs.
+   (pure Rust, tools-side); encoders for raw watch blobs. **LANDED** —
+   `tools/diffharness/src/{dump,hash}.rs` + `tests/dump_schema.rs`
+   (grammar pinned in §3 + D78).
 4. **W4 — DOSBox-X runner.** Extend tools/runtime/dosbox-harness.sh with a
    `diff` mode: scenario script → conf copy → debugger automation → D: dumps
    → digest manifest. First target: S0 headless; then S1.
