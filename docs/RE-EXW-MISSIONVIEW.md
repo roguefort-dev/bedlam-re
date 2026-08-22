@@ -70,6 +70,19 @@ Two passes, zero-fill helper FUN_00402965 (rep-stos, args in ECX/EDI):
    [consumers verified in FUN_00403938; producers of +0x18/+0x1a/
    +0x1b/+0x1c NOT yet found — the zero-fill leaves them 0 on ZONEA,
    so shipped A-zone renders use static frame 0; open item §8.1].
+   UPDATE 2026-08-22 (RE-EXW-SIM §7j.32): the full record grammar is
+   unified there — `+0x18` = scorch (producer CLOSED 7j.8/7j.9
+   FUN_00422287), `+0x19` = type-DB variant<<4 and `+0x1a` = door
+   byte bit7 (producers = the 7j.12 stamper FUN_00422fd1 @0x4796d5/
+   0x4796d6), and **`+0x1b/+0x1c` = the OBJECT-HEIGHT pair (z0,
+   z0+D)** — the "anim-window lo/hi" producers ARE the
+   objective-building stamps (FUN_0044889a @0x448963/0x448975 writes
+   z0 and z0+D over each objective footprint; FUN_00448b80 CLEARS
+   both on destroy) — the §2 renderer window test below is the
+   intact-vs-rubble layer gate flipped by destruction; `+0x1d` has
+   zero .text traffic. The §8.1 producer hunt for +0x1b/+0x1c is
+   CLOSED (the +0x1a "height-bias" producer note stands as the
+   door-stamper cross-ref).
 
 ## 3. FUN_00403938 — the per-frame viewport renderer [verified core loop]
 

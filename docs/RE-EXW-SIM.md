@@ -4511,11 +4511,15 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
 | weapon impact resolver | FUN_0041a894(x Q13, y Q13, chain ctr ecx, damage ebx, [stack] score flag): tile from x/y>>13; grid word 0/0x7d2/0x7d3 → ret 0 (pass); 0x7d4 → FUN_00422693; n>0 → rec n−1 hp−=damage, destroyed → flags 0x40 + tail → ret 1; ret 1 only on destroy | §7j.13 |
-| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870 — map §7j.25), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c; +0x46/+0x4A = the saved under-terrain consumed by the destroy restore §7j.25; +0x3E/+0x42 readers open) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13 |
+| object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870 — map §7j.25), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c; disk order +0x3E,+0x46,+0x42,+0x4A interleaved; +0x46/+0x4A = the UNDER-terrain pair consumed by the destroy restore §7j.25; +0x3E/+0x42 = the CURRENT-state pair ≡ shipped TOT/DAT at footprints — DEAD EDITOR PAYLOAD, zero readers §7j.32) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13, §7j.32 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | destroy-tail effect entries | 5 × 8B @type+0x16+8m (m 0..4, exit @+0x28): selector word@entry+0 ∈ 1..9 → jump table 0x41a870 idx sel−1; payload w2/w4/w6 @entry+2/+4/+6 = x/y TILE + z-level offsets off the 0x46cbf4 record; sel1→k14(+0xF,+0xF)+FUN_0041a225+5 splashes, sel2..5→k18/k17/k16/k19 single gibs at (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0)+4-splash loop, sel6/7→k10 at (+0x10,+0x20)/(+0x20,+0x10)+DEADMAN SFX (delay 0, param −1), sel8→k14 ×25 demolition shower @water z (±3-tile RandA&7−3 jitter, delay ctr+2m+i>>3), sel9→k20+3×3 splash ring (delay ctr+2+RandA&3); stager delay = chain-ctr+m (sel1/8/9); PRECEDED by the footprint W×H×D terrain RESTORE (TOT-mirror z-words ← bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear (z·H+i)·W+j); GER gate: type 0xb ∧ GER skips the whole restore/effect/score/chain tail (record still marked destroyed + triggers fired) | §7j.25 |
 | effects-bank stager | FUN_0041a225(x,y,z tiles, delay ECX) — FIRST producer of the MISSIONVIEW §5d/§5e "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (first-fit allocator FUN_0041a4cc, 12-try spawn loop); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, vz@+0x14 RandB&0x7FF+0x1770 RISING (high word = sprite group 0..2 → DEBRIS.BIN img group*8+frame&7), active u16@+0x18 = FUN_0041ec59(3) (~8% stillborn), delay u16@+0x1A = ECX arg, frame u16@+0x1C = RandB&7}; callers: destroy-tail cases 1/8; mover FUN_00419f62 (kill off-map/ceiling z>>13>0xB); consumer = the §5e direct draw (7j.26) | §7j.25, §7j.26 |
-| .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each; +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25 |
+| .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each (slot order +0x3E,+0x46,+0x42,+0x4A — §7j.32); +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c; tail seeds instance hp@+0x10 ← type hp@+8 + stamps the claim grid per footprint. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25, §7j.32 |
+| .BDG template-bank semantics | 2×2 roles (§7j.32 corpus proof, ZONEA/M1 434/435 cells): CURRENT pair (+0x3E TOT words, +0x42 DAT words) ≡ the SHIPPED .TOT/.DAT at the .POS footprints — editor stamp payload, ZERO runtime readers (triple census: slot addresses, +0x3e/+0x42 displacements, arena walk); UNDER pair (+0x46, +0x4A) = the pre-building terrain, consumed ONLY by the destroy restore (mirror words ← +0x46; seen=(+0x4A word==0), DAT volume=+0x4A low byte); value domains b1/b2 tile words ≤1868, b3 ≤102, b4 ≤512; overlap footprints = last-.POS-slot-wins in the shipped TOT | §7j.32 |
+| TOT-mirror tile record | ONE 0x1E-B record per tile @0x4796bc+0x1E·tile (unifies the scattered tail-byte families, §7j.32): +0x00..+0x0F = the 8 plane words (+2·z); +0x10..+0x17 = the 8 SEEN bytes (restore writes @0x4796cc = base+0x10+z); +0x18 scorch (7j.8/7j.9); +0x19 variant<<4 + 0x1A door byte (7j.12 FUN_00422fd1); +0x1B/+0x1C = the OBJECT-HEIGHT pair (z0, z0+D) — stamped by the objective pass FUN_0044889a (0x448963/0x448975), cleared by FUN_00448b80 on destroy, read by the intact-vs-rubble draw pick (0x406891/0x4068ec); +0x1D zero traffic [open] | §7j.32 |
+| objective-building family | FUN_0044889a (zone gate [0x4edd8c]==7): counts type ids 0x44..0x47 into [0x46cce0] + stamps the +0x1B/+0x1C heights; FUN_00448b80(idx) = the destroy-tail "notify" (SP-only): [0x46cce0]−−, heights cleared, at ZERO → FUN_004239ef(0x28,3)+(0x29,3) + 0x46cd00:=3 / 0x46ccfc:=0x20 / 0x46ccc4:=0x32 (extraction-arm lights, 7j.20 cross-ref); edition≠7 = the script-objective path (0x4eaaee/0x4eaaf2/0x4eab0c walk, tables 0x4557f8/0x456810, code 0x1388) head-decoded | §7j.32 |
+| TRT death stamp | FUN_0041bc1c tail (FORMATS §14 resolver): mirror plane word := word@[0x454a04+4·zone] (per-zone rubble table), seen := 1, DAT volume byte := 0, k15 debris FUN_00420608(×0x20 coords, param −1 delay 0) + splash FUN_00424355 at the FUN_0041bd78 water z — the .BDG-tail death shape minus the restore (no under-bank) | §7j.32 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff |vx|>0x40 ∨ |vy|>0x40, anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c; the MID-FLIGHT DRAW walk §7j.28 (types 0x65/0x67/0x68 single WEAPONS 0x3C/0x3C/0x38-strip sprites, 0x69 the per-level beam column 0x34-strip, 0x66 NOT drawn) | §7j.13, §7j.28 |
@@ -4746,6 +4750,131 @@ in .text touches the array.
 - New watch candidates: [0x46ccd8] count + the type cell
   [0x46cc00] + latch bit [0x4ddb20]&2 (TI/T4 family; not yet in
   watches.toml — additive when the harness needs click parity).
+
+## 7j.32. The .BDG TEMPLATE-BANK READERS — plane↔mirror mapping CLOSED; +0x3E/+0x42 = DEAD EDITOR PAYLOAD; the 0x1E-B mirror-record grammar + the objective-height family (2026-08-22, worker ce347a0e claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; corpus probes read-only over game-data, scratch /tmp)
+
+Closes the 7j.25 open item ("the @+0x3E/+0x42 readers — which
+bank feeds which restore word"). HEADLINE: **+0x46/+0x4A are the
+only banks any code reads; +0x3E/+0x42 are loaded into the arena
+and NEVER consumed by any .text site — they are the editor's
+CURRENT-state stamp payload, and the shipped .TOT/.DAT already
+carry that state (bank1 ≡ shipped TOT word at footprints
+434/435 cells, bank3 ≡ shipped DAT byte 434/435 on ZONEA/M1)**.
+
+1. **The loader's bank DISK ORDER is interleaved vs the slot
+   order [verified 0x41a71d..0x41a782]**: the four reads march
+   the arena cursor [0x46ad5c] and store the pointers in the
+   order +0x3E (1st read, 0x41a727), **+0x46 (2nd, 0x41a742)**,
+   **+0x42 (3rd, 0x41a75d)**, **+0x4A (4th, 0x41a77c)**. So the
+   on-disk template-bank order is `+0x3E, +0x46, +0x42, +0x4A`
+   (FORMATS §16 refined).
+2. **The reader census [verified, three independent scans]**:
+   (a) absolute-address scan for the slot addresses 0x4dee30/
+   0x4dee34 (rec+0x3E/+0x42 across all 282 recs) — the ONLY
+   hits are the loader's four stores + the restore's +0x46/
+   +0x4A loads (0x41ab59/0x41ab72/0x41ab8a); (b) displacement
+   scan for `[reg+0x3e]`/`[reg+0x42]` forms over the whole
+   objdump — zero type-table hits; (c) arena scan (0x46ad5c/
+   0x46ad60) — loader-only + the boot arena allocator 0x41d9c8.
+   The complete 0x4dedf2 traffic census (20 sites): loader ×5,
+   footprint stamper 0x41a857 (W/H), destroy resolver 0x41a9d7,
+   chain-walk ×4 (W/H/D/chain/score), rubble-draw 0x408ce9 +
+   minimap 0x41f65e (W/H only), MissionShell ×5 (0x448804
+   script-step W/H + destroyed-bit 0x40 test; 0x448938/0x448b24
+   objective counters; 0x448bfb/0x448d3b FUN_00448b80) — NONE
+   touch the +0x3E/+0x42 slots.
+3. **The destroy-restore mapping re-verified instruction-exact
+   [0x41a9c3..0x41ac0b]**: z-loop runs z0..min(z0+D,8) (bound
+   cell [esp+0x48], 7-vs-8 clamp at 0x41ab0c); per cell the
+   template linear index is `(z'·H+i)·W+j` with z' = z−z0
+   (accumulator form: (k·H)·W + i·W + j, k per z-iteration —
+   same value); **+0x46 bank word → the TOT-mirror plane word
+   @0x4796bc+0x1E·tile+2·z** (mirror word addr starts 2·z0 at
+   0x41aa33, +2 per z); **+0x4A bank word → seen byte
+   @0x4796cc+0x1E·tile+z := (word==0) AND DAT volume byte
+   @[[0x4edd58]+z·w·h+tile] := word&0xFF** (loaded twice,
+   0x41ab72 and 0x41ab8a). Tile = (y+i)·w+(x+j); **H is the
+   y-extent, W the x-extent**; [0x4eddec]=map w, [0x4eddf0]=h
+   (also bounds-checked by the chain walk 0x41b803/0x41b920).
+4. **Corpus role proof [verified, ZONEA/MISSION1: 213 instances,
+   435 footprint cells]**: bank1(+0x3E) word == the SHIPPED TOT
+   plane word at (x+j, y+i, z0+z') in **434/435** cells; bank3
+   (+0x42) word == the SHIPPED DAT byte in **434/435**. bank2/
+   bank4 match only 11/435 and 155/435 (coincidences where
+   building type == ground type). Global value domains (37
+   files, 7907 active recs, 67269 words/bank): b1/b2 = tile
+   words (max 1868/1802, 34%/52% zero); b3 = DAT-domain words
+   (max 102, 91% nonzero, top 1/2/10/3); b4 ≤ 512 (49% zero
+   → seen=1). READING: the four banks are a 2×2 —
+   {CURRENT-state pair (+0x3E TOT words, +0x42 DAT volume),
+   UNDER-terrain pair (+0x46, +0x4A)}. The editor stamped the
+   CURRENT pair into the shipped .TOT/.DAT at the footprints;
+   the game never needs to re-stamp, hence zero readers. The
+   destroy restore re-instates the UNDER pair into the runtime
+   mirror/seen/DAT volume. **The "runtime spawn-stamp pass"
+   hypothesis is RETIRED** — no such code exists; buildings
+   arrive pre-baked in the mission files.
+5. **The one mismatch is a faithful overlap artifact**: tile
+   (14,29,z1) ZONEA/M1 is covered by BOTH .POS slot 97 (type
+   63, 1×2×3, b1=806) and slot 207 (type 0, 1×1×1, b1=53) —
+   the shipped TOT holds 53 = LAST-SLOT-WINS; layered destroys
+   there restore per-type templates (slot 207's b2=1189 already
+   contains slot 97's building). Editor data quirk, not an
+   engine rule.
+6. **THE 0x1E-BYTE MIRROR-RECORD GRAMMAR (0x4796bc, per tile)
+   [verified — unifies three prior families]**: `+0x00..+0x0F`
+   = the 8 TOT plane words (+2·z); `+0x10..+0x17` = the 8 SEEN
+   bytes (+0x10+z — the restore's 0x4796cc writes, seen base =
+   mirror base+0x10); `+0x18` = scorch (FUN_0042223c/87, 7j.8/
+   7j.9); `+0x19` = type-DB variant byte 0x4796d5 (7j.12
+   stamper FUN_00422fd1, variant<<4); `+0x1A` = door/type byte
+   0x4796d6 (7j.12, bit7=0x80 door flag); **`+0x1B/+0x1C` = the
+   OBJECT-HEIGHT pair (z0, z0+D)** — NEW: stamped per footprint
+   tile by the MissionShell objective pass FUN_0044889a
+   (0x448963/0x448975: z := instance z@+8, then z+D via
+   type-rec byte@+6) and CLEARED (both := 0) by the destroy
+   notify FUN_00448b80 (0x448c25/0x448c2c); read by the
+   draw/occlusion family (e.g. 0x4068ec/0x406907/0x406a0e/
+   0x406a1a — the intact-vs-rubble tile pick alongside the
+   plane-0 word test 0x406891). `+0x1D` = ZERO traffic in
+   .text (padding/unused). This RETIRES the scattered "+0x18/
+   +0x19/+0x1A tail bytes" open items as ONE record grammar
+   (MISSIONVIEW §8 cross-ref); +0x1D stays formally open.
+7. **FUN_0044889a + FUN_00448b80 = the OBJECTIVE-BUILDING
+   family [verified]**: FUN_0044889a (zone/edition gate
+   [0x4edd8c]==7 at 0x4488be — the ZONEG path; the cell is the
+   zone index 1..7 per 7j.21, 7j.30's "edition" gloss): counts
+   instances with type id&0x3FFF ∈
+   [0x44,0x47] into **[0x46cce0]** (the objective counter) and
+   stamps the +0x1B/+0x1C heights over their footprints; the
+   edition≠7 path (0x448c94) is the SCRIPT-driven objective
+   walk (0x4eaaee count / 0x4eaaf2 instance idx / 0x4eab0c
+   anim word, script tables 0x4557f8/0x456810, special code
+   0x1388=5000 two-word script op) — head-decoded only, out of
+   scope here. FUN_00448b80(instance idx) — the "notify" call
+   of the 7j.25 destroy tail — SP-only ([0x4edb88]==2 skips at
+   0x448b91): decrements [0x46cce0], clears the footprint
+   heights, and at ZERO fires **FUN_004239ef(0x28,3) +
+   FUN_004239ef(0x29,3)** (the 7j.20 beacon-armer SFX family)
+   and stages **0x46cd00:=3, 0x46ccfc:=0x20, 0x46ccc4:=0x32**
+   — the extraction-arm family lights up when the last
+   objective building falls (7j.20 cross-ref).
+8. **FUN_0041bc1c death stamp (TRT/turret resolver, FORMATS §14
+   family — new detail)**: on hp ≤ 0 the mirror plane word :=
+   word@[0x454a04+4·zone] (per-zone rubble word table),
+   seen := 1, DAT volume byte := 0, then debris
+   FUN_00420608(x·0x20,y·0x20,z·0x20, kind ecx=0xF, param −1,
+   delay 0) + splash FUN_00424355 at the FUN_0041bd78 water-z
+   probe — the same death shape as the .BDG tail (7j.25) minus
+   the restore (turrets have no under-bank).
+9. **Corpus verdict**: unchanged — nothing destroys in the
+   gates; the restore/height families stay off the corpus
+   path. E-side seam: NONE required for the template banks
+   (skip or keep the dead payload — arena layout is
+   reader-free; keeping the load is the faithful option). New
+   watch candidates if objective parity is ever needed:
+   [0x46cce0] counter + the +0x1B/+0x1C height bytes via the
+   0x4796bc row.
 
 ## 9. Open items (next slices)
 

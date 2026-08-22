@@ -3400,3 +3400,41 @@ Nudge-Worker: 7972b334-1999-4c48-82c5-ae0582b17a0d
    (interactive); this closes the hot-rect unit.
 
 Nudge-Worker: aa62f5ed-46c8-4b65-98f4-7b0bbc54929e
+
+## D96 — 2026-08-22: P4/RE — the .BDG template-bank readers CLOSED: +0x46/+0x4A are the only consumed banks (the UNDER pair); +0x3E/+0x42 = DEAD EDITOR PAYLOAD (the CURRENT pair ≡ shipped TOT/DAT); the 0x1E-B mirror-record grammar unified (worker ce347a0e claim 2)
+
+1. THE QUESTION (7j.25 open): which bank feeds which restore
+   word, and who reads slots +0x3E/+0x42. ANSWER, three-legged:
+   (a) loader bank DISK ORDER pinned — the four file banks land
+   in slots +0x3E, +0x46, +0x42, +0x4A IN THAT ORDER
+   (interleaved vs the slot layout; 0x41a71d..0x41a782);
+   (b) reader census over the full .text objdump (slot absolute
+   addresses + displacement forms + arena walk) — +0x3E/+0x42
+   have ZERO readers; +0x46 feeds the TOT-mirror plane words,
+   +0x4A feeds seen=(word==0) + DAT volume=low byte (restore
+   re-verified instruction-exact: linear (z'·H+i)·W+j, z ∈
+   [z0, min(z0+D,8)), mirror word +2·z, seen +0x10+z);
+   (c) corpus proof of ROLE: bank1(+0x3E) ≡ shipped TOT word and
+   bank3(+0x42) ≡ shipped DAT byte at every .POS footprint
+   (434/435 ZONEA/M1 cells; the single miss = a genuine footprint
+   overlap, last-.POS-slot-wins) — the CURRENT-state pair is
+   already baked into the shipped mission files, so the game
+   never re-stamps; the "runtime spawn-stamp pass" hypothesis is
+   RETIRED. E-side: no seam change (terrain load already carries
+   buildings; the destroy restore needs only the UNDER pair).
+2. BONUS DECODES: (a) the TOT-mirror tile record grammar
+   (0x1E B @0x4796bc: plane words +2·z, seen bytes +0x10+z,
+   +0x18 scorch, +0x19/+0x1A variant/door, +0x1B/+0x1C the
+   OBJECT-HEIGHT pair, +0x1D unused) — unifies the scattered
+   MISSIONVIEW §8 tail-byte families; (b) FUN_0044889a /
+   FUN_00448b80 = the OBJECTIVE-BUILDING family (zone==7 gate;
+   counter [0x46cce0] over types 0x44..0x47; at zero → SFX
+   0x28/0x29 + extraction-arm cells 0x46cd00/0x46ccfc/0x46ccc4);
+   (c) .POS word 2 = the BASE Z LEVEL (FORMATS §12 "kind" gloss
+   corrected); (d) FUN_0041bc1c's TRT death stamp (per-zone
+   rubble word 0x454a04, FORMATS §14 family).
+   Docs-only; no engine change; objdump-only + read-only corpus
+   probes (scratch /tmp/opencode). Next queued: the .BLD record
+   walk (item 3).
+
+Nudge-Worker: ce347a0e-c2b8-4a25-9960-72473bedb8a8

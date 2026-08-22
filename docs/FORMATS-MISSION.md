@@ -86,6 +86,19 @@ extensions of §0 with no unresolved member at that dispatcher.
   per-frame runtime view** (where the TRT structure animation frames
   1..0x1E live). FUN_0044661b re-loads .TOT/.BIN/.DAT on the
   save/EDITOR\ZONE restore path.
+- **Mirror-record grammar + pre-stamped footprints (EXW §7j.32,
+  2026-08-22):** the TOT MIRROR is one **0x1E-B record per tile**
+  @0x4796bc+0x1E·tile: `+2·z` the 8 plane words, `+0x10+z` the 8
+  SEEN bytes, `+0x18` scorch, `+0x19/+0x1A` type-DB variant/door
+  bytes, `+0x1B/+0x1C` the OBJECT-HEIGHT pair (z0, z0+D) stamped/
+  cleared by the objective-building family, `+0x1D` unused. And
+  the shipped .TOT/.DAT are **pre-stamped with the destructible
+  buildings**: every .POS footprint cell carries its BDG
+  CURRENT-state bank word/byte in the shipped files (434/435
+  ZONEA/M1 cells; the one miss = a footprint overlap,
+  last-.POS-slot-wins) — buildings never get stamped at runtime;
+  destroy re-instates the BDG UNDER-terrain pair (§16) into the
+  runtime mirror/seen/DAT only.
 - **Relationship to MAP — VERIFIED, with a caveat:**
   - MAP and TOT are **never** byte-identical (0/37).
   - Across all 37 missions and all 8 planes there are exactly **0** cells where
@@ -301,7 +314,12 @@ What RE must confirm: everything beyond the layout.
   - Used slots per mission: 48 (ZONEF/M7) … 1954 (ZONEE/M7); ZONEA/M1: 213.
   - `x ≤ w`, `y ≤ h` for every non-sentinel record checked (in-bounds test
     over all missions flags only 0xFFFFFFFF slots).
-  - kind ∈ 0…5; index ∈ 0…273 with 0xFFFFFFFF also occurring in field 3.
+  - **word 2 = the BASE Z LEVEL 0..5, not a "kind" (EXW §7j.32, 2026-08-22):
+    the destroy restore runs z ∈ [word2, word2+D) and the BDG CURRENT-state
+    banks match the shipped TOT/DAT at planes word2+z' for 434/435 ZONEA/M1
+    cells — word 2 is consumed as the footprint's z origin (values 0..5 fit
+    the 8-plane stack with max D 3).**
+  - index ∈ 0…273 with 0xFFFFFFFF also occurring in field 3.
 - **Cross-file (LIKELY):** the `index` field never exceeds the mission's BLD
   record count (e.g. ZONEA: max 196 vs ≈285 BLD records; ZONEB/M1: max 230 vs
   ≈344; ZONEF/M5: max 273 vs ≈473) — consistent with *index = BLD record
@@ -388,12 +406,29 @@ What RE must confirm: everything beyond the layout.
     relative to the instance; selector 1..9 → the destroy-tail debris/effect
     cases, EXW §7j.25; corpus uses ONLY 1..9: ×11098/1490/1385/402/330/304/
     316/178/56), then **four template banks of `2·W·H·D` bytes each**
-    (the saved under-terrain restored when the object dies).
+    (u16 cells, linear `(z·H+i)·W+j` — H = y-extent, W = x-extent).
+- **TEMPLATE-BANK SEMANTICS CLOSED (EXW §7j.32, 2026-08-22):** the four
+  banks are a 2×2 of {CURRENT state, UNDER-terrain} × {TOT words, DAT
+  volume}, and the **on-disk order is interleaved vs the in-memory slot
+  order** (loader FUN_0041a4f8 @0x41a71d..0x41a782): disk bank **1 → slot
+  +0x3E** (CURRENT TOT words), **2 → +0x46** (UNDER TOT words), **3 →
+  +0x42** (CURRENT DAT words), **4 → +0x4A** (UNDER DAT words). Corpus
+  proof (ZONEA/M1, 435 footprint cells): bank1 ≡ the shipped .TOT plane
+  word and bank3 ≡ the shipped .DAT byte at every .POS footprint (434/435
+  each — the one miss is a genuine footprint overlap, last-.POS-slot-wins);
+  bank2/bank4 (the UNDER pair, what the destroy restore writes back into
+  the runtime mirror/seen/DAT) differ from the shipped files almost
+  everywhere. **+0x3E/+0x42 are loaded into the arena and read by NO code**
+  (triple census: slot addresses, displacement forms, arena walk) — the
+  editor's stamp payload, already baked into the shipped .TOT/.DAT; there
+  is NO runtime spawn-stamp pass. Value domains: banks 1/2 = tile words
+  ≤1868; bank 3 ≤ 102 (DAT domain); bank 4 ≤ 512 (word 0 → seen=1, low
+  byte → DAT volume on restore).
 - **Cross-file:** mission-level BDG size vs BLD size Pearson r = 0.985 — BLD
   carries the same object list's NAMES/graphics; BDG carries the gameplay
   spec. .POS word 3 (index) selects the BDG/BLD row (§12).
 - **What RE must confirm:** nothing structural; remaining open — the BLD-side
-  record walk (§17) and which template-bank plane maps to which mirror word.
+  record walk (§17).
 
 ## 17. BLD — scenery/building object library with names
 
