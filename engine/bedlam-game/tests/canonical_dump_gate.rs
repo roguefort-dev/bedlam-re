@@ -140,6 +140,8 @@ fn synthetic_grammar_pins_the_6a_bytes() {
         order_target: (31, 46, 3),
         armor_pads: &pads,
         map_wh: Some((300, 150)),
+        weapon_bank: &[],
+        enemy_bank: &[],
     };
     let tiers: Vec<String> = ["T0", "T1", "TS"].iter().map(|s| s.to_string()).collect();
     let frame = emit_frame(&st, &tiers, true, true);
@@ -333,6 +335,8 @@ fn synthetic_frames() -> Vec<diffharness::dump::FrameRecord> {
             order_target: (0, 0, 0),
             armor_pads: sim.armor_pads(),
             map_wh: (i == 0).then_some((4, 4)),
+            weapon_bank: sim.weapon_bank(),
+            enemy_bank: sim.enemy_bank(),
         };
         frames.push(emit_frame(&st, &tiers, false, i == 0));
     }
@@ -504,6 +508,173 @@ fn claims_set(claims: &[u8]) -> Vec<u16> {
         .chunks(2)
         .map(|c| u16::from_le_bytes(c.try_into().unwrap()))
         .collect()
+}
+
+/// Active (kind ≠ 0) weapon-bank records as (slot, kind, owner, tick,
+/// class) — the §6a T2 row grammar (0x36 records after the u32 count,
+/// byte layout = the guest record).
+fn weapons_of(bank: &[u8]) -> Vec<(usize, u16, i32, i32, i32)> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 0x36, "weapon-anim-bank row shape");
+    let mut out = Vec::new();
+    for i in 0..n {
+        let rec = &bank[4 + i * 0x36..4 + (i + 1) * 0x36];
+        let kind = u16::from_le_bytes(rec[0..2].try_into().unwrap());
+        if kind != 0 {
+            let owner = i32::from_le_bytes(rec[2..6].try_into().unwrap());
+            let tick = i32::from_le_bytes(rec[0xA..0xE].try_into().unwrap());
+            let class = i32::from_le_bytes(rec[0x2A..0x2E].try_into().unwrap());
+            out.push((i, kind, owner, tick, class));
+        }
+    }
+    out
+}
+
+#[test]
+fn corpus_s3_command_fire() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+
+    // S3 (DESIGN §7 S3 row + §10-W12; D103): the loadout key stages
+    // robot 0 with one slot per inline-spawn class + the marker
+    // robot with the rocket; 8 COMMAND records exercise the fire
+    // gates, the cooldown cadences, the per-record ammo gate, the
+    // auto-rearm cascade, and the spawn/active/free lifecycle of
+    // every modeled record family. 133 records (anchor + 132),
+    // pinned chain.
+    let s3 = fs::read_to_string(scen_path("S3")).expect("S3.scen committed");
+    let run = run_canonical(&s3, &root).expect("S3 canonical run");
+    assert_eq!(run.manifest.frame_count, 133);
+    assert_eq!(
+        run.manifest.chain_digest, "49193732e6dbc546",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s3, &root).expect("S3 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S3 dump verifies");
+
+    // --- the T2 rows: FULL banks every frame ------------------------
+    for f in &dump.frames {
+        let w = f.watch("weapon-anim-bank").expect("T2 weapon row");
+        assert_eq!(w.len(), 4 + 400 * 0x36, "the full 400-slot bank");
+        let p = f.watch("projectile-bank").expect("T2 projectile row");
+        assert_eq!(p.len(), 4 + 50 * 0x22, "the full 50-slot bank");
+        // No enemy fire rides S3 (the 0x22 producers are the critter
+        // family, an E-gap): the row stays the all-free zero blob.
+        assert!(p[4..].iter().all(|&x| x == 0), "projectile bank free");
+    }
+
+    // --- anchor frame 0: inert banks, TS rides -----------------------
+    let f0 = &dump.frames[0];
+    assert!(weapons_of(f0.watch("weapon-anim-bank").unwrap()).is_empty());
+    assert!(f0.watch("static-map-wh").is_some());
+
+    // --- frame 1: the full volley (15 records) -----------------------
+    let f1 = &dump.frames[1];
+    assert!(f1.injection_applied);
+    let v1 = weapons_of(f1.watch("weapon-anim-bank").unwrap());
+    let mut kinds: Vec<u16> = v1.iter().map(|&(_, k, ..)| k).collect();
+    kinds.sort_unstable();
+    assert_eq!(
+        kinds,
+        vec![
+            9, 0xA, 0xB, // artillery (record type = the slot id)
+            0xF, 0xF, // prox mines 0x10 -> 2x type 0xF
+            0x13, 0x13, // pressure mines 0x14 -> 2x type 0x13
+            0x1A, 0x1A, 0x1A, 0x1A, // bouncy 0x1B -> 4x type 0x1A
+            0x1F, 0x1F, 0x1F, 0x1F, // sticky 0x1D -> 4x type 0x1F
+        ],
+        "one record per inline-spawn class, first-free slot order"
+    );
+    assert!(v1.iter().all(|&(_, _, o, ..)| o == 0), "owner = robot 0");
+    // The mines/grenades jittered their RandA draws: the rng row moved.
+    assert_ne!(
+        f0.watch("rng-state-a").unwrap(),
+        f1.watch("rng-state-a").unwrap()
+    );
+    // The order-target row mirrors the COMMAND triple (raw Q5 words).
+    assert_eq!(
+        f1.watch("order-target").unwrap(),
+        &[
+            736i32.to_le_bytes(),
+            2336i32.to_le_bytes(),
+            0i32.to_le_bytes()
+        ]
+        .concat()[..]
+    );
+
+    // --- frame 10: volley 2 (12 records; the artillery slots stay
+    //     disarmed — the unconditional one-shot per arm) --------------
+    let f10 = &dump.frames[10];
+    let v2 = weapons_of(f10.watch("weapon-anim-bank").unwrap());
+    assert_eq!(v2.len(), 17, "5 survivors + the 12 volley-2 records");
+    assert_eq!(
+        v2.iter().filter(|&&(_, k, ..)| k == 9).count(),
+        1,
+        "artillery 9 still the volley-1 record (no refire)"
+    );
+
+    // --- frame 11: the rocket (owner 1 = the staged marker robot) ----
+    let f11 = &dump.frames[11];
+    let rockets: Vec<_> = weapons_of(f11.watch("weapon-anim-bank").unwrap())
+        .into_iter()
+        .filter(|&(_, k, ..)| k == 0x24)
+        .collect();
+    assert_eq!(rockets.len(), 1);
+    assert_eq!(rockets[0].2, 1, "the rocket's owner is robot 1");
+
+    // --- frames 20/28/36: the AUTO-REARM CASCADE — the volley-2 ammo
+    //     spend emptied the mask, slot 0 re-armed, and each command
+    //     fires exactly one artillery walking slots 9 -> 0xA -> 0xB ---
+    for (fi, kind) in [(20usize, 9u16), (28, 0xA), (36, 0xB)] {
+        let f = &dump.frames[fi];
+        assert!(f.injection_applied);
+        let fresh: Vec<_> = weapons_of(f.watch("weapon-anim-bank").unwrap())
+            .into_iter()
+            .filter(|&(_, k, _, t, _)| k == kind && t <= 4)
+            .collect();
+        assert_eq!(fresh.len(), 1, "frame {fi}: one fresh artillery {kind:#x}");
+        assert_eq!(fresh[0].2, 0);
+    }
+
+    // --- frame 44: the ALL-EMPTY command — the mask is 0, nothing
+    //     fires (the no-op arm path) -----------------------------------
+    let before = weapons_of(dump.frames[43].watch("weapon-anim-bank").unwrap()).len();
+    let f44 = weapons_of(dump.frames[44].watch("weapon-anim-bank").unwrap());
+    assert!(dump.frames[44].injection_applied);
+    assert_eq!(f44.len(), before, "the empty-mask command fires nothing");
+
+    // --- frame 45: rocket 2 (ammo to 0; no rearm — the all-empty
+    //     auto-rearm path) ---------------------------------------------
+    let rockets: Vec<_> = weapons_of(dump.frames[45].watch("weapon-anim-bank").unwrap())
+        .into_iter()
+        .filter(|&(_, k, ..)| k == 0x24)
+        .collect();
+    assert_eq!(rockets.len(), 1);
+    assert_eq!(rockets[0].2, 1);
+
+    // --- frame 100: the class ladder — only the volley-2 mines remain
+    //     (grenades + rockets + artillery freed; the mines' 4-cycle
+    //     class decrement is mid-ladder) --------------------------------
+    let v100 = weapons_of(dump.frames[100].watch("weapon-anim-bank").unwrap());
+    assert!(v100.iter().all(|&(_, k, ..)| k == 0xF || k == 0x13));
+    assert!(v100.iter().all(|&(_, _, _, _, c)| c == 1), "class 4 -> 1");
+
+    // --- the tail: every spawned record freed (the full lifecycle) ---
+    let flast = dump.frames.last().unwrap();
+    assert!(weapons_of(flast.watch("weapon-anim-bank").unwrap()).is_empty());
+
+    // --- the loadout seam gates ----------------------------------------
+    // A robot index past the staged bank fails loud (never guessed).
+    let bad = "scenario = \"SB\"\ntiers = T0\nframes = 1\nloadout = 5,0x01,9:2\nuntil-anchor mission-start\nstep 1\n";
+    let err = run_canonical(bad, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("not in the bank"),
+        "loadout rejection names the bank bound: {err}"
+    );
 }
 
 #[test]

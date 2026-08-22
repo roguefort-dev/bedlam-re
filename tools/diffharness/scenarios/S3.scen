@@ -1,0 +1,64 @@
+# S3 — COMMAND weapon-fire (DESIGN-DIFFHARNESS.md §7 S3 row + §10-W12;
+# pairs the W12-S3-prep producer, D102, with its scenario + dumps).
+#
+# The `loadout` key stages robot 0 (the ZONEA/MISSION1 MRK robot at
+# (21,73)) with one slot per INLINE-spawn class — artillery 9/0xA/0xB
+# (record type = the slot id), prox mines 0x10 (2× type 0xF) and
+# pressure mines 0x14 (2× type 0x13), bouncy grenades 0x1B (4× type
+# 0x1A) and sticky 0x1D (4× type 0x1F) — and the staged marker robot
+# at (18,73) with the rocket 0x20 (1× type 0x24). The COMMAND
+# records carry flags=02 (the ORDER fire arm) + Q5 target words
+# (tile·32; the payload grammar words@+7/+9/+0xB, byte@+6 filler).
+#
+# EVERY class the modeled FUN_00409138 dispatch can inline-spawn is
+# covered. NOT in the first S3 chain (the documented E-gaps, D102):
+# bullets 2..4 / shell 5 / ballistic 0x17 / homing 0x29 have NO
+# inline spawn case — their records are born inside the AI-order
+# families (FUN_0040b615 etc.) and the mortar FUN_0040a9ff, whose
+# spawn bodies are unmodeled; a live O1 S3 that fires those slots
+# will show records E cannot source (the differ's coverage class
+# names them — "S3 findings name them").
+#
+# Frame budget: 8 volleys over frames 1..45 exercising the cooldown
+# cadences (8/5), the unconditional artillery disarm, the per-record
+# ammo gate (mines 2/4/6 and grenades 4/6 spend ONE ammo PER SPAWNED
+# RECORD — the loadout budgets 4/8 so volleys 1-2 fire full bursts and
+# volley 3 empties the mask for the auto-rearm), the rearm cascade
+# (slot 0 re-arms → the C5..C7 single artillery shots walk slots
+# 0..2), and the spawn/active/free lifecycle through frame 132: the
+# ballistic family ticks 4×/frame (all four weapon_tick phases), so
+# grenades expire (tick 0x65) ~15 frames in, the rocket flies out of
+# the map bounds ~13 frames in, and the mines run their full
+# 4-cycle class ladder (tick 0x65 ≈ every 25 frames, class 4→0)
+# freeing ~frame 100 — every spawned record is FREE by the tail.
+# The 50×0x22 projectile bank stays all-free every frame (no enemy
+# fire in S3; its producers are the critter family, an E-gap).
+scenario = "S3"
+tiers = T0,T1,T2,TS
+anchor = mission-start
+frames = 132
+markers = 18,73,1
+loadout = 0,0x7F,9:2,0xA:2,0xB:2,0x10:4,0x14:4,0x1B:8,0x1D:8; 1,0x01,0x20:2
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# frame 1: full volley, target tile (23,73) Q5 = 0x2E0,0x920
+command 01 00 00 00 00 02 00 E0 02 20 09 00 00 00
+step 8
+# frame 10: mines + grenades (cooldown 8 expired; artillery disarmed)
+command 01 00 00 00 00 02 00 60 02 E0 08 00 00 00
+# frame 11: robot 1 rocket at (21,73)
+command 01 01 00 00 00 02 00 A0 02 20 09 00 00 00
+step 8
+# frame 20: volley 3 - ammo hits 0, the mask empties, auto-rearm
+# re-arms artillery slot 0
+command 01 00 00 00 00 02 00 E0 02 20 09 00 00 00
+step 7
+# frames 28/36/44: the auto-rearmed artillery walks slots 0..2
+command 01 00 00 00 00 02 00 E0 02 20 09 00 00 00
+step 7
+command 01 00 00 00 00 02 00 E0 02 20 09 00 00 00
+step 7
+command 01 00 00 00 00 02 00 E0 02 20 09 00 00 00
+# frame 45: robot 1 rocket 2 (ammo to 0; no rearm - the all-empty path)
+command 01 01 00 00 00 02 00 A0 02 20 09 00 00 00
+step 87

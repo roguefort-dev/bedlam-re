@@ -41,7 +41,19 @@
 //! The `markers` header key (D91) stages extra squad robots through
 //! the existing `load_mission(staged_markers)` seam after the MRK
 //! robots — the walk seam (the click-order moves only the OTHER
-//! robots in radius, so order→walk scenarios stage a walker).
+//! robots in radius, so order→walk scenarios stage a walker). The
+//! `loadout` header key (W12-S3, grammar v1.3) stages per-robot
+//! weapon slots + the enable mask through `stage_robot_weapons` —
+//! the fire-path seam S3's COMMAND steps consume (the original fills
+//! the slots at spawn from the session table; an E-side staging
+//! seam, recorded never fabricated).
+//!
+//! T2 tier (W12-S3): the scenario's tier list gates the two bank
+//! rows — `weapon-anim-bank` (the 400×0x36 blob, byte layout = the
+//! guest record) + `projectile-bank` (the 50×0x22 blob, 7 mapped
+//! fields + the zeroed +0x1A/+0x1E tail). Full bank by design (the
+//! O1 raw side has no count cell; slot identity is the watched
+//! state); they stay OUT of `state_hash` (the W6 split).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -49,6 +61,7 @@ use std::path::{Path, PathBuf};
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::Robot;
 use bedlam_core::sim::SimConfig;
+use bedlam_core::weapon::{CommandRecord, EnemyProjectile, WeaponRecord, WeaponSlot};
 use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, SceneAction};
 use diffharness::dump::{Channel, DumpHeader, FrameRecord};
 use diffharness::hash::sha256;
@@ -96,10 +109,67 @@ pub struct TickState<'a> {
     pub armor_pads: &'a [u8],
     /// TS statics ride the anchor frame only.
     pub map_wh: Option<(u32, u32)>,
+    /// The T2 watch surfaces (W12-S3): the two projectile banks,
+    /// emitted WHOLE per frame — never in `state_hash` (the W6
+    /// split: watched bank rows are their own dump blobs).
+    pub weapon_bank: &'a [WeaponRecord],
+    pub enemy_bank: &'a [EnemyProjectile],
 }
 
 fn u32b(v: u32) -> Vec<u8> {
     v.to_le_bytes().to_vec()
+}
+
+/// Encode the 400×0x36 weapon-anim bank (the T2 row, W12-S3): u32
+/// slot count + the records in the §6a canonical field order — which
+/// IS the guest 0x36 layout byte-for-byte (type w@+0, owner, target,
+/// tick, draw_ctr, xyz, v, class, arc, trail — 2 + 13·4 = 0x36, no
+/// gaps: the EXD 0x980d4 twin writes the same offsets, RE-EXD-MAP
+/// §5c). FULL BANK by design: the O1 raw side has no count cell to
+/// bound a compact form, and slot-index identity (first-free
+/// allocation) is the state the row watches.
+fn weapon_bank_blob(bank: &[WeaponRecord]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + bank.len() * 0x36);
+    b.extend_from_slice(&(bank.len() as u32).to_le_bytes());
+    for r in bank {
+        b.extend_from_slice(&r.kind.to_le_bytes());
+        b.extend_from_slice(&r.owner.to_le_bytes());
+        b.extend_from_slice(&r.target.to_le_bytes());
+        b.extend_from_slice(&r.tick.to_le_bytes());
+        b.extend_from_slice(&r.draw_ctr.to_le_bytes());
+        b.extend_from_slice(&r.x.to_le_bytes());
+        b.extend_from_slice(&r.y.to_le_bytes());
+        b.extend_from_slice(&r.z.to_le_bytes());
+        b.extend_from_slice(&r.vx.to_le_bytes());
+        b.extend_from_slice(&r.vy.to_le_bytes());
+        b.extend_from_slice(&r.vz.to_le_bytes());
+        b.extend_from_slice(&r.class.to_le_bytes());
+        b.extend_from_slice(&r.arc.to_le_bytes());
+        b.extend_from_slice(&r.trail.to_le_bytes());
+    }
+    b
+}
+
+/// Encode the 50×0x22 projectile bank (the T2 row, W12-S3): u32 slot
+/// count + records {type w@+0, x, y, z, vx, vy, vz} — the first
+/// 0x1A bytes of the guest stride (the +0x1A clamp-counter and the
+/// +0x1E countdown tail words are E-gaps, RE-EXD-MAP §5c — the O1
+/// normalizer maps only the 7 fields; the tail is a documented
+/// coverage gap, never fabricated).
+fn enemy_bank_blob(bank: &[EnemyProjectile]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + bank.len() * 0x22);
+    b.extend_from_slice(&(bank.len() as u32).to_le_bytes());
+    for r in bank {
+        b.extend_from_slice(&r.kind.to_le_bytes());
+        b.extend_from_slice(&r.x.to_le_bytes());
+        b.extend_from_slice(&r.y.to_le_bytes());
+        b.extend_from_slice(&r.z.to_le_bytes());
+        b.extend_from_slice(&r.vx.to_le_bytes());
+        b.extend_from_slice(&r.vy.to_le_bytes());
+        b.extend_from_slice(&r.vz.to_le_bytes());
+        b.extend_from_slice(&[0u8; 8]); // +0x1A/+0x1E tail (E-gap, zero)
+    }
+    b
 }
 
 /// Encode the robot bank: u32 count + per-robot records in the
@@ -244,6 +314,10 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         pads.extend_from_slice(st.armor_pads);
         f.push_watch("typedb-fade-byte", pads.clone());
         f.push_watch("armor-pad-reads", pads);
+    }
+    if want("T2") {
+        f.push_watch("weapon-anim-bank", weapon_bank_blob(st.weapon_bank));
+        f.push_watch("projectile-bank", enemy_bank_blob(st.enemy_bank));
     }
     if anchor && want("TS") {
         let (w, h) = st.map_wh.unwrap_or((0, 0));
@@ -444,6 +518,33 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         scene.sim_mut().set_difficulty(difficulty);
     }
 
+    // The LOADOUT staging seam (W12-S3, grammar v1.3): expand the
+    // per-robot entries into the 7-slot arrays through the engine
+    // host seam (`stage_robot_weapons`, the D51 pattern — the
+    // original fills the slots at spawn from the session table).
+    // Like `markers`, this is an E-side staging seam: no O1 write
+    // exists, the plan records it. An index past the bank is a
+    // scenario error (fail loud, never guess).
+    for l in &scen.loadout {
+        let mut slots = [WeaponSlot::default(); 7];
+        for (k, &(id, ammo)) in l.slots.iter().enumerate().take(7) {
+            slots[k] = WeaponSlot {
+                id,
+                ammo,
+                cooldown: 0,
+            };
+        }
+        let scene = host.mission_mut().expect("mission staged");
+        if !scene.sim_mut().stage_robot_weapons(l.robot, slots, l.mask) {
+            let n = scene.sim().robots().len();
+            return Err(CanonicalError(format!(
+                "loadout robot {} is not in the bank ({} robots staged; MRK \
+                 robots then markers order)",
+                l.robot, n
+            )));
+        }
+    }
+
     // Session scalars from the episode (fresh host: ZONEA/MISSION1).
     let (zone, mission_no) = host.mission_slot();
     let session = Session {
@@ -573,7 +674,10 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 // appends at the ring; E stages them into the sim's
                 // ring and the next frame's MissionShell pass
                 // consumes them (FUN_00409138 — the fire family of
-                // DESIGN §7's S3 row).
+                // DESIGN §7's S3 row). The bit1 consumer writes the
+                // record's triple to the 0x4dd484 cells — they
+                // PERSIST like the ORDER seam's write, so the
+                // order-target row mirrors the last of either.
                 let scene = host
                     .mission_mut()
                     .ok_or_else(|| CanonicalError("mission not staged".into()))?;
@@ -581,6 +685,11 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                     return Err(CanonicalError(format!(
                         "command payload too short (<14 B record): {bytes:02x?}"
                     )));
+                }
+                if let Some(rec) = CommandRecord::from_payload(bytes) {
+                    if rec.flags & 2 != 0 {
+                        seam_target = (i32::from(rec.x), i32::from(rec.y), i32::from(rec.z));
+                    }
                 }
                 let executed = host.pump_frame(DT_SUBTICKS, &null);
                 check_cadence(executed)?;
@@ -676,6 +785,8 @@ fn tick_state<'a>(
         order_target: seam_target,
         armor_pads: sim.armor_pads(),
         map_wh,
+        weapon_bank: sim.weapon_bank(),
+        enemy_bank: sim.enemy_bank(),
     }
 }
 
