@@ -22,7 +22,6 @@
     { "name": "dat_ptr", "addr": "CS:00107518", "len": 4 },
     { "name": "claim_ptr", "addr": "CS:00119564", "len": 4 },
     { "name": "robot_count", "addr": "CS:0011958C", "len": 4 },
-    { "name": "obj_count", "addr": "CS:00119554", "len": 4 },
     { "name": "trt_count", "addr": "CS:0011949C", "len": 4 }
   ],
   "anchor_watches": [
@@ -48,8 +47,8 @@
     { "id": "typedb-mirror-rows", "addr": "CS:000AC1E4", "len": "$map_w*$map_h*0x1E" },
     { "id": "typedb-fade-byte", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" },
     { "id": "variant-flag-bytes", "addr": "CS:000AC1FD", "len": "(2*$map_w*$map_h)+1" },
-    { "id": "object-instances", "addr": "CS:$obj_ptr", "len": "$obj_count*0x14" },
-    { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20" },
+    { "id": "object-instances", "addr": "CS:$obj_ptr", "len": "2000*0x14", "prefix": { "addr": "CS:00119554", "len": 4 } },
+    { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20", "prefix": { "addr": "CS:0011949C", "len": 4 } },
     { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" },
     { "id": "static-type-table", "addr": "CS:00108428", "len": 21996 },
     { "id": "static-tot-volume", "addr": "CS:$tot_ptr", "len": "4+16*$map_w*$map_h" },
@@ -84,8 +83,8 @@
     { "id": "typedb-mirror-rows", "addr": "CS:000AC1E4", "len": "$map_w*$map_h*0x1E" },
     { "id": "typedb-fade-byte", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" },
     { "id": "variant-flag-bytes", "addr": "CS:000AC1FD", "len": "(2*$map_w*$map_h)+1" },
-    { "id": "object-instances", "addr": "CS:$obj_ptr", "len": "$obj_count*0x14" },
-    { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20" },
+    { "id": "object-instances", "addr": "CS:$obj_ptr", "len": "2000*0x14", "prefix": { "addr": "CS:00119554", "len": 4 } },
+    { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20", "prefix": { "addr": "CS:0011949C", "len": 4 } },
     { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" }
   ],
   "_deferred": [

@@ -11,8 +11,11 @@
 //! it relies on — a registry edit that invalidates a row fails this
 //! build loudly instead of silently emitting a stale address.
 //!
-//! Supported scenario tiers: T0 + TS (the S0 shape). T1+ extents need
-//! the count-cell resolver (W5); passing such a scenario is an error.
+//! Supported scenario tiers: T0/T1/TS (the S0/S1 shape) + T2/T3 (the
+//! W12-S3/S4 widening, D109). T2/T3 rows WITHOUT an EXD alias stay
+//! explicit coverage gaps (deferred, never emitted — the differ's
+//! coverage discipline); the aliased rows compile to their full fixed
+//! bank spans.
 //!
 //! Usage:
 //! ```text
@@ -27,8 +30,9 @@ use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// The tiers this compiler can resolve today (the S0/S1 shape).
-const SUPPORTED_TIERS: [&str; 3] = ["T0", "T1", "TS"];
+/// The tiers this compiler can resolve today (T0/T1/TS + the D109
+/// T2/T3 widening: unaliased rows are deferred, never fabricated).
+const SUPPORTED_TIERS: [&str; 5] = ["T0", "T1", "T2", "T3", "TS"];
 
 // ------------------------------------------------------------- resolution
 
@@ -49,6 +53,13 @@ enum Form {
     /// Fixed base address + a length EXPRESSION over resolve symbols
     /// (the count-driven T1 bank form: base + count-cell resolve row).
     CountExpr { addr: u64, len_expr: String },
+    /// A count cell rides the blob HEAD (D109): dump the 4-byte cell
+    /// at `cell` first, then the inner form's span — capgen
+    /// concatenates the two dumps into the one watch blob. This is
+    /// the O1 bank-row grammar the differ's normalizers pin (u32
+    /// count + records for trt-array/object-instances; robot-bank
+    /// stays a bare span — its normalizer has no count prefix).
+    Prefixed { cell: u64, inner: Box<Form> },
 }
 
 #[derive(Debug, Clone)]
@@ -227,7 +238,10 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             // count-driven banks: extent "count*<stride>" + a count cell
             // named in exd_addr. [derived-pinned] the count cell is the
             // SECOND exd cell of the row (RE-EXD-MAP sec 5 bank rows).
-            "robot-bank" | "trt-array" => {
+            // robot-bank stays a BARE span (the differ's robot O1
+            // walk has no count prefix); trt-array pins its count
+            // cell onto the blob head (trt_o1 walks 0..count, D109).
+            "robot-bank" => {
                 if cells.len() != 2 {
                     return Err(die(format!(
                         "row {id} exd_addr {:?} no longer carries base + count cell",
@@ -239,6 +253,23 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                 plan(Form::CountExpr {
                     addr: cells[0],
                     len_expr: format!("${sym}*{stride}"),
+                })
+            }
+            "trt-array" => {
+                if cells.len() != 2 {
+                    return Err(die(format!(
+                        "row {id} exd_addr {:?} no longer carries base + count cell",
+                        row.exd_addr
+                    )));
+                }
+                let stride = extent_stride(&row.extent, id)?;
+                let sym = count_symbol(id);
+                plan(Form::Prefixed {
+                    cell: cells[1],
+                    inner: Box::new(Form::CountExpr {
+                        addr: cells[0],
+                        len_expr: format!("${sym}*{stride}"),
+                    }),
                 })
             }
             // partial alias: EXD covers the selected-idx cell only
@@ -341,10 +372,37 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                         row.indirect, row.exd_addr
                     )));
                 }
-                let stride = extent_stride(&row.extent, id)?;
-                plan(Form::PtrCell {
-                    cell: cells[0],
-                    len_expr: format!("$obj_count*{stride}"),
+                // [derived-pinned] (D108/D109): the O1 walk covers the
+                // WHOLE bank — the ZONEB .POS surface carries LIVE slots
+                // past dead holes (max slot 1128 over 1096 live; a
+                // count-bounded span silently drops 32 objects and
+                // breaks the count field). The differ's O1 normalizer
+                // pins the blob grammar: u32 count cell FIRST + the
+                // full 2000*0x14 records (dead id==-1 slots skipped in
+                // the walk) — the count cell rides the blob head via
+                // the prefix form, so $obj_count needs no resolve row.
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row {id} extent {:?} stopped parsing as the fixed \
+                         full-bank span: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                if len != 2000 * 0x14 {
+                    return Err(die(format!(
+                        "object-instances extent is {len:#x}, not the pinned \
+                         full-bank 2000*0x14 = {:#x}: update dbx-plan (the \
+                         count-bounded span drops the ZONEB live-past-dead \
+                         slots — D108)",
+                        2000 * 0x14
+                    )));
+                }
+                plan(Form::Prefixed {
+                    cell: cells[1],
+                    inner: Box::new(Form::PtrCell {
+                        cell: cells[0],
+                        len_expr: "2000*0x14".into(),
+                    }),
                 })
             }
             "move-target-words" => {
@@ -381,6 +439,83 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             other => Err(die(format!(
                 "T1 registry row {other:?} has no dbx-plan resolution form"
             ))),
+        };
+    }
+
+    // --- T2/T3 (the D109 tier widening): unaliased rows (no EXD
+    // twin yet) are explicit coverage gaps — never dumped on O1 (the
+    // differ's coverage discipline: they surface as E-only rows in
+    // cross-channel reports, never silence). The two aliased T2 banks
+    // are FULL fixed spans: the differ's O1 normalizers require the
+    // whole bank with NO count cell (the guest free-slot walk is the
+    // bound — RE-EXD-MAP sec 5c).
+    if row.tier == "T2" || row.tier == "T3" {
+        if row.exd_addr.is_empty() {
+            return Ok(None); // E-only coverage row (debris/splash/mortar/...)
+        }
+        let cells = exd_cells(&row.exd_addr);
+        let first = cells.first().copied().ok_or_else(|| {
+            die(format!(
+                "{} row {id} has no parsable exd_addr: {:?}",
+                row.tier, row.exd_addr
+            ))
+        })?;
+        return match id {
+            "weapon-anim-bank" | "projectile-bank" => {
+                if row.indirect || cells.len() != 1 {
+                    return Err(die(format!(
+                        "row {id} changed shape (indirect {}, exd_addr {:?}): \
+                         the T2 banks are single fixed cells",
+                        row.indirect, row.exd_addr
+                    )));
+                }
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row {id} extent {:?} stopped parsing as the fixed \
+                         full-bank span: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                // [derived-pinned] the full-bank pins (RE-EXD-MAP
+                // sec 5c): 400*0x36 = 0x5460 — the EXD free-slot
+                // finder FUN_00023295 bound; 50*0x22 = 0x6A4 — the
+                // tick twin FUN_00022a52's 50-slot walk.
+                let want = if id == "weapon-anim-bank" {
+                    400 * 0x36
+                } else {
+                    50 * 0x22
+                };
+                if len != want {
+                    return Err(die(format!(
+                        "row {id} extent is {len:#x}, not the pinned full-bank \
+                         {want:#x}: update dbx-plan (the differ's O1 walk \
+                         requires the WHOLE bank)"
+                    )));
+                }
+                plan(Form::Fixed { addr: first, len })
+            }
+            other => {
+                // A future aliased T2/T3 row: fixed span only, and
+                // NEVER a guessed address — an indirect row (pointer
+                // cell) or a count-driven extent needs its own
+                // deliberate form, so both die loudly here.
+                if row.indirect {
+                    return Err(die(format!(
+                        "aliased {} row {other:?} is indirect — add an explicit \
+                         PtrCell form in dbx-plan, never the generic fixed span",
+                        row.tier
+                    )));
+                }
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "aliased {} row {other:?} extent {:?} has no fixed form: \
+                         add a deliberate dbx-plan form (count-driven banks \
+                         need a count-cell prefix too)",
+                        row.tier, row.extent
+                    )));
+                };
+                plan(Form::Fixed { addr: first, len })
+            }
         };
     }
 
@@ -969,6 +1104,60 @@ fn expr_symbols(expr: &str) -> Vec<String> {
 
 // ----------------------------------------------------------------- emit
 
+/// The span-bearing form under an optional count-cell prefix (one
+/// level — resolve_row never nests prefixes).
+fn span_form(form: &Form) -> &Form {
+    match form {
+        Form::Prefixed { inner, .. } => inner.as_ref(),
+        f => f,
+    }
+}
+
+/// One RowPlan as a plan-JSON watch row (addr/len per form; a
+/// Prefixed row adds the capgen `prefix` sub-row — dump the 4-byte
+/// count cell first, then the span, one concatenated blob).
+fn watch_row_json(p: &RowPlan) -> String {
+    match &p.form {
+        Form::Fixed { addr, len } => format!(
+            "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {len} }}",
+            jstr(&p.id)
+        ),
+        Form::Span { base, len, .. } => format!(
+            "    {{ \"id\": {}, \"addr\": \"CS:{base:08X}\", \"len\": {len} }}",
+            jstr(&p.id)
+        ),
+        Form::PtrCell { len_expr, .. } => {
+            let sym = match p.id.as_str() {
+                "static-tot-volume" => "tot_ptr",
+                "static-dat-volume" => "dat_ptr",
+                "static-claim-bank" => "claim_ptr",
+                "object-instances" => "obj_ptr",
+                _ => unreachable!("emit_plan gates the PtrCell ids"),
+            };
+            format!(
+                "    {{ \"id\": {}, \"addr\": \"CS:${sym}\", \"len\": {} }}",
+                jstr(&p.id),
+                jstr(len_expr)
+            )
+        }
+        Form::CountExpr { addr, len_expr } => format!(
+            "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {} }}",
+            jstr(&p.id),
+            jstr(len_expr)
+        ),
+        Form::Prefixed { cell, inner } => {
+            let mut s = watch_row_json(&RowPlan {
+                id: p.id.clone(),
+                form: inner.as_ref().clone(),
+            });
+            let tail = format!(", \"prefix\": {{ \"addr\": \"CS:{cell:08X}\", \"len\": 4 }} }}");
+            let cut = s.trim_end_matches(" }").len();
+            s.replace_range(cut.., &tail);
+            s
+        }
+    }
+}
+
 fn jstr(s: &str) -> String {
     // Zero-dep emitter: our strings are ASCII without quotes/backslashes
     // (asserted — anything else needs a real escaper, not silent pass-through).
@@ -1120,7 +1309,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     }
     let mut resolve: Vec<(String, u64)> = vec![("map_w".into(), w_cell), ("map_h".into(), h_cell)];
     for p in &anchor {
-        if let Form::PtrCell { cell, .. } = p.form {
+        if let Form::PtrCell { cell, .. } = span_form(&p.form) {
             let name = match p.id.as_str() {
                 "static-tot-volume" => "tot_ptr",
                 "static-dat-volume" => "dat_ptr",
@@ -1132,7 +1321,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                     )))
                 }
             };
-            resolve.push((name.into(), cell));
+            resolve.push((name.into(), *cell));
         }
     }
     // Every $symbol referenced by any len expression (CountExpr bank
@@ -1141,11 +1330,12 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // static-map-wh.
     let mut lens: Vec<&str> = Vec::new();
     for p in &anchor {
-        match &p.form {
+        match span_form(&p.form) {
             Form::CountExpr { len_expr, .. } | Form::PtrCell { len_expr, .. } => {
                 lens.push(len_expr)
             }
             Form::Fixed { .. } | Form::Span { .. } => {}
+            Form::Prefixed { .. } => unreachable!("span_form unwraps prefixes"),
         }
     }
     for name in lens.iter().flat_map(|e| expr_symbols(e)) {
@@ -1179,37 +1369,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         resolve.push((name, cell));
     }
 
-    let watch_json = |p: &RowPlan| -> String {
-        match &p.form {
-            Form::Fixed { addr, len } => format!(
-                "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {len} }}",
-                jstr(&p.id)
-            ),
-            Form::Span { base, len, .. } => format!(
-                "    {{ \"id\": {}, \"addr\": \"CS:{base:08X}\", \"len\": {len} }}",
-                jstr(&p.id)
-            ),
-            Form::PtrCell { len_expr, .. } => {
-                let sym = match p.id.as_str() {
-                    "static-tot-volume" => "tot_ptr",
-                    "static-dat-volume" => "dat_ptr",
-                    "static-claim-bank" => "claim_ptr",
-                    "object-instances" => "obj_ptr",
-                    _ => unreachable!("checked above"),
-                };
-                format!(
-                    "    {{ \"id\": {}, \"addr\": \"CS:${sym}\", \"len\": {} }}",
-                    jstr(&p.id),
-                    jstr(len_expr)
-                )
-            }
-            Form::CountExpr { addr, len_expr } => format!(
-                "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {} }}",
-                jstr(&p.id),
-                jstr(len_expr)
-            ),
-        }
-    };
+    let watch_json = |p: &RowPlan| -> String { watch_row_json(p) };
 
     let mut j = String::new();
     j.push_str("{\n");
@@ -1270,8 +1430,12 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                 .map(|(id, ammo)| format!("{id:#x}:{ammo}"))
                 .collect::<Vec<_>>()
                 .join(", ");
+            // NOTE: mask is DECIMAL here — JSON has no hex literals
+            // (the D103 emitter's 0x-form made loadout-bearing plans
+            // unparseable; S3 is the first compilable one, D109). The
+            // slot ids stay hex INSIDE the slots string.
             l.push_str(&format!(
-                "      {{ \"robot\": {}, \"mask\": {:#x}, \"slots\": \"{}\" }}{}",
+                "      {{ \"robot\": {}, \"mask\": {}, \"slots\": \"{}\" }}{}",
                 lr.robot,
                 lr.mask,
                 slots,
@@ -1567,6 +1731,9 @@ mod tests {
             "7 S0 deferrals + T1: 2 gaps (move-target no longer deferred)"
         );
         // count-cell resolve rows exist with the registry-derived cells
+        // (obj_count is GONE — D109: the object row dumps the FULL
+        // bank, so its count cell rides the blob head as the prefix,
+        // not a resolve symbol)
         assert!(emitted
             .json
             .contains("\"name\": \"robot_count\", \"addr\": \"CS:0011958C\""));
@@ -1576,13 +1743,22 @@ mod tests {
         assert!(emitted
             .json
             .contains("\"name\": \"obj_ptr\", \"addr\": \"CS:00119584\""));
-        assert!(emitted
-            .json
-            .contains("\"name\": \"obj_count\", \"addr\": \"CS:00119554\""));
+        assert!(!emitted.json.contains("\"name\": \"obj_count\""));
         // count-driven extents compiled to expressions
         assert!(emitted.json.contains("\"len\": \"$robot_count*0xA8\""));
-        assert!(emitted.json.contains("\"len\": \"$trt_count*0x20\""));
-        assert!(emitted.json.contains("\"len\": \"$obj_count*0x14\""));
+        // D109: trt-array pins its count cell onto the blob head (the
+        // differ's trt_o1 walks 0..count) and object-instances dumps
+        // the FULL 2000-slot bank + count prefix (the ZONEB .POS
+        // live-past-dead holes — the count-bounded span dropped 32
+        // live objects, D108)
+        assert!(emitted.json.contains(
+            "{ \"id\": \"trt-array\", \"addr\": \"CS:00095264\", \"len\": \"$trt_count*0x20\", \
+             \"prefix\": { \"addr\": \"CS:0011949C\", \"len\": 4 } }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"object-instances\", \"addr\": \"CS:$obj_ptr\", \"len\": \"2000*0x14\", \
+             \"prefix\": { \"addr\": \"CS:00119554\", \"len\": 4 } }"
+        ));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*2\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*0x1E\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
@@ -1689,10 +1865,10 @@ mod tests {
         assert!(emitted.json.contains("\"loadout\": ["));
         assert!(emitted
             .json
-            .contains("{ \"robot\": 0, \"mask\": 0x3, \"slots\": \"0x9:2, 0x10:4\" }"));
+            .contains("{ \"robot\": 0, \"mask\": 3, \"slots\": \"0x9:2, 0x10:4\" }"));
         assert!(emitted
             .json
-            .contains("{ \"robot\": 1, \"mask\": 0x1, \"slots\": \"0x20:2\" }"));
+            .contains("{ \"robot\": 1, \"mask\": 1, \"slots\": \"0x20:2\" }"));
         assert!(emitted
             .json
             .contains("E-side staging seam (D103, grammar v1.3)"));
@@ -1746,10 +1922,125 @@ mod tests {
     }
 
     #[test]
-    fn t2_scenario_refused() {
+    fn t2_tiers_compile_the_two_aliased_banks_only() {
+        // D109: the T2 tier compiles — but ONLY the two aliased banks
+        // (weapon-anim 0x980d4 / projectile 0x10e174, RE-EXD-MAP
+        // sec 5c) emit, as the FULL fixed spans the differ's O1
+        // normalizers require (no count cell on the guest); the three
+        // unaliased T2 rows stay refused (deferred, never emitted —
+        // the differ's coverage discipline).
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
-        assert!(emit_plan(&scen, &registry()).is_err());
+        let reg = registry();
+        let emitted = emit_plan(&scen, &reg).unwrap();
+        assert!(emitted.json.contains(
+            "{ \"id\": \"weapon-anim-bank\", \"addr\": \"CS:000980D4\", \"len\": 21600 }"
+        ));
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"projectile-bank\", \"addr\": \"CS:0010E174\", \"len\": 1700 }"));
+        for gap in ["mortar-trail-bank", "critter-bank", "poi-bank"] {
+            assert!(
+                emitted.deferred.iter().any(|d| d.starts_with(gap)),
+                "unaliased T2 row {gap} must be deferred: {:?}",
+                emitted.deferred
+            );
+        }
+        for id in row_ids(&emitted.json) {
+            assert!(
+                !matches!(
+                    id.as_str(),
+                    "mortar-trail-bank" | "critter-bank" | "poi-bank"
+                ),
+                "unaliased T2 row {id:?} must never be emitted"
+            );
+        }
+    }
+
+    #[test]
+    fn s3_plan_compiles_the_t2_tier() {
+        // D109: S3 (the W12-S3 command-fire scenario) compiles at
+        // T0,T1,T2,TS — the first T2-tier plan. T2 adds the two full
+        // bank spans per frame; the loadout seam records (D103) with
+        // a VALID-JSON decimal mask (the old 0x-form made
+        // loadout-bearing plans unparseable).
+        let scen = Scenario::parse(include_str!("../../scenarios/S3.scen")).unwrap();
+        assert!(scen.tiers.iter().any(|t| t == "T2"));
+        let reg = registry();
+        let emitted = emit_plan(&scen, &reg).unwrap();
+        // T0 10 + T1 15 + T2 2 per-frame; anchor adds TS 9.
+        let anchor_count = count_rows(&emitted.json, "anchor_watches");
+        let frame_count = count_rows(&emitted.json, "watches");
+        assert_eq!(frame_count, 10 + 15 + 2);
+        assert_eq!(anchor_count, frame_count + 9);
+        // deferred: the 9 S1-shape gaps + the 3 unaliased T2 rows
+        assert_eq!(emitted.deferred.len(), 12);
+        // the 8 command volleys compile to inject rows (the S3 frame
+        // schedule), and the loadout seam records never-fabricated
+        assert_eq!(emitted.inject_count, 8);
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("\"loadout\": ["));
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert!(
+                !addr.ends_with("F6D34") && !addr.ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+    }
+
+    #[test]
+    fn s3_plan_matches_committed_artifact() {
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S3.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S3.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S3.json is stale: regenerate with dbx-plan scenarios/S3.scen --out capture-plans/S3.json");
+    }
+
+    #[test]
+    fn s4_t3_rows_stay_refused() {
+        // D109: S4 (the W12-S4 destroy scenario) compiles at
+        // T0,T1,T3,TS — the T3 tier contributes ZERO O1 rows (no T3
+        // row has an EXD alias yet): every T3 row is deferred and
+        // documented, never emitted. The debris-stager/splash-records
+        // pair the scenario's E-side rows ride stays E-only — the
+        // differ's coverage findings, never fabricated.
+        let scen = Scenario::parse(include_str!("../../scenarios/S4.scen")).unwrap();
+        assert!(scen.tiers.iter().any(|t| t == "T3"));
+        let reg = registry();
+        let emitted = emit_plan(&scen, &reg).unwrap();
+        // T0 10 + T1 15 per-frame (T3 adds none); anchor adds TS 9.
+        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 15);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 15 + 9);
+        // deferred: the 9 S1-shape gaps + ALL 14 T3 rows
+        assert_eq!(emitted.deferred.len(), 23);
+        for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
+            assert!(
+                emitted.deferred.iter().any(|d| d == gap),
+                "T3 coverage gap {gap:?} must be documented: {:?}",
+                emitted.deferred
+            );
+        }
+        for id in row_ids(&emitted.json) {
+            let row = reg.iter().find(|r| r.id == id).expect("registry row");
+            assert_ne!(
+                row.tier, "T3",
+                "unaliased T3 row {id:?} must never be emitted on O1"
+            );
+        }
+    }
+
+    #[test]
+    fn s4_plan_matches_committed_artifact() {
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S4.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S4.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S4.json is stale: regenerate with dbx-plan scenarios/S4.scen --out capture-plans/S4.json");
     }
 
     #[test]
