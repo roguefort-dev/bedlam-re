@@ -1,5 +1,30 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4.2/W12-S7 COMPLETE (D113; the §7j.41 decode
+    984a078 + the engine platform-dynamics family ea2f259 + the
+    scenario leg b9cbcf3 by predecessor 56d80c42 claim 2, which
+    died before the differ/plan/docs legs; this run adopted the
+    pushed state + completed them, worker 0b66f6a6 claim 2, commits
+    4c6c068 (differ) + 13bae85 (plan) + the docs commit): S7.scen =
+    the platform-dynamics lifecycle in ONE ZONEA/M1 run — the
+    FUN_00422600 zone-code trigger build (slot 74 (3,57,2), the
+    gunner's quadrant blocks 3 of 8 tiles), the corrected weaken
+    ring gates (300→150 spread, 150→75 site latch), the destroy
+    (k7 census 5/20), the armed creep (first 199 tile f449, 22
+    creep tiles by f1240, tail static). Grammar v1.6 `platforms = 1`
+    (THE PER-FRAME RandA GATE-DRAW finding: the original draws one
+    gate RandA per frame even unarmed — an E-side stream gap on
+    S0..S6 until a deliberate re-baseline; O1 needs no staging).
+    1361 records, chain b41db389f3ad8947 + double-run
+    byte-identical; corpus_s7 + differ_gate S7 row (2 S1-class +
+    the debris/splash E-only pair, zero gaps) + capture-plans/
+    S7.json byte-pinned (5 command injects; the platforms arm note
+    in _e_staging); the §8 ledger rows rewritten with the §7j.41
+    corrections. S0..S6 chains re-asserted byte-identical; fmt+
+    clippy clean, manifest clean, PUSHED. Queue: 1 = [BLOCKED] S0
+    live session (operator), 2 = W12-S8 the critter-engagement
+    producer + scenario unit. NEXT: W12-S8 (item 2).
+
   - 2026-08-23 P4.2/W12-S6 COMPLETE (worker 4d92bb13 claim 2,
     commits bcf5396 + 0545e2e, D112; the §7j.40 decode 631bd28 +
     the engine extraction family edafd02 by predecessor 8d32d85d —

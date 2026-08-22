@@ -829,7 +829,7 @@ fn creep_tick_extends_the_bridge() {
     let mut grew = false;
     for _ in 0..8192 {
         sim.platform_creep_tick();
-        if sim.platform_bank().iter().any(|&s| s == 199) {
+        if sim.platform_bank().contains(&199) {
             grew = true;
             break;
         }

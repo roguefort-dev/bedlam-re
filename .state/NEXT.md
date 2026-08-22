@@ -96,6 +96,19 @@ renumbered queue keeps every open item claimable by number).
    trt/object rows now carry the count-prefix sub-row + the
    object FULL 2000*0x14 bank; capgen dumps the prefix first) —
    re-stage ANY plan after pulling D109; S0/S0W bytes untouched.
+   NOTE D113 (2026-08-23): S7 exists (chain b41db389f3ad8947,
+   the canonical_dump_gate corpus_s7_platform_dynamics row;
+   capture-plans/S7.json committed + byte-pinned, 5 command
+   injects — re-stage the same way: dbx-plan scenarios/S7.scen
+   --out ...). The `platforms = 1` arm key is an EQUIVALENCE on
+   the live side (the original runs the creep tick natively — no
+   O1 staging row), BUT expect the §7j.41/4 per-frame RandA
+   gate-draw as a channel finding on EVERY live capture: the
+   original consumes one RNG draw per frame for the creep gate
+   even unarmed, so any live O1 run's rng-state rows drift vs
+   E's (S0..S6) — the budgeted RNG class, never a structural
+   diff; a live S7 runs the tick on both channels (equivalence,
+   no drift beyond the ordinary budget).
    NOTE D108 (2026-08-22): S5/S5B
    exist E-side (chains a4659f25d453b6a1 / 93e976587a98d2a1, the
    canonical_dump_gate corpus_s5* + differ_gate rows; dbx-plan
@@ -110,24 +123,24 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4.2/W12-S7-prep] THE E-SIDE PLATFORM-DYNAMICS PRODUCER unit
-   (medium; DESIGN §7 S7 row + §10-W12): the §7j.12 platform
-   family is decoded but NOT engine-modeled beyond the S4 destroy
-   entry (the platform 0x7d4 resolver). Land the producers
-   engine-side first — the damage body FUN_00422693 (weapon ray
-   0x41a8ff → strength −damage, the <0 destroy tail incl. the
-   water z-word clear + both banks + 5× k7 debris), the SPREAD
-   ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word +
-   planeA 0 + planeB 1 + no robot; writes water z-word + 0x7d4 +
-   strength + scorch+4), the CREEP tick FUN_00422a9c (1/32 chance,
-   ray over water, tip→FUN_00422832(…,199)), and the build path
-   (strength 300 via trigger) — then S7.scen (repeated fire on
-   platforms: build/spread/creep/destroy observable in one run,
-   ZONEA if the corpus has platforms, else the first zone that
-   does) + the canonical gate rows + dbx-plan compile. Chain pin +
-   S0..S6 byte-identical re-assert + differ_gate row. RE-READ
-   §7j.12 amendment + the platform/strength ledger rows first; the
-   platform-strength row is already in the watch set.
+2. [P4.2/W12-S8] THE E-SIDE CRITTER-ENGAGEMENT PRODUCER unit
+   (medium; DESIGN §7 S8 row + §10-W12): the critter family is
+   decoded but NOT engine-modeled — the mode dispatchers (the
+   §7j.29 mode-9 SEEK target-acquisition whole + the 4-way
+   steppers + the wander/dormant modes), the aggro/state machine
+   per difficulty, the §7j.24 death handlers (bounty gate + the
+   death debris/splash staging), and the critter→robot damage lane
+   (§7j.23). Land the producers engine-side (bedlam-core — the
+   critter bank is a T2 UNALIASED row: it stays an E-only coverage
+   finding on the differ, per the D109 rule; watch what IS aliased
+   — robot-bank + T0/T1 rows carry the observable), then S8.scen
+   (a walk into critter aggro ranges on the corpus zone that hosts
+   them — census which zone/mission first; expect the T0/T1/TS
+   tier set unless an EXD alias exists) + the canonical gate rows
+   + dbx-plan compile. Chain pin + S0..S7 byte-identical re-assert
+   + differ_gate row. RE-READ §7j.17 (the critter/POI census) +
+   §7j.23/§7j.24 + the DESIGN §7 S8 row first; the critter
+   fire-anchored SFX families (7j.17 pins) stay T4/E-gaps.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -265,6 +278,37 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4.2/W12-S7 THE PLATFORM-DYNAMICS PRODUCER unit
+   COMPLETE (D113; the §7j.41 RE decode 984a078 + the engine leg
+   ea2f259 + the scenario leg b9cbcf3 landed by predecessor worker
+   56d80c42 claim 2, which died at session end BEFORE the
+   differ/plan/docs legs; continuation worker 0b66f6a6 claim 2
+   adopted the pushed state + completed them, commits 4c6c068
+   (differ_gate S7 row + the stale scenario-comment creep schedule
+   corrected to the pinned timeline) + 13bae85 (dbx-plan
+   `platforms` _e_staging note + capture-plans/S7.json, 34 anchor +
+   25 per-frame, 5 command injects, byte-pinned) + the docs commit
+   (D113 + DESIGN §7/§10-W12 + the §8 ledger rows rewritten with
+   the §7j.41 corrections + §7j.41 LANDED note)). S7.scen: the full
+   lifecycle in ONE ZONEA/M1 run — the FUN_00422600 zone-code
+   trigger build at .POS slot 74 (3,57,2) (the gunner's own
+   quadrant blocks 3 of 8 ring tiles — the live-robot gate
+   OBSERVED), the same burst's pair-7 destroy (first k7), the
+   corrected weaken ring gates (300→150 SPREAD, 150→75 site
+   latch), the destroy tail (k7 census 5→20), and the armed creep
+   (grammar v1.6 `platforms = 1`; THE PER-FRAME RandA GATE-DRAW
+   finding — the original consumes one gate draw per frame even
+   unarmed, an E-side stream gap on S0..S6 until a deliberate
+   re-baseline; the live-capture note folded into queue item 1).
+   1361 records, chain b41db389f3ad8947, double-run
+   byte-identical; corpus_s7_platform_dynamics gates the full
+   timeline (the 0x25D water word + seen-0 volume-2 semantics);
+   differ_gate S7 row (cross PASS-WITH-NOTES, exactly the 2
+   S1-class + the debris/splash E-only pair, zero field gaps).
+   S0..S6 chains re-asserted BYTE-IDENTICAL; workspace suites
+   green, fmt+clippy clean (one predecessor clippy lint fixed),
+   manifest clean both sides, PUSHED. Queued: W12-S8 the
+   critter-engagement producer unit (item 2).
 - 2026-08-23: P4.2/W12-S6 THE EXTRACTION SCENARIO unit COMPLETE
    (worker 4d92bb13 claim 2, commits bcf5396 (scenario+harness+gate)
    + 0545e2e (differ+plan) + the docs commit, D112; the §7j.40 RE

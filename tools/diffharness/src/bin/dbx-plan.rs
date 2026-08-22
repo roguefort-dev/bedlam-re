@@ -2191,7 +2191,11 @@ mod tests {
         assert!(s7.platforms);
         assert!(s7.destroy);
         assert!(s7.pickup);
-        assert_eq!(s7.markers, vec![(3, 57, 2)], "the gunner ON the trigger tile");
+        assert_eq!(
+            s7.markers,
+            vec![(3, 57, 2)],
+            "the gunner ON the trigger tile"
+        );
         let emitted = emit_plan(&s7, &registry()).unwrap();
         assert!(emitted.json.contains("\"_e_staging\": {"));
         assert!(emitted.json.contains("\"platforms\": true"));
