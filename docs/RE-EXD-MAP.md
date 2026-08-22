@@ -2,10 +2,12 @@
 
 Status: COMPLETE for the bounded scope (2026-08-22, worker d06341cf,
 claim 1): EXD imported, frame-tail/S0 trigger pinned, T0/T1 rows mapped
-with dual anchors + the static-after-load table aliases. Explicit gaps
-(unmapped, schema-visible): difficulty, SFX master gate, blink-cursor,
-order-target triple, no-extract latch, selection cursor/squad cells —
-each carries its anchor method for the follow-up unit. T2-T4 aliasing
+with dual anchors + the static-after-load table aliases. W5-FOLLOWUP
+(2026-08-22, worker ef11271c, claim 2) CLOSED four of the six explicit
+gaps: difficulty, order-target triple, keystore, command ring + count
+(§5c). Remaining gaps (unmapped, schema-visible): SFX master gate,
+blink-cursor, no-extract latch, selection cursor/squad cells — each
+carries its anchor method for the follow-up unit. T2-T4 aliasing
 stays later per the W1 ticket. Purpose: the DESIGN-DIFFHARNESS.md W1
 deliverable — the `exd_addr` fills for the harness watch rows.
 
@@ -152,7 +154,7 @@ to docs/DIVERGENCES.md as a seed.
 | RNG state B | 0x4ede4c | **0x107474** | plant 0x39447 @0x2c7ba→0x2c7d5; stepper FUN_00012257 read/write | [verified] |
 | score | 0x4dd40c | **0x10da28** | resolver FUN_0002b150 `+= ESI` (type) @0x2bff6 + `+= 0xa` (type-0xb→10) @0x2bfed = the EXW chain-detonation rule; debrief payouts += 0x3e8/0x7d0/0x1388/0x2710 (FUN_0001f8c1) | [verified] |
 | money | 0x46ae70 | **0x119600** | two 0xfa0 (4000) plants: campaign start `MOV EDX,0xfa0; SUB EDX,EAX; MOV [0x119600],EDX` @0x4ccd3-0x4cce3 + new-game case `MOV EDI,0xfa0; MOV [0x119600],EDI` @0x4e2ab-0x4e2ba | [verified] |
-| difficulty | 0x46cbf8 | TODO (gap) | not in the GameInit boot plants; cycled at the name-entry/save path — anchor via the (d+1)%3 site or the critter table reads (7j.17 DAT_00454edc twin) in a later unit | |
+| difficulty | 0x46cbf8 | **0x119558** | the 7j.17 range formula EXACT in the epilogue tick FUN_00023967: `iVar14 < (2 − [0x119558])·(−0x40) + 300` → d=0→172/d=1→236/d=2→300 (decompile line 416, the CMP-d/0/1/2 dispatch @0x24035/4d/65) + the respawn-delay table twin `MOV EAX,[0x119558]; CMP/MOV EDX,[EAX*4+0x81050]` @0x24181-9/0x241f5-0x24200 (EXW DAT_00454edc[d] → EXD table **0x81050**, 3 dwords); 44 refs program-wide, all READ except 3 WRITE sites in FUN_0002c6e3 (the mission-reseed/save-load twin @0x2c831/0x2ceae/0x2cec4) | [verified] |
 | zone | 0x4edd8c | **0x107500** | spawn twin per-zone rule `<3∨==7→1, 3→2, else 3` over [0x107500] (EXW FUN_0040cca0 rule exact) + zone-param table reads 0x80bcc/0x80c58 by [0x107500] | [verified] |
 | mission | 0x4edd88 | **0x119610** | TRT hp formula `(m·250)/27+250` EXACT (EXW 250+250·m/27) + pod-stagger `2000−m·1000/27` EXACT (both in EXD read [0x119610]) | [verified] |
 | mode | 0x4edb88 | **0x1075d8** | SP/MP branch `DAT_001075d8 == 0` in the spawn twin + mission-loop `== 2` MP gates + new-game `MOV [0x1075d8],1` | [verified] |
@@ -167,7 +169,7 @@ to docs/DIVERGENCES.md as a seed.
 | selection triple | 0x46cbd4/dc/d8 | **selected idx 0x11954c** (cursor/squad cells TODO) | mission-loop auto-switch: `i != DAT_0011954c` skip-current check + `DAT_0011954c := i` on switch (state write 0x119498 := 3) | [verified] |
 | blink-cursor selector | 0x4dc5d0 | TODO (gap) | 7j.7 producer twin not located this unit; anchor via the effect-row family when W2 needs it | |
 | per-player selected anchor | 0x4c71c4 | **0x971a4** | spawn-tail seed loop `do {[0x971a4+i]=x>>8; [0x971a8+i]=y>>8; [0x971ac+i]=z} ×4 (0x30/0xC)` — EXW 4×0xC {x>>8,y>>8,z} EXACT | [verified] |
-| order target xyz | 0x4dd484/88/8c | TODO (gap) | click-order path lives in the FUN_000448e7 UI monolith; anchor via the command-record consumer or FUN_00410644 twin's store when W2 needs it | |
+| order target xyz | 0x4dd484/88/8c | **0x10e0a4/0x10e0a8/0x10e0ac** | consumer twin FUN_00019ee9 bit1-ORDER branch writes all three @0x1a0af/0x1a0bc/0x1a0d8 (words@+7/+9/+0xB of the record, EXW EXACT) + the click-order twin FUN_00021112 writes the triple from the pick (FUN_0002a271, EXW FUN_00419943): ground branch iso combine, rect branch reads rec@0x9df30-base, the `&0x2000` structure flag EXACT; loop position = EXW MissionShell trio EXACT (FUN_00021112 → FUN_0005b066(1) builder → FUN_00019ee9 consumer = EXW FUN_00410644 → FUN_00449c94 → FUN_00409138) | [verified] |
 | per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs) | [verified] |
 | extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | **0x119628/0x11962a/0x11962c/0x11962e/0x119630** | armer FUN_0003570e full decode (guard/timer 0x197/tile trio) + mission-loop countdown `(short)DAT_0011962a −−` with the digit draws and the all-state-3 → FUN_00030899 completion sweep | [verified] |
 | spread claims | 0x4eabba | **0x119632** | picker FUN_0003581b full decode: first-free u16 scan `[0x119632+i]`, bound = cap cell 0x11950c, marks 1, the 12-offset switch around beacon x/y — EXW FUN_004248c8 EXACT | [verified] |
@@ -180,19 +182,43 @@ to docs/DIVERGENCES.md as a seed.
 | object instances | 0x46cbf4, count 0x46cbe8 | ***(0x119584) bank, count 0x119554** (indirect: EXD stores the bank in a pointer cell) | .POS/.BDG loader FUN_0002adb4: 2000×0x10 reads (cap CMP 0x7d0 @0x2ae45/86), id≠−1 → count, stride 0x14 (piVar1+5); footprint stamper FUN_0002b0af tail | [verified] |
 | TRT array | 0x4cccf8, count 0x46ccd4 | **0x95264 (static), count 0x11949c** | .TRT loader FUN_000279e3: u16 count read, stride 0x20 (i·8 dwords), hp `(m·0xfa)/0x1b+0xfa` EXACT, active=1/state=1 stamps, tile-0x66 DAT byte + TOT word 1 | [verified] |
 
-**W5 input-twin note (2026-08-22, probe ghidra-project/
-exd-input-probe.txt via EXDInputProbe.java):** the EXD KEYSTORE
-alias (EXW g_keystore 0x4edc44, 256 B scan-indexed) is STILL a
-gap. The candidate suggested by the MissionShell pause spin —
-FUN_0002ec12 — is NOT a keystore reader: disassembly shows only
-`MOV [0x1075b4],0; CMP EAX,[0x1075b4]; JG` = a WAIT-for-latch
-spin on the P-pause latch 0x1075b4 (it never reads a 256-byte
-array). The keystore twin needs a proper reader census (start:
-the any-key scan family twin, EXW FUN_0041f9d1 scanning codes
-1..0xFE, and the InputReset memset-256 twin EXW 0x4207b5). Until
-then KEYSTATE/ORDER/PAD/COMMAND/BOOT injection steps cannot
-compile to O1 addresses (dbx-plan errors, naming the gap) — the
-engine side consumes the same steps directly (W6).
+**W5 input-twin note — CLOSED 2026-08-22 (worker ef11271c, claim 2,
+probes ghidra-project/exd-input-twin{,2,3,4}.txt via
+tools/ghidra-scripts/EXDInputTwin{,2,3,4}.java, `-process BEDLAM.EXD
+-noanalysis`):** see §5c. The FUN_0002ec12 dead end stands (P-latch
+spin only). KEYSTATE/ORDER/COMMAND injection steps now compile for O1
+(dbx-plan reads §5c's registry rows); the PAD step still awaits the
+capgen runtime pad-slot op (its die names both halves).
+
+### 5c. Input & command family (EXW → EXD) — the W5-followup census
+
+Provenance: 4 Ghidra probe passes over the imported EXD (listing-text
+immediate censuses, ref censuses, decompiles, targeted disasm). All
+rows [verified] = read from the EXD program this unit; EXW column from
+RE-EXW-INPUT / RE-EXW-SIM §7j.16-17 ledger rows.
+
+| EXW | EXD | anchors | tag |
+|---|---|---|---|
+| g_keystore 0x4edc44 (256 B, scan-indexed, 1=held) | **0x894d4** (256 B) | AnyKeyWait twin FUN_00030792 @0x30792-0x307c0: `EAX:=1; loop: [EAX+0x894d4]!=0 ∧ EAX∉{0x2a,0x36} → consume(byte:=0) return code; EAX++; EAX<0xff` — the EXW FUN_0041f9d1 scan 1..0xFE skip-both-shifts shape EXACT + the DOS KeySink = an INT 9 hook installed by FUN_0003064d (vector set via FUN_0005fe87(9,…,&LAB_000303f5,…)): make/break handler @0x30446-0x30495 (`AL&=0x7f; keystore[AL]:=1/0` with the held-keys counter 0x107534 INC/DEC) + the ARROW-REMAP twin `OR BL/AL,0x80` @0x304a5/0x304d3 (E0-prefixed extended scancodes → bytes 0xc8/0xcb/0xcd/0xd0) + the installer's memset `MOV EDI,0x894d4` @0x30665 (the EXW InputReset 0x4207b5 memset-256 twin; FUN_0003064d also zeroes the aux cell 0x1194c4 + counter 0x107534) | [verified] |
+| remapped arrow bytes 0x4edd0c/0f/11/14 | **0x8959c / 0x8959f / 0x895a1 / 0x895a4** | [derived: keystore base 0x894d4 + 0xc8/0xcb/0xcd/0xd0; the ISR OR-0x80 path stores them] | [derived] |
+| keystore[ESC] byte 0x4edc45 | **0x894d5** | direct-byte readers: FUN_0004c80c/0004f1d1/00052fd7/00057775 ×2/0005b066 ×3/0005b853 (B3 census) — the EXW ESC-family readers | [verified] |
+| held-keys counter (EXW has none) | **0x107534** | ISR INC/DEC @0x30456/0x30488 (EXD-specific bookkeeping; aux state cell 0x1194c4 set 2/cleared in the ISR) | [verified] |
+| ScanToChar FUN_0041fa02 | **0x307c1-0x307e8** | `keystore[0x2a] (0x894fe) ∨ keystore[0x36] (0x8950a)` → table word>>16: shifted **0x8097a** / unshifted **0x8077a** | [verified] |
+| command records 0x4dd4a0 (stride 0x80) | **0x9255c** (stride 0x80) | builder twin FUN_0005b066 (EXW FUN_00449c94; called FUN_0005b066(1) in the MissionShell loop = EXW's call): append cursor = `&0x9255d + player·0x40` (short-scaled = byte +1 of record player·0x80), marker byte@+0 := DAT_001075c0 (player type), id short@+1 := [0x11954c] (selected idx), spot short@+3 := [0x10e15c] (order word), flags byte@+5 := [0x11a51a], payload = rand&0xf / MP weapon-mask / flags&1 move-words 0x119484/0x119488 / flags&2 the order-target triple words + consumer twin FUN_00019ee9 (EXW FUN_00409138): record walk with id = marker·robot_count([0x11958c]) + slot, flags bit0 SELECT → move-target writes 0xf75ec/0xf761c + auto-arm (state ∉ 2..5 → state:=1, target@+0x74 := 1000000 = 0xf4240 @0xf6da8 base), bit1 ORDER → triple 0x10e0a4/a8/ac := words@+7/+9/+0xB + order-active 0x10e140 := 1 + five clears 0x1076b4/70/90/a4/7c (EXW clears 0x4eb940..50), weapon dispatch on the robot's 7 slots w@+0x36+8k: w 2/3/4 → FUN_0001c3fb (EXW FUN_0040b615) orders 3/2/1, w 6/7/8 → FUN_0001bd8f (EXW FUN_0040af98) 0/1/2, w 9/0xA/0xB artillery → FUN_00023295 free slot + 0x36-stride record into the projectile bank (see below), 39-case bound CMP 0x26 | [verified] |
+| command count 0x46cbe0 | **0x119588** | consumer loop bound `if ([0x119588] <= rec) → cooldown-tail/return` + the ring-modulo read `(_DAT_00107688 + 1) % [0x119588]` + `_DAT_00107658 += [0x119588]` (builder family FUN_0005b066 ×8 reads) + 6 WRITE sites in FUN_0004c80c (the net/input pump — also the keystore[ESC] reader; mission-start resets @0x4ccd8/0x4cd6a) | [verified] |
+| order-active flag 0x4dc6bc | **0x10e140** | consumer bit1 branch `:= 1` (EXW `_DAT_004dc6bc := 1`); also cleared 0 at MissionShell boot (probe7 line 81) | [verified] |
+| order spot staging (EXW: none separate) | **0x10e15c** | consumer stores record word@+3 → 0x10e15c; builder reads it back as the spot short — EXD keeps a staging cell EXW inlines | [verified] |
+| command flags staging (EXW: none separate) | **0x11a51a** | builder reads flags byte from it; MissionShell ORs 4 into it on the MP path (DAT_001075d8 != 0, probe7 line 480) | [verified] |
+| projectile bank 0x4c71f4 (400×0x36) | **0x980d4** (×0x36) | consumer artillery case writes the record: type w@+0 (0x980d4), owner d@+2 (0x980d6), ttl d@+0xA (0x980de), xyz d@+0x12/+0x16/+0x1A (0x980e6/ea/ee), vxyz d@+0x1E/+0x22/+0x26 (0x980f2/f6/fa), +0x2A := 4, ttl2 `0x900 − (RandA&0x2ff)` @+0x2E — EXW §7j.17 field map EXACT (T2 registry fill lands with the T2 unit) | [verified] |
+
+Order-dispatcher reader twins over the triple (EXW FUN_0040af98 ×3,
+FUN_0040a56f/0xa7a1/0xace8/0xb615/0xa9ff ×2 each → EXD FUN_0001b369,
+FUN_0001b598, FUN_0001bae0, FUN_0001bd8f, FUN_0001c3fb, FUN_0001b7f7;
+the 0xf75ec/0xf761c move-target writers stay in the FUN_000448e7 UI
+monolith as mapped in §5).
+
+Divergence seeds found this unit → §7 items 6-7 (attack-break
+randomness source; EXD-only staging cells).
 
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
@@ -259,3 +285,12 @@ file is next touched.
    note.
 5. **EXD-only /KARMA cmdline switch** (GameInit FUN_0002c6e3 → cell
    0x11960c) — no EXW counterpart; non-scenario surface.
+6. **Critter attack-break randomness source** (§5c, W5-followup): EXD
+   gates on FRAME-COUNTER+TIMER masks (`TEST AL,0x1f/0xf/0x7` per
+   d=0/1/2, FUN_00023967 @0x24035-0x2407d) where EXW gates RandA
+   draws (1/8, 1/16, never per 7j.17 @0x41353e/56/6e) — different
+   randomness SOURCE and an inverted mapping (EXD d=2 breaks most
+   often, EXW d=2 never). A live T2/T3 diff class.
+7. **EXD staging cells the EXW build inlines** (§5c): order word
+   0x10e15c, command flags 0x11a51a, held-keys counter 0x107534 —
+   watch-artifact class, not gameplay divergence.
