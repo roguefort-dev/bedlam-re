@@ -33,8 +33,9 @@
 # from frame 0 — the ORIGINAL runs it every frame (its 1/32 gate
 # draws one RandA per frame; the E-gap on unarmed paths is D113).
 # After the f34 site latch, the lucky frames extend the bridge: the
-# first 199-strength tile lands at f387, and by f1308 the creep has
-# grown a 25-tile 199 bridge across the plateau (3..9, 53..57).
+# first 199-strength tile lands at f449, and by f1240 the creep has
+# grown a 22-tile 199 bridge (the saturated tail: 27 field tiles =
+# 22 creep + the 5 destroy survivors).
 #
 #   f1:   the artillery command (the gunner's slot 0)
 #   f18/f22/f26/f30: the four grenade volleys (the auto-rearmed
@@ -49,10 +50,10 @@
 #   f34:  the 150s → 75 (the second gate; the site latches)
 #   f35:  DESTROY — (2,56),(3,56),(2,57) die (75 − 75 ≤ 0), 5× k7
 #         debris each; the field = the north row + (4,56) + (2,58)
-#   f387: the FIRST CREEP BUILD — (2,57) at 199
-#   f412..f1308: the bridge grows — 25 tiles at 199 across
-#         (3..9, 53..57); the run ends at f1360 (the growth
-#         saturated: the last change f1308)
+#   f449: the FIRST CREEP BUILD — (2,57) at 199
+#   f450..f1240: the bridge grows — 22 tiles at 199; the run ends
+#         at f1360 (the growth saturated: the last change f1240,
+#         the tail static past it)
 #
 # TIERS: T0/T1/T3/TS — the platform-strength + tile-word-grid rows
 # carry the whole family (both banks are T1 destroy-staging rows),

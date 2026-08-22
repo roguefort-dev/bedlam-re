@@ -359,6 +359,17 @@ fn s0_s1_cross_and_double_run() {
         // and parse back exactly; the swept robot's state-5/stop-1e6
         // words ride the aliased robot bank — zero field gaps.
         ("S6", 75u64, "c96f0735df1059ea", 2u64 + 1),
+        // W12-S7 (§7j.41, D113): the platform-dynamics lifecycle —
+        // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
+        // destroy rows + both platform banks ride, and the T3
+        // debris/splash rows carry the k7 destroy debris — no
+        // dropship, no T2 banks). Exactly the 2 S1-class row-level
+        // findings + the debris/splash E-only pair (like S4). The
+        // platform rows fabricate as the identity spans their
+        // normalizers define (both channels carry the same form);
+        // the creep-grown mirror words parse back through the
+        // compact-tile filter — zero field gaps.
+        ("S7", 1361u64, "b41db389f3ad8947", 2u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -414,7 +425,7 @@ fn s0_s1_cross_and_double_run() {
                 .iter()
                 .any(|f| f.row == "move-target-words" && f.class == Class::Coverage));
         }
-        if id == "S4" {
+        if id == "S4" || id == "S7" {
             // The debris/splash rows have no EXD alias yet — exactly
             // the 2 extra row-level findings (E-only rows, never
             // fabricated O1 bytes).
