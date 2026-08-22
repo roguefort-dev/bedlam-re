@@ -207,6 +207,12 @@ pub struct Terrain {
     /// CGR directory entry index) [verified: sprite bytes are the
     /// height field].
     heights: Vec<[u8; 1024]>,
+    /// The parsed .PAD records in slot order — the live run of the
+    /// runtime 999×8-B slot bank @0x4e44f8 (the 0xFFFF-x terminator
+    /// ends the list; the loader preserves file record order and
+    /// marks every parsed slot active, 7j.16/§7j.40/1). Records are
+    /// `(x, y, level)` tile triples.
+    pad_slots: Vec<(i32, i32, i32)>,
     /// Type-3 trigger latch (get_z_pos side effect at 004dc688/8c/90):
     /// `(z_level, tile_x, tile_y)` of the last type-3 probe — hashed
     /// sim state, consumed by the tile-effect logic in a later slice.
@@ -261,6 +267,7 @@ impl Terrain {
             height,
             dat,
             heights,
+            pad_slots: Vec::new(),
             last_trigger: None,
         })
     }
@@ -288,7 +295,9 @@ impl Terrain {
         let height = u16::from_le_bytes([*dat.get(2)?, *dat.get(3)?]) as i32;
         let n = (width * height) as usize;
         let mut planes = dat_plane_bytes(dat)?;
-        // PAD marks: DAT[level][y][x] = 0xFF [0x41ded0, verified].
+        // PAD marks: DAT[level][y][x] = 0xFF [0x41ded0, verified] +
+        // the slot bank in file record order (the 7j.16 loader).
+        let mut pad_slots = Vec::new();
         for rec in pad.chunks_exact(6) {
             let x = u16::from_le_bytes([rec[0], rec[1]]) as i32;
             let y = u16::from_le_bytes([rec[2], rec[3]]) as i32;
@@ -296,6 +305,7 @@ impl Terrain {
             if x == -1 {
                 break; // 0xFFFF fill ends the record run [0x41defa]
             }
+            pad_slots.push((x, y, level));
             if !(0..8).contains(&level) || x < 0 || y < 0 || x >= width || y >= height {
                 continue;
             }
@@ -323,7 +333,9 @@ impl Terrain {
             map.copy_from_slice(&cgr[body..end]);
             heights.push(map);
         }
-        Terrain::from_parts(width, height, planes, heights)
+        let mut terrain = Terrain::from_parts(width, height, planes, heights)?;
+        terrain.pad_slots = pad_slots;
+        Some(terrain)
     }
 
     /// Map size in tiles (DAT_004eddec / DAT_004eddf0).
@@ -347,6 +359,39 @@ impl Terrain {
         } else {
             t
         }
+    }
+
+    /// The RAW DAT-volume plane byte at a tile — FUN_0041eb4c's read
+    /// with NO 0xFF→1 remap (the pad-tile probe's `and eax,0xff;
+    /// cmp eax,0xff` test, §7j.40/1). Out-of-range reads as `None`.
+    pub fn raw_dat_byte(&self, x: i32, y: i32, z: i32) -> Option<u8> {
+        if !(0..8).contains(&z) || x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return None;
+        }
+        let n = (self.width * self.height) as usize;
+        Some(self.dat[z as usize * n + y as usize * self.width as usize + x as usize])
+    }
+
+    /// FUN_00422e5e's slot scan [§7j.40/1]: the FIRST .PAD record
+    /// (slot order = file record order) matching the tile and LEVEL
+    /// (the robot's `z>>5`), or `None`. A hit implies the loader's
+    /// 0xFF plane mark at that tile (same source records), so the
+    /// probe's raw-byte 0xFF precondition holds by construction.
+    pub fn pad_slot_at(&self, x: i32, y: i32, level: i32) -> Option<usize> {
+        self.pad_slots
+            .iter()
+            .position(|&(px, py, pl)| px == x && py == y && pl == level)
+    }
+
+    /// The parsed .PAD records in slot order (the live run of the
+    /// runtime slot bank; `None` past the terminator).
+    pub fn pad_slot(&self, slot: usize) -> Option<(i32, i32, i32)> {
+        self.pad_slots.get(slot).copied()
+    }
+
+    /// The parsed .PAD record count (the live run length).
+    pub fn pad_slot_count(&self) -> usize {
+        self.pad_slots.len()
     }
 
     /// Write one raw DAT volume byte [the FUN_0042394a /
@@ -546,6 +591,23 @@ pub struct Order {
     pub window: u16,
     /// 12-slot spread-claim array (0x4eabba).
     pub claims: [bool; 12],
+}
+
+/// One 0x1C-B escape-craft record — the shared frame
+/// {active@+0, phase@+4, x@+8, y@+0xC, altitude@+0x10, img-group@+0x14,
+/// dwell@+0x18} of the FUN_0041fbb1 animator machines (§7j.27/3,
+/// §7j.40/6). E models the extraction DROPSHIP slot 0x4e6610 (machine
+/// 2); the exit slots (machine 1) and the per-robot pod bank (machine
+/// 3) stay the documented E-gaps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CraftRecord {
+    pub active: bool,
+    pub phase: i32,
+    pub x: i32,
+    pub y: i32,
+    pub alt: i32,
+    pub group: i32,
+    pub dwell: i32,
 }
 
 /// What [`MissionSim::apply_damage`] did — the presentation half of
@@ -768,6 +830,36 @@ pub struct MissionSim {
     pub(crate) pickup_score_pending: i32,
     /// The pending case-4 pickup MONEY award ([0x46ae70] delta).
     pub(crate) pickup_money_pending: i32,
+    // --- The extraction family (W12-S6; NONE of it enters
+    //     `state_hash` — the W6 split: the craft record is its own
+    //     T3 dump row, and the sweep's robot-state effects ride the
+    //     hashed robot fields) ---
+    /// The extraction dropship record 0x4e6610 (FUN_0041fbb1
+    /// machine 2) [§7j.40].
+    pub(crate) dropship: CraftRecord,
+    /// The extracted-robot counter [0x4dc680].
+    pub(crate) extracted: i32,
+    /// The extraction-complete flag [0x4dc67c].
+    pub(crate) extraction_complete: bool,
+    /// Producer tag: the pending order was armed by the PAD path
+    /// (EXW's real producer — the armer's sole caller) vs the
+    /// click-order seam approximation (S0..S5C). Gates the expiry
+    /// deploy [§7j.40/5].
+    pub(crate) order_pad_armed: bool,
+    /// The surviving beacon tile words 0x4eabb4/6/8 — FUN_0041faf0
+    /// clears only the flag/window pair [§7j.40/4]. Pad path only.
+    pub(crate) beacon_tile_latch: Option<(i32, i32, i32)>,
+    /// The surviving spread-claim words 0x4eabba (never released,
+    /// §7j.20/3 — copied at deploy). Pad path only.
+    pub(crate) beacon_claims_latch: [bool; 12],
+    /// The objective-resolver phase cell 0x46cd00 {1 first, 2 done,
+    /// 3 all-complete, 4 partial} + the light cells 0x46ccfc/0x46ccc4
+    /// (§7j.32/5) — E models the zone-7 destroy-notify at-zero tail;
+    /// the script-objective staging (tables 0x4557f8/0x456810) is
+    /// the documented E-gap, so the cells read 0 elsewhere.
+    pub(crate) objective_phase: u32,
+    pub(crate) objective_blink: u32,
+    pub(crate) objective_light: u32,
 }
 
 impl MissionSim {
@@ -807,6 +899,15 @@ impl MissionSim {
             strip_arm: false,
             pickup_score_pending: 0,
             pickup_money_pending: 0,
+            dropship: CraftRecord::default(),
+            extracted: 0,
+            extraction_complete: false,
+            order_pad_armed: false,
+            beacon_tile_latch: None,
+            beacon_claims_latch: [false; 12],
+            objective_phase: 0,
+            objective_blink: 0,
+            objective_light: 0,
             terrain,
         }
     }
@@ -832,6 +933,62 @@ impl MissionSim {
     /// The pending order, if any.
     pub fn order(&self) -> Option<Order> {
         self.order
+    }
+
+    /// The extraction dropship record (the S6 canonical T3 row).
+    pub fn dropship(&self) -> CraftRecord {
+        self.dropship
+    }
+
+    /// The extraction counters ([0x4dc680] extracted, [0x4dc67c]
+    /// complete) — no watch row carries them; the canonical test
+    /// asserts through this accessor.
+    pub fn extraction_state(&self) -> (i32, bool) {
+        (self.extracted, self.extraction_complete)
+    }
+
+    /// The surviving beacon tile words 0x4eabb4/6/8 (pad path only;
+    /// `None` = never pad-armed — the pre-S6 row form).
+    pub fn beacon_tile_latch(&self) -> Option<(i32, i32, i32)> {
+        self.beacon_tile_latch
+    }
+
+    /// The surviving spread-claim words 0x4eabba (pad path only).
+    pub fn beacon_claims_latch(&self) -> [bool; 12] {
+        self.beacon_claims_latch
+    }
+
+    /// The objective-resolver cells (0x46cd00 phase, 0x46ccfc,
+    /// 0x46ccc4) — §7j.32/5; no watch row (the objective-slots row
+    /// needs the unmodeled script-objective staging).
+    pub fn objective_cells(&self) -> (u32, u32, u32) {
+        (
+            self.objective_phase,
+            self.objective_blink,
+            self.objective_light,
+        )
+    }
+
+    /// Stage the terrain-set/zone cell [0x4edd8c] (1..7) WITHOUT the
+    /// destroy banks — the pad-script dispatcher keys on it
+    /// (FUN_00433980's zone switch, §7j.40); the destroy staging
+    /// sets the same cell with its banks.
+    pub fn stage_zone_set(&mut self, zone: u32) {
+        self.zone = zone;
+    }
+
+    /// The zone's extraction-pad slot set — the §7j.20/2 census (the
+    /// .PAD slots whose zone scripts call the beacon armer;
+    /// mechanical-parse provenance; zones 6/7 are not in the census).
+    fn zone_extraction_slots(zone: u32) -> &'static [usize] {
+        match zone {
+            1 => &[8, 0x10, 0x12, 0x18],
+            2 => &[4, 5, 7, 0xE, 0x11],
+            3 => &[0, 1, 6, 0xF, 0x15],
+            4 => &[0, 2, 0x10, 0x15, 0x16],
+            5 => &[8, 9, 0x3D],
+            _ => &[],
+        }
     }
 
     /// Frames elapsed.
@@ -1337,6 +1494,135 @@ impl MissionSim {
         Some((ox + dx, oy + dy))
     }
 
+    /// The zone pad-trigger dispatcher's extraction subset
+    /// [FUN_00433980 @0x433cfb → FUN_004247b5, §7j.19/4 + §7j.40/2]:
+    /// a WALKING robot (state ∈ {1,4} with a move target — the
+    /// 0x46cc30 order-word gate, both tested before the dispatch
+    /// call 0x40bd16..0x40bd58) standing on a .PAD-marked tile whose
+    /// slot is the zone's extraction pad arms the beacon AT THE
+    /// ROBOT'S TILE. The revisit latch (0x4eb9fc/0x4eb9f4) is
+    /// unmodeled: after a trigger the beacon is armed (the armer's
+    /// one-at-a-time head gate) and the robot is halted state 3, so
+    /// a repeat probe is inert [derived, §7j.40/1].
+    fn pad_extraction_trigger(&mut self, idx: usize) {
+        if self.order.is_some() {
+            return; // the armer's one-beacon-at-a-time head gate
+        }
+        let (tx, ty, level) = {
+            let r = &self.robots[idx];
+            (r.pos_x >> 13, r.pos_y >> 13, r.z >> 5)
+        };
+        let zone = self.zone;
+        let Some(slot) = self.terrain.pad_slot_at(tx, ty, level) else {
+            return;
+        };
+        if !Self::zone_extraction_slots(zone).contains(&slot) {
+            return;
+        }
+        // FUN_004247b5 (the shared armer body = arm_order_at_robot):
+        // arm at the robot's tile, halt it state 3, spread-claim —
+        // plus the producer tag + the surviving-words latch.
+        if self.arm_order_at_robot(idx) {
+            self.order_pad_armed = true;
+            self.beacon_tile_latch = self.order.map(|o| o.tile);
+        }
+    }
+
+    /// FUN_0041faf0 (the DROPSHIP DEPLOYER) [§7j.40/4, full body]:
+    /// stamp the craft from the beacon words + clear the flag/window
+    /// pair ONLY — the tile words survive in
+    /// [`MissionSim::beacon_tile_latch`] and the claims (never
+    /// released anywhere, §7j.20/3) in
+    /// [`MissionSim::beacon_claims_latch`].
+    fn deploy_dropship(&mut self) {
+        if let Some(o) = self.order.take() {
+            self.dropship = CraftRecord {
+                active: true,
+                phase: 1,
+                x: o.tile.0 << 5,
+                y: o.tile.1 << 5,
+                alt: 0x200,
+                group: 0,
+                dwell: 0,
+            };
+            self.beacon_claims_latch = o.claims;
+            self.order_pad_armed = false;
+        }
+    }
+
+    /// FUN_0041fbb1 machine 2 (the extraction dropship) per frame
+    /// [§7j.27/3 + §7j.40/6]. Runs BEFORE the MissionShell beacon
+    /// block (animator 0x448012 < beacon block 0x448306): a craft
+    /// deployed at this frame's beacon block first animates the next
+    /// frame.
+    fn dropship_tick(&mut self) {
+        if !self.dropship.active {
+            return;
+        }
+        match self.dropship.phase {
+            1 => {
+                // DESCEND: 2-frame flicker (groups 0/1), −0x20 while
+                // ≥ 0x101, then the (alt>>2)·3 shrink; < 1 → land.
+                self.dropship.group = (self.dropship.group + 1) & 1;
+                if self.dropship.alt >= 0x101 {
+                    self.dropship.alt -= 0x20;
+                } else {
+                    self.dropship.alt = (self.dropship.alt >> 2) * 3;
+                }
+                if self.dropship.alt < 1 {
+                    self.dropship.alt = 0;
+                    self.dropship.phase = 2;
+                    self.dropship.dwell = 10;
+                    self.extraction_sweep();
+                }
+            }
+            2 => {
+                // LANDED: RandA-jittered 0/1 altitude (a SHARED-STREAM
+                // draw), flicker, dwell 10 → depart.
+                self.dropship.alt = if self.rand_a() & 7 == 0 { 1 } else { 0 };
+                self.dropship.group ^= 1;
+                self.dropship.dwell -= 1;
+                if self.dropship.dwell == 0 {
+                    self.dropship.phase = 3;
+                }
+            }
+            3 => {
+                // DEPART: accelerating rise + the group-scaled left
+                // drift; > 0x200 → done + the complete flag.
+                self.dropship.alt += (self.dropship.alt >> 2) + 1;
+                self.dropship.x -= self.dropship.group * 4;
+                self.dropship.group = if self.dropship.group < 5 {
+                    self.dropship.group + 1
+                } else {
+                    4
+                };
+                if self.dropship.alt > 0x200 {
+                    self.dropship.active = false;
+                    self.extraction_complete = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The phase-1 landing EXTRACTION SWEEP [§7j.19/1 machine 2]:
+    /// every alive robot state ∈ {3,4} → state 5 + stop 1e6 (the
+    /// +0x74 order target) + [0x4dc680]++. The +0x90 timer := 0x28
+    /// write is outside the 31-leaf canonical pin (E-gap,
+    /// §7j.40/6); the SFX is presentation.
+    fn extraction_sweep(&mut self) {
+        let MissionSim {
+            robots, extracted, ..
+        } = self;
+        for r in robots.iter_mut() {
+            if r.alive && (r.state == STATE_ORDERED || r.state == STATE_MOVING) {
+                r.state = 5;
+                r.stop_dist = 1_000_000;
+                *extracted += 1;
+            }
+        }
+    }
+
     /// One frame: six unit-manager phases, then the order-window tick
     /// (MissionShell order, verified): decrement the window when
     /// nonzero, then clear the order if the window hit 0 or every
@@ -1384,6 +1670,11 @@ impl MissionSim {
                 r.hit_flash = r.hit_flash.min(5) - 1;
             }
         }
+        // The escape-craft animator (FUN_0041fbb1 machine 2, the
+        // extraction dropship) runs BEFORE the MissionShell beacon
+        // block (0x448012 < 0x448306) — a craft deployed below first
+        // animates the NEXT frame [§7j.40/3].
+        self.dropship_tick();
         if let Some(order) = &mut self.order {
             if order.window != 0 {
                 order.window -= 1;
@@ -1394,7 +1685,23 @@ impl MissionSim {
                     .iter()
                     .all(|r| !r.alive || r.state == STATE_ORDERED)
             {
-                self.clear_order();
+                // The MissionShell beacon block 0x448306..0x448381:
+                // the sole expiry consumer is FUN_0041faf0 — it
+                // deploys the dropship AND clears the beacon
+                // flag/window. EXW's real beacon producer is the pad
+                // step-on (the armer's sole caller) — the click-order
+                // seam (the S0..S5C approximation) never reaches the
+                // deploy in the original, so E gates the deploy on
+                // the pad tag [§7j.40/5]; a beacon expiring while a
+                // craft is in flight stays ARMED at window 0 (the
+                // block's dropship-active gate skips everything).
+                if self.order_pad_armed {
+                    if !self.dropship.active {
+                        self.deploy_dropship();
+                    }
+                } else {
+                    self.clear_order();
+                }
             }
         }
         self.frame += 1;
@@ -1470,6 +1777,17 @@ impl MissionSim {
                 // Pure no-op until destructibles are staged (the
                 // grid word stays 0 — the no-inject invariant).
                 self.robot_trap_lane(idx);
+            }
+            // The zone pad-trigger extraction subset (§7j.40/2): the
+            // dispatcher call sits between the armor pass and the
+            // move math, dual-gated on the walking states + a move
+            // target (0x40bd16..0x40bd58). The armer's halt takes
+            // effect before this robot's move the same phase.
+            {
+                let r = &self.robots[idx];
+                if matches!(r.state, 1 | STATE_MOVING) && r.target.is_some() {
+                    self.pad_extraction_trigger(idx);
+                }
             }
             // Order consumption: pending order, state outside {3,4,5},
             // robot within ORDER_RADIUS of the order tile center.

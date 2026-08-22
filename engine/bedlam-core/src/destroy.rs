@@ -1208,11 +1208,12 @@ impl MissionSim {
         }
     }
 
-    /// FUN_00448b80's modeled subset [§7j.32/2]: zone-7 gate, the
-    /// [0x46cce0] counter decrement, the +0x1B/+0x1C height clears
-    /// over the footprint. The at-zero extraction-arm tail (SFX +
-    /// the 0x46cd00/0x46ccfc/0x46ccc4 arm cells) is the S6-seam
-    /// E-gap.
+    /// FUN_00448b80's modeled subset [§7j.32/2 + §7j.40/7]: zone-7
+    /// gate, the [0x46cce0] counter decrement, the +0x1B/+0x1C
+    /// height clears over the footprint, and the at-zero
+    /// extraction-arm tail (the 0x46cd00 phase := 3 + the light
+    /// cells 0x46ccfc := 0x20 / 0x46ccc4 := 0x32; the SFX pair is
+    /// presentation).
     fn objective_notify(&mut self, idx: usize) {
         if self.zone != 7 {
             return;
@@ -1228,6 +1229,11 @@ impl MissionSim {
         }
         if self.objective_count > 0 {
             self.objective_count -= 1;
+        }
+        if self.objective_count == 0 {
+            self.objective_phase = 3;
+            self.objective_blink = 0x20;
+            self.objective_light = 0x32;
         }
         let (w, h) = self.terrain.size();
         for i in 0..ty.h as i32 {
