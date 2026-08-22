@@ -1,5 +1,64 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-22 P4.2/dbx-plan-tiers COMPLETE (worker 33a28c84 claim
+    2, commits a784e49 + 690d8b0 + 4db7ba1, D109): dbx-plan compiles
+    the T2/T3 tiers — S3 (T2) and S4 (T0/T1/T3) capture plans land
+    (capture-plans/S3+S4.json, byte-pinned; the two aliased weapon
+    banks as FULL spans 0x5460/0x6A4; every unaliased T2/T3 row an
+    explicit _deferred gap, never emitted — the debris/splash refusal
+    pinned by tests). THE COUNT-PREFIX GRAMMAR: capgen watch rows
+    gain a `prefix` sub-row (count cell first, concatenated — flow
+    probe GREEN headless, all four dbgprobe modes re-verified) and
+    dbx-plan emits Prefixed for trt-array/object-instances; the
+    object row now dumps the FULL 2000*0x14 bank (the D108 ZONEB
+    .POS live-past-dead holes — without it a live capture drops 32
+    live objects AND fails row normalization structurally on
+    trt/object; robot-bank stays the bare span by contract). BONUS:
+    the D103 loadout _e_staging mask was invalid-JSON hex — now
+    decimal (S3, the first compilable loadout plan, surfaced it).
+    S1/S2/S5/S5B regenerated; S0/S0W untouched. Workspace 54 suites
+    / 632 tests green, fmt+clippy clean, manifest clean, PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator; the item's D109
+    note records the re-stage requirement), 2 = W12-S5C. NEXT:
+    W12-S5C (item 2).
+
+  - 2026-08-22 P4.2/W12-S5 COMPLETE (worker c2aba48b claim 2, commits
+    66ad013 (docs/RE notes first) + 3626010 (engine+grammar+tests+
+    scenarios+plans), D108): the S5/S5B PICKUP SCENARIOS are landed —
+    grammar v1.5 `zone = "B"` (the GameHost::stage_episode_slot D51
+    seam standing in for the campaign/save-load shells) + `pickup = 1`
+    (the mission's own .TOT through stage_pickup_surface AFTER the
+    destroy staging + the §7j.12/6 hazard stamper — the original
+    load order). S5 = the row-21 z3 corridor (cases 1/2/4, the only
+    c1+c2 co-walkable spot in the corpus; 16 records, chain
+    a4659f25d453b6a1), S5B = the row-10 z3 corridor (case 3 + 4× c4
+    + the (76,9) diagonal side cell; 19 records, chain
+    93e976587a98d2a1) — the TWO-SCENARIO SPLIT is forced by the
+    order-window semantics (cases 1 and 3 are 61 tiles apart; a
+    second order needs the first cleared = all-alive-state-3
+    impossible mid-scenario, or the 0x197-frame window ≈ 407 idle
+    frames × ~340 KB/record of REAL mirror rows). The mirror rows go
+    REAL on S5-class runs (every ZONEB tile active; S4's
+    empty-mirror divergence closes; the S4 chain untouched). DIFFER
+    FIXES the ZONEB surface exposed: the O1 zone-row normalizer maps
+    cell−1 (§6a zone convention — the guest cell is the 1-based set,
+    E canonical the 0-based index), the O1 object-instances walk
+    covers the WHOLE span (ZONEB .POS carries live slots past dead
+    holes: 1128 max slot / 1096 live — a count-bounded walk dropped
+    32 live objects), and the field-union join is hash-indexed (the
+    mirror rows carry ~170k fields/frame; the linear union was
+    quadratic — 5+ min → 3 s). dbx-plan compiles both tiers T0/T1/TS
+    with the zone+pickup seams in _e_staging (strict JSON for
+    multi-entry stagings; S0/S0W/S1/S2 plans byte-identical);
+    capture-plans/S5+S5B committed. VERIFIED: workspace 54 suites /
+    629 tests green (S0..S4 chains byte-identical:
+    8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
+    e29f76f5585401e1 / 2ddd15ea50c8a14d), differ_gate S5/S5B rows,
+    fmt+clippy clean, registry_anchors green, manifest clean both
+    sides, PUSHED. Queue: 1 = [BLOCKED] S0 live session,
+    2 = dbx-plan-tiers, 3 = W12-S5C (the case-3 hp-observability
+    variant). NEXT: dbx-plan-tiers (item 2).
+
   - 2026-08-22 P4.2/W12-S5-prep COMPLETE (worker f32193a2 claim 2,
     commits ad43c12 (RE §7h.5) + 7a2dfeb (engine+tests), D107): the
     E-side PICKUP PRODUCER is in the engine — stage_pickup_surface

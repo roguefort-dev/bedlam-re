@@ -83,56 +83,49 @@ renumbered queue keeps every open item claimable by number).
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it). NOTE D103 (2026-08-22): S3
    exists E-side (chain 49193732e6dbc546, the canonical_dump_gate
-   corpus_s3_command_fire row) — but dbx-plan still REFUSES to
-   compile the T2 tier (only the two weapon banks are aliased; the
-   critter/POI/effects T2 rows are not), so a live S3 capture
-   needs the dbx-plan T2-tier unit first; the `loadout` seam
+   corpus_s3_command_fire row); the `loadout` seam
    auto-records in `_e_staging` (the O1 side arms robots by
    playing the session — the weapon-slot/ammo diff is the
-   scenario seam, never a finding).
-2. [P4.2/W12-S5] THE S5.SCEN + CANONICAL-CHAIN unit (DESIGN §7 S5
-   row; the pickup observation instrument; the E-side producer is
-   LANDED — stage_pickup_surface + the clear→move→test→fire
-   protocol + the case-4 folds, D107/§7h.5, commit 7a2dfeb): (a)
-   the canonical runner wiring — a grammar v1.5 staging key (e.g.
-   `pickup = 1`) that loads the mission's OWN .TOT through the
-   host seam and calls stage_pickup_surface AFTER any destroy
-   staging (the load-order note in its doc comment) + the zone
-   set; NOTE THE ZONE STAGING QUESTION: the runner boots
-   ZONEA/MISSION1 fresh hosts, but S5's pickup leg MUST run ZONEB
-   (set 2, 152 live cells in M1 — the positive control in
-   mission_corpus_gate zoneb_mission1_stages_live_pickup_cells) —
-   decide + land the zone staging (a host seam staging
-   ZONEB/MISSION1's full asset set through load_mission is the
-   D51-pattern candidate; the W5 walk-zone/mission calibration
-   remains the LIVE-capture path, not an E-side requirement); the
-   pads leg can stay ZONEA; (b) S5.scen authored over a real
-   ZONEB pickup corridor (walk orders that fire cases 1..4 —
-   case-4 dominant at 140 cells); (c) the canonical pickup
-   coverage — the consumed cells ride the EXISTING
-   typedb-mirror-rows (REAL-staged now, not empty — S4's recorded
-   empty-mirror divergence closes; the S4 chain must NOT move —
-   the pickup key gates its own staging, S4 does not set it) +
-   the score/money rows (the case-4 folds) + the DAT-byte
-   visibility question (the collision-plane consume changes
-   walkability — check whether a differ row needs the DAT plane
-   or the mirror word suffices); (d) differ_gate S5 row +
-   dbx-plan S5 compile (staging recorded in _e_staging, never
-   fabricated); (e) chain pin + S0..S4 BYTE-IDENTICAL re-assert
-   (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
-   49193732e6dbc546 / 2ddd15ea50c8a14d) + manifest checks bracket
-   corpus runs; fmt+clippy green; registry_anchors green.
- 3. [P4.2/dbx-plan-tiers] THE T2/T3 TIER COMPILE unit (the
-   W12-S3/S4 live-capture prerequisite; tooling, unattended-
-   safe): widen dbx-plan SUPPORTED_TIERS beyond T0/T1/TS so
-   S3 (T2) and S4 (T0/T1/T3) plans compile — per-row compile
-   forms for the weapon-anim (0x980d4)/projectile (0x10e174)
-   banks + the T3 aliased rows; the debris/splash unmapped T3
-   rows must STAY refused on O1 (the differ's coverage
-   discipline — a live S4 carries only the aliased T1 rows +
-   documents the 2 E-only rows); regenerate + byte-pin any
-   affected capture-plan; registry_anchors green; fmt+clippy
-   green.
+   scenario seam, never a finding). NOTE D109 (2026-08-22): the
+   dbx-plan T2/T3 tier unit LANDED — S3 (T2) and S4 (T0/T1/T3)
+   plans compile (capture-plans/S3+S4.json committed; the two
+   weapon banks emit as FULL spans, every unaliased T2/T3 row
+   documented in _deferred, never emitted on O1); re-stage them
+   the same way as S0/S1 (dbx-plan scenarios/S3.scen --out ...).
+   D109 ALSO changed the committed S1/S2/S5/S5B plans (the
+   trt/object rows now carry the count-prefix sub-row + the
+   object FULL 2000*0x14 bank; capgen dumps the prefix first) —
+   re-stage ANY plan after pulling D109; S0/S0W bytes untouched.
+   NOTE D108 (2026-08-22): S5/S5B
+   exist E-side (chains a4659f25d453b6a1 / 93e976587a98d2a1, the
+   canonical_dump_gate corpus_s5* + differ_gate rows; dbx-plan
+   compiles BOTH at tiers T0/T1/TS — capture-plans/S5+S5B.json
+   committed). A live S5/S5B capture boots ZONEB — the operator
+   walks the campaign to zone B (or a save) and the plan's
+   _e_staging.zone_note records the seam: the session's own
+   linear/mission counters (0x46ae8c etc.) are the live-capture
+   seam, never a finding; the zone cell (0x4edd8c/0x107500 = 2)
+   canonicalizes via the D108 cell−1 normalizer; the typedb-mirror
+   row is ~300 KB/frame on O1 (the REAL ZONEB surface) — expect a
+   heavy transcript; the case-1 drop_countdown=1000 side effect
+   (phases 4/5 re-open for the walker) is canonical robot-bank
+   state, not a finding.
+2. [P4.2/W12-S5C] THE CASE-3 OBSERVABILITY VARIANT unit (small;
+   the D108 follow-up): S5B's case-3 walker spawns AT the hp
+   clamp (5000), so apply_pickup case 3's +2500 is
+   value-invisible in the robot-bank row. Land S5C.scen = the
+   row-10 corridor walk with a PRE-DAMAGED walker (the S4
+   artillery pattern: a loadout-armed gunner command record
+   whose burst box spends walker hp below 5000 before the walk —
+   mind the ORDER_RADIUS staging rule (markers ≤5 tiles from the
+   order tile; the +0xF00 spawn offset makes 6 tiles read 0xC1)
+   + the gunner surviving or dying by design, both fine); the
+   consume census asserts the hp DELTA (+2500 up to the clamp)
+   beside the mirror-row consume; chain pin + S0..S5B
+   byte-identical re-assert + differ_gate row; dbx-plan compile
+   (the loadout seam already records). If the damage path fights
+   the walk timing, tag [BLOCKED] with the concrete frame
+   conflict and stop — do NOT widen the unit.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -266,6 +259,92 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/dbx-plan-tiers THE T2/T3 TIER COMPILE unit
+  COMPLETE (worker 33a28c84 claim 2, commits a784e49 (dbx-plan +
+  capture-plans) + 690d8b0 (capgen prefix + flow probe) + 4db7ba1
+  (D109 docs), D109; tooling, unattended-safe; no engine change, no
+  Ghidra run, no corpus write — manifest clean). SUPPORTED_TIERS
+  widens to T0/T1/T2/T3/TS: S3 (T2) and S4 (T0/T1/T3) capture plans
+  COMPILE — capture-plans/S3+S4.json committed + byte-pinned by
+  tests (S3: 36 anchor + 27 per-frame, 8 command inject rows, the
+  loadout seam recorded with a DECIMAL mask — the D103 hex literal
+  made loadout plans unparseable JSON, surfaced by the first
+  compilable one; S4: 34 + 25, 3 injects). The two aliased T2 banks
+  emit as the FULL fixed spans the differ's O1 normalizers pin
+  (weapon-anim 0x980d4 × 400*0x36 = 0x5460, projectile 0x10e174 ×
+  50*0x22 = 0x6A4; no count cell on the guest); ALL unaliased T2/T3
+  rows (mortar/critter/POI + the 14 T3 rows incl. debris-stager +
+  splash-records) STAY refused — explicit _deferred coverage gaps,
+  never emitted (tests pin the refusal); a future aliased row needs
+  a deliberate form (indirect/count-driven extents die loudly).
+  THE COUNT-PREFIX GRAMMAR: the differ pins trt/object O1 blobs as
+  u32 count + records but the count cells (0x11949c/0x119554) are
+  not contiguous with the banks — capgen watch rows gain a `prefix`
+  {addr,len} sub-row (dump 4 B first, concatenate; the flow probe
+  gains the probe-flow-prefix row + assertions, GREEN headless; all
+  four dbgprobe modes re-verified) and dbx-plan emits Prefixed for
+  trt-array + object-instances (robot-bank stays the bare span its
+  normalizer defines). OBJECT-INSTANCES now dumps the WHOLE
+  2000*0x14 bank + count prefix (the D108 ZONEB .POS live-past-dead
+  holes — the count-bounded span dropped 32 live objects and broke
+  the count field; $obj_count retires as a resolve symbol). S1/S2/
+  S5/S5B plans REGENERATED (prefix + full-bank rows); S0/S0W
+  byte-identical (artifact tests green). Workspace 54 suites / 632
+  tests green, fmt+clippy clean, registry_anchors green. LIVE-SESSION
+  NOTE folded into queue item 1: re-stage any plan after D109.
+  Queued next: W12-S5C (item 2, renumbered).
+- 2026-08-22: P4.2/W12-S5 THE S5.SCEN + CANONICAL-CHAIN unit
+  COMPLETE (worker c2aba48b claim 2, commits 66ad013 (RE/design
+  notes first: the ZONEB/M1 corridor census, the order-window
+  two-scenario-split analysis, D108) + 3626010 (grammar+engine+
+  scenarios+tests+plans)). Grammar v1.5 `zone = "B"` (the
+  GameHost::stage_episode_slot D51 seam — fsm Episode::stage_slot +
+  SceneFsm + host wrappers; the campaign-advance/save-load shells;
+  mask 0 → MISSION1, linear the fresh-slot 0) + `pickup = 1` (the
+  mission's own .TOT through stage_pickup_surface AFTER the destroy
+  staging + the §7j.12/6 hazard stamper — the original mission-load
+  order; 30 ZONEB hazard grid cells). S5.scen = the row-21 z3
+  corridor (cases 1/2/4 at (26,21)/(27,21)/(28,21) — the ONLY c1+c2
+  co-walkable spot in the corpus; clicker (28,21,3) + walker
+  (25,21,3), order 28 21 3 → slot-1 (29,21); consumes at frames
+  1/2/4 = drop_countdown 1000 / shield 1000 / score+1000, arrival
+  frame 5; 16 records, chain a4659f25d453b6a1) + S5B.scen = the
+  row-10 z3 corridor (case 3 at (76,10) + 4× c4 + the (76,9)
+  diagonal side cell = 6 consumes; arrival frame 12 at (78,9); 19
+  records, chain 93e976587a98d2a1) — the SPLIT is forced by the
+  order-window semantics (c1↔c3 are 61 octagonal tiles apart; a
+  second order needs the first cleared = all-alive-state-3, which
+  mid-scenario robots can never reach, or the 0x197-frame window ≈
+  407 idle frames × ~340 KB/record of REAL mirror rows). The
+  typedb-mirror-rows go REAL on pickup runs (15,102 words + 52,715
+  seen, every tile active; S4's empty-mirror divergence closes; the
+  S4 chain untouched — S4 sets no pickup key). DIFFER FIXES the
+  ZONEB surface exposed: (a) the O1 zone-row normalizer maps cell−1
+  (§6a zone convention: the guest cell 0x4edd8c/0x107500 is the
+  1-based set per D99, E canonical the 0-based slot index; + the
+  differ unit test + the differ_gate inv fabrication cell+1); (b)
+  the O1 object-instances walk covers the WHOLE dumped span
+  (ZONEB/M1 .POS carries live slots past dead holes: 1096 live,
+  max slot 1128, first hole at 303 — the count-bounded walk
+  silently dropped 32 live objects); (c) the field-union join is
+  hash-indexed (the mirror rows carry ~170k fields/frame; the old
+  linear union + per-name lookup was quadratic — the real-dump diff
+  went 5+ min → 3 s). dbx-plan: the zone+pickup seams record in
+  _e_staging (multi-entry stagings are strict JSON again — the
+  join fix; S0/S0W/S1/S2 plans BYTE-IDENTICAL, re-verified);
+  capture-plans/S5+S5B.json compiled + committed (34 anchor + 25
+  per-frame rows, tiers T0/T1/TS — no T2/T3 unit needed).
+  VERIFIED: workspace 54 suites / 629 tests green incl. the S0..S4
+  chains BYTE-IDENTICAL (8901789a88cf61fe / 1c4e7b4c9d9b0947 /
+  809f4961b7757da4 / e29f76f5585401e1 / 2ddd15ea50c8a14d) +
+  differ_gate S5/S5B rows (cross PASS-WITH-NOTES exactly the 2
+  S1-class findings, double-run PASS modulo counter/RNG, FAIL on
+  money) + canonical_dump_gate corpus_s5/corpus_s5b (whole-map
+  consume censuses: exactly the corridor cells); fmt+clippy clean,
+  registry_anchors green, manifest clean before AND after the
+  corpus runs; PUSHED. Queued: dbx-plan-tiers (item 2) + the
+  W12-S5C case-3 observability variant (item 3, the pre-damaged
+  walker follow-up).
 - 2026-08-22: P4.2/W12-S5-prep THE E-SIDE PICKUP PRODUCER unit
   COMPLETE (worker f32193a2 claim 2, commits ad43c12 (RE notes
   §7h.5 first) + 7a2dfeb (engine+tests) + D107). bedlam-core::
