@@ -96,17 +96,45 @@
     0x46ccfc/0x46ccc4); .POS word 2 = BASE Z LEVEL (FORMATS §12
     corrected); FUN_0041bc1c TRT death stamp (per-zone rubble word
     0x454a04). Docs-only; registry_anchors green; manifest clean.
-3. [P4/FORMATS] THE .BLD RECORD WALK unit (unattended, bounded RE):
-   the .BLD names/graphics side (FORMATS §17 — the 201-B/64-B-
-   extension hypothesis still unanchored; the residual item of the
-   D93 .MOFO retirement). Anchor the record grammar against the
-   corpus .BLD files + the loader in ghidra-project/
-   exw-text-objdump.txt; land FORMATS §17 + ledger rows.
-    NOTE 7j.32 (2026-08-22, D96): the .BDG side is fully closed —
-    BLD is the names/graphics sibling (r=0.985 size correlation);
-    the loader call should sit near the .NME/.POS/.BDG loader
-    family (mission-load chain 0x447b3a..0x447c00) — grep the
-    ".BLD" DGROUP string for the anchor.
+ 2. DONE 2026-08-22 (worker fc88ecf3 claim 2, commit 6897326, D97,
+    §7j.33): [P4/FORMATS] THE .BLD RECORD WALK unit — CLOSED
+    (previous DONE 4210f55/D96 above). NEGATIVE HEADLINE: "BLD"
+    (case-insensitive) occurs in ZERO shipped executables —
+    there is NO .BLD loader ("SAVED.BDL" @0x4597d6 = the
+    savegame); .BLD is EDITOR-ONLY, the editor SOURCE that
+    compiles to .BDG (record j ≡ BDG non-empty record j: same
+    H/hp/chain/type head u32s + the SAME four template banks).
+    Grammar VERIFIED (FORMATS §17 rewritten): length = 137 +
+    64·W·H + variable tail (subsumes the 201+64k rule — the
+    "extension blocks" = four 16·W·H template-bank slots ==
+    the BDG banks); name@+0x60; NOT self-delimiting (no
+    terminator/count — parse needs the sibling BDG's W,H);
+    zero fill after the last record; 7 286/7 907 records walked
+    byte-exact (ZONEA/C/D/E + ZONEF M2/M4/M7 fully; ZONEB/G +
+    ZONEF M6 desync at a few variable-tail records — bounded).
+    Runtime family census landed (FUN_0041dc5a 8-tag table
+    0x4587d9..0x4587fc + path builder FUN_0044670c; editor-only
+    set .BLD/.CTG/.COL/.MAP/.PTH/.TXT — FORMATS §0.2). BONUS:
+    zone D DOES ship mission-level BLDs (§0 row fixed);
+    zone-level BLDs byte-shared A≡F, B≡G. Docs-only; registry
+    anchors green; manifest clean; PUSHED.
+3. [P4/RE] THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS unit
+   (unattended, bounded RE): the +0x1a/+0x1b/+0x1c tail bytes
+   of the type-DB mirror rows @0x4796bc (0x1E-B record grammar
+   now UNIFIED by §7j.32 — see the new §7j.32/§7j.33 rows for
+   the closed neighbors: +0x18 = the runtime scorch writer
+   FUN_00422287, +0x19 variant<<4 / +0x1A door bit7 via
+   FUN_00422fd1 §7j.12, +0x1B/+0x1C = the OBJECT-HEIGHT pair
+   via the objective family FUN_0044889a/FUN_00448b80 §7j.32 —
+   NOTE: re-verify the §7j.12 door byte vs the §7j.32 +0x1A
+   gloss before walking; the queue's older "+0x1a/+0x1b/+0x1c
+   producers" list predates the 7j.32 grammar unification).
+   Anchor remaining writers/readers in ghidra-project/
+   exw-text-objdump.txt; land RE-EXW-MISSIONVIEW §8 + ledger
+   rows. This UNBLOCKS the pickup tile-word producer (7h.3:
+   the 0x4796bc mirror rows + the probe-latch walk + the DAT
+   z-plane consume + the 0x454a90 floor-word swap → the
+   apply_pickup dispatch from host-seamed to corpus-real).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -242,6 +270,36 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/FORMATS THE .BLD RECORD WALK unit COMPLETE
+  (worker fc88ecf3 claim 2, commit 6897326, D97, docs-only;
+  objdump-only from exw-text-objdump.txt + read-only corpus
+  probes in /tmp/opencode, no Ghidra run). CLOSED with a
+  negative-result headline: "BLD" (case-insensitive) appears
+  in ZERO shipped executables (EXW/EXD/EXE/cd-root/DIRECTX×3)
+  — there is NO .BLD loader; "SAVED.BDL" @0x4597d6 = the
+  savegame. .BLD is the EDITOR-SOURCE format that compiles to
+  .BDG (record j ≡ BDG non-empty record j; BLD 197 = 282 − 85
+  EMPTY rows on ZONEA/M1). Grammar VERIFIED: length = 137 +
+  64·W·H + variable tail (subsumes the 201+64k deltas); four
+  template-bank slots of 16·W·H B each whose values ARE the
+  BDG banks (+0x3E/+0x42/+0x46/+0x4A); head u32s = H/hp/
+  chain/type; name@+0x60; arrays cap at 16 u16s; NOT
+  self-delimiting (no terminator/count — needs the sibling
+  BDG's W,H); zero fill after the last record; 7 286/7 907
+  records byte-validated (ZONEA/C/D/E + ZONEF M2/M4/M7 fully;
+  ZONEB/G + ZONEF M6 desync at variable-tail records —
+  bounded, documented). RUNTIME CENSUS: FUN_0041dc5a = the
+  mission family loader (.TOT/.DAT/.CGR/.BIN/.MIN/.LNG-or-.
+  LNK by [0x4eba1c], .PAD; 8-entry 5-B-stride tag table
+  0x4587d9..0x4587fc) + path builder FUN_0044670c
+  ("EDITOR\ZONE{n}\MISSION{m}"); editor-only set = .BLD/.CTG/
+  .COL/.MAP/.PTH/.TXT (FORMATS §0.2 — .CTG never loaded!).
+  BONUS: zone D DOES ship mission-level BLDs (§0 row fixed);
+  zone-level BLDs byte-shared A≡F and B≡G. Deliverables:
+  RE-EXW-SIM §7j.33 + 2 ledger rows + FORMATS §0/§0.2/§16/§17/
+  §19/§20/§21 + D97. registry_anchors green, manifest clean
+  both sides, PUSHED. Queued: the MISSIONVIEW §8 type-DB tail
+  producers unit (item 3 → next slot 2).
 - 2026-08-22: P4/RE THE .BDG TEMPLATE-BANK READER unit COMPLETE
   (worker ce347a0e claim 2, commit 4210f55, D96, docs-only;
   objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra

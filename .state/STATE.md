@@ -1,5 +1,31 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/FORMATS THE .BLD RECORD WALK unit
+    COMPLETE, worker fc88ecf3 claim 2, commit 6897326, D97,
+    docs-only): the last FORMATS structure gap is CLOSED with a
+    negative-result headline — "BLD" (case-insensitive) occurs
+    in ZERO shipped executables; there is NO .BLD loader
+    ("SAVED.BDL" @0x4597d6 = the savegame). .BLD = the
+    EDITOR-SOURCE format compiled into .BDG (record j ≡ BDG
+    non-empty record j; same H/hp/chain/type heads + the SAME
+    four template banks; BLD 197 = 282 − 85 EMPTY rows ZONEA/M1).
+    Grammar VERIFIED (RE-EXW-SIM §7j.33 + FORMATS §17):
+    length = 137 + 64·W·H + variable tail (subsumes 201+64k);
+    four 16·W·H template-bank slots == the BDG banks; name@+0x60;
+    NOT self-delimiting (no terminator/count); zero fill EOF;
+    7 286/7 907 records byte-validated (ZONEB/G + ZONEF M6
+    desyncs = variable tails, bounded+documented). RUNTIME
+    FILE-FAMILY CENSUS landed: FUN_0041dc5a (.TOT/.DAT/.CGR/
+    .BIN/.MIN/.LNG-or-.LNK gate [0x4eba1c]/.PAD, tag table
+    0x4587d9..0x4587fc) + path builder FUN_0044670c
+    (EDITOR\ZONE\MISSION); editor-only set .BLD/.CTG/.COL/.MAP/
+    .PTH/.TXT (FORMATS §0.2; .CTG never loaded). BONUS: zone D
+    ships mission-level BLDs (§0 fixed); zone-level BLDs
+    byte-shared A≡F, B≡G. NEXT: the MISSIONVIEW §8 type-DB
+    tail producers (queued as the next slot-2 unit — unblocks
+    the 7h.3 pickup tile-word producer) — then the
+    operator-adjacent W10/W11/W12 tail.
+
   - OPEN 2026-08-22 (P4/RE THE .BDG TEMPLATE-BANK READER unit
     COMPLETE, worker ce347a0e claim 2, commit 4210f55, D96,
     docs-only): the 7j.25 open item is CLOSED with a
