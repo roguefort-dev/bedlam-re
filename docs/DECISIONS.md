@@ -2674,3 +2674,42 @@ Nudge-Worker: d35c7066-4f7f-4c3a-a8b3-0afaead3049d
    by the harness).
 
 Nudge-Worker: 4deb0081-12f4-4fdd-a60e-36363119d216
+
+## 2026-08-22 P4.2/DH-G0-live prep — the S0 capture-plan design is D81: CS-register addressing (no numeric selector), BPLM boot-trap → BP arm sequence, runtime cell resolution in capgen
+
+1. THE SELECTOR QUESTION DISSOLVES (source-pinned, RUNTIME.md "S0 live
+   channel mechanics" #1): GetHexValue resolves REGISTER NAMES in the
+   default MEMDUMPBIN/BP parse path — `CS:001195F0` resolves through
+   SegValue(cs) → cached base + offset at any in-game stop. The plan and
+   the runner therefore carry NO selector parameter; the BP ack line
+   echoes the numeric selector into the logfile as the per-run pin
+   record. The queue's INT3-at-entry proof step is replaced by: SELINFO
+   CS base==0 runtime guard + the BP ack echo (both automatic, both in
+   the logfile).
+2. BOOT-TRAP ORDER (RUNTIME.md #2): BP locations resolve EAGERLY at arm
+   time (pre-boot arming mis-resolves); BPLM is LAZY (per-instruction
+   linear compare). Live flow: `BPLM 1195F0` at the parked halt → first
+   post-boot write stop (LeLoader copy / first screen-loop INC) →
+   SELINFO flat-CS guard (retry loop for non-flat stops) → `BPDEL *` +
+   `BP CS:0005A6EB` → per-frame RUNWATCH capture loop. Anchor frame =
+   first BP hit = mission frame 2's dump point (the trap fires past
+   frame 1's tail; alignment rides the frame-counter watch).
+3. RESOLUTION AT CAPTURE TIME, NOT PLAN-BUILD TIME: capgen plan v2
+   carries `resolve` rows (u32 cell reads at the arm stop) + arithmetic
+   addr/len expressions over them ($map_w etc.) — the TOT/DAT volume
+   extents (4+16·w·h / 4+8·w·h, FORMATS §2/§4) and the pointer-cell
+   banks resolve from THE SAME session's memory (no cross-run pointer
+   staleness; the DESIGN "plan-build time or capture time" question is
+   answered: capture time).
+4. STAGED-CONF CHANNEL FLIP: `diff stage` rewrites debuggerrun=watch →
+   debugger in the STAGED runtime/ conf copy (watch mode free-runs past
+   the parked halt; queued commands never execute). The canon conf and
+   every D29 sim pin are untouched.
+5. EXPECTATION SETTING (RUNTIME.md #5): the frame counter has NO reset
+   (14 INC sites incl. menu screens) — interactive S0 double-runs are
+   expected to differ ONLY in the frame-counter (+RNG-churn) watch
+   bytes (T2/T3 classes per DESIGN §6). Byte-identical chains are the
+   W5 scripted-walk property; the live gate records "identical modulo
+   those cells" + the diff detail as its verdict form.
+
+Nudge-Worker: fa49e9cf-487a-4005-8bba-83ac6e2b6776

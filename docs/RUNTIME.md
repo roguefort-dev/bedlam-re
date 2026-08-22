@@ -269,6 +269,84 @@ run + the pmode flat-selector proof (INT3 at EXD _entry 0x5fbb0, BP at
 the present-tail 0x5a6eb) + cycles calibration remain INTERACTIVE-GATED
 for the next unit (S0 live + DH-G1 determinism).
 
+## S0 live channel mechanics (2026-08-22, queue item 1 prep; all facts
+## [source-pinned] on the D80 build's tree at e522642 unless noted)
+
+These facts retire the queue item's INT3/SELINFO-first ordering: the live
+capture plan needs NO numeric selector parameter at all.
+
+1. THE `CS:` REGISTER-NAME FORM ELIMINATES THE SELECTOR PARAM
+   [source-pinned, debug.cpp:1547-1680 + 2013-2019 + 2540-2544]:
+   `GetHexValue` (the argument parser MEMDUMPBIN/BP/BPM use) accepts
+   REGISTER NAMES in its default path — `CS` resolves to
+   `SegValue(cs)` (line 1638), `DS`/`ES`/… likewise, plus `+`/`-`
+   expression tails. Therefore, at any stop INSIDE game code:
+   - `MEMDUMPBIN CS:001195F0 4` → seg = SegValue(cs) = the game flat CS
+     selector VALUE (numeric), and GetAddress(seg==SegValue(cs)) returns
+     `SegPhys(cs)+offset` = cached base (0 under DOS4GW flat) + the EXD
+     linear address. No SELINFO step, no hardcoded selector.
+   - `BP CS:0005A6EB` arms the registry s0-trigger row; the ack line
+     ("DEBUG: Set breakpoint at %04X:%04X", debug.cpp:2544) ECHOES the
+     numeric selector — the flat-selector pin lands in the logfile for
+     free, per run.
+   - `GetAddress` current-CS path is limit-check-FREE (debug.cpp:470-472
+     uses the cached base directly), so watch reads up to object2 top
+     0x12583e cannot fail on a limit gate.
+2. BP ARMING IS EAGER, BPLM IS LAZY — THE BOOT-TRAP ORDER FOLLOWS
+   [source-pinned, debug.cpp:585 SetAddress → GetAddress at ARM time]:
+   `BP <seg>:<off>` resolves its location WHEN ARMED. Armed at the
+   pre-boot `-break-start` halt (real mode, GDT empty) a game BP
+   mis-resolves (real-mode seg<<4) and never fires. `BPLM <linear>`
+   (BKPNT_MEMORY_LINEAR) is the opposite: it stores only the linear
+   offset and the value-compare happens per-instruction at CHECK time
+   (debug.cpp:787-810) — so the live flow arms `BPLM 1195F0` (the EXD
+   frame-counter cell, watches.toml row frame-counter) at the pre-boot
+   halt; it fires on the first post-boot write to that cell (LeLoader
+   object2 copy — 0x1195f0 sits inside object2 — and/or the first
+   screen-loop INC; 14 INC sites exist, exd-probe2 census), giving a
+   guaranteed stop with the machine in game context, where the real
+   `BP CS:0005A6EB` is then armed.
+3. SELINFO RIDES THE LOGFILE [source-pinned, debug.cpp:2861-2869]:
+   SELINFO output goes through DEBUG_ShowMsg (the [log] logfile), 3
+   lines: "SelectorInfo CS:", "CS: b:XXXXXXXX type:..", "    l:XXXXXXXX
+   ..". GetLimit applies the granularity bit (cpu.h:436-441), so a flat
+   4GB descriptor prints l:FFFFFFFF. capgen parses b:/l: as a RUNTIME
+   GUARD: a stop is armable iff base==0 (limit>=0x12583e belt+braces).
+   Stops in non-flat context (LeLoader stub, real mode) retry: BPDEL *,
+   re-arm BPLM, RUNWATCH again (bounded retries).
+4. `debuggerrun = watch` WOULD FREE-RUN [source-pinned, RUNTIME.md D80
+   entry]: watch mode auto-RUNWATCHes at debugger entry — with no
+   breakpoints yet the machine boots through the parked halt and queued
+   PTY commands never execute (input is only processed at stops). The
+   canon conf tools/runtime/dosbox-x-harness.conf pins watch mode (fine
+   for its original purpose); `diff stage` therefore rewrites the STAGED
+   copy (runtime/-only) to `debuggerrun = debugger` — a channel-mode
+   flip, not a sim-pin change (cycles/machine/core/mixer untouched).
+5. FRAME-COUNTER IS SESSION-LIFETIME — S0 ANCHOR NOISE EXPECTATION
+   [verified, exd-probe2/probe8 census]: [0x1195f0] has NO reset store
+   anywhere in the image — only INCs (mission tail 0x5a6f0-fd + 13 other
+   screen-loop tails: FUN_0004c80c/0004f1d1/00050953/0005638d). The
+   title/menu screens increment the SAME cell, so the counter value (and
+   any menu-RNG churn) at mission start is OPERATOR-TIMING-DEPENDENT
+   across interactive S0 runs. DESIGN §6 already classes frame counters
+   T2-tolerant and RNG T3-statistical: the S0 double-run verdict is
+   "identical chains modulo the frame-counter (+RNG) watch bytes";
+   byte-identical chains need the W5 scripted menu walk (the DH-G1
+   headless S1 form). The live checklist records this so a
+   counter-only chain diff is NOT misread as a channel failure.
+6. LIVE SESSION NEEDS REAL SDL VIDEO [derived]: capgen's default env is
+   SDL dummy A/V (headless-safe), but dummy video has NO keyboard — the
+   operator cannot walk the title menu. Plan `env` entries
+   (SDL_VIDEODRIVER="" = unset → the desktop X server) flip this; audio
+   stays dummy for capture runs (real audio only for the cycles
+   calibration listen test).
+7. THE ANCHOR-FRAME OFF-BY-A-TAIL [derived from 2]: the BPLM boot trap
+   fires AFTER mission frame 1's present tail (the counter INC sits
+   past the CALL at 0x5a6eb), so the armed BP's first hit = mission
+   frame 2's dump point. capgen frame 1 = that hit; alignment is by the
+   frame-counter watch value (DESIGN §2), so the one-frame shift is a
+   recorded constant, not a divergence.
+
 CPU BASELINE (the other side of the diff): cargo run --release --example
 parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced
 byte-identically twice this unit): scene chain 0xcae25cd08d7cbc08, sim
