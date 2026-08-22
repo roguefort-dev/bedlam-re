@@ -6264,3 +6264,119 @@ below is [verified] against the objdump unless tagged.
    = 0 all SP (GameMain 0x41c34c); fresh campaign = all-zero loadout
    (money 4000, shop before every mission). Name switch FUN_00420260
    pinned (7d.5).
+
+## 7j.41. THE S7 PLATFORM-DYNAMICS DECODE — the trigger dispatcher
+whole + the ring/creeper instruction-exact re-read + THE PER-FRAME
+RNG FINDING (2026-08-23, worker 56d80c42 claim 2; objdump-only from
+the COMMITTED ghidra-project/exw-text-objdump.txt + the read-only
+corpus probes /tmp/opencode/s7probe{,2}.py, no Ghidra run; prep for
+the E-side W12-S7 landing — every fact below was read off the raw
+asm this run)
+
+1. **FUN_00422600 — the per-zone BRIDGE-BUILD TRIGGER DISPATCHER,
+   whole body** [verified 0x422600..0x422692 + the table bytes
+   0x4225d0..0x422600]. Entry (eax = the destroyed instance's id
+   dword, edx = the 0x46cbf4 record index): `ecx := id`; zone =
+   [0x4edd8c]−1 ∈ 0..6 → `jmp [0x4225e4 + 4·(zone−1)]` — the zone
+   code table [dword@0x4225e4.., bytes read this run]:
+   zone 1 → 5; zone 2 → 0x84; **zone 3 → an MP-MODE SUB-DISPATCH**
+   (0x422648: [0x4edd88]−1 ∈ 0..4 → `jmp [0x4225d0+4·idx]` → codes
+   {0x6f, 0x7e, 0x80, 0x79, 0x88}; **[0x4edd88] = the WITHIN-ZONE
+   MISSION NUMBER** [§1 load_mission paths, this pins its second
+   use] — missions 1..5 pick the code, 6/7 match nothing); zone 4 →
+   5; zone 5 → 0x2f; zone 6 → 0x2710 (a NEVER-code — no type row
+   index reaches 10000); zone 7 → 0x84. `cmp ecx, ebx; jne ret` —
+   the id must EQUAL the zone's code; then `rec = ptr[0x46cbf4] +
+   0x14·record_index` and `FUN_00422832(rec.x@+0, rec.y@+4,
+   rec.z@+8, ecx = 0x12C)` — **destroying an instance whose TYPE
+   ROW INDEX equals the zone's trigger code builds a strength-300
+   ring at the INSTANCE'S OWN (x,y,z)**. The §7j.12/9 gloss
+   ("matching a record id") is corrected: the match is on the TYPE
+   id, the BUILD SITE is the dying instance's record.
+2. **FUN_00422832 — the SPREAD RING, call order pinned** [verified
+   0x422832..0x4228cd]: saves (x−1, y−1) locals, then EIGHT
+   FUN_004228ce calls in ROW-MAJOR N→S order: (x−1,y−1), (x,y−1),
+   (x+1,y−1), (x−1,y), (x+1,y), (x−1,y+1), (x,y+1), (x+1,y+1) —
+   the center tile is NEVER built. FUN_004228ce(eax=x, edx=y,
+   ecx=strength, ebx=z) **gates in instruction order** [verified
+   0x4228ce..0x422a3c]: bounds x/y ≥ 0 ∧ < [0x4eddec]/[0x4eddf0];
+   `word[0x465daa+2·tile] == 0` (strength bank empty);
+   `word[0x460dfa+2·tile] == 0` (object grid empty);
+   `byte[0x46af58-bank + tile] == 0` (the tile-claim arena — the
+   order-marker writers are the D82 seam, host-staged zeros);
+   **the LIVE-ROBOT scan**: over all [0x46ccbc] records at
+   0x4c6a60+i·0xA8, alive@[+0] ≠ 0, tile_x = (x_q13>>8 − 0xC)>>5,
+   tile_y = (y_q13>>8 − 0xC)>>5 — the candidate tile is BLOCKED iff
+   it is one of {(tx,ty), (tx,ty+1), (tx+1,ty), (tx+1,ty+1)} (the
+   robot's tile + its E/S/SE neighbors — a +0xF00-offset marker
+   robot blocks exactly its own tile's quadrant); `z ≠ 0`;
+   `byte[0x4796ba+30·tile+2z]>>16 == 0` — the TOT-mirror z-word at
+   the BUILD LEVEL is empty; `byte[DAT + tile + [z·4+0x4eaacc]] ==
+   0` — the DAT VOLUME at level z is empty; **`byte[DAT + tile +
+   [z·4+0x4eaac8]] == 1`** — the §7j.12/3 "plane-B" gate ANCHORED:
+   the 0x4eaacc z_base table (z·w·h, §1 load_mission item 3) sits
+   at 0x4eaacc, so `[z·4+0x4eaac8]` = z_base[z−1] for every z ≥ 1 —
+   **PLANE B = THE DAT VOLUME AT LEVEL z−1 MUST BE 1** (build one
+   level above a volume-1 surface). WRITES: FUN_0042394a(x, y, z,
+   [0x454ae4+4·zone], volume 2) — the water z-structure (word =
+   the zone stamped-WORD base, seen := (volume==0) = 0, DAT
+   volume := 2); `word[0x460dfa+2·tile] := 0x7d4`;
+   `word[0x465daa+2·tile] := strength`; FUN_0042223c(x, y, 4)
+   (scorch +4).
+3. **FUN_00422693 — the WEAKEN tail RE-READ, two §7j.12 glosses
+   CORRECTED** [verified 0x4227c5..0x422831]: after
+   `strength := new` + the +4 scorch: eax = the OLD strength;
+   `old < 0xC8 → check-B; else new < 0xC8 → BUILD; else check-B`
+   where check-B = `old < 0x64 → exit; new ≥ 0x64 → exit; BUILD`.
+   **The ring gate is (old ≥ 200 ∧ new < 200) ∨ (old ≥ 100 ∧ new <
+   100)** — NOT the §7j.12/2 "strength ≥ 100 and (diff < 200 or
+   new < 100)" (that gloss builds for old ∈ [100,200) ∧ new ∈
+   [100,200), which the asm REJECTS). The ring, when gated through,
+   passes the NEW strength. **The creep-site latch
+   [0x4dc5c8]/[0x4dc5cc] := (x, y) happens ONLY on the weaken→ring
+   path (0x42281e)** — the DESTROY path (0x422746..0x4227c3)
+   stores NO site (the §7j.12/2 "both paths store the site" gloss
+   corrected); the destroy path = the FUN_0042394a(x,y,z,0,0)
+   water-clear + both banks zeroed + the 5× k7 debris (delay
+   0/2/4/6/8, 2 RandA each — confirmed).
+4. **FUN_00422a9c — the CREEP tick, whole body** [verified
+   0x422a9c..0x422c70]: **RandA draw #1 AT ENTRY, UNCONDITIONALLY
+   (the 1/32 gate `test al,0x1f`)** — THE PER-FRAME RNG FINDING:
+   the MissionShell epilogue calls this function EVERY frame (call
+   0x44808a, straight-line, no branch around it — verified), so
+   THE ORIGINAL CONSUMES ONE RandA PER FRAME on every mission even
+   with no platform staged, plus TWO more (the x/y jitters) on
+   every 1-in-32 lucky frame — an E-side stream gap on every
+   scenario until a deliberate re-baseline (D113). Then: x =
+   [0x4dc5c8] + (RandA&7) − 3 (draw #2), y = [0x4dc5cc] +
+   (RandA&7) − 3 (draw #3); bounds; `word[0x465daa+2·tile] ≠ 0`
+   (a platform must stand at the seed); the FIRST z whose mirror
+   z-word is in the water range [0x454ae4+4·zone, +0xE) (z == 8 →
+   exit); RandA&3 (draw #4) → jump table 0x422a8c = {0: (x, y−1)
+   up; 1: (x+1, y) right; 2: (x, y+1) down; 3: (x−1, y) left}; the
+   WALK reads the CURRENT tile's z-word at the found z (the seed
+   tile passes by construction), steps, bounds-checks per step
+   (OOB mid-walk → exit, NO build), loops while the z-word is in
+   the water range; the first NON-water tile ends the walk —
+   **step BACK one onto the last water tile** → bounds →
+   `FUN_00422832(tip_x, tip_y, z, 0xC7)` (strength 199) +
+   [0x4dc5c8/cc] := the tip. Bridges grow one ring per lucky
+   frame from the last damaged/built site.
+5. **CORPUS PROBE (read-only)**: the FUN_004228ce substrate
+   (volume@(z−1) == 1 ∧ volume@z == 0 ∧ TOT word@z == 0) exists in
+   EVERY zone (ZONEA/M1: 1361 tiles; the widest 9.8k in ZONEF/M1).
+   **ZONEA/MISSION1 hosts the full S7 story in one spot**: the
+   zone-1 code-5 instance = .POS slot 74 @ (3,57,2), type row 5 =
+   (W1 H1 D2 hp 75 chain 0 kind 8) — one artillery blast (or one
+   grenade detonation, hp 75) destroys it; ALL EIGHT (3,57)
+   neighbors are z2 substrate (volume@z1 == 1 under them). A
+   marker robot at (3,57) blocks its own E/S/SE quadrant
+   ((3,58),(4,57),(4,58)) → five platforms build.
+6. Engine routing this unit (D113): the spread ring, the creep
+   tick, and the trigger build land in `bedlam-core::destroy` /
+   `advance_frame`; the creep tick runs ARMED (grammar
+   `platforms = 1`) so S0..S6 chains stay byte-identical while S7
+   is faithful from frame 0; FUN_00422e0a (the delayed-trigger
+   payload producer, FUN_00439c20 census-unidentified) and the
+   timer tick FUN_00422cc2 STAY no-ops (documented E-gaps — the
+   S7 destroy arms no timers in E).
