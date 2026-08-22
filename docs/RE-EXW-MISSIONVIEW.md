@@ -121,8 +121,12 @@ for i in 0..cache_count:                        // 0x4067a6..
            if word[layer] != 0 and 0x4ede18 <= dest < 0x4ede18+0x59b00:
               sprite = LNK[word[layer]]; word[layer] = sprite   // ANIM STEP
               frame = (layer < rec[0x1b] || layer >= rec[0x1c])
-                      ? rec[0x18]                // static
-                      : u32[0x456ca8 + (g_frame_count&0xf)*4]   // anim seq
+                      ? rec[0x18]                // static = scorch byte
+                                                 // as ramp index
+                      : u32[0x456ca8 + (g_frame_count&0xf)*4]
+                                                 // anim seq = STATIC
+                                                 // ping-pong const
+                                                 // {0..7,7..0} §8.2
               FUN_00401471(BIN, sprite, remap=u32[0x4dd444 + frame*4])
            cursor++
            // chase: consecutive seen levels above draw the SAME-side
@@ -130,8 +134,9 @@ for i in 0..cache_count:                        // 0x4067a6..
            while cursor < 8 && seen[cursor] && word[cursor]:
               d2 = dest - 0x5000 + bias
               sprite2 = LNK[word[cursor]]; word[cursor] = sprite2
-              if water-zone sprite range (0x454aac[zone]..+0x1e)
-                 && water enabled (_DAT_004edbd4):
+              if water-zone sprite range (0x454aac[set@0x4edd8c]..+0x1e)
+                 && water enabled (_DAT_004edbd4 — ≡ 1 in every
+                 mission, §8.2):
                  FUN_0040167a(BIN, sprite2)     // u8-RLE + TXPAL1 remap
               else FUN_00401471(BIN, sprite2, ...)
               cursor++
@@ -175,7 +180,8 @@ bank (BIN), EDI = dest ptr in the 0x64000 buffer.
 
 FUN_0040167a (water variant): same header, forces u8-RLE decode, each
 literal byte written as TXPAL1-relative lookup (bank 0x4edbfc)
-[secondary; ZONEA unaffected unless the water range hits].
+[secondary; ZONEA unaffected — the water sprite family stages ZERO
+cells in ZONEA/M1, §8.2].
 
 ## 5. FUN_0040798e — sprite-list enqueue (entities/overlays) [verified, asm-anchored]
 
@@ -229,7 +235,8 @@ zero-skip** (REP MOVSB): transparency exists only as RLE skip words.
 Mode dispatch (mode = node +0x18):
 - `0x130` → paint every literal-run byte as 0xFF (STOSB 0xFF);
 - water flag `_DAT_004edbd4 == 0` OR mode `0x12c` (= decimal 300) →
-  plain raw copy;
+  plain raw copy [the flag==0 arm is DEAD CODE in shipped play —
+  the flag is 1 for every mission, §8.2];
 - water on: `0x12d` → `dest = TXPAL1[(dest<<8) | b]` and `0x12e` →
   `dest = TXPAL1[(b<<8) | dest]` — TXPAL1 at 0x4edbfc is a 64-KiB
   two-level composition table [asm: `MOV AH,[ESI]; MOV AL,[EDI]` /
@@ -537,9 +544,24 @@ terrain pass overwrites everything the present window reads.
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader
    FUN_0042209b, slot 0 NULLed after load); u32[0x4dd464+4i] the 8
-   MAPTRAN ramp pointers (FUN_00422171). The `u32[0x456ca8]` anim
-   sequence producer is still open; ZONEA/M1 LNK identity cells make
-   frames irrelevant there.
+   MAPTRAN ramp pointers (FUN_00422171). **FULLY CLOSED 2026-08-22
+   (RE-EXW-SIM §7j.35)**: the `u32[0x456ca8]` "producer" is the
+   FILE IMAGE itself — a STATIC DGROUP const
+   `{0,1,2,3,4,5,6,7, 7,6,5,4,3,2,1,0}` (16-phase ping-pong over
+   the 8 ramp slots; zero .text writers, two readers 0x40691a/
+   0x406a2c). The STATIC branch indexes the same ramps by the
+   +0x18 SCORCH byte (scorch n → ramp n — the ramps double as
+   scorch darkening); the anim-window branch (+0x1b/+0x1c, §8.1)
+   is ZONEG-only. The WATER FLAG producer is closed the same
+   unit: `_DAT_004edbd4` ≡ 1 for every mission (sole persistent
+   writer = the campaign-boot defaults FUN_004252c0 @0x4252d8;
+   one scoped save/restore around the SELECTOR screen
+   FUN_0043e7d4 — no config/options/save/MP writer), so the
+   0x12d/0x12e/0x12f "water-off" plain-copy arms are dead code
+   in shipped play and E may hard-code water-ON. Corpus: water
+   sprite words stage ONLY in ZONEB/M1 (12 cells), ZONEB/M6 (78),
+   ZONEC/M4 (33), ZONED/M1 (1), ZONEF/M7 (4824) — ZONEA/M1 ZERO;
+   the water-leg P4.2 hooks are in §7j.35 item 5.
 3. ~~FUN_00403938's entity loops~~ **CLOSED 2026-08-21**: the robot
    entity loop + FUN_0040798e/0179b enqueue/flush are decoded (§5b–§5d)
    and wired into bedlam-render. **FULLY CLOSED 2026-08-21 (7j.26)**:

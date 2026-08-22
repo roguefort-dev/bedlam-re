@@ -3592,3 +3592,43 @@ Nudge-Worker: a42c6027-6acd-491d-b4a7-47ae4b4ae69f
    the corpus probes; docs-only, no engine pins touched.
 
 Nudge-Worker: f461ea05-7a4d-4663-8955-eab1766f74a4
+
+## D100 — 2026-08-22: P4/RE — the MISSIONVIEW §8 water-flag/anim remainder CLOSED: u32[0x456ca8] = a STATIC ping-pong const {0..7,7..0} (no runtime producer; the static branch = the scorch byte as the PALTRAN ramp index); [0x4edbd4] ≡ 1 in every mission (water-off paths dead); ZONEA/M1 stages ZERO water (worker 57ba8753 claim 2)
+
+1. THE ANIM SEQUENCE "PRODUCER" IS THE FILE IMAGE: full-.text census
+   — u32[0x456ca8] has exactly two sites (readers 0x40691a/0x406a2c
+   in the terrain loop) and ZERO writers; DGROUP (0x552a8 in the PE)
+   carries {0,1,2,3,4,5,6,7, 7,6,5,4,3,2,1,0} — a 16-phase
+   ping-pong over the 8 PALTRAN ramps (0x4dd444, slot 0 NULL =
+   plain). The STATIC branch indexes the same ramps by the +0x18
+   SCORCH byte (scorch n → ramp n — scorch darkening IS ramp
+   selection); anim-window (+0x1b/+0x1c) tiles are ZONEG-only.
+2. THE WATER FLAG IS A CONSTANT IN SHIPPED PLAY: [0x4edbd4]'s only
+   persistent writer is the campaign-boot defaults FUN_004252c0
+   @0x4252d8 (:= 1, every "New Single Player Game"); the one other
+   write pair (0x41c649/0x41c65a) is a scoped save/restore around
+   the SELECTOR screen FUN_0043e7d4 (esi = the mission-index reg =
+   1 on both paths). No CONFIG/options/save/MP writer exists — the
+   0x12d/0x12e/0x12f "water-off" plain-copy arms and the remap-XLAT
+   gate's flag==0 arm are dead code in every shipped session; E may
+   hard-code water-ON.
+3. 7j.12 OFF-BY-ONE CORRECTED: all zone tables (0x454a20/0x454a3c/
+   0x454aac/0x454ae4 — one contiguous u32 array at 0x1C strides) are
+   indexed by the RAW set [0x4edd8c] 1..7; entry 0 is the previous
+   array's tail. Set-indexed bases landed in the §7j.35 ledger rows.
+4. CORPUS VERDICT: water sprite words stage ONLY in ZONEB/M1 (12),
+   ZONEB/M6 (78), ZONEC/M4 (33), ZONED/M1 (1), ZONEF/M7 (4824);
+   ZONEA/M1 ZERO in both the sprite range and the platform/splash
+   word range (which appears in NO shipped file — runtime-only).
+   Side finding: 44 0x7d2 hazard cells in ZONEA/M1 → the load
+   stamper pre-stages the 0x460dfa hazard grid in every gate run
+   (the 7g.5 robots() hazard path is live).
+5. ENGINE: docs-only (D98/D99 pattern — the corpus path does not
+   fire for the gates); DrawParams.remap stays the host seam
+   (pixel-side selection, out of the 0b state budget). P4.2 hooks
+   on the DESIGN §7 S5 row: a water leg shares the S5 zone-walk
+   staging, must run ZONEB/M1|M6, ZONEC/M4 or ZONEF/M7. Deliverables:
+   RE-EXW-SIM §7j.35 + 2 new + 1 rewritten ledger rows; MISSIONVIEW
+   §8.2 closure + §1/§3/§4/§5c refreshes; DESIGN S5 row.
+
+Nudge-Worker: 57ba8753-c3b0-471f-b960-5c67704d0b41

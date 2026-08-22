@@ -4511,7 +4511,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
 | platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via trigger / 199 via creep; weaken −damage; <0 → destroy: clear water z-word + both banks + 5× k7 debris); ring spread when ≥100 ∧ (hit <200 ∨ new <100) | §7j.12 |
 | platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; spread ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word + planeA 0 + planeB 1 + no robot, writes water z-word + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (1/32, ray over water, tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc | §7j.12 |
-| 0x7d2/0x7d3 stamper | FUN_00422f18 (load 0x447b8f): z-word ∈ [0x454a20+4z, +4] → 0x7d2; ∈ [0x454a3c+4z, +4] → 0x7d3; zone bases 0x7d2 {0x20,0x49,0x49,0x34e,0x49,0x77,0x77} / 0x7d3 {0x49,0x77,0x77,0x49,0x4e,0x4e,0x349} | §7j.12 |
+| 0x7d2/0x7d3 stamper | FUN_00422f18 (load 0x447b8f): z-word ∈ [0x454a20+4z, +4] → 0x7d2; ∈ [0x454a3c+4z, +4] → 0x7d3; CORRECTED §7j.35: tables indexed by the RAW set [0x4edd8c] 1..7 → set-indexed bases 0x7d2 {0x49,0x49,0x34E,0x49,0x77,0x77,0x49} / 0x7d3 {0x4E,0x4E,0x349,0x4E,0x7C,0x7C,0x4E} (the 7j.12 prose lists were entries 0..6, one zone off; entry 0 = the previous array's tail) | §7j.12, §7j.35 |
 | type-DB tail stamper | FUN_00422fd1 (load 0x447ba3): 45 rec @0x4dcae8 stride 0x10 {state,x0,y0,w,h,variant,cd,flag}; STATE@+0 ≥ 3 (§7j.34: the 7j.12 "word@+2" qualifier was the wrong field) → byte 0x4796d5 = variant<<4, byte 0x4796d6 = (state==3?0:0x80) | §7j.12, §7j.34 |
 | delayed trigger timers | 32 rec @0x4ea828 stride 0x18 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
@@ -4625,6 +4625,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | hot-rect click-target array | ONE array base 0x4787bc (record 0; the dispatcher's 1-based view 0x47879c = base−0x20), stride 0x20, 8 dwords {+0 world X, +4 world Y, +8 hit-box X origin, +0xC Y origin, +0x10 z, +0x14 w, +0x18 h, +0x1C type}, count [0x46ccd8] cap 0x77 (extent ..0x47969c), per-frame reset @0x403a9a; writers = 7 sites ALL in FUN_00403938: w1 0x403c87 robots MP-only ([0x4edb88]==2 ∧ ≠local player) type (idx+1)\|0x1000 w/h 0x40 z=rec+8+0x21 corner tile+0xB; w2-w7 0x4056f1/0x4058b8/0x405c4d/0x405f7b/0x406142/0x4062c6 critter .NME paths (state ∉{6,7,0xB}; w7 {6,7}) type idx+1, z ∈ {[crit+0x3E] raw/+0x20/+0x10/>>8}, w ∈ {0x3C,0x40} h 0x40 | §7j.31 |
 | click picker | FUN_00419943 (only caller = dispatcher 0x41068e): scans hot rects i<[0x46ccd8], box = origin+(w/2,h/2) ± (w/2,h/2); priority = octile FUN_0041ebf8 max(\|dx\|,\|dy\|)+min/2, early-out <4; returns i+1; ground fallback = iso (mx−0xF0)·[0x4ede54]/0x1E0 + camera + TRT active-scan (x/y/z @+0x14/18/1C ×0x20, windows −0x10..+0x30) → 0x2000\|(idx+1) else 0 | §7j.31 |
 | click order dispatcher | FUN_00410644 (MissionShell @0x448021; gates mouse≠−1/[0x4ede14]≠0/[0x4edba0]==0/mx<0x1E0): picked → type cell [0x46cc00] (NEW pin); bit13 TRT: rec(id−1) via −0xC-bias base 0x4cccec, coords ×0x20+0x10 → ORDER TARGET 0x4dd484/88/8c; bit12 robot: corner +0/+4 + z +0x10; else critter: corner + FUN_004128ec(id−1)>>8+0x15; ground: camera+view-mouse z0; tail [0x4ddb20]\|=2 order latch (NEW pin) + [0x4ede00]:=−1 consume | §7j.31 |
+| terrain anim sequence | u32[16] @0x456ca8 = STATIC DGROUP const {0,1,2,3,4,5,6,7,7,6,5,4,3,2,1,0} — a 16-phase ping-pong over the 8 PALTRAN ramp slots (0x4dd444; slot 0 = NULL = plain blit); NO runtime producer (2 readers only: 0x40691a seen-level draw + 0x406a2c chase column, both `seq[frame&0xf]` → ramp → FUN_00401471/0040167a); the STATIC branch = the +0x18 scorch byte as the ramp index (scorch n → ramp n — the PALTRAN ramps double as scorch darkening); branch pick = the +0x1b/+0x1c anim window (nonzero in ZONEG only, §7j.32) | §7j.35 |
+| water flag | [0x4edbd4] ≡ 1 in every mission: sole persistent writer = FUN_004252c0 @0x4252d8 (campaign-boot defaults, := 1, called 0x41c129 in FUN_0041c050); scoped save/restore bracket 0x41c649/0x41c65a around the SELECTOR screen FUN_0043e7d4 (GAMEGFX\SELECTOR.BIN/.PAL; esi = the mission-index reg = 1 on both paths); NO config/options/save/MP writer — "water off" render paths (remap-XLAT 0x4014d3/0x401566; the 0x12d/0x12e/0x12f plain-copy gates 0x4017a3/0x4020b5/0x40229d; chase pick 0x4069c7) are dead code in shipped play; water tables set-indexed 1..7: sprite family 0x454aac {0x15F,0x4B3,0x5B8,0x15F,0x141,0xFB,0x4B3} +0x1E, stamped-word base 0x454ae4 {0xBD,0x3BD,0x5E8,0xBD,0xEC,0xC3,0x3BD} +0xE; corpus: water sprites stage ONLY in ZONEB/M1(12)/M6(78), ZONEC/M4(33), ZONED/M1(1), ZONEF/M7(4824); ZONEA/M1 ZERO (but 44 0x7d2 hazard cells → the load stamper pre-stages the 0x460dfa grid in the gates) | §7j.35 |
 
 ## 7j.31. The HOT-RECT CLICK-TARGET RECORD — one 0x20-stride array; writer census + both reader families (2026-08-22, worker aa62f5ed claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run)
 
@@ -5285,6 +5287,128 @@ differ would report as structural robot-bank + terrain rows. The
 watch surface for a pickup scenario: the mirror row word + seen +
 the DAT plane byte at the consumed cell, plus the case-4
 score/money pair (the D52 seam fields).
+
+## 7j.35. THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER — u32[0x456ca8] = a STATIC ping-pong const (producer = the file image); [0x4edbd4] ≡ 1 for every mission (no gameplay writer exists); ZONEA/M1 stages ZERO water (2026-08-22, worker 57ba8753 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; DGROUP bytes + corpus TOTs re-read read-only, scratch /tmp/opencode)
+
+Closes MISSIONVIEW §8 item 2 (the last open §8 row): the 16-entry
+anim sequence producer and the water-flag producer. All [verified]
+asm/DGROUP/corpus unless tagged.
+
+1. **u32[0x456ca8] IS STATIC DGROUP DATA — there is no runtime
+producer.** Full-.text census (objdump 0x401000..0x460000, every
+addressing form): the table has exactly TWO sites, both READERS
+in the terrain loop of FUN_00403938 — 0x40691a (the seen-level
+draw) and 0x406a2c (the seen-chase column) — and ZERO writers
+(no `mov [x*4+0x456ca8]`, no immediate-EDI bulk setup). The file
+image carries the values (PE DGROUP VA 0x454000 = file 0x52600,
+read at 0x552a8): `u32[16] = {0,1,2,3,4,5,6,7, 7,6,5,4,3,2,1,0}`
+— a 16-phase PING-PONG (triangle wave) over the 8 PALTRAN ramp
+slots. Reader form (both sites): `frame = u32[0x456ca8 +
+(g_frame_count@0x46ae68 & 0xf)*4]` → `remap = u32[0x4dd444 +
+frame*4]` → the blit (FUN_00401471, or FUN_0040167a on the water
+path). With ramp slot 0 NULLed after load (§7e) the cycle renders
+as plain, r1, r2, … r7, r7, r6, … r1, plain — an 8-on-8-off
+shimmer; the same 0x4dd444 ramps are the ones the STATIC branch
+indexes by the +0x18 SCORCH byte (0x406923: `edx :=
+byte[0x4796d4+30·tile]` → 0x406935 `ebx := u32[0x4dd444+edx*4]`),
+i.e. **the PALTRAN ramps double as the scorch-darkening tables**
+— scorch n draws ramp n, scorch 0 = plain. The branch pick is
+the +0x1b/+0x1c anim WINDOW (`z < +0x1b ∨ z ≥ +0x1c → static`):
+outside the window the scorch byte rules, inside it the ping-pong
+rules. Producers of nonzero windows are the ZONE-7 objective
+family only (§7j.32) — no non-ZONEG mission ever animates a
+tile, and the +0x18 scorch is the transient 7j.8/9/10 ring
+(fades ≤7 frames, already modeled in bedlam-core).
+2. **The water flag [0x4edbd4] ≡ 1 during EVERY mission —
+"water off" is unreachable in shipped gameplay.** Writer census
+(complete, 3 instructions in .text):
+   - **0x4252d8, FUN_004252c0 (the campaign-boot defaults
+     initializer, called at 0x41c129 inside FUN_0041c050 on
+     every "New Single Player Game")**: `0x4edbd4 := 1` (beside
+     `0x4edbf0 := 1`, `0x4edbe0 := 1`, `0x4edbe8 := 2`,
+     `0x4ddb2c := 0x4B`). This is the ONLY persistent write —
+     no CONFIG.BDL restore, no OPTIONS-menu toggle, no save-load
+     write, no MP path touches it (0x4edbe0 is a DIFFERENT,
+     options-writable cell — cleared by the stub FUN_0043a1c8
+     @0x43a1cb and gated in the renderer at 0x4033ec/0x403503;
+     0x4edbe8's reader cluster is the MissionShell family;
+     neither feeds 0x4edbd4).
+   - **0x41c649 + 0x41c65a, FUN_0041c050 (campaign loop)**: a
+     scoped save/restore bracket — `0x46ae80 := flag; flag :=
+     esi; call FUN_0043e7d4; flag := 0x46ae80`. FUN_0043e7d4 is
+     the robot SELECTOR screen (loads GAMEGFX\SELECTOR.BIN/.PAL,
+     0x4592d8/0x4592ed); esi is the loop's mission-index register
+     (= 1 on both observed paths: init 0x41c09e, reset
+     0x41c4ad), so even transiently the flag stays 1 — the
+     bracket is a conservative guard, and it is OUTSIDE the
+     MissionShell lifetime regardless.
+   Readers (complete): the remap-XLAT gate in FUN_00401471
+   (0x4014d3/0x401566), the `flag==0 → plain copy` gates of the
+   0x12d/0x12e/0x12f mode dispatches in FUN_0040179b (0x4017a3)
+   and the direct-codec family (0x4020b5/0x40229d, mode cell
+   [0x4edd5c]), and the terrain chase-column water pick
+   (0x4069c7). **Consequence for the §8 item's stated goal: the
+   0x12d/0x12e/0x12f flush remaps may permanently assume
+   water-ON semantics — the `flag == 0` branches are dead code
+   in every shipped session (missions, MP, save-load).**
+3. **Water-range table CORRECTION (7j.12 item 6 off-by-one):**
+every consumer indexes the zone tables by the RAW set value
+[0x4edd8c] = 1..7 (`shl edx,2` of the cell, verbatim at
+0x422f77..f89 / 0x422fa3..fb5 / 0x4226f0..701 / 0x422a40..a4b /
+0x422bbd..be2 / 0x4069d8..9e4 / 0x42411b..126), so table entry 0
+is UNUSED (it is the previous array's tail — the
+0x454a20..0x454ae4 family is ONE contiguous u32 array chopped at
+0x1C strides). Effective SET-INDEXED (1..7 = A..G) bases,
+DGROUP-read:
+   - 0x7d2 hazard words (extent +4): 0x454a20[1..7] =
+     {0x49, 0x49, 0x34E, 0x49, 0x77, 0x77, 0x49};
+   - 0x7d3 clamp words (+4): 0x454a3c[1..7] =
+     {0x4E, 0x4E, 0x349, 0x4E, 0x7C, 0x7C, 0x4E};
+   - water SPRITE family (+0x1E, the renderer/splash test):
+     0x454aac[1..7] = {0x15F, 0x4B3, 0x5B8, 0x15F, 0x141, 0xFB,
+     0x4B3};
+   - water stamped-WORD base (+0xE, the platform/splash word
+     test): 0x454ae4[1..7] = {0xBD, 0x3BD, 0x5E8, 0xBD, 0xEC,
+     0xC3, 0x3BD}.
+   The 7j.12 prose lists were entries 0..6 of the raw array
+   (shifted one zone); the instruction bases 0x454a20/0x454a3c
+   stand.
+4. **THE CORPUS VERDICT — ZONEA/M1 stages ZERO water; the
+harness corpus path does NOT fire** [read-only probe
+/tmp/opencode/watercorpus.py, all 37 mission TOTs, per-zone
+set-indexed ranges]: water SPRITE-family words stage in exactly
+five missions — ZONEB/M1 (12 cells), ZONEB/M6 (78), ZONEC/M4
+(33), ZONED/M1 (1), ZONEF/M7 (4824 — a water-heavy mission);
+ZONEA/M1: **0 water cells in both the sprite range
+[0x15F,0x17D) and the stamped-word range [0xBD,0xCB)**. The
+platform/splash WORD family (0x454ae4 base) appears in ZERO
+shipped files — it is runtime-only (platforms/splashes never
+stage in the gates: weapons never fire, platforms unstaged,
+§7j.12 corpus verdict). Side finding: the 0x7d2 HAZARD words DO
+stage widely (the load-time stamper FUN_00422f18 runs every
+mission): ZONEA/M1 carries 44 cells in [0x49,0x4D) → 44
+hazard-grid words @0x460dfa at boot (the 7g.5 robots() hazard
+path is LIVE in the gates; 0x7d3: 0 cells — zone A's
+[0x4E,0x52) range is empty). High scores elsewhere: ZONEC/M4
+481, ZONED/M4 394, ZONEB/M6 288+29, ZONEC/M3 286, ZONEB/M7 166,
+ZONEG/M1 170, ZONEF/M3 193; ZONEE stages no 0x7d2 (54+16 0x7d3
+cells in M6/M7).
+5. Engine seam (this unit, D98/D99 pattern): the corpus path
+does NOT fire for ZONEA/M1 — NO engine code this unit. The
+bedlam-render `DrawParams.remap` stays the host seam (the
+frame-index/scorch/ping-pong selection is pixel-side, out of the
+0b state-diff budget; scorch STATE is already hash-covered via
+the 7j.10 fade). P4.2 hooks (D100): a water-leg scenario must
+run ZONEB/M1, ZONEB/M6, ZONEC/M4 or ZONEF/M7 (F/M7 = the
+4824-cell water mission); E needs, before such a scenario,
+(a) the per-tile remap selection (static scorch-index ramp /
+anim-window ping-pong — the 16-word const above), (b) the water
+sprite-range branch in the chase path (FUN_0040167a/TXPAL1),
+(c) the water flag pinned ON (it is a constant in shipped play
+— no E-side toggle exists to model); the watch surface is the
+terrain mirror rows (water words already covered by the mirror
+row) — nothing new to watch. The 0x12d/0x12e/0x12f flush
+semantics may hard-code water-ON.
 
 ## 9. Open items (next slices)
 
