@@ -78,25 +78,35 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. [P4/RE] THE .BDG TEMPLATE-BANK READER unit (unattended, bounded
-   RE): 7j.25 pinned the .BDG grammar (FORMATS §12/§16) + two of
-   the four restore-word feeders (banks @+0x46/+0x4A = TOT-mirror/
-   seen+DAT), but the @+0x3E/+0x42 READERS are still open (which
-   bank feeds which restore word). Walk the .BDG restore/resolver
-   family in ghidra-project/exw-text-objdump.txt (the 7j.25 destroy
-   resolver FUN_00416xxx chain + any [bank+0x3E]/[bank+0x42]
-   traffic), pin the plane↔mirror-word mapping, land RE-EXW-SIM
-   §7j.32 + ledger rows (pure decode, no engine change). NOTE
-   7j.31 (2026-08-22, D95): the hot-rect click-target record is
-   CLOSED — the E click/order seams are anchored (SP orders never
-   robot-targeted; new pins 0x46cc00/0x4ddb20 for the watch set
-   when click parity is needed).
+ 2. DONE 2026-08-22 (worker ce347a0e claim 2, commit 4210f55, D96,
+    §7j.32): [P4/RE] THE .BDG TEMPLATE-BANK READER unit — CLOSED.
+    Loader disk order pinned (+0x3E,+0x46,+0x42,+0x4A interleaved
+    vs slots); +0x46/+0x4A = the UNDER pair, the ONLY banks any
+    code reads (restore re-verified instruction-exact: linear
+    (z'·H+i)·W+j, mirror word +2·z, seen +0x10+z, DAT volume low
+    byte); +0x3E/+0x42 = the CURRENT pair ≡ shipped TOT/DAT at
+    .POS footprints (434/435 ZONEA/M1; 1 miss = footprint overlap,
+    last-slot-wins) — DEAD EDITOR PAYLOAD, zero readers, the
+    runtime spawn-stamp hypothesis RETIRED. BONUS: the 0x1E-B
+    mirror-record grammar unified (+0x1B/+0x1C = the OBJECT-HEIGHT
+    pair — closes the MISSIONVIEW §8.1 producer hunt; +0x1D no
+    traffic); FUN_0044889a/FUN_00448b80 = the objective-building
+    family (zone-7 gate, counter [0x46cce0] over types 0x44..0x47,
+    at zero SFX 0x28/0x29 + extraction-arm cells 0x46cd00/
+    0x46ccfc/0x46ccc4); .POS word 2 = BASE Z LEVEL (FORMATS §12
+    corrected); FUN_0041bc1c TRT death stamp (per-zone rubble word
+    0x454a04). Docs-only; registry_anchors green; manifest clean.
 3. [P4/FORMATS] THE .BLD RECORD WALK unit (unattended, bounded RE):
    the .BLD names/graphics side (FORMATS §17 — the 201-B/64-B-
    extension hypothesis still unanchored; the residual item of the
    D93 .MOFO retirement). Anchor the record grammar against the
    corpus .BLD files + the loader in ghidra-project/
    exw-text-objdump.txt; land FORMATS §17 + ledger rows.
+    NOTE 7j.32 (2026-08-22, D96): the .BDG side is fully closed —
+    BLD is the names/graphics sibling (r=0.985 size correlation);
+    the loader call should sit near the .NME/.POS/.BDG loader
+    family (mission-load chain 0x447b3a..0x447c00) — grep the
+    ".BLD" DGROUP string for the anchor.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -232,6 +242,37 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE .BDG TEMPLATE-BANK READER unit COMPLETE
+  (worker ce347a0e claim 2, commit 4210f55, D96, docs-only;
+  objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra
+  run; read-only corpus probes in /tmp/opencode). CLOSED with a
+  negative-result headline: +0x3E/+0x42 have ZERO readers — they
+  are the editor's CURRENT-state pair (bank1 ≡ shipped TOT word,
+  bank3 ≡ shipped DAT byte at every .POS footprint, 434/435
+  ZONEA/M1 cells; the 1 miss = a genuine footprint overlap,
+  last-.POS-slot-wins), already baked into the shipped mission
+  files — the runtime spawn-stamp hypothesis is RETIRED. The
+  loader DISK ORDER is interleaved vs the slot layout
+  (+0x3E,+0x46,+0x42,+0x4A; 0x41a71d..0x41a782); the destroy
+  restore consumes ONLY the UNDER pair (+0x46 → TOT-mirror plane
+  words +2·z; +0x4A → seen=(word==0) @+0x10+z + DAT volume low
+  byte; linear (z'·H+i)·W+j; z ∈ [z0, min(z0+D,8))) —
+  re-verified instruction-exact. BONUS DECODES: (a) the 0x1E-B
+  TOT-mirror tile-record grammar unified (plane words +0x00..0x0F,
+  seen +0x10..0x17, +0x18 scorch, +0x19 variant<<4, +0x1A door
+  bit7, +0x1B/+0x1C = the OBJECT-HEIGHT pair (z0, z0+D) — the
+  MISSIONVIEW §8.1 unknown producer found = the objective family;
+  +0x1D zero traffic); (b) FUN_0044889a/FUN_00448b80 = the
+  OBJECTIVE-BUILDING family (zone-7 gate [0x4edd8c]==7, counter
+  [0x46cce0] over instance types 0x44..0x47, heights stamped/
+  cleared, at zero SFX FUN_004239ef(0x28,3)/(0x29,3) +
+  extraction-arm cells 0x46cd00/0x46ccfc/0x46ccc4); (c) .POS word
+  2 = the BASE Z LEVEL (FORMATS §12 kind-gloss corrected);
+  (d) FUN_0041bc1c TRT death stamp (per-zone rubble word table
+  0x454a04 + k15 debris + splash). Deliverables: RE-EXW-SIM §7j.32
+  + 3 rewritten + 4 new ledger rows + FORMATS §2/§12/§16 +
+  MISSIONVIEW §2 update + D96. registry_anchors green, manifest
+  clean both sides, PUSHED. Queued: the .BLD record walk (item 3).
 - 2026-08-22: P4/RE THE HOT-RECT RECORD unit COMPLETE (worker
   aa62f5ed claim 2, commit 5abeaad, D95, docs-only; objdump-only
   from ghidra-project/exw-text-objdump.txt, no Ghidra run).

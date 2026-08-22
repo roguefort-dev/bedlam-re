@@ -1,5 +1,30 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE .BDG TEMPLATE-BANK READER unit
+    COMPLETE, worker ce347a0e claim 2, commit 4210f55, D96,
+    docs-only): the 7j.25 open item is CLOSED with a
+    negative-result headline — the .BDG template banks +0x3E/+0x42
+    have ZERO code readers: they are the editor's CURRENT-state
+    pair, already baked into the shipped .TOT/.DAT at every .POS
+    footprint (bank1 ≡ TOT word / bank3 ≡ DAT byte, 434/435
+    ZONEA/M1 cells; the single miss = a real footprint overlap,
+    last-.POS-slot-wins) — the runtime spawn-stamp hypothesis is
+    RETIRED (RE-EXW-SIM §7j.32 + 3 rewritten + 4 new ledger rows +
+    FORMATS §2/§12/§16 + MISSIONVIEW §2 + D96). Loader disk order
+    interleaved (+0x3E,+0x46,+0x42,+0x4A); the destroy restore
+    consumes only the UNDER pair (+0x46 → mirror plane words
+    +2·z; +0x4A → seen=(word==0) + DAT volume low byte), verified
+    instruction-exact. BONUS: the 0x1E-B mirror tile-record
+    grammar unified (plane words / seen bytes / +0x18 scorch /
+    +0x19 variant / +0x1A door / +0x1B/+0x1C OBJECT-HEIGHT pair —
+    the MISSIONVIEW §8.1 producer hunt closed / +0x1D unused);
+    FUN_0044889a/FUN_00448b80 = the objective-building family
+    (zone-7 gate, counter [0x46cce0], at zero SFX 0x28/0x29 +
+    extraction-arm cells); .POS word 2 = base z level; TRT death
+    stamp = per-zone rubble word 0x454a04. NEXT: the .BLD record
+    walk (queue item 3) — then the operator-adjacent W10/W11/W12
+    tail.
+
   - OPEN 2026-08-22 (P4/RE THE HOT-RECT RECORD unit COMPLETE,
     worker aa62f5ed claim 2, commit 5abeaad, D95, docs-only): the
     0x4787c4/0x47879c click-target family is CLOSED — ONE
