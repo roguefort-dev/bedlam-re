@@ -8,10 +8,11 @@
 #               once at mission start) | TI = injection surface (§5: watched
 #               AND written)
 #   exw_addr    EXW (Win95) address expression — the canon of record
-#   exd_addr    EXD (DOS oracle) alias from RE-EXD-MAP §4/§5/§5b (W1).
-#               EMPTY = explicit gap (difficulty, SFX gate, blink-cursor,
-#               order target, no-extract latch, selection cursor/squad) or a
-#               not-yet-aliased tier (T2-T4, TI). Never guessed.
+#   exd_addr    EXD (DOS oracle) alias from RE-EXD-MAP §4/§5/§5b/§5c.
+#               EMPTY = explicit gap (SFX gate, blink-cursor,
+#               no-extract latch, selection cursor/squad) or a
+#               not-yet-aliased tier (T2-T4; TI rows are aliased
+#               where their seam is pinned — §5c). Never guessed.
 #   indirect    true = EXD keeps the bank behind a pointer cell; read
 #               through it (RE-EXD-MAP §7 divergence seed #4).
 #   extent      watched byte extent (expression form)
@@ -100,13 +101,13 @@ anchor = "money"
 id = "difficulty"
 tier = "T0"
 exw_addr = "0x46cbf8"
-exd_addr = ""
+exd_addr = "0x119558"
 extent = "4"
 layout = "u32 difficulty scalar 0..2 ((d+1)%3 at name entry; scales projectile damage + critter behavior)"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "difficulty scalar"
-note = "W1 gap: not in the GameInit boot plants; anchor via the (d+1)%3 site or the critter difficulty-table reads in a later unit (RE-EXD-MAP §4)."
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "difficulty"
+note = "W5-followup: the 172/236/300 range formula + the respawn-delay table twin 0x81050 in FUN_00023967; writers in FUN_0002c6e3 (RE-EXD-MAP §4)."
 
 [[watch]]
 id = "zone"
@@ -218,13 +219,13 @@ anchor = "per-player selected anchor"
 id = "order-target"
 tier = "T1"
 exw_addr = "0x4dd484 / 0x4dd488 / 0x4dd48c"
-exd_addr = ""
+exd_addr = "0x10e0a4 / 0x10e0a8 / 0x10e0ac"
 extent = "12"
 layout = "i32 x3 {x, y, z} — also the ORDER injection seam (DESIGN §5.2)"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "click order target"
-note = "W1 gap: click-order path lives in the EXD UI monolith FUN_000448e7 (RE-EXD-MAP §5)."
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "order target xyz"
+note = "W5-followup: consumer twin FUN_00019ee9 bit1 writes + click-order twin FUN_00021112 (iso formula exact); order-active flag twin 0x10e140 (EXW 0x4dc6bc) — RE-EXD-MAP §5/§5c."
 
 [[watch]]
 id = "move-target-words"
@@ -801,23 +802,24 @@ anchor = "weapon impact resolver"
 id = "inj-key-state"
 tier = "TI"
 exw_addr = "0x4edc44"
-exd_addr = ""
+exd_addr = "0x894d4"
 extent = "256"
 layout = "g_keystore bytes, scan-code indexed, 1 = held (KEYSTATE injection)"
-exd_status = "unmapped"
-anchor_doc = "RE-EXW-INPUT"
-anchor = "2. KeySink @0041be05(scan, down) [verified]"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "g_keystore 0x4edc44 (256 B, scan-indexed, 1=held)"
+note = "W5-followup: AnyKeyWait twin FUN_00030792 + the INT-9 hook KeySink + the installer memset (RE-EXD-MAP §5c)."
 
 [[watch]]
 id = "inj-remapped-keys"
 tier = "TI"
 exw_addr = "0x4edd0c / 0x4edd0f / 0x4edd11 / 0x4edd14"
-exd_addr = ""
+exd_addr = "0x8959c / 0x8959f / 0x895a1 / 0x895a4"
 extent = "4"
 layout = "remapped key bytes (arrows 0xc8/0xcb/0xcd/0xd0 +0x80)"
-exd_status = "unmapped"
-anchor_doc = "RE-EXW-INPUT"
-anchor = "2. KeySink @0041be05(scan, down) [verified]"
+exd_status = "derived"
+anchor_doc = "RE-EXD-MAP"
+anchor = "remapped arrow bytes 0x4edd0c/0f/11/14"
 
 [[watch]]
 id = "inj-mouse-buttons"
@@ -867,22 +869,22 @@ anchor = "2. KeySink @0041be05(scan, down) [verified]"
 id = "inj-command-ring"
 tier = "TI"
 exw_addr = "0x4dd4a0 (stride 0x80)"
-exd_addr = ""
+exd_addr = "0x9255c (stride 0x80)"
 extent = "0x80 per record"
 layout = "command records (builder FUN_00449c94 / consumer FUN_00409138): robot-id short@+1, spot short@+3, FLAGS byte@+5, payload words@+7/+9/+0xB — the COMMAND injection seam (DESIGN §5.3)"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "command-record consumer"
-note = "W5 gap: EXD command-ring twin not located; anchor via the MissionShell consumer-call twin (@EXW 0x448030) when a scenario needs it (RE-EXD-MAP input-twin note)."
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "command records 0x4dd4a0 (stride 0x80)"
+note = "W5-followup: EXD twins FUN_0005b066 (builder) / FUN_00019ee9 (consumer), record layout byte@+0 marker EXACT (RE-EXD-MAP §5c)."
 
 [[watch]]
 id = "inj-command-count"
 tier = "TI"
 exw_addr = "0x46cbe0"
-exd_addr = ""
+exd_addr = "0x119588"
 extent = "4"
 layout = "u32 command-record count (the ring append index; MP override cell per §7j.13)"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "command-record consumer"
-note = "W5 gap together with inj-command-ring."
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "command count 0x46cbe0"
+note = "W5-followup: consumer loop bound + ring-modulo read + the FUN_0004c80c pump writes (RE-EXD-MAP §5c)."

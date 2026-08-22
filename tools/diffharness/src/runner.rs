@@ -958,13 +958,13 @@ mod tests {
             other => panic!("expected TierOutOfScenario, got {other:?}"),
         }
 
-        // T0 row with an explicit EXD gap (difficulty) on the O1 channel
+        // T0 row with an explicit EXD gap (SFX master gate) on the O1 channel
         let t = Transcript::parse(
-            "DBXCAP v1\nframe 1\nwatch difficulty 00\nframe 2\nwatch frame-counter 00\n",
+            "DBXCAP v1\nframe 1\nwatch sfx-master-gate 00\nframe 2\nwatch frame-counter 00\n",
         )
         .unwrap();
         match stitch(&s, &t, &hdr, &r) {
-            Err(StitchError::NoExdAddress { id, .. }) => assert_eq!(id, "difficulty"),
+            Err(StitchError::NoExdAddress { id, .. }) => assert_eq!(id, "sfx-master-gate"),
             other => panic!("expected NoExdAddress, got {other:?}"),
         }
 

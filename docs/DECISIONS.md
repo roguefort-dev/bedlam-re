@@ -2759,3 +2759,43 @@ Nudge-Worker: fa49e9cf-487a-4005-8bba-83ac6e2b6776
    walks manually meanwhile.
 
 Nudge-Worker: 683a65d6-c1ae-485b-9188-cd9413234442
+
+## D83 — 2026-08-22: EXD input-twin census closes the four W5 seam gaps (keystore / order target / command ring + count / difficulty)
+
+Worker ef11271c claim 2 (queue item 2). Four Ghidra `-process
+BEDLAM.EXD -noanalysis` probe passes (EXDInputTwin{,2,3,4}.java).
+
+1. THE FOUR SEAMS ARE PINNED (RE-EXD-MAP §4/§5/§5c, all dual+ anchored):
+   keystore 0x894d4 (AnyKeyWait twin FUN_00030792 + the INT-9 hook
+   KeySink with the OR-0x80 arrow remap + the installer memset),
+   order target 0x10e0a4/a8/ac (+ order-active 0x10e140), command ring
+   0x9255c stride 0x80 + count 0x119588 (builder FUN_0005b066 /
+   consumer FUN_00019ee9 = the EXW 00449c94/00409138 twins; the EXD
+   MissionShell trio position is EXACT), difficulty 0x119558 (the
+   7j.17 172/236/300 formula + the respawn-delay table twin 0x81050 in
+   the epilogue tick FUN_00023967).
+2. REGISTRY + COMPILER LIFT: watches.toml rows filled (difficulty,
+   order-target, inj-key-state, inj-remapped-keys derived, both
+   inj-command rows); the TI exd-emptiness test rule narrows to T2-T4
+   (TI rows are aliased where their seam is pinned); dbx-plan gains
+   the order-target resolution form (3 contiguous u32 = 12-byte watch
+   with a spacing anti-ghost assert); the step-compiler tests now run
+   against the REAL registry (the fabricated-registry helper is
+   replaced by a cleared-registry gap-prover). S0/S1 plans regenerated
+   (difficulty + order-target leave _deferred, entering the watch
+   sets); a scratch scenario proves keystore/order/command steps
+   compile end-to-end to the anchored addresses (incl. the remapped
+   arrow byte CS:0008959F = 0x894d4+0xcb).
+3. DIVERGENCE SEEDS 6-7 (RE-EXD-MAP §7): EXD critter attack-break
+   gates are frame-counter+timer masks (0x1f/0xf/0x7 per d=0/1/2) vs
+   EXW RandA gates (1/8, 1/16, never) — different randomness source
+   AND inverted mapping, a live T2/T3 diff class; EXD-only staging
+   cells (order word 0x10e15c, command flags 0x11a51a, held-keys
+   counter 0x107534) = watch-artifact class. BONUS (T2-ready, not
+   registered): projectile bank 0x980d4 ×0x36 field-exact, ScanToChar
+   tables 0x8077a/0x8097a.
+4. NEXT HEAD: the scripted-menu-walk driver unit is unblocked (the
+   keystore alias landed); the pad step still needs the capgen runtime
+   pad-slot op.
+
+Nudge-Worker: ef11271c-539d-4331-9689-ffc84b2848ee

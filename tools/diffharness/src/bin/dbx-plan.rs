@@ -214,7 +214,7 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     // feed $symbols); grid rows derive their extent from map w/h.
     if row.tier == "T1" {
         if row.exd_addr.is_empty() {
-            return Ok(None); // explicit gap (blink-cursor/order-target/latch)
+            return Ok(None); // explicit gap (blink-cursor/no-extract-latch)
         }
         let cells = exd_cells(&row.exd_addr);
         let first = cells.first().copied().ok_or_else(|| {
@@ -248,6 +248,29 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                 addr: first,
                 len: 4,
             }),
+            // click-order target {x,y,z}: 3 contiguous u32 cells =
+            // one 12-byte span (W5-followup pinned 0x10e0a4/a8/ac).
+            "order-target" => {
+                if cells.len() != 3 {
+                    return Err(die(format!(
+                        "order-target exd_addr {:?} no longer has exactly 3 cells",
+                        row.exd_addr
+                    )));
+                }
+                let (lo, hi) = (
+                    cells.iter().copied().min().expect("3 cells"),
+                    cells.iter().copied().max().expect("3 cells"),
+                );
+                if hi - lo != 2 * 4 {
+                    return Err(die(format!(
+                        "order-target cells are no longer u32-spaced: {lo:#x}..{hi:#x}"
+                    )));
+                }
+                plan(Form::Fixed {
+                    addr: lo,
+                    len: 2 * 4 + 4,
+                })
+            }
             "per-player-selected" => {
                 let Some(len) = parse_extent(&row.extent) else {
                     return Err(die(format!(
@@ -1177,15 +1200,15 @@ mod tests {
         let scen = s0();
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0: 11 rows, 2 gaps (difficulty, sfx-master-gate) -> 9 per-frame.
-        // TS: 15 rows, 6 deferred -> 9 anchor-only + 0... but T0 rides the
-        // anchor too: 9 + 9 = 18 anchor rows.
+        // T0: 11 rows, 1 gap (sfx-master-gate; difficulty closed by the
+        // W5-followup) -> 10 per-frame. TS: 15 rows, 6 deferred -> 9
+        // anchor-only + T0 rides the anchor too: 10 + 9 = 19 anchor rows.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 9, "T0 rows minus the 2 gaps");
-        assert_eq!(anchor_count, 18, "T0 + resolved TS rows");
-        // 6 TS extent gaps + the 2 explicit T0 EXD gaps
-        assert_eq!(emitted.deferred.len(), 8);
+        assert_eq!(frame_count, 10, "T0 rows minus the 1 gap");
+        assert_eq!(anchor_count, 19, "T0 + resolved TS rows");
+        // 6 TS extent gaps + the 1 explicit T0 EXD gap
+        assert_eq!(emitted.deferred.len(), 7);
         // every emitted id is a real registry row of the scenario tiers
         for id in row_ids(&emitted.json) {
             let row = reg
@@ -1227,17 +1250,18 @@ mod tests {
         let scen = Scenario::parse(include_str!("../../scenarios/S1.scen")).unwrap();
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T1: 17 rows - 3 gaps (blink-cursor/order-target/no-extract-
-        // latch) - 1 deferred (move-target-words) = 13 resolved.
-        // T0: 9 per-frame + TS: 9 anchor-only, same as S0.
+        // T1: 17 rows - 2 gaps (blink-cursor/no-extract-latch;
+        // order-target closed by the W5-followup) - 1 deferred
+        // (move-target-words) = 14 resolved.
+        // T0: 10 per-frame + TS: 9 anchor-only, same as S0.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 9 + 13, "T0 minus 2 gaps + T1 resolved");
-        assert_eq!(anchor_count, 18 + 13, "T0 + TS + T1 rows");
+        assert_eq!(frame_count, 10 + 14, "T0 minus 1 gap + T1 resolved");
+        assert_eq!(anchor_count, 19 + 14, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            12,
-            "8 S0 deferrals + T1: 3 gaps + move-target-words"
+            10,
+            "7 S0 deferrals + T1: 2 gaps + move-target-words"
         );
         // count-cell resolve rows exist with the registry-derived cells
         assert!(emitted
@@ -1259,13 +1283,20 @@ mod tests {
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*2\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*0x1E\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
-        // gaps never emit
+        // gaps never emit (order-target closed by the W5-followup and
+        // now emits its verified 12-byte triple)
         for id in row_ids(&emitted.json) {
             assert!(
-                id != "blink-cursor" && id != "order-target" && id != "no-extract-latch",
+                id != "blink-cursor" && id != "no-extract-latch",
                 "gap row {id:?} must never be emitted"
             );
         }
+        assert!(
+            emitted
+                .json
+                .contains("{ \"id\": \"order-target\", \"addr\": \"CS:0010E0A4\", \"len\": 12 }"),
+            "order-target must emit its verified triple"
+        );
     }
 
     #[test]
@@ -1284,9 +1315,11 @@ mod tests {
 
     #[test]
     fn injection_steps_gate_on_registry_gaps() {
-        // The REAL registry: every §5 seam row is an explicit EXD gap —
-        // each step kind must fail loudly, naming the seam.
-        let reg = registry();
+        // The committed registry with the §5 seam aliases CLEARED (the
+        // pre-W5-followup state): each step kind must fail loudly,
+        // naming the seam. Proves the gate still bites on any future
+        // gap.
+        let reg = registry_with_gaps();
         for src in [
             "scenario = X\ntiers = T0\nframes = 4\nboot difficulty=1\n",
             "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\nkeystore 0x1f=1\n",
@@ -1310,11 +1343,10 @@ mod tests {
 
     #[test]
     fn injection_steps_compile_with_aliases() {
-        // A FABRICATED registry (aliases filled): proves the compiler
-        // emission — frame accounting, byte layout, command op shape.
-        // These addresses NEVER enter the committed plans (the real
-        // registry keeps them as gaps until RE pins them).
-        let fake = fake_registry_with_aliases();
+        // The REAL registry (W5-followup §5c pins): keystore 0x894d4,
+        // order target 0x10e0a4/a8/ac, ring 0x9255c + count 0x119588.
+        // Proves the compiler emission against the anchored EXD
+        // addresses — frame accounting, byte layout, command op shape.
         let src = "scenario = X\ntiers = T0\nframes = 4\n\
                    until-anchor mission-start\n\
                    step 2\n\
@@ -1322,55 +1354,53 @@ mod tests {
                    order 29 18 0\n\
                    command 01 02 3f\n";
         let scen = Scenario::parse(src).unwrap();
-        let emitted = emit_plan(&scen, &fake).unwrap();
-        // boundaries: anchor=1, step 2 -> 3; keystore @3 (base 0x10dc44
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        // boundaries: anchor=1, step 2 -> 3; keystore @3 (base 0x894d4
         // + scan 0x1f / 0x2a), order @4, command @5 (frames=4 -> the
         // 5th record is the window edge)
         assert!(emitted
             .json
-            .contains("\"frame\": 3, \"addr\": \"CS:0010DC63\", \"bytes\": \"01\""));
+            .contains("\"frame\": 3, \"addr\": \"CS:000894F3\", \"bytes\": \"01\""));
         assert!(emitted
             .json
-            .contains("\"frame\": 3, \"addr\": \"CS:0010DC6E\", \"bytes\": \"00\""));
+            .contains("\"frame\": 3, \"addr\": \"CS:000894FE\", \"bytes\": \"00\""));
         assert!(emitted
             .json
-            .contains("\"frame\": 4, \"addr\": \"CS:0010D484\", \"bytes\": \"1d000000\""));
+            .contains("\"frame\": 4, \"addr\": \"CS:0010E0A4\", \"bytes\": \"1d000000\""));
         assert!(emitted
             .json
-            .contains("\"frame\": 4, \"addr\": \"CS:0010D488\", \"bytes\": \"12000000\""));
+            .contains("\"frame\": 4, \"addr\": \"CS:0010E0A8\", \"bytes\": \"12000000\""));
         assert!(emitted.json.contains(
-            "\"frame\": 5, \"op\": \"command\", \"base\": \"CS:0010D4A0\", \
-             \"stride\": 128, \"count_cell\": \"CS:0010CBE0\", \"bytes\": \"01023f\""
+            "\"frame\": 5, \"op\": \"command\", \"base\": \"CS:0009255C\", \
+             \"stride\": 128, \"count_cell\": \"CS:00119588\", \"bytes\": \"01023f\""
         ));
         assert_eq!(emitted.inject_count, 6);
     }
 
     #[test]
     fn injection_step_past_window_refused() {
-        let fake = fake_registry_with_aliases();
         let src = "scenario = X\ntiers = T0\nframes = 1\n\
                    until-anchor mission-start\n\
                    step 3\n\
                    command 01\n";
         let scen = Scenario::parse(src).unwrap();
-        assert!(emit_plan(&scen, &fake)
+        assert!(emit_plan(&scen, &registry())
             .err()
             .map(|e| e.to_string())
             .is_some_and(|e| e.contains("past the capture window")));
     }
 
-    /// The committed registry with the §5 seam aliases FABRICATED in
-    /// (0x4edc44 + 0x1000000-style shifted cells so nothing could ever
-    /// collide with real EXD addresses). Compiler tests only.
-    fn fake_registry_with_aliases() -> Vec<diffharness::Watch> {
+    /// The committed registry with the §5 seam aliases CLEARED — the
+    /// pre-W5-followup gap state, so the alias gates can still be
+    /// proven to bite. Compiler tests only.
+    fn registry_with_gaps() -> Vec<diffharness::Watch> {
         let mut reg = registry();
         for row in reg.iter_mut() {
             match row.id.as_str() {
-                "inj-key-state" => row.exd_addr = "0x10dc44".into(),
-                "order-target" => row.exd_addr = "0x10d484 / 0x10d488 / 0x10d48c".into(),
-                "inj-command-ring" => row.exd_addr = "0x10d4a0 (stride 0x80)".into(),
-                "inj-command-count" => row.exd_addr = "0x10cbe0".into(),
-                "difficulty" => row.exd_addr = "0x10cbf8".into(),
+                "inj-key-state" | "order-target" | "inj-command-ring" | "inj-command-count"
+                | "difficulty" => {
+                    row.exd_addr = String::new();
+                }
                 _ => {}
             }
         }

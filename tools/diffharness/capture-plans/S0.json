@@ -26,6 +26,7 @@
     { "id": "rng-state-b", "addr": "CS:00107474", "len": 4 },
     { "id": "score", "addr": "CS:0010DA28", "len": 4 },
     { "id": "money", "addr": "CS:00119600", "len": 4 },
+    { "id": "difficulty", "addr": "CS:00119558", "len": 4 },
     { "id": "zone", "addr": "CS:00107500", "len": 4 },
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
@@ -46,13 +47,13 @@
     { "id": "rng-state-b", "addr": "CS:00107474", "len": 4 },
     { "id": "score", "addr": "CS:0010DA28", "len": 4 },
     { "id": "money", "addr": "CS:00119600", "len": 4 },
+    { "id": "difficulty", "addr": "CS:00119558", "len": 4 },
     { "id": "zone", "addr": "CS:00107500", "len": 4 },
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 }
   ],
   "_deferred": [
-    "difficulty (4)",
     "sfx-master-gate (4)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",

@@ -47,10 +47,11 @@ pub struct Watch {
     pub extent: String,
     /// Layout reference: field offsets / record grammar for the field map.
     pub layout: String,
-    /// Provenance of the EXD alias: "verified" (disasm-anchored by W1),
-    /// "derived" (arithmetic consequence of verified rows), "gap" (T0/T1
-    /// row the W1 map explicitly left open), "unmapped" (T2+ / TI rows;
-    /// aliasing is a later unit per the W1 ticket).
+    /// Provenance of the EXD alias: "verified" (disasm-anchored by W1 /
+    /// the W5-followup §5c census), "derived" (arithmetic consequence of
+    /// verified rows), "gap" (T0/T1 row the map explicitly left open),
+    /// "unmapped" (T2+ rows; aliasing is a later unit per the W1 ticket
+    /// — TI rows are aliased where their seam is pinned).
     pub exd_status: String,
     /// Which doc the anchor heading lives in (RE-EXW-SIM, RE-EXD-MAP, ...).
     pub anchor_doc: String,

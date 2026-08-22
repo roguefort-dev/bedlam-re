@@ -140,9 +140,12 @@ fn registry_schema_invariants_hold() {
             }
             _ => {}
         }
-        // W2 scope rule: T2-T4 and TI rows stay EXD-empty (W1 ticket)
-        if ["T2", "T3", "T4", "TI"].contains(&tier.as_str()) && has_exd {
-            failures.push(format!("{id}: tier {tier} must stay exd-empty in W2"));
+        // W1 scope rule: T2-T4 rows stay EXD-empty until their aliasing
+        // unit (W5-followup legitimately filled the TI seams — §5c).
+        if ["T2", "T3", "T4"].contains(&tier.as_str()) && has_exd {
+            failures.push(format!(
+                "{id}: tier {tier} must stay exd-empty until its aliasing unit"
+            ));
         }
         // indirect = EXD pointer cell: meaningless without an EXD alias
         if w.indirect && !has_exd {
@@ -189,14 +192,10 @@ fn registry_schema_invariants_hold() {
             failures.push(format!("missing tier {need} entirely"));
         }
     }
-    // The six tagged T0/T1 gaps must be present AND exd-empty (ticket W2).
-    let gap_ids = [
-        "difficulty",
-        "sfx-master-gate",
-        "blink-cursor",
-        "order-target",
-        "no-extract-latch",
-    ];
+    // The still-tagged T0/T1 gaps must be present AND exd-empty
+    // (difficulty + order-target were closed by the W5-followup census,
+    // RE-EXD-MAP §5c — they now carry verified aliases).
+    let gap_ids = ["sfx-master-gate", "blink-cursor", "no-extract-latch"];
     for gid in gap_ids {
         match rows.iter().find(|w| w.id == gid) {
             Some(w) => {
