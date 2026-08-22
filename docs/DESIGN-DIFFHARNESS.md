@@ -448,7 +448,7 @@ identical state, by construction.
 |---|---|---|---|---|
 | S0 | boot→mission | no injection; run to ZONEA/MISSION1 first frame | T0 + statics | loader parity (statics hashes); frame-trigger stability; the W1 EXD map on real memory |
 | S1 | mission-start passive | no injection; record ~400 frames | T0/T1/T3 | **pod-descent stagger** (watch pod timer w@+0x2C ≡ 0x4c6a10 vs the `1+k·(2000−m·1000/27)` formula, pod ring phase→release, descent ≈41 frames, pod phase 2 = one tick, release = state 6 — §7j.20/§7j.27); **blink-cursor-from-spawn** (does 0x4dc5d0 go nonzero with no click, from which frame); **debris 2k start-delay** (which 0x476fbc +0x24 values actually get staged on the corpus path — is any ≈0x7D0?) |
-| S2 | order→walk (the P4 slice) | ORDER steps moving one squad member across ZONEA/MISSION1 (mirrors engine/bedlam-core/tests/mission_corpus_gate.rs; the walk needs a second robot — the `markers` staging key below, D91) | T0/T1 | slice field parity (positions, arrival snap, spread claims, move-target words); the engine's biggest existing seam |
+| S2 | order→walk (the P4 slice) — **LANDED 2026-08-22 (D91)** | ORDER steps moving one squad member across ZONEA/MISSION1 (mirrors engine/bedlam-core/tests/mission_corpus_gate.rs; the walk needs a second robot — the `markers` staging key below, D91) | T0/T1 | slice field parity (positions, arrival snap, spread claims, move-target words); the engine's biggest existing seam |
 | S3 | weapon fire family | COMMAND records: one per weapon class (bullet 2..4, shell 5, artillery 9..0xB, ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F}, rocket 0x24, homing 0x29) at fixed targets | T0/T1/T2 + T4 | fire cadences, damage application (FUN_00419aff table), bank record lifecycle; the corpus-off weapon producers; T4 SFX events seed the SFX-family walk |
 | S4 | destroy family | S3 fire onto destructibles (tile 0x62 traps, platform 0x7d4, chainable objects) | T0/T1/T3 + T4 | destroy resolver → terrain restore → 5-effect loop → chain walks end-to-end (§7j.25); **five-ring overlap read** (0x4796d4 bytes around overlapping corpse rings — statically mooted by §7j.10's ≤7-frame fade; the harness read is the confirming observation); debris producer kinds/delays (stager widening input) |
 | S5 | pickups & pads | walk over pickup tiles + armor-pad rings | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (the 7h.3 producer question gets its observation instrument) |
@@ -635,6 +635,16 @@ differ come before any new scenario depth.
    splices the target trio into the robot-bank row; the pad op is
    modeled through the order-target rows it writes (D86).
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).
+   S2 LANDED 2026-08-22 (D91, commit 786c9fb): scenarios/S2.scen (the
+   `markers` staging key + `order 21 73 1`), the canonical gate with
+   the pinned chain 809f4961b7757da4 (the full walk timeline — arm,
+   present=1 window, arrival snap, beacon/claims clear), the
+   differ-gate S2 row (present=1 spans both directions through the
+   D90 splice), and the byte-pinned capture-plans/S2.json (the
+   `_e_staging` seam field). The LIVE O1 leg of S2 stays with the
+   operator session (the S0 checklist; re-stage the S2 plan the same
+   way) — and note the live robot-count diff is the `_e_staging`
+   seam, never a finding.
    NOTE (W6 addendum, D85 completion): the E runner stages the
    host-default marker set — no network-marker override — so ZONEA is
    a single-robot squad on E. ~~W8 must pin whether the original SP

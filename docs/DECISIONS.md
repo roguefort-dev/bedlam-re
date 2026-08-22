@@ -3196,8 +3196,43 @@ Nudge-Worker: 3595c744-f77a-4b9e-993c-bba6c59b29fb
    alive robots are state-3 (flag → 0, claims → all 0); the
    walker's move-target stays present=1 after arrival (state-4
    arrival keeps the target).
-4. VERIFIED: (recorded by the implementation commit — the canonical
-   S2 chain pin, the present=1/arrival/beacon-claims asserts, the
-   differ-gate S2 row, and the byte-pinned capture-plans/S2.json).
+4. VERIFIED (commits a9e6964 + 786c9fb): grammar v1.2 parse tests
+   (triples, hex, arity, the 9-marker cap); the canonical S2 run —
+   17 records, chain 809f4961b7757da4 pinned, byte-identical double
+   run — with the full walk timeline asserted in
+   canonical_dump_gate::corpus_s2_order_walk: frame 1 (the order
+   step's pump) arms the beacon (flag 1, window 0x197−1 = 406 after
+   the arming pump's decrement — the single-robot window-0 clear does
+   NOT fire at 2 alive), claims slots 0+1, the clicked robot state-3
+   snapped at its own tile origin with NO target, the walker state-4
+   with present=1 target (22,73) Q5 + stop_dist 1,000,000; frames
+   1..6 the walk (state 4, monotone tile crossings 18→19→20→21,
+   beacon flag 1 throughout); frame 7 the arrival clear (state 4→3,
+   pos snapped one tile SHORT of the slot target at the (21,73)
+   origin — the west-approach ARRIVE_RADIUS 0x1400 semantics,
+   exactly the mission_corpus_gate fixture — beacon flag 0 + claims
+   all 0 once every alive robot is state-3; the walker KEEPS its
+   move-target so present=1 persists to the last frame). The
+   differ_gate S2 row: fabricated O1 through the inverse normalizer
+   carries the present=1 span both ways (the D90 splice) — cross
+   PASS-WITH-NOTES with exactly the 2 E-only row findings, ZERO
+   robot field gaps; double-run PASS modulo counter/RNG, FAIL on
+   money perturbation. dbx-plan compiles S2: the order step's
+   3-cell order-target write at frame 1 + the `_e_staging` plan
+   field naming the markers seam (a test pins that NO inject row
+   touches the robot bank/count cells — staging is never fabricated
+   on O1); capture-plans/S2.json committed + byte-pinned. Workspace
+   52 suites green (565 tests), fmt+clippy clean, manifest clean
+   around the corpus reads.
+5. LIVE-SESSION NOTE: any future live S2 capture re-stages the plan
+   the same way as S0/S1 (dbx-plan scenarios/S2.scen --out
+   runtime/harness-out/diff/S2/capture-plan.json). The live O1 run
+   banks the MRK squad ONLY (1 robot) — its robot-count diff vs E is
+   the `_e_staging` scenario seam; the differ's live verdict for S2
+   reads the robot-bank row findings against that seam, and the
+   order→walk comparison on O1 waits on the live click-order path
+   (the 0x10e0a4 triple write alone does not arm an order in the
+   original; the W8 "seam approximation" note in DESIGN §6a stands
+   until a live session refines it).
 
 Nudge-Worker: 7faaeb53-0c41-43f2-abe2-1ae7228eace0

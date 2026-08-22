@@ -69,26 +69,16 @@
    the differ splices it into the robot-bank row (S1 coverage = the 2
    E-only rows ONLY, blink-cursor + move-target-words; zero robot
    field gaps). Re-stage the S1 plan for any S1 capture the same way
-   as S0 (dbx-plan scenarios/S1.scen --out ...).
-2. [P4.2/W8-s2] THE S2 ORDER SCENARIO unit (unattended; the D90
-   follow-through — first corpus scenario exercising the splice's
-   present=1 path + the beacon/claims/order-target rows as LIVE
-   values): (a) author tools/diffharness/scenarios/S2.scen per DESIGN
-   §7 (ORDER steps moving one squad member across ZONEA/MISSION1,
-   mirroring engine/bedlam-core/tests/mission_corpus_gate.rs — the
-   order step grammar is landed (D82/D83), the E runner accepts
-   `order x y z`); (b) canonical_dump_gate extension: run_canonical on
-   S2, pin the chain + assert a present=1 target window + the
-   arrival clear + the beacon-family/claims transitions (the
-   spread-claim arm is proven in mission_corpus_gate — reuse its
-   fixtures as the expected values); (c) differ_gate extension: S2
-   row added to the loop (fabricated O1 via the inverse normalizer —
-   present=1 spans both directions); (d) dbx-plan compiles S2 (the
-   order step is already un-gated; plan committed + byte-pinned).
-   Watch for: the armer's window-0 case clearing the order on the
-   arming tick (the W6 finding) and the arrive snap vs stop_dist
-   semantics (T2 tolerance already covers pos fields).
-3. [P4.2/W9] GATES/CI WIRING unit (unattended; DESIGN §10-W9, DH-G3):
+   as S0 (dbx-plan scenarios/S1.scen --out ...). NOTE D91
+   (2026-08-22): S2 now exists for any order→walk live capture —
+   re-stage its plan the same way (dbx-plan scenarios/S2.scen --out
+   ...) and read the plan's `_e_staging` field first: the live O1
+   banks the MRK squad ONLY, so the robot-count diff vs E is the
+   recorded scenario seam, never a finding (the original's in-game
+   arm needs the click path — the bare 0x10e0a4 triple write does
+   not move robots; DESIGN §6a's seam-approximation note stands
+   until a live session refines it).
+2. [P4.2/W9] GATES/CI WIRING unit (unattended; DESIGN §10-W9, DH-G3):
    wire the corpus-gated test set into CI (the runner must skip
    cleanly without game-data — the `corpus_present()` pattern), add
    the DH-G3 gate doc section (what CI proves vs what the live
@@ -229,6 +219,37 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W8-s2 THE S2 ORDER SCENARIO unit COMPLETE (worker
+  7faaeb53 claim 2, commits a9e6964 + 786c9fb, D91). (a) STAGING
+  DESIGN (docs-first): grammar v1.2 `markers = x,y,z[; ...]` header
+  key — the walk seam (the click-order moves only the OTHER robots
+  in the order radius; the clicked robot snaps to spread slot 0, and
+  D89 pins the SP squad at 1 robot on EXW/EXD/E alike). E stages via
+  the EXISTING load_mission(staged_markers) seam (no staging-rule
+  change, MRK+markers ≤ 12); O1 records the seam in the plan's
+  `_e_staging` field and NEVER fabricates (a dbx-plan test pins that
+  no inject row touches the robot bank/count). Also landed the
+  predecessor 3595c744's uncommitted D90 journal. (b) S2.scen:
+  markers 18,73,1 (the mission_corpus_gate walker) + order 21 73 1 +
+  frames 16, tiers T0,T1,TS. (c) canonical_dump_gate
+  corpus_s2_order_walk: 17 records, chain 809f4961b7757da4 pinned,
+  double-run byte-identical; asserts the arm frame (window 0x197−1
+  after the arming pump's decrement — the single-robot window-0
+  clear does NOT fire at 2 alive; claims slots 0+1; clicked robot
+  state-3 snapped + no target; walker state-4, present=1 target
+  (22,73) Q5, stop_dist 1000000), the walk window (frames 1..6,
+  monotone 18→21), the arrival clear at frame 7 (state 4→3, snapped
+  ONE TILE SHORT at the (21,73) origin — the west-approach
+  ARRIVE_RADIUS semantics; beacon 0 + claims all 0 on all-state-3;
+  target RETAINED, present=1 persists), the move-target-words row
+  form, and the steady tail. (d) differ_gate: S2 row in the loop —
+  fabricated O1 carries the present=1 span both ways through the D90
+  splice; cross PASS-WITH-NOTES (exactly the 2 E-only rows, ZERO
+  robot field gaps), double-run PASS modulo counter/RNG, FAIL on
+  money. (e) dbx-plan compiles S2: order-target 3-cell write at
+  frame 1 + `_e_staging`; capture-plans/S2.json committed +
+  byte-pinned. Workspace 52 suites green (565 tests), fmt+clippy
+  clean, manifest clean. Queued: W9 gates/CI wiring (item 2).
 - 2026-08-22: P4.2/W8-prep THE ROBOT-COUNT OVERRIDE PIN unit COMPLETE
   (worker b0656949 claim 2, commit f106cf1, D89, docs-only). ANSWERED:
   the original SP does NOT fill the 0x46cbe0 network-marker override —

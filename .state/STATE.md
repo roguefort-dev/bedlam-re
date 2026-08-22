@@ -1,5 +1,32 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W8-s2 THE S2 ORDER SCENARIO unit COMPLETE,
+    worker 7faaeb53 claim 2, commits a9e6964 + 786c9fb, D91): the
+    order→walk corpus slice is live end-to-end on E + the differ +
+    the plan compiler. GRAMMAR v1.2 adds the scenario-level
+    `markers = x,y,z[; ...]` staging key — the walk seam (the
+    click-order moves only the OTHER robots in the order radius; the
+    clicked robot snaps to spread slot 0, and D89 pins the SP squad
+    at 1 robot on EXW/EXD/E alike, so a walk scenario stages its
+    walker: E via the EXISTING load_mission(staged_markers) seam, no
+    staging-rule change; O1 records it in the plan's `_e_staging`
+    field and NEVER fabricates a robot record — the live robot-count
+    diff is the scenario seam, not a finding). S2.scen = markers
+    18,73,1 (the mission_corpus_gate walker) + `order 21 73 1`;
+    canonical chain 809f4961b7757da4 pinned (17 records; arm frame
+    beacon window 0x197−1 — the single-robot window-0 clear does NOT
+    fire at 2 alive — claims slots 0+1, walker present=1 target
+    (22,73) Q5, walk frames 1..6, arrival frame 7 snapped one tile
+    short at the (21,73) origin, beacon/claims clear on all-state-3,
+    target RETAINED post-arrival); differ_gate S2 row (present=1
+    spans both ways through the D90 splice, cross PASS-WITH-NOTES
+    with exactly the 2 E-only rows, zero robot field gaps);
+    capture-plans/S2.json byte-pinned (order-target 3-cell write at
+    frame 1 + `_e_staging`). Workspace 52 suites green (565 tests),
+    fmt+clippy clean, manifest clean. NEXT HEADS: the operator S0
+    live session (item 1, interactive-gated; S2 plan re-stages the
+    same way) + W9 gates/CI wiring (item 3, unattended).
+
   - OPEN 2026-08-22 (P4.2/W8-prep THE ROBOT-COUNT OVERRIDE PIN unit
     COMPLETE, worker b0656949 claim 2, commit f106cf1, D89, docs-only
     — no new Ghidra run: the EXW disasm was extracted verbatim from
