@@ -231,6 +231,15 @@ elif [ "$kind" = rate-limit ]; then
   echo "$until" > "$STATE/taskcooldown/$task_hash"
   echo "$(date -Is) agent item $item failed [rate-limit rc=$rc progress=$progress] task=$task_hash; provider quota, not charged to the task; cooling down until $(date -d "@$until" '+%F %T %z')" >> "$STATE/nudge.log"
 elif [ "$kind" != none ]; then
+
+  # Operator no-cooldown doctrine (2026-08-22): a failed run retries
+  # immediately, like a clean one. Age the heartbeat so the controller
+  # freshness gate (300s) cannot become a silent per-failure backoff
+  # now that claims are released instead of retained. rate-limit keeps
+  # its provider-closed hold (the quota cooldown) by design.
+  if [ "$kind" != rate-limit ]; then
+    touch -d @0 "$STATE/heartbeat"
+  fi
   # Failures are scoped to this task, not to the whole controller, so
   # unrelated items can never be blamed for (or cleared by) this run.
   mkdir -p "$STATE/taskfails" "$STATE/taskcooldown"
