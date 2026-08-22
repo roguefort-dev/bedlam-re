@@ -1,3 +1,30 @@
+  - CLOSED 2026-08-22 (P4.2/W3 the DUMP SCHEMA unit COMPLETE, worker
+    6f14cea1 claim 1, commit fca6657): the DESIGN §3 dump format
+    implemented in the zero-dep crate — tools/diffharness/src/dump.rs
+    (schema_ver 1) + src/hash.rs + tests/dump_schema.rs (15 integration
+    + 3 in-module tests; workspace build/test/fmt/clippy green).
+    Grammar: "BDLD" header {schema_ver, channel 1..4 (O1 EXD/DOSBox-X,
+    O2 EXW/Wine, O3 8street, E engine), build_sha256[32], scenario,
+    pins} → N × "BDLD" frame {frame_no u64, injection_applied u8,
+    watch_count u16, per watch {id, len u32, raw bytes}, frame_digest
+    u64} → "BDLT" trailer {frame_count, chain_digest}, all LE.
+    frame_digest = FNV-1a-64 over the tag-prefixed canonical frame
+    bytes (BDLD domain separation vs StateHash); chain = the D28
+    parity_harness construction verbatim (incremental Fnv1a64,
+    write_u64 per frame digest) → dump chains are directly comparable
+    fingerprints. Encoders registry-driven: canonical watch order =
+    watches.toml file order (stable sort), unknown/duplicate ids
+    rejected, frame_no strictly increasing (encode+decode), empty
+    blobs legal (count-0 banks); identical state ⇒ identical frame
+    digests on every channel (tested). decode verifies every digest +
+    count + chain + truncation/trailing/magic/bool/utf8. The FNV util
+    is a MIRROR of bedlam-core's (a dependency would pull thiserror
+    into the zero-dep crate), pinned to the engine's public vectors by
+    tests/dump_schema.rs::engine_hash_vectors. Docs: DESIGN §3/§10-W3
+    LANDED + DECISIONS D78. PUSHED fca6657.
+    Next P4.2 head: W4 (DOSBox-X runner diff mode: scenario → conf →
+    debugger automation → D: dumps → digest manifest; S0 headless
+    first) — needs the DH-G0 interactive debugger-surface pin.
   - CLOSED 2026-08-22 (P4.2/W2 the WATCH REGISTRY unit COMPLETE, worker
     873ebd5e claim 1, commit 01a6847): the DESIGN-DIFFHARNESS §4 watch
     set committed as data — tools/diffharness/watches.toml, 73 rows

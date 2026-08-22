@@ -1,22 +1,32 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/W3] DUMP SCHEMA (third ticket of the DESIGN-DIFFHARNESS.md build
-   order, D77; W2 landed as commit 01a6847): implement the DESIGN §3 dump
-   format in the tools/diffharness crate — the versioned frame-record
-   stream shared by O1/O2/O3/E: header {schema_ver, channel, build_sha256,
-   pin versions, scenario id}, per frame {frame_no, injection_applied,
-   per-watch {id, raw bytes, len}}, trailer digest; per-frame digest =
-   FNV-1a-64 over the canonicalized records with the `BDLD` tag — REUSE
-   the engine's StateHash hash util (find it via the parity_harness/D28
-   path in engine/; if reuse would drag engine deps into the zero-dep
-   guard crate, mirror the util as a small pure function + a cross-check
-   test against the engine's expected outputs). Encoders for raw watch
-   blobs driven by the committed registry (tools/diffharness/watches.toml
-   — parse via diffharness::registry()). Bounded: schema + encoders +
-   unit tests ONLY; no runner (W4), no engine-side emitter (W6). Keep the
-   crate zero-dependency so CI stays offline-safe. Dump blobs themselves
-   are asset-derived data (runtime/harness-out only, never git).
+1. [P4.2/W4] DOSBOX-X RUNNER (fourth ticket of the DESIGN-DIFFHARNESS.md
+   build order, D78; W3 landed as commit fca6657): extend
+   tools/runtime/dosbox-harness.sh with a `diff` mode per DESIGN §3/§10:
+   scenario script → pinned conf copy (D29 pins: core=normal,
+   cputype=pentium, cycles=60000) → debugger automation (BPINT/BPLM/D
+   forms, watch-mode logging, or the fallback linear breakpoint at the
+   frame-tail site whose handler reads the whole tier list) → per-frame
+   bulk reads of the scenario's watch tiers → D: dumps in the W3 schema
+   (emit via a small Rust bin in tools/diffharness consuming the
+   registry + dump encoders, or a shell/python stitcher that pipes
+   debugger output into it — implementer's choice, keep the crate
+   itself zero-dep) → digest manifest (sha256 + chain fingerprints).
+   FIRST TARGET: S0 headless (boot → menu walk → mission start → N
+   steady-state frames). CRITICAL DEPENDENCY: the §3 trigger surface is
+   [pin-unverified] — the DH-G0 interactive session must pin the exact
+   DOSBox-X debugger command surface (startup.js automation route,
+   breakpoint-at-0x5a6eb handler shape, bulk-read command forms) and
+   convert the UNCERTAINs into committed runbook facts in
+   docs/RUNTIME.md BEFORE or AS PART of this unit; if the interactive
+   pin cannot run unattended, split the unit: (a) conf copy + corpus
+   rsync scratch + D: output staging + the S0 scenario script grammar
+   (all unattended-safe), (b) the live debugger automation (tag the
+   remaining piece [BLOCKED]-on-DH-G0-interactive and stop). Bounded:
+   no injector (W5), no engine emitter (W6), no differ (W7). Dump blobs
+   are asset-derived (runtime/harness-out only, never git); MANIFEST
+   checks bracket every corpus-touching run.
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -147,6 +157,29 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W3 the DUMP SCHEMA unit COMPLETE (worker 6f14cea1
+  claim 1, commit fca6657). tools/diffharness/src/dump.rs = the DESIGN
+  §3 format as code, schema_ver 1, all-LE: "BDLD" header {channel 1..4
+  (O1/O2/O3/E), build_sha256[32], scenario, pins} → frames {frame_no,
+  injection_applied, per-watch {id, len u32, raw}, frame_digest} →
+  "BDLT" trailer {frame_count, chain}. frame_digest = FNV-1a-64 over
+  the BDLD-tag-prefixed canonical frame bytes (domain separation vs
+  StateHash); chain = the D28 parity_harness construction verbatim
+  (incremental Fnv1a64 write_u64 per frame digest) so dump chains are
+  directly comparable fingerprints. Encoders registry-driven: canonical
+  watch order = watches.toml file order, unknown/duplicate ids
+  rejected, frame_no strictly increasing (encode+decode), empty blobs
+  legal (count-0 banks); identical state ⇒ identical digests on every
+  channel (tested). decode_dump verifies every digest + count + chain +
+  truncation/trailing/magic/bool/utf8 (tamper tests cover payload,
+  chain, count, truncation, trailing, magic, schema, channel).
+  hash.rs = zero-dep MIRROR of bedlam-core's FNV-1a-64 (dependency
+  would pull thiserror), pinned to the engine's public vectors by
+  tests/dump_schema.rs::engine_hash_vectors. 15 integration + 3
+  in-module tests; workspace build/test/fmt/clippy green (release
+  build clean). Docs: DESIGN §3 + §10-W3 LANDED, DECISIONS D78.
+  PUSHED fca6657. Queued: W4 (DOSBox-X runner diff mode + DH-G0
+  debugger-surface pin).
 - 2026-08-22: P4.2/W2 the WATCH REGISTRY unit COMPLETE (worker 873ebd5e
   claim 1, commit 01a6847). tools/diffharness/watches.toml = the DESIGN
   §4 watch set as data, 73 rows: S0 trigger (EXW PresentEnd 0x425a03 /
