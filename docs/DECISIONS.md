@@ -3117,3 +3117,87 @@ Nudge-Worker: 03be9318-237b-4c9c-aa78-83bc504a48ef
    EXD: dead gap) — no diff surface.
 
 Nudge-Worker: b0656949-cebf-46d7-b08c-1bcdff462127
+
+## D90 — 2026-08-22: W7-followup2 — the move-target plan row FILLED + the differ splice; robot coverage 3 → 0 (worker 3595c744 claim 2)
+
+1. CONTEXT: D88 pinned the move-target extent (per-robot u32 ×2 by
+   ABSOLUTE robot id over the cap cell 0x11950c, ≤ 12; the fixed 0x60-B
+   span at EXD 0xf75ec covers x[12]+y[12]) but the plan row stayed
+   deferred and the O1/O2 normalizer refused the row (UnpinnedForm);
+   the canonical target trio was the last 3 of 34 robot leaves without
+   an O1 source.
+2. DECISION: (a) dbx-plan emits the row as one Span{CS:000F75EC,
+   len 96} (the x/y array pair asserted 0x30 apart; extent 0x60 pinned
+   in watches.toml — the old "u16 arrays" gloss superseded);
+   capture-plans/S1.json regenerated (S0 untouched, T0/TS only).
+   (b) The differ SPLICES: normalize_frame (O1/O2) pre-parses the span
+   (x[i] u32 @+4i, y[i] u32 @+0x30+4i, present = x ≠ −1, absent
+   canonicalizes to 0/0/0 mirroring the E §6a row) and folds
+   target_present/x/y into the robot-bank row bounded by the SAME
+   frame's robot-bank count; the span carries NO standalone raw row —
+   the E move-target-words row deliberately stays an E-only ROW-level
+   coverage note (no duplicate comparison of the same bytes). A lone
+   span (no bank row), a short span, or > 12 robots is a loud error.
+   UnpinnedForm removed (no deferred raw forms remain).
+3. UNIT CHECK (the Q5 question): both sides are Q5 — EXD writers are
+   `tile<<5` (spawn −1 fill, order consumer, beacon auto-order,
+   arrive-clear) and the engine's `Robot::target` is
+   `dest_tile·Q5_PER_TILE(0x20)` — raw i32 comparison, no shift.
+4. VERIFIED: differ_gate S1 coverage 2+3 → 2 (blink-cursor +
+   move-target-words rows E-only, ZERO robot field gaps; cross
+   PASS-WITH-NOTES, double-run PASS modulo counter/RNG, FAIL on money
+   perturbation; pinned chains 8901789a88cf61fe / 1c4e7b4c9d9b0947
+   re-asserted); S0/S1 plan byte-pin tests green; 52 workspace suites
+   green, fmt+clippy clean, manifest clean. NOTE: S1 is passive (no
+   order) — a live present=1 target first compares when the S2 ORDER
+   scenario lands; the present=1 splice path is covered meanwhile by
+   the unit fixtures + the O1==E shared-field contract test.
+
+Nudge-Worker: 3595c744-f77a-4b9e-993c-bba6c59b29fb
+
+## D91 — 2026-08-22: W8-s2 — the S2 order scenario staging key `markers`; the E walk needs a second robot (worker 7faaeb53 claim 2)
+
+1. CONTEXT (the staging question, settled BEFORE authoring S2): the
+   queue's S2 item expects a present=1 move-target window, an arrival
+   clear, and live beacon/claims transitions. In the verified
+   click-order model (RE-EXW-SIM §5c / FUN_004247b5 = the beacon armer,
+   the E `arm_order_at_robot`) the CLICKED robot only snaps to spread
+   slot 0 — its own tile — and the walk is performed by OTHER alive
+   robots inside the 6-tile order radius that consume the order in
+   phases 0..3 (mission.rs robots_phase). D89 pins the SP squad at the
+   zone rule with NO override (ZONEA banks exactly 1 robot on EXW,
+   EXD, and E), so a single-robot scenario can never walk — the W6 SO
+   seam gate's window-0 immediate-clear is the whole story there.
+   mission_corpus_gate's scripted walk stages a second robot at
+   (18,73) for exactly this reason ("staged marker (host seam)").
+2. DECISION: grammar v1.2 adds a scenario-level header key
+   `markers = x,y,z[; x,y,z ...]` — extra squad markers staged after
+   the MRK robots (deterministic indices), bounded so MRK+markers ≤ 12
+   (the bank cap cell discipline, D89's count-cell note). (a) E stages
+   them through the EXISTING `load_mission(staged_markers)` host seam
+   — the D89 SP staging RULE is untouched; markers are scenario-level
+   additions (the same seam mission_corpus_gate drives via
+   spawn_robot). (b) O1 has NO equivalent write (fabricating an 0xA8
+   robot record + count bump would be ghost staging): dbx-plan
+   compiles markers scenarios and records the markers in an explicit
+   `_e_staging` plan field — the registry gap discipline applied to
+   staging (named, never fabricated). The live O1 capture of a
+   markers scenario banks the MRK squad only; its robot-count diff vs
+   E is the recorded scenario seam, never an engine finding.
+3. S2 SHAPE: markers = 18,73,1 (the corpus-gate walker);
+   `order 21 73 1` at boundary 1 (the arm at the MRK robot's tile —
+   the E pick form); frames=16. Expected values (the corpus-gate
+   fixtures): with 2 alive the window is 0x197 (NOT the single-robot
+   window-0 clear — the order survives the arming pump and decrements
+   while the walker walks); the walker claims spread slot 1 =
+   order tile + (1,0) = (22,73), arrives ≈7 frames in snapped one
+   tile short at the (21,73) origin (west-approach ARRIVE_RADIUS
+   0x1400 semantics, pos &= ~0x1FFF); the order clears when all
+   alive robots are state-3 (flag → 0, claims → all 0); the
+   walker's move-target stays present=1 after arrival (state-4
+   arrival keeps the target).
+4. VERIFIED: (recorded by the implementation commit — the canonical
+   S2 chain pin, the present=1/arrival/beacon-claims asserts, the
+   differ-gate S2 row, and the byte-pinned capture-plans/S2.json).
+
+Nudge-Worker: 7faaeb53-0c41-43f2-abe2-1ae7228eace0

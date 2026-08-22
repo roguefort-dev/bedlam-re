@@ -64,22 +64,37 @@
    canonical, E never emits it). Expect the alarm_ctr decay question
    (EXD decrements it per phase-0 pass, EXW 7g.1 documents no decay)
    to surface as the first candidate finding if any damage happens
-   in-scenario.
-2. [P4.2/W7-followup2] THE MOVE-TARGET PLAN-ROW FILL (unattended; the
-   D88 follow-up — takes S1 robot coverage 3 -> 0): (a) dbx-plan
-   emits the move-target-words row for S1 (extent formula now PINNED:
-   the fixed 0x60-B span at EXD 0xf75ec covers x[12]+y[12]; the
-   RE-EXD-MAP sec 5 row) — regenerate capture-plans/S1.json + re-pin
-   the byte-equality test; (b) differ.rs: parse the O1/O2
-   move-target-words span (x[i] u32 @+4i, y[i] u32 @+0x30+4i,
-   present = x != -1, robots bounded by the same frame's robot-bank
-   count) and SPLICE target_present/tx/ty into the robot-bank row so
-   the E canonical target fields compare (replaces the UnpinnedForm
-   error); (c) E side: re-check the sec 6a move-target-words row
-   semantics against the splice (Q5 tile<<5 vs canonical i32 — the
-   live contract). Verify: differ_gate.rs S1 coverage 2+3 -> 2 (the
-   inverse fabricator gains the row), workspace green, plans
-   byte-pinned deliberately.
+   in-scenario. NOTE D90 (2026-08-22): the target trio is now
+   SOURCED — the live S1 plan carries the move-target 0x60 span and
+   the differ splices it into the robot-bank row (S1 coverage = the 2
+   E-only rows ONLY, blink-cursor + move-target-words; zero robot
+   field gaps). Re-stage the S1 plan for any S1 capture the same way
+   as S0 (dbx-plan scenarios/S1.scen --out ...).
+2. [P4.2/W8-s2] THE S2 ORDER SCENARIO unit (unattended; the D90
+   follow-through — first corpus scenario exercising the splice's
+   present=1 path + the beacon/claims/order-target rows as LIVE
+   values): (a) author tools/diffharness/scenarios/S2.scen per DESIGN
+   §7 (ORDER steps moving one squad member across ZONEA/MISSION1,
+   mirroring engine/bedlam-core/tests/mission_corpus_gate.rs — the
+   order step grammar is landed (D82/D83), the E runner accepts
+   `order x y z`); (b) canonical_dump_gate extension: run_canonical on
+   S2, pin the chain + assert a present=1 target window + the
+   arrival clear + the beacon-family/claims transitions (the
+   spread-claim arm is proven in mission_corpus_gate — reuse its
+   fixtures as the expected values); (c) differ_gate extension: S2
+   row added to the loop (fabricated O1 via the inverse normalizer —
+   present=1 spans both directions); (d) dbx-plan compiles S2 (the
+   order step is already un-gated; plan committed + byte-pinned).
+   Watch for: the armer's window-0 case clearing the order on the
+   arming tick (the W6 finding) and the arrive snap vs stop_dist
+   semantics (T2 tolerance already covers pos fields).
+3. [P4.2/W9] GATES/CI WIRING unit (unattended; DESIGN §10-W9, DH-G3):
+   wire the corpus-gated test set into CI (the runner must skip
+   cleanly without game-data — the `corpus_present()` pattern), add
+   the DH-G3 gate doc section (what CI proves vs what the live
+   session proves), and sweep the workspace for non-skipping corpus
+   dependencies. Small, mechanical, closes the W-series unattended
+   tail before W10/W11 (both need operator-adjacent setup).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
