@@ -13,7 +13,12 @@
 //!   RE-EXD-MAP §8 field map. Only offsets individually pinned in the
 //!   ledger are mapped; every other canonical field is simply NOT
 //!   covered by the O1 side (a STRUCTURAL coverage finding in the
-//!   report — never zero-filled-and-compared, never guessed).
+//!   report — never zero-filled-and-compared, never guessed). The one
+//!   cross-row form is the D90 move-target splice: the raw 0x60-B span
+//!   (x[12]+y[12] u32 at 0xf75ec) is consumed into the robot-bank row
+//!   as the per-robot `target_*` trio (bounded by the same frame's
+//!   robot count), so the raw side carries no standalone
+//!   move-target-words row.
 //! - **Channel O2 (EXW/Wine)**: same row forms as O1 except the robot
 //!   record uses the RE-EXW-SIM §3/§7f/§7g EXW field table (the
 //!   seed-#1 EXW-front discrepancy is recorded OPEN in RE-EXD-MAP §8 —
@@ -167,9 +172,6 @@ pub enum NormalizeError {
         len: usize,
         want: String,
     },
-    /// O1 row whose raw form is not pinned (the deferred
-    /// move-target-words extent) — the capture plan should not emit it.
-    UnpinnedForm { id: String },
     /// Channel with no normalization table yet.
     UnsupportedChannel(Channel),
     /// Scenario mismatch between the two dumps.
@@ -182,10 +184,6 @@ impl fmt::Display for NormalizeError {
             NormalizeError::BadLength { id, frame_no, len, want } => write!(
                 f,
                 "watch {id:?} at frame {frame_no}: {len} bytes does not fit the pinned form ({want})"
-            ),
-            NormalizeError::UnpinnedForm { id } => write!(
-                f,
-                "watch {id:?}: raw O1 form is not pinned (deferred plan row) — cannot normalize"
             ),
             NormalizeError::UnsupportedChannel(c) => {
                 write!(f, "no normalization table for channel {}", c.name())
@@ -448,23 +446,150 @@ pub fn normalize_frame(
     reg: &[Watch],
 ) -> Result<Vec<NormRow>, NormalizeError> {
     let no = frame.frame_no;
+    let _ = reg; // membership is enforced by encode/stitch; the tier
+                 // lookup happens at compare time.
     let mut rows = Vec::new();
-    for w in &frame.watches {
-        let id = w.id.as_str();
-        // Registry membership is already enforced by encode/stitch; the
-        // tier lookup here only feeds the passthrough decision.
-        let _tier = reg.iter().find(|r| r.id == id).map(|r| r.tier.as_str());
-        let row = match channel {
-            Channel::Engine => normalize_engine_row(id, no, &w.bytes)?,
-            Channel::O1ExdDosboxX => normalize_o1_row(id, no, &w.bytes)?,
-            Channel::O2ExwWine => normalize_o2_row(id, no, &w.bytes)?,
-            Channel::O3Street => {
-                return Err(NormalizeError::UnsupportedChannel(channel));
+    match channel {
+        Channel::Engine => {
+            for w in &frame.watches {
+                rows.push(normalize_engine_row(&w.id, no, &w.bytes)?);
             }
-        };
-        rows.push(row);
+        }
+        Channel::O1ExdDosboxX | Channel::O2ExwWine => {
+            // Cross-row splice (D90): the raw move-target span is
+            // indexed by ABSOLUTE robot id and bounded by the SAME
+            // frame's robot-bank count (RE-EXD-MAP §5) — parse it
+            // first, then fold it into the robot-bank row. The span
+            // carries NO standalone canonical row on the raw side
+            // (the E §6a move-target-words row stays an E-only
+            // coverage note in cross-channel reports).
+            let span = match frame.watches.iter().find(|w| w.id == "move-target-words") {
+                Some(w) => Some(parse_move_target_span(no, &w.bytes)?),
+                None => None,
+            };
+            let mut saw_robot_bank = false;
+            for w in &frame.watches {
+                if w.id == "move-target-words" {
+                    continue; // consumed by the splice below
+                }
+                let mut row = if channel == Channel::O1ExdDosboxX {
+                    normalize_o1_row(&w.id, no, &w.bytes)?
+                } else {
+                    normalize_o2_row(&w.id, no, &w.bytes)?
+                };
+                if w.id == "robot-bank" {
+                    saw_robot_bank = true;
+                    if let Some(span) = &span {
+                        splice_move_targets(no, &mut row, span)?;
+                    }
+                }
+                rows.push(row);
+            }
+            if span.is_some() && !saw_robot_bank {
+                // The plan always pairs the span with the bank row; a
+                // lone span has no bound — fail loud, never guess.
+                return Err(NormalizeError::BadLength {
+                    id: "move-target-words".into(),
+                    frame_no: no,
+                    len: 0x60,
+                    want: "the robot-bank row in the same frame (the span's robot bound)".into(),
+                });
+            }
+        }
+        Channel::O3Street => {
+            return Err(NormalizeError::UnsupportedChannel(channel));
+        }
     }
     Ok(rows)
+}
+
+// ---------------------------------------------------------------------
+// The move-target splice (D90 — RE-EXD-MAP §5/§8)
+// ---------------------------------------------------------------------
+
+/// Move-target span slot count: the CAP cell bound (≤ 12 robots; the
+/// fixed 0x60-B EXD span at 0xf75ec covers x[12] u32 + y[12] u32).
+const MOVE_TARGET_SLOTS: usize = 12;
+
+/// One parsed span slot in §6a canonical form: (present, tx, ty). Both
+/// sides are Q5 (`tile<<5`) — raw i32 comparison, no shift.
+type MoveTarget = (i128, i128, i128);
+
+/// Parse the raw O1/O2 move-target span: x[i] u32 @+4i, y[i] u32
+/// @+0x30+4i; x == −1 = no target (spawn −1-fill / arrive-clear), and
+/// an absent target canonicalizes to (0, 0, 0) — exactly the E §6a
+/// row's encoding of `Robot::target: None`.
+fn parse_move_target_span(frame_no: u64, b: &[u8]) -> Result<Vec<MoveTarget>, NormalizeError> {
+    need(
+        "move-target-words",
+        frame_no,
+        b,
+        "0x60 (x[12] u32 + y[12] u32 — the D90 span)",
+        0x60,
+    )?;
+    let mut out = Vec::with_capacity(MOVE_TARGET_SLOTS);
+    for i in 0..MOVE_TARGET_SLOTS {
+        let x = i32le(&b[4 * i..]);
+        let y = i32le(&b[0x30 + 4 * i..]);
+        if x == -1 {
+            out.push((0, 0, 0));
+        } else {
+            out.push((1, x as i128, y as i128));
+        }
+    }
+    Ok(out)
+}
+
+/// Fold the parsed span into a robot-bank row: `robot[i].target_*` for
+/// i < count (absolute-id indexing), inserted after each robot's
+/// `stop_dist` to mirror the CANON_ROBOT_FIELDS order.
+fn splice_move_targets(
+    frame_no: u64,
+    row: &mut NormRow,
+    span: &[MoveTarget],
+) -> Result<(), NormalizeError> {
+    let count = match row.field("count") {
+        Some(FieldVal::Int(n)) => *n as usize,
+        _ => {
+            return Err(NormalizeError::BadLength {
+                id: row.id.clone(),
+                frame_no,
+                len: row.fields.len(),
+                want: "a count field (robot-bank row)".into(),
+            });
+        }
+    };
+    if count > MOVE_TARGET_SLOTS {
+        return Err(NormalizeError::BadLength {
+            id: "robot-bank".into(),
+            frame_no,
+            len: count,
+            want: format!(
+                "≤ {MOVE_TARGET_SLOTS} robots (the move-target span bound, RE-EXD-MAP sec 5)"
+            ),
+        });
+    }
+    for (i, &(present, tx, ty)) in span.iter().enumerate().take(count) {
+        let trio = [
+            (format!("robot[{i}].target_present"), FieldVal::Int(present)),
+            (format!("robot[{i}].target_x"), FieldVal::Int(tx)),
+            (format!("robot[{i}].target_y"), FieldVal::Int(ty)),
+        ];
+        let at = row
+            .fields
+            .iter()
+            .position(|(n, _)| n == &format!("robot[{i}].stop_dist"))
+            .ok_or_else(|| NormalizeError::BadLength {
+                id: row.id.clone(),
+                frame_no,
+                len: row.fields.len(),
+                want: format!("robot[{i}].stop_dist (robot-bank map order)"),
+            })?;
+        for (k, f) in trio.into_iter().enumerate() {
+            row.fields.insert(at + 1 + k, f);
+        }
+    }
+    Ok(())
 }
 
 fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
@@ -674,7 +799,9 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
                 int("h", u32le(b) as i128),
             ]))
         }
-        "move-target-words" => Err(NormalizeError::UnpinnedForm { id: id.to_string() }),
+        // move-target-words never reaches here on the raw side — the
+        // normalize_frame pre-pass consumes it into the robot-bank
+        // splice (D90); it has no standalone raw canonical form.
         // Statics (TS) rows and anything unrecognized: byte passthrough
         // — exact-compare when both sides carry them, a coverage
         // finding when only one does.
@@ -714,7 +841,8 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
             id: id.to_string(),
             fields: Vec::new(),
         }),
-        "move-target-words" => Err(NormalizeError::UnpinnedForm { id: id.to_string() }),
+        // move-target-words never reaches here — the normalize_frame
+        // pre-pass consumes it into the robot-bank splice (D90).
         _ => Ok(NormRow {
             id: id.to_string(),
             fields: vec![("raw".to_string(), FieldVal::Bytes(b.to_vec()))],

@@ -8,7 +8,7 @@
 
 use diffharness::differ::{
     manifest_json, normalize_frame, report_text, run_diff, Class, DiffConfig, FieldVal, Mode,
-    NormalizeError, Verdict,
+    Verdict,
 };
 use diffharness::dump::{encode_dump, Channel, DumpHeader, FrameRecord, WatchRecord};
 use diffharness::hash::sha256;
@@ -245,17 +245,117 @@ fn o1_row_forms() {
 }
 
 #[test]
-fn o1_move_target_words_refuses_the_unpinned_form() {
+fn o1_move_target_splice_into_robot_bank() {
+    // The D90 form: a 0x60 span whose slots carry the per-robot x/y
+    // u32 pairs by ABSOLUTE id (-1 = none). Robot 0 holds a Q5 target
+    // (tile<<5 units), robot 1 cleared, slots >= count never read.
+    let mut span = vec![0xFFu8; 0x60];
+    span[0x00..0x04].copy_from_slice(&0x0012_3400i32.to_le_bytes()); // x[0]
+    span[0x30..0x34].copy_from_slice(&(-256i32).to_le_bytes()); // y[0]
+    span[0x04..0x08].copy_from_slice(&(-1i32).to_le_bytes()); // x[1] = none
+    span[0x34..0x38].copy_from_slice(&(-1i32).to_le_bytes()); // y[1]
+    let mut blob = Vec::new();
+    blob.extend(exd_robot_record(
+        21 << 13,
+        73 << 13,
+        65,
+        3,
+        41,
+        1000000,
+        5000,
+        1,
+    ));
+    blob.extend(exd_robot_record(0, 0, 0, 0, 0, 0, 0, 0));
     let f = frame(
         0,
-        vec![WatchRecord::new("move-target-words", vec![0u8; 13])],
+        vec![
+            WatchRecord::new("robot-bank", blob),
+            WatchRecord::new("move-target-words", span),
+        ],
     );
-    let err = normalize_frame(&f, Channel::O1ExdDosboxX, &reg()).unwrap_err();
+    let rows = normalize_frame(&f, Channel::O1ExdDosboxX, &reg()).unwrap();
+    // The span carries NO standalone raw row — consumed by the splice.
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, "robot-bank");
+    let row = &rows[0];
+    let get = |n: &str| row.field(n).cloned();
+    // Canonicalized trio: present x!=−1, absent -> (0, 0, 0).
+    assert_eq!(get("robot[0].target_present"), Some(FieldVal::Int(1)));
+    assert_eq!(get("robot[0].target_x"), Some(FieldVal::Int(0x0012_3400)));
+    assert_eq!(get("robot[0].target_y"), Some(FieldVal::Int(-256)));
+    assert_eq!(get("robot[1].target_present"), Some(FieldVal::Int(0)));
+    assert_eq!(get("robot[1].target_x"), Some(FieldVal::Int(0)));
+    assert_eq!(get("robot[1].target_y"), Some(FieldVal::Int(0)));
+    // Spliced at the canonical position: right after stop_dist,
+    // before hp (the CANON_ROBOT_FIELDS order).
+    let names: Vec<&str> = row.fields.iter().map(|(n, _)| n.as_str()).collect();
+    let at = names
+        .iter()
+        .position(|n| *n == "robot[0].stop_dist")
+        .unwrap();
+    assert_eq!(
+        &names[at + 1..at + 4],
+        [
+            "robot[0].target_present",
+            "robot[0].target_x",
+            "robot[0].target_y"
+        ]
+    );
+    assert_eq!(names[at + 4], "robot[0].hp");
+}
+
+#[test]
+fn o1_move_target_span_guards() {
+    let robot = WatchRecord::new("robot-bank", exd_robot_record(0, 0, 0, 0, 0, 0, 0, 0));
+    // Wrong length: loud BadLength naming the pinned 0x60 form.
+    let err = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("move-target-words", vec![0u8; 13])],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("move-target-words"), "{err}");
+    assert!(err.to_string().contains("0x60"), "{err}");
+    // A span without the robot-bank row has no bound — never guessed.
+    let err = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("move-target-words", vec![0xFFu8; 0x60])],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap_err();
     assert!(
-        err.to_string().contains("move-target-words"),
-        "names the row: {err}"
+        err.to_string()
+            .contains("the robot-bank row in the same frame"),
+        "{err}"
     );
-    matches!(err, NormalizeError::UnpinnedForm { .. });
+    // More robots than span slots: loud, never truncated.
+    let mut blob = Vec::new();
+    for _ in 0..13 {
+        blob.extend(exd_robot_record(0, 0, 0, 0, 0, 0, 0, 0));
+    }
+    let err = normalize_frame(
+        &frame(
+            0,
+            vec![
+                WatchRecord::new("robot-bank", blob),
+                WatchRecord::new("move-target-words", vec![0xFFu8; 0x60]),
+            ],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("≤ 12"), "{err}");
+    // Sanity: the bank row alone (no span) still normalizes — an old
+    // plan without the row leaves the trio uncovered, not broken.
+    let rows = normalize_frame(&frame(0, vec![robot]), Channel::O1ExdDosboxX, &reg()).unwrap();
+    assert!(rows[0].field("robot[0].target_present").is_none());
 }
 
 // ---------------------------------------------------------------------
@@ -331,13 +431,25 @@ fn engine_robot_bank_parses_the_full_canonical_record() {
 
 /// The shared-field contract: the O1 normalizer's output for a robot
 /// the EXD record describes must EQUAL the E canonical parse of the
-/// same robot's canonical record (on the §8-mapped fields).
+/// same robot's canonical record (on the §8-mapped fields — including
+/// the D90 spliced target trio, sourced from the record-external
+/// §5 span).
 #[test]
 fn o1_and_engine_robot_rows_agree_on_shared_fields() {
     // Canonical fixture robot (see canon_robot_bank): pos 0x100000/-256,
-    // z 65, state 6, drop 0x99, stop -3, hp 5000, alive 1.
+    // z 65, state 6, drop 0x99, stop -3, hp 5000, alive 1, target
+    // present @ (0x0012_3400, -256).
     let exd = exd_robot_record(0x0010_0000, -256, 65, 6, 0x99, -3, 5000, 1);
-    let f_o1 = frame(0, vec![WatchRecord::new("robot-bank", exd)]);
+    let mut span = vec![0xFFu8; 0x60];
+    span[0x00..0x04].copy_from_slice(&0x0012_3400i32.to_le_bytes()); // x[0]
+    span[0x30..0x34].copy_from_slice(&(-256i32).to_le_bytes()); // y[0]
+    let f_o1 = frame(
+        0,
+        vec![
+            WatchRecord::new("robot-bank", exd),
+            WatchRecord::new("move-target-words", span),
+        ],
+    );
     let f_e = frame(0, vec![WatchRecord::new("robot-bank", canon_robot_bank())]);
     let o1 = normalize_frame(&f_o1, Channel::O1ExdDosboxX, &reg()).unwrap();
     let e = normalize_frame(&f_e, Channel::Engine, &reg()).unwrap();
@@ -349,6 +461,9 @@ fn o1_and_engine_robot_rows_agree_on_shared_fields() {
             "shared field {name} must agree across the two normalizers"
         );
     }
+    // The splice closed the last gap: every O1 leaf is shared now.
+    assert!(o1[0].field("robot[0].target_x").is_some());
+    assert_eq!(o1[0].fields.len(), e[0].fields.len());
 }
 
 // ---------------------------------------------------------------------
