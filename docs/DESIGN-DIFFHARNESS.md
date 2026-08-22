@@ -389,7 +389,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 | rng-state-b | u64 | MissionScene RandB-stand-in PCG32 raw state (same class) |
 | score / money | u32 / u32 | `MissionScene::campaign()` (0 / 4000 fresh; boot difficulty seeds money `4000−500·d`, the engine's own `menu::start_score`) |
 | difficulty | u32 | the session BOOT value (engine difficulty producers unmodeled — the record carries the injected scalar) |
-| zone / mission / mode / linear-mission-m | u32 ×4 | host episode slot (`mission_slot()` / `episode().linear()`); mode = 0 (SP, engine-modeled constant) |
+| zone / mission / mode / linear-mission-m | u32 ×4 | host episode slot (`mission_slot()` / `episode().linear()`); mode = 0 (SP, engine-modeled constant). **ZONE CONVENTION (D108):** E's zone is the 0-based mission-slot INDEX (0..6); the guest cell (EXW 0x4edd8c / EXD 0x107500) is 1-based set (zone_index+1, D99) — the O1 normalizer maps `cell−1` so both channels canonicalize to the index. First exercised by S5/S5B (zone 1 = ZONEB); the `linear` counter is the staged fresh-slot 0, recorded as the live-capture seam (a campaign-walk O1 session carries its own linear) |
 | robot-bank | u32 count + count records; record = the modeled Robot field list in the `state_hash` order: alive u8, pos_x i32, pos_y i32, z i32, state u16, dir_byte u16, facing u16, anim u16, variant u16, probe_z u16×8, stop_dist i32, target_present u8, target_x i32, target_y i32, drop_countdown i32, hp i32, armor i16, hit_flash u16, alarm u16, kind u16, shield i32, shield_charges i32, shield_boost i32, battery i32, armor_pool i32, alarm_ctr i32, death_flag u16 | `MissionSim::robots()` |
 | selection-triple | u32 selected idx only (the D83 anti-fabrication precedent: the alias-covered cell; cursor/squad join when their engine models + EXD aliases land) | `sidebar_selected()` |
 | blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector) |
@@ -451,7 +451,7 @@ identical state, by construction.
 | S2 | order→walk (the P4 slice) — **LANDED 2026-08-22 (D91)** | ORDER steps moving one squad member across ZONEA/MISSION1 (mirrors engine/bedlam-core/tests/mission_corpus_gate.rs; the walk needs a second robot — the `markers` staging key below, D91) | T0/T1 | slice field parity (positions, arrival snap, spread claims, move-target words); the engine's biggest existing seam |
 | S3 | weapon fire family | COMMAND records: one per weapon class (bullet 2..4, shell 5, artillery 9..0xB, ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F}, rocket 0x24, homing 0x29) at fixed targets | T0/T1/T2 + T4 | fire cadences, damage application (FUN_00419aff table), bank record lifecycle; the corpus-off weapon producers; T4 SFX events seed the SFX-family walk |
 | S4 | destroy family — **LANDED 2026-08-22 (D105)** | S3 fire onto destructibles (tile 0x62 traps, platform 0x7d4, chainable objects) | T0/T1/T3 + T4 | destroy resolver → terrain restore → 5-effect loop → chain walks end-to-end (§7j.25); **five-ring overlap read** (0x4796d4 bytes around overlapping corpse rings — statically mooted by §7j.10's ≤7-frame fade; the harness read is the confirming observation); debris producer kinds/delays (stager widening input) |
-| S5 | pickups & pads — **E-SIDE PRODUCER LANDED 2026-08-22 (W12-S5-prep, §7h.5)**: `stage_pickup_surface` (init_tiles TOT+seen staging + the set cell), the clear→move→test fire protocol, and the widened `apply_pickup` (case-4 score/money folds; 8/9 effect-id host seams) are in the engine, corpus-proven inert on ZONEA | walk over pickup tiles + armor-pad rings — **NOTE 7h.4/D99: ZONEA stages ZERO pickup cells (set 1); the pickup leg MUST run on ZONEB (set 2, 601 cells — e.g. M1's 152) or ZONEF (set 6, 149)**, i.e. S5 needs the zone/mission menu-walk staging (the W5 walk-zone/mission calibration) — the E-side producer it also needed is LANDED (§7h.5); the pads leg can stay ZONEA. **NOTE 7j.35/D100 (water): ZONEA/M1 stages ZERO water words too — the water family (sprite-range remaps FUN_0040167a/TXPAL1, the ping-pong anim const 0x456ca8, the [0x4edbd4] flag ≡ 1 with no gameplay writer) is corpus-dead for S0-S2; a water leg would share the S5 zone-walk staging and must run ZONEB/M1 (12 cells), ZONEB/M6 (78), ZONEC/M4 (33) or ZONEF/M7 (4824) + the E-side per-tile remap selection (§7j.35 item 5); until then E may hard-code water-ON in the 0x12d/0x12e/0x12f flush** | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (the 7h.3 producer is now DECODED §7h.4 — S5 is its observation instrument; watch surface: the consumed cell's mirror word + seen + DAT byte, the case-4 score/money pair) |
+| S5 | pickups & pads — **LANDED 2026-08-22 (W12-S5, D108; producer W12-S5-prep §7h.5)**: grammar v1.5 keys `zone = "B"` (the episode-slot host seam — the campaign-advance/save-load shells the host stands in for, D51 pattern; mission implicitly 1 via mask 0, linear 0) + `pickup = 1` (stage the mission's OWN .TOT through `stage_pickup_surface` AFTER any destroy staging + the §7j.12/6 hazard stamper, the original's load order) — S5/S5B run ZONEB/MISSION1 (set 2) with destroy staged too, so the typedb-mirror-rows go REAL (S4's recorded empty-mirror divergence closes for S5-class scenarios; the S4 chain itself is untouched — S4 sets no pickup key) | TWO short walks (the order-window constraint forces the split: a second `order` needs the first cleared — all-alive-state-3 or the 0x197-frame window expiry, and 407 idle frames × ~340 KB/record of REAL mirror rows is not a shippable dump, D108). **S5 = the row-21 z3 corridor** (the only spot in the corpus where cases 1 and 2 co-occur walkably: cells (26,21) c1 w0x76, (27,21) c2 w0x7e, (28,21) c4 w0x82 — clicker marker (28,21,3), walker marker (25,21,3), `order 28 21 3` → slot-1 target (29,21); the walker collects c1/c2/c4 at frames 1/2/4 and arrives frame 5). **S5B = the row-10 z3 corridor** (case 3 + 4× c4: cells (74..78,10) w0x83/0x83/0x7b(c3)/0x83/0x83 — clicker (78,10,3), walker (73,10,3), `order 78 10 3` → slot-1 (79,10); consumes all five incl. the diagonal probe reach at (78,10) from (77,9), arrives frame 12). ORDER_RADIUS staging note: the claim needs the walker within 0xC0 Q5 of the ORDER TILE CENTER — the marker's +0xF00 spawn offset makes a 6-tile gap read 0xC1 (rejected); keep walkers ≤5 tiles out. Case-3 observability note: the walker spawns hp 5000 (the clamp ceiling), so the c3 body's +2500 is value-invisible — the consume + dispatch still ride the mirror/T0 rows; a pre-damaged-walker variant is the live follow-up | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (7h.3/§7h.4): the consumed cell's mirror word (:= table-C floor 0x48F) + seen (:= 1) + the case-4 score/money folds + the case-1/2 robot fields (drop_countdown 1000 / shield 1000). DAT-byte visibility ANSWERED (D108): the consume's DAT := 0 (collision-plane empty) needs NO dedicated row — the mirror word/seen carry the pickup observation and the walkability change rides the robot-bank rows (the walker crosses the cells it consumes mid-walk); no watch set carries the raw DAT volume (it is not a guest span) |
 | S6 | extraction | ORDER onto the extraction .PAD (step-on) | T0/T1/T3 | **arm-extraction via scripted .PAD step-on** (beacon family, exit ring phases, dropship deploy, objective counters — §7j.19/§7j.20/§7j.27) |
 | S7 | platform dynamics | repeated fire on platforms (build/spread/creep/destroy) | T0/T1/T3 | platform family field parity (§7j.12) |
 | S8 | critter engagement | walk into critter aggro ranges | T0/T2/T3 | critter states/AI per difficulty; death handlers; bounty gate (§7j.17/§7j.23/§7j.24) |
@@ -852,6 +852,38 @@ differ come before any new scenario depth.
     (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
     e29f76f5585401e1). A live S4 capture needs the dbx-plan T3-tier
     unit first (the S3 T2-tier precedent).
+
+    **S5/S5B LANDED 2026-08-22 (W12-S5, D108):** grammar v1.5 adds
+    `zone = "B"` (the episode-slot host seam `stage_episode_slot` —
+    the campaign-advance/save-load shells the host stands in for;
+    zone letter → stage, mask 0 → MISSION1, linear stays 0) and
+    `pickup = 1` (the mission's OWN .TOT through
+    `stage_pickup_surface` AFTER any destroy staging — the engine
+    load-order note — then the §7j.12/6 hazard stamper, matching
+    the original's mission-load order). S5/S5B run ZONEB/MISSION1
+    set 2 with destroy staged too, so the typedb-mirror-rows carry
+    the REAL staged surface (15,102 words / 52,715 seen of
+    80,000 — every tile active, the compact row is the honest full
+    form) and the recorded S4 empty-mirror divergence closes for
+    S5-class scenarios (S4's chain is untouched — it sets no pickup
+    key). THE TWO-SCENARIO SPLIT is a dump-budget decision (D108):
+    one scenario cannot walk both corridors — the nearest case-1
+    and case-3 cells are 61 octagonal tiles apart (beyond any
+    order's reach), and two sequential orders need the first order
+    CLEARED (all-alive-state-3 — impossible while the second leg's
+    robots stand idle — or the 0x197-frame window expiry, whose
+    ~407 idle frames × ~340 KB/record of REAL mirror rows is not a
+    shippable dump). S5 = the row-21 z3 trio (c1/c2/c4, arrival
+    frame 5, 16 records), S5B = the row-10 z3 five (c3 + 4× c4,
+    the (78,10) diagonal probe reach, arrival frame 12, 19
+    records); chains pinned in canonical_dump_gate, differ_gate
+    rows joined, dbx-plan compiles both tiers T0/T1/TS (no T2/T3
+    tier needed — nothing fires/dies/explodes in the walks) with
+    the zone + pickup seams recorded in `_e_staging`. The zone-row
+    O1 normalizer (cell−1) landed with them — the first non-A-zone
+    scenario exposes the 1-based guest cell vs E's 0-based slot
+    index (§6a zone convention, D108). S0..S4 chains re-asserted
+    BYTE-IDENTICAL.
 
 ## 11. Risks
 
