@@ -793,13 +793,25 @@ impl MissionSim {
                 return;
             }
             TERRAIN => {
-                // Impact pair (damage = weapon_damage(kind)) — the
-                // application is the S4 E-gap; the damage value is
-                // exercised by the table tests.
-                let _ = weapon_damage(self.weapon_bank[i].kind, self.difficulty);
-                x += vx;
-                y += vy;
-                z += vz;
+                // The impact pair + the disburser [§7j.37/3 +
+                // §7j.39/2, raw asm 0x410ab9..0x4114eb]:
+                // FUN_0041a894 (0x410ae0) then FUN_0041bc1c
+                // (0x410af9), damage = FUN_00419aff(kind), score
+                // armed (`push 1`); then the re-add commits the
+                // position and the disburser stages K2 (2 jitter
+                // draws) and FREES the record — the §7j.37/3
+                // "no free on impact" gloss is corrected by the
+                // raw asm (kind := 0 inside the disburser).
+                let (hx, hy) = (x + vx, y + vy);
+                let hz = z + vz;
+                let dmg = weapon_damage(self.weapon_bank[i].kind, self.difficulty);
+                self.resolve_object_impact(hx, hy, 0, dmg, true);
+                self.resolve_structure_impact(hx, hy, dmg);
+                self.weapon_bank[i].x = hx;
+                self.weapon_bank[i].y = hy;
+                self.weapon_bank[i].z = hz;
+                self.weapon_disburser(i);
+                return;
             }
             _ => {}
         }
@@ -812,28 +824,35 @@ impl MissionSim {
     /// tick>100/z-OOB; floor hit → impact(75) + free; else commit +
     /// tick++. The critter-lane trail body is a structural no-op.
     fn tick_shell(&mut self, i: usize, map_w: i32, map_h: i32, phase: i32) {
-        let r = &mut self.weapon_bank[i];
-        let x = r.x + r.vx;
-        let y = r.y + r.vy;
-        let z = r.z + r.vz;
+        let (x, y, z, tick) = {
+            let r = &mut self.weapon_bank[i];
+            (r.x + r.vx, r.y + r.vy, r.z + r.vz, r.tick)
+        };
         if x < 0
             || y < 0
             || x >= map_w * 0x2000
             || y >= map_h * 0x2000
-            || r.tick > 100
+            || tick > 100
             || !(0..=0xFFFF).contains(&z)
         {
-            r.kind = 0;
+            self.weapon_bank[i].kind = 0;
             return;
         }
         let _ = phase; // the odd-phase lane is the critter lane (E-gap)
         let floor = self.terrain.floor_z(x >> 8, y >> 8, z >> 8);
         if z >> 8 < floor {
-            // Impact pair (75) + disburser + FREE.
-            r.kind = 0;
-            let _ = weapon_damage(5, self.difficulty);
+            // The floor hit → impact pair (75) + disburser + FREE
+            // [§7j.37/4 + §7j.39/2]: the resolvers run at the
+            // UNCOMMITTED hit position; the disburser reads the
+            // record's stored (one-step-back) position and frees.
+            let dmg = weapon_damage(5, self.difficulty);
+            self.resolve_object_impact(x, y, 0, dmg, true);
+            self.resolve_structure_impact(x, y, dmg);
+            self.weapon_bank[i].kind = 0;
+            self.weapon_disburser(i);
             return;
         }
+        let r = &mut self.weapon_bank[i];
         r.x = x;
         r.y = y;
         r.z = z;
@@ -850,11 +869,14 @@ impl MissionSim {
         }
     }
 
-    /// Types 9..0xB ARTILLERY [verified §7j.37/5]: fall 0x200/tick
-    /// to the FUN_0041e411 settle; the burst window
-    /// tick−0x20 < duration walks the scripted pair lists (the
-    /// 5000-damage blast application is the S4 E-gap); past the
-    /// window → disburser tail + free.
+    /// Types 9..0xB ARTILLERY [verified §7j.37/5 + §7j.39/7]: fall
+    /// 0x200/tick to the FUN_0041e411 settle; the burst window
+    /// tick−0x20 < duration walks the scripted pair lists — per
+    /// pair the SCRIPT BLAST FUN_004244a1 (5000 damage, flag 1 +
+    /// its k6 1-in-8 gate draws) + the 50% RandA k11 gate (the
+    /// staged k11 drawing its own SFX-gate draw); past the window
+    /// → tick ≤ 0x22 exits silently (w9's exact-0x22 end), else
+    /// the disburser tail (kind := 0 for 9..0xB).
     fn tick_artillery(&mut self, i: usize, kind: u16) {
         let r = &mut self.weapon_bank[i];
         r.tick += 1;
@@ -868,18 +890,41 @@ impl MissionSim {
             r.z = floor << 8;
         }
         let tick = r.tick;
+        let owner = r.owner;
         if tick < 0x20 {
             // tick==0x18 ∧ player-kind → the wall-strip redraw
             // FUN_004245c9 (presentation — unmodeled).
             return;
         }
         if tick - 0x20 < Self::artillery_duration(kind) {
-            // The burst pair walk: FUN_004244a1 per pair + 50% K0xB
-            // debris — application is the S4 E-gap (no
-            // terrain-structure bank).
+            // The burst pair walk [§7j.39/7]: list
+            // PTR[0x456bf0+4·(tick−0x20)], (Δy,Δx) until the 500
+            // sentinel; the blast at (x_tile+Δx, y_tile+Δy,
+            // z_level) then the 50% k11 gate.
+            let f = (tick - 0x20) as usize;
+            let (xt, yt) = (x >> 13, y >> 13);
+            let z_level = (((z >> 8) + 0x3F) >> 5).min(7);
+            if let Some(pairs) = crate::destroy::ARTILLERY_PAIRS.get(f) {
+                for &(dy, dx) in pairs.iter() {
+                    self.script_blast(xt + dx as i32, yt + dy as i32, z_level);
+                    if self.rand_a() & 1 != 0 {
+                        self.stage_debris(
+                            (xt << 5) + 0xF,
+                            (yt << 5) + 0xF,
+                            (z_level << 5) + 0x10,
+                            11,
+                            0,
+                            owner,
+                        );
+                    }
+                }
+            }
         } else {
-            // Past the window: the disburser tail + free.
-            r.kind = 0;
+            // Past the window: tick ≤ 0x22 → the silent exit; the
+            // disburser (which frees the record) runs late.
+            if tick > 0x22 {
+                self.weapon_disburser(i);
+            }
         }
     }
 
@@ -909,15 +954,47 @@ impl MissionSim {
             return;
         }
         if self.weapon_bank[i].tick >= 0x65 {
-            // EXPIRY: 0xF/0x13 → tick := 0, class−−; class == 0 →
-            // the four-quadrant detonation (E-gap application) +
-            // disburser + free; class > 0 → the cycle re-arms.
+            // EXPIRY [§7j.39/3, raw asm 0x410d5c..0x410eb2]:
+            // 0xF/0x13 → tick := 0, class−−; class ≠ 0 → the
+            // cycle re-arms; class == 0 → the disburser FIRST,
+            // then 4× FUN_0041a894 at (x±0x1000, y±0x1000) in the
+            // quadrant order (+,+),(+,−),(−,+),(−,−) with damage
+            // FUN_00419aff(0x1a) score-armed (the 0x1a damage even
+            // when the dying record is 0xF/0x13), then 4×
+            // FUN_0041bc1c over the same quadrants, then the
+            // trail-ring slot clear. The 0xF disburser is a raw-asm
+            // NO-OP (the §7j.14 map corrected) — a 0xF mine does
+            // NOT free here; the mine-proximity family (the
+            // FUN_00410823 tail checks, §7j.39/8) re-opens it.
             if kind == 0xF || kind == 0x13 {
                 self.weapon_bank[i].tick = 0;
                 self.weapon_bank[i].class -= 1;
             }
             if self.weapon_bank[i].class == 0 {
-                self.weapon_bank[i].kind = 0;
+                let x = self.weapon_bank[i].x;
+                let y = self.weapon_bank[i].y;
+                let dmg = weapon_damage(0x1a, self.difficulty);
+                self.weapon_disburser(i);
+                for (sx, sy) in [
+                    (0x1000i32, 0x1000i32),
+                    (0x1000, -0x1000),
+                    (-0x1000, 0x1000),
+                    (-0x1000, -0x1000),
+                ] {
+                    self.resolve_object_impact(x + sx, y + sy, 0, dmg, true);
+                }
+                for (sx, sy) in [
+                    (0x1000i32, 0x1000i32),
+                    (0x1000, -0x1000),
+                    (-0x1000, 0x1000),
+                    (-0x1000, -0x1000),
+                ] {
+                    self.resolve_structure_impact(x + sx, y + sy, dmg);
+                }
+                // The trail-ring slot clear writes the 0x4e66b8
+                // ring (an E-gap bank); the record's own trail
+                // word stays [faithful — the record is freed for
+                // every kind but 0xF].
             }
             return;
         }
@@ -1015,8 +1092,21 @@ impl MissionSim {
                         }
                         if kind == 0xE {
                             // The 3-cell scripted detonation
-                            // (FUN_004244a1 at tile offsets) — the
-                            // S4 E-gap application.
+                            // [§7j.39/4, raw asm 0x411298..0x411338]:
+                            // at the committed post-wall position
+                            // with the POST-halving velocities —
+                            // (x,y), (x−vx·4, y−vy·4), (x−vx·4,
+                            // y+vy·4), all >>13, z = z>>13.
+                            let (bx, by, bz) = (
+                                self.weapon_bank[i].x,
+                                self.weapon_bank[i].y,
+                                self.weapon_bank[i].z,
+                            );
+                            let vx4 = self.weapon_bank[i].vx * 4;
+                            let vy4 = self.weapon_bank[i].vy * 4;
+                            self.script_blast(bx >> 13, by >> 13, bz >> 13);
+                            self.script_blast((bx - vx4) >> 13, (by - vy4) >> 13, bz >> 13);
+                            self.script_blast((bx - vx4) >> 13, (by + vy4) >> 13, bz >> 13);
                         }
                     }
                     _ => {}
@@ -1056,6 +1146,9 @@ impl MissionSim {
             return;
         }
         if r.z < 0 {
+            // The z-OOB path [raw asm 0x411787]: z := 0x1000,
+            // kind := 0, then a disburser call that reads the
+            // already-zeroed kind — a structural no-op [faithful].
             r.z = 0x1000;
             r.kind = 0;
             return;
@@ -1063,8 +1156,14 @@ impl MissionSim {
         let (x, y, z) = (r.x, r.y, r.z);
         let floor = self.terrain.floor_z(x >> 8, y >> 8, z >> 8);
         if z >> 8 < floor {
-            let _ = weapon_damage(0x24, self.difficulty);
-            r.kind = 0;
+            // The floor impact [§7j.39/2, raw asm 0x411899..]: the
+            // OBJECT resolver (0x4118ad) → the STRUCTURE resolver
+            // (0x4118c2) → the disburser (K6 + free).
+            let dmg = weapon_damage(0x24, self.difficulty);
+            self.resolve_object_impact(x, y, 0, dmg, true);
+            self.resolve_structure_impact(x, y, dmg);
+            self.weapon_bank[i].kind = 0;
+            self.weapon_disburser(i);
         }
     }
 
@@ -1203,8 +1302,15 @@ impl MissionSim {
         let _ = phase; // the odd-phase lanes are E-gap no-ops
         let floor = self.terrain.floor_z(new_x >> 8, new_y >> 8, nz >> 8);
         if nz >> 8 < floor {
-            let _ = weapon_damage(0x29, self.difficulty);
-            r.kind = 0;
+            // The floor impact [§7j.39/2 — the order REVERSED vs
+            // 0x24, raw asm 0x411f0e..0x411f4f]: the STRUCTURE
+            // resolver (0x411f24) → the OBJECT resolver (0x411f3f)
+            // → the disburser (K9 + free).
+            let dmg = weapon_damage(0x29, self.difficulty);
+            self.resolve_structure_impact(new_x, new_y, dmg);
+            self.resolve_object_impact(new_x, new_y, 0, dmg, true);
+            self.weapon_bank[i].kind = 0;
+            self.weapon_disburser(i);
         }
     }
 
@@ -1234,16 +1340,35 @@ impl MissionSim {
             // floor surface.
             let floor = self.terrain.floor_z(r.x >> 8, r.y >> 8, r.z >> 8);
             if r.z >> 8 < floor {
-                match r.kind {
+                // The impact branches [§7j.13/5 + §7j.14/4]: the
+                // disburser FUN_004126dc FIRST (k20/k8/k4 — each
+                // clears the type word), then the resolvers. The
+                // score flag follows the weapon-site push-1
+                // convention [hypothesis — no E producer covers
+                // the 0x22 bank yet; a live record names it].
+                let (x, y, kind) = (r.x, r.y, r.kind);
+                match kind {
                     0x66 => {
-                        let _ = weapon_damage(0x66, self.difficulty);
-                        r.kind = 0;
+                        self.projectile_disburser(i);
+                        let dmg = weapon_damage(0x66, self.difficulty);
+                        self.resolve_object_impact(x, y, 0, dmg, true);
+                        self.resolve_structure_impact(x, y, dmg);
                     }
-                    0x67 => r.kind = 0,
+                    0x67 => {
+                        self.projectile_disburser(i);
+                    }
                     0x65 => {
-                        let _ = weapon_damage(0x65, self.difficulty);
+                        self.projectile_disburser(i);
                         // type 0x65 does NOT deactivate on terrain
-                        // [7j.13/5: no free on the 0x65 branch].
+                        // [7j.13/5: no free on the 0x65 branch] —
+                        // the disburser's clear makes this a
+                        // presentational no-op for 0x65 [the
+                        // FUN_004126dc kind map: 0x65 → K0x14 +
+                        // clear; the "no deactivate" reading is the
+                        // §7j.37 normalization hypothesis's open
+                        // edge — S4+ coverage names it].
+                        let dmg = weapon_damage(0x65, self.difficulty);
+                        self.resolve_object_impact(x, y, 0, dmg, true);
                     }
                     _ => {}
                 }

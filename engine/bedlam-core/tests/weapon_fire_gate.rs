@@ -550,9 +550,12 @@ fn bullets_free_only_at_ttl() {
 }
 
 #[test]
-fn bullets_survive_the_floor_and_keep_flying() {
-    // A bullet below the floor surface: terrain result re-adds the
-    // step but the record does NOT free [verified §7j.37/3].
+fn bullets_hit_the_floor_and_free_via_the_disburser() {
+    // A bullet below the floor surface: the terrain result re-adds
+    // the step, applies the impact pair, and the DISBURSER stages
+    // K2 and frees the record [§7j.39/2 — the raw asm 0x410b3e →
+    // 0x4114eb → kind := 0; the §7j.37/3 "no free on impact" gloss
+    // corrected]. The K2 jitter consumes 2 shared-stream draws.
     let mut s = sim();
     s.weapon_bank_mut()[0] = WeaponRecord {
         kind: 4,
@@ -562,10 +565,13 @@ fn bullets_survive_the_floor_and_keep_flying() {
         vx: 0x100,
         ..WeaponRecord::default()
     };
+    let before = s.rand_a_state();
     s.weapon_tick(0);
-    let rec = &s.weapon_bank()[0];
-    assert_ne!(rec.kind, 0, "impacts do not kill bullets");
-    assert_eq!(rec.x, 16 * 0x2000 + 0x100);
+    assert_eq!(s.weapon_bank()[0].kind, 0, "the disburser frees on impact");
+    // The K2 debris staged (bounds-checked; the record sits in-map)
+    // with its 2 jitter draws.
+    assert!(s.rand_a_state() != before);
+    assert!(s.debris_bank().iter().any(|d| d.active && d.kind == 2));
 }
 
 #[test]
@@ -708,6 +714,15 @@ fn ballistic_17_floor_contact_splits_three_clones() {
 
 #[test]
 fn ballistic_expiry_cycles_class_and_frees_at_zero() {
+    // The 0xF/0x13 cycle at tick ≥ 0x65 [§7j.39/3]: tick := 0,
+    // class−−; at class == 0 the disburser runs FIRST, then the
+    // four-quadrant detonation (damage = the 0x1a table row even
+    // for a dying 0xF/0x13). The 0xF disburser arm is the raw-asm
+    // NO-OP [§7j.14/3 corrected: 0xF keeps its word] — a 0xF mine
+    // PERSISTS past its class-0 quadrant (the mine-proximity
+    // family that eventually re-opens it is the §7j.39/8 E-gap;
+    // the S3 canonical tail pins the same shape). 0x13 frees via
+    // its K0xC disburser arm.
     let mut s = sim();
     s.weapon_bank_mut()[0] = WeaponRecord {
         kind: 0xF,
@@ -727,12 +742,27 @@ fn ballistic_expiry_cycles_class_and_frees_at_zero() {
     s.weapon_bank_mut()[0].class = 1;
     s.weapon_tick(0);
     assert_eq!(s.weapon_bank()[0].class, 0);
-    // class 0 at the NEXT expiry frees (the quadrant detonation is
-    // the S4 application E-gap).
+    // class 0 at the NEXT expiry runs the quadrant detonation but
+    // does NOT free the 0xF record (the disburser no-op).
     s.weapon_bank_mut()[0].tick = 0x65;
     s.weapon_bank_mut()[0].class = 0;
     s.weapon_tick(0);
-    assert_eq!(s.weapon_bank()[0].kind, 0);
+    assert_eq!(s.weapon_bank()[0].kind, 0xF, "0xF persists past class 0");
+    assert_eq!(s.weapon_bank()[0].tick, 0);
+    assert_eq!(s.weapon_bank()[0].class, -1, "the cycle re-arms below 0");
+    // 0x13: the K0xC disburser arm frees at the class 1→0 expiry.
+    s.weapon_bank_mut()[1] = WeaponRecord {
+        kind: 0x13,
+        x: 16 * 0x2000,
+        y: 16 * 0x2000,
+        z: 0x2000,
+        class: 1,
+        tick: 0x65,
+        ..WeaponRecord::default()
+    };
+    s.weapon_tick(1);
+    assert_eq!(s.weapon_bank()[1].kind, 0, "the 0x13 disburser frees");
+    assert!(s.debris_bank().iter().any(|d| d.active && d.kind == 0xC));
 }
 
 #[test]
@@ -828,10 +858,17 @@ fn enemy_projectiles_move_and_free_on_terrain() {
         .is_some());
     s.enemy_tick();
     assert_eq!(s.enemy_bank()[0].x, 16 * 0x2000 + 0x200);
-    // Terrain hit: 0x66 deactivates, 0x65 does not [7j.13/5].
+    // Terrain hit: 0x66 disburser (K8 + clear) + the resolver pair
+    // [§7j.14/4 type-2 branch + §7j.13/5].
     s.enemy_bank_mut()[0].z = 0x100;
     s.enemy_tick();
     assert_eq!(s.enemy_bank()[0].kind, 0);
+    // 0x65: the type-1 branch runs the disburser FIRST — K0x14 +
+    // the type-word clear [§7j.14/4: "every branch clears the type
+    // word"] — then the object resolver. The §7j.13/5 "no
+    // deactivate on 0x65" gloss is superseded: the disburser's
+    // clear IS the deactivation (the §7j.37 normalization
+    // hypothesis's open edge — S4+ coverage names it).
     let s2 = s.stage_enemy_projectile(EnemyProjectile {
         kind: 0x65,
         x: 16 * 0x2000,
@@ -843,11 +880,25 @@ fn enemy_projectiles_move_and_free_on_terrain() {
     });
     assert!(s2.is_some());
     s.enemy_tick();
-    assert_ne!(s.enemy_bank()[s2.unwrap()].kind, 0, "0x65 survives terrain");
-    // Bounds exit deactivates.
-    s.enemy_bank_mut()[s2.unwrap()].vx = 0x100000;
+    assert_eq!(
+        s.enemy_bank()[s2.unwrap()].kind,
+        0,
+        "0x65 clears via the disburser"
+    );
+    assert!(s.debris_bank().iter().any(|d| d.active && d.kind == 0x14));
+    // Bounds exit deactivates (a flying 0x65, no terrain hit).
+    let s3 = s.stage_enemy_projectile(EnemyProjectile {
+        kind: 0x65,
+        x: 16 * 0x2000,
+        y: 16 * 0x2000,
+        z: 0x2000,
+        vx: 0x100000,
+        vy: 0,
+        vz: 0,
+    });
+    assert!(s3.is_some());
     s.enemy_tick();
-    assert_eq!(s.enemy_bank()[s2.unwrap()].kind, 0);
+    assert_eq!(s.enemy_bank()[s3.unwrap()].kind, 0);
 }
 
 // ---------------------------------------------------------------------

@@ -840,9 +840,15 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
                     want: format!("4 + {n}"),
                 });
             }
+            // The W12-S4 canonicalization: the length is a lazy
+            // materialization artifact (the bank keeps its grown
+            // length after the ≤7-frame fade zeroes the bytes), so
+            // BOTH channels canonicalize to the last-nonzero
+            // prefix — the D104 differ contract for this row.
+            let blob = truncate_trailing_zeros(&b[4..]);
             Ok(row(vec![
-                int("len", n as i128),
-                ("bytes".to_string(), FieldVal::Bytes(b[4..].to_vec())),
+                int("len", blob.len() as i128),
+                ("bytes".to_string(), FieldVal::Bytes(blob)),
             ]))
         }
         "static-map-wh" => {
@@ -929,20 +935,16 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
             Ok(row(fields))
         }
         "typedb-fade-byte" | "armor-pad-reads" => {
-            // Raw w*h grid -> the §6a equivalence "len 0 == all-zero
-            // grid": an all-zero blob canonicalizes to len 0 (the
-            // ZONEA corpus shape until a death materializes the bank).
-            if b.iter().all(|&x| x == 0) {
-                Ok(row(vec![
-                    int("len", 0),
-                    ("bytes".to_string(), FieldVal::Bytes(vec![])),
-                ]))
-            } else {
-                Ok(row(vec![
-                    int("len", b.len() as i128),
-                    ("bytes".to_string(), FieldVal::Bytes(b.to_vec())),
-                ]))
-            }
+            // Raw w*h grid -> the last-nonzero prefix (the D104
+            // canonicalization: E's lazy bank and the full guest
+            // grid carry the same content; trailing zeros — faded
+            // scorch bytes or untouched tiles — are not state).
+            // Subsumes the §6a "len 0 == all-zero grid" rule.
+            let blob = truncate_trailing_zeros(b);
+            Ok(row(vec![
+                int("len", blob.len() as i128),
+                ("bytes".to_string(), FieldVal::Bytes(blob)),
+            ]))
         }
         "static-map-wh" => {
             // 48-B span: h @+0x00 (cell 0x10748c), w @+0x2C (0x1074b8).
@@ -1492,6 +1494,15 @@ fn detect_shift(a: &[i64], b: &[i64]) -> i64 {
         }
     }
     0
+}
+
+/// The D104 armor/fade canonicalization: the last-nonzero prefix —
+/// E lazily materializes the +0x18 byte bank (it keeps its grown
+/// length after the ≤7-frame fade zeroes the tail) while the guest
+/// grid is full-size; identical content canonicalizes identically.
+fn truncate_trailing_zeros(b: &[u8]) -> Vec<u8> {
+    let end = b.iter().rposition(|&x| x != 0).map(|i| i + 1).unwrap_or(0);
+    b[..end].to_vec()
 }
 
 /// Normalize every frame of a dump.

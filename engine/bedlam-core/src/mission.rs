@@ -349,6 +349,22 @@ impl Terrain {
         }
     }
 
+    /// Write one raw DAT volume byte [the FUN_0042394a /
+    /// destroy-restore write side, §7j.25/2 + §7j.32/3]: the
+    /// plane-major store at `dat[z·w·h + y·w + x]`. NOTE this is
+    /// the RAW byte — a 0xFF write materializes a pad-style deck
+    /// block for `dat_type` readers exactly like the PAD loader.
+    /// Out-of-range writes are skipped (the panic-free charter;
+    /// the EXW callers are in-bounds on shipped data).
+    pub fn dat_write(&mut self, x: i32, y: i32, z: i32, byte: u8) {
+        if !(0..8).contains(&z) || x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return;
+        }
+        let n = (self.width * self.height) as usize;
+        let idx = z as usize * n + y as usize * self.width as usize + x as usize;
+        self.dat[idx] = byte;
+    }
+
     fn height_of(&self, ty: u8, sx: i32, sy: i32) -> u8 {
         if ty == 0 {
             return 0;
@@ -691,6 +707,50 @@ pub struct MissionSim {
     /// the difficulty-scaled damage rows [§7j.15/2]. Staged by the
     /// host; 0 = the modeled default.
     pub(crate) difficulty: u32,
+    // --- The destroy family (W12-S4-prep, `destroy.rs`; NONE of
+    //     these enter `state_hash` — the W6 split) ---
+    /// The terrain-set/zone cell [0x4edd8c] (1..7) — indexes the
+    /// rubble/water/hazard tables + gates the objective notify.
+    pub(crate) zone: u32,
+    /// The linear mission m [0x46ae8c] — the turret hp formula.
+    pub(crate) linear: u32,
+    /// The language latch [0x4eba1c] (1 = GER) — the destroy-tail
+    /// GER gate. Host-staged; 0 = the modeled default.
+    pub(crate) language: u32,
+    /// The .BDG type table (0x4dedf2, ≤282 rows).
+    pub(crate) object_types: Vec<crate::destroy::ObjectType>,
+    /// The .POS instances (0x46cbf4).
+    pub(crate) objects: Vec<crate::destroy::ObjectInstance>,
+    /// The .TRT terrain-structure bank (0x4cccf8).
+    pub(crate) structures: Vec<crate::destroy::TerrainStructure>,
+    /// The object-presence word grid (0x460dfa): 0 empty,
+    /// 0x7d2/0x7d3 hazard/clamp, 0x7d4 platform, n = instance
+    /// n−1's footprint [§7j.12/1].
+    pub(crate) object_grid: Vec<u16>,
+    /// The platform STRENGTH bank (0x465daa; 0 = none) [§7j.12/2].
+    pub(crate) platform_strength: Vec<u16>,
+    /// The creep seed site 0x4dc5c8/cc — the last platform-damage
+    /// tile (the S7 creep tick's reader).
+    pub(crate) platform_site: (i32, i32),
+    /// The TOT-mirror plane words, 8 per tile (the 0x1E record
+    /// +2·z words at 0x4796bc) [§7j.32/1].
+    pub(crate) mirror_words: Vec<u16>,
+    /// The seen bytes, 8 per tile (the record +0x10+z bytes).
+    pub(crate) mirror_seen: Vec<u8>,
+    /// The +0x1B/+0x1C object-height pairs per tile [§7j.32/1].
+    pub(crate) mirror_heights: Vec<(u8, u8)>,
+    /// The zone-7 objective counter [0x46cce0] (§7j.32/2).
+    pub(crate) objective_count: i32,
+    /// The 128-slot debris ring (0x476fbc) — the T3 surface.
+    pub(crate) debris: Vec<crate::destroy::DebrisRecord>,
+    /// The +0x18 seq counter — the debris LRU eviction key.
+    pub(crate) debris_seq: i32,
+    /// The 250-slot splash bank (0x4e9778) — the T3 surface.
+    pub(crate) splashes: Vec<crate::destroy::SplashRecord>,
+    /// The pending destroy score award ([0x4dd40c] delta).
+    pub(crate) score_pending: i32,
+    /// The score-strip redraw arm ([0x46ccf0] := 2).
+    pub(crate) strip_arm: bool,
 }
 
 impl MissionSim {
@@ -710,6 +770,24 @@ impl MissionSim {
             order_target: (0, 0, 0),
             order_flag: false,
             difficulty: 0,
+            zone: 0,
+            linear: 0,
+            language: 0,
+            object_types: Vec::new(),
+            objects: Vec::new(),
+            structures: Vec::new(),
+            object_grid: Vec::new(),
+            platform_strength: Vec::new(),
+            platform_site: (0, 0),
+            mirror_words: Vec::new(),
+            mirror_seen: Vec::new(),
+            mirror_heights: Vec::new(),
+            objective_count: 0,
+            debris: vec![crate::destroy::DebrisRecord::default(); crate::destroy::DEBRIS_SLOTS],
+            debris_seq: 0,
+            splashes: vec![crate::destroy::SplashRecord::default(); crate::destroy::SPLASH_SLOTS],
+            score_pending: 0,
+            strip_arm: false,
             terrain,
         }
     }
@@ -825,6 +903,30 @@ impl MissionSim {
             self.armor_pads.resize(tile + 1, 0);
         }
         self.armor_pads[tile] = value;
+    }
+
+    /// FUN_0042223c [§7j.12/5, verified 0x42223c..0x422287]: the
+    /// type-DB +0x18 byte INCREMENT writer —
+    /// `byte[0x4796d4+0x1E·tile] += value; if ≥ 8 → 7`. The
+    /// platform damage/build path's scorch (both add 4); the byte
+    /// decays via the same advance_frame fade as the absolute
+    /// writes.
+    pub fn scorch_increment(&mut self, world_x: i32, world_y: i32, value: u8) {
+        let tx = world_x >> 5;
+        let ty = world_y >> 5;
+        if tx < 0 || ty < 0 {
+            return;
+        }
+        let (w, h) = self.terrain.size();
+        if tx >= w || ty >= h {
+            return;
+        }
+        let tile = (ty * w + tx) as usize;
+        if self.armor_pads.len() <= tile {
+            self.armor_pads.resize(tile + 1, 0);
+        }
+        let v = self.armor_pads[tile].saturating_add(value).min(7);
+        self.armor_pads[tile] = v;
     }
 
     /// Apply damage to robot `idx` — the SP core of
@@ -1204,6 +1306,13 @@ impl MissionSim {
                     let a = self.robots[idx].armor.wrapping_sub(ARMOR_BLEED);
                     self.robots[idx].armor = if a < 0 { 0 } else { a };
                 }
+                // The tile-0x62 TRAP lane (FUN_0040fe93, §7j.25/7 —
+                // the destroy-family unit): armor-first with the
+                // exact intra-walk interleaving unpinned
+                // [§7j.38/6 hypothesis; corpus-never on ZONEA].
+                // Pure no-op until destructibles are staged (the
+                // grid word stays 0 — the no-inject invariant).
+                self.robot_trap_lane(idx);
             }
             // Order consumption: pending order, state outside {3,4,5},
             // robot within ORDER_RADIUS of the order tile center.

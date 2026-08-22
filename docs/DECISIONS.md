@@ -3836,3 +3836,87 @@ Nudge-Worker: 95ab9206-6d30-4fb1-8fd1-222e6d78e780
    is the §7j/FORMATS backlog + W10/W11.
 
 Nudge-Worker: 16ebe0c4-74ee-48e1-bf36-73e981ed114f
+
+## D104 — 2026-08-22: P4.2/W12-S4-prep — the E-side destroy family LANDED in bedlam-core::destroy (staging seams + the two resolvers + the destroy tail + the 20-kind debris stager + the splash/blast/platform/trap lanes + both disbursers + the weapon-tick impact wiring); the S3 canonical chain re-pinned ONCE 49193732e6dbc546 → e29f76f5585401e1 (RE 7j.38/7j.39 by worker 460d294e claim 2, committed dcc8865 + acf09ff; engine+tests built by worker d57a4dec claim 2 but left uncommitted by a SECOND session death — ADOPTED + INDEPENDENTLY RE-VALIDATED + COMMITTED + PUSHED by continuation worker 3e93a4b1 claim 2)
+
+1. RE BASIS (committed first, dcc8865 §7j.38 + acf09ff §7j.39,
+   objdump-only from the existing local dumps): the destroy-family
+   RNG census (the five-effect draw table 8/8/8/8/8/0/0/72/9 for
+   sel 1..9, the chain-walk one-roll-per-QUALIFYING-candidate
+   protocol word>0 → alive → chain≠0 → draw, the platform 2×5,
+   the trap 3×5, the k11 SFX-gate draw, the blast k6 1-in-8 gate),
+   the rubble 0x454a04/water 0x454ae4/7-artillery-pair-lists
+   DGROUP tables, the FUN_004244a1 script-blast internals, the
+   impact-pair call orders (0x29 REVERSED vs 0x24), the chain-walk
+   geometry CORRECTED (4 perimeter walks, the walk-2 (Y+W)<<13
+   recursion quirk), the debris allocator (first-free else
+   min-seq LRU), and the class-0 quadrant body (disburser FIRST;
+   0x1a damage even for dying 0xF/0x13).
+2. STAGING (host seams per the D51 pattern): .BDG type table
+   (≤282 variable rows, the §7j.25 grammar; the four template
+   banks kept in DISK order +0x3E/+0x46/+0x42/+0x4A), .POS
+   instances (2000×16 B, footprint word idx+1 + hp re-stamp),
+   .TRT structures (hp = 250 + 250·m/27), the 0x7d2/0x7d3 hazard
+   stamper over staged mirror words, the TOT-mirror/seen banks
+   (staged EMPTY — the init_tiles TOT fill is the S5 pairing),
+   and the language latch (the GER gate).
+3. RESOLVERS + TAIL: FUN_0041a894 (pass-through on
+   empty/hazard/clamp words; the platform 0x7d4 → FUN_00422693;
+   survivor = pure subtract; immune −1; destroy → the tail),
+   FUN_0041bc1c (rubble stamp + seen + DAT-zero + k15 + splash),
+   the tail = objective notify (zone 7, kinds 0x44..0x47) → the
+   GER skip → the +0x46/+0x4A RESTORE (linear (z·H+i)·W+j, z ∈
+   [z0, min(z0+D,8)), seen := under_dat==0) → the five-effect
+   loop → the score award (0xb → 10) → the four chain walks
+   (recursive resolver at 1000, forwarded flag).
+4. IMPACT WIRING (the §7j.39/2 orders): bullets/shell floor =
+   OBJECT→STRUCTURE→disburser(K2)+free; 0x24 floor = OBJECT→
+   STRUCTURE→disburser(K6)+free; 0x29 floor = STRUCTURE→OBJECT→
+   disburser(K9)+free (REVERSED, faithful); the artillery burst =
+   the pair-list walk per tick−0x20 with the script blast + the
+   50% k11 gate (past-window: tick ≤ 0x22 silent, else the
+   disburser); the mortar 0xE 3-cell at the POST-halving
+   offsets; the class-0 expiry = disburser→4×OBJECT(0x1a)→4×
+   STRUCTURE (the 0xF disburser arm is the raw-asm NO-OP — a 0xF
+   mine PERSISTS past class 0, the §7j.14/3 map corrected; the
+   mine-proximity family is the §7j.39/8 E-gap); the projectile
+   type-1/2/3 branches (0x65 → K20+clear — the §7j.13/5 "no
+   deactivate" gloss superseded: the disburser's clear IS the
+   deactivation, the open edge documented for S4+ coverage).
+5. GATES + THE S3 RE-PIN: destroy_gate (16 tests, fully
+   synthetic/CI-safe: the BDG roundtrip incl. the disk bank
+   order, the TRT hp formula, footprints/hazards, survivor/
+   immune/destroyed, the GER gate, the §7j.38 draw-count table
+   via a same-seed reference sim, chain detonation + the
+   non-chainable zero-draw, the rubble stamp, the stager gates,
+   the platform destroy/weaken draw counts, the trap lane, the
+   disburser arms, the blast robot box-lane, the 217-pair table
+   shape, the no-inject pass-through). weapon_fire_gate updated
+   to the corrected 0xF-persist/0x13-free and 0x65-clear
+   behavior (28/28). S0/S1/S2 chains BYTE-IDENTICAL
+   (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 —
+   the no-inject invariant holds); S3 re-pinned ONCE to
+   e29f76f5585401e1 (the burst pairs + the stager gates draw the
+   shared stream — BEFORE any O1 S3 capture exists; the frame-100
+   class ladder + the persistent-0xF tail re-derived).
+6. THE D104 DIFFER CONTRACT: the armor-pad-reads/typedb-fade-byte
+   rows canonicalize BOTH channels to the last-nonzero prefix —
+   E's +0x18 bank is lazily materialized (it keeps its grown
+   length after the ≤7-frame fade zeroes the tail bytes) while
+   the guest grid is full-size; identical content now
+   canonicalizes identically (subsumes the §6a "len 0 == all-zero
+   grid" equivalence). The destroy family's scorch writes land in
+   that same bank — this is the contract that keeps the widened
+   scorch writers differ-safe.
+7. E-GAPS (documented, S4/S7 findings name them): the splash TICK
+   body (odd-frame fall/absorb, the per-tick 5-draw scorch
+   re-roll, the water stamps), the platform spread ring + creep
+   tick (S7), the trigger producers FUN_00422e0a/FUN_00422600
+   (S7 no-ops), the FUN_0041a225 effects bank (RandB-fed), the
+   critter area-damage lane (no critter bank in E), the debris
+   physics pass FUN_0040de9c, the objective at-zero extraction-
+   arm tail (the S6 seam), every SFX family (T4), and the §7j.39/8
+   open items (the 0x1F floor arm dispatch reading + the mine
+   proximity checks — the audit unit).
+
+Nudge-Worker: 3e93a4b1-0132-4e70-a159-e60f176207a5

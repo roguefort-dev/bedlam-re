@@ -765,6 +765,34 @@ differ come before any new scenario depth.
     2 E-only rows, zero field gaps, zero T2 diffs). S4 (the destroy
     family onto destructibles) is the next scenario unit, gated on
     the S3 finding set.
+    **S4-PREP LANDED 2026-08-22 (D104, §7j.38 + §7j.39):** the
+    E-side destroy family is in `bedlam-core::destroy` — the
+    mission-load STAGING (the .BDG type table ≤282 rows + the .POS
+    2000×16-B instance list with the footprint/hp re-stamp + the
+    .TRT terrain-structure bank, all host-seamed per the D51
+    pattern; the 0x7d2/0x7d3 hazard stamper FUN_00422f18), the two
+    RESOLVERS (FUN_0041a894 objects incl. the platform 0x7d4 entry
+    FUN_00422693 destroy/weaken + FUN_0041bc1c structures with the
+    rubble stamp), the destroy TAIL (objective notify → the GER
+    gate → the template-bank terrain RESTORE +0x46/+0x4A → the
+    five-effect loop with the §7j.38 draw table 8/8/8/8/8/0/0/72/9
+    → the score award → the four perimeter CHAIN walks with the
+    §7j.39/5 corrected geometry), the widened 20-kind debris stager
+    (the 11 seq walks + the ring/center scorch classes + the LRU
+    allocator), the splash stager + the water-z probe, the script
+    blast FUN_004244a1, the tile-0x62 trap lane, and both disbursers
+    (FUN_004124a4/FUN_004126dc — the §7j.14 0xF/0x65 corrections
+    landed). The weapon-tick IMPACT LANES are wired (the
+    §7j.39/2-verified call orders: bullets/shell/0x24/0x29 floors,
+    the artillery burst pairs, the mortar 3-cell, the class-0
+    quadrant body, the projectile type-1/2/3 branches). NONE of it
+    enters `state_hash` (the W6 split — debris/splash are T3
+    rows). NO-INJECT INVARIANT: S0/S1/S2 chains byte-identical; S3
+    re-pinned ONCE to e29f76f5585401e1 (the burst pairs draw the
+    shared stream whether or not destructibles are staged — no O1
+    S3 capture exists yet, D103's dbx-plan T2-tier unit precedes
+    it). S4.scen (S3 volleys onto staged destructibles) is the next
+    unit.
 
 ## 11. Risks
 

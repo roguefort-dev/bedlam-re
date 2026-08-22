@@ -234,8 +234,8 @@ fn o1_row_forms() {
     assert_eq!(get("typedb-fade-byte", "len"), Some(FieldVal::Int(0)));
     assert_eq!(
         get("armor-pad-reads", "len"),
-        Some(FieldVal::Int(8)),
-        "the len-0 equivalence applies only to all-zero grids"
+        Some(FieldVal::Int(4)),
+        "the D104 contract: the last-nonzero prefix (a nonzero at index 3 → len 4)"
     );
     assert_eq!(
         get("rng-state-a", "value"),

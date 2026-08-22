@@ -548,8 +548,17 @@ fn corpus_s3_command_fire() {
     let s3 = fs::read_to_string(scen_path("S3")).expect("S3.scen committed");
     let run = run_canonical(&s3, &root).expect("S3 canonical run");
     assert_eq!(run.manifest.frame_count, 133);
+    // Re-pinned ONCE at the W12-S4-prep landing [D104, §7j.39/9]:
+    // the S3 artillery volleys reach the burst window, and the
+    // landed burst-pair application draws the shared stream (the
+    // per-pair script-blast k6 1-in-8 gate + the k11 50% gate +
+    // the stager's k11 SFX-gate draw) whether or not destructibles
+    // are staged; the 0xF mine's class-0 expiry also no longer
+    // frees the record (the raw-asm disburser no-op). The chain
+    // moved from 49193732e6dbc546 BEFORE any O1 S3 capture exists
+    // (the D103 dbx-plan T2-tier unit precedes any live S3).
     assert_eq!(
-        run.manifest.chain_digest, "49193732e6dbc546",
+        run.manifest.chain_digest, "e29f76f5585401e1",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s3, &root).expect("S3 canonical re-run");
@@ -656,16 +665,37 @@ fn corpus_s3_command_fire() {
     assert_eq!(rockets.len(), 1);
     assert_eq!(rockets[0].2, 1);
 
-    // --- frame 100: the class ladder — only the volley-2 mines remain
-    //     (grenades + rockets + artillery freed; the mines' 4-cycle
-    //     class decrement is mid-ladder) --------------------------------
+    // --- frame 100: the class ladder — only mines remain (grenades +
+    //     rockets + artillery freed; the mines' 4-cycle class
+    //     decrement mid-ladder) -----------------------------------------
+    // Re-derived at the S4-prep re-pin [D104]: the burst-pair RNG
+    // draws shifted the later volleys' spawn jitter, so the frame-100
+    // ladder now shows the volley-2 0xF mines at classes {0,0,1,1}
+    // and the 0x13s at {1,1}.
     let v100 = weapons_of(dump.frames[100].watch("weapon-anim-bank").unwrap());
     assert!(v100.iter().all(|&(_, k, ..)| k == 0xF || k == 0x13));
-    assert!(v100.iter().all(|&(_, _, _, _, c)| c == 1), "class 4 -> 1");
+    let mut classes: Vec<_> = v100.iter().map(|&(_, _, _, _, c)| c).collect();
+    classes.sort_unstable();
+    assert_eq!(classes, vec![0, 0, 1, 1, 1, 1], "class 4 -> {classes:?}");
 
-    // --- the tail: every spawned record freed (the full lifecycle) ---
+    // --- the tail: the class-0 lifecycle split [§7j.39/3 — the raw
+    //     disburser map]: every spawned record freed EXCEPT the 0xF
+    //     mines, which persist past their class-0 quadrant (the 0xF
+    //     disburser arm is an asm no-op; the mine-proximity family
+    //     that eventually frees them is the documented E-gap — the
+    //     S4+ scenario/differ coverage names it) ------------------------
     let flast = dump.frames.last().unwrap();
-    assert!(weapons_of(flast.watch("weapon-anim-bank").unwrap()).is_empty());
+    let tail = weapons_of(flast.watch("weapon-anim-bank").unwrap());
+    assert!(
+        tail.iter().all(|&(_, k, ..)| k == 0xF),
+        "only the persistent 0xF mines remain: {tail:?}"
+    );
+    assert_eq!(tail.len(), 4);
+    // Two already cycled past class 0 (class −1, forever re-arming);
+    // two sit between the 3rd and 4th expiry (class 0).
+    let mut tail_classes: Vec<_> = tail.iter().map(|&(_, _, _, _, c)| c).collect();
+    tail_classes.sort_unstable();
+    assert_eq!(tail_classes, vec![-1, -1, 0, 0]);
 
     // --- the loadout seam gates ----------------------------------------
     // A robot index past the staged bank fails loud (never guessed).

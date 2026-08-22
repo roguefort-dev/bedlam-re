@@ -238,7 +238,10 @@ fn s0_s1_cross_and_double_run() {
         ("S0", 3u64, "8901789a88cf61fe", 0u64),
         ("S1", 401u64, "1c4e7b4c9d9b0947", 2u64),
         ("S2", 17u64, "809f4961b7757da4", 2u64),
-        ("S3", 133u64, "49193732e6dbc546", 2u64),
+        // Re-pinned at the W12-S4-prep landing (D104, §7j.39/9) —
+        // the artillery burst-pair application draws the shared
+        // stream (was 49193732e6dbc546).
+        ("S3", 133u64, "e29f76f5585401e1", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
