@@ -496,6 +496,23 @@ O1 capture of a markers scenario banks the MRK squad only, so its
 robot-count diff vs E is the recorded scenario seam, never a finding.
 S2's marker = `18,73,1`, the mission_corpus_gate walker.
 
+**Scenario staging key `loadout` (D103, grammar v1.3):** weapon-fire
+scenarios need armed robots, and NO engine path reaches the weapon slots
+(the original fills them at spawn from the session stat table — the D51
+host-seam pattern). `loadout = idx,mask,id:ammo[,...][; ...]` stages
+per-robot slot ids + the enable mask through the EXISTING
+`stage_robot_weapons` host seam — the same discipline as `markers`:
+an E-side staging seam, recorded never fabricated (O1 arms the same
+slots by playing the real game; the differ never writes a bank).
+Bounds mirror the original structures: robot idx 0..11 (the 12-robot
+cap), mask 0..0x7F (7 slots), ids in the 2..0x28 dispatch domain,
+positive i16 ammo, no mask bit beyond the staged list (auto-rearm never
+arms an empty slot). S3's loadout: robot 0 (the MRK robot) with one
+slot per INLINE-spawn class — artillery 9/0xA/0xB, prox mines 0x10
+(→2× type 0xF), pressure mines 0x14 (→2× 0x13), bouncy grenades 0x1B
+(→4× 0x1A), sticky 0x1D (→4× 0x1F) — and robot 1 (the `markers`
+walker) with the rocket 0x20 (→1× 0x24).
+
 ## 8. Open hypotheses ledger (what this doc does with each)
 
 | hypothesis | source | disposition |
@@ -720,11 +737,34 @@ differ come before any new scenario depth.
     banks are exposed via read accessors (the S3 T2 rows read them;
     they stay out of `state_hash` — the W6 split). NO-INJECT
     INVARIANT pinned: the S0/S1/S2 chains are byte-identical and
-    `advance_frame` draws no RandA without staged records. The S3
-    unit that follows = S3.scen (the scenario grammar needs a
-    loadout-staging key beside `markers` — the slots are host-seamed
-    through `stage_robot_weapons`) + the canonical weapon-bank/
-    projectile-bank rows + the differ normalizers + the chain pin.
+    `advance_frame` draws no RandA without staged records.
+    **S3 LANDED 2026-08-22 (D103):** the unit this prep named is
+    complete end-to-end. Grammar v1.3 adds the `loadout` staging key
+    (§7 note above) through `stage_robot_weapons`; the EXD twins for
+    the two T2 banks are PINNED and REGISTERED (RE-EXD-MAP §5c,
+    W12-S3 Ghidra hop: weapon-anim 0x980d4 — the free-slot finder
+    FUN_00023295 bound 0x5460 = 400·0x36 exact + the tick twin
+    FUN_000212f2 with the 0x17 3-clone split; projectile 0x10e174 —
+    the tick twin FUN_00022a52's 50-slot walk + the +0x1A/+0x1E
+    tail words beyond the 7 E-modeled fields, an O1-only coverage
+    surface, never fabricated). `parity_harness --canonical` emits
+    both banks as u32 count + the FULL records (the record field
+    order IS the guest layout — no compaction; the W6 split keeps
+    them out of state_hash); S3.scen stages 8 COMMAND volleys over
+    133 records covering every class the modeled dispatch can
+    INLINE-spawn (artillery 9/0xA/0xB, mines 0xF/0x13, grenades
+    0x1A/0x1F, rocket 0x24) — bullets/shell/0x17/homing are
+    documented E-gaps (their producers are the unmodeled AI-order
+    families + the mortar; a live O1 firing them surfaces as differ
+    coverage findings, never silence). Chain pinned
+    49193732e6dbc546, byte-identical double run; S0/S1/S2 chains
+    re-asserted byte-identical. The differ normalizes both banks on
+    BOTH channels (E: count+records; O1: the bare guest span — no
+    count cell, the free-slot walk is the bound) through the SAME
+    field walk; differ_gate S3 = cross PASS-WITH-NOTES (exactly the
+    2 E-only rows, zero field gaps, zero T2 diffs). S4 (the destroy
+    family onto destructibles) is the next scenario unit, gated on
+    the S3 finding set.
 
 ## 11. Risks
 

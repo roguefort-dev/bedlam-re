@@ -3742,3 +3742,97 @@ Nudge-Worker: d6b238f4-c0d3-4954-b02b-ede9b5eba5a4
    sides. NEXT: the S3.scen/canonical-chain unit.
 
 Nudge-Worker: 95ab9206-6d30-4fb1-8fd1-222e6d78e780
+
+## D103 — 2026-08-22: P4.2/W12-S3 — the S3.scen + canonical-chain unit COMPLETE: the weapon/projectile T2 bank rows live end-to-end (canonical emission + EXD aliases + differ normalizers both channels + differ_gate row), grammar v1.3 gains the `loadout` staging key; the EXD twins for both banks PINNED (0x980d4 / 0x10e174) + a pre-S3 COMMAND payload off-by-one fixed (+7/+9/+0xB); S0/S1/S2 chains stay BYTE-IDENTICAL, S3 pinned 49193732e6dbc546 (engine+tests by worker 0bef7bae claim 2 — RE hop + fix + loadout key + canonical chain committed; the differ/registry leg left uncommitted by session death, ADOPTED + VALIDATED + COMPLETED by continuation worker 16ebe0c4 claim 2)
+
+1. RE HOP (774eed4, -process BEDLAM.EXD -noanalysis + EXDProjBank.java
+   → ghidra-project/exd-projbank.txt): the EXD twins of the two S3 T2
+   banks are PINNED and now REGISTERED (RE-EXD-MAP §5c). Weapon-anim
+   bank = **0x980d4** ×0x36 — the free-slot finder twin FUN_00023295
+   walks stride 0x36 with the bound `iVar1 < 0x5460` = 400·0x36
+   EXACT (slot-count re-confirm), and the tick twin FUN_000212f2
+   (the enemy-×4 family) performs the 0x17 3-CLONE SPLIT at the
+   0x980d4 base (`(&DAT)[slot·0x1b] := 0x17`, parent xyz copy,
+   damped v −= v>>1) — the §7j.37 clone split EXACT. Projectile
+   bank = **0x10e174** ×0x22 — the tick twin FUN_00022a52 (50-slot
+   walk, type 0x65..0x68 = the §7j.28 draw-dispatch family) +
+   FUN_0002a0f7 (the odd-i robot-hit lane). TAIL WORDS beyond the
+   7 E-modeled fields: +0x1A a clamp-0..7 counter, +0x1E a −1
+   countdown whose zero CLEARS the type — E models no producer;
+   they parse on BOTH channels so a live O1 tail surfaces as a T2
+   finding, never silence (the coverage discipline, not a gap).
+2. THE COMMAND PAYLOAD FIX (ae8be6b, pre-S3 off-by-one):
+   from_payload read x/y/z ONE BYTE EARLY (+6/+8/+0xA), folding the
+   builder's +6 filler byte (SP: rand&0xF) into the target words —
+   the correct grammar is words@+7/+9/+0xB exactly as RE-EXD-MAP
+   §5c/D83 pinned and the FUN_00409138 decompile shows
+   (exw-robottarget.txt:74-113: local_e0 = rec+7; the bit0 reads
+   then bump +2; the MP-only mask block bumps first, SP never takes
+   it). Fixtures re-authored with the filler byte 0x0A proving the
+   offsets. 28/28 weapon_fire_gate green.
+3. GRAMMAR v1.3 `loadout` (a928ad8, runner.rs): per-robot
+   `idx,mask,id:ammo[,...]` entries (';'-separated) staged through
+   the EXISTING stage_robot_weapons host seam — the D51/markers
+   discipline (E-side staging seam, recorded never fabricated).
+   Bounds mirror the original structures: idx 0..11 (12-robot cap),
+   mask 0..0x7F (7 slots), ids 2..0x28 (the consumer dispatch
+   domain), ammo 1..0x7FFF (positive i16), ≤7 slots, no mask bit
+   beyond the staged list (auto-rearm never arms an empty slot).
+4. CANONICAL + S3.scen (af5c2b8): parity_harness --canonical emits
+   weapon-anim-bank (u32 count + the FULL 400×0x36 — the record
+   field order IS the guest layout, no compaction picked because the
+   bank IS the watch surface: a compact active-records form would
+   hide free-slot reuse; documented as the §7 form) +
+   projectile-bank (50×0x22, the 7 mapped fields + the zeroed
+   +0x1A/+0x1E tail), both T2-tier-gated like every row; the
+   order-target row now mirrors the COMMAND triple write. S3.scen:
+   tiers T0,T1,T2,TS; markers 18,73,1 (the S2 walker = rocket
+   robot 1); loadout robot 0 = one slot per INLINE-spawn class
+   (artillery 9/0xA/0xB, prox 0x10→0xF, pressure 0x14→0x13, bouncy
+   0x1B→0x1A, sticky 0x1D→0x1F) + robot 1 rocket 0x20→0x24; 8
+   COMMAND volleys over 133 records / 132 frames — the cadences
+   (8/5), the unconditional artillery disarm, the per-record ammo
+   gate, the rearm cascade walking slots 0..2, the all-empty no-op,
+   and the FULL spawn/active/free lifecycle of every family (the
+   mines' 4-cycle class ladder frees ~frame 100; everything free at
+   the tail). Chain 49193732e6dbc546 pinned, double-run
+   byte-identical. SCOPE REFINEMENT (documented in the scen header
+   vs the §7 row's "every modeled class"): bullets 2..4 / shell 5 /
+   ballistic 0x17 / homing 0x29 have NO inline spawn case in the
+   modeled dispatch — their records are born in the unmodeled
+   AI-order families + the mortar; S3 fires what the COMMAND path
+   can actually source, and a live O1 firing the other slots
+   surfaces as the differ's coverage class ("S3 findings name
+   them") rather than a silent gap.
+5. THE DIFFER LEG (the adopted WIP, completed this run): both banks
+   normalize on BOTH channels through the SAME field walk
+   (weapon: count + 14 fields ×400 — kind u16 w@+0, owner d@+2,
+   target d@+6, tick d@+0xA, draw_ctr d@+0xE, xyz Q13 d@+0x12/
+   +0x16/+0x1A, v d@+0x1E/+0x22/+0x26, class d@+0x2A, arc d@+0x2E,
+   trail d@+0x32; projectile: count + 9 fields ×50 — kind w@+0,
+   xyz d@+2/+6/+0xA, v d@+0xE/+0x12/+0x16, tail_ctr +0x1A,
+   tail_cdn +0x1E). E parses u32 count + records (count ≠ slot
+   total = truncated dump, FAIL LOUD); O1 parses the BARE guest
+   span (no count cell on the guest — the free-slot walk is the
+   bound; RE-EXD-MAP §5c). watches.toml: exd_addr 0x980d4 /
+   0x10e174 filled, exd_status verified, layouts rewritten
+   field-exact; registry_anchors' W1 T2-empty rule narrowed to
+   exempt exactly these two rows. differ_gate: S3 joins the
+   s0_s1_cross_and_double_run loop (inv_frame fabricates the O1
+   banks as the bare spans) — cross PASS-WITH-NOTES with exactly
+   the 2 E-only row findings, ZERO field gaps, ZERO T2 diffs;
+   double-run PASS modulo counter/RNG.
+6. VERIFIED (this run, full re-validation of the whole unit):
+   diffharness suite green (incl. the 2 new bank-row tests —
+   same-walk-both-channels, wrong-count/short-span fail-loud);
+   canonical_dump_gate 6/6 (S3 chain + S0/S1/S2 pins
+   8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 all
+   re-asserted — the no-inject invariant holds); differ_gate green
+   over S0/S1/S2/S3; fmt applied clean; manifest clean before AND
+   after the corpus-reading runs. Deliverables: DESIGN-DIFFHARNESS
+   §7 v1.3 note + §10-W12 S3-LANDED; watches.toml; differ.rs;
+   registry_anchors exception. NEXT: S4 (the destroy family) gates
+   on the S3 finding set from a live session; the unattended tail
+   is the §7j/FORMATS backlog + W10/W11.
+
+Nudge-Worker: 16ebe0c4-74ee-48e1-bf36-73e981ed114f
