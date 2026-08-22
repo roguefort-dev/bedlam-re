@@ -331,6 +331,74 @@ event-timing table, and the dump-chain digests for both sides. A regression
 is any class-count change other than `accepted-T3` noise (statistical bands
 pinned per scenario at first green).
 
+### 6a. Canonical record grammar (W6 — the E-side field map, D85)
+
+The canonical record is the CONTRACT both sides serialize into the W3
+watch blobs: the E emitter writes it directly from engine state; the W7
+normalizer converts O1/O2 raw guest bytes into the same grammar per the
+registry row layouts. Little-endian, no padding, fixed field order per
+row. Emitted rows only where the engine has a defined field map — every
+other registry row is an explicit **E-gap** (the differ reports it as
+STRUCTURAL missing-on-E, never silently skipped).
+
+| watch id | canonical bytes (E) | source engine state |
+|---|---|---|
+| frame-counter | u32 | mission frame PRE-increment at the tail (`sim.frame()−1`; O1 reads the same pre-increment word at its tail — the registry row's dump-point ordering anchor) |
+| rng-state-a | u64 | MissionSim PCG32 raw state (channel-native state word; T3-statistical class — never bit-compared) |
+| rng-state-b | u64 | MissionScene RandB-stand-in PCG32 raw state (same class) |
+| score / money | u32 / u32 | `MissionScene::campaign()` (0 / 4000 fresh; boot difficulty seeds money `4000−500·d`, the engine's own `menu::start_score`) |
+| difficulty | u32 | the session BOOT value (engine difficulty producers unmodeled — the record carries the injected scalar) |
+| zone / mission / mode / linear-mission-m | u32 ×4 | host episode slot (`mission_slot()` / `episode().linear()`); mode = 0 (SP, engine-modeled constant) |
+| robot-bank | u32 count + count records; record = the modeled Robot field list in the `state_hash` order: alive u8, pos_x i32, pos_y i32, z i32, state u16, dir_byte u16, facing u16, anim u16, variant u16, probe_z u16×8, stop_dist i32, target_present u8, target_x i32, target_y i32, drop_countdown i32, hp i32, armor i16, hit_flash u16, alarm u16, kind u16, shield i32, shield_charges i32, shield_boost i32, battery i32, armor_pool i32, alarm_ctr i32, death_flag u16 | `MissionSim::robots()` |
+| selection-triple | u32 selected idx only (the D83 anti-fabrication precedent: the alias-covered cell; cursor/squad join when their engine models + EXD aliases land) | `sidebar_selected()` |
+| blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector) |
+| per-player-selected | 4 × {x i32, y i32, z i32} (player 0 = selected robot pos>>8 Q5 + z; 1..3 zero) | sim + sidebar |
+| order-target | i32 ×3 | the ORDER-seam write (last injected target; the 0x4dd484 cells persist, so does the E session value) |
+| move-target-words | u32 count + per-robot {present u8, tx i32, ty i32} (Q5; the EXW u16-word semantics pin at W7) | `Robot::target` |
+| beacon-family | flag u32, timer u32, tile i32×3 | `MissionSim::order()` (window = timer 0x197) |
+| spread-claims | u16 ×12 | `Order::claims` |
+| typedb-fade-byte, armor-pad-reads | u32 len + len bytes (the engine bank is lazily materialized; len 0 ≡ all-zero w·h — the ZONEA corpus until a death) | `armor_pads()` (the +0x18 byte family, 7g.3/7j.9) |
+| static-map-wh (TS, anchor frame only) | u32 w, u32 h | terrain/view size |
+
+**E-gaps (rows the E side does not emit in W6):** sfx-master-gate (T0),
+no-extract-latch, tile-word-grid (the 7h.3 tile-word producer is
+host-seamed), platform-strength, typedb-mirror-rows, variant-flag-bytes,
+object-instances, trt-array (T1); every TS row except static-map-wh (the
+engine parses the volumes into internal forms and does not retain raw
+bytes); all T2/T3/T4 (unmapped tiers); all TI (the E injection surface is
+the scenario step list, not watched keystore bytes).
+
+**Frame model (E):** one MissionShell-equivalent frame = one
+`pump_frame(dt=4)` = `MissionScene::tick` (six phases + epilogue) +
+`present` (the render epilogue runs `rand_b` churn — the real engine frame
+rhythm, so the dumps represent genuine engine frames, not stripped-down
+ticks). The ANCHOR record = the tail of the FIRST mission tick
+(`frame_no` 0); the dump point is after `present`, before nothing — the
+engine has no separate flip. Records then run `frame_no` 1.. strictly
+increasing; total = anchor + `frames` (the stitcher contract). Audio is
+deliberately not pulled (state-only harness, §0).
+
+**Scenario step consumption (E, the D82 shared seam — the same
+`diffharness::runner` parser):** walk phase must be EMPTY (the E menu-walk
+seam waits on the P2e InputFrame button bit-map; S0W-shaped scenarios are
+rejected naming it). Mission-phase steps: `step N` = N null-input frames;
+`keystore` = the seam maps scans → `InputFrame` — the pinned map is EMPTY
+in W6 (no engine keyboard consumer exists; P2e), so steps mark the frame
+injected and deliver the null frame; scan 0x19 (P-pause) is rejected
+outright (§2 pause rule). `order x y z` = the click-order seam: record the
+target triple (order-target row) and arm via `arm_order_at_robot` at the
+alive robot whose tile == (x,y) (the E pick form — tile-exact; the EXW pick
+is the 0x20-px screen-distance twin, a documented seam approximation W8 can
+refine); no robot at the tile = the pick fails, target recorded. `command`
+and `pad` are REJECTED naming the missing engine seams (the fire family and
+extraction arming are not modeled — S3/S6 pair with their engine producers
+per §10-W12). `boot difficulty=d` = the campaign money seed
+(`set_campaign(0, 4000−500·d)`) + the canonical difficulty value. The dump
+is produced by the same `runner::stitch` validation + `encode_dump` path as
+O1 captures (channel E, build_sha256 = sha256 of the engine identity
+string, pins = seed/dt/difficulty/zone/mission) — identical bytes given
+identical state, by construction.
+
 ## 7. Scenario corpus (build order; each names its hypotheses)
 
 | id | scenario | script sketch | tiers | arbitrates / proves |
@@ -459,6 +527,18 @@ differ come before any new scenario depth.
 6. **W6 — engine dump emitter.** parity_harness gains `--canonical`:
    per-tick canonical records in the W3 schema (MissionSim/MissionScene
    field maps for T0/T1 first).
+   **STATUS 2026-08-22 (D85):** LANDED. `parity_harness --canonical
+   --scenario <S.scen>` drives GameHost over the SHARED v1.1 scenario
+   grammar (the D82 seam: same `runner::Scenario` parser as the O1 side)
+   and emits the channel-E W3 dump via the same `runner::stitch` +
+   `encode_dump` path as O1 captures. The canonical record grammar (the
+   field-map contract W7's normalizer must match) is §6a above; E-gaps
+   and the scenario step semantics (keystore/order/boot consumed,
+   command/pad + walk-phase rejected naming the missing engine seams)
+   are recorded there. Verified by a synthetic comparison fixture (the
+   byte grammar + digests pinned) + corpus-gated S0/S1 runs (the
+   mission_corpus_gate pattern; dumps stay runtime-only, chain digests
+   pinned in the test).
 7. **W7 — differ.** Normalizer + the §6 comparison modes + report writer +
    fingerprint manifest output.
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).

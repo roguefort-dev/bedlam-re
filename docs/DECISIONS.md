@@ -2851,3 +2851,57 @@ Design first (RUNTIME.md "W5 walk driver"), implementation follows.
    relies on acks as before).
 
 Nudge-Worker: 845abdc5-ded1-4499-9286-85bbebcccfdc
+
+## D85 — 2026-08-22: the W6 engine dump emitter lands (`--canonical`, channel E): the §6a canonical record grammar + the shared scenario seam
+
+Context: DESIGN §10-W6 — the E side of the differ. parity_harness (the
+bedlam-game example) gains `--canonical --scenario <path>`: drive GameHost
+over a v1.1 scenario file and emit the per-tick W3 dump (channel E)
+through the SAME validation/encode path as O1 captures
+(`runner::stitch` + `encode_dump`; the E dump is byte-deterministic by
+construction). Decisions:
+
+1. CANONICAL RECORD GRAMMAR (DESIGN §6a, the W6 deliverable): the watch
+   blobs are the CONTRACT — E writes engine state directly; W7's
+   normalizer must convert O1/O2 raw bytes into the same grammar. T0/T1
+   field maps committed (frame counter pre-increment at the tail, RNG
+   A/B as channel-native state words, score/money/difficulty/zone/
+   mission/mode/linear-m, the robot bank as the modeled Robot field
+   list in the state_hash order, selection-triple 4-B alias form per
+   the D83 precedent, blink-cursor, per-player-selected, order-target,
+   move-target-words, beacon-family, spread-claims, the +0x18 byte
+   family, static-map-wh). Every unmapped row is an explicit E-gap
+   (listed in §6a) — missing-on-E is a STRUCTURAL finding, never
+   silent.
+2. FRAME MODEL: one record per `pump_frame(dt=4)` = tick + present
+   (the render epilogue runs the RandB churn — dumps represent genuine
+   engine frames); anchor = tail of the FIRST mission tick (frame_no
+   0), then strictly increasing; total = anchor + `frames` (the
+   stitcher contract). Audio not pulled (state-only, §0).
+3. SHARED SEAM (D82): the emitter consumes the SAME `runner::Scenario`
+   parser. Walk phase must be empty (the E menu-walk seam waits on the
+   P2e button bit-map — S0W-shaped scenarios are rejected naming it);
+   keystore maps to InputFrame via the pinned EMPTY map (no engine
+   keyboard consumer yet; scan 0x19 P-pause rejected per §2); order =
+   the click-order seam (target recorded + `arm_order_at_robot` at the
+   tile-exact alive robot — the EXW 0x20-px screen pick is the
+   documented approximation); boot difficulty seeds the campaign money
+   via the engine's own `menu::start_score` formula; command/pad are
+   REJECTED naming the missing engine seams (fire family / extraction
+   arming — S3/S6 pair with their producers per W12).
+4. PLACEMENT: the field maps live in
+   engine/bedlam-game/examples/parity_harness/canonical.rs (shared by
+   the example and the corpus-gated test via `#[path]`); diffharness is
+   a bedlam-game DEV-dependency only (zero-dep workspace member — the
+   engine production dependency graph is untouched). Three new
+   read-only accessors (MissionSim::rand_a_state/armor_pads,
+   MissionScene::rand_b_state); no engine behavior changed.
+5. VERIFICATION: synthetic comparison fixture (hand-built TickState →
+   hand-expected blob bytes + pinned digests — pins the §6a byte
+   grammar), synthetic MissionSim run (dump decode + pinned chain), and
+   corpus-gated S0/S1 runs (401/3 records, byte-identical double runs,
+   pinned chain digests — re-baseline deliberately, the fingerprint
+   discipline). Dumps stay runtime-only (§3 hygiene); git carries the
+   chain digests in the test.
+
+Nudge-Worker: 1f758667-a545-4efc-b1ca-975af330fcb1
