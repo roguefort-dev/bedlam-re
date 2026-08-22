@@ -65,23 +65,7 @@
    (EXD decrements it per phase-0 pass, EXW 7g.1 documents no decay)
    to surface as the first candidate finding if any damage happens
    in-scenario.
-2. [P4.2/W8-prep] THE ROBOT-COUNT OVERRIDE PIN (unattended; bounded
-   probe, the DESIGN sec 10-W8 NOTE): does the original SP path fill
-   the network-marker override at 0x46cbe0/EXD 0x119588-adjacent
-   staging (E stages the host-default markers -> ZONEA single-robot
-   squad; if the ORIGINAL spawns the full squad, robot-count diffs
-   are a finding class of their own)? Anchor: the W5-followup command
-   count cell 0x46cbe0 + the spawn path FUN_0040cca0 twin. NOTE D88:
-   the EXD spawn initializer is PINNED = FUN_0001d9cd (ghidra-project/
-   exd-robot-backhalf2.txt) — SP writes count 0x11958c := 1 (zone<3
-   || 7) / 2 (zone 3) / 3 (else) and cap 0x11950c := count (MP: cap
-   := command count 0x119588), i.e. the SP ZONEA live game banks ONE
-   robot exactly like E; only the EXW side (FUN_0040cca0) needs the
-   same one-hop confirmation to close W8. Deliverable:
-   the pinned answer in RE-EXD-MAP/DESIGN + (if the original fills
-   it) the E-side staging seam named for W8. Verify: docs-only or a
-   small engine test if a staging seam changes.
-3. [P4.2/W7-followup2] THE MOVE-TARGET PLAN-ROW FILL (unattended; the
+2. [P4.2/W7-followup2] THE MOVE-TARGET PLAN-ROW FILL (unattended; the
    D88 follow-up — takes S1 robot coverage 3 -> 0): (a) dbx-plan
    emits the move-target-words row for S1 (extent formula now PINNED:
    the fixed 0x60-B span at EXD 0xf75ec covers x[12]+y[12]; the
@@ -230,6 +214,25 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W8-prep THE ROBOT-COUNT OVERRIDE PIN unit COMPLETE
+  (worker b0656949 claim 2, commit f106cf1, D89, docs-only). ANSWERED:
+  the original SP does NOT fill the 0x46cbe0 network-marker override —
+  EXW FUN_0040cca0 @0x40cd8d gates it on [0x4edb88]!=0 (network
+  sessions only; the EXD twin is the mode==0 branch of FUN_0001d9cd,
+  instruction-for-instruction), and the title menu "New Single Player
+  Game" @0x43aaa3 sets 0x4edb88=0 ∧ 0x46cbe0=1 for every local
+  session. SP ZONEA banks ONE robot in EXW, EXD, and E alike —
+  robot-count parity holds, robot-count diffs in SP scenarios are a
+  genuine finding class, NO E-side staging seam changes. Corrections
+  landed: EXW 0x46ccbc = TOTAL (EXD cap 0x11950c twin) vs 0x46cbd8 =
+  PER-PLAYER (EXD 0x11958c twin) — RE-EXD-MAP §5 robot-bank row +
+  RE-EXW-SIM §7c.7 fixed; future MP bank dumps must bound by the cap
+  cell. Faithful quirk recorded: the SP marker write hits
+  record[12]+0x2A (stale MRK-copy counter, both twins) — harmless.
+  Evidence: local ghidra-project/exw-spawncount-asm.txt (verbatim
+  extract from the 7j.27 objdump — no new Ghidra run; desync/
+  realignment note in its header). DESIGN §10-W8 resolved; DECISIONS
+  D89; RE-EXD-MAP §5d. Queued: the move-target plan-row fill (item 2).
 - 2026-08-22: P4.2/W7-followup THE EXD ROBOT BACK-HALF PROBE unit
   COMPLETE (worker 03be9318 claim 2, commits 455ca41 + 206b776, D88).
   (a) RE NOTES FIRST (455ca41): two `-process BEDLAM.EXD -noanalysis`

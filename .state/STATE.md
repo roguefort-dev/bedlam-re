@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W8-prep THE ROBOT-COUNT OVERRIDE PIN unit
+    COMPLETE, worker b0656949 claim 2, commit f106cf1, D89, docs-only
+    — no new Ghidra run: the EXW disasm was extracted verbatim from
+    the 7j.27 exw-text-objdump into local ghidra-project/
+    exw-spawncount-asm.txt): ANSWERED — the original SP does NOT fill
+    the 0x46cbe0 network-marker override. EXW FUN_0040cca0
+    @0x40cd4c..0x40ce23: per_player [0x46cbd8] := zone rule, total
+    [0x46ccbc] := per_player; the override is gated on [0x4edb88]!=0
+    @0x40cd8d (network sessions only; EXD twin = the mode==0 branch
+    of FUN_0001d9cd, instruction-for-instruction). Title menu pins
+    SP: "New Single Player Game" @0x43aaa3 sets 0x4edb88=0 ∧
+    0x46cbe0=1 (host marker only; MP lobby 1=Coop/2=Head2Head).
+    SP ZONEA banks ONE robot in EXW, EXD, and E alike — robot-count
+    parity holds, robot-count diffs in SP scenarios are a genuine
+    finding class, NO E-side staging seam changes. CORRECTION: EXW
+    0x46ccbc = TOTAL (EXD cap 0x11950c twin), EXW 0x46cbd8 =
+    PER-PLAYER (EXD 0x11958c twin) — RE-EXD-MAP §5 robot-bank row +
+    RE-EXW-SIM §7c.7 fixed (equal in SP; future MP bank dumps bound
+    by the cap cell). Faithful quirk: the SP marker write hits
+    record[12]+0x2A (stale MRK-copy counter, both twins) — harmless,
+    re-stamped/dead-gap, no diff surface. NEXT HEADS: the move-target
+    plan-row fill (item 2, unattended, coverage 3 → 0) + the operator
+    S0 live session (item 1, interactive-gated).
+
   - OPEN 2026-08-22 (P4.2/W7-followup THE EXD ROBOT BACK-HALF PROBE
     unit COMPLETE, worker 03be9318 claim 2, commits 455ca41 + 206b776,
     D88): the robot-record canonical coverage is 31 of 34 leaves on
