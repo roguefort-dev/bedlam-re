@@ -4572,7 +4572,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | per-player selected anchor | 0x4c71c4: 4×0xC {x>>8, y>>8, z}, spawn-seeded by FUN_0040cca0 tail (selected robot idx DAT_0046cbd4), renderer-updated FUN_00403938 @0x403994/0x4039d2/0x403a27; sits immediately before the 0x4c71f4 bank base | §7j.20 |
 | pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides [§7j.21: arm the matching 0x4dcdb8 record — rider state@+0x0C := 2, pos := the record's own marker x/y ·0x2000+0x1000 (dwords 0x4dcdbc..0x4dd330), countdown := 10, +0x20 := rider], messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19, §7j.21 |
 | critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
-| command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0; flags byte@+5 (bit0 select→0x46cc30/0x46cc60 + auto-arm, bit1 order→0x4dd484/88/8C, bit4); 39-case weapon switch (id−2): order dispatchers FUN_0040b615/0xaf98/0xa56f/0xace8/0xa7a1/0xa9ff + projectile spawners into the 400×0x36 bank 0x4c71f4 (types 0x9..0xB/0xF/0x13/0x1A/0x1F/0x24, aimed at the order target, ammo/enable/cooldown bookkeeping, auto-rearm + msgs 0x1C..0x21) | §7j.17 |
+| command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0 (count NOT reset by the consumer; the recharge pass runs once at the loop exit for EVERY robot × 7 slots: enabled ∧ cooldown≠0 → −−); spot@+3 → robot+0x14 + cursor angle 0x4dc678; robot = rec_idx·0x46cbd8 + id@+1; bit0 select → move-target words (state ∉ 3/4/5) + auto-arm state:=1/stop:=10⁶ (state ∉ 2..5) — and the bit0 block BUMPS the word pointer +2, so bit0∧bit1 records take the order triple from +0xB/+0xD/+0xF; bit1 order → 0x4dc6bc:=1, triple 0x4dd484/88/8c, 0x4eb940..50 clear, then (alive ∧ deploy-delay+0xA0==0 ∧ state≠2) the 7-slot loop with FIRE GATES mask∧cooldown==0∧ammo≠0: artillery w9..0xB INLINE 1× (type=id, pos+0x100, z=(z+0x15)<<8, no velocity, cooldown 0, mask bit XORed UNCONDITIONALLY); mines w0x10..0x12/0x14..0x16 INLINE 2/4/6× types 0xF/0x13 (2×RandA jitter ±0x20 on the order target, octile>>3 normalize, vel>>2/>>1, ttl RandA&0xF+1, arc 0x900−RandA&0x2FF, class 4, cooldown 8, 4 draws/record); grenades w0x1B..0x1E INLINE 4/6× types 0x1A/0x1F (3D vz from the order z, ttl 0x32∓/＋RandA&0xF, arc 0xB00−/0x900−RandA&0x2FF, class 0, trail:=0); rocket w0x20 INLINE 1× type 0x24 (no jitter, ttl 0, cooldown 5, arc := angle_pair); the AI-order families w2/3/4,w6/7/8,w0x18/0x19,w0x21..0x23,w0x25..0x28 with counts 3/2/1, 0/1/2, 1/2, 3/6/9, 1/2/4/6 (internals OPEN); auto-rearm first id≠0∧ammo≠0 slot when the mask emptied + msgs 0x1C..0x21; idle AI ticks (10/9/2/6) when deploy-delay≠0 ∧ frame&3==0 | §7j.17, §7j.37 |
 | mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
 | floor probe | FUN_0041e411(px,py,z): level try +1/−2; per-type height entry [0x4edd60+2+(type−1)·4] → in-tile 0x20×0x20 byte map @(x&31)+(y&31)·32 at +6; floor = level·0x20 + byte; 0x1F = top-of-stack (sibling of FUN_0041eaa1 §7j.14) | §7j.17 |
 | walk/settle helpers | FUN_0041f8f9 8-sample walk probe (0x4543e4/0x454404, level ∧ height-diff ≤3); FUN_004186fc standing-on-scenery (mirror 0x4796d5); FUN_004182c3 8-corner z-settle (snap +0x13/+0x0B); FUN_0041642d anim ctr wrap; FUN_0041286f 50×0x22 free slot; FUN_00412848 400×0x36 free slot | §7j.17 |
@@ -4589,6 +4589,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
 | terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |
 | weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i (400 slots, free-slot FUN_00412848), kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14/§7j.17 |
+| weapon-anim tick (400×0x36 bank) | FUN_00410823(phase 0..3), 4×/frame from MissionShell: bullets 2..4 = 2 tested sub-steps + 1 committed (rollback −v; actor/terrain hits re-add + disburser K2 + impact pair via FUN_00419aff(type); records FREE ONLY at tick>99 — impacts do not kill them); shell 5 = 1 move, free on bounds/tick>100/z-OOB, critter-lane hit (odd phases) stores (x,y)+K3 debris at z>>8−10, MP-lane hit → disburser, floor hit → impact pair 75 + disburser + FREE; artillery 9..0xB phase-0-only, tick++, fall 0x200/tick to FUN_0041e411 settle (floor<<8), tick==0x18 ∧ player-kind → FUN_004245c9, burst window tick−0x20 < dword[0x456c78+4·TYPE] (durations 2/4/7 BY TYPE) walking the pair lists PTR[0x456bf0+4·(tick−0x20)] (sentinel 500, FUN_004244a1 5000-damage blasts + 50% K0xB), past the window → disburser + free; ballistic family gravity arc −0x100/tick with the per-type bounce/roll semantics (7j.22 item 6); rocket 0x24 class-countdown launch delay → straight flight, floor → 400 impact, ttl>0x64/bounds → free; homing 0x29 launch delay → z-ease ±0x200 clamp [0,0xFF00] + ground-lift ≥(z>>8)−4, heading := (heading + angle-diff·4)&0xFF over the target Q13 delta, vel = 2·(sin[heading]>>4, sin[heading−0x40]>>4), forward probe FUN_0041e56d, avoidance ±4-sector LEFT-first (left-OOB also climbs z+=0x600), dead-target gates → disburser+fizzle, floor → 250 impact, ttl>0xC8/bounds → free | §7j.22, §7j.37 |
+| byte-angle sine table | SINTABLE.BIN (512 B = 256 i16): word[a] = round(sin(a·π/128)·32767) [corpus-verified]; FUN_0041eb65 "cos" = movsx word[base+(a&0xFF)·2], FUN_0041eb77 "sin" = the same at (a−0x40)&0xFF; the 64-word sector-scan threshold table (FUN_0041eb7d, base+4) = words[2..66] of the same array — one dual-use file table at [0x46cbd0] | §7j.37 |
 | projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4; coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20) | §7j.14 |
 | splash gates/eviction | FUN_0041bd78: first z ≥ min(z,7) with DAT 0 ∧ seen 0; FUN_00424355 gates: DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58+tile]=0; full ring → evict max-age + FUN_0042394a flush | §7j.14 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
@@ -5532,6 +5534,175 @@ question). All [verified] asm/DGROUP/corpus unless tagged.
    rows (already covered). E-side: the terrain blit seam is exactly
    the 7j.35 list (u8-RLE decode + per-tile remap selection) — the
    scratch family and the stamp need NOT be modeled at all.
+
+## 7j.37. THE S3-PREP RE ADDENDUM — the COMMAND dispatch + the
+weapon-anim tick re-verified field-exact from the existing local
+dumps (consumer FUN_00409138 ghidra-project/exw-robottarget.txt,
+tick FUN_00410823 ghidra-project/exw-weaponanim.txt/-asm.txt, angle
+family ghidra-project/exw-text-objdump.txt 0x41eb65..0x41ebf7); the
+SINTABLE.BIN cos/sin identity CLOSED against the corpus file
+(2026-08-22, worker 95ab9206 claim 2; objdump/dump-only, NO new
+Ghidra run; one read-only corpus probe of SINTABLE.BIN, scratch
+/tmp/opencode — prep for the E-side W12-S3 weapon-fire producer)
+
+Purpose: the E-side fire model needs the spawn fields and per-tick
+mechanics at transcription fidelity. Everything below is
+[verified] against the named dumps unless tagged. This refines
+7j.17 item 4 and 7j.22 items 3/4/5/8 — no ledger row is
+contradicted; three rows are rewritten/added.
+
+1. **THE CONSUMER DISPATCH, field-exact** (FUN_00409138,
+   exw-robottarget.txt:5..650):
+   - Ring: records @0x4dd4a0 stride 0x80, count DAT_0046cbe0; the
+     loop processes record i then i+1 — and the RECHARGE PASS runs
+     ONCE at the do-while exit (also when count==0): for EVERY
+     robot × 7 slots, `(enable-bit set) ∧ cooldown≠0 → cooldown−−`
+     (slot cooldown = u16@(rec+0x36+8k+6), i.e. 0x4c6a20+8k). The
+     count is NOT reset by the consumer [the reset writer stays
+     unpinned; the W5 injector appends at count].
+   - Per record: spot short@+3 → robot +0x14 (frame-base word) AND
+     the cursor angle `_DAT_004dc678`; robot idx = record_index·
+     DAT_0046cbd8 + id short@+1 (SP: the raw id); MP-only
+     (0x4edb88≠0): robot enable mask +0x6E := word@+7.
+   - **flags bit0 SELECT**: if state ∉ {3,4,5} → move-target words
+     DAT_0046cc30/60[robot] := words@+7/+9 (raw Q5 words); if
+     alive ∧ state ∉ {2,3,4,5} → state@+0x0C := 1, stop_dist@+0x74
+     := 1000000. QUIRK [decompile-faithful]: the bit0 block
+     advances the record word pointer +2 shorts, so a record with
+     bit0∧bit1 set writes the ORDER triple from words@+0xB/+0xD/
+     +0xF (bit1 alone reads +7/+9/+0xB).
+   - **flags bit1 ORDER** (the fire arm): 0x4dc6bc := 1; the
+     order-target triple 0x4dd484/88/8c := the words above;
+     clears 0x4eb940..0x4eb950 (7 dwords, the one-shot SFX latch
+     family); then per robot (alive ∧ deploy-delay +0xA0 == 0 ∧
+     state ≠ 2): player-kind → sidebar redraw 2; THE 7-SLOT
+     WEAPON LOOP:
+     * **FIRE GATES** [verified]: `(mask@+0x6E >> k) & 1) ∧
+       cooldown@slot == 0 ∧ ammo@slot ≠ 0` — the slot fires. A
+       slot passing the gates sets the pass-fired flag even for
+       out-of-switch ids (id−2 > 0x26).
+     * **w 9/0xA/0xB ARTILLERY (inline)**: 1 record, type :=
+       the slot id; x := pos_x+0x100, y := pos_y+0x100,
+       z := (robot.z+0x15)<<8; tick@+0xA := 0, draw-ctr@+0xE := 0,
+       owner := robot; NO velocity/class/arc (falls); ammo−1;
+       **mask bit XORed UNCONDITIONALLY** (one-shot per arm);
+       cooldown := 0; SFX 0x4edf94.
+     * **w 0x10/11/12 (prox mines) and 0x14/15/16 (pressure
+       mines)**: 2/4/6 records (both families — the 0x14-row count
+       was elided in 7j.17, the loop bound is 2/4/6 here), types
+       0xF / 0x13; per record (gates re-check ammo>0 PER RECORD;
+       free slot −1 or vx==vy==0 → skip the spawn but the ammo
+       bookkeeping of THAT record still ran): jitter = TWO RandA
+       draws (`RandA()&0x3F − 0x20 + order_target_x/y`); octile
+       normalization `dist8 = octile((tgt−muzzle)<<8) >> 3` (0→1,
+       min 1); `vx = ((tgt_x − pos_x>>8)·0x10000)/dist8` (vy
+       likewise); vx := vx>>2 (0xF) or >>1 (0x13), vy likewise;
+       spawn {x := pos_x, y := pos_y, z := (z+0x15)<<8, vz := 0,
+       ttl := RandA&0xF + 1, arc := 0x900 − RandA&0x2FF, class :=
+       4} (the 0x13 family also class 4 — the 7j.17 "class 0/4"
+       split applies 0 to the GRENADES, not the mines); ammo−1,
+       0 → mask bit clear; cooldown := 8; SFX 0x4edfe4 once per
+       pass (latch 0x4eb950). **4 RandA draws per spawned record**
+       (2 jitter + 1 ttl + 1 arc).
+     * **w 0x1B/0x1C (bouncy) and 0x1D/0x1E (sticky)**: 4/6
+       records, types 0x1A / 0x1F; **3D velocity**: `vz := 0` if
+       order z == 0 else `(order_z − (muzzle_z>>8))·0x10000/
+       dist8`; ttl := 0x32 − RandA&0xF (0x1A: 35..50) / 0x32 +
+       RandA&0xF (0x1F: 50..65) [corrects the 7j.17 "0x33−" and
+       "..0x42" glosses]; arc := 0xB00 − RandA&0x2FF (0x1A) /
+       0x900 − RandA&0x2FF (0x1F); class := 0; trail word +0x32 :=
+       0; the same 4-draw jitter+ttl+arc shape; cooldown 8.
+     * **w 0x20 ROCKET (inline)**: 1 record, type 0x24, NO jitter
+       (aim at the RAW order target); `vx = ((tgt_x − pos>>8)·
+       0x10000)/oct8` (vy likewise, vz 3D like the grenades);
+       ttl := 0, class := 0; arc@+0x2E := the angle pair result
+       (FUN_0041eb7d(ratio of |dx|·0x80/(octile>>8)) +
+       FUN_0041ebc1 quadrant fold — E's AngleTable::angle_byte);
+       cooldown := 5; SFX 0x4edfac; ammo−1, 0 → mask clear.
+     * **w 2/3/4, 6/7/8, 0x18/0x19, 0x21..0x23, 0x25..0x28** →
+       the AI-ORDER FAMILIES with count args 3/2/1, 0/1/2, 1/2,
+       3/6/9, 1/2/4/6: FUN_0040b615 / FUN_0040af98 / FUN_0040a56f
+       / FUN_0040ace8 / FUN_0040a7a1. Their internals stay OPEN
+       (the bullet/plasma/frag/rocket-pack/reaper spawn bodies);
+       the inline bookkeeping (ammo/cooldown/mask) does NOT run
+       for them here — whatever they do is inside the family.
+     * **AUTO-REARM** [verified]: after the slot loop, if the
+       robot's mask == 0 ∧ something passed the gates this pass:
+       first slot with id≠0 ∧ ammo≠0 → mask bit set + the
+       weapon-switch messages FUN_004239ef(0x1C/0x1D/0x1E,
+       playerIdx) (per-player guards 0x46cbd4/0x46cbd8); if the
+       mask is STILL 0 → the all-empty messages (0x1F/0x20/0x21).
+   - Idle path [refines 7j.17]: the AI idle ticks
+     (FUN_0040af98(10)/0xace8(9)/0xa56f(2)/0xa7a1(6)) run when
+     alive ∧ **deploy-delay +0xA0 ≠ 0** ∧ frame&3 == 0 — not on
+     the 0x4dc6bc gate.
+2. **SINTABLE.BIN IS THE BYTE-ANGLE SINE TABLE** [verified:
+   corpus 512-B file + asm 0x41eb65/0x41eb77]: word[a] =
+   round(sin(a·π/128)·32767) over a = 0..255 (w[0]=0, w[0x40]=
+   32767, w[0x80]=−1, w[0xC0]=−32767). FUN_0041eb65 (COS) returns
+   `movsx word[base + (angle&0xFF)·2]`; FUN_0041eb77 (SIN) =
+   the same lookup at `(angle−0x40)&0xFF`; the 64-word threshold
+   table of the sector scan (FUN_0041eb7d, base+4) = words[2..66]
+   of the SAME array — the table is dual-use. (The "cos/sin"
+   names are the callers' intent; the values are the sine ramp at
+   two phase offsets.) E stages the full 256-word array; the
+   lookups are pure reads.
+3. **BULLETS (types 2..4) — the exact sub-step loop** [verified
+   decompile]: per call, up to 2 sub-steps; each: `x+=vx, tick+=2,
+   y+=vy, z+=vz`, then (sub-step ≤ 2) test bounds/`z>>13>7`/tick>99
+   → free; the CRITTER lane → actor-hit; the MP robot lane →
+   actor-hit; floor test `get_z_pos(x>>8,y>>8,z>>8) > z>>8` →
+   terrain-hit. NO hit after 2 sub-steps → done-this-call. After
+   the loop the position is ROLLED BACK one step (`pos −= v`);
+   actor-hit re-adds the step and runs the disburser (K2);
+   terrain-hit re-adds, applies the impact pair
+   (FUN_00419aff(type) via FUN_0041a894 + FUN_0041bc1c) and the
+   disburser — **and the record does NOT free on impact**: bullets
+   expire ONLY at tick>99 (≈50 calls) [refines 7j.22 item 3's
+   "expire → type := 0" — that free is the ttl path alone].
+4. **SHELL (type 5)** [verified]: one move per call; bounds/tick>
+   100/z OOB → free; on ODD phases the critter lane runs — a HIT
+   stores (x,y) and emits the K3 debris at z>>8−10
+   (FUN_00420608(...,3,0,owner)) [refines 7j.22 item 4: the trail
+   is the LANE-HIT body, not a per-tick emit]; the MP robot lane
+   hit → disburser only; the floor hit → impact pair (75) +
+   disburser + FREE; else pos/tick update (tick += 1).
+5. **ARTILLERY (9..0xB)** [verified]: phase-0 call only; tick++;
+   `floor = FUN_0041e411(x>>8,y>>8,z>>8); floor < z>>8 → z −=
+   0x200 else z = floor<<8`; tick==0x18 ∧ owner-kind == player →
+   the wall-strip redraw FUN_004245c9 (presentation); the burst
+   window is `tick−0x20 < dword[0x456c78 + 4·TYPE]` — **the
+   duration table is indexed BY TYPE** (durations 9→2, 0xA→4,
+   0xB→7; entries 0..8 unused), NOT id−9; inside the window the
+   pair list `PTR[0x456bf0 + 4·(tick−0x20)]` (sentinel 500) fires
+   FUN_004244a1 per pair with the 50% K0xB debris; past the
+   window → the disburser tail + free (the 7j.22 ">0x22" gloss =
+   the w9 arithmetic; wA/wB free at tick 0x24/0x27 by the same
+   comparison).
+6. **HOMING (0x29) steering, exact** [verified decompile]:
+   z-eases toward the target z ±0x200/tick (clamp [0,0xFF00]);
+   ground-lift `FUN_0041e411(x>>8,y>>8,z>>8) ≥ (z>>8)−4 → z +=
+   0x200` (clamp again); `dx/dy = target_Q13 − (pos&~0xFF)`; the
+   angle pair over `|dx|·0x80/(octile>>8)`; heading@+0x2E :=
+   `(heading + FUN_00412a19(angle, heading)·4) & 0xFF` (the
+   signed byte-diff helper, turn clamp = the diff itself ×4);
+   velocity step `2·(word[heading]>>4, word[heading−0x40]>>4)`;
+   forward floor probe FUN_0041e56d (a 4e411 sibling) at the new
+   x/y — blocked (floor ≥ z>>8) → the AVOIDANCE LOOP over offsets
+   0,4,8..0x3C: candidate = (heading−off)&0xFF FIRST (left), then
+   (heading+off)&0xFF; a clear candidate becomes the heading; the
+   LEFT leg that goes out-of-bounds ALSO climbs z += 0x600 (the
+   right leg does not — asymmetric [faithful]). Then tick++ and
+   the bounds/ttl/dead-target/floor-impact chain of 7j.22 item 8.
+7. Engine consequence (the S3-prep seam): everything above is
+   transcription-ready. E-gaps that stay open on the E side: the
+   five AI-order family internals (w2..8/0x18/0x19/0x21..0x28
+   spawn bodies), the mortar family FUN_0040a9ff internals
+   (w0xE), the artillery burst-pair APPLICATION (FUN_004244a1
+   needs the terrain-structure bank — S4), the disburser/debris
+   tails (off-path), the SFX/message families (T4), the 0x22-bank
+   spawn producers (enemy fire — the critter family), and the
+   0x69-vs-table question (unchanged).
 
 ## 9. Open items (next slices)
 
