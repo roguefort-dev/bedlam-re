@@ -22,6 +22,14 @@
 //!    non-boot steps rejected naming the P2e seam, command/pad
 //!    rejected naming their engine seams, P-pause banned mid-scenario,
 //!    and the order seam arming at the tile-exact robot.
+//! 4. CORPUS-GATED S2 (the W8-s2 order→walk slice, D91): the
+//!    `markers` staging key banks the mission_corpus_gate walker at
+//!    (18,73) beside the MRK robot; `order 21 73 1` arms the beacon
+//!    at the MRK robot's tile and the WALKER consumes it (spread
+//!    slot 1 = (22,73)) — the first corpus scenario with a live
+//!    present=1 move-target window, the arrival snap (one tile short
+//!    of the slot target, west approach), and the beacon/claims
+//!    clear on all-state-3. Pinned chain; byte-identical double run.
 //!
 //! PIN DISCIPLINE: the digest/chain pins below are fingerprints of
 //! deliberate engine/dump behavior — they move only when the engine
@@ -438,6 +446,178 @@ fn corpus_s0_s1_canonical_runs() {
     assert_eq!(run1.manifest.chain_digest, "1c4e7b4c9d9b0947");
     let run1b = run_canonical(&s1, &root).expect("S1 canonical re-run");
     assert_eq!(run1.bytes, run1b.bytes, "byte-identical double run");
+}
+
+/// One robot leaf from a canonical robot-bank blob (94 B records
+/// after the u32 count — the §6a order).
+struct RobotView<'a> {
+    rec: &'a [u8],
+}
+
+impl RobotView<'_> {
+    fn i32(&self, p: usize) -> i32 {
+        i32::from_le_bytes(self.rec[p..p + 4].try_into().unwrap())
+    }
+    fn u16(&self, p: usize) -> u16 {
+        u16::from_le_bytes(self.rec[p..p + 2].try_into().unwrap())
+    }
+    fn tile(&self) -> (i32, i32) {
+        (self.i32(1) >> 13, self.i32(5) >> 13)
+    }
+    fn snapped(&self) -> bool {
+        self.i32(1) & 0x1FFF == 0 && self.i32(5) & 0x1FFF == 0
+    }
+    fn state(&self) -> u16 {
+        self.u16(13)
+    }
+    fn present(&self) -> u8 {
+        self.rec[43]
+    }
+    /// The move-target in TILE units (Q5 >> 5) for the asserts.
+    fn target_tile(&self) -> (i32, i32) {
+        (self.i32(44) >> 5, self.i32(48) >> 5)
+    }
+}
+
+fn robots_of(bank: &[u8]) -> Vec<RobotView<'_>> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 94, "canonical robot-bank shape");
+    (0..n)
+        .map(|i| RobotView {
+            rec: &bank[4 + i * 94..4 + (i + 1) * 94],
+        })
+        .collect()
+}
+
+fn beacon_u32(beacon: &[u8], p: usize) -> u32 {
+    u32::from_le_bytes(beacon[p..p + 4].try_into().unwrap())
+}
+
+fn claims_set(claims: &[u8]) -> Vec<u16> {
+    claims
+        .chunks(2)
+        .map(|c| u16::from_le_bytes(c.try_into().unwrap()))
+        .collect()
+}
+
+#[test]
+fn corpus_s2_order_walk() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+
+    // S2 (DESIGN §7, the P4 slice; D91): the markers key stages the
+    // mission_corpus_gate walker; `order 21 73 1` arms at the MRK
+    // robot. 17 records (anchor + 16), pinned chain.
+    let s2 = fs::read_to_string(scen_path("S2")).expect("S2.scen committed");
+    let run = run_canonical(&s2, &root).expect("S2 canonical run");
+    assert_eq!(run.manifest.frame_count, 17);
+    assert_eq!(
+        run.manifest.chain_digest, "809f4961b7757da4",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s2, &root).expect("S2 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S2 dump verifies");
+
+    // --- anchor frame 0: two idle robots, no order -------------------
+    let f0 = &dump.frames[0];
+    let bank = f0.watch("robot-bank").expect("T1 robot bank");
+    let rs = robots_of(bank);
+    assert_eq!(rs.len(), 2, "MRK robot + the staged marker (D91)");
+    assert_eq!(rs[0].tile(), (21, 73), "ZONEA/MISSION1 MRK record 0");
+    assert_eq!(rs[1].tile(), (18, 73), "the staged walker marker");
+    assert!([rs[0].state(), rs[1].state()].iter().all(|&s| s == 0));
+    assert!([rs[0].present(), rs[1].present()].iter().all(|&p| p == 0));
+    assert_eq!(beacon_u32(f0.watch("beacon-family").unwrap(), 0), 0);
+    assert!(f0.watch("static-map-wh").is_some(), "TS rides the anchor");
+    // The TS tier is why S2 carries it: the fabricated-O1 differ leg
+    // needs the anchor statics for the len-0 grid equivalence.
+
+    // --- frame 1 (the order step): arm + consume in one pump --------
+    let f1 = &dump.frames[1];
+    assert!(f1.injection_applied);
+    // The SEAM write persists on the order-target row (the step's
+    // z=1; the BEACON tile z is the robot's z=31 — different sources,
+    // both pinned §5c/§6a).
+    assert_eq!(
+        f1.watch("order-target"),
+        Some(&[21i32.to_le_bytes(), 73i32.to_le_bytes(), 1i32.to_le_bytes()].concat()[..])
+    );
+    let beacon = f1.watch("beacon-family").unwrap();
+    assert_eq!(beacon_u32(beacon, 0), 1, "order armed");
+    assert_eq!(
+        beacon_u32(beacon, 4),
+        u32::from(bedlam_core::mission::ORDER_WINDOW) - 1,
+        "window 0x197 minus the arming pump's decrement (the W6 SO \
+         gate's single-robot window-0 clear does NOT fire at 2 alive)"
+    );
+    assert_eq!(beacon_u32(beacon, 8), 21);
+    assert_eq!(beacon_u32(beacon, 12), 73);
+    assert_eq!(beacon_u32(beacon, 16), 31);
+    // claims: slot 0 = the clicked robot's own tile, slot 1 = the
+    // walker's (22,73) — claimed in the SAME pump's phases.
+    assert_eq!(
+        claims_set(f1.watch("spread-claims").unwrap()),
+        vec![1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    );
+    let rs = robots_of(f1.watch("robot-bank").unwrap());
+    assert_eq!(rs[0].state(), 3, "the clicked robot takes state 3");
+    assert_eq!(rs[0].tile(), (21, 73));
+    assert!(rs[0].snapped(), "the armer snaps slot 0 to the tile origin");
+    assert_eq!(rs[0].present(), 0, "the clicked robot gets no target");
+    assert_eq!(rs[1].state(), 4, "the walker consumed the order");
+    assert_eq!(rs[1].present(), 1, "THE present=1 target window opens");
+    assert_eq!(rs[1].target_tile(), (22, 73), "spread slot 1 = +1 x");
+    assert_eq!(rs[1].i32(39), 1_000_000, "ORDER_STOP_DIST go-all-the-way");
+    // The move-target-words row carries the same window (the E-side
+    // form the D90 splice mirrors on O1).
+    let mv = f1.watch("move-target-words").unwrap();
+    assert_eq!(u32::from_le_bytes(mv[0..4].try_into().unwrap()), 2);
+    assert_eq!(mv[4], 0, "robot 0 absent");
+    assert_eq!(mv[4 + 9], 1, "robot 1 present");
+
+    // --- the walk window (frames 1..6): state 4, present 1, monotone
+    for f in &dump.frames[1..7] {
+        let rs = robots_of(f.watch("robot-bank").unwrap());
+        assert_eq!(rs[1].state(), 4, "walking");
+        assert_eq!(rs[1].present(), 1);
+        assert_eq!(rs[1].target_tile(), (22, 73));
+        assert_eq!(beacon_u32(f.watch("beacon-family").unwrap(), 0), 1);
+    }
+    // eastbound tile crossings (0.75 tile/frame on the real deck)
+    let tile_at = |f: &diffharness::dump::FrameRecord, i: usize| {
+        robots_of(f.watch("robot-bank").unwrap())[i].tile()
+    };
+    assert_eq!(tile_at(&dump.frames[1], 1), (18, 73));
+    assert_eq!(tile_at(&dump.frames[2], 1), (19, 73));
+    assert_eq!(tile_at(&dump.frames[4], 1), (20, 73));
+    assert_eq!(tile_at(&dump.frames[6], 1), (21, 73));
+
+    // --- frame 7: the arrival clear ----------------------------------
+    let f7 = &dump.frames[7];
+    let rs = robots_of(f7.watch("robot-bank").unwrap());
+    assert_eq!(rs[1].state(), 3, "state 4 -> 3 on arrival");
+    assert_eq!(rs[1].tile(), (21, 73), "one tile SHORT of the slot target");
+    assert!(rs[1].snapped(), "arrival snaps pos &= !0x1FFF");
+    assert_eq!(rs[1].i32(9), 31, "stays on the real deck");
+    // the walker KEEPS its target (state-4 arrival clears neither
+    // target nor stop_dist) — present=1 persists to the last frame.
+    assert_eq!(rs[1].present(), 1);
+    assert_eq!(rs[1].target_tile(), (22, 73));
+    // the ORDER clears once every alive robot is state-3: flag 0,
+    // window 0, claims all 0 (the beacon-family/claims transition).
+    let beacon = f7.watch("beacon-family").unwrap();
+    assert_eq!(beacon_u32(beacon, 0), 0);
+    assert_eq!(beacon_u32(beacon, 4), 0);
+    assert_eq!(claims_set(f7.watch("spread-claims").unwrap()), vec![0; 12]);
+    // ...and the steady state holds to the end.
+    let flast = dump.frames.last().unwrap();
+    let rs = robots_of(flast.watch("robot-bank").unwrap());
+    assert!([rs[0].state(), rs[1].state()].iter().all(|&s| s == 3));
+    assert_eq!(beacon_u32(flast.watch("beacon-family").unwrap(), 0), 0);
 }
 
 #[test]

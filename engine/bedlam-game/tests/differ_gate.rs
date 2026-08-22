@@ -215,10 +215,15 @@ fn s0_s1_cross_and_double_run() {
     // (the latter because the O1 side consumes its span into the
     // robot-bank splice) and the robot field gaps are ZERO — the D90
     // splice sources the record-external target trio (34 canonical
-    // leaves, all 34 shared, RE-EXD-MAP §8).
+    // leaves, all 34 shared, RE-EXD-MAP §8). S2 (D91) is the first
+    // scenario whose splice carries a live present=1 span both ways:
+    // the staged walker's target (22,73) fabricates into the EXD
+    // x[1]/y[1] u32 pair and splices back — same 2 row-level
+    // findings, zero field gaps.
     for (id, frames_total, pinned_chain, expect_coverage) in [
         ("S0", 3u64, "8901789a88cf61fe", 0u64),
         ("S1", 401u64, "1c4e7b4c9d9b0947", 2u64),
+        ("S2", 17u64, "809f4961b7757da4", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

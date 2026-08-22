@@ -76,12 +76,20 @@ pub struct Scenario {
     /// (anchor frame included; S0-style "first frame only" sets frames=0).
     pub frames: u64,
     pub launch: Option<String>,
+    /// Extra squad markers staged after the MRK robots (D91, grammar
+    /// v1.2 `markers` header key): the E walk seam — the click-order
+    /// moves only the OTHER robots in radius, so order→walk scenarios
+    /// stage a second robot. Bounded so MRK robots + markers ≤ 12
+    /// (the bank cap cell discipline). No O1 write exists; consumers
+    /// record the seam explicitly (never fabricate).
+    pub markers: Vec<(i32, i32, i32)>,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
 
-/// Scenario step directives (grammar v1.1 — runner directives + the
-/// DESIGN §5 W5 injection vocabulary).
+/// Scenario step directives (grammar v1.2 — runner directives + the
+/// DESIGN §5 W5 injection vocabulary; v1.2 adds the scenario-level
+/// `markers` staging key, D91 — see [`Scenario::markers`]).
 ///
 /// Injection steps are FRAME-BOUNDARY writes: each step line applies at
 /// the next frame boundary (between the previous frame's present and
@@ -173,6 +181,7 @@ impl Scenario {
         let mut anchor: Option<String> = None;
         let mut frames: Option<u64> = None;
         let mut launch: Option<String> = None;
+        let mut markers: Vec<(i32, i32, i32)> = Vec::new();
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -371,6 +380,46 @@ impl Scenario {
                                 })?);
                         }
                         "launch" => launch = Some(value.to_string()),
+                        "markers" => {
+                            // D91: `x,y,z` triples, `;`-separated. The
+                            // squad bank is capped at 12 records (the
+                            // spread table + move-target arrays are
+                            // 12-wide; EXD cap cell 0x11950c) and the
+                            // zone rule stages up to 3 MRK robots, so
+                            // at most 9 markers may ride a scenario.
+                            for triple in value.split(';') {
+                                let nums: Vec<i64> = triple
+                                    .split(',')
+                                    .map(parse_num)
+                                    .collect::<Option<Vec<_>>>()
+                                    .ok_or_else(|| {
+                                        scen_err(
+                                            line_no,
+                                            line,
+                                            "markers entries are x,y,z integer triples",
+                                        )
+                                    })?;
+                                if nums.len() != 3 {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "markers entries are x,y,z triples (exactly 3 values)",
+                                    ));
+                                }
+                                markers.push((nums[0] as i32, nums[1] as i32, nums[2] as i32));
+                            }
+                            if markers.is_empty() {
+                                return Err(scen_err(line_no, line, "markers must not be empty"));
+                            }
+                            if markers.len() > 9 {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "markers exceed the bank cap: MRK robots + markers must be \
+                                     <= 12 (max 9 markers)",
+                                ));
+                            }
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -414,6 +463,7 @@ impl Scenario {
             anchor,
             frames,
             launch,
+            markers,
             steps,
         })
     }
@@ -823,6 +873,26 @@ mod tests {
         assert!(Scenario::parse("scenario = X\ntiers = T0\n").is_err()); // no frames
         assert!(Scenario::parse("scenario = X\ntiers = T0\nframes = 1\nfoo = 1\n").is_err());
         assert!(Scenario::parse("scenario = X\ntiers = T0\nframes = 1\nfrobnicate 3\n").is_err());
+    }
+
+    #[test]
+    fn markers_key_parses_and_bounds() {
+        // D91: `x,y,z` triples, `;`-separated, staged after the MRK
+        // robots; default empty.
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        assert!(Scenario::parse(base).unwrap().markers.is_empty());
+        let s = Scenario::parse(&format!("{base}markers = 18,73,1\n")).unwrap();
+        assert_eq!(s.markers, vec![(18, 73, 1)]);
+        let s = Scenario::parse(&format!("{base}markers = 0x12,73,1; 5,0x3D,0\n")).unwrap();
+        assert_eq!(s.markers, vec![(0x12, 73, 1), (5, 0x3D, 0)]);
+        // malformed: non-integers, wrong arity, empty, over the cap
+        assert!(Scenario::parse(&format!("{base}markers = 18,73,x\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}markers = 18,73\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}markers = 18,73,1,4\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}markers = \n")).is_err());
+        let ten = "1,2,3; 4,5,6; 7,8,9; 10,11,12; 13,14,15; 16,17,18; \
+                   19,20,21; 22,23,24; 25,26,27; 28,29,30";
+        assert!(Scenario::parse(&format!("{base}markers = {ten}\n")).is_err());
     }
 
     #[test]

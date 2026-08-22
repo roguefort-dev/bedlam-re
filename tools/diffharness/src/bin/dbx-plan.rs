@@ -1223,6 +1223,30 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     j.push_str("  \"boot_retries\": 24,\n");
     j.push_str(&format!("  \"frames\": {},\n", scen.frames + 1));
     j.push_str("  \"resolve_at\": \"anchor\",\n");
+    // D91: the markers staging key is an E-side seam — the O1 capture
+    // has NO equivalent write (fabricating an 0xA8 robot record +
+    // count bump would be ghost staging). Record it explicitly so the
+    // live comparison knows the robot-count diff is the scenario
+    // seam, never a finding.
+    if !scen.markers.is_empty() {
+        j.push_str("  \"_e_staging\": {\n    \"markers\": [\n");
+        for (i, (x, y, z)) in scen.markers.iter().enumerate() {
+            j.push_str(&format!(
+                "      {{ \"x\": {x}, \"y\": {y}, \"z\": {z} }}{}",
+                if i + 1 < scen.markers.len() {
+                    ",\n"
+                } else {
+                    "\n"
+                }
+            ));
+        }
+        j.push_str(
+            "    ],\n    \"note\": \"E-side staging seam (D91): extra squad robots the \
+             ENGINE canonical run banks after the MRK squad. The O1 capture stages \
+             NO equivalent (never fabricated): its robot-count diff vs E is this \
+             scenario seam, not a finding\"\n  },\n",
+        );
+    }
     j.push_str("  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n");
     j.push_str("  \"boot_commands\": [\n");
     j.push_str(&format!(
@@ -1506,6 +1530,64 @@ mod tests {
         assert_eq!(emitted.json, committed, "capture-plans/S1.json is stale: regenerate with dbx-plan scenarios/S1.scen --out capture-plans/S1.json");
     }
 
+    fn s2() -> Scenario {
+        Scenario::parse(include_str!("../../scenarios/S2.scen")).unwrap()
+    }
+
+    #[test]
+    fn s2_plan_compiles_the_order_seam_plus_e_staging() {
+        let scen = s2();
+        assert_eq!(scen.markers, vec![(18, 73, 1)], "the D91 staging key");
+        let reg = registry();
+        let emitted = emit_plan(&scen, &reg).unwrap();
+        // Same tier set as S1 -> the same row shape (19 anchor TS/T0 +
+        // 15 T1; 10 T0 + 15 T1 per-frame).
+        let anchor_count = count_rows(&emitted.json, "anchor_watches");
+        let frame_count = count_rows(&emitted.json, "watches");
+        assert_eq!(frame_count, 10 + 15);
+        assert_eq!(anchor_count, 19 + 15);
+        // The order step's inject rows: frame 1 (the first mission
+        // boundary), the three i32-LE cells of the order-target triple
+        // (21, 73, 1) at the registry-derived cells.
+        let injects = extract_injects(&emitted.json);
+        assert_eq!(injects.len(), 3, "one row per order-target cell");
+        let expect: [(&str, &str); 3] = [
+            ("CS:0010E0A4", "15000000"),
+            ("CS:0010E0A8", "49000000"),
+            ("CS:0010E0AC", "01000000"),
+        ];
+        for (addr, bytes) in expect {
+            assert!(
+                injects
+                    .iter()
+                    .any(|(f, a, b)| *f == Some(1) && a == addr && b == bytes),
+                "missing inject {addr}={bytes} at frame 1 in {injects:?}"
+            );
+        }
+        // The E-side staging seam is RECORDED, never fabricated: no
+        // inject row may target the robot bank/count cells, and the
+        // _e_staging field names the marker + the seam.
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("{ \"x\": 18, \"y\": 73, \"z\": 1 }"));
+        assert!(emitted.json.contains("scenario seam, not a finding"));
+        for (_, addr, _) in &injects {
+            assert!(
+                !addr.ends_with("F6D34") && !addr.ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+        // stitcher contract: frames + 1 records
+        let frames: u64 = extract_frames(&emitted.json);
+        assert_eq!(frames, scen.frames + 1);
+    }
+
+    #[test]
+    fn s2_plan_matches_committed_artifact() {
+        let emitted = emit_plan(&s2(), &registry()).unwrap();
+        let committed = include_str!("../../capture-plans/S2.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S2.json is stale: regenerate with dbx-plan scenarios/S2.scen --out capture-plans/S2.json");
+    }
+
     #[test]
     fn t2_scenario_refused() {
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
@@ -1776,5 +1858,41 @@ mod tests {
             }
         }
         panic!("no frames key");
+    }
+
+    /// (frame, addr, bytes) rows of the "inject" section.
+    fn extract_injects(json: &str) -> Vec<(Option<u64>, String, String)> {
+        let section = json
+            .split("\"inject\": [")
+            .nth(1)
+            .unwrap()
+            .split("]")
+            .next()
+            .unwrap();
+        let mut out = Vec::new();
+        for line in section.lines() {
+            let line = line
+                .trim()
+                .trim_start_matches('{')
+                .trim_end_matches(',')
+                .trim_end_matches('}');
+            let mut frame = None;
+            let mut addr = String::new();
+            let mut bytes = String::new();
+            for part in line.split(", ") {
+                let part = part.trim();
+                if let Some(rest) = part.strip_prefix("\"frame\": ") {
+                    frame = Some(rest.parse().unwrap());
+                } else if let Some(rest) = part.strip_prefix("\"addr\": ") {
+                    addr = rest.trim_matches('"').to_string();
+                } else if let Some(rest) = part.strip_prefix("\"bytes\": ") {
+                    bytes = rest.trim_matches('"').to_string();
+                }
+            }
+            if !addr.is_empty() {
+                out.push((frame, addr, bytes));
+            }
+        }
+        out
     }
 }

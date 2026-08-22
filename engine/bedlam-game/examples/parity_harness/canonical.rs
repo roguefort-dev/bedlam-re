@@ -33,6 +33,10 @@
 //! at the tile-exact alive robot); `command`/`pad` are rejected
 //! naming the missing engine seams; `boot difficulty=d` seeds the
 //! campaign money via the engine's own `menu::start_score` formula.
+//! The `markers` header key (D91) stages extra squad robots through
+//! the existing `load_mission(staged_markers)` seam after the MRK
+//! robots — the walk seam (the click-order moves only the OTHER
+//! robots in radius, so order→walk scenarios stage a walker).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -424,7 +428,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         &bytes[21],
         &bytes[22],
         None,
-        &[],
+        &scen.markers,
     )?;
     if difficulty != 0 {
         let money = bedlam_game::menu::start_score(difficulty as u8);

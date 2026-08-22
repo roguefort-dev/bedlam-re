@@ -1,0 +1,27 @@
+# S2 — order→walk (DESIGN-DIFFHARNESS.md §7, the P4 slice; D91).
+#
+# First corpus scenario exercising the D90 move-target splice's
+# present=1 path + the beacon/claims/order-target rows as LIVE values.
+# The walk needs a second robot: the click-order moves only the OTHER
+# alive robots in the 6-tile order radius (the clicked robot snaps to
+# spread slot 0 — its own tile), so the `markers` key stages the
+# mission_corpus_gate walker at (18,73) after the MRK squad (D89: SP
+# ZONEA banks ONE MRK robot on EXW/EXD/E alike; markers is the E-side
+# staging seam — no O1 write, the plan records it). `order 21 73 1`
+# arms at the MRK robot's tile (the E pick form); the walker claims
+# spread slot 1 = order tile + (1,0) = (22,73), walks east ~4 tiles,
+# arrives ≈7 frames in snapped one tile short at the (21,73) origin
+# (west-approach ARRIVE_RADIUS 0x1400 semantics — the corpus-gate
+# fixture values). NOTE with TWO alive the window is 0x197 — the
+# single-robot window-0 clear (the W6 finding) does NOT fire; the
+# order survives the arming pump and clears when all alive robots are
+# state-3.
+scenario = "S2"
+tiers = T0,T1,TS
+anchor = mission-start
+frames = 16
+markers = 18,73,1
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+order 21 73 1
+step 15
