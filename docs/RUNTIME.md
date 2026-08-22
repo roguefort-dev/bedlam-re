@@ -150,8 +150,16 @@ BUILD LAYOUT (everything under gitignored runtime/, nothing committed):
 - runtime/dosbox-x-build/ = autotools out-of-tree build (autogen.sh run
   FROM THE SOURCE DIR — running it from the build dir fails: aclocal
   needs configure.ac CWD), configured
-  `../dosbox-x-src/configure --enable-sdl2 --enable-debug=heavy`,
+  `../dosbox-x-src/configure --enable-sdl2 --enable-debug=heavy
+  --disable-sdlnet --disable-avcodec`
+  (sdlnet: host lacks SDL2_net headers — only modem/IPX need it;
+  avcodec: host ffmpeg 8 removed AVCodec::sample_fmts, upstream code
+  at e522642 does not compile against it — capture-to-video only;
+  neither feature touches the harness),
   config.h verified: `#define C_DEBUG 1` + `#define C_HEAVY_DEBUG 1`.
+  Built binary sha256 24f71092885df7ebd6ebc92c7cbf0edf…, banner
+  "DOSBox-X version 2026.07.02 SDL2" (= the e522642 banner commit;
+  the flathub 2026.08.02 release shipped this same banner).
 - Host toolchain recorded as part of the pin: gcc 16.2.1, SDL2 2.32.70
   (pkg-config), ncursesw 6.6.20251230, autoconf 2.73, automake 1.18.1,
   libtool 2.6.2, gnu make 4.4.1, 32-way build.
@@ -161,34 +169,44 @@ BUILD LAYOUT (everything under gitignored runtime/, nothing committed):
   only --enable-sdl2 → no debugger (matches the D79 audit).
 
 DEBUGGER COMMAND SURFACE [source-pinned at e522642, src/debug/debug.cpp
-unless noted; to be behaviorally [verified] at the smoke probe below]:
+unless noted; BEHAVIORALLY VERIFIED 2026-08-22 on this build via the
+dbgprobe channel probes — see "D80 channel probe results" below]:
 - ENTRY: `-break-start` (sdlmain.cpp:7517,10152 → DEBUG_EnableDebugger)
   or conf `debuggerrun` (debug_gui.cpp:933-939): "debugger"→0 (sit at
   prompt), "normal"→1 (auto-RUN on entry), "watch"→2 (auto-RUNWATCH on
-  entry) — applied at debug.cpp:5100-5101.
+  entry) — applied at debug.cpp:5100-5101. [verified: mode 0 via
+  -break-start]
 - PTY GATE [source-pinned, debug.cpp:5042-5064]: on Linux the debugger
   REFUSES to open unless isatty(0)&&isatty(1)&&isatty(2). Automation
   therefore runs the binary under a host PTY (python3 pty). The D79
   "inert debuggerrun/-break-start" probes on the flathub build were
-  never gated by this — that build simply lacked C_DEBUG.
+  never gated by this — that build simply lacked C_DEBUG. [verified:
+  PTY session opens the debugger, banner + prompt live]
 - RUNWATCH (debug.cpp:2668): run with breakpoints ACTIVE; on a bp hit
   the loop re-enters the debugger prompt (the watch-mode shape D29
-  assumed). RUN = plain resume.
+  assumed). RUN = plain resume. [verified: resume→hit→prompt→resume
+  cycles over multiple frames]
 - FRAME TRIGGER PRIMITIVES:
-  - BP [seg]:[off] — code breakpoint (the present-tail site).
+  - BP [seg]:[off] — code breakpoint (the present-tail site; live unit).
   - BPLM [linear] — LINEAR memory-change breakpoint (C_HEAVY_DEBUG
-    only, i.e. our build) — the alternative trigger on a state word.
-  - BPINT [nr] [ah] [al] — interrupt breakpoint.
+    only, i.e. our build). [verified: `BPLM 46C` armed ("Set linear
+    memory breakpoint at 0000046C") and FIRED on the next write
+    ("Memory breakpoint : 0000:046C - 00 -> AA"), stopping the machine]
+  - BPINT [nr] [ah] [al] — interrupt breakpoint. [verified: `BPINT 8`
+    as the probe hit surrogate across 3 frames]
 - BULK READ (the dump primitive):
   - MEMDUMPBIN [seg]:[off] [len] → MEMDUMP.BIN raw bytes (fixed name,
     HOST CWD, "wb" = overwrite per call) — debug.cpp:2021-2027,6002-6020.
+    [verified: 9/9 round-trips, correct lengths, rename-between-calls]
   - MEMDUMP [seg]:[off] [len] → MEMDUMP.TXT hex text (same fixed-name
-    + CWD shape) — debug.cpp:2013-2019,5965-6000.
+    + CWD shape) — debug.cpp:2013-2019,5965-6000. [source-pinned only]
   The PTY driver renames the file between calls (the emitter side of
   the DBXCAP transcript).
 - INJECTION PRIMITIVE (W5): SMV [linear] [val].. — set memory at a
   LINEAR address (debug.cpp, listed in HELP); SM [seg]:[off] segmented
-  twin; SR reg val.
+  twin; SR reg val. [verified: `SMV 46C AA BB CC DD` → readback at
+  0040:006C = aabbccdd; ack line "DEBUG: Memory changed (4 bytes)";
+  linear==seg<<4 confirmed in real mode]
 - ADDRESS MODEL [source-pinned, debug.cpp:460-479 GetAddress]:
   seg:off resolves — current-CS → SegPhys(cs)+off; pmode selector →
   descriptor base+off (LinMakeProt); real mode → seg<<4+off. Under
@@ -196,15 +214,60 @@ unless noted; to be behaviorally [verified] at the smoke probe below]:
   the runtime flat selector (pinned via SELINFO/LDT at DH-G0) reads
   the LE objects at their linear addresses (0x10000/0x80000). The
   INT3-at-_entry proof (EXD entry 0x5fbb0) pins this conversion at the
-  first interactive session, as the watch skeleton requires.
+  first interactive session, as the watch skeleton requires. [real-mode
+  linear verified; the pmode/flat-selector path is the live unit's
+  first checklist item]
 - VIEWS: D seg:off / DV linear / DP physical; SELINFO, GDT/LDT/IDT,
-  EMU MEM/MACHINE for pinning the selector facts.
+  EMU MEM/MACHINE for pinning the selector facts. [source-pinned only]
+
+D80 CHANNEL GOTCHAS (behaviorally pinned 2026-08-22 — the driver bakes
+these in, do not "simplify" them away):
+1. THE [log] LOGFILE GETS REWRITTEN at debugger init (truncate +
+   re-emit): a seek/offset-based tailer anchors into the stale
+   pre-rewrite copy and never sees acks (measured: cursor 2700 >
+   filesize 2212 while the ack sat in the file). Ack matching MUST be
+   COUNT-based over full reads (tools/runtime/dbx-capgen.py LogTail).
+2. A PERMANENT PTY DRAIN IS MANDATORY: ncurses redraws several KB per
+   update and the pty kernel buffer is ~64KB; once full, wrefresh()
+   blocks and the whole debugger loop deadlocks (first command acks in
+   ~40ms, then everything stalls until the buffer is read).
+3. SETTLE 1.0s AFTER EACH ACK before the next send: input written
+   ~0.01s after the previous ack sits in the tty queue for tens of
+   seconds; input sent after a 1.0s gap acks in ~40ms. (Mechanism
+   not isolated; empirically bisected across dbgprobe2 runs.)
+4. Ack lines land in the [log] logfile (DEBUG_ShowMsg: fprintf+fflush
+   per message, debug_gui.cpp:744) — the logfile is the ack channel,
+   NOT the ncurses screen (redraws re-emit old pane text).
+
+D80 channel probe results (2026-08-22, this host, this build; probe
+transcript runtime/harness-out/dbgprobe2/capture.dbxcap — plumbing-only
+ids, never stitched): 3 frames × 3 watches. Frame 1 (the -break-start
+pre-boot halt): IVT/BIOS/BDA all zeros (machine parked at F000:FFF0).
+Frame 2 (after RUNWATCH → POST → BPINT-8 hit): IVT vectors f000:ca60,
+BDA shows COM1 0x3F8 / COM2 0x2F8 / LPT1 0x0378 — real BIOS state.
+Frame 3: INT 1-3 vectors moved to 0070:000e (DOS kernel vectors took
+over between timer ticks). Per-command cost ≈ 1.05s (the settle) —
+S0-shape captures (≈13 watches × 3 frames) ≈ 45s.
 
 Next in this unit: build the binary, behavioral smoke (headless SDL
 dummy + PTY: -break-start enters the prompt, MEMDUMPBIN round-trips,
 RUN/RUNWATCH parse) — converting the tags above to [verified] on THIS
 self-built pin — then wire the DBXCAP emitter driver. NO game diff:
 the live game run stays interactive-gated (FORCE_DIFF_RUN=1).
+
+UNIT CLOSE-OUT (2026-08-22): build DONE (--disable-sdlnet
+--disable-avcodec added: host lacks SDL2_net headers and ffmpeg 8
+removed AVCodec::sample_fmts — both features are irrelevant to the
+harness; binary 144MB, `--version` banner "2026.07.02 SDL2" = the
+e522642 banner, sha256 24f71092885df7ebd6ebc92c7cbf0edf...). Behavioral
+probe DONE (see "D80 channel probe results"). Emitter WIRED:
+tools/runtime/dbx-capgen.py (PTY + count-based log acks + MEMDUMPBIN
+slicing → DBXCAP) driven by `dosbox-harness.sh dbgprobe` (unattended,
+no game) and `diff capture` (FORCE_DIFF_RUN=1, needs the staged
+capture-plan.json — the DH-G1 live unit's deliverable). The live game
+run + the pmode flat-selector proof (INT3 at EXD _entry 0x5fbb0, BP at
+the present-tail 0x5a6eb) + cycles calibration remain INTERACTIVE-GATED
+for the next unit (S0 live + DH-G1 determinism).
 
 CPU BASELINE (the other side of the diff): cargo run --release --example
 parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced

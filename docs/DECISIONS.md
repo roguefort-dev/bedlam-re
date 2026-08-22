@@ -2656,5 +2656,21 @@ Nudge-Worker: d35c7066-4f7f-4c3a-a8b3-0afaead3049d
    per watch → DBXCAP transcript → existing W4 dbx-stitch. Injection (W5)
    rides SMV linear writes. Behaviorally verified at the unit's headless
    smoke probe; the live game diff stays interactive-gated.
+5. PROBE VERDICTS (2026-08-22, headless, no game; tools/runtime/
+   dbx-capgen.py + dosbox-harness.sh dbgprobe): channel GREEN —
+   -break-start prompt over PTY, BPINT-8 hit surrogate across 3 frames,
+   9/9 MEMDUMPBIN round-trips, RUNWATCH resume/hit cycles, DBXCAP
+   transcript with real state deltas (pre-boot zeros → POST IVT/BDA →
+   DOS-kernel vectors). SMV linear write + readback, BPLM linear
+   memory-change bp arm + fire: VERIFIED. Three channel gotchas pinned
+   and baked into the driver (RUNTIME.md "D80 CHANNEL GOTCHAS"): the
+   [log] logfile is REWRITTEN at debugger init (acks must be count-
+   matched over full reads, not seek-tailed), a permanent PTY drain is
+   mandatory (ncurses redraws fill the ~64KB pty buffer → wrefresh
+   deadlocks), and each command needs a ~1.0s post-ack settle
+   (0.01s-gap input stalls tens of seconds). Configure correction vs
+   the first commit: --disable-sdlnet --disable-avcodec (host lacks
+   SDL2_net; ffmpeg 8 broke upstream's avcodec code — neither is used
+   by the harness).
 
 Nudge-Worker: 4deb0081-12f4-4fdd-a60e-36363119d216

@@ -41,16 +41,18 @@ AUDIO SIDE (D17b byte-identity gate):
   slots, 11025 Hz native). Dump the voice slot array per PresentFlip hit.
 
 AUTOMATION ROUTES in this pin (2026.08.02):
-  RESOLVED NEGATIVE 2026-08-22 (DH-G0 channel audit, docs/RUNTIME.md):
-  this flathub build has NO integrated debugger (--enable-debug is off in
-  configure.ac and the flathub build passes only --enable-sdl2); the
-  BPINT/BPLM/D names below are UNPINNABLE on this runtime. The [script]
-  startup.js route EXISTS (Duktape is compiled in) but its API is
-  log-only (console.log -> [log] misc channel; enable misc=true to see
-  it) with no memory access and no hooks. The watch SET below stays valid
-  for a future --enable-debug build of DOSBox-X at a pinned commit
-  (channel re-pin decision pending); the addresses are census-pinned
-  independent of the instrument.
+  RESOLVED 2026-08-22 (D80, docs/RUNTIME.md "DH-G0 channel re-pin"):
+  the capture channel is the REPO-LOCAL SELF-BUILD at the same upstream
+  commit e522642 (--enable-sdl2 --enable-debug=heavy --disable-sdlnet
+  --disable-avcodec; runtime/dosbox-x-build). On that binary the
+  command names below are BEHAVIORALLY VERIFIED for BPINT / BPLM /
+  MEMDUMPBIN / RUNWATCH / SMV (headless PTY probes, no game; RUNTIME.md
+  "D80 channel probe results"); BP / DV / DP / MEMDUMP are
+  source-pinned. The flathub runtime stays installed as the D29 sandbox
+  baseline but has NO debugger (D79). Driver: tools/runtime/
+  dbx-capgen.py (PTY + count-based [log]-logfile acks + the mandatory
+  drain + 1.0s post-ack settle — see RUNTIME.md "D80 CHANNEL GOTCHAS"
+  before touching it).
 
 CALIBRATION CHECKLIST for the first interactive run:
   1. smoke gate green (unattended, this unit)
@@ -66,7 +68,13 @@ CALIBRATION CHECKLIST for the first interactive run:
   3. game mode launch at cycles=fixed 60000: audio dropouts? lower the pin
      DELIBERATELY + re-baseline (D19/D29)
   4. verify debugger command names + the linear conversion (INT3 _entry)
+     [PART 2026-08-22 (D80): BPINT/BPLM/MEMDUMPBIN/RUNWATCH/SMV verified
+     headless in REAL mode (linear==seg<<4). STILL OPEN, needs the game:
+     the pmode flat-selector proof — INT3 at EXD _entry 0x5fbb0,
+     SELINFO/LDT to pin the flat CS/DS selectors, then the present-tail
+     BP at linear 0x5a6eb]
   5. record the exact verified command list HERE, replacing UNCERTAIN tags
+     [see "AUTOMATION ROUTES" above + RUNTIME.md D80 sections]
   6. first golden watch dump = runtime-side anchors to diff against the
      CPU baseline (D28: scene 0xcae25cd08d7cbc08, sim 0x72979d5d9dedc832,
      frame 0x87263f149564ad25, audio 0xc862e45d2e95ad29)
