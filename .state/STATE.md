@@ -1,5 +1,23 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W5-pad THE CAPGEN PAD OP unit COMPLETE,
+    worker 85dedea3 claim 2, commits fb92286 + b5d1920, D86): the
+    PAD step is fully landed on the O1 side — the capgen
+    `{op:"pad"}` inject form reads the .PAD slot record from the pad
+    bank at the capture-frame stop (999×8 B, loader marks
+    active==1/x!=0xFFFF, fail loud), then writes {x,y,z} i32-LE x3 to
+    the order-target triple; dbx-plan compiles `pad <slot>` with
+    every address registry-derived (static-pad-slots = the READ
+    anchor, order-target = the write seam). The §7j.20 extraction-pad
+    census is committed in DESIGN §7 (S6 slot picker). Verified:
+    `dbgprobe pad` GREEN headless (positive + negative legs),
+    gate/inject/flow/walk regression-green, workspace test/fmt/clippy
+    green, byte-pinned plans unchanged. The E side still rejects pad
+    steps (S6 engine seam, W12 pairs it). NEXT HEADS: W7 the differ
+    (item 2, unattended — both sides of its input contract exist) +
+    the operator S0 live session (item 1, interactive-gated, S0W
+    calibration hook).
+
   - OPEN 2026-08-22 (P4.2/W6 THE ENGINE DUMP EMITTER unit COMPLETE,
     design by worker 1f758667 claim 2 / adopted + completed by worker
     36f752cd claim 2, commit 54d781a, D85 + completion addendum): the

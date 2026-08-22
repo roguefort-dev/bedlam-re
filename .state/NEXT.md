@@ -56,15 +56,7 @@
    in tests/canonical_dump_gate.rs (8901789a88cf61fe / 1c4e7b4c9d9b0947);
    the live session's O1 chains compare against THOSE (modulo the
    T2/T3 statistical classes) once W7's normalizer lands.
-2. [P4.2/W5-pad] THE CAPGEN PAD OP (small, unattended; D84 item 4):
-   the runtime pad-slot read op for the PAD step (§5.4 — read the
-   .PAD slot's tile from the pad bank at capture time, then write the
-   order-target triple to it): needs the §7j.20 pad census semantics
-   (the ~25 extraction-pad (zone,slot) pairs + the 0xf63c bank layout
-   — FORMATS/RE-EXD-MAP rows) + a capgen `{op:"pad"}` inject form +
-   un-gating Step::Pad in dbx-plan. S6 (extraction) pulls this; land
-   it before W8 wiring.
-3. [P4.2/W7] THE DIFFER (unattended; DESIGN §6 + §6a): the W7
+2. [P4.2/W7] THE DIFFER (unattended; DESIGN §6 + §6a): the W7
    normalizer + comparison modes + report writer + fingerprint
    manifest. Input contract now EXISTS on both sides: O1 raw guest
    bytes (dbx-stitch path) + E canonical dumps (channel E, commit
@@ -78,6 +70,9 @@
    fingerprint manifest. Verify: workspace green; corpus-gated tests
    vs the pinned E dumps in tests/canonical_dump_gate.rs (synthetic
    reference = the synthetic_frames() fixture + the pinned chains).
+   NOTE (D86, W5-pad landed): the pad seam is now fully O1-side — S6
+   scenarios compile `pad <slot>` (census in DESIGN §7); W7 models
+   the pad op only through the order-target triple rows it carries.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -212,6 +207,34 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W5-pad THE CAPGEN PAD OP unit COMPLETE (worker
+  85dedea3 claim 2, commits fb92286 + b5d1920, D86). (a) capgen
+  `{op:"pad"}` inject form: reads the 8-B .PAD slot record
+  {u16 active@+0, x@+2, y@+4, z@+6} from the pad bank at the
+  capture-frame stop (MEMDUMPBIN through the bank's own SEG form +
+  slot*8), FAILS LOUD unless active==1 and x!=0xFFFF (a slot the
+  staged mission never loaded is a capture error naming the slot),
+  then writes {x,y,z} as i32-LE x3 to the order-target triple (EXD
+  0x10e0a4/a8/ac; tile coords = the shared-grammar contract). The op
+  writes only the ORDER — the robot's arrival arms extraction
+  in-game. (b) dbx-plan un-gate: `pad <slot>` compiles to the op row
+  (bank from static-pad-slots — a READ anchor with its OWN gap error;
+  targets from order-target; slot 0..998 re-checked). (c) The §7j.20
+  extraction-pad census committed as S6 authoring data in DESIGN §7
+  (zone 1 {8,0x10,0x12,0x18}, zone 2 {4,5,7,0xE,0x11}, zone 3
+  {0,1,6,0xF,0x15}, zone 4 {0,2,0x10,0x15,0x16}, zone 5 {8,9 ×2,
+  0x3D} + the shared slot-6 tail). (d) VERIFIED: `dbgprobe pad`
+  headless GREEN both legs (positive: seeded slot 2 = the real
+  ZONEA/MISSION1.PAD record 0 (5,61,0) → triple 05000000 3d000000
+  00000000 + injected flag; negative: inactive slot 3 aborts, no
+  transcript — NB the negative run log lives OUTSIDE the capgen
+  workdir, capgen purges stale *.log there); gate/inject/flow/walk
+  regression-GREEN; new dbx-plan tests (op-row emission vs the REAL
+  registry + the READ-anchor gap refusal); S0/S1/S0W byte-pinned
+  plans unchanged; scratch CLI end-to-end compile (pad 8 → frame-6
+  op row); workspace test/fmt/clippy green; manifest clean. The E
+  side still rejects pad steps naming the S6 seam (W12). Queued: W7
+  the differ (item 2).
 - 2026-08-22: P4.2/W6 THE ENGINE DUMP EMITTER unit COMPLETE (design
   83f04b9 by worker 1f758667 claim 2 — interrupted mid-implementation;
   adopted + completed by worker 36f752cd claim 2, commits 54d781a +
