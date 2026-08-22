@@ -17,7 +17,8 @@
   ],
   "anchor_watches": [
     { "id": "probe-flow-expr-len", "addr": "0000:0000", "len": "$com1-1000" },
-    { "id": "probe-flow-expr-addr", "addr": "0040:$com1-1016", "len": 16 }
+    { "id": "probe-flow-expr-addr", "addr": "0040:$com1-1016", "len": 16 },
+    { "id": "probe-flow-prefix", "addr": "F000:0000", "len": 4, "prefix": { "addr": "0040:0000", "len": 4 } }
   ],
   "watches": [
     { "id": "probe-flow-bios", "addr": "F000:0000", "len": 16 }

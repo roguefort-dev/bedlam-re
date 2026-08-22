@@ -93,7 +93,10 @@ runs from the staged conf's autoexec. Keys:
   anchor_watches / watches      frame 1 dumps anchor_watches+watches
       (TS statics ride the anchor frame), frames 2+ dump watches.
       addr "SEG:<expr>" offsets and len may be arithmetic over $names
-      (e.g. "CS:$tot_ptr", "4+16*$map_w*$map_h").
+      (e.g. "CS:$tot_ptr", "4+16*$map_w*$map_h"). A watch may carry a
+      "prefix" {addr, len} sub-row (D109): the prefix cell is dumped
+      FIRST and concatenated onto the span — the O1 bank-row grammar
+      (u32 count cell + records; trt-array/object-instances).
   frames / time_limit           plan-level defaults (CLI overrides).
   env {KEY: val}                "" removes capgen's default override —
       live plans unset SDL_VIDEODRIVER so the desktop session provides
@@ -846,7 +849,18 @@ def run_capture(args):
             for n, w in enumerate(rows_def):
                 addr, length = watch_target(w, symbols)
                 dest = os.path.join(dumps, f"f{frame:06d}.w{n:03d}.bin")
-                data = dump_watch(sess, dblog, args.workdir, dest, addr, length)
+                data = b""
+                if "prefix" in w:
+                    # D109 count-cell prefix: dump the 4-byte cell
+                    # FIRST, then the span — one concatenated blob
+                    # (the O1 bank-row grammar the differ pins: u32
+                    # count + records; e.g. trt 0x11949c + the
+                    # count*0x20 span, object 0x119554 + the full
+                    # 2000*0x14 bank).
+                    paddr, plen = watch_target(w["prefix"], symbols)
+                    pdest = os.path.join(dumps, f"f{frame:06d}.w{n:03d}.pre.bin")
+                    data += dump_watch(sess, dblog, args.workdir, pdest, paddr, plen)
+                data += dump_watch(sess, dblog, args.workdir, dest, addr, length)
                 rows.append((w["id"], data))
             return rows
 

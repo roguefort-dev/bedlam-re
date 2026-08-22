@@ -245,18 +245,24 @@ for ln in lines:
     elif p[0] == "watch":
         frames[cur].append((p[1], p[2] if len(p) > 2 else ""))
 assert sorted(frames) == [1, 2, 3], f"frame keys {sorted(frames)}"
-assert len(frames[1]) == 3, f"anchor frame rows {len(frames[1])}"
+assert len(frames[1]) == 4, f"anchor frame rows {len(frames[1])}"
 for f in (2, 3):
     assert len(frames[f]) == 1, f"frame {f} rows {len(frames[f])}"
 ids = {w[0] for fl in frames.values() for w in fl}
-assert ids == {"probe-flow-expr-len", "probe-flow-expr-addr", "probe-flow-bios"}, ids
+assert ids == {"probe-flow-expr-len", "probe-flow-expr-addr", "probe-flow-prefix", "probe-flow-bios"}, ids
 row = dict(frames[1])
 # $com1 = 0x3F8: expr-len = 1016-1000 = 16 bytes of IVT; expr-addr
 # offset = 1016-1016 = 0 -> BDA base (16 bytes).
 assert len(row["probe-flow-expr-len"]) == 32, "expr len did not evaluate to 16 bytes"
 assert len(row["probe-flow-expr-addr"]) == 32, "expr addr row is not 16 bytes"
 assert len(row["probe-flow-bios"]) == 32
-print("flow probe: GREEN (boot trap + arm + resolve + expr addr/len + anchor split)")
+# D109 prefix form: the 4-B BDA prefix (COM1 base 0x3F8 + COM2 0x2F8,
+# both u16-LE) rides the head of the 4-B F000 span -> ONE 8-B blob,
+# prefix first.
+assert len(row["probe-flow-prefix"]) == 16, "prefix row is not prefix(4)+span(4) bytes"
+assert row["probe-flow-prefix"][:8] == "f803f802", row["probe-flow-prefix"][:8]
+assert row["probe-flow-prefix"][8:] == row["probe-flow-bios"][:8], "prefix row tail is not the F000 span"
+print("flow probe: GREEN (boot trap + arm + resolve + expr addr/len + anchor split + count-prefix form)")
 PYCHK
     echo "flow transcript: $PROBE_OUT/capture.dbxcap"
     echo "pty log:         $PROBE_OUT/pty.log"
