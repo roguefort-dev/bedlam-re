@@ -4321,7 +4321,156 @@ only for .NME-seeded seekers; no corpus gate reaches a corrupted
 direction, and the fatal is a crash path by construction).
 
 
-## 8. Constants ledger (all [verified] unless tagged)
+## 7j.30. The SFX/GFX BANK-NAME WALK — the complete bank→name map + the FUN_0043a48e play family (2026-08-22, worker 7972b334 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt + DGROUP bytes re-read from BEDLAM.EXW, no Ghidra run)
+
+Sec 9 item 5's DATA PREREQUISITE delivered: every durable
+bank-pointer cell in 0x4edfXX/0x46afXX now carries its file name.
+Method [verified]: two independent extractors over the full .text
+objdump (a strict 3-instruction window matcher and the looser
+predecessor state machine from the interrupted 09:55 WIP — adopted,
+validated row-by-row, 100% agreement after window widening; the
+single artifact row `BEEP5→0x46af0c` rejected as the staging-cell
+false pair) + the DGROUP string table re-read from the binary
+(PE: DGROUP VA 0x454000 = file 0x52600, section table verified
+this run). 202 durable assignments, zero unnamed durable cells;
+raw dump = ghidra-project/exw-banknames.txt, generators
+/tmp/opencode/sfxwalk.py + /tmp/opencode/sfxcensus.py.
+
+**The register/load idiom pair** [verified]:
+- SFX: `mov eax,NAME; call FUN_0043a36e|FUN_0043a39c; mov ds:CELL,eax`
+  — both callees share an identical head: stage the .RAW through the
+  scratch cell 0x46af0c (`mov edx,[0x46af0c]; ecx=8; ebx=0x2b11;
+  call 0x41cc7f` = the file→arena loader) then
+  `0x44c64c(eax=[0x46af0c], edx=[0x4eded4], push 1)` returns the
+  VOICE-BASE handle stored into the cell. FUN_0043a36e registers
+  ONE voice; FUN_0043a39c registers FOUR (0x44c64c + 0x44c828 ×3,
+  channel words edx=2..4) — Watcom clone pair, heads byte-identical.
+  **The SFX cells hold voice-base handles, not data pointers.**
+- GFX/PAL: `mov eax,NAME; mov edx,ds:CELL; call 0x41cc7f` (the
+  0x41cc7f return value is the arena bank pointer; several sites
+  reorder the edx read before the name load or interleave a
+  `mov ecx,0x302`-style mode/stride arg — the 17 widened-window
+  pairs all verified in-dump).
+- **Language variants**: `cmp ds:0x4eba1c,1; jne` picks `NAMEG.BIN`
+  vs `NAME.BIN` into the SAME cell (SENTRYG/SENTRY→0x4edda4,
+  BIOMEX3G/BIOMEX3→0x4edda8, BLOWUPG/BLOWUP→0x4edd6c,
+  BIOMEX1G/BIOMEX1→0x4edda0); 0x4eba1c = the parsed language INDEX
+  (0x46cbb4 holds the LANGUAGE.GER content/handle, loaded
+  0x41c1f5). Edition gate quirk @0x41d912: `[0x4edd8c] > 4` loads
+  the GRILLA(G) family else the BIOMEX1(G) family — both into
+  0x4edda0.
+
+**FUN_0043a48e = the SFX PLAY/STEAL function** [verified, head]:
+args (eax=voice-base handle, ebx=x, ecx=y, edi=[esp+0x1c]=age,
+stack=priority-family); ebx=ecx=−1 → defaults vol 0x7f / pan
+0x8000 (the whole-menu family passes −1,−1); else FUN_0043a3e0
+(x,y → signed pan byte, via 0x41ebf8 angle field, clamp ±0x7ff0>>8)
+and FUN_0043a447 (x,y → volume word, clamp ±0x7fff +0x8000 bias)
+against the LISTENER cells 0x4edde4/0x4edde8 (x/y). Channel pick:
+probe the base's 4 voices via 0x44c5ac (free query); none free →
+steal: scan priority words `[0x4ee1c2+2·v]>>16` vs required and
+age words `[0x4ee2e2+2·v]`, lowest/oldest wins; start via
+0x44c904(base+slot); tail packs pan<<8 back into the arrays.
+Voice-state census: 0x4ee1c2/0x4ee1c4 = ONE priority array (odd
+base, dword read takes the high word), 0x4ee2e2/0x4ee2e4 = the
+age/pan array, 0x4ee1c0 = reset-with-listener cell (0x4478b9,
+mission-load reset block). Speech BYPASSES this path: indexed
+record pick `mov eax,[eax*8+0x4ee014]` (A variant) /
+`[eax+0x4ee018]` (B) then 0x44c8c4 direct play (vol 0x7f00) —
+sites 0x423b85/0x423b57.
+
+**The complete SFX map** (cell = file; all [verified] in-dump):
+
+*Mission set — FUN_0043a1d3, the 27-register block 0x43a1d3..0x43a36d:*
+0x4edf60 MIDIGUN, 0x4edf64 BOOM1, 0x4edf68 BOOM2, 0x4edf6c BOOM3,
+0x4edf70 **MIDIGUN AGAIN** (duplicate file, distinct cell — quirk,
+no consumer found for 0x4edf70), 0x4edf74 SQUISH2, 0x4edf78 SQUISH3,
+0x4edf7c HURT1, 0x4edf80 HURT2, 0x4edf84 HURT3, 0x4edf88 DEATH1,
+0x4edf8c DEATH2, 0x4edf90 DEATH3, 0x4edf94 PLASMA (readers
+0x409273/0x40ab52/0x40b03b = the 7j.17 robot-fire family ✓),
+0x4edf98 RICOCHT1, 0x4edf9c RICOCHT2, 0x4edfa0 RICOCHT3,
+0x4edfa4 RICOCHT4, 0x4edfa8 POWERUP (10 readers = the 7h pickup
+family ✓), 0x4edfac MISSILE1, 0x4edfb0 ELEV1, 0x4edfb4 ELEV2,
+0x4edfb8 DEADMAN1, 0x4edfbc DEADMAN2 (7j.25 ✓), 0x4edfd0 TEXTBOX1,
+0x4edfd8 BEEP5, 0x4edfdc BEEP5 (BEEP5 twice, distinct cells —
+per-screen re-registration shares the file).
+
+*Screen sets (re-registered per screen, same cells reused):*
+0x4edfc0 MENU1 / 0x4edfc4 MENU2 (title 0x43a6d0 family, selector
+0x43e973, debrief-aliased 0x4ee00c/0x4ee010 at 0x44448e/0x44449d,
+read 0x44545f/0x4454b7); briefing 0x43d150: 0x4edfc8 BEEP1,
+0x4edfcc BEEP4, 0x4edfd4 BEEP7 (+BEEP5/TEXTBOX1 shares above);
+selector 0x43e946: + 0x4edfe8 DOOROPEN (read 0x43f003/0x43f094),
+0x4edfec DOORCLSE (read 0x43f04c); shop 0x440f7e re-runs the
+BEEP set; map/debrief 0x444436 adds nothing new.
+
+*Mission-extra set — MissionShell block 0x447bb2..0x447c3b:*
+0x4edfe0 BEAMIN (pod release — 7j.27 ✓, readers incl. 0x412dd7/
+0x4136de/0x41376b the critter wake family), 0x4edfe4 THROW
+(readers 0x409646/0x4098db/0x409b11 = robot fire w6/7/8 ✓),
+0x4edff0 BIOFIRE (reader 0x413e4b), 0x4edff4 PEXPLODE (reader
+0x421dc4), 0x4edff8 CACODETH (reader 0x418982 = k7 death ✓),
+0x4edffc SQUAWK (reader 0x4152bd), 0x4ee000 GRUNT1 / 0x4ee004
+GRUNT2 / 0x4ee008 GRUNT3 (readers 0x421ef2/0x421f01/0x421f17 =
+the critter-hit SFX dispatcher family).
+
+*Speech bank — boot loader block 0x41cf4a..0x41d4d6 (FUN called
+from 0x41c2b4):* 8-byte records at 0x4ee014 = {A-variant handle
+@+0, B-variant handle @+4}, record i @ 0x4ee014+8i, i = SPCH## :
+SPCH00..SPCH14 A+B, SPCH15 A only, SPCH16..SPCH33 A+B, SPCH34 A
+only, SPCH35..SPCH42 A only, SPCH43..SPCH51 A+B, SPCH52 A only
+(95 files, 53 records; 11 unpopulated B-slots — the 10 mid-table
+cells 0x4ee090/0x4ee128/0x4ee130/0x4ee138/0x4ee140/0x4ee148/
+0x4ee150/0x4ee158/0x4ee160/0x4ee168 plus the record-52 tail
+0x4ee1b8, all zero refs, never stored [verified]). Pair slot
+order FLIPS at SPCH16: records 0..14 store A@+0/B@+4, records
+16..33 and 43..51 store B@+0/A@+4 (verified at 0x41d111..0x41d12f:
+SPCH16A→0x4ee098 = rec16+4, SPCH16B→0x4ee094 = rec16+0; same
+at 17/33/43..48); singles always occupy +0. The head-level
+readers pick SLOT, not variant — 0x423b85 reads +0, 0x423b57
+reads +4 — so the +0 slot carries the A file for records 0..14
+and the B file for records 16..51. Faithful quirk recorded
+[verified]; whether any caller actually reaches records 16+
+via these two sites is open.
+
+**The complete GFX/PAL name map** (selection; full dump in
+ghidra-project/exw-banknames.txt):
+- 0x46afXX durable: 0x46af2c REAPER, 0x46af30 SHRIKE, 0x46af34
+  SMOKE, 0x46af38 TELEPORT, 0x46af3c NUMBERS, 0x46af40 FLAGS,
+  0x46af44 SHIELD, 0x46af48 ROBNUMS, 0x46af50 DIGITS, 0x46af54
+  SMOKER (all cross-check 7j.26/7j.28 ✓).
+- 0x46afXX unnamed-by-design (census): 0x46af0c = the universal
+  LOAD STAGING cell (31 refs — every SFX/GFX load passes through
+  it; boot-written 0x41c2ab, GFX-loader-copied to 0x46af20
+  0x41d680); 0x46af4c = the DAT volume pointer (the §7j.17
+  presence-mark formula bank — loaded from the mission .DAT, no
+  fixed name); 0x46af58 = a 0x2710-B runtime arena (0x41db89
+  alloc, readers 0x41f191/0x422931/0x423858 = beacon/scan
+  family); 0x46af5c = struct-array base (address-taken only);
+  0x46af04/08/10/14/1c/20/24 = loader bookkeeping + a MP state
+  cell (0x46af08, written 0x449cab, cmp==1).
+- Sprites: 0x4edd64 DROPSHIP (arena 0x25990, load 0x41d81c),
+  0x4edd6c BLOWUP(+G), 0x4edd7c GENERAL, 0x4edd80 SCANNER,
+  0x4edd84 SPIDER, 0x4edda0 BIOMEX1/GRILLA(+G), 0x4edda4 SENTRY(+G),
+  0x4edda8 BIOMEX3(+G), 0x4eddbc WEAPONS, 0x4eddb0 VICERA,
+  0x4eddb4 DEBRIS, 0x4ede2c DANTE, 0x4ede30 TERRA, 0x4ede7c SMLFONT,
+  0x46cbbc TABLE, 0x46cbc4 FULLFONT (re-loaded 0x447798 MissionShell),
+  0x46cbc8 HUMANS (boot 0x41d8cd + re-load 0x41e07e), 0x46cbcc
+  IDIOTGFX, 0x46cbd0 SINTABLE, 0x46cdac MONOFONT, 0x46cdb0 TINYFONT,
+  0x46cdb4 BRIEF; 0x4eddac CACO (arena 0x59d8 — the critter bank ✓).
+- Palettes SHARE cells per screen role: 0x4edbf8 = current-screen
+  palette (LOADPAL 0x41c88e boot, GAMEPAL, BRFPAL, SELECTOR,
+  SHOPPAL, DB_PAL — one cell, six names, last-load-wins);
+  0x4edbfc = TXPAL1/TXPAL2/TXPAL3; 0x4edc00 = DARKPAL/SELDARK/
+  DARKPALS. Do NOT treat these as stable identities across screens.
+
+Corpus-path verdict: docs-only, no engine change — the map is the
+data prerequisite for the future mission-SFX tier (sec 9 backlog:
+the tier itself remains unimplemented; MENU1/MENU2-style mixer
+instruments stay out of the hashed core per §5 note).
+
+Corrections: none needed — 7j.25's DEADMAN pair, 7j.17's fire
+banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 
 
 | constant | value | anchor |
@@ -4457,6 +4606,8 @@ direction, and the fatal is a crash path by construction).
 | terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link | MISSIONVIEW §1/§4 |
 | dither noise bank | 0x4e6ed8 (2048 B .bss ring, cursor 0x4ddb30), bytes {0,0xFF}, `RandB()&3==0` 25%; boot fill MissionShell 0x447b13, churn 15 B/frame 0x448147 | §7i |
 | dither blit | FUN_00401ae6(y,h,x,w,src_off,mode): mode 0 = rep-movsb full copy (dead/unoccupied boxes), mode ≠ 0 = nonzero-only overlay (hit flash); reseed `RandB()&0x1ff` when src_off+96 ≥ 0x800; seed `(RandB()&0x7fff)/15` clamp ≤ 0x7f5 | §7i |
+| SFX bank→name map (COMPLETE) | 202 durable assignments, zero unnamed durable cells: mission set 0x4edf60..0x4edfbc+ELEV/BEEP/TEXTBOX = 27 registers by FUN_0043a1d3 (MIDIGUN dup at 0x4edf70 quirk), screen sets MENU1/2+BEEP1/4/5/7+TEXTBOX1+DOOROPEN/DOORCLSE (0x4edfc0..0x4edfec, cells reused per screen; 0x4ee00c/0x4ee010 = the debrief MENU1/2 alias), mission-extra 0x4edfe0..0x4ee008 (BEAMIN/THROW/BIOFIRE/PEXPLODE/CACODETH/SQUAWK/GRUNT1..3), speech 0x4ee014+8i 53 records {A,B} (95 files, 11 empty +4 slots, pair slot-order flip at SPCH16); GFX 0x46af2c..0x46af54 + 0x4eddXX/0x4edeXX/0x46cbXX families + G-variant picks (language index 0x4eba1c==1, edition gate [0x4edd8c]>4 → GRILLA family); palettes SHARE role cells (0x4edbf8 current-screen PAL ×6 names, 0x4edbfc TXPAL1..3, 0x4edc00 DARKPAL family); full dump ghidra-project/exw-banknames.txt | §7j.30 |
+| SFX register/play family | FUN_0043a36e = 1-voice register, FUN_0043a39c = 4-voice register (clone pair; stage via scratch cell 0x46af0c → arena 0x2b11 → 0x44c64c returns the VOICE-BASE handle — SFX cells hold handles, not pointers); FUN_0043a48e = play/steal (x,y=−1,−1 → vol 0x7f/pan 0x8000; else FUN_0043a3e0 pan / FUN_0043a447 vol vs listener 0x4edde4/0x4edde8; 4-voice probe 0x44c5ac, steal by priority [0x4ee1c2+2v]>>16 + age [0x4ee2e2+2v], start 0x44c904); speech bypasses it (indexed slot pick + 0x44c8c4 direct, vol 0x7f00) | §7j.30 |
 
 ## 9. Open items (next slices)
 

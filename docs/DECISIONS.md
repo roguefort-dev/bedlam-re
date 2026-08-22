@@ -3322,3 +3322,39 @@ Nudge-Worker: cd3ebd73-10b5-4032-a085-6a30022ce8ea
    rows + 1 erratum in RE-EXW-SIM §7j.29 (commit 03e8c3b).
 
 Nudge-Worker: 0a08a5e1-c1ab-431b-880b-094e6ba40017
+
+## D94 — 2026-08-22: P4/RE — the SFX/GFX bank-name walk COMPLETE; 202 durable assignments, zero unnamed durable cells (worker 7972b334 claim 2)
+
+1. METHOD: two independent extractors over the full .text objdump
+   (a strict 3-instruction window matcher written this run +
+   the interrupted 09:55 predecessor state machine — adopted as
+   WIP, validated row-by-row; 17 window-widening additions all
+   verified in-dump; ONE artifact row rejected: the BEEP5→0x46af0c
+   "pair" is the staging-cell false positive of the loose machine)
+   + DGROUP strings re-read from BEDLAM.EXW (PE DGROUP VA 0x454000
+   = file 0x52600, section table verified). No Ghidra run; manifest
+   clean before/after the corpus read.
+2. HEADLINES: the SFX cells hold VOICE-BASE handles (FUN_0043a36e
+   1-voice / FUN_0043a39c 4-voice registers staging via scratch
+   cell 0x46af0c); FUN_0043a48e = the play/steal function (default
+   vol 0x7f/pan 0x8000 at x=y=−1, else position→pan/vol vs the
+   listener cells 0x4edde4/0x4edde8; steal by the priority/age
+   arrays 0x4ee1c2/0x4ee2e2); speech is a 53-record {A,B} bank at
+   0x4ee014 (8-B records, 95 files, pair slot-order FLIPS at
+   SPCH16, 11 unpopulated +4 slots) and BYPASSES FUN_0043a48e
+   (0x44c8c4 direct). Language G-variants share cells via the
+   index gate 0x4eba1c==1 + the edition gate [0x4edd8c]>4 → the
+   GRILLA family; palette cells are per-ROLE shared slots
+   (0x4edbf8 = current-screen PAL ×6 names — never treat as a
+   stable identity). MIDIGUN is registered TWICE (0x4edf60 +
+   0x4edf70, the latter consumer-less).
+3. All prior bank pins re-confirmed cell-exact (7j.25 DEADMAN,
+   7j.17 fire banks, 7h.2 POWERUP, 7j.27 BEAMIN, 7j.26/7j.28 GFX
+   banks); corrections: none. Deliverable = RE-EXW-SIM §7j.30 +
+   2 ledger rows; raw dump ghidra-project/exw-banknames.txt
+   (git-ignored evidence), generators /tmp/opencode/sfxwalk.py +
+   sfxcensus.py (scratch). The sec-9 "Mission SFX tier" backlog
+   item DATA prerequisite is now met; the tier itself stays
+   unimplemented (presentation stays out of the hashed core).
+
+Nudge-Worker: 7972b334-1999-4c48-82c5-ae0582b17a0d
