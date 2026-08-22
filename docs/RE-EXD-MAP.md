@@ -294,3 +294,71 @@ file is next touched.
 7. **EXD staging cells the EXW build inlines** (§5c): order word
    0x10e15c, command flags 0x11a51a, held-keys counter 0x107534 —
    watch-artifact class, not gameplay divergence.
+
+## 8. The W7 normalizer field map (robot record + row forms) — PINNED 2026-08-22
+
+The W7 differ (DESIGN-DIFFHARNESS §6/§6a) converts O1 raw guest bytes
+into the §6a canonical grammar per registry row. The map below is the
+per-field EXD evidence table (robot record, base 0xf6d34, stride 0xA8):
+
+| canonical field | EXD off | type | provenance |
+|---|---|---|---|
+| pos_x | +0x00 | i32 Q13 | [verified] beacon armer teleported x/y (seed #1) + the per-player anchor writer `d@(0xf6d34+i)>>8` → 0x971a4 |
+| pos_y | +0x04 | i32 Q13 | [verified] same pair (`d@(0xf6d38+i)>>8`) |
+| z | +0x08 | i32 | [verified-NEW this unit] the per-player anchor writer's third word: `d@(0xf6d3c+i) + 0x20` (exd-probe5.txt @0x1fc6x/0x1fc8x — the 4×0xC {x>>8, y>>8, z+0x20} triple reads +0/+4/+8 of the record) |
+| state | +0x0C | u16 | [verified] armer `[0xf6d40+i·0xA8] := 3` (§4) |
+| drop_countdown | +0x2C | u16→i32 | [verified] spawn stagger store `[0xf6d60+i·0xA8] = 1+k·(2000−m·1000/27)` (§4) |
+| stop_dist | +0x74 | i32 | [verified] consumer auto-arm `target@+0x74 := 1000000 (0xf4240)` @0xf6da8 (§5c) |
+| hp | +0x78 | i32 | [verified] respawn base `[EAX+0xf6dac] = 0x1388` (§4) |
+| alive | +0x7C | i32→u8 (≠0) | [verified] armer alive loop over `[0xf6db0+i]` presence (§4) |
+
+**Coverage gaps (canonical fields with NO pinned EXD offset — the
+normalizer leaves them OUT of coverage, they are reported as STRUCTURAL
+coverage findings, never zero-filled-then-compared, never guessed):**
+dir_byte, facing, anim, variant, probe_z[8], target_present/x/y (the
+EXW move-target globals are the source, but the O1 plan row is deferred
+— extent formula unpinned), armor, hit_flash, alarm, kind, shield,
+shield_charges, shield_boost, battery, armor_pool, alarm_ctr,
+death_flag. The EXW back-half offsets exist in RE-EXW-SIM §3/§7f/§7g
+(hit_flash +0x2E, armor word +0x30, shield +0x88, shield_charges +0x8C,
+battery +0x94), and five mid/back anchors (+0x2C/+0x36/+0x74/+0x78/
++0x7C) coincide EXACTLY between EXW and EXD — the back-half transfer is
+plausible but unpinned for EXD; a bounded probe pass can pin it when a
+live S1 diff needs those fields (recorded as the follow-up).
+
+**Seed #1 EXW-front discrepancy [OPEN, W11]:** RE-EXW-SIM §3 documents
+EXW pos_x@+0x00/pos_y@+0x04 (evidence column: 0x4c69ec z, 0x4c69f0
+state) while seed #1 above says EXW carries x@+4/y@+8. The EXD side
+(x@0/y@4/z@8/state@0xC) is independently verified and unaffected. The
+O2/EXW normalizer uses the SIM §3 table (the per-field evidence one);
+the first live EXW capture (W11) arbitrates the conflict — a one-field
+map flip either way.
+
+**Non-robot row forms the O1 normalizer consumes** (all from the
+dbx-plan-emitted capture rows; identity unless noted):
+- T0 scalars (score/money/difficulty/zone/mission/mode/linear-mission-m):
+  4-B u32 identity; rng-state-a/b: u32 → canonical u64 zero-extend
+  (channel-native state word, §6a — T3 class, never bit-compared);
+  frame-counter: u32 identity (T2 class: the O1 counter never resets —
+  14 INC sites incl. menus — so a live O1 value ≠ E's 0..N by
+  construction; the ALIGNMENT key is the record `frame_no`, not this
+  row).
+- selection-triple: the 4-B selected-idx alias (D83 form) — identity.
+- order-target: 12-B i32×3 span — identity.
+- beacon-family: 10-B span of five u16 cells {flag, timer, tile×3} →
+  canonical {flag u32, timer u32, tile i32×3} (zero-extend each; the
+  EXW cells are u16-spaced identically). Cell-order note: the tile
+  trio maps in registry-listed order; if the original writes {z,x,y}
+  a live diff flags it as a finding (layout differences are findings,
+  not false negatives).
+- spread-claims: 24-B u16×12 — identity.
+- per-player-selected: 0x30 = 4×0xC {x>>8, y>>8, z} — identity.
+- typedb-fade-byte / armor-pad-reads: raw w·h grid → canonical
+  u32 len + bytes with the §6a equivalence "len 0 ≡ all-zero w·h"
+  applied (an all-zero grid canonicalizes to len 0 — the ZONEA corpus
+  shape until a death materializes the bank).
+- static-map-wh: 48-B span → canonical {w u32, h u32} with
+  w = u32@span+0x2C (cell 0x1074b8), h = u32@span+0x00 (0x10748c).
+- every other TS/T2/T3/T4/TI row: no E-side emitter (§6a E-gaps) and/
+  or no EXD alias — comparison is impossible; the differ reports
+  coverage asymmetry, never silence.
