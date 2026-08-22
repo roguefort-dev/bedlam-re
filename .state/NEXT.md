@@ -78,79 +78,59 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
- 2. DONE 2026-08-22 (worker ce347a0e claim 2, commit 4210f55, D96,
-    §7j.32): [P4/RE] THE .BDG TEMPLATE-BANK READER unit — CLOSED.
-    Loader disk order pinned (+0x3E,+0x46,+0x42,+0x4A interleaved
-    vs slots); +0x46/+0x4A = the UNDER pair, the ONLY banks any
-    code reads (restore re-verified instruction-exact: linear
-    (z'·H+i)·W+j, mirror word +2·z, seen +0x10+z, DAT volume low
-    byte); +0x3E/+0x42 = the CURRENT pair ≡ shipped TOT/DAT at
-    .POS footprints (434/435 ZONEA/M1; 1 miss = footprint overlap,
-    last-slot-wins) — DEAD EDITOR PAYLOAD, zero readers, the
-    runtime spawn-stamp hypothesis RETIRED. BONUS: the 0x1E-B
-    mirror-record grammar unified (+0x1B/+0x1C = the OBJECT-HEIGHT
-    pair — closes the MISSIONVIEW §8.1 producer hunt; +0x1D no
-    traffic); FUN_0044889a/FUN_00448b80 = the objective-building
-    family (zone-7 gate, counter [0x46cce0] over types 0x44..0x47,
-    at zero SFX 0x28/0x29 + extraction-arm cells 0x46cd00/
-    0x46ccfc/0x46ccc4); .POS word 2 = BASE Z LEVEL (FORMATS §12
-    corrected); FUN_0041bc1c TRT death stamp (per-zone rubble word
-    0x454a04). Docs-only; registry_anchors green; manifest clean.
- 2. DONE 2026-08-22 (worker fc88ecf3 claim 2, commit 6897326, D97,
-    §7j.33): [P4/FORMATS] THE .BLD RECORD WALK unit — CLOSED
-    (previous DONE 4210f55/D96 above). NEGATIVE HEADLINE: "BLD"
-    (case-insensitive) occurs in ZERO shipped executables —
-    there is NO .BLD loader ("SAVED.BDL" @0x4597d6 = the
-    savegame); .BLD is EDITOR-ONLY, the editor SOURCE that
-    compiles to .BDG (record j ≡ BDG non-empty record j: same
-    H/hp/chain/type head u32s + the SAME four template banks).
-    Grammar VERIFIED (FORMATS §17 rewritten): length = 137 +
-    64·W·H + variable tail (subsumes the 201+64k rule — the
-    "extension blocks" = four 16·W·H template-bank slots ==
-    the BDG banks); name@+0x60; NOT self-delimiting (no
-    terminator/count — parse needs the sibling BDG's W,H);
-    zero fill after the last record; 7 286/7 907 records walked
-    byte-exact (ZONEA/C/D/E + ZONEF M2/M4/M7 fully; ZONEB/G +
-    ZONEF M6 desync at a few variable-tail records — bounded).
-    Runtime family census landed (FUN_0041dc5a 8-tag table
-    0x4587d9..0x4587fc + path builder FUN_0044670c; editor-only
-    set .BLD/.CTG/.COL/.MAP/.PTH/.TXT — FORMATS §0.2). BONUS:
-    zone D DOES ship mission-level BLDs (§0 row fixed);
-    zone-level BLDs byte-shared A≡F, B≡G. Docs-only; registry
-    anchors green; manifest clean; PUSHED.
- 3. DONE 2026-08-22 (worker a42c6027 claim 2, commit 3530df5, D98,
-    §7j.34): [P4/RE] THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS
-    unit — CLOSED. The 71-site absolute census of 0x4796d4..d9 +
-    bounded decodes of all seven container functions: +0x19 =
-    the door/scenery TARGET-TAG byte, +0x1A = {bit7 phase, low7
-    frame counter} — the 15-frame sliding-door machine
-    FUN_00423081 (MissionShell epilogue @0x44808f; DAT
-    door-frame bytes 0x40+2n even / 0x5F−2n odd; per-16-frame
-    z-stack DROP/PUSH-UP finish pairs FUN_004235fb/00423740 +
-    DAT seen 1/0; auto doors XOR bit7 + 0x14-tick pause
-    forever; renderer slide bias −nibble·0x500 @0x406c5c). Rect
-    grammar RESOLVED {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA
-    variant,+0xC cd,+0xE sfx} (7j.12 "word@+2" qualifier +
-    7j.21 w/y/h permutation corrected). New reader anchors:
-    scorch→damage 0x40bc60, fire-anchor 0x4110cb, the second
-    +0x1B/+0x1C stamp/clear walks; +0x1D zero traffic
-    CONFIRMED. MISSIONVIEW §8.1 CLOSED; docs-only;
-    registry_anchors green; manifest clean; PUSHED.
- 3. [P4/RE] THE PICKUP TILE-WORD PRODUCER unit (7h.3 — NOW
-    UNBLOCKED by §7j.34): the 0x4796bc mirror rows' plane words
-    are the pickup-word substrate; walk the 7h.3 chain (the
-    probe-latch walk + the DAT z-plane consume + the 0x454a90
-    floor-word swap → the apply_pickup dispatch from
-    host-seamed to corpus-real). Anchor in
-    ghidra-project/exw-text-objdump.txt; land RE-EXW-SIM
-    ledger rows + the 7h.3 closure + engine seam if the corpus
-    path fires (check the ZONEA/M1 corpus: do pickups stage in
-    the gates? if not, docs-only + P4.2 hooks per the D98
-    pattern). RE NOTES: the §7j.34 door family is the closest
-    decoded neighbor (same mirror rows, same row table
-    0x4ea900, same z-plane tables 0x4eaac8-family); the 7h
-    pickup tables 0x454a58/74/90 sit right after the 7j.12
-    zone tables.
+2. DONE 2026-08-22 (worker f461ea05 claim 2, commit 187f0aa, D99,
+     §7h.4): [P4/RE] THE 7h.3 PICKUP TILE-WORD PRODUCER unit —
+     CLOSED (docs-only; objdump-only from exw-text-objdump.txt +
+     read-only corpus probes in /tmp/opencode, no Ghidra run; the
+     engine seam stays host-seamed BY CORPUS FACT — ZONEA/M1 stages
+     ZERO pickup cells, the D98 pattern). STAGING: init_tiles@00407e11
+     copies EVERY nonzero TOT plane word into the 0x4796bc mirror
+     (the DAT byte gates ONLY the seen flag — the §2/§7j.16 gloss
+     corrected; the DAT==0 word gate belongs to the FUN_00440a2d
+     restamp path alone). LATCH: get_z_pos writes {z,x,y}→
+     0x4dc688/8c/90 at FOUR sites (z / z+1 / z−2 empty-search /
+     slope z+1), each gated on the probed DAT byte == 3,
+     last-write-wins, no auto-clear. CONSUME: the robots()
+     move-toward-target block ONLY — clear −1 (0x40bef2) →
+     robot_move (0x40bf06) → test ≠ −1 (0x40bf0b) → mirror-word
+     range test → DAT byte := 0 + mirror word := floor word + seen
+     := 1 + MP-only {x,y,z} stage 0x4dc6ac/b0/b4 → FUN_0040eba0;
+     any of the 9 probes of one move sub-tick collects (±0.34..0.38
+     tile reach; the wander-family robot_move call 0x40dc0e has no
+     clear/test). SET: [0x4edd8c] = zone_index+1 CONFIRMED (path
+     zone letter 'A'+set−1 @0x446771; boot 1, campaign episode
+     advance ++ @0x41c9e5, save-load restore @0x43c2b8, MP picker
+     MP-only). CORPUS: ZONEA/M1 = 80 type-3 cells, ZERO in set-1
+     range (0x81..0x84/0x53D are set-2/5 shapes, inert under set 1);
+     ZONEB (set 2) 601 pickup cells, ZONEF (set 6) 149, zones
+     C/D/E/G none — S0/S1/S2 never fire the machinery. P4.2 hooks:
+     S5's pickup leg must run ZONEB/ZONEF + the E-side producer
+     list (DESIGN §7 S5 row). Deliverables: RE-EXW-SIM §7h.4 + §7h
+     seam note superseded + 1 rewritten + 2 new ledger rows + §9
+     item 4 refresh; FORMATS §2 correction + §4 type-3 note; D99.
+     registry_anchors green; manifest clean both sides; PUSHED.
+  2. [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER unit: the
+     u32[0x456ca8] anim sequence + the water flag producer — the
+     last open §8 items (needed before the 0x12d/0x12e/0x12f flush
+     remaps can leave water-off semantics; RE-EXW-MISSIONVIEW §8
+     open list). Anchor in ghidra-project/exw-text-objdump.txt; the
+     7j.12 platform family (FUN_00422832/0042394a water z-structure
+     writer, [0x4edd58] plane-A/B occupancy reads) is the decoded
+     neighbor; land RE-EXW-SIM ledger rows + the §8 closure + the
+     corpus check (does water stage anywhere in ZONEA/M1? the
+     0x7d2/0x7d3 stamper FUN_00422f18 tables 0x454a20/0x454a3c +
+     the 0x454ae4 zone-water words are the file-side substrate) +
+     engine seam only if the corpus path fires (else docs-only +
+     P4.2 hooks per the D98/D99 pattern).
+  3. [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit (7j.16
+     residue): the ".BIN" load is pinned (header word → 0x46cdb8;
+     MISSION{A..G}.BIN sprites staged at [0x4ede1c]) but the bank's
+     CONTENT readers are open — census the bank's readers
+     (MISSIONVIEW §1/§4 point at the terrain sprite family), pin
+     the sprite record grammar, and check the corpus path (the
+     gates' terrain draws read it — but is any of it STATE the
+     differ must watch, or is it render-only presentation per the
+     §0b budget?).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -284,6 +264,37 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE 7h.3 PICKUP TILE-WORD PRODUCER unit COMPLETE
+  (worker f461ea05 claim 2, commit 187f0aa, D99, docs-only; objdump-only
+  from exw-text-objdump.txt + read-only corpus probes in /tmp/opencode,
+  no Ghidra run). CLOSED with the staging headline: init_tiles@00407e11
+  copies EVERY nonzero TOT plane word into the 0x4796bc mirror (the DAT
+  byte gates ONLY the seen flag — the §2/§7j.16 gloss corrected; the
+  DAT==0 word gate is the FUN_00440a2d restamp path alone). The
+  get_z_pos type-3 probe latch = FOUR writer sites {z/x/y}→
+  0x4dc688/8c/90 (z / z+1 / z−2 empty-search / slope z+1), last-write-
+  wins; SOLE consumer = the robots() move-toward-target clear(0x40bef2)
+  →robot_move(0x40bf06)→test(0x40bf0b)→fire protocol (DAT byte := 0,
+  mirror word := floor word 0x454a90+4·set, seen := 1, MP-only
+  0x4dc6ac/b0/b4 stage via FUN_00425647, then FUN_0040eba0); any of
+  the 9 probes of one move sub-tick collects (±0.34..0.38 tile reach,
+  no standing-on). TERRAIN SET [0x4edd8c] = zone_index+1 CONFIRMED
+  (path zone letter 'A'+set−1 @0x446771/79/d2; GameMain boot 1,
+  campaign episode advance ++ @0x41c9e5 walking sets 1..7 = zones
+  A..G, save-load restore @0x43c2b8, MP picker rows 1..10 → sets 2..6
+  MP-ONLY). CORPUS VERDICT: ZONEA/M1 = 80 DAT==3 cells, ZERO in the
+  set-1 pickup range (0x81..0x84/0x53D are set-2/5 shapes — inert
+  under set 1); ZONEB (set 2) 601 pickup cells, ZONEF (set 6) 149,
+  zones C/D/E/G none — S0/S1/S2 NEVER fire the machinery, so the
+  engine seam stays host-seamed BY CORPUS FACT (D98 pattern; P4.2
+  hooks on the S5 row: the pickup leg must run ZONEB/ZONEF + the
+  E-side producer list). Deliverables: RE-EXW-SIM §7h.4 + the §7h
+  seam note superseded + 1 rewritten + 2 new ledger rows + §9 item 4
+  refresh; FORMATS-MISSION §2 staging correction + §4 type-3
+  substrate note; DESIGN-DIFFHARNESS S5 row; D99. registry_anchors
+  green; manifest clean before AND after the corpus probes; PUSHED.
+  Queued: the MISSIONVIEW §8 water-flag/anim remainder (item 2) + the
+  [0x4ede1c] BIN-bank content consumers (item 3).
 - 2026-08-22: P4/RE THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS unit
   COMPLETE (worker a42c6027 claim 2, commit 3530df5, D98,
   docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,

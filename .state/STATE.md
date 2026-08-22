@@ -1,5 +1,37 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE 7h.3 PICKUP TILE-WORD PRODUCER unit
+    COMPLETE, worker f461ea05 claim 2, commit 187f0aa, D99,
+    docs-only): the producer chain is decoded end-to-end —
+    init_tiles@00407e11 stages EVERY nonzero TOT plane word into
+    the 0x4796bc mirror (the DAT byte gates ONLY the seen flag;
+    the §2/§7j.16 "word needs DAT==0" gloss corrected — that gate
+    is the FUN_00440a2d restamp path); get_z_pos writes the
+    trigger triple {z,x,y}→0x4dc688/8c/90 at FOUR sites gated on
+    the probed DAT byte == 3 (last-write-wins, no auto-clear); the
+    SOLE consumer = the robots() move-toward-target clear(0x40bef2)
+    →robot_move(0x40bf06)→test(0x40bf0b)→fire protocol (DAT byte
+    := 0, mirror word := floor word 0x454a90+4·set, seen := 1,
+    MP-only 0x4dc6ac/b0/b4 stage, then FUN_0040eba0) — any of the
+    9 probes of one move sub-tick collects (±0.34..0.38 tile
+    reach). The terrain set [0x4edd8c] = zone_index+1 CONFIRMED
+    (the path zone letter is 'A'+set−1; boot 1, campaign episode
+    advance ++ walking sets 1..7 = zones A..G, save-load restore,
+    MP picker MP-only). CORPUS VERDICT: ZONEA/M1 (set 1) stages
+    ZERO pickup cells — S0/S1/S2 NEVER fire the machinery (80
+    type-3 cells exist but their words are set-2/5 shapes, inert
+    under set 1); ZONEB (set 2) stages 601 pickup cells, ZONEF
+    (set 6) 149, zones C/D/E/G none. The engine seam stays
+    host-seamed BY CORPUS FACT (D98 pattern); P4.2 hooks on the
+    S5 row (the pickup leg must run ZONEB/ZONEF + the E-side
+    producer list: TOT words in Terrain + set + the latch/consume
+    protocol + apply_pickup). Deliverables: RE-EXW-SIM §7h.4 +
+    ledger rows + FORMATS §2/§4 + DESIGN-DIFFHARNESS S5 + D99;
+    registry_anchors green; manifest clean both sides; PUSHED.
+    NEXT: the MISSIONVIEW §8 water-flag/anim remainder (queued
+    item 2) + the [0x4ede1c] BIN-bank content consumers (item 3) —
+    then the operator-adjacent W10/W11/W12 tail.
+
   - OPEN 2026-08-22 (P4/RE THE MISSIONVIEW §8 TYPE-DB TAIL
     PRODUCERS unit COMPLETE, worker a42c6027 claim 2, commit
     3530df5, D98, docs-only): the mirror-record tail is fully
