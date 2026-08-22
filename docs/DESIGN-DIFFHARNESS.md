@@ -106,13 +106,26 @@ engine dump emitter (W6, parity_harness -canonical) ──> same frame-record sc
                     divergence report (classes, meter, first-divergence)
 ```
 
-- **Trigger**: [pin-unverified] the exact DOSBox-X debugger command surface
+- **Trigger**: ~~[pin-unverified] the exact DOSBox-X debugger command surface
   (BPINT/BPLM/D forms, watch-mode logging, startup.js automation route) is
   verified at the first interactive session per the RUNTIME.md skeleton
   checklist — that session converts this section's UNCERTAINs into committed
   runbook facts. Fallback trigger class if watch mode can't bulk-read on
   demand: a single linear breakpoint at the frame-tail site whose handler
-  reads the whole tier list (the B2 skeleton already assumes this shape).
+  reads the whole tier list (the B2 skeleton already assumes this shape).~~
+  **RESOLVED NEGATIVE 2026-08-22 (W4 DH-G0 channel audit, RUNTIME.md "DH-G0
+  channel audit"): the pinned flathub DOSBox-X 2026.08.02 has NO integrated
+  debugger** (build gates it off; `debuggerrun`/`-break-start` inert) **and
+  its Duktape startup.js is log-only** (no memory access, no hooks).
+  O1 therefore needs a **channel re-pin** before any live trigger: (a)
+  self-build DOSBox-X at a pinned commit with `--enable-debug=heavy`
+  (conf pins carry over), (b) GameLink linear-read feasibility, or (c) the
+  O2 ptrace route as primary. W4 ships the channel-AGNOSTIC plumbing: the
+  runner stages the scenario + corpus + conf and consumes a **capture
+  transcript** (`DBXCAP` line format, tools/diffharness/src/bin/dbx-stitch)
+  that whatever channel lands at DH-G0 emits; the stitcher converts it to
+  the W3 dump + digest manifest. The live-run piece is
+  [BLOCKED]-on-DH-G0-channel-repin.
 - **Dump format** (W3, one schema for O1/O2/O3/E): a versioned record stream —
   header {schema_ver, channel, build_sha256, pin versions, scenario id},
   then per frame: {frame_no, injection_applied, per-watch {id, raw bytes,
@@ -363,6 +376,13 @@ records instead of guessing the case).
   DOSBox-X run per the RUNTIME skeleton checklist verifies debugger command
   names, the linear-address conversion, and produces S0 dumps whose digests
   reproduce across two runs. Converts [pin-unverified] items to runbook facts.
+  **UPDATE 2026-08-22 (W4 audit):** step zero of DH-G0 is now a CHANNEL
+  RE-PIN — the pinned flathub binary has no debugger and log-only JS
+  (RUNTIME.md "DH-G0 channel audit"); options (a) self-build with
+  --enable-debug=heavy, (b) GameLink feasibility, (c) O2-ptrace-as-primary.
+  The audit itself converted the §3 trigger UNCERTAINs to NEGATIVE facts
+  (committed); the breakpoint shape + bulk-read forms get pinned on the
+  re-pinned channel at the first interactive session.
 - **DH-G1 runner-determinism**: headless S1 run twice → identical dump
   chains (same pin, same scratch corpus). No CI; desktop/local only, results
   committed as fingerprints.
@@ -399,6 +419,14 @@ differ come before any new scenario depth.
 4. **W4 — DOSBox-X runner.** Extend tools/runtime/dosbox-harness.sh with a
    `diff` mode: scenario script → conf copy → debugger automation → D: dumps
    → digest manifest. First target: S0 headless; then S1.
+   **STATUS 2026-08-22:** unattended-safe staging LANDED (diff mode with
+   `stage`/`run`/`stitch` sub-operations; EXD corpus scratch at
+   runtime/harness-corpus-exd; scenario grammar v1 in
+   tools/diffharness/scenarios/; the `dbx-stitch` bin converting a channel
+   capture transcript `DBXCAP` to the W3 dump + digest manifest; replay
+   fixture tests pin the pipeline determinism). The live automation piece is
+   [BLOCKED]-on-DH-G0-channel-repin (RUNTIME.md audit: no debugger in this
+   pin; startup.js log-only).
 5. **W5 — injector.** The §5 vocabulary as runner-side writes (script
    grammar extension shared with the engine emitter).
 6. **W6 — engine dump emitter.** parity_harness gains `--canonical`:
@@ -420,10 +448,12 @@ differ come before any new scenario depth.
 
 ## 11. Risks
 
-- **Debugger surface uncertainty** [pin-unverified] — the single biggest
-  unknown; DH-G0 exists to retire it early. Fallbacks: linear-breakpoint
-  handler reads (skeleton's assumed shape); O2 ptrace channel as the
-  escape hatch (all addresses verbatim).
+- **Debugger surface uncertainty** ~~[pin-unverified] — the single biggest
+  unknown; DH-G0 exists to retire it early.~~ RESOLVED NEGATIVE for the
+  pinned flathub runtime (2026-08-22 W4 audit: no debugger compiled in;
+  startup.js log-only — RUNTIME.md). The risk moved one step earlier: the
+  channel itself must be re-pinned (self-build/GameLink/O2-ptrace options).
+  Fallbacks: O2 ptrace channel as the escape hatch (all addresses verbatim).
 - **EXD↔EXW logic divergence polluting diffs** — bounded by the
   `original-divergence` class + O2 arbitration; expected only in
   hardware-coupled categories per PLAN §0; anything in pure game rules is a

@@ -21,9 +21,13 @@ are re-downloadable artifacts, never committed).
   the official Linux channel (linked from dosbox-x.com) and is current with
   upstream (2026.08.02 = latest tag). The queue item said AppImage; that
   channel does not exist anymore, decision recorded as D19.
-- Debugger presence (harness requirement): the shipped binary carries the
+- ~~Debugger presence (harness requirement): the shipped binary carries the
   integrated debugger (strings: INT-3 auto-breakpoint config text, BP-style
-  commands). Headless smoke --version exits 0.
+  commands)~~ SUPERSEDED 2026-08-22 — see "DH-G0 channel audit" below: the
+  strings were a config help text ("If set, a breakpoint on INT 3 is
+  automatically set up at startup" — an unrelated option's description) plus
+  coincidental junk ("BP A" inside other strings). The pinned flathub build
+  has NO integrated debugger. Headless smoke --version exits 0.
 - Wrapper: tools/runtime/dosbox-x.sh (sets XDG_DATA_HOME, exec flatpak run).
 - Upgrade policy: NEVER update blindly. A new pin is a deliberate decision:
   install to a NEW commit, smoke-test, re-baseline goldens, update this file.
@@ -79,6 +83,52 @@ WATCH PLAN: tools/runtime/dosbox-watch.skeleton.txt pins the B2 watch set
 the PresentFlip@0x1066b frame trigger, the PcmMixerService@0x136e0 audio
 dump, and the calibration checklist. Debugger command names (BPINT/BPLM/D)
 and the startup.js route get verified at the first interactive session.
+
+## DH-G0 channel audit (2026-08-22, W4; all facts [verified] on THIS pin)
+
+Method: binary strings + reference conf shipped in the flatpak, upstream
+source at the binary's own banner commit (e522642b8c86d87cd4e58ffb2961fa30608c119a;
+note the flathub manifest.json names 784240ad as the git source — the banner
+commit is the ground truth for code), plus headless behavioral probes
+(DOS shell only, no game launch, SDL dummy A/V, sandbox-visible runtime/
+paths; probe dir runtime/harness-out/dbgprobe/).
+
+1. NO INTEGRATED DEBUGGER in this pin. configure.ac gates the debugger
+   behind --enable-debug (default OFF: "Debugger not enabled"); the flathub
+   manifest builds with --enable-sdl2 only. Behavioral: `debuggerrun =
+   debugger` and `-break-start` both parse and are INERT (three probes:
+   piped stdin, PTY, plain — boot runs straight through, no debugger
+   console, no break). The BP/BPLM/BPINT/MEMDUMP command table is absent
+   from the binary. Consequence: the D29/D77 "watch-mode debugger" O1
+   instrument DOES NOT EXIST in this runtime; BPINT/BPLM/D names are
+   UNPINNABLE here (the skeleton's UNCERTAINs resolve negative).
+2. Duktape ECMAScript IS compiled in and runs [script] startup.js once at
+   boot (before the machine loop). Enumerated API (behavioral probe,
+   Object.getOwnPropertyNames): `_emu = {emulator:"DOSBox-X", version,
+   log(fn), _js{...}}`, `console.log` (same function), plus Node-ish
+   Buffer/CBOR polyfills with NO I/O attached. There is NO memory access,
+   NO callback/per-frame hook, NO file API. JS scripting is log-only and
+   cannot be the dump instrument.
+3. LOG CHANNEL GATE: console.log/LOG(LOG_MISC,*) output is invisible
+   unless `[log] misc = true` (the [log] advanced channel list). This bit
+   the original probes; any future JS-side diagnostics must enable it.
+4. GameLink (GC4 shared-memory IPC, src/gamelink/) IS compiled in (config
+   keys "gamelink master/snoop/load address" + output_gamelink present).
+   It is client-driven polling designed for real-mode games; whether it
+   can read DPMI/flat linear addresses (LeLoader EXD objects 0x10000 /
+   0x80000) is an OPEN feasibility question for the channel re-pin.
+
+IMPLICATION for DH-G0/O1: the trigger surface must be re-pinned before any
+live debugger automation. Options (decision pending, not made here):
+(a) self-build DOSBox-X at a pinned commit with --enable-debug=heavy
+    inside runtime/ (keeps every D29 conf pin; one-time deliberate pin
+    change per D19 discipline + smoke + manifest bracketing);
+(b) GameLink feasibility study for linear-address reads (open question);
+(c) escape hatch per DESIGN §11: promote the O2 ptrace channel (W11)
+    to primary instrument.
+The W4 runner ships unattended-safe staging + the channel-agnostic capture
+transcript format + the stitcher (see DESIGN §3/§10-W4); the live-run piece
+is [BLOCKED]-on-DH-G0-channel-repin.
 
 CPU BASELINE (the other side of the diff): cargo run --release --example
 parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced

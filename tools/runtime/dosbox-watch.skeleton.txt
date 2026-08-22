@@ -41,14 +41,16 @@ AUDIO SIDE (D17b byte-identity gate):
   slots, 11025 Hz native). Dump the voice slot array per PresentFlip hit.
 
 AUTOMATION ROUTES in this pin (2026.08.02):
-  1. Integrated debugger commands, seedable via -c:
-     BPINT 08  break on the IRQ0 tick        [UNCERTAIN: exact name]
-     BPLM <linear>  linear-memory breakpoint [UNCERTAIN: exact name]
-     D <linear>     dump memory              [UNCERTAIN: exact name]
-  2. [script] startup.js hook (reference conf section [script]): runs a
-     JS file at startup. API surface NOT validated - do not guess; write
-     and prove watch callbacks during the interactive baselining run,
-     then bake a committed startup.js.
+  RESOLVED NEGATIVE 2026-08-22 (DH-G0 channel audit, docs/RUNTIME.md):
+  this flathub build has NO integrated debugger (--enable-debug is off in
+  configure.ac and the flathub build passes only --enable-sdl2); the
+  BPINT/BPLM/D names below are UNPINNABLE on this runtime. The [script]
+  startup.js route EXISTS (Duktape is compiled in) but its API is
+  log-only (console.log -> [log] misc channel; enable misc=true to see
+  it) with no memory access and no hooks. The watch SET below stays valid
+  for a future --enable-debug build of DOSBox-X at a pinned commit
+  (channel re-pin decision pending); the addresses are census-pinned
+  independent of the instrument.
 
 CALIBRATION CHECKLIST for the first interactive run:
   1. smoke gate green (unattended, this unit)

@@ -2587,3 +2587,42 @@ zero-dependency (offline CI).
    runtime/harness-out only, fingerprints in git (D77 hygiene).
 
 Nudge-Worker: 6f14cea1-e317-4016-8a1a-55054fed36f0
+
+## 2026-08-22 P4.2/W4 — the DOSBox-X O1 channel audit is D79: the pinned flathub runtime has NO debugger and log-only JS; W4 lands channel-agnostic staging + the DBXCAP stitcher, live runs blocked on a channel re-pin
+
+1. REVERSAL OF A D29 ASSUMPTION (recorded in RUNTIME.md "DH-G0 channel
+   audit", all [verified] on the pinned binary via strings + reference
+   conf + upstream source at the banner commit e522642 + three headless
+   behavioral probes): the flathub DOSBox-X 2026.08.02 was built WITHOUT
+   the integrated debugger (configure.ac --enable-debug default off;
+   flathub passes only --enable-sdl2; debuggerrun=debugger and
+   -break-start parse but are inert), and its Duktape startup.js engine,
+   while present and running, exposes a LOG-ONLY API (_emu.emulator/
+   version/log, console.log, Buffer/CBOR with no I/O) — no memory reads,
+   no hooks. The D29 claim "the shipped binary carries the integrated
+   debugger" misread a config help string + coincidental junk strings;
+   corrected in RUNTIME.md.
+2. GET-VISIBLE-BY-DEFAULT GOTCHA: LOG(LOG_MISC,*) (incl. all JS
+   console.log) requires [log] misc = true or it is invisible in the
+   logfile — pinned behaviorally, recorded in RUNTIME.md.
+3. DH-G0 PRECONDITION CHANGES: before any live trigger automation, O1
+   needs a CHANNEL RE-PIN. Options left OPEN (no decision made here):
+   (a) self-build DOSBox-X at a pinned commit with --enable-debug=heavy
+   inside runtime/ (D29 conf pins carry over; D19 deliberate-pin
+   discipline applies), (b) GameLink GC4 IPC feasibility for DPMI
+   linear reads (it is compiled in; address model unproven),
+   (c) promote the O2 ptrace channel (W11) to primary. The choice is an
+   operator/interactive decision; the queue item for it follows W4.
+4. W4 DELIVERABLES LANDED (unattended-safe slice per the W4 ticket
+   split clause): tools/runtime/dosbox-harness.sh gains the `diff` mode
+   (stage/run/stitch); EXD corpus scratch at runtime/harness-corpus-exd
+   (game-data/BEDLAM rsync; the B2 scratch stays untouched); scenario
+   grammar v1 + S0/S1 scenario files under tools/diffharness/scenarios/;
+   the zero-dep `dbx-stitch` bin consuming a channel-agnostic DBXCAP
+   capture transcript -> W3 BDLD dump + JSON digest manifest (file
+   sha256 + frame count + chain digest; dumps stay runtime/-only per
+   D77 hygiene, only synthetic test vectors are committed). The live
+   game automation stays [BLOCKED]-on-DH-G0-channel-repin and
+   interactive-gated.
+
+Nudge-Worker: d35c7066-4f7f-4c3a-a8b3-0afaead3049d
