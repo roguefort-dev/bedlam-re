@@ -3685,3 +3685,60 @@ Nudge-Worker: 57ba8753-c3b0-471f-b960-5c67704d0b41
    corpus probes.
 
 Nudge-Worker: d6b238f4-c0d3-4954-b02b-ede9b5eba5a4
+
+## D102 — 2026-08-22: P4.2/W12-S3-prep — the E-side weapon-fire COMMAND producer LANDED in bedlam-core::weapon (the consumer FUN_00409138 subset + the two projectile banks + the per-type ticks + the damage table), RE-verified decode-exact against the existing local dumps (§7j.37); the S0/S1/S2 canonical chains stay BYTE-IDENTICAL (the no-inject invariant is a first-class pinned constraint) (worker 95ab9206 claim 2)
+
+1. RE BASIS (§7j.37, dumps-only — exw-robottarget.txt the consumer
+   decompile, exw-weaponanim.txt/-asm.txt the tick, the objdump angle
+   family, ONE read-only corpus read of SINTABLE.BIN): the dispatch
+   decode re-verified field-exact — fire gates mask ∧ cooldown==0 ∧
+   ammo≠0; the inline spawn cases (artillery 1× type=id pos+0x100
+   z=(z+0x15)<<8 cooldown 0 + UNCONDITIONAL mask clear; mines 2/4/6×
+   types 0xF/0x13 with the 4-RandA-draw jitter/ttl/arc shape, class 4
+   BOTH families; grenades 4/6× 0x1A/0x1F 3D vz ttl 0x32∓/＋RandA&0xF
+   arc 0xB00−/0x900−RandA&0x2FF class 0 trail:=0; rocket ttl 0
+   cooldown 5 arc=angle-pair NO RandA); the auto-rearm + loop-exit
+   recharge; the bit0 pointer-bump quirk (bit0∧bit1 records read the
+   triple from +0xB/+0xD/+0xF — E documents it and models the +7/+9/
+   +0xB words only); the idle-tick gate is deploy-delay ≠ 0 ∧
+   frame&3==0. SINTABLE.BIN = the full 256-word byte-angle sine ramp
+   (FUN_0041eb65/77 = pure word lookups at a / a−0x40; the sector
+   thresholds are words[2..66] of the same array — dual-use file
+   table). Bullets: 2 tested sub-steps but NET TWO committed steps
+   (3 moves − 1 rollback, tick += 6 — CORRECTS the 7j.22 "1
+   committed" gloss); bullets free ONLY at tick>99. Artillery burst
+   window indexes the duration table BY TYPE. Homing steering exact
+   (heading := heading + angle-diff·4; vel = 2·(sin[h]>>4,
+   sin[h−0x40]>>4); LEFT-first ±4-sector avoidance with the left-OOB
+   z+=0x600 climb).
+2. ENGINE SHAPE (the D85 W6 pattern extended): the banks + the ring
+   are sim state but NOT in state_hash — they are the S3 T2 watch
+   surface (their own dump rows, like the robot bank blob). Robot
+   gains weapons[7] + weapon_mask (the +0x36../+0x6E record fields);
+   staging is host-seamed (stage_robot_weapons — the D51 pattern;
+   the S3.scen follow-up adds the scenario key beside `markers`).
+   The consumer runs at the TOP of advance_frame (MissionShell
+   order), the 4× enemy pass after the 6 robot phases. The
+   difficulty dword 0x46cbf8 is staged into the sim (the scaled
+   damage rows).
+3. NO-INJECT INVARIANT (the unit's constraint, pinned THREE ways):
+   unit-level (no staged records → zero RandA draws, banks all-free,
+   order flag clear), the corpus-gated S0/S1/S2 chains re-run
+   BYTE-IDENTICAL, and the canonical seam-gate test proves a
+   well-formed flags=2 record with no staged slots fires nothing.
+4. E-GAPS left OPEN (documented in the module head, the differ's
+   expected finding classes until their units land): the five
+   AI-order family spawn internals (w2..8/0x18/0x19/0x21..0x28),
+   FUN_0040a9ff (mortar w0xE), the impact APPLICATION (FUN_0041a894/
+   0041bc1c need the terrain-structure bank — S4), the debris
+   disbursers, the SFX/message families (T4), the enemy-fire
+   producers of the 0x22 bank (critter family), FUN_004197d4, the
+   smoke-trail ring bank, and the family bookkeeping [hypothesis:
+   the families mirror the inline ammo/cooldown/mask shape].
+5. Deliverables: §7j.37 + 1 rewritten + 2 new ledger rows;
+   DESIGN-DIFFHARNESS §6a/§10-W12; canonical.rs Command consumed;
+   weapon_fire_gate.rs (28 tests). Workspace 100% green (565+28),
+   fmt+clippy clean, registry_anchors green, manifest clean both
+   sides. NEXT: the S3.scen/canonical-chain unit.
+
+Nudge-Worker: 95ab9206-6d30-4fb1-8fd1-222e6d78e780

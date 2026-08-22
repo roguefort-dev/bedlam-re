@@ -645,8 +645,13 @@ differ come before any new scenario depth.
    and emits the channel-E W3 dump via the same `runner::stitch` +
    `encode_dump` path as O1 captures. The canonical record grammar (the
    field-map contract W7's normalizer must match) is §6a above; E-gaps
-   and the scenario step semantics (keystore/order/boot consumed,
-   command/pad + walk-phase rejected naming the missing engine seams)
+   and the scenario step semantics (keystore/order/boot consumed;
+   **`command` CONSUMED since W12-S3-prep (2026-08-22, §7j.37): the
+   payload stages as a COMMAND record into the sim ring and the
+   pumped frame's consumer fires the weapon dispatch — the fire
+   family lives in `bedlam-core::weapon`; the S3.scen unit pairs the
+   canonical rows**; pad + walk-phase still rejected naming the
+   missing engine seams)
    are recorded there. Verified by a synthetic comparison fixture (the
    byte grammar + digests pinned) + corpus-gated S0/S1 runs (the
    mission_corpus_gate pattern; dumps stay runtime-only, chain digests
@@ -705,6 +710,21 @@ differ come before any new scenario depth.
     finding and for canon-only EXW behaviors.
 12. **W12 — scenario depth S3–S8** as producer families land in-engine
     (each S3+ unit pairs the engine producer with its scenario).
+    **S3-PREP LANDED 2026-08-22 (D102, §7j.37):** the E-side
+    weapon-fire COMMAND producer is in `bedlam-core::weapon` — the
+    consumer (FUN_00409138's modeled subset: flags, the verified
+    fire gates, the inline spawn cases field-exact, the family
+    routing, auto-rearm, the recharge pass), the 400×0x36 weapon
+    bank + the 50×0x22 projectile bank with their per-type ticks
+    (FUN_00410823/FUN_00412010 subsets), and the damage table. The
+    banks are exposed via read accessors (the S3 T2 rows read them;
+    they stay out of `state_hash` — the W6 split). NO-INJECT
+    INVARIANT pinned: the S0/S1/S2 chains are byte-identical and
+    `advance_frame` draws no RandA without staged records. The S3
+    unit that follows = S3.scen (the scenario grammar needs a
+    loadout-staging key beside `markers` — the slots are host-seamed
+    through `stage_robot_weapons`) + the canonical weapon-bank/
+    projectile-bank rows + the differ normalizers + the chain pin.
 
 ## 11. Risks
 
