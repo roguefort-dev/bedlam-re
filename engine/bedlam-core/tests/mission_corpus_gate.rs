@@ -31,7 +31,8 @@
 use std::path::PathBuf;
 
 use bedlam_core::mission::{
-    AngleTable, MissionSim, Terrain, Q13_PER_TILE, SPAWN_CENTER, STATE_ORDERED,
+    pickup_case, AngleTable, MissionSim, Terrain, PICKUP_FLOOR_WORD, Q13_PER_TILE, SPAWN_CENTER,
+    STATE_ORDERED,
 };
 
 fn root() -> PathBuf {
@@ -207,4 +208,152 @@ fn zoneb_mission1_multilevel_spawn_settles_on_the_roof() {
     let r = &sim.robots()[a];
     assert_eq!(r.z, 95, "spawn settles on the level-2 deck roof");
     assert_eq!(r.probe_z[0], 95);
+}
+
+#[test]
+fn zonea_pickup_surface_is_corpus_dead() {
+    // THE W12-S5-prep corpus gate [§7h.4/5 + §7h.5/3]: stage the
+    // FULL pickup surface (init_tiles semantics) on the REAL
+    // ZONEA/MISSION1 bytes and prove it fires NOTHING — every
+    // DAT==3 cell's staged word decodes to no case under the
+    // set-1 tables (the D99 corpus verdict, re-derived live from
+    // the shipped TOT), and the S2-style walk's hash trace is
+    // BYTE-IDENTICAL with and without the staging (the no-inject
+    // invariant that keeps the S0..S4 canonical chains pinned).
+    let (Some((dat, pad, _mrk, cgr, sintable)), Some(tot)) =
+        (zonea(), read(&["EDITOR", "ZONEA", "MISSION1.TOT"]))
+    else {
+        eprintln!("corpus absent - skipping (CI)");
+        return;
+    };
+
+    // --- 1. The staging parses the real volume ------------------------
+    let mut sim = build_sim(&dat, &pad, &cgr, &sintable);
+    assert!(sim.stage_pickup_surface(&tot, 1), "real TOT parses");
+    let (w, h) = sim.terrain.size();
+    assert_eq!((w, h), (25, 75));
+
+    // --- 2. The D99 census re-derived live ----------------------------
+    // 80 DAT==3 (tile,z) cells; the staged word multiset is exactly
+    // the §7h.4/5 census and EVERY word decodes None under set 1.
+    let n = (w * h) as usize;
+    let mut cells = 0usize;
+    let mut census: std::collections::BTreeMap<u16, usize> = Default::default();
+    for tile in 0..n {
+        for z in 0..8usize {
+            let (tx, ty) = ((tile % w as usize) as i32, (tile / w as usize) as i32);
+            if sim.terrain.dat_type(tx, ty, z as i32) == 3 {
+                cells += 1;
+                let word = sim.mirror_word(tile, z);
+                if word != 0 {
+                    *census.entry(word).or_default() += 1;
+                }
+                assert_eq!(
+                    pickup_case(word as i32, 0),
+                    None,
+                    "ZONEA set-1 word {word:#x} at tile {tile} z {z} is INERT"
+                );
+            }
+        }
+    }
+    assert_eq!(cells, 80, "the D99 DAT==3 census");
+    assert_eq!(
+        census,
+        [
+            (0x81u16, 13usize),
+            (0x82, 1),
+            (0x83, 10),
+            (0x84, 13),
+            (0x131, 1),
+            (0x230, 8),
+            (0x231, 28),
+            (0x232, 1),
+            (0x233, 1),
+            (0x236, 1),
+            (0x237, 1),
+            (0x28D, 1),
+            (0x53D, 1),
+        ]
+        .into_iter()
+        .collect(),
+        "the D99 word census (0x81..0x84 x37, 0x230..0x237 x40, singles)"
+    );
+
+    // --- 3. The staged walk is trace-identical + fires nothing -------
+    let words0 = sim.mirror_words().to_vec();
+    let seen0 = sim.mirror_seen_bank().to_vec();
+    let (trace, frames) = scripted_walk(&dat, &pad, &cgr, &sintable);
+    // The same walk WITH the surface staged (stage before the
+    // spawns — the load-order note in stage_pickup_surface).
+    let mut staged = build_sim(&dat, &pad, &cgr, &sintable);
+    assert!(staged.stage_pickup_surface(&tot, 1));
+    let a = staged.spawn_robot((21, 73, 1));
+    let b = staged.spawn_robot((18, 73, 1));
+    let mut staged_trace = vec![staged.state_hash().0]; // post-spawn
+    assert!(staged.arm_order_at_robot(a));
+    staged_trace.push(staged.state_hash().0); // post-arm, as scripted_walk
+    let mut f = 0usize;
+    while staged.robots()[b].state != STATE_ORDERED && f < 400 {
+        staged.advance_frame();
+        staged_trace.push(staged.state_hash().0);
+        assert_eq!(staged.take_pickup_awards(), (0, 0), "no award fires");
+        f += 1;
+    }
+    assert_eq!(f, frames, "same walk length staged vs bare");
+    assert_eq!(
+        staged_trace, trace,
+        "the staged surface is hash-invisible (the no-inject invariant)"
+    );
+    assert_eq!(staged.mirror_words(), words0.as_slice(), "no word mutated");
+    assert_eq!(
+        staged.mirror_seen_bank(),
+        seen0.as_slice(),
+        "no seen mutated"
+    );
+    // The floor-word table is reachable for the ZONEB pairing.
+    assert_eq!(PICKUP_FLOOR_WORD[0] as u16, 0x70B);
+}
+
+#[test]
+fn zoneb_mission1_stages_live_pickup_cells() {
+    // The positive control [§7h.4/5, D99]: ZONEB/MISSION1 (set 2)
+    // DOES stage in-range pickup words — 152 of its 199 DAT==3
+    // cells decode to a case under the idx-1 tables, case-4
+    // dominant (the S5 pairing's fuel; ZONEA stages none).
+    let (Some(dat), Some(cgr), Some(sintable), Some(tot)) = (
+        read(&["EDITOR", "ZONEB", "MISSION1.DAT"]),
+        read(&["EDITOR", "ZONEB", "MISSIONB.CGR"]),
+        read(&["GAMEGFX", "SINTABLE.BIN"]),
+        read(&["EDITOR", "ZONEB", "MISSION1.TOT"]),
+    ) else {
+        eprintln!("corpus absent - skipping (CI)");
+        return;
+    };
+    let pad = read(&["EDITOR", "ZONEB", "MISSION1.PAD"]).expect("ZONEB PAD");
+    let mut sim = build_sim(&dat, &pad, &cgr, &sintable);
+    assert!(sim.stage_pickup_surface(&tot, 2), "zone param = set 2");
+    let (w, h) = sim.terrain.size();
+    assert_eq!((w, h), (100, 100));
+    let n = (w * h) as usize;
+    let mut cells = 0usize;
+    let mut cases: std::collections::BTreeMap<u8, usize> = Default::default();
+    for tile in 0..n {
+        for z in 0..8usize {
+            let (tx, ty) = ((tile % w as usize) as i32, (tile / w as usize) as i32);
+            if sim.terrain.dat_type(tx, ty, z as i32) == 3 {
+                cells += 1;
+                if let Some(c) = pickup_case(sim.mirror_word(tile, z) as i32, 1) {
+                    *cases.entry(c).or_default() += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(cells, 199, "the ZONEB/M1 DAT==3 census");
+    assert_eq!(
+        cases,
+        [(1u8, 3usize), (2, 3), (3, 6), (4, 140)]
+            .into_iter()
+            .collect(),
+        "the D99 M1 census: 152 in-range, case-4 dominant"
+    );
 }

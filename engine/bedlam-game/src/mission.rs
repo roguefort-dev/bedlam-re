@@ -165,8 +165,9 @@ pub const MONEY_STRIP_ICON: (u16, i32, i32) = (0xB, 0x20B, 0x1A4);
 pub const MONEY_STRIP_XS: [i32; 6] = [0x211, 0x21B, 0x225, 0x231, 0x23B, 0x245];
 /// The score/money pickup award table [7f.6, FUN_0040eba0 case 4]:
 /// `RandA()&1` picks the row (0 = score, 1 = money), `RandA()&3`
-/// the amount.
-pub const PICKUP_AWARDS: [[i32; 4]; 2] = [[1000, 2000, 5000, 10000], [10, 50, 100, 250]];
+/// the amount. Canonical home: `bedlam_core::mission` (the sim's
+/// case-4 draws) — re-exported here for the presentation callers.
+pub use bedlam_core::mission::PICKUP_AWARDS;
 /// The fresh-campaign session state [RE-EXW-SIM 7d.4 + 7f.9]: score
 /// starts 0 (GameMain boot write 0x41c44e), money starts 4000
 /// (GameMain campaign init 0x41c5ec — `4000 - 500*difficulty`, and
@@ -1001,6 +1002,23 @@ impl MissionScene {
         let (award, _strip) = self.sim.take_destroy_score();
         if award != 0 {
             self.score += award;
+        }
+        // The case-4 pickup folds [7f.6 + §7h.5/2]: the sim's tile
+        // consume (fire_pickup → apply_pickup case 4) draws the
+        // award on the SHARED mission stream and stages it; the
+        // shell folds it into the session cells the strips read
+        // ([0x4dd40c]/[0x46ae70]) and arms the score-strip
+        // countdown exactly like the host seam. Zero without
+        // pickup fires — the no-inject invariant (ZONEA stages no
+        // in-range words, §7h.4/5).
+        let (ps, pm) = self.sim.take_pickup_awards();
+        if ps != 0 {
+            self.score = self.score.wrapping_add(ps);
+            self.strip = 2;
+        }
+        if pm != 0 {
+            self.money = self.money.wrapping_add(pm);
+            self.strip = 2;
         }
         // FUN_00408dcc — the territory ring stamp runs inside
         // robots() for the moving-family machines [7e.3]; the
@@ -2654,10 +2672,25 @@ mod tests {
         let out = m.pickup(0, 1);
         assert_eq!((out.applied, out.effect), (true, 1));
         assert_eq!(m.sim.robots()[0].drop_countdown, 1000);
-        // None of the four re-arms the score strip; case 4 is not
-        // this seam (the dedicated producer owns it).
+        // None of the four re-arms the score strip; case 4 (7f.6 +
+        // §7h.5/2) is applied through the same seam now: the sim
+        // draws the award on the shared stream and the NEXT frame's
+        // shell fold lands it (session cell + strip countdown 2).
         assert_eq!(m.score_strip_countdown(), 0);
-        assert!(!m.pickup(0, 4).applied);
+        let (s0, m0) = m.campaign();
+        let out = m.pickup(0, 4);
+        assert_eq!((out.applied, out.effect), (true, 1));
+        assert_eq!(m.score_strip_countdown(), 0, "the fold runs per-frame");
+        m.tick(&InputFrame::default());
+        let (s1, m1) = m.campaign();
+        let ds = s1.wrapping_sub(s0);
+        let dm = m1.wrapping_sub(m0);
+        assert!(
+            (PICKUP_AWARDS[0].contains(&ds) && dm == 0)
+                || (PICKUP_AWARDS[1].contains(&dm) && ds == 0),
+            "one table value on one side: (+{ds}, +{dm})"
+        );
+        assert_eq!(m.score_strip_countdown(), 2, "the award arms the strip");
         assert!(!m.pickup(9, 1).applied, "bad robot index");
         // The dispatch decode is the pure half: every set-0 pickup
         // word round-trips word -> case -> the same field family.

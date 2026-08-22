@@ -634,6 +634,18 @@ pub const PICKUP_RANGE_A: [i32; 7] = [0x4E, 0x75, 0x75, 0x358, 0x75, 0xA3, 0xA3]
 /// DGROUP 0x454a74, PE bytes, 7h.1): tile words in the closed
 /// groups `[base, base+0xC)` map to cases 9/7/8.
 pub const PICKUP_RANGE_B: [i32; 7] = [0x75, 0x535, 0x70B, 0x656, 0x535, 0x4FE, 0x31E];
+/// The bare-floor word table C at DGROUP 0x454a90 (7 dwords, 7h.2
+/// item 3): the word the pickup consume writes over the mirror
+/// cell — the drawer stops drawing the pickup sprite. Indexed by
+/// zone_index 0-based like the range tables (the 0x454a04..
+/// 0x454ac8 family is one contiguous run of 7-dword tables at
+/// exact 0x1C strides — no head slots, so `base+(cell-1)*4`;
+/// §7h.5/1).
+pub const PICKUP_FLOOR_WORD: [i32; 7] = [0x70B, 0x48F, 0x24C, 0x368, 0x48F, 0x39, 0x39];
+/// The case-4 score/money award table [7f.6, FUN_0040eba0 case 4]:
+/// `RandA()&1` picks the row (0 = score, 1 = money), `RandA()&3`
+/// the amount.
+pub const PICKUP_AWARDS: [[i32; 4]; 2] = [[1000, 2000, 5000, 10000], [10, 50, 100, 250]];
 
 /// The FUN_0040eba0 dispatch decode [RE-EXW-SIM 7h.1, verified asm
 /// 0x40ebaa..0x40ecef]: which pickup case a per-tile type word
@@ -751,6 +763,11 @@ pub struct MissionSim {
     pub(crate) score_pending: i32,
     /// The score-strip redraw arm ([0x46ccf0] := 2).
     pub(crate) strip_arm: bool,
+    /// The pending case-4 pickup SCORE award ([0x4dd40c] delta —
+    /// the shell folds it beside the destroy award; §7h.5/2).
+    pub(crate) pickup_score_pending: i32,
+    /// The pending case-4 pickup MONEY award ([0x46ae70] delta).
+    pub(crate) pickup_money_pending: i32,
 }
 
 impl MissionSim {
@@ -788,6 +805,8 @@ impl MissionSim {
             splashes: vec![crate::destroy::SplashRecord::default(); crate::destroy::SPLASH_SLOTS],
             score_pending: 0,
             strip_arm: false,
+            pickup_score_pending: 0,
+            pickup_money_pending: 0,
             terrain,
         }
     }
@@ -1039,50 +1058,188 @@ impl MissionSim {
     }
 
     /// Apply a pickup to robot `idx` — the FUN_0040eba0 case bodies
-    /// 1/2/3/7 [RE-EXW-SIM 7h.2, verified asm]: case 1 stages the
-    /// reinforcement (`drop_countdown = 1000`), case 2 refills the
-    /// shield pool (`shield = 1000`), case 3 heals (`hp += 2500`
-    /// clamped `> 5000 → 5000`), case 7 arms the shield booster
+    /// 1/2/3/4/7 (+ the 8/9 presentation ids) [RE-EXW-SIM 7h.2 +
+    /// 7f.6, verified asm]: case 1 stages the reinforcement
+    /// (`drop_countdown = 1000`), case 2 refills the shield pool
+    /// (`shield = 1000`), case 3 heals (`hp += 2500` clamped
+    /// `> 5000 → 5000`), case 7 arms the shield booster
     /// (`shield_boost = 200` — the phase-0 pre-walk consumes it,
-    /// 7g.2). No alive/state gates (the caller fires the dispatch
-    /// on the tile match alone); cases 4/8/9 (score-money/ammo/
-    /// episode) are NOT this seam — case 4 is the D52
-    /// score/money host seam, 8/9 remain unlanded. The SFX +
+    /// 7g.2). Case 4 draws the score/money award on the SHARED
+    /// mission stream (`row = RandA()&1` then `amount =
+    /// PICKUP_AWARDS[row][RandA()&3]`, 7f.6) and stages it in the
+    /// pending pair the shell folds (`take_pickup_awards`) — the
+    /// [0x4dd40c]/[0x46ae70] cells are shell session state (the
+    /// destroy-score fold precedent). Cases 8 (ammo, effect 0xC)
+    /// and 9 (episode, effect 0xD) return their effect ids with NO
+    /// field writes — host-seamed: the robot weapons[7] bank is the
+    /// D51 host seam (W12-S3) and no shipped mission stages
+    /// case-8/9 cells (§7h.5/2). No alive/state gates (the caller
+    /// fires the dispatch on the tile match alone). The SFX +
     /// 0x4dc5d0 effect-row staging are presentation — the host
-    /// reads the effect id off [`PickupOutcome`]. Nothing on the
-    /// default corpus path invokes this (the tile-word producer
-    /// 7h.3 is host-seamed).
+    /// reads the effect id off [`PickupOutcome`].
     pub fn apply_pickup(&mut self, idx: usize, case: u8) -> PickupOutcome {
         let mut out = PickupOutcome {
             applied: false,
             effect: 0,
         };
-        // The field value per case (7h.2), paired with the
-        // 0x4dc5d0 effect-row id the tail stages for it.
-        let (value, effect) = match case {
-            1 => (PICKUP_DROP, 1),
-            2 => (PICKUP_SHIELD, 6),
-            3 => (PICKUP_HEALTH, 7),
-            7 => (PICKUP_BOOST, 0xE),
-            _ => return out,
-        };
-        let Some(r) = self.robots.get_mut(idx) else {
+        if !matches!(case, 1..=4 | 7..=9) || self.robots.get(idx).is_none() {
             return out;
-        };
+        }
         out.applied = true;
+        // The 0x4dc5d0 effect-row id per case [7h.2 + 7j/1]:
+        // 1→1, 2→6, 3→7, 4→1 (reuses the drop-in id), 7→0xE,
+        // 8→0xC, 9→0xD.
+        let effect: i32 = match case {
+            1 => 1,
+            2 => 6,
+            3 => 7,
+            4 => 1,
+            7 => 0xE,
+            8 => 0xC,
+            _ => 0xD,
+        };
         out.effect = effect;
+        let r = &mut self.robots[idx];
         match case {
-            1 => r.drop_countdown = value,
-            2 => r.shield = value,
+            1 => r.drop_countdown = PICKUP_DROP,
+            2 => r.shield = PICKUP_SHIELD,
             3 => {
-                r.hp += value;
+                r.hp += PICKUP_HEALTH;
                 if r.hp > HP_MAX {
                     r.hp = HP_MAX;
                 }
             }
-            _ => r.shield_boost = value,
+            4 => {
+                // The two shared-stream draws [7f.6, verified]:
+                // row first, amount second.
+                let row = (self.rng.next_u32() & 1) as usize;
+                let amount = PICKUP_AWARDS[row][(self.rng.next_u32() & 3) as usize];
+                if row == 0 {
+                    self.pickup_score_pending += amount;
+                } else {
+                    self.pickup_money_pending += amount;
+                }
+            }
+            7 => r.shield_boost = PICKUP_BOOST,
+            // 8/9: presentation-only host seams (documented above).
+            _ => {}
         }
         out
+    }
+
+    /// Stage the PICKUP SURFACE — the init_tiles@00407e11 seam
+    /// [§7h.4/1, verified 0x407fb0..0x407ff8; §7h.5/2]: parses the
+    /// mission `.TOT` volume (`u16 w + u16 h + 8 × w·h u16`
+    /// plane-major, FORMATS §2) and stages EVERY plane word into
+    /// the TOT mirror (the pre-cleared mirror makes the EXW
+    /// nonzero-filter equivalent to a plain copy), the SEEN bytes
+    /// (`seen := 1` exactly where the swept+PAD DAT volume byte is
+    /// 0 — the DAT byte gates ONLY the seen flag, §7h.4/1), and
+    /// the terrain-set cell `zone` ([0x4edd8c] = zone_index+1,
+    /// D99). The +0x1B/+0x1C heights pair is NOT staged (its
+    /// producer is the zone-7 objective family, §7j.32).
+    ///
+    /// CALL ORDER: after [`MissionSim::stage_destroy_family`] when
+    /// both stage — the destroy staging resets the mirror banks,
+    /// and the EXW original carries the pre-stamped building words
+    /// inside the shipped TOT volume itself (FORMATS §2), so the
+    /// TOT staging is the later, complete write. Returns false on
+    /// a malformed TOT or a size/zone mismatch with the terrain
+    /// (never guess). Arming note: the consume protocol
+    /// (clear→move→test→fire) is ALWAYS live — with no staged
+    /// words the fire reads word 0 and never triggers, so the
+    /// S0..S4 no-inject invariant holds by construction (§7h.5/3).
+    pub fn stage_pickup_surface(&mut self, tot: &[u8], zone: u32) -> bool {
+        let (w, h) = self.terrain.size();
+        if w <= 0 || h <= 0 {
+            return false;
+        }
+        let n = (w * h) as usize;
+        if tot.len() != 4 + 2 * 8 * n {
+            return false;
+        }
+        let tw = u16::from_le_bytes([tot[0], tot[1]]) as i32;
+        let th = u16::from_le_bytes([tot[2], tot[3]]) as i32;
+        if tw != w || th != h {
+            return false;
+        }
+        self.mirror_words = vec![0u16; 8 * n];
+        self.mirror_seen = vec![0u8; 8 * n];
+        if self.mirror_heights.len() != n {
+            self.mirror_heights = vec![(0u8, 0u8); n];
+        }
+        for tile in 0..n {
+            for z in 0..8usize {
+                let o = 4 + 2 * (z * n + tile);
+                let word = u16::from_le_bytes([tot[o], tot[o + 1]]);
+                if word != 0 {
+                    self.mirror_words[tile * 8 + z] = word;
+                }
+                // The seen gate: the RAW swept+PAD volume byte (the
+                // engine `dat` holds exactly those bytes).
+                if self.terrain.dat[z * n + tile] == 0 {
+                    self.mirror_seen[tile * 8 + z] = 1;
+                }
+            }
+        }
+        self.zone = zone;
+        true
+    }
+
+    /// The pending case-4 pickup awards `(score, money)` — the
+    /// shell folds them into the session cells beside the destroy
+    /// award ([0x4dd40c]/[0x46ae70]). Taking clears both. Zero on
+    /// every no-inject path.
+    pub fn take_pickup_awards(&mut self) -> (i32, i32) {
+        let out = (self.pickup_score_pending, self.pickup_money_pending);
+        self.pickup_score_pending = 0;
+        self.pickup_money_pending = 0;
+        out
+    }
+
+    /// The move-toward-target consume fire [0x40bf18..0x40bff8,
+    /// §7h.4/3, verified; §7h.5/2]: the latched probe cell's mirror
+    /// word selects a pickup case for the staged terrain set; on a
+    /// match the tile is CONSUMED — (a) the DAT volume byte := 0
+    /// (the cell leaves the collision plane and becomes EMPTY:
+    /// walkable-through afterward), (b) the mirror word := the
+    /// bare-floor word (table C, [`PICKUP_FLOOR_WORD`]), (c) seen
+    /// := 1 — then the §7h.2 dispatch runs on the ORIGINAL word's
+    /// case. The MP-only {x,y,z} staging (0x4dc6ac/b0/b4, gated
+    /// [0x4edb88]==2) is SP-unreachable — unwired by design.
+    fn fire_pickup(&mut self, idx: usize, z: i32, tx: i32, ty: i32) {
+        let (w, _) = self.terrain.size();
+        if w <= 0 || !(0..8).contains(&z) || tx < 0 || ty < 0 {
+            return;
+        }
+        let tile = ty * w + tx;
+        if tile < 0 {
+            return;
+        }
+        let tile = tile as usize;
+        let word = i32::from(self.mirror_word(tile, z as usize));
+        // The staged set [0x4edd8c] = zone_index+1 → the 0-based
+        // table index (§7h.5/1); an unstaged cell 0 never fires.
+        let Some(set) = usize::try_from(self.zone)
+            .ok()
+            .and_then(|z| z.checked_sub(1))
+        else {
+            return;
+        };
+        let Some(case) = pickup_case(word, set) else {
+            return;
+        };
+        let floor = PICKUP_FLOOR_WORD.get(set).copied().unwrap_or(word);
+        // (a) the collision-plane consume.
+        self.terrain.dat_write(tx, ty, z, 0);
+        // (b)+(c) the mirror writes.
+        if tile * 8 + (z as usize) < self.mirror_words.len() {
+            self.mirror_words[tile * 8 + z as usize] = floor as u16;
+            self.mirror_seen[tile * 8 + z as usize] = 1;
+        }
+        // The dispatch (the case-4 draws advance the shared stream;
+        // cases 1/2/3/7 write the robot fields).
+        self.apply_pickup(idx, case);
     }
 
     /// Spawn a robot from an MRK marker record [FUN_0040cca0,
@@ -1365,7 +1522,20 @@ impl MissionSim {
                 let dist = dist_raw.min(0xFFFF);
                 let vx = ((dx_q5 << 16) / dist) << 2;
                 let vy = ((dy_q5 << 16) / dist) << 2;
+                // The probe-latch consume protocol [0x40bef2..
+                // 0x40bf0b, §7h.4/3, verified]: clear the latch
+                // (the −1 sentinel) immediately BEFORE the move,
+                // then the ≠ −1 test immediately AFTER — the move's
+                // nine probes may latch a type-3 cell on the way
+                // past (no standing-on required, ±11/12 Q5 reach).
+                // UNCONDITIONAL like EXW: with no staged mirror
+                // words the fire reads word 0 and never triggers
+                // (the S0..S4 no-inject invariant, §7h.5/3).
+                self.terrain.last_trigger = None;
                 self.robot_move(idx, vx, vy, angle);
+                if let Some((lz, ltx, lty)) = self.terrain.last_trigger {
+                    self.fire_pickup(idx, lz, ltx, lty);
+                }
             }
         }
     }
@@ -2466,6 +2636,166 @@ mod tests {
         assert_ne!(sim.state_hash().0, base.0, "death_flag covered");
     }
 
+    /// A synthetic `.TOT` volume (`u16 w + u16 h + 8 × w·h u16
+    /// plane-major, FORMATS §2) with `(tile, z, word)` overrides.
+    fn tot_volume(w: i32, h: i32, words: &[(usize, usize, u16)]) -> Vec<u8> {
+        let n = (w * h) as usize;
+        let mut tot = vec![0u8; 4 + 2 * 8 * n];
+        tot[0..2].copy_from_slice(&(w as u16).to_le_bytes());
+        tot[2..4].copy_from_slice(&(h as u16).to_le_bytes());
+        for &(tile, z, word) in words {
+            let o = 4 + 2 * (z * n + tile);
+            tot[o..o + 2].copy_from_slice(&word.to_le_bytes());
+        }
+        tot
+    }
+
+    /// The pickup walk fixture [§7h.4/§7h.5]: flat 16×16 floor type 5
+    /// (height 3, slot 4), the type-3 pickup cells at (5,8) and (4,8)
+    /// with heights[2] = 3 so they floor exactly like the deck (the
+    /// walk passes THROUGH the probe reach, no standing-on). `a`
+    /// spawns at (2,8) (the clicked armer), `b` at (6,8) (the walker
+    /// west through both cells toward spread slot (3,8)).
+    fn pickup_walk_sim() -> MissionSim {
+        let mut hs = zero_heights(8);
+        hs[4] = [3u8; 1024];
+        hs[2] = [3u8; 1024]; // type-3 height slot
+        let w = 16;
+        let h = 16;
+        let mut dat = vec![0u8; (8 * w * h) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                dat[(y * w + x) as usize] = if (x == 4 || x == 5) && y == 8 {
+                    3u8
+                } else {
+                    5u8
+                };
+            }
+        }
+        MissionSim::new(
+            Terrain::from_parts(w, h, dat, hs).unwrap(),
+            sintable_like(),
+            21,
+        )
+    }
+
+    #[test]
+    fn stage_pickup_surface_follows_init_tiles() {
+        // §7h.4/1: EVERY nonzero TOT word stages (the DAT byte gates
+        // ONLY the seen flag); the zone cell writes [0x4edd8c].
+        let mut sim = pickup_walk_sim();
+        let a = sim.spawn_robot((2, 8, 0));
+        let _ = a;
+        // (0,0) plane 0 byte 0 (empty cell) + a word: the word MUST
+        // stage and seen MUST be 1 — the §7h.4/1 correction pin.
+        sim.terrain.dat_write(0, 0, 0, 0);
+        let tot = tot_volume(16, 16, &[(8 * 16 + 4, 0, 0x52), (0, 0, 0x131)]);
+        assert!(sim.stage_pickup_surface(&tot, 1));
+        assert_eq!(sim.mirror_word(8 * 16 + 4, 0), 0x52);
+        assert_eq!(sim.mirror_word(0, 0), 0x131, "word stages at a DAT-0 cell");
+        assert_eq!(sim.mirror_seen(0, 0), 1, "seen at the DAT-0 cell");
+        assert_eq!(sim.mirror_seen(8 * 16 + 4, 0), 0, "no seen under type 3");
+        // The rest of the deck (type 5, DAT≠0): words stay 0 (not in
+        // the TOT), seen 0.
+        assert_eq!(sim.mirror_word(8 * 16 + 6, 0), 0);
+        assert_eq!(sim.mirror_seen(8 * 16 + 6, 0), 0);
+        // Malformed inputs are refused, never guessed.
+        assert!(!sim.stage_pickup_surface(&tot[..tot.len() - 2], 1));
+        let bad_dims = tot_volume(8, 8, &[]);
+        assert!(!sim.stage_pickup_surface(&bad_dims, 1));
+    }
+
+    #[test]
+    fn walk_fires_pickups_through_the_probe_reach() {
+        // The full consume protocol [§7h.4/3, 0x40bef2..0x40bff8]:
+        // the walker's probes latch the type-3 cells walking PAST
+        // them; each fire consumes the cell (DAT 0 / floor word /
+        // seen 1) and dispatches on the original word — case 4 at
+        // (5,8) (word 0x5A = A+12, zone-1 tables) stages the award,
+        // case 3 at (4,8) (word 0x52 = A+4) heals +2500.
+        let mut sim = pickup_walk_sim();
+        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x5A), (8 * 16 + 4, 0, 0x52)]);
+        assert!(sim.stage_pickup_surface(&tot, 1));
+        let a = sim.spawn_robot((2, 8, 0));
+        let b = sim.spawn_robot((6, 8, 0));
+        sim.robots_mut()[b].hp = 1000;
+        assert!(sim.arm_order_at_robot(a));
+        let mut frames = 0;
+        while frames < 200 && sim.robots()[b].state != STATE_ORDERED {
+            sim.advance_frame();
+            frames += 1;
+        }
+        assert!(frames < 200, "the walk terminates through the pickups");
+        // Both cells consumed.
+        assert_eq!(sim.terrain.dat_type(5, 8, 0), 0, "case-4 cell consumed");
+        assert_eq!(sim.terrain.dat_type(4, 8, 0), 0, "case-3 cell consumed");
+        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), PICKUP_FLOOR_WORD[0] as u16);
+        assert_eq!(sim.mirror_word(8 * 16 + 4, 0), PICKUP_FLOOR_WORD[0] as u16);
+        assert_eq!(sim.mirror_seen(8 * 16 + 5, 0), 1);
+        assert_eq!(sim.mirror_seen(8 * 16 + 4, 0), 1);
+        // The case-3 body ran (hp 1000 + 2500) and the case-4 award
+        // staged exactly one table value on one side of the pair.
+        assert_eq!(sim.robots()[b].hp, 3500);
+        let (s, m) = sim.take_pickup_awards();
+        assert!(
+            (PICKUP_AWARDS[0].contains(&s) && m == 0) || (PICKUP_AWARDS[1].contains(&m) && s == 0),
+            "one row, one table amount: ({s}, {m})"
+        );
+        assert_eq!(sim.take_pickup_awards(), (0, 0));
+        // The armer (state 3, never in the move-toward block) fired
+        // nothing — its record is untouched.
+        assert_eq!(sim.robots()[a].hp, 5000);
+    }
+
+    #[test]
+    fn inert_words_latch_but_never_fire() {
+        // The ZONEA corpus shape [§7h.4/5]: a type-3 cell whose word
+        // (0x81 = a set-2 case-4 shape) is OUT of the staged set's
+        // ranges latches on the walk past but never fires — the
+        // corpus-dead invariant, synthetically.
+        let mut sim = pickup_walk_sim();
+        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x81), (8 * 16 + 4, 0, 0x81)]);
+        assert!(sim.stage_pickup_surface(&tot, 1));
+        let a = sim.spawn_robot((2, 8, 0));
+        let b = sim.spawn_robot((6, 8, 0));
+        assert!(sim.arm_order_at_robot(a));
+        let mut frames = 0;
+        while frames < 200 && sim.robots()[b].state != STATE_ORDERED {
+            sim.advance_frame();
+            frames += 1;
+        }
+        assert!(frames < 200, "the walk still terminates");
+        assert_eq!(sim.terrain.dat_type(5, 8, 0), 3, "cell untouched");
+        assert_eq!(sim.terrain.dat_type(4, 8, 0), 3, "cell untouched");
+        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), 0x81);
+        assert_eq!(sim.mirror_seen(8 * 16 + 5, 0), 0);
+        assert_eq!(sim.take_pickup_awards(), (0, 0));
+        assert_eq!(sim.robots()[b].hp, 5000);
+    }
+
+    #[test]
+    fn move_sub_tick_clears_the_latch() {
+        // 0x40bef2: the clear runs at EVERY move-toward-target
+        // sub-tick — a stale latch (set by an earlier probe family,
+        // e.g. the wander/drift robot_move site that has no clear)
+        // does not survive the next sub-tick.
+        let mut hs = zero_heights(8);
+        hs[4] = [3u8; 1024];
+        let mut sim = MissionSim::new(flat_terrain(16, 16, 5, hs), sintable_like(), 5);
+        let a = sim.spawn_robot((2, 8, 0));
+        let b = sim.spawn_robot((6, 8, 0));
+        assert!(sim.arm_order_at_robot(a));
+        // Mid-walk: b is state 4 with a target.
+        sim.advance_frame();
+        assert_eq!(sim.robots()[b].state, STATE_MOVING);
+        sim.terrain.last_trigger = Some((0, 1, 1)); // stale latch
+        sim.advance_frame();
+        assert_eq!(
+            sim.terrain.last_trigger, None,
+            "the move sub-tick cleared the stale latch"
+        );
+    }
+
     #[test]
     fn pickup_case_decodes_the_range_tables() {
         // 7h.1: table A groups → 1/3/2/4, table B → 9/7/8, four
@@ -2528,11 +2858,40 @@ mod tests {
         assert_eq!((out.applied, out.effect), (true, 0xE));
         assert_eq!(sim.robots()[0].shield_boost, 200);
 
-        // Cases 4/8/9 and a bad robot index are not this seam.
+        // Case 4 (7f.6): applied with the drop-in effect id 1; the
+        // two shared-stream draws stage a pending award of exactly
+        // one table value, one side of the pair (§7h.5/2).
         let mut sim = damage_sim();
-        assert!(!sim.apply_pickup(0, 4).applied);
-        assert!(!sim.apply_pickup(0, 8).applied);
-        assert!(!sim.apply_pickup(0, 9).applied);
+        let out = sim.apply_pickup(0, 4);
+        assert_eq!((out.applied, out.effect), (true, 1));
+        let (s, m) = sim.take_pickup_awards();
+        let sums: (bool, bool) = (
+            PICKUP_AWARDS[0].contains(&s) && m == 0,
+            PICKUP_AWARDS[1].contains(&m) && s == 0,
+        );
+        assert!(sums.0 || sums.1, "one row, one table amount: ({s}, {m})");
+        assert_eq!(sim.take_pickup_awards(), (0, 0), "taking clears");
+        assert_eq!(sim.robots()[0].hp, 5000, "case 4 writes no robot field");
+
+        // Cases 8/9: applied (the dispatch ran) with their
+        // presentation ids, but NO field writes — host-seamed
+        // bodies (§7h.5/2).
+        let mut sim = damage_sim();
+        assert_eq!(
+            (sim.apply_pickup(0, 8).applied, sim.robots()[0].shield_boost),
+            (true, 0)
+        );
+        assert_eq!(
+            (
+                sim.apply_pickup(0, 9).applied,
+                sim.robots()[0].drop_countdown
+            ),
+            (true, 0)
+        );
+        assert_eq!(sim.apply_pickup(0, 8).effect, 0xC);
+        assert_eq!(sim.apply_pickup(0, 9).effect, 0xD);
+        assert_eq!(sim.take_pickup_awards(), (0, 0));
+        // A bad robot index is never applied.
         assert!(!sim.apply_pickup(9, 1).applied);
         assert_eq!(sim.robots()[0].hp, 5000);
     }
