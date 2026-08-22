@@ -256,6 +256,7 @@ dependencies = [
  "bedlam-audio",
  "bedlam-core",
  "bedlam-render",
+ "diffharness",
  "sha2",
  "thiserror 1.0.69",
 ]

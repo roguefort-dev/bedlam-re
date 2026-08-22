@@ -12,3 +12,11 @@ thiserror = "1"
 
 [dev-dependencies]
 sha2 = "0.10"
+# The canonical emitter module (examples/parity_harness/canonical.rs,
+# shared into tests/canonical_dump_gate.rs via #[path]) touches
+# bedlam-core types directly; integration tests see dev-deps only.
+bedlam-core = { path = "../bedlam-core" }
+# W6 canonical dump emitter: the shared W3 dump schema + scenario
+# grammar (dev-only — the engine production graph is untouched; the
+# zero-dep harness crate is already a workspace member).
+diffharness = { path = "../../tools/diffharness" }

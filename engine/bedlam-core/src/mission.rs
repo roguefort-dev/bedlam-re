@@ -677,6 +677,20 @@ impl MissionSim {
     /// producers (RE-EXW-SIM 7f.6): every draw advances the stream
     /// exactly like the original, so the sim hash moves with it —
     /// nothing on the default corpus path calls this.
+    pub fn rand_a_state(&self) -> u64 {
+        self.rng.state()
+    }
+
+    /// The staged armor-pad/scorch bank as stored (the +0x18 byte
+    /// family, 7g.3/7j.9): lazily materialized, so its length is 0
+    /// until the first `scorch_write` grows it (the all-zero ZONEA
+    /// corpus). Read-only view for the canonical dump emitter (W6).
+    pub fn armor_pads(&self) -> &[u8] {
+        &self.armor_pads
+    }
+
+    /// One `RandA()` draw from the SHARED mission stream (advances it
+    /// exactly like the original — see the canonical-emitter note above).
     pub fn rand_a(&mut self) -> u32 {
         self.rng.next_u32()
     }

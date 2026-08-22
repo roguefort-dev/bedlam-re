@@ -379,9 +379,11 @@ increasing; total = anchor + `frames` (the stitcher contract). Audio is
 deliberately not pulled (state-only harness, §0).
 
 **Scenario step consumption (E, the D82 shared seam — the same
-`diffharness::runner` parser):** walk phase must be EMPTY (the E menu-walk
-seam waits on the P2e InputFrame button bit-map; S0W-shaped scenarios are
-rejected naming it). Mission-phase steps: `step N` = N null-input frames;
+`diffharness::runner` parser):** walk phase may carry ONLY `boot`
+steps (any other walk step — the S0W menu-walk shape — is rejected
+naming the P2e InputFrame button bit-map seam; the grammar pins boot
+to the walk phase, so the difficulty seed stays reachable).
+Mission-phase steps: `step N` = N null-input frames;
 `keystore` = the seam maps scans → `InputFrame` — the pinned map is EMPTY
 in W6 (no engine keyboard consumer exists; P2e), so steps mark the frame
 injected and deliver the null frame; scan 0x19 (P-pause) is rejected

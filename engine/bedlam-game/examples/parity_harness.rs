@@ -24,11 +24,26 @@
 //!       load a music track through the byte source now (the next
 //!       scene sync attaches it)
 //!
+//! Canonical mode (W6, DESIGN-DIFFHARNESS.md §6a + parity_harness/
+//! canonical.rs): `--canonical --scenario <path> --out <path>` runs a
+//! v1.1 scenario file on the engine and writes the channel-E W3 dump
+//! (plus `<out>.manifest.json`) — the E side of the differ. Script
+//! flags are ignored in canonical mode.
+//!
 //! Usage: parity_harness [--root DIR] [--script PATH] [--out PATH] [--dt N]
+//!                       [--canonical] [--scenario PATH]
 //!   --root   install tree (default: repo game-data/BEDLAM)
 //!   --script input script (default: the embedded walk below)
-//!   --out    report file (default: stdout)
+//!   --out    report file (default: stdout; REQUIRED with --canonical)
 //!   --dt     host dt in 240 Hz subticks per frame (default 4 = 60 Hz)
+//!   --canonical        run a scenario canonically (channel-E dump)
+//!   --scenario PATH    the .scen file (required with --canonical)
+
+// Crate-root module rule: submodules of the example's root file
+// resolve in examples/, so pin the subdir path explicitly (the file
+// is shared with tests/canonical_dump_gate.rs via the same #[path]).
+#[path = "parity_harness/canonical.rs"]
+mod canonical;
 
 use std::error::Error;
 use std::fs;
@@ -240,6 +255,8 @@ struct Args {
     script: Option<PathBuf>,
     out: Option<PathBuf>,
     dt: u32,
+    canonical: bool,
+    scenario: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -248,9 +265,15 @@ fn parse_args() -> Result<Args, String> {
         script: None,
         out: None,
         dt: SUBTICKS_PER_TICK,
+        canonical: false,
+        scenario: None,
     };
     let mut it = std::env::args().skip(1);
     while let Some(flag) = it.next() {
+        if flag == "--canonical" {
+            args.canonical = true;
+            continue;
+        }
         let value = it
             .next()
             .ok_or_else(|| format!("flag {flag} needs a value"))?;
@@ -258,6 +281,7 @@ fn parse_args() -> Result<Args, String> {
             "--root" => args.root = PathBuf::from(value),
             "--script" => args.script = Some(PathBuf::from(value)),
             "--out" => args.out = Some(PathBuf::from(value)),
+            "--scenario" => args.scenario = Some(PathBuf::from(value)),
             "--dt" => {
                 args.dt = value.parse().map_err(|_| format!("bad dt {value}"))?;
             }
@@ -269,6 +293,39 @@ fn parse_args() -> Result<Args, String> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = parse_args()?;
+
+    // Canonical mode (W6): scenario → engine → channel-E W3 dump +
+    // manifest. Binary output, so --out is required here.
+    if args.canonical {
+        let scenario_path = args
+            .scenario
+            .as_ref()
+            .ok_or("--canonical needs --scenario PATH")?;
+        let out = args
+            .out
+            .as_ref()
+            .ok_or("--canonical needs --out PATH (binary dump)")?;
+        let src = fs::read_to_string(scenario_path)
+            .map_err(|e| format!("cannot read scenario {}: {e}", scenario_path.display()))?;
+        let stitched = canonical::run_canonical(&src, &args.root)?;
+        fs::write(out, &stitched.bytes)?;
+        let manifest_path = out.with_file_name(format!(
+            "{}.manifest.json",
+            out.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        ));
+        fs::write(&manifest_path, stitched.manifest.to_json())?;
+        eprintln!(
+            "parity_harness --canonical: scenario {} — {} frames, chain {}, dump sha256 {}",
+            stitched.manifest.scenario,
+            stitched.manifest.frame_count,
+            stitched.manifest.chain_digest,
+            stitched.manifest.dump_sha256
+        );
+        return Ok(());
+    }
+
     let script_text = match &args.script {
         Some(path) => fs::read_to_string(path)
             .map_err(|e| format!("cannot read script {}: {e}", path.display()))?,

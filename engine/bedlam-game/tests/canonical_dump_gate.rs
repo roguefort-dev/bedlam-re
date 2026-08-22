@@ -1,0 +1,537 @@
+//! W6 canonical dump gate (DESIGN-DIFFHARNESS.md §6a/§10-W6, D85) —
+//! the verification half of the engine dump emitter. Three tiers:
+//!
+//! 1. SYNTHETIC GRAMMAR FIXTURE (no corpus): a hand-built
+//!    [`canonical::TickState`] emitted through
+//!    [`canonical::emit_frame`] and compared byte-for-byte against
+//!    HAND-ENCODED literals written straight from the §6a grammar
+//!    table — an independent transcription, not a re-run of
+//!    `robot_bank_blob` (the independence is the point: it pins the
+//!    CONTRACT W7's normalizer must match). The frame digest is
+//!    pinned; a grammar drift moves it loudly.
+//! 2. SYNTHETIC SIM RUN (no corpus): a headless MissionSim (flat
+//!    terrain, zeroed angle table, pinned seed) ticked three frames
+//!    through the SAME emit_frame + `runner::stitch` + `encode_dump`
+//!    path the live channel uses; `decode_dump` verifies the stream
+//!    and the chain digest is pinned + double-run byte-identical.
+//! 3. CORPUS-GATED S0/S1 (skips when game-data is absent): full
+//!    `run_canonical` drives over the REAL shipped ZONEA/MISSION1 —
+//!    3/401 records, pinned chain digests, byte-identical double
+//!    runs — plus the scenario-step seam gates: boot difficulty
+//!    consumed (money seed via menu::start_score), walk-phase
+//!    non-boot steps rejected naming the P2e seam, command/pad
+//!    rejected naming their engine seams, P-pause banned mid-scenario,
+//!    and the order seam arming at the tile-exact robot.
+//!
+//! PIN DISCIPLINE: the digest/chain pins below are fingerprints of
+//! deliberate engine/dump behavior — they move only when the engine
+//! behavior or the §6a grammar changes, and then they are re-baselined
+//! DELIBERATELY with a commit message saying why (the fingerprint
+//! discipline, D28). Dumps stay runtime-only (§3 hygiene); git carries
+//! only the digests asserted here.
+
+#[path = "../examples/parity_harness/canonical.rs"]
+mod canonical;
+
+use std::fs;
+use std::path::PathBuf;
+
+use bedlam_core::mission::{AngleTable, MissionSim, Order, Robot, Terrain, ORDER_WINDOW};
+use canonical::{emit_frame, run_canonical, TickState};
+use diffharness::dump::{canonicalize_frame, decode_dump, frame_digest, Channel, DumpHeader};
+use diffharness::hash::sha256;
+use diffharness::registry;
+use diffharness::runner::{stitch, Scenario, Transcript};
+
+fn root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM")
+}
+
+fn scen_path(id: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tools/diffharness/scenarios")
+        .join(format!("{id}.scen"))
+}
+
+fn corpus_present() -> bool {
+    root().join("EDITOR/ZONEA/MISSION1.TOT").is_file()
+}
+
+// ---------------------------------------------------------------------
+// 1. The synthetic §6a grammar fixture
+// ---------------------------------------------------------------------
+
+/// The fixture robot: every field a distinct value so a field-order or
+/// width drift flips bytes (negatives chosen for pos_y, stop_dist,
+/// armor, alarm_ctr to pin sign extension).
+fn fixture_robot() -> Robot {
+    Robot {
+        pos_x: 0x0010_0000,
+        pos_y: -256,
+        z: 65,
+        state: 6,
+        dir_byte: 42,
+        facing: 3,
+        anim: 7,
+        variant: 2,
+        probe_z: [
+            0x0102, 0x0304, 0x0506, 0x0708, 0x090A, 0x0B0C, 0x0D0E, 0x0F10,
+        ],
+        stop_dist: -3,
+        target: Some((0x0012_3400, -256)),
+        alive: true,
+        drop_countdown: 0x99,
+        hp: 5000,
+        armor: -25,
+        hit_flash: 2,
+        alarm: 100,
+        alarm_ctr: -99,
+        shield: 32,
+        shield_charges: 5,
+        shield_boost: 0,
+        battery: 10,
+        armor_pool: 2000,
+        kind: 0,
+        death_flag: 0,
+    }
+}
+
+#[test]
+fn synthetic_grammar_pins_the_6a_bytes() {
+    let robot = fixture_robot();
+    let mut claims = [false; 12];
+    claims[0] = true;
+    claims[2] = true;
+    let order = Order {
+        tile: (31, 46, 3),
+        window: 0x0103,
+        claims,
+    };
+    let pads = [0xABu8, 0xCD, 0xEF];
+    let st = TickState {
+        frame_no: 7,
+        rand_a_state: 0x0123_4567_89AB_CDEF,
+        rand_b_state: 0xFEDC_BA98_7654_3210,
+        score: 1234,
+        money: 2500,
+        difficulty: 3,
+        zone: 0,
+        mission: 1,
+        mode: 0,
+        linear: 17,
+        robots: std::slice::from_ref(&robot),
+        order: Some(order),
+        selected: 0,
+        blink_cursor: 2,
+        order_target: (31, 46, 3),
+        armor_pads: &pads,
+        map_wh: Some((300, 150)),
+    };
+    let tiers: Vec<String> = ["T0", "T1", "TS"].iter().map(|s| s.to_string()).collect();
+    let frame = emit_frame(&st, &tiers, true, true);
+
+    assert_eq!(frame.frame_no, 7);
+    assert!(frame.injection_applied);
+
+    // --- T0 rows (§6a): u32 scalars, little-endian ---
+    assert_eq!(frame.watch("frame-counter"), Some(&[0x07, 0, 0, 0][..]));
+    assert_eq!(
+        frame.watch("rng-state-a"),
+        Some(&[0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01][..])
+    );
+    assert_eq!(
+        frame.watch("rng-state-b"),
+        Some(&[0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE][..])
+    );
+    assert_eq!(frame.watch("score"), Some(&1234u32.to_le_bytes()[..]));
+    assert_eq!(frame.watch("money"), Some(&2500u32.to_le_bytes()[..]));
+    assert_eq!(frame.watch("difficulty"), Some(&3u32.to_le_bytes()[..]));
+    assert_eq!(frame.watch("zone"), Some(&0u32.to_le_bytes()[..]));
+    assert_eq!(frame.watch("mission"), Some(&1u32.to_le_bytes()[..]));
+    assert_eq!(frame.watch("mode"), Some(&0u32.to_le_bytes()[..]));
+    assert_eq!(
+        frame.watch("linear-mission-m"),
+        Some(&17u32.to_le_bytes()[..])
+    );
+
+    // --- T1 rows ---
+    // robot-bank: u32 count + the state_hash field order
+    // (alive u8, pos_x i32, pos_y i32, z i32, state u16, dir_byte u16,
+    // facing u16, anim u16, variant u16, probe_z u16×8, stop_dist i32,
+    // present u8, tx i32, ty i32, drop_countdown i32, hp i32,
+    // armor i16, hit_flash u16, alarm u16, kind u16, shield i32,
+    // shield_charges i32, shield_boost i32, battery i32,
+    // armor_pool i32, alarm_ctr i32, death_flag u16) — 98 bytes total.
+    let expect_robot_bank: [u8; 98] = [
+        // count = 1
+        0x01, 0x00, 0x00, 0x00, //
+        // alive
+        0x01, //
+        // pos_x 0x00100000
+        0x00, 0x00, 0x10, 0x00, //
+        // pos_y -256 (0xFFFFFF00)
+        0x00, 0xFF, 0xFF, 0xFF, //
+        // z 65
+        0x41, 0x00, 0x00, 0x00, //
+        // state 6, dir_byte 42, facing 3, anim 7, variant 2
+        0x06, 0x00, 0x2A, 0x00, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00, //
+        // probe_z 0x0102..0x0F10 (u16 LE each)
+        0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 0x08, 0x07, 0x0A, 0x09, 0x0C, 0x0B, 0x0E, 0x0D, 0x10,
+        0x0F, //
+        // stop_dist -3
+        0xFD, 0xFF, 0xFF, 0xFF, //
+        // target present 1, tx 0x00123400, ty -256
+        0x01, 0x00, 0x34, 0x12, 0x00, 0x00, 0xFF, 0xFF, 0xFF, //
+        // drop_countdown 0x99, hp 5000
+        0x99, 0x00, 0x00, 0x00, 0x88, 0x13, 0x00, 0x00, //
+        // armor -25 (i16), hit_flash 2, alarm 100, kind 0
+        0xE7, 0xFF, 0x02, 0x00, 0x64, 0x00, 0x00, 0x00, //
+        // shield 32, charges 5, boost 0
+        0x20, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+        // battery 10, armor_pool 2000
+        0x0A, 0x00, 0x00, 0x00, 0xD0, 0x07, 0x00, 0x00, //
+        // alarm_ctr -99, death_flag 0
+        0x9D, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+    ];
+    assert_eq!(frame.watch("robot-bank"), Some(&expect_robot_bank[..]));
+
+    // selection-triple: the 4-byte selected-idx alias (D83 form).
+    assert_eq!(
+        frame.watch("selection-triple"),
+        Some(&0u32.to_le_bytes()[..])
+    );
+    // blink-cursor: u32.
+    assert_eq!(frame.watch("blink-cursor"), Some(&2u32.to_le_bytes()[..]));
+
+    // per-player-selected: 4 × {x i32, y i32, z i32}; player 0 =
+    // selected robot pos>>8 (Q5) + z; players 1..3 zero.
+    let mut expect_players: Vec<u8> = Vec::new();
+    expect_players.extend_from_slice(&4096i32.to_le_bytes()); // 0x00100000>>8
+    expect_players.extend_from_slice(&(-1i32).to_le_bytes()); // -256>>8
+    expect_players.extend_from_slice(&65i32.to_le_bytes());
+    expect_players.extend_from_slice(&[0u8; 36]);
+    assert_eq!(
+        frame.watch("per-player-selected"),
+        Some(&expect_players[..])
+    );
+
+    // order-target: i32 ×3 (the seam write persists).
+    let mut expect_target = Vec::new();
+    expect_target.extend_from_slice(&31i32.to_le_bytes());
+    expect_target.extend_from_slice(&46i32.to_le_bytes());
+    expect_target.extend_from_slice(&3i32.to_le_bytes());
+    assert_eq!(frame.watch("order-target"), Some(&expect_target[..]));
+
+    // move-target-words: u32 count + per-robot {present u8, tx i32, ty i32}.
+    let expect_moves: [u8; 13] = [
+        0x01, 0x00, 0x00, 0x00, // count
+        0x01, // present
+        0x00, 0x34, 0x12, 0x00, // tx
+        0x00, 0xFF, 0xFF, 0xFF, // ty
+    ];
+    assert_eq!(frame.watch("move-target-words"), Some(&expect_moves[..]));
+
+    // beacon-family: flag u32, timer u32, tile i32×3.
+    let expect_beacon: [u8; 20] = [
+        0x01, 0x00, 0x00, 0x00, // flag = armed
+        0x03, 0x01, 0x00, 0x00, // window 0x0103
+        0x1F, 0x00, 0x00, 0x00, // tile x 31
+        0x2E, 0x00, 0x00, 0x00, // tile y 46
+        0x03, 0x00, 0x00, 0x00, // tile z 3
+    ];
+    assert_eq!(frame.watch("beacon-family"), Some(&expect_beacon[..]));
+
+    // spread-claims: u16 ×12 (claims 0 and 2 set).
+    let mut expect_claims = Vec::new();
+    expect_claims.extend_from_slice(&1u16.to_le_bytes());
+    expect_claims.extend_from_slice(&0u16.to_le_bytes());
+    expect_claims.extend_from_slice(&1u16.to_le_bytes());
+    expect_claims.extend_from_slice(&[0u8; 18]);
+    assert_eq!(frame.watch("spread-claims"), Some(&expect_claims[..]));
+
+    // the +0x18 byte family: u32 len + raw bytes (both rows, same bank).
+    let expect_pads: [u8; 7] = [0x03, 0x00, 0x00, 0x00, 0xAB, 0xCD, 0xEF];
+    assert_eq!(frame.watch("typedb-fade-byte"), Some(&expect_pads[..]));
+    assert_eq!(frame.watch("armor-pad-reads"), Some(&expect_pads[..]));
+
+    // --- TS row (anchor frame only) ---
+    let expect_wh: [u8; 8] = [
+        0x2C, 0x01, 0x00, 0x00, // w 300
+        0x96, 0x00, 0x00, 0x00, // h 150
+    ];
+    assert_eq!(frame.watch("static-map-wh"), Some(&expect_wh[..]));
+
+    // The registry order is imposed by encode; here we just pin that
+    // every emitted id exists as a registry row (stitch's job, but
+    // fail early with a clear name).
+    let reg = registry();
+    for w in &frame.watches {
+        assert!(
+            reg.iter().any(|r| r.id == w.id),
+            "emitted id {} is not a registry row",
+            w.id
+        );
+    }
+
+    // Pinned frame digest (canonicalized to registry order first).
+    let mut canon = frame.clone();
+    canonicalize_frame(&mut canon, &reg).expect("registry covers every emitted id");
+    let digest = frame_digest(&canon).expect("digest computes");
+    assert_eq!(
+        digest.to_string(),
+        "b359f7d282db7cb8",
+        "grammar drift: re-derive the hand bytes above, then re-pin (deliberately)"
+    );
+}
+
+// ---------------------------------------------------------------------
+// 2. The synthetic MissionSim run (dump decode + pinned chain)
+// ---------------------------------------------------------------------
+
+fn synthetic_frames() -> Vec<diffharness::dump::FrameRecord> {
+    let terrain = Terrain::from_parts(4, 4, vec![0u8; 8 * 4 * 4], Vec::new())
+        .expect("4×4 flat terrain is well-formed");
+    let angles = AngleTable::from_thresholds(&[0u16; 64]).expect("64 thresholds");
+    let mut sim = MissionSim::new(terrain, angles, 0x1E240);
+    let r0 = sim.spawn_robot((1, 1, 0));
+    let _r1 = sim.spawn_robot((2, 2, 0));
+    assert!(sim.arm_order_at_robot(r0));
+
+    let tiers: Vec<String> = ["T0", "T1", "TS"].iter().map(|s| s.to_string()).collect();
+    let mut frames = Vec::new();
+    for i in 0..3u64 {
+        sim.advance_frame();
+        let st = TickState {
+            frame_no: sim.frame() - 1,
+            rand_a_state: sim.rand_a_state(),
+            rand_b_state: 0xDEAD_BEEF_CAFE_F00D,
+            score: 0,
+            money: 4000,
+            difficulty: 0,
+            zone: 0,
+            mission: 1,
+            mode: 0,
+            linear: 1,
+            robots: sim.robots(),
+            order: sim.order(),
+            selected: 0,
+            blink_cursor: 0,
+            order_target: (0, 0, 0),
+            armor_pads: sim.armor_pads(),
+            map_wh: (i == 0).then_some((4, 4)),
+        };
+        frames.push(emit_frame(&st, &tiers, false, i == 0));
+    }
+    frames
+}
+
+#[test]
+fn synthetic_sim_dump_decodes_with_pinned_chain() {
+    let src = "scenario = \"SX\"\ntiers = T0,T1,TS\nanchor = mission-start\nframes = 2\n";
+    let scen = Scenario::parse(src).expect("synthetic scenario parses");
+    let header = DumpHeader::new(Channel::Engine, sha256(b"synthetic"), "SX");
+    let stitched = stitch(
+        &scen,
+        &Transcript {
+            frames: synthetic_frames(),
+        },
+        &header,
+        &registry(),
+    )
+    .expect("synthetic transcript stitches");
+
+    // Frame-count contract: anchor + frames = 3.
+    assert_eq!(stitched.manifest.frame_count, 3);
+    // Determinism: identical inputs stitch to identical bytes.
+    let again = stitch(
+        &scen,
+        &Transcript {
+            frames: synthetic_frames(),
+        },
+        &header,
+        &registry(),
+    )
+    .expect("second stitch");
+    assert_eq!(
+        stitched.bytes, again.bytes,
+        "byte-deterministic by construction"
+    );
+
+    // Decode verifies every digest + the chain against the bytes.
+    let dump = decode_dump(&stitched.bytes).expect("dump decodes + verifies");
+    assert_eq!(dump.header.channel, Channel::Engine);
+    assert_eq!(dump.header.scenario, "SX");
+    assert_eq!(dump.trailer.frame_count, 3);
+    assert_eq!(
+        dump.trailer.chain.to_string(),
+        stitched.manifest.chain_digest
+    );
+    // frame_no strictly increasing from the anchor (0, 1, 2).
+    assert_eq!(
+        dump.frames.iter().map(|f| f.frame_no).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    // The TS row rides the anchor only.
+    assert!(dump.frames[0].watch("static-map-wh").is_some());
+    assert!(dump.frames[1].watch("static-map-wh").is_none());
+    // The armed order is live sim state, not fixture data: two alive
+    // robots → the 0x197 window at arm time; the anchor emit runs
+    // AFTER the first advance_frame, so the window shows 0x197−1.
+    let beacon = dump.frames[0].watch("beacon-family").expect("T1 row");
+    assert_eq!(&beacon[0..4], &1u32.to_le_bytes()[..]);
+    assert_eq!(
+        &beacon[4..8],
+        &u32::from(ORDER_WINDOW - 1).to_le_bytes()[..]
+    );
+
+    assert_eq!(
+        stitched.manifest.chain_digest, "ea0bc53dc95ff0b2",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+}
+
+// ---------------------------------------------------------------------
+// 3. Corpus-gated S0/S1 + the scenario seam gates
+// ---------------------------------------------------------------------
+
+#[test]
+fn corpus_s0_s1_canonical_runs() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+
+    // S0: boot → mission start, 3 records (anchor + 2).
+    let s0 = fs::read_to_string(scen_path("S0")).expect("S0.scen committed");
+    let run0 = run_canonical(&s0, &root).expect("S0 canonical run");
+    assert_eq!(run0.manifest.frame_count, 3);
+    assert_eq!(run0.manifest.chain_digest, "8901789a88cf61fe");
+    let run0b = run_canonical(&s0, &root).expect("S0 canonical re-run");
+    assert_eq!(run0.bytes, run0b.bytes, "byte-identical double run");
+
+    let dump = decode_dump(&run0.bytes).expect("S0 dump verifies");
+    assert_eq!(dump.header.channel, Channel::Engine);
+    assert_eq!(dump.header.scenario, "S0");
+    assert_eq!(
+        dump.frames.iter().map(|f| f.frame_no).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    // Fresh campaign: money 4000, the ZONEA statics ride the anchor.
+    assert_eq!(
+        dump.frames[0].watch("money"),
+        Some(&4000u32.to_le_bytes()[..])
+    );
+    assert!(dump.frames[0].watch("static-map-wh").is_some());
+    assert!(dump.frames[1].watch("static-map-wh").is_none());
+    // ZONEA/MISSION1 is 25×75 tiles (w·h = 1875 — the W1 cross-check:
+    // TOT 4+16wh = 30004, DAT 4+8wh = 15004 file bytes).
+    assert_eq!(
+        dump.frames[0].watch("static-map-wh"),
+        Some(&[25u32.to_le_bytes(), 75u32.to_le_bytes()].concat()[..])
+    );
+
+    // S1: mission-start passive, 401 records (anchor + 400).
+    let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
+    let run1 = run_canonical(&s1, &root).expect("S1 canonical run");
+    assert_eq!(run1.manifest.frame_count, 401);
+    assert_eq!(run1.manifest.chain_digest, "1c4e7b4c9d9b0947");
+    let run1b = run_canonical(&s1, &root).expect("S1 canonical re-run");
+    assert_eq!(run1.bytes, run1b.bytes, "byte-identical double run");
+}
+
+#[test]
+fn canonical_seam_gates() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+
+    // Walk-phase non-boot steps name the missing P2e seam. (This
+    // fires before staging, but stays in the gated test.)
+    let walk = "scenario = \"SW\"\ntiers = T0\nframes = 1\nkeystore 0x1f=1\nuntil-anchor mission-start\nstep 1\n";
+    let err = run_canonical(walk, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("P2e"),
+        "walk rejection names the seam: {err}"
+    );
+
+    // BOOT difficulty is the one consumable walk step: money seed via
+    // the engine's own formula (4000 − 500·2 = 3000) + the pin.
+    let sd = "scenario = \"SD\"\ntiers = T0,TS\nframes = 2\nboot difficulty=2\nuntil-anchor mission-start\nstep 2\n";
+    let run = run_canonical(sd, &root).expect("boot difficulty consumed");
+    assert_eq!(run.manifest.frame_count, 3);
+    assert!(run.manifest.pins.iter().any(|p| p == "difficulty=2"));
+    let dump = decode_dump(&run.bytes).expect("SD dump verifies");
+    assert_eq!(
+        dump.frames[0].watch("money"),
+        Some(&3000u32.to_le_bytes()[..])
+    );
+    assert_eq!(
+        dump.frames[0].watch("difficulty"),
+        Some(&2u32.to_le_bytes()[..])
+    );
+
+    // COMMAND names the missing engine fire seam (S3 pairs it, W12).
+    let cmd = "scenario = \"SC\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\ncommand 01\n";
+    let err = run_canonical(cmd, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("fire"),
+        "command rejection names the fire seam: {err}"
+    );
+
+    // PAD names the missing extraction-arming seam (S6, W12).
+    let pad = "scenario = \"SP\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\npad 0\n";
+    let err = run_canonical(pad, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("extraction"),
+        "pad rejection names the extraction seam: {err}"
+    );
+
+    // P-pause (scan 0x19) is banned mid-scenario (DESIGN §2).
+    let pp =
+        "scenario = \"SK\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\nkeystore 0x19=1\n";
+    let err = run_canonical(pp, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("0x19"),
+        "P-pause rejection names the scan: {err}"
+    );
+
+    // ORDER: the click-order seam — target recorded (order-target
+    // row) + the armer at the tile-exact alive robot (ZONEA/MISSION1
+    // robot 0 spawns at tile (21, 73), mission_scene_gate's click
+    // twin). NOTE the canonical runner stages NO network marker
+    // override (the host default), so ZONEA carries a SINGLE-robot
+    // squad: the armer's window-0 single-robot special case then
+    // clears the order on the SAME pump's window tick (the ledger
+    // behavior — 0x4eabb2 = 0 when one alive, cleared next tick), so
+    // the beacon flag reads 0 in the dump; the ARM itself is proven
+    // by robot 0's state-3 + tile-origin snap in the robot bank.
+    // (The surviving-order case is the synthetic two-robot fixture
+    // above.)
+    let so = "scenario = \"SO\"\ntiers = T0,T1\nframes = 2\nuntil-anchor mission-start\norder 21 73 1\nstep 1\n";
+    let run = run_canonical(so, &root).expect("order seam runs");
+    let dump = decode_dump(&run.bytes).expect("SO dump verifies");
+    assert_eq!(dump.frames.len(), 3);
+    let injected = &dump.frames[1];
+    assert!(injected.injection_applied);
+    assert_eq!(
+        injected.watch("order-target"),
+        Some(&[21i32.to_le_bytes(), 73i32.to_le_bytes(), 1i32.to_le_bytes()].concat()[..])
+    );
+    let bank = injected.watch("robot-bank").expect("robot bank row");
+    // u32 count, alive u8, pos_x i32, pos_y i32, z i32, then state u16.
+    let count = u32::from_le_bytes(bank[0..4].try_into().unwrap());
+    let pos_x = i32::from_le_bytes(bank[5..9].try_into().unwrap());
+    let state = u16::from_le_bytes(bank[17..19].try_into().unwrap());
+    assert_eq!(count, 1, "no network override markers staged");
+    assert_eq!(state, 3, "the order ARMED robot 0 (state 3)");
+    assert_eq!(pos_x, 21 << 13, "snap to the tile origin");
+    let beacon = injected.watch("beacon-family").expect("beacon row");
+    assert_eq!(
+        &beacon[0..4],
+        &0u32.to_le_bytes()[..],
+        "single-robot window-0 order clears on the arming pump's tick"
+    );
+}

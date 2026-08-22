@@ -1563,6 +1563,13 @@ impl MissionScene {
         (self.score, self.money)
     }
 
+    /// The RandB-stand-in stream state, read-only (the canonical dump
+    /// emitter's rng-state-b row, W6; the fill/churn draws advance it,
+    /// this never does).
+    pub fn rand_b_state(&self) -> u64 {
+        self.rand_b.state()
+    }
+
     /// Stage the campaign session state (D52): the GameMain campaign
     /// init / a save-load stand-in. Default FRESH_CAMPAIGN (0, 4000).
     pub fn set_campaign(&mut self, score: i32, money: i32) {
