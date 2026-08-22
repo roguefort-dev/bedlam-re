@@ -1,5 +1,18 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-22 QUEUE HYGIENE #2 (worker e444e1cd claim 2, commit
+    6b6274f, D111): the claimed queue item 2 (the MISSIONVIEW §8
+    water-flag/anim remainder) was found ALREADY CLOSED at HEAD —
+    D100/§7j.35 (bee4336+60f7d3b) closed it ~15 units before S5C,
+    but 105d9aa's queue note re-queued it by mistake. Closure
+    re-verified green with independent spot-checks (objdump censuses
+    for 0x456ca8 [2 readers/0 writers] + 0x4edbd4 [3 writers] exact;
+    file image at 0x552a8 = the static {0..7,7..0} const byte-exact;
+    registry_anchors 2/2; MANIFEST clean both sides). No engine/doc/
+    tool change beyond the queue + D111. Queue: 1 = [BLOCKED] S0
+    live session (operator), 2 = W12-S6 the extraction scenario
+    unit. NEXT: W12-S6 (item 2).
+
   - 2026-08-22 P4.2/W12-S5C COMPLETE (worker 82d5a27f claim 2,
     commit c27b3db, D110): the case-3 OBSERVABILITY variant landed —
     S5C.scen (the S4 artillery pattern spends the walker to 1256
