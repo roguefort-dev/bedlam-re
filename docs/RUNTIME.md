@@ -130,6 +130,82 @@ The W4 runner ships unattended-safe staging + the channel-agnostic capture
 transcript format + the stitcher (see DESIGN §3/§10-W4); the live-run piece
 is [BLOCKED]-on-DH-G0-channel-repin.
 
+## DH-G0 channel re-pin (2026-08-22, queue item 1) — DECISION: option (a), self-build at e522642 (D80)
+
+DECISION (the queue item's stated DEFAULT, no operator input): the O1
+capture channel becomes a REPO-LOCAL SELF-BUILT DOSBox-X at the SAME
+upstream commit as the flathub pin's banner — e522642b8c86d87cd4e58ffb2961fa30608c119a
+— configured `--enable-sdl2 --enable-debug=heavy`. Rationale: the watch
+skeleton's entire command surface (BPINT/BPLM/D) exists in this tree
+(source-pinned below); the flathub runtime stays installed as the
+D29-proven sandbox baseline; conf pins carry over unchanged; GameLink
+(option b) is client-poll real-mode oriented with an unproven DPMI/flat
+linear model and would still need a host client + probing, and O2-ptrace
+(option c) abandons the DOS-side oracle entirely. Recorded as D80.
+
+BUILD LAYOUT (everything under gitignored runtime/, nothing committed):
+- runtime/dosbox-x-src/   = upstream checkout at e522642 (shallow fetch,
+  verified `git rev-parse HEAD`); source is READ-ONLY reference for the
+  facts below — never patched (oracle rule: observation only).
+- runtime/dosbox-x-build/ = autotools out-of-tree build (autogen.sh run
+  FROM THE SOURCE DIR — running it from the build dir fails: aclocal
+  needs configure.ac CWD), configured
+  `../dosbox-x-src/configure --enable-sdl2 --enable-debug=heavy`,
+  config.h verified: `#define C_DEBUG 1` + `#define C_HEAVY_DEBUG 1`.
+- Host toolchain recorded as part of the pin: gcc 16.2.1, SDL2 2.32.70
+  (pkg-config), ncursesw 6.6.20251230, autoconf 2.73, automake 1.18.1,
+  libtool 2.6.2, gnu make 4.4.1, 32-way build.
+- configure gate [source-pinned, configure.ac:1144-1156]:
+  --enable-debug requires curses (else AC_MSG_ERROR) and defines C_DEBUG;
+  `=heavy` additionally defines C_HEAVY_DEBUG. The flathub build passed
+  only --enable-sdl2 → no debugger (matches the D79 audit).
+
+DEBUGGER COMMAND SURFACE [source-pinned at e522642, src/debug/debug.cpp
+unless noted; to be behaviorally [verified] at the smoke probe below]:
+- ENTRY: `-break-start` (sdlmain.cpp:7517,10152 → DEBUG_EnableDebugger)
+  or conf `debuggerrun` (debug_gui.cpp:933-939): "debugger"→0 (sit at
+  prompt), "normal"→1 (auto-RUN on entry), "watch"→2 (auto-RUNWATCH on
+  entry) — applied at debug.cpp:5100-5101.
+- PTY GATE [source-pinned, debug.cpp:5042-5064]: on Linux the debugger
+  REFUSES to open unless isatty(0)&&isatty(1)&&isatty(2). Automation
+  therefore runs the binary under a host PTY (python3 pty). The D79
+  "inert debuggerrun/-break-start" probes on the flathub build were
+  never gated by this — that build simply lacked C_DEBUG.
+- RUNWATCH (debug.cpp:2668): run with breakpoints ACTIVE; on a bp hit
+  the loop re-enters the debugger prompt (the watch-mode shape D29
+  assumed). RUN = plain resume.
+- FRAME TRIGGER PRIMITIVES:
+  - BP [seg]:[off] — code breakpoint (the present-tail site).
+  - BPLM [linear] — LINEAR memory-change breakpoint (C_HEAVY_DEBUG
+    only, i.e. our build) — the alternative trigger on a state word.
+  - BPINT [nr] [ah] [al] — interrupt breakpoint.
+- BULK READ (the dump primitive):
+  - MEMDUMPBIN [seg]:[off] [len] → MEMDUMP.BIN raw bytes (fixed name,
+    HOST CWD, "wb" = overwrite per call) — debug.cpp:2021-2027,6002-6020.
+  - MEMDUMP [seg]:[off] [len] → MEMDUMP.TXT hex text (same fixed-name
+    + CWD shape) — debug.cpp:2013-2019,5965-6000.
+  The PTY driver renames the file between calls (the emitter side of
+  the DBXCAP transcript).
+- INJECTION PRIMITIVE (W5): SMV [linear] [val].. — set memory at a
+  LINEAR address (debug.cpp, listed in HELP); SM [seg]:[off] segmented
+  twin; SR reg val.
+- ADDRESS MODEL [source-pinned, debug.cpp:460-479 GetAddress]:
+  seg:off resolves — current-CS → SegPhys(cs)+off; pmode selector →
+  descriptor base+off (LinMakeProt); real mode → seg<<4+off. Under
+  DOS4GW the game's flat selectors have base 0, so `sel:linear` with
+  the runtime flat selector (pinned via SELINFO/LDT at DH-G0) reads
+  the LE objects at their linear addresses (0x10000/0x80000). The
+  INT3-at-_entry proof (EXD entry 0x5fbb0) pins this conversion at the
+  first interactive session, as the watch skeleton requires.
+- VIEWS: D seg:off / DV linear / DP physical; SELINFO, GDT/LDT/IDT,
+  EMU MEM/MACHINE for pinning the selector facts.
+
+Next in this unit: build the binary, behavioral smoke (headless SDL
+dummy + PTY: -break-start enters the prompt, MEMDUMPBIN round-trips,
+RUN/RUNWATCH parse) — converting the tags above to [verified] on THIS
+self-built pin — then wire the DBXCAP emitter driver. NO game diff:
+the live game run stays interactive-gated (FORCE_DIFF_RUN=1).
+
 CPU BASELINE (the other side of the diff): cargo run --release --example
 parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced
 byte-identically twice this unit): scene chain 0xcae25cd08d7cbc08, sim

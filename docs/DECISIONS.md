@@ -2626,3 +2626,35 @@ Nudge-Worker: 6f14cea1-e317-4016-8a1a-55054fed36f0
    interactive-gated.
 
 Nudge-Worker: d35c7066-4f7f-4c3a-a8b3-0afaead3049d
+
+## 2026-08-22 P4.2/DH-G0 — the O1 capture channel re-pin is D80: repo-local self-built DOSBox-X at e522642 with --enable-debug=heavy; flathub pin stays as sandbox baseline; PTY automation is the driver shape
+
+1. THE DECISION (queue item 1's stated DEFAULT absent operator input;
+   options a/b/c were left open by D79): O1's capture channel = a
+   self-built DOSBox-X at upstream commit e522642 (the flathub pin's own
+   banner commit — same code, different configure flags), built
+   out-of-tree under gitignored runtime/ with `--enable-sdl2
+   --enable-debug=heavy` (C_DEBUG + C_HEAVY_DEBUG verified in config.h).
+   The flathub runtime remains installed (D29 sandbox baseline + golden
+   runs without the debugger); the self-build is the INSTRUMENT build.
+   Host toolchain recorded as part of the pin (gcc 16.2.1, SDL2 2.32.70,
+   ncursesw 6.6, autotools; RUNTIME.md "DH-G0 channel re-pin").
+2. WHY NOT (b)/(c): GameLink is compiled in but client-poll oriented for
+   real-mode games with an unproven DPMI/flat-linear model — adopting it
+   buys a second research project instead of a channel; O2-ptrace abandons
+   the DOS-side oracle and re-shuffles D77's topology. The self-build
+   needs zero RE changes: the watch skeleton's full command surface
+   (BP/BPINT/BPLM/RUNWATCH/MEMDUMPBIN/SMV/D-DV-DP) is source-pinned in
+   this tree at e522642 (RUNTIME.md section, line refs).
+3. KEY NEW FACT (source-pinned): the Linux debugger REFUSES to open unless
+   isatty(0/1/2) — automation MUST drive the binary under a host PTY
+   (debug.cpp:5042-5064). The D79 "inert -break-start" observation on
+   flathub was the missing C_DEBUG, not this gate.
+4. AUTOMATION SHAPE: PTY driver feeds ParseCommand lines (ncurses getch
+   input), per frame-tail bp hit: N× MEMDUMPBIN (fixed name MEMDUMP.BIN,
+   host CWD, overwrite per call → driver renames between reads) → slice
+   per watch → DBXCAP transcript → existing W4 dbx-stitch. Injection (W5)
+   rides SMV linear writes. Behaviorally verified at the unit's headless
+   smoke probe; the live game diff stays interactive-gated.
+
+Nudge-Worker: 4deb0081-12f4-4fdd-a60e-36363119d216
