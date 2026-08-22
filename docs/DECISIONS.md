@@ -3036,3 +3036,47 @@ Nudge-Worker: 85dedea3-2ef6-47c7-a088-03a058aba96f
    dbx-diff for its DH-G1 verdict step.
 
 Nudge-Worker: c594df62-4614-47f6-b32d-f96b7a04db19
+
+## D88 — EXD robot-record back half pinned; drop_countdown rebound +0x2C→+0x80 (2026-08-22, W7-followup, worker 03be9318 claim 2)
+
+1. PROBE: two Ghidra `-process BEDLAM.EXD -noanalysis` passes
+   (tools/ghidra-scripts/EXDRobotBackhalf{,2}.java; dumps
+   ghidra-project/exd-robot-backhalf{,2}.txt). Hop 1 = program-wide
+   immediate census of the 0xf6d34..0xf6ddc robot-base family (every
+   hypothesis offset has traffic; dominant forms `[i·0xA8 + const]`
+   and `[i·0x15 · 8 + const]`) + the FUN_0001c7dc disasm/decompile.
+   Hop 2 = decompiles of the writer family: FUN_0001ef61 (damage
+   applier, EXW 0040e230 twin), FUN_0001d9cd (spawn initializer, EXW
+   0040cca0 twin — variant/kind/facing/probe-seed/stat-switch),
+   FUN_0001d274 (robot_move — dir/facing/anim), FUN_0001e440 (probes),
+   FUN_00020dea (pad charge), FUN_000180a1 (portrait pass),
+   FUN_0005961c (SP all-dead sweep), FUN_00020fd5 (order cooldowns).
+2. PINNED (RE-EXD-MAP §8 table rewritten, per-field provenance):
+   dir_byte +0x0E, facing +0x10, anim +0x12, variant +0x18,
+   probe_z[8] +0x1A..+0x29, kind +0x2A, hit_flash +0x2E, armor +0x30
+   (i16), alarm +0x34, shield +0x88, shield_charges +0x8C, battery
+   +0x94, armor_pool +0x98, death_flag +0x9C, shield_boost +0xA0,
+   alarm_ctr +0xA4 — every EXW §3/§7f/§7g offset coincides in EXD
+   with the semantic twin EXACT (damage order, stat switch 0x2A/0x2B/
+   0x2C ×200, hp ceiling b·100+5000, booster 10000/150, anim formula,
+   RandA&3, facing cardinals). death_flag READER pinned (FUN_0005961c
+   all-dead sweep) closing the 7g.6 note. Canonical coverage gaps 26
+   → 3 (target_present/x/y only).
+3. CORRECTION (D87 sec-8 table): canonical drop_countdown binds raw
+   +0x80 (the phase-4/5 gate `phase<4 ∨ phase·32 < d` + decrement +
+   reinforcement countdown — the ENGINE field exact semantics,
+   mission.rs `phase < 4 || phase*32 < drop_countdown`), NOT +0x2C.
+   +0x2C is the mission-start pod-DESCENT timer (stagger + freeze
+   gate) which the engine does not model canonically. EXD_ROBOT_MAP +
+   EXW_ROBOT_MAP rebound; the differ gate inverse fixture follows.
+   Both EXW and EXD split the two cells identically (SIM §3).
+4. NOTES: EXD decrements alarm_ctr (+0xA4) 1/phase-0-pass when
+   nonzero — no EXW decay is documented (7g.1 evidence gap, divergence
+   -seed candidate until a live S1 diff). The move-target extent
+   formula PINNED (cap-bounded ≤ 12; the 0x60-B span at 0xf75ec
+   covers x[12]+y[12]) — the deferred dbx-plan row can now be filled
+   (follow-up: plan row + normalizer splice to take coverage 3 → 0).
+   The W1 "(14,644 B)" size belonged to FUN_0001476d, not FUN_0001c7dc
+   (2,712 B per-phase tick) — sec-1b corrected.
+
+Nudge-Worker: 03be9318-237b-4c9c-aa78-83bc504a48ef

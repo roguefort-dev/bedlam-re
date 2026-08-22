@@ -115,10 +115,17 @@ anchors (two independent evidence pieces) per the W1 ticket.
   FUN_0002eb0d (divisor 0x2e9b = 100.01 Hz, same as B2); INT8 handler
   region ~0x12780-0x127a5 (six counter INCs: 0x801a0, 0x1075e8,
   0x1075fc, 0x1075b4, 0x1075c8, 0x1075e0 — the B2 seven-counter twin).
-- **robots()/tick monolith = FUN_0001c7dc** (14,644 B; contains the
-  trap-pair resolver reads + calls FUN_000448e7, the 28,451-B draw/UI
+- **robots()/tick family (sizes CORRECTED W7-followup)**: FUN_0001c7dc
+  = the per-PHASE tick (2,712 B; arg = phase 0..5, contains the
+  trap-pair resolver reads + the decay/booster/armor/pod-gate pre-pass
+  + the move/arrive loop; calls FUN_000448e7, the 28,451-B draw/UI
   monolith whose 0xf75ec move-target writes are the EXW
   order-dispatcher family; 87× FUN_000332f8 + 38× FUN_00033d94 draws).
+  FUN_0001476d = the 14,644-B phase monolith (the W1 "(14,644 B)"
+  size belonged here — the earlier line mis-attributed it to
+  FUN_0001c7dc). FUN_0001ef61 = the damage applier (EXW 0040e230
+  twin), FUN_0001d9cd = the spawn initializer (EXW 0040cca0 twin),
+  FUN_0001d274 = robot_move, FUN_0001e440 = the probe writer.
 
 ## 3. Mapping method (how EXW rows get EXD aliases)
 
@@ -170,7 +177,7 @@ to docs/DIVERGENCES.md as a seed.
 | blink-cursor selector | 0x4dc5d0 | TODO (gap) | 7j.7 producer twin not located this unit; anchor via the effect-row family when W2 needs it | |
 | per-player selected anchor | 0x4c71c4 | **0x971a4** | spawn-tail seed loop `do {[0x971a4+i]=x>>8; [0x971a8+i]=y>>8; [0x971ac+i]=z} ×4 (0x30/0xC)` — EXW 4×0xC {x>>8,y>>8,z} EXACT | [verified] |
 | order target xyz | 0x4dd484/88/8c | **0x10e0a4/0x10e0a8/0x10e0ac** | consumer twin FUN_00019ee9 bit1-ORDER branch writes all three @0x1a0af/0x1a0bc/0x1a0d8 (words@+7/+9/+0xB of the record, EXW EXACT) + the click-order twin FUN_00021112 writes the triple from the pick (FUN_0002a271, EXW FUN_00419943): ground branch iso combine, rect branch reads rec@0x9df30-base, the `&0x2000` structure flag EXACT; loop position = EXW MissionShell trio EXACT (FUN_00021112 → FUN_0005b066(1) builder → FUN_00019ee9 consumer = EXW FUN_00410644 → FUN_00449c94 → FUN_00409138) | [verified] |
-| per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs) | [verified] |
+| per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs). EXTENT PINNED (W7-followup): per-robot u32 ×2 indexed by ABSOLUTE robot id over the CAP cell 0x11950c (tick loop `+= 4` per record; 0x11950c := 0x11958c SP / 0x119588 MP, ≤ 12); the fixed 0x60-B span at 0xf75ec covers x[12]+y[12] deterministically — the dbx-plan row can now be filled | [verified] |
 | extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | **0x119628/0x11962a/0x11962c/0x11962e/0x119630** | armer FUN_0003570e full decode (guard/timer 0x197/tile trio) + mission-loop countdown `(short)DAT_0011962a −−` with the digit draws and the all-state-3 → FUN_00030899 completion sweep | [verified] |
 | spread claims | 0x4eabba | **0x119632** | picker FUN_0003581b full decode: first-free u16 scan `[0x119632+i]`, bound = cap cell 0x11950c, marks 1, the 12-offset switch around beacon x/y — EXW FUN_004248c8 EXACT | [verified] |
 | no-extract latch | 0x46aed4 | TODO (gap) | animator twin not decoded this unit (FUN_0001f8c1 turned out to be the debrief/payout fn); anchor via the pod-ring animator when W2 needs it | |
@@ -295,36 +302,70 @@ file is next touched.
    0x10e15c, command flags 0x11a51a, held-keys counter 0x107534 —
    watch-artifact class, not gameplay divergence.
 
-## 8. The W7 normalizer field map (robot record + row forms) — PINNED 2026-08-22
+## 8. The W7 normalizer field map (robot record + row forms) — PINNED 2026-08-22, back half added 2026-08-22 (D88)
 
 The W7 differ (DESIGN-DIFFHARNESS §6/§6a) converts O1 raw guest bytes
 into the §6a canonical grammar per registry row. The map below is the
-per-field EXD evidence table (robot record, base 0xf6d34, stride 0xA8):
+per-field EXD evidence table (robot record, base 0xf6d34, stride 0xA8).
+Rows 1-4 + back anchors from the W7 unit; the remaining 23 leaf fields
++ the drop_countdown CORRECTION pinned by the W7-followup back-half
+probe (probes ghidra-project/exd-robot-backhalf{,2}.txt via
+tools/ghidra-scripts/EXDRobotBackhalf{,2}.java, `-process BEDLAM.EXD
+-noanalysis`; census = every instruction whose immediate lands in
+0xf6d34..0xf6ddc, plus decompiles of the writer family):
 
 | canonical field | EXD off | type | provenance |
 |---|---|---|---|
 | pos_x | +0x00 | i32 Q13 | [verified] beacon armer teleported x/y (seed #1) + the per-player anchor writer `d@(0xf6d34+i)>>8` → 0x971a4 |
 | pos_y | +0x04 | i32 Q13 | [verified] same pair (`d@(0xf6d38+i)>>8`) |
-| z | +0x08 | i32 | [verified-NEW this unit] the per-player anchor writer's third word: `d@(0xf6d3c+i) + 0x20` (exd-probe5.txt @0x1fc6x/0x1fc8x — the 4×0xC {x>>8, y>>8, z+0x20} triple reads +0/+4/+8 of the record) |
+| z | +0x08 | i32 | [verified] the per-player anchor writer's third word: `d@(0xf6d3c+i) + 0x20` (exd-probe5.txt — the 4×0xC {x>>8, y>>8, z+0x20} triple reads +0/+4/+8 of the record) |
 | state | +0x0C | u16 | [verified] armer `[0xf6d40+i·0xA8] := 3` (§4) |
-| drop_countdown | +0x2C | u16→i32 | [verified] spawn stagger store `[0xf6d60+i·0xA8] = 1+k·(2000−m·1000/27)` (§4) |
-| stop_dist | +0x74 | i32 | [verified] consumer auto-arm `target@+0x74 := 1000000 (0xf4240)` @0xf6da8 (§5c) |
-| hp | +0x78 | i32 | [verified] respawn base `[EAX+0xf6dac] = 0x1388` (§4) |
+| dir_byte | +0x0E | u16→i32 | [verified-NEW] move twin FUN_0001d274 @~0x1d2f5: `w@(0xf6d42+i·0xA8) := angle_byte` at every move start; the diagonal branch reads `d@+0x0E>>0x10` (= the facing word) — EXW §3 "+0x0E last dir byte" EXACT |
+| facing | +0x10 | u16→i32 | [verified-NEW] spawn-init FUN_0001d9cd `w@(0xf6d44+i·0xA8) := 0xFFFF` (spawn-none); move twin writes the four cardinals 0x00/0x40/0x80/0xC0 + 0xFFFF fallback — EXW §3 row EXACT |
+| anim | +0x12 | u16→i32 | [verified-NEW] move twin `w@(0xf6d46+…) := ((angle+4)&0xFF)>>3` — the EXW formula EXACT |
+| variant | +0x18 | u16→i32 | [verified-NEW] spawn-init `w@(0xf6d4c+…) := RandA()&3` (FUN_00012216 = RandA) — EXW §3 row EXACT |
+| probe_z[8] | +0x1A..+0x29 | u16×8→i32 | [verified-NEW] spawn-init 8-word seed loop `w@(0xf6d4e+2k+…) := z` (bound 0x10 B); probe writer FUN_0001e440 touches each of 0xf6d4e..0xf6d5a; `d@+0x28>>0x10` = the kind read (the 7b.2 climb-compare form) |
+| kind | +0x2A | u16→i32 | [verified-NEW] spawn-init SP `w@(0xf6d5e+…) := [0x1075c0]` (player type) / MP `:= i`; gates the alarm trip + booster SFX (always via `d@+0x28>>0x10`) — EXW §3 row EXACT |
+| hit_flash | +0x2E | u16→i32 | [verified-NEW] damage applier FUN_0001ef61 `w@(0xf6d62+…) += 1` FIRST on every unshielded hit; portrait pass FUN_000180a1 clamps 5 + decrements while alive ∧ hp≥1 — EXW 7g.1/7g.8 EXACT |
+| armor | +0x30 | i16 | [verified-NEW] phase-1 pad pass (FUN_0001c7dc): off-pad `w@(0xf6d64+…) −= 10` clamp 0 behind the type-DB fade byte; pad-charge FUN_00020dea `+= charge` clamp 3000, bar-full chime at 2500 — EXW 7g.3/7f EXACT (read form `d@+0x2E>>0x10`) |
+| alarm | +0x34 | u16→i32 | [verified-NEW] damage applier trip `w@(0xf6d68+…) := 100`; phase-0 decay `−= 1` (FUN_0001c7dc) — EXW 7g.1/7g.2 EXACT |
+| stop_dist | +0x74 | i32 | [verified] consumer auto-arm `target@+0x74 := 1000000 (0xf4240)` @0xf6da8 (§5c) + the beacon-proximity armer's second `:= &DAT_000f4240` store + the arrive gate `stop < dist ∨ dist < 0x1400` |
+| hp | +0x78 | i32 | [verified] respawn base `[EAX+0xf6dac] = 0x1388` (§4) + damage `d@(0xf6dac+…) −= dmg`, ceiling `battery·100+5000` |
 | alive | +0x7C | i32→u8 (≠0) | [verified] armer alive loop over `[0xf6db0+i]` presence (§4) |
+| drop_countdown | +0x80 | i32 | [verified-CORRECTED, D88] the phase-4/5 gate `phase < 4 ∨ phase·32 < d@(0xf6db4+…)` + per-tick decrement (FUN_0001c7dc; `local_2c = phase<<5`) + death clear (FUN_0001ef61) — the ENGINE field's semantics EXACT. The W7 row bound this canonical field to +0x2C (the pod timer) — WRONG: +0x2C is the mission-start pod-DESCENT timer (spawn stagger `w@(0xf6d60+…)`, freeze gate `w@+0x2C ≠ 0` skips the whole tick), which the engine does NOT model as a canonical field (pod-stagger modeling stays a backlog note). Both EXW +0x2C and +0x80 carry the same split (SIM §3) |
+| shield | +0x88 | i32 | [verified-NEW] damage absorb `d@(0xf6dbc+…) −= dmg` clamp 0; phase-0 decay 2; conversions := 0x20 (state-3); booster forces 10000, expiry 150 — EXW 7g.1/7g.2 EXACT |
+| shield_charges | +0x8C | i32 | [verified-NEW] spawn stat-0x2A copy `d@(0xf6dc0+…) := stat>>0x10` (FUN_0001d9cd switch); damage gate `charges==0 ∨ shield≠0` → spend one charge for a 0x20 shield — EXW 7g.1 EXACT |
+| battery | +0x94 | i32 | [verified-NEW] spawn stat-0x2B copy `d@(0xf6dc8+…) := stat>>0x10`; hp ceiling `battery·100+5000` in the damage clamp — EXW 7f.8 EXACT |
+| armor_pool | +0x98 | i32 | [verified-NEW] spawn stat-0x2C copy `d@(0xf6dcc+…) := (stat>>0x10)·200`; pad-charge gate `pool==0 → direct armor charge` — EXW 7g.4 EXACT |
+| death_flag | +0x9C | u16→i32 | [verified-NEW] `d@(0xf6dd0+…) := 1` on BOTH death subsets (FUN_0001ef61 SP @~0x1f0e3 + MP); READER pinned: FUN_0005961c = the SP all-dead mission-fail sweep (`any +0x9C==0 → skip`) — closes the EXW §7g.6 "readers not census'd" note |
+| shield_boost | +0xA0 | i32 | [verified-NEW] countdown `d@(0xf6dd4+…) −= 1` forces `shield := 10000` per frame; expiry `< 1` → 0 + `shield := 150 (0x96)`; countdown==200/0xC4 SFX pair — EXW 7g.2/7h.2 (arms 200) EXACT |
+| alarm_ctr | +0xA4 | i32 | [verified-NEW] damage `d@(0xf6dd8+…) += 3` while alarm==0; `> 100 ∧ kind==player-type` → alarm := 100, ctr := 0 — EXW 7g.1 EXACT. NOTE: EXD ALSO decrements it 1/phase-0-pass when nonzero (FUN_0001c7dc @~0x1c886) — an EXW-side evidence gap (7g.1 lists no decay); flagged as divergence-seed candidate until a live S1 diff or an EXW re-read |
 
-**Coverage gaps (canonical fields with NO pinned EXD offset — the
-normalizer leaves them OUT of coverage, they are reported as STRUCTURAL
-coverage findings, never zero-filled-then-compared, never guessed):**
-dir_byte, facing, anim, variant, probe_z[8], target_present/x/y (the
-EXW move-target globals are the source, but the O1 plan row is deferred
-— extent formula unpinned), armor, hit_flash, alarm, kind, shield,
-shield_charges, shield_boost, battery, armor_pool, alarm_ctr,
-death_flag. The EXW back-half offsets exist in RE-EXW-SIM §3/§7f/§7g
-(hit_flash +0x2E, armor word +0x30, shield +0x88, shield_charges +0x8C,
-battery +0x94), and five mid/back anchors (+0x2C/+0x36/+0x74/+0x78/
-+0x7C) coincide EXACTLY between EXW and EXD — the back-half transfer is
-plausible but unpinned for EXD; a bounded probe pass can pin it when a
-live S1 diff needs those fields (recorded as the follow-up).
+**Coverage gaps AFTER this unit (canonical fields with NO pinned EXD
+offset — the normalizer leaves them OUT of coverage, they are reported
+as STRUCTURAL coverage findings, never zero-filled-then-compared, never
+guessed):** target_present/target_x/target_y ONLY — 3 of the 34
+canonical leaf fields. Their SOURCE is pinned (§5 move-target arrays
+0xf75ec/0xf761c: per-robot u32 x/y Q5 by ABSOLUTE robot index, −1 =
+none, writers = spawn-init −1 fill + order consumer + the beacon
+auto-order `:= tile<<5`, and the tick's arrive-clear; indexing loop
+`local_48 += 4` bounded by the CAP cell 0x11950c — the extent formula
+is therefore `2 × cap × 4 B ≤ 0x60`, and the fixed 0x60-B span at
+0xf75ec covers x[12]+y[12] exactly since 0xf761c−0xf75ec = 0x30), but
+the O1 PLAN row is still deferred (dbx-plan must emit the row; the O1
+normalizer then parses the span). Named follow-up: fill the
+move-target-words plan row + splice target_present/tx/ty into the O1
+robot-bank fields (coverage 3 → 0 per robot).
+
+Non-canonical record cells decoded in passing (context rows, no
+canonical field — the engine does not model them): +0x14 viewport
+frame-base word; +0x16 deploy countdown (`:= 0xFFFF` spent, phase-0
+decrement, gates the +0x40 overlay); +0x32 EXD-side phase-0 countdown
+word (0xf6d66, no EXW §3 row — evidence gap, not gameplay-relevant);
++0x36..+0x6C the 7×8-B order-stat groups + order-gate cooldown drains
+(FUN_00020fd5); +0x6E order bits; +0x70 deploy delay (vs table
+0x8105c[difficulty]); +0x84 pathing scratch (108 refs, heavy);
++0x90 dying countdown (states 5/6, expiry → alive:=0 / state:=0).
 
 **Seed #1 EXW-front discrepancy [OPEN, W11]:** RE-EXW-SIM §3 documents
 EXW pos_x@+0x00/pos_y@+0x04 (evidence column: 0x4c69ec z, 0x4c69f0
