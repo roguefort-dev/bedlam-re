@@ -4520,6 +4520,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | object type table | 0x4dedf2, 0x4E stride, 282 recs from the mission file (FUN_0041a4f8, load call 0x447b76): W@+2, H@+4, D@+6 (word@+0 unconsumed [open]; 7j.13 erratum + 7j.16 verification), hp@+8, chain@+0xC, type@+0xE (0xb = score 10), count@+0x12, 5×8B effect entries @+0x16..+0x3E (selectors +0x16+8k → 9-case table 0x41a870 — map §7j.25), 4 W·H·D-word template banks @+0x3E/+0x42/+0x46/+0x4A (arena 0x46ad5c; disk order +0x3E,+0x46,+0x42,+0x4A interleaved; +0x46/+0x4A = the UNDER-terrain pair consumed by the destroy restore §7j.25; +0x3E/+0x42 = the CURRENT-state pair ≡ shipped TOT/DAT at footprints — DEAD EDITOR PAYLOAD, zero readers §7j.32) — exact 0x4E fit; footprint stamper FUN_0041a7f0 (word = rec idx+1 over W×H at spawn) | §7j.13, §7j.32 |
 | chain detonation | destroy tail walks the object's 4 perimeter edges; chainable neighbor (id-table word@+0xC ≠ 0, alive) → recurse FUN_0041a894(pos, ctr+1@RandA&3==0, damage 1000); score [0x4dd40c] += type (0xb → 10) when stack flag ≠ 0 | §7j.13 |
 | destroy-tail effect entries | 5 × 8B @type+0x16+8m (m 0..4, exit @+0x28): selector word@entry+0 ∈ 1..9 → jump table 0x41a870 idx sel−1; payload w2/w4/w6 @entry+2/+4/+6 = x/y TILE + z-level offsets off the 0x46cbf4 record; sel1→k14(+0xF,+0xF)+FUN_0041a225+5 splashes, sel2..5→k18/k17/k16/k19 single gibs at (+0x10,+0x30)/(+0x30,+0x10)/(+0x20,−0x10)/(−0x20,0)+4-splash loop, sel6/7→k10 at (+0x10,+0x20)/(+0x20,+0x10)+DEADMAN SFX (delay 0, param −1), sel8→k14 ×25 demolition shower @water z (±3-tile RandA&7−3 jitter, delay ctr+2m+i>>3), sel9→k20+3×3 splash ring (delay ctr+2+RandA&3); stager delay = chain-ctr+m (sel1/8/9); PRECEDED by the footprint W×H×D terrain RESTORE (TOT-mirror z-words ← bank@type+0x46, seen + DAT volume ← bank@type+0x4A, linear (z·H+i)·W+j); GER gate: type 0xb ∧ GER skips the whole restore/effect/score/chain tail (record still marked destroyed + triggers fired) | §7j.25 |
+| script-blast entry | FUN_004244a1(x_tile, y_tile, z) [§7j.39/1, verified 0x4244a1..0x4245c4]: splash FUN_00424355(delay 0) → FUN_0041bc1c(5000) → FUN_0041a894(ctr 0, 5000, flag 1) → k6 debris on a 1-IN-8 RandA gate (test al,7; delay = a 2nd draw &7, param −1) → z' = clamp(z−1, ≥1) → ALL-critter hits (FUN_004190bc, weapon 0xC, owner −1) + ALL-robot hits (FUN_00418fca, weapon 0xD, box ±0x20/±0x30 Q5); callers = the artillery burst pairs + the mortar-0E 3-cell (§7j.39/4) | §7j.39 |
 | effects-bank stager | FUN_0041a225(x,y,z tiles, delay ECX) — FIRST producer of the MISSIONVIEW §5d/§5e "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (first-fit allocator FUN_0041a4cc, 12-try spawn loop); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, vz@+0x14 RandB&0x7FF+0x1770 RISING (high word = sprite group 0..2 → DEBRIS.BIN img group*8+frame&7), active u16@+0x18 = FUN_0041ec59(3) (~8% stillborn), delay u16@+0x1A = ECX arg, frame u16@+0x1C = RandB&7}; callers: destroy-tail cases 1/8; mover FUN_00419f62 (kill off-map/ceiling z>>13>0xB); consumer = the §5e direct draw (7j.26) | §7j.25, §7j.26 |
 | .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each (slot order +0x3E,+0x46,+0x42,+0x4A — §7j.32); +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c; tail seeds instance hp@+0x10 ← type hp@+8 + stamps the claim grid per footprint. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25, §7j.32 |
 | .BDG template-bank semantics | 2×2 roles (§7j.32 corpus proof, ZONEA/M1 434/435 cells): CURRENT pair (+0x3E TOT words, +0x42 DAT words) ≡ the SHIPPED .TOT/.DAT at the .POS footprints — editor stamp payload, ZERO runtime readers (triple census: slot addresses, +0x3e/+0x42 displacements, arena walk); UNDER pair (+0x46, +0x4A) = the pre-building terrain, consumed ONLY by the destroy restore (mirror words ← +0x46; seen=(+0x4A word==0), DAT volume=+0x4A low byte); value domains b1/b2 tile words ≤1868, b3 ≤102, b4 ≤512; overlap footprints = last-.POS-slot-wins in the shipped TOT | §7j.32 |
@@ -5764,8 +5765,14 @@ resolver/structure-death need.
    The loop runs m = 0..4 over the 5 entries; selector 0 or >9
    skips the entry with NO draws.
 2. **THE FOUR PERIMETER CHAIN WALKS** (0x41b771..0x41bc06;
-   entry x/y = the destroyed instance's footprint origin, W/H =
-   its type row's extent words):
+    entry x/y = the destroyed instance's footprint origin, W/H =
+    its type row's extent words). [GEOMETRY CORRECTED
+    2026-08-22 §7j.39/5 — this item's walk-2/3 labels were
+    garbled; the raw-asm walks are: 1 the N row (y−1, x+j,
+    j ∈ [−1, W]), 2 the S row (y+H, x+j, j ∈ [−1, W], the
+    recursion passing (y+W)<<13 — a faithful quirk), 3 the W
+    edge (x−1, y+j, j ∈ [0, H)), 4 the E edge (x+W, y+j,
+    j ∈ [0, H)); the per-candidate protocol below stands]:
    - Walk 1 — the N row: y' = y−1 fixed; the x Q13 accumulator
      starts at the x−1 tile and steps +0x2000; j runs −1..W
      (bound W+1, 0x41b7dd..0x41b7f0).
@@ -5829,6 +5836,115 @@ resolver/structure-death need.
    modeled armor-first with the exact interleaving unpinned
    [hypothesis — matters only when a trap shares a pad tile,
    corpus-never].
+
+## 7j.39. THE S4-PREP ENGINE-LANDING ADDENDUM — FUN_004244a1
+internals + the impact-pair call orders + the chain-walk geometry
+correction + the debris allocator (2026-08-22, worker 460d294e
+claim 2; objdump-only from the COMMITTED ghidra-project/
+exw-text-objdump.txt + exw-weaponanim-asm.txt, no Ghidra run;
+prep for the E-side W12-S4 landing — every fact below was read
+off the raw asm this run)
+
+1. **FUN_004244a1 = the SCRIPT BLAST, whole body**
+   [verified 0x4244a1..0x4245c4]: args (x_tile, y_tile, z_level).
+   Bounds x/y vs map_w/h → silent exit. Then IN ORDER: (a)
+   FUN_00424355 splash stage, delay arg ECX = 0; (b)
+   FUN_0041bc1c(x<<13, y<<13, 5000) — the STRUCTURE resolver
+   FIRST; (c) `push 1` + FUN_0041a894(x<<13, y<<13, ctr 0,
+   5000, flag 1) — the OBJECT resolver second; (d) k6 debris
+   gate: ONE RandA, `test al,7` → stages ONLY when (al&7)==0
+   (1-in-8, NOT 50% — corrects the 7j.13 census gloss), delay =
+   a SECOND RandA draw &7, kind 6, param −1, coords (x<<5,
+   y<<5, z<<5); (e) z' = clamp(z−1, min 1); (f) ALL-CRITTER
+   area damage: FUN_004190bc(i, owner −1, x<<5, y<<5, z'<<5,
+   weapon 0xC, mode 2) for i < [0x46cc2c]; (g) ALL-ROBOT area
+   damage: FUN_00418fca(i, x<<5, y<<5, z'<<5, weapon 0xD, mode
+   2) for i < [0x46ccbc] (the TOTAL count — D89) — the §7j.23
+   box test |dx|,|dy| < 0x20 (Q5) + mode-2 |dz| < 0x30 (robot
+   z raw) → FUN_0040e230(FUN_00419aff(weapon), owner −1).
+2. **The weapon-tick IMPACT-PAIR call orders** [verified
+   exw-weaponanim-asm.txt]: bullets 2..4 = FUN_0041a894
+   (0x410ae0) then FUN_0041bc1c (0x410af9), both
+   FUN_00419aff(kind), `push 1`; shell 5 floor = pair
+   (0x410c8d/0x410ca2) + disburser + FREE; ROCKET 0x24 floor =
+   OBJECT (0x4118ad) → STRUCTURE (0x4118c2) → disburser
+   (0x4114eb) → free; HOMING 0x29 floor = STRUCTURE (0x411f24)
+   → OBJECT (0x411f3f) → disburser (0x411f4a) → free — the 0x29
+   order is REVERSED vs 0x24 [faithful]. The rocket z<0 path
+   (0x411787: z := 0x1000, kind := 0) ALSO disburses.
+3. **The class-0 EXPIRY QUADRANT body** [verified
+   0x410d5c..0x410eb2]: at tick > 0x64, kinds 0xF/0x13 first
+   tick := 0, class−−; class ≠ 0 → continue; class == 0 →
+   FUN_004124a4 disburser FIRST (0x410dc4), then 4×
+   FUN_0041a894 at (x±0x1000, y±0x1000) quadrants in the order
+   (+,+), (+,−), (−,+), (−,−) (0x410de1..0x410e42, damage
+   FUN_00419aff(0x1a) `push 1` — the 0x1a damage even when the
+   dying record is 0xF/0x13!), then 4× FUN_0041bc1c over the
+   same quadrants (0x410e59..0x410e9e), then the trail-ring
+   slot clear, then free.
+4. **The mortar 0xE floor-contact 3-cell detonation**
+   [verified 0x411298..0x411338]: after the bounce arm (with
+   the arm's vx/vy HALVING already applied — 0xE runs the
+   shared halving at 0x41153), kind 0xE fires FUN_004244a1 ×3:
+   (x>>13, y>>13, z>>13), ((x−vx·4)>>13, (y−vy·4)>>13, z>>13),
+   ((x−vx·4)>>13, (y+vy·4)>>13, z>>13) — x/y = the committed
+   post-wall position ([ESP+0x78]/[ESP+0x80] = the saved record
+   x/y), vx/vy the POST-halving velocities.
+5. **THE CHAIN-WALK GEOMETRY CORRECTED** (§7j.38/2's walk-2/3
+   labels were garbled; this is the raw-asm order
+   0x41b771..0x41bc06): the tail runs FOUR walks over the
+   destroyed record's footprint origin (X, Y) + the type W/H —
+   WALK 1 the N row: y' = Y−1 fixed, x' = X+j, j ∈ [−1, W]
+   (bound W+1); WALK 2 the S row: y' = Y+H (candidate check),
+   x' = X+j, j ∈ [−1, W]; WALK 3 the W edge: x' = X−1 fixed,
+   y' = Y+j, j ∈ [0, H); WALK 4 the E edge: x' = X+W, y' = Y+j,
+   j ∈ [0, H). Per candidate (all walks): STRICT bounds
+   0 < x' < w ∧ 0 < y' < h (jle/jge skips); the grid word −1
+   signed > 0; instance[word−1] id dword < 0x4000 (alive);
+   type-row(id).chain word ≠ 0; ONE RandA (the roll ALWAYS
+   draws; &3 == 0 → counter++); then the recursive
+   FUN_0041a894(x'_q13, y'_q13, counter, 1000, forwarded
+   flag). QUIRKS [faithful]: walk 2's RECURSION passes
+   EDX = (Y + **W**)<<13 (0x41b9b5..0x41b9cd reads the +0
+   dword) while its candidate gate checked Y+H — identical on
+   every corpus type (W == H throughout §7j.25/8), divergent
+   only for hypothetical non-square footprints; walk 1's
+   yline read is the 0x4ea8fc-base idiom = line[Y−1].
+6. **The debris stager FUN_00420608 head + allocator**
+   [verified 0x420608..0x4206b0]: bounds x < 0 ∨ y < 0 ∨
+   (x>>5) ≥ w ∨ (y>>5) ≥ h → NO staging; z clamped [0x20,
+   0xFF]; ALLOCATION = first slot with dword@+0 == 0 (0..127),
+   else the MIN +0x18 seq slot (LRU evict — the +0x18 seq is
+   the age key); kind 1..20 else exit (before the dispatch).
+7. **The artillery burst body, arg-exact** [verified
+   0x4115eb..0x4116e1]: the pair list PTR[0x456bf0 +
+   4·(tick−0x20)] walks (Δy, Δx) i16 pairs until the 500
+   sentinel; per pair FUN_004244a1(x_tile + Δx, y_tile + Δy,
+   z clamped ((z>>8)+0x3F)>>5 cap 7), then ONE RandA `test
+   al,1` → on odd, k11 debris at ((x_tile<<5)+0xF,
+   (y_tile<<5)+0xF, (z_level<<5)+0x10), kind 11, delay 0,
+   param = the record's owner dword@+2. Past the window:
+   tick ≤ 0x22 → silent exit (w9's exact-0x22 end), else the
+   FUN_004124a4 disburser tail.
+8. **OPEN (deliberately NOT changed this unit)**: the 0x1F
+   floor-contact ARM — the raw dispatch sends 0x1F to the
+   damped-roll arm 0x41133a (with 0x13), while §7j.22/§7j.37
+   and the landed engine place it in the vertical-bounce arm;
+   fixing it moves the pinned S3 chain and needs its own
+   re-pin unit. Also open: the 0xF/0x13 mine per-tick
+   proximity detonation checks at the FUN_00410823 tail
+   (0x411457..0x4114f0/0x4114f5.. — the DAT-volume row tests +
+   FUN_00417cde thresholds 0x40/0x20) and the 0x17 tail
+   tick−− (0x41148, net-0 per pass) — both recorded for the
+   mine/0x17 audit unit.
+9. **Engine consequence**: the E-side landing of all the above
+   is chain-neutral for S0/S1/S2 (no weapons fire) but NOT for
+   S3 — the artillery burst pairs draw (the k6 1/8 gate per
+   FUN_004244a1 + the k11 50% gate + the stager's k11 SFX-gate
+   draw) with or without destructibles staged, so the S3
+   canonical chain re-pins ONCE at this landing (the D103
+   note: no O1 S3 capture exists yet — the dbx-plan T2-tier
+   unit precedes any live S3).
 
 ## 9. Open items (next slices)
 
