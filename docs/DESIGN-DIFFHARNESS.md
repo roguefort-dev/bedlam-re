@@ -530,11 +530,38 @@ S2's marker = `18,73,1`, the mission_corpus_gate walker.
   mode green (loader statics + bank layouts/counts + occupancy shapes).
 - **DH-G3 field parity budget**: S2 T1-exact green; S3/S4 T1-exact on the
   producer paths as they land in-engine; meter thresholds pinned per
-  scenario at first green.
+  scenario at first green. **W9 CI leg (LANDED 2026-08-22, D92):** the
+  corpus-gated test set runs in CI as a NAMED workflow job
+  (`.github/workflows/ci.yml` `diffharness`: `cargo test -p
+  diffharness` + `cargo test -p bedlam-game --test canonical_dump_gate
+  --test differ_gate`). WHAT CI PROVES: (a) the harness set compiles
+  on every push, (b) the SKIP-CLEANLY property — every game-data
+  reader guards on `corpus_present()` and a test that forgets (the W9
+  sweep found exactly one: `menu_gate`, 3 of 5 tests panicking on the
+  absent corpus) fails the job, (c) the corpus-FREE tests inside the
+  gated files (the synthetic §6a grammar fixture, the dump schema,
+  the registry anchors, the stitch replay, the differ unit tests)
+  run for real. WHAT CI DOES NOT PROVE: the pinned-chain corpus
+  assertions (`8901789a88cf61fe` / `1c4e7b4c9d9b0947` /
+  `809f4961b7757da4` + the differ cross-channel verdicts) — CI
+  checkouts never carry game-data (it is never committed), so those
+  run wherever a corpus is present (dev/operator machines run the
+  same commands pre-push; the identical test names make the leg
+  auditable). The LIVE session (DH-G0) is the separate,
+  desktop-gated proof of the O1 capture channel; original-side runs
+  (O1/O2/O3) never run in CI by design (pinned emulator).
 - **CI wiring**: original-side runs never run in CI (pinned emulator,
   desktop-gated). CI runs the ENGINE dump emitter + differ against committed
   reference fingerprints (corpus-gated, skip when game-data absent — the
-  mission_corpus_gate pattern).
+  mission_corpus_gate pattern). **LANDED 2026-08-22 (W9, D92)** — the
+  named `diffharness` job above + the workspace sweep: every
+  corpus-dependent suite (assets corpus/fonts/loading/smk×2, core
+  mission_corpus_gate, render mission_view_gate, game
+  boot_attract/brief/menu/music/title_playback/mission_scene/
+  canonical_dump/differ) verified by a fresh corpus-free clone test
+  run to skip cleanly; `menu_gate` (the one exception) fixed with the
+  same guard. Re-verify by re-running the clone test when adding a
+  new corpus gate.
 
 ## 10. Build-order tickets
 
@@ -661,6 +688,14 @@ differ come before any new scenario depth.
    by the CAP cell — EXW 0x46ccbc total / 0x46cbd8 per-player, EXD
    0x11950c cap / 0x11958c per-player; in SP all equal the zone rule.)
 9. **W9 — gates/CI wiring** (DH-G3 + corpus-gated CI job).
+   **LANDED 2026-08-22 (D92):** the named `diffharness` CI job (§9
+   DH-G3 bullet — what CI proves vs the live session), the workspace
+   corpus-skip sweep via a fresh corpus-free clone test run (all 52
+   test targets green after it; the one non-skipping suite
+   `menu_gate` — 3 tests panicking on the absent corpus — fixed with
+   the `corpus_present()` guard), and the §9 CI-wiring landing note
+   with the re-verification recipe (re-run the clone test whenever a
+   new corpus gate lands).
 10. **W10 — 8street instrumented comparator (O3).** Rebuild 8street at the
     pinned commit with state-dump hooks emitting the W3 schema (test-only
     comparator; no code enters this repo).

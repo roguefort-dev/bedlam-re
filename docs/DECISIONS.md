@@ -3236,3 +3236,52 @@ Nudge-Worker: 3595c744-f77a-4b9e-993c-bba6c59b29fb
    until a live session refines it).
 
 Nudge-Worker: 7faaeb53-0c41-43f2-abe2-1ae7228eace0
+
+## D92 — 2026-08-22: W9 — the DH-G3 CI leg + the corpus-skip sweep; menu_gate fixed as the sweep's one finding (worker cd3ebd73 claim 2)
+
+1. DECISION (a): the corpus-gated harness set is wired into CI as a
+   NAMED workflow job (.github/workflows/ci.yml `diffharness`:
+   `cargo test -p diffharness` + `cargo test -p bedlam-game --test
+   canonical_dump_gate --test differ_gate`) instead of relying on
+   the blanket `cargo test --workspace` matrix step. Rationale: the
+   DH-G3 leg is now auditable by job name, and CI continuously
+   proves the SKIP-CLEANLY property (any test touching game-data
+   without a `corpus_present()` guard fails the job — this exact
+   failure mode shipped undetected in menu_gate until the sweep).
+   What CI proves vs the live session is written at DESIGN §9 DH-G3:
+   CI proves compile + skip-cleanly + the corpus-FREE tests (the
+   synthetic §6a fixture, dump schema, registry anchors, stitch
+   replay, differ units); the pinned-chain corpus assertions
+   (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4) run
+   wherever a corpus is present — dev/operator machines run the
+   same commands; original-side O1/O2/O3 runs NEVER run in CI
+   (pinned emulator, desktop-gated; unchanged per §9).
+2. THE SWEEP (b): empirical, not grep-only — a fresh git clone to a
+   scratch dir (a faithful CI-checkout sim: game-data is never
+   committed) + `cargo test --workspace --no-fail-fast`. Result: 51
+   targets ok, exactly ONE non-skipping corpus dependency —
+   engine/bedlam-game/tests/menu_gate.rs, 3 of 5 tests
+   (table_geometry_and_color_sets, start_hands_off_with_the_seed,
+   sfx_audible) called `corpus_host()` whose `.expect("corpus
+   present but LANGUAGE.ENG missing")` PANICS on the absent corpus
+   instead of skipping — despite the file header claiming "Skips
+   when the corpus is absent (CI)". All other corpus suites
+   (assets corpus/font_gate/loading/smk_title/smk_corpus, core
+   mission_corpus_gate, render mission_view_gate, game
+   boot_attract/brief/music/title_playback/mission_scene/
+   canonical_dump/differ) skip cleanly.
+3. FIX (c): `menu_gate` gains `fn corpus_present()` (LANGUAGE.ENG =
+   the first staged file, the suite's own marker) and the three
+   unguarded tests return with the file's existing "corpus absent:
+   skipping" eprintln — identical pattern to the two already-guarded
+   tests; `corpus_host`'s expect messages stay as corrupt-corpus
+   tripwires (only reachable when the corpus IS present now).
+   Verified: the clone run goes 52/52 green; the corpus-PRESENT
+   workspace run keeps all 5 menu_gate tests executing for real.
+4. RECIPE (recorded in DESIGN §9 CI-wiring note): re-run the
+   corpus-free clone test whenever a new corpus gate lands; the
+   named CI job enforces it from now on.
+5. VERIFIED: fmt/clippy clean; workspace test green with the corpus
+   present; manifest clean around the corpus-touching runs.
+
+Nudge-Worker: cd3ebd73-10b5-4032-a085-6a30022ce8ea

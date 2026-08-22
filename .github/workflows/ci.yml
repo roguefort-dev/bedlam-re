@@ -18,6 +18,24 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --release --workspace
 
+  # P4.2/W9 (DESIGN-DIFFHARNESS.md §9 "CI wiring", DH-G3): the
+  # differential-harness corpus-gated set as a NAMED CI leg. CI
+  # checkouts never carry game-data (it is never committed), so here
+  # these tests prove the SKIP-CLEANLY property + compilation; the
+  # full pinned-chain assertions run wherever a corpus is present
+  # (dev/operator machines run the same commands). Original-side
+  # (O1/O2/O3) runs NEVER run in CI: pinned emulator, desktop-gated
+  # (the DH-G0 live session). Any test that touches game-data without
+  # a corpus_present() guard fails this job on CI — the W9 sweep
+  # found exactly one such (menu_gate, fixed with it).
+  diffharness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -p diffharness
+      - run: cargo test -p bedlam-game --test canonical_dump_gate --test differ_gate
+
   # PLAN sec 7 charter: Miri on bedlam-core + bedlam-audio, from the first
   # tick. Ubuntu-only (miri has no Windows support). The per-tick hash
   # fixture itself runs in the ordinary matrix above - this job adds

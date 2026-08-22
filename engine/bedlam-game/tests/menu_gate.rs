@@ -48,6 +48,13 @@ fn read(rel: &[&str]) -> Option<Vec<u8>> {
     std::fs::read(root().join(rel.iter().collect::<PathBuf>())).ok()
 }
 
+/// The suite's corpus marker (W9 skip discipline): LANGUAGE.ENG is
+/// the first file `corpus_host` stages; every corpus test guards on
+/// it and skips cleanly when game-data is absent (CI checkouts).
+fn corpus_present() -> bool {
+    read(&["LANGUAGE.ENG"]).is_some()
+}
+
 /// Host pace: 60 Hz frames = 4 sub-ticks.
 const SUBTICKS_PER_PUMP: u32 = 4;
 
@@ -102,6 +109,10 @@ fn menu_click(host: &mut GameHost, i: i8) {
 
 #[test]
 fn menu_corpus_table_geometry_and_color_sets() {
+    if !corpus_present() {
+        eprintln!("corpus absent: skipping");
+        return;
+    }
     let mut host = corpus_host();
     let menu = host.menu().unwrap();
     // 1. TABLE: the exact corpus strings, EXW order.
@@ -190,6 +201,10 @@ fn menu_corpus_table_geometry_and_color_sets() {
 
 #[test]
 fn menu_corpus_start_hands_off_with_the_seed() {
+    if !corpus_present() {
+        eprintln!("corpus absent: skipping");
+        return;
+    }
     let mut host = corpus_host();
     // Difficulty 1 -> seed 3500.
     menu_click(&mut host, 2);
@@ -200,6 +215,10 @@ fn menu_corpus_start_hands_off_with_the_seed() {
 
 #[test]
 fn menu_corpus_sfx_audible() {
+    if !corpus_present() {
+        eprintln!("corpus absent: skipping");
+        return;
+    }
     let mut host = corpus_host();
     // Hover + click land MENU1/MENU2 as sounding instrument voices
     // with the real RAW waves.
