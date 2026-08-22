@@ -810,9 +810,9 @@ differ come before any new scenario depth.
     rows). NO-INJECT INVARIANT: S0/S1/S2 chains byte-identical; S3
     re-pinned ONCE to e29f76f5585401e1 (the burst pairs draw the
     shared stream whether or not destructibles are staged — no O1
-    S3 capture exists yet, D103's dbx-plan T2-tier unit precedes
-    it). S4.scen (S3 volleys onto staged destructibles) is the next
-    unit.
+    S3 capture exists yet; the dbx-plan T2-tier unit landed D109,
+    the plan awaits the operator session). S4.scen (S3 volleys onto
+    staged destructibles) is the next unit.
     **S4 LANDED 2026-08-22 (D105):** grammar v1.4 adds the `destroy`
     staging key (§7 note above — an EQUIVALENCE seam: the original
     loads the same .BDG/.POS/.TRT natively, so no O1 write exists to
@@ -850,8 +850,8 @@ differ come before any new scenario depth.
     without staged destructibles, the no-inject invariant):
     S0/S1/S2/S3 chains re-asserted BYTE-IDENTICAL
     (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
-    e29f76f5585401e1). A live S4 capture needs the dbx-plan T3-tier
-    unit first (the S3 T2-tier precedent).
+    e29f76f5585401e1). ~~A live S4 capture needs the dbx-plan
+    T3-tier unit first~~ (landed D109 — capture-plans/S4.json).
 
     **S5/S5B LANDED 2026-08-22 (W12-S5, D108):** grammar v1.5 adds
     `zone = "B"` (the episode-slot host seam `stage_episode_slot` —
@@ -884,6 +884,30 @@ differ come before any new scenario depth.
     scenario exposes the 1-based guest cell vs E's 0-based slot
     index (§6a zone convention, D108). S0..S4 chains re-asserted
     BYTE-IDENTICAL.
+    **dbx-plan T2/T3 TIERS LANDED 2026-08-22 (D109):** SUPPORTED_TIERS
+    widens to T0/T1/T2/T3/TS — S3 (T2) and S4 (T0/T1/T3) plans
+    compile (capture-plans/S3+S4.json committed, byte-pinned by
+    tests; S1/S2/S5/S5B regenerated). The two aliased T2 banks emit
+    as the FULL fixed spans (weapon-anim 0x980d4 × 0x5460,
+    projectile 0x10e174 × 0x6A4 — no count cell on the guest, the
+    free-slot walk is the bound); every unaliased T2/T3 row (mortar/
+    critter/POI + all 14 T3 rows incl. debris-stager and
+    splash-records) stays an explicit `_deferred` coverage gap —
+    never emitted on O1, the differ reports them E-only. THE
+    COUNT-PREFIX GRAMMAR landed with it: the differ's O1
+    normalizers pin bank rows as u32 count + records
+    (trt-array walks 0..count; object-instances walks the whole
+    span skipping dead id==-1 slots), but no contiguous guest span
+    carries the count cell — capgen watch rows gain a `prefix`
+    {addr, len} sub-row (dump the 4-byte cell first, concatenate;
+    headless-proven in the flow probe), and dbx-plan emits it for
+    trt-array (prefix 0x11949c) and object-instances (prefix
+    0x119554 + the FULL 2000×0x14 bank — the D108 live-past-dead
+    .POS holes: a count-bounded span dropped 32 live objects and
+    broke the count field). robot-bank stays the bare span its
+    normalizer defines. BONUS FIX: the D103 loadout `_e_staging`
+    mask was a JSON hex literal (unparseable — S3 is the first
+    compilable loadout plan); masks are decimal now.
 
 ## 11. Risks
 
