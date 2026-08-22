@@ -110,21 +110,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER unit
-   (small, docs-only pattern; re-queued from the D99 plan — the S5
-   series superseded it): the u32[0x456ca8] anim-sequence family +
-   the WATER FLAG producer (RE-EXW-MISSIONVIEW §8's last open
-   items). The 0x12d/0x12e/0x12f flush remaps still carry
-   water-ON semantics; pin who sets/clears the water flag and what
-   anim sequence the u32[0x456ca8] family walks (objdump-only from
-   ghidra-project/exw-text-objdump.txt; read-only corpus probes in
-   /tmp/opencode if a DAT/TOT read is needed). Deliverables: the
-   §8 rows closed + any ledger corrections in RE-EXW-SIM (7j.x) +
-   DECISIONS entry; registry_anchors green; manifest clean before
-   AND after any corpus probe. If the family turns out
-   render-only, record the §0b verdict (no differ watch row) and
-   close it — the D101 precedent.
-3. [P4.2/W12-S6] THE EXTRACTION SCENARIO unit (medium; DESIGN §7 S6
+2. [P4.2/W12-S6] THE EXTRACTION SCENARIO unit (medium; DESIGN §7 S6
    row + §10-W12): arm extraction via the scripted .PAD step-on —
    the E side still REJECTS pad steps naming the S6 seam (D86), so
    this unit first lands the engine-side extraction arming (the
@@ -216,10 +202,13 @@ renumbered queue keeps every open item claimable by number).
   reader anchors + +0x1D padding). CLOSED 2026-08-22 (§7j.36/D101):
   the BIN u32[bank+0] header word (sprite COUNT → the write-only cell
   0x46cdb8; the [0x4ede1c] bank's content consumers = the vestigial
-  radar stamp — no differ row). PROMOTED to the Now queue (item 2):
-  the u32[0x456ca8] anim sequence + the water flag producer (needed
-  before the 0x12d/0x12e/0x12f flush remaps can leave water-off
-  semantics). CLOSED: u32[0x4dd444] (7e.4 - the PALTRAN
+  radar stamp — no differ row). CLOSED 2026-08-22 (§7j.35/D100):
+  the u32[0x456ca8] anim sequence + the water flag producer
+  (STATIC ping-pong const + flag ≡ 1 for every mission — the
+  0x12d/0x12e/0x12f flush remaps may hard-code water-ON; a stale
+  re-queue of this closed unit was caught + removed by queue
+  hygiene 2026-08-22, D111). SEC 8 IS NOW FULLY CLOSED (all four
+  items). CLOSED: u32[0x4dd444] (7e.4 - the PALTRAN
   ramps); +0x18 producer (7j.8/7j.9 - FUN_00422287, reader raw,
   ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
@@ -270,6 +259,32 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: QUEUE HYGIENE unit #2 (worker e444e1cd claim 2,
+   D111): the claimed queue item 2 (the MISSIONVIEW §8
+   water-flag/anim remainder) was found ALREADY CLOSED at HEAD —
+   closed by worker 57ba8753 claim 2 as D100/RE-EXW-SIM §7j.35
+   (commits bee4336 + 60f7d3b, ~15 units BEFORE S5C), but the
+   S5C unit's queue note (105d9aa) re-queued the closed unit as
+   item 2 by mistake (a hand-written stale queue note, NOT a
+   scheduler bug — D106's DONE-marker fix doesn't apply;
+   nudge-free-items.py untouched; a Done-log-aware semantic
+   dedupe was judged too fuzzy to automate). Re-verified green
+   at HEAD this run: §7j.35 covers every deliverable the
+   re-queued item asked for (the u32[0x456ca8] family = a STATIC
+   DGROUP ping-pong const, 2 readers/0 writers; the [0x4edbd4]
+   water-flag 3-writer census ≡ 1 every mission; the 7j.12
+   zone-table off-by-one ledger correction; MISSIONVIEW §8 all
+   FOUR items closed; the §0b verdict = nothing new to watch;
+   D100 recorded) — plus INDEPENDENT spot-checks: objdump re-grep
+   confirms 0x456ca8 exactly {0x40691a,0x406a2c} readers/zero
+   writers and the 0x4edbd4 {0x4252d8 persistent, 0x41c649/
+   0x41c65a bracket} writer census; the file-image read at
+   0x552a8 confirms u32[16] = {0..7,7..0} byte-exact;
+   registry_anchors 2/2 green; MANIFEST clean before AND after
+   the read-only corpus probe. Stale Now item removed (W12-S6
+   renumbered to item 2), the stale Backlog PROMOTED note folded
+   to CLOSED. No engine/doc/tool change beyond the queue +
+   DECISIONS D111.
 - 2026-08-22: P4.2/W12-S5C THE CASE-3 OBSERVABILITY VARIANT unit
   COMPLETE (worker 82d5a27f claim 2, commit c27b3db, D110; scenario
   + tests + plan, unattended-safe; NO engine change, no Ghidra run,
