@@ -141,8 +141,11 @@ fn registry_schema_invariants_hold() {
             _ => {}
         }
         // W1 scope rule: T2-T4 rows stay EXD-empty until their aliasing
-        // unit (W5-followup legitimately filled the TI seams — §5c).
-        if ["T2", "T3", "T4"].contains(&tier.as_str()) && has_exd {
+        // unit (W5-followup legitimately filled the TI seams — §5c;
+        // W12-S3 legitimately filled the two weapon-fire banks —
+        // RE-EXD-MAP §5c pins 0x980d4 / 0x10e174).
+        let aliased_t2 = matches!(id.as_str(), "weapon-anim-bank" | "projectile-bank");
+        if ["T2", "T3", "T4"].contains(&tier.as_str()) && has_exd && !aliased_t2 {
             failures.push(format!(
                 "{id}: tier {tier} must stay exd-empty until its aliasing unit"
             ));

@@ -131,6 +131,17 @@ fn inv_frame(
                 (v + menu_frames).to_le_bytes().to_vec()
             }
             "robot-bank" => inv_robot_bank(&w.bytes),
+            // The T2 banks (W12-S3): E canonical = u32 count + the
+            // records; the O1 raw form = the bare span (no count cell
+            // on the guest — the free-slot walk is the bound).
+            "weapon-anim-bank" => {
+                assert_eq!(w.bytes.len(), 4 + 400 * 0x36);
+                w.bytes[4..].to_vec()
+            }
+            "projectile-bank" => {
+                assert_eq!(w.bytes.len(), 4 + 50 * 0x22);
+                w.bytes[4..].to_vec()
+            }
             "move-target-words" => {
                 // canonical u32 count + n*9 records -> the 0x60 EXD
                 // span: x[i]/y[i] u32 by ABSOLUTE id, -1 = none, the
@@ -219,11 +230,15 @@ fn s0_s1_cross_and_double_run() {
     // scenario whose splice carries a live present=1 span both ways:
     // the staged walker's target (22,73) fabricates into the EXD
     // x[1]/y[1] u32 pair and splices back — same 2 row-level
-    // findings, zero field gaps.
+    // findings, zero field gaps. S3 (W12-S3, D103) adds the T2 slice:
+    // the two full bank rows fabricate as the bare spans and parse
+    // back through the shared field walk — still exactly the 2
+    // row-level findings, zero field gaps, zero T2 diffs.
     for (id, frames_total, pinned_chain, expect_coverage) in [
         ("S0", 3u64, "8901789a88cf61fe", 0u64),
         ("S1", 401u64, "1c4e7b4c9d9b0947", 2u64),
         ("S2", 17u64, "809f4961b7757da4", 2u64),
+        ("S3", 133u64, "49193732e6dbc546", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

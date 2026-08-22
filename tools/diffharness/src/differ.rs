@@ -324,6 +324,146 @@ const CANON_ROBOT_FIELDS: &[(&str, usize)] = &[
 /// fixture; a grammar change moves it loudly there first).
 const CANON_ROBOT_REC: usize = 94;
 
+// ---------------------------------------------------------------------
+// The T2 bank rows (W12-S3 — DESIGN §7 S3 row; RE-EXD-MAP §5c twins)
+// ---------------------------------------------------------------------
+
+/// Weapon-anim bank slot count: the free-slot finder bound 400·0x36
+/// = 0x5460 (EXD FUN_00023295; EXW 400×0x36 at 0x4c71f4).
+const WEAPON_SLOTS: usize = 400;
+/// Projectile bank slot count: the tick loop bound 50 (EXD
+/// FUN_00022a52 `iVar8 < 0x32`; EXW 50×0x22 at 0x4cc654).
+const PROJ_SLOTS: usize = 50;
+
+/// The weapon record fields (guest offsets — identical EXW/EXD, the
+/// record IS the canonical layout, no gaps): type w@+0, owner
+/// d@+2, target d@+6, tick d@+0xA, draw_ctr d@+0xE, x/y/z
+/// d@+0x12/+0x16/+0x1A, vx/vy/vz d@+0x1E/+0x22/+0x26, class d@+0x2A,
+/// arc d@+0x2E, trail d@+0x32.
+const WEAPON_REC_FIELDS: &[(u16, &str)] = &[
+    (0x00, "kind"),
+    (0x02, "owner"),
+    (0x06, "target"),
+    (0x0A, "tick"),
+    (0x0E, "draw_ctr"),
+    (0x12, "x"),
+    (0x16, "y"),
+    (0x1A, "z"),
+    (0x1E, "vx"),
+    (0x22, "vy"),
+    (0x26, "vz"),
+    (0x2A, "class"),
+    (0x2E, "arc"),
+    (0x32, "trail"),
+];
+
+/// The projectile record fields (guest offsets): type w@+0, xyz
+/// d@+2/+6/+0xA, v d@+0xE/+0x12/+0x16 — plus the +0x1A/+0x1E TAIL
+/// words (the clamp-0..7 counter and the free countdown; E models
+/// no producer — its blob carries modeled ZEROS, so a live O1
+/// nonzero tail surfaces as a T2 finding, never silence).
+const PROJ_REC_FIELDS: &[(u16, &str)] = &[
+    (0x00, "kind"),
+    (0x02, "x"),
+    (0x06, "y"),
+    (0x0A, "z"),
+    (0x0E, "vx"),
+    (0x12, "vy"),
+    (0x16, "vz"),
+    (0x1A, "tail_ctr"),
+    (0x1E, "tail_cdn"),
+];
+
+/// Parse one full weapon-anim bank into named fields. `recs` is the
+/// 400·0x36 record span (E: after the u32 count; O1: the raw span).
+fn weapon_bank_row(frame_no: u64, recs: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "weapon-anim-bank";
+    need(
+        id,
+        frame_no,
+        recs,
+        "400*0x36 records (the full bank)",
+        WEAPON_SLOTS * 0x36,
+    )?;
+    let mut fields = Vec::with_capacity(1 + WEAPON_SLOTS * WEAPON_REC_FIELDS.len());
+    fields.push(("count".to_string(), FieldVal::Int(WEAPON_SLOTS as i128)));
+    for i in 0..WEAPON_SLOTS {
+        let r = &recs[i * 0x36..];
+        for &(off, name) in WEAPON_REC_FIELDS {
+            let v = if off == 0 {
+                u16le(r) as i128
+            } else {
+                i32le(&r[off as usize..]) as i128
+            };
+            fields.push((format!("w[{i}].{name}"), FieldVal::Int(v)));
+        }
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// Parse one full projectile bank into named fields (the same walk
+/// for both channels — the layouts are field-exact twins).
+fn projectile_bank_row(frame_no: u64, recs: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "projectile-bank";
+    need(
+        id,
+        frame_no,
+        recs,
+        "50*0x22 records (the full bank)",
+        PROJ_SLOTS * 0x22,
+    )?;
+    let mut fields = Vec::with_capacity(1 + PROJ_SLOTS * PROJ_REC_FIELDS.len());
+    fields.push(("count".to_string(), FieldVal::Int(PROJ_SLOTS as i128)));
+    for i in 0..PROJ_SLOTS {
+        let r = &recs[i * 0x22..];
+        for &(off, name) in PROJ_REC_FIELDS {
+            let v = if off == 0 {
+                u16le(r) as i128
+            } else {
+                i32le(&r[off as usize..]) as i128
+            };
+            fields.push((format!("p[{i}].{name}"), FieldVal::Int(v)));
+        }
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The channel-E bank rows: u32 count + the records (the count is
+/// the bank size, pinned to the slot total — a shorter row is a
+/// truncated dump, fail loud).
+fn bank_row_canonical<'a>(
+    id: &str,
+    frame_no: u64,
+    b: &'a [u8],
+    slots: usize,
+    rec: usize,
+) -> Result<&'a [u8], NormalizeError> {
+    if b.len() < 4 {
+        return Err(NormalizeError::BadLength {
+            id: id.to_string(),
+            frame_no,
+            len: b.len(),
+            want: format!("u32 count + {slots}*{rec:#x} records"),
+        });
+    }
+    let n = u32le(b) as usize;
+    if n != slots || b.len() != 4 + n * rec {
+        return Err(NormalizeError::BadLength {
+            id: id.to_string(),
+            frame_no,
+            len: b.len(),
+            want: format!("count {slots} + {slots}*{rec:#x} records (the full bank)"),
+        });
+    }
+    Ok(&b[4..])
+}
+
 fn robot_row_from_map(
     id: &str,
     frame_no: u64,
@@ -610,6 +750,12 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
             Ok(row(vec![int("value", u64le(b) as i128)]))
         }
         "robot-bank" => robot_row_canonical(no, b),
+        "weapon-anim-bank" => {
+            weapon_bank_row(no, bank_row_canonical(id, no, b, WEAPON_SLOTS, 0x36)?)
+        }
+        "projectile-bank" => {
+            projectile_bank_row(no, bank_row_canonical(id, no, b, PROJ_SLOTS, 0x22)?)
+        }
         "move-target-words" => {
             if b.len() < 4 {
                 return Err(NormalizeError::BadLength {
@@ -734,6 +880,13 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
             Ok(row(vec![int("value", u32le(b) as i128)]))
         }
         "robot-bank" => robot_row_from_map(id, no, b, EXD_ROBOT_MAP),
+        // The T2 banks (W12-S3): the O1 raw form is the FULL span
+        // (no count cell on the guest — the free-slot walk is the
+        // bound; EXD 0x980d4 / 0x10e174 twins, RE-EXD-MAP §5c). The
+        // record layouts are field-exact, so both channels share the
+        // same field walk.
+        "weapon-anim-bank" => weapon_bank_row(no, b),
+        "projectile-bank" => projectile_bank_row(no, b),
         "order-target" => {
             need(id, no, b, "3 contiguous i32 cells", 12)?;
             Ok(row(vec![
@@ -916,6 +1069,7 @@ fn field_class(row: &str, field: &str, tier: &str) -> Class {
         // separately).
         ("rng-state-a", _) | ("rng-state-b", _) => Class::AcceptedT3,
         ("robot-bank", "count") | ("move-target-words", "count") => Class::Structural,
+        ("weapon-anim-bank", "count") | ("projectile-bank", "count") => Class::Structural,
         ("robot-bank", f) if is_t2_position(f) => Class::T2Reported,
         ("move-target-words", f) if f.ends_with(".tx") || f.ends_with(".ty") => Class::T2Reported,
         // TS statics: byte-exact structural comparison.

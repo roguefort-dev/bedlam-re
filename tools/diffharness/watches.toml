@@ -538,16 +538,16 @@ anchor_doc = "RE-EXD-MAP"
 anchor = "cursor clamp (INPUT)"
 note = "EXD-only boot plant; the EXW cursor clamps live in host 640x480 space (RE-EXW-INPUT sec 4) — no EXW alias row."
 
-# ------------------------------------------------- T2 weapons & actors (EXD aliasing is a later unit)
+# ------------------------------------------------- T2 weapons & actors (weapon + projectile aliases FILLED by W12-S3; critter/POI/trail banks await their units)
 
 [[watch]]
 id = "weapon-anim-bank"
 tier = "T2"
 exw_addr = "0x4c71f4"
-exd_addr = ""
+exd_addr = "0x980d4"
 extent = "400*0x36"
-layout = "{type w@+0, owner, target, tick, xyz Q13, v, class, arc, trail link}"
-exd_status = "unmapped"
+layout = "{type w@+0, owner d@+2, target d@+6, tick d@+0xA, draw_ctr d@+0xE, xyz Q13 d@+0x12/+0x16/+0x1A, v d@+0x1E/+0x22/+0x26, class d@+0x2A, arc d@+0x2E, trail d@+0x32} — field-exact twin (RE-EXD-MAP sec 5c: the artillery spawn + free-slot finder FUN_00023295 bound 0x5460 = 400*0x36 + the tick twin FUN_000212f2 with the 0x17 3-clone split at the base)"
+exd_status = "verified"
 anchor_doc = "RE-EXW-SIM"
 anchor = "weapon-anim tick"
 
@@ -555,10 +555,10 @@ anchor = "weapon-anim tick"
 id = "projectile-bank"
 tier = "T2"
 exw_addr = "0x4cc654"
-exd_addr = ""
+exd_addr = "0x10e174"
 extent = "50*0x22"
-layout = "{type w@+0, xyz Q13, v}"
-exd_status = "unmapped"
+layout = "{type w@+0, xyz Q13 d@+2/+6/+0xA, v d@+0xE/+0x12/+0x16, tail: +0x1A clamp-0..7 counter, +0x1E free countdown} — the 7 EXW-modeled fields + the 2 tail words (E models no producer; RE-EXD-MAP sec 5c, FUN_00022a52 = the tick twin, 50-slot walk)"
+exd_status = "verified"
 anchor_doc = "RE-EXW-SIM"
 anchor = "projectile tick"
 

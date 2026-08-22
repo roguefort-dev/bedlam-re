@@ -850,3 +850,113 @@ fn encode_dump_canonicalizes_watch_order() {
     assert_eq!(d.frames[0].watches[0].id, "frame-counter");
     let _ = scen;
 }
+
+// ---------------------------------------------------------------------
+// The T2 bank rows (W12-S3)
+// ---------------------------------------------------------------------
+
+/// One hand-built weapon record (independent transcription of the
+/// §6a/guest layout): a live 0x17 with distinct field values.
+fn weapon_rec(kind: u16, owner: i32, tick: i32, x: i32, class: i32, arc: i32) -> Vec<u8> {
+    let mut r = vec![0u8; 0x36];
+    r[0x00..0x02].copy_from_slice(&kind.to_le_bytes());
+    r[0x02..0x06].copy_from_slice(&owner.to_le_bytes());
+    r[0x06..0x0A].copy_from_slice(&0x1001i32.to_le_bytes()); // target
+    r[0x0A..0x0E].copy_from_slice(&tick.to_le_bytes());
+    r[0x0E..0x12].copy_from_slice(&3i32.to_le_bytes()); // draw_ctr
+    r[0x12..0x16].copy_from_slice(&x.to_le_bytes());
+    r[0x16..0x1A].copy_from_slice(&(-256i32).to_le_bytes()); // y
+    r[0x1A..0x1E].copy_from_slice(&0x3400i32.to_le_bytes()); // z
+    r[0x1E..0x22].copy_from_slice(&57i32.to_le_bytes()); // vx
+    r[0x22..0x26].copy_from_slice(&(-995i32).to_le_bytes()); // vy
+    r[0x26..0x2A].copy_from_slice(&0i32.to_le_bytes()); // vz
+    r[0x2A..0x2E].copy_from_slice(&class.to_le_bytes());
+    r[0x2E..0x32].copy_from_slice(&arc.to_le_bytes());
+    r[0x32..0x36].copy_from_slice(&(-1i32).to_le_bytes()); // trail
+    r
+}
+
+#[test]
+fn t2_bank_rows_parse_identically_both_channels() {
+    // E canonical: u32 count + the records; O1: the raw span. The
+    // field walks must agree name-for-name, value-for-value.
+    let mut recs = vec![vec![0u8; 0x36]; 400];
+    recs[7] = weapon_rec(0x17, 2, 41, 0x0012_3400, 0, 0x601);
+    let mut e_blob = Vec::new();
+    e_blob.extend_from_slice(&400u32.to_le_bytes());
+    for r in &recs {
+        e_blob.extend_from_slice(r);
+    }
+    let o1_span: Vec<u8> = recs.concat(); // the raw 0x5460 span
+
+    let mut fe = FrameRecord::new(3, true);
+    fe.push_watch("weapon-anim-bank", e_blob);
+    let rows_e = normalize_frame(&fe, Channel::Engine, &reg()).unwrap();
+    let mut fo = FrameRecord::new(3, true);
+    fo.push_watch("weapon-anim-bank", o1_span);
+    let rows_o = normalize_frame(&fo, Channel::O1ExdDosboxX, &reg()).unwrap();
+
+    assert_eq!(rows_e.len(), 1);
+    assert_eq!(rows_e[0].fields.len(), 1 + 400 * 14);
+    assert_eq!(
+        rows_e[0].fields, rows_o[0].fields,
+        "same walk both channels"
+    );
+    assert_eq!(rows_e[0].field("count"), Some(&FieldVal::Int(400)));
+    assert_eq!(rows_e[0].field("w[0].kind"), Some(&FieldVal::Int(0)));
+    assert_eq!(rows_e[0].field("w[7].kind"), Some(&FieldVal::Int(0x17)));
+    assert_eq!(rows_e[0].field("w[7].owner"), Some(&FieldVal::Int(2)));
+    assert_eq!(rows_e[0].field("w[7].tick"), Some(&FieldVal::Int(41)));
+    assert_eq!(rows_e[0].field("w[7].y"), Some(&FieldVal::Int(-256)));
+    assert_eq!(rows_e[0].field("w[7].arc"), Some(&FieldVal::Int(0x601)));
+    assert_eq!(rows_e[0].field("w[7].trail"), Some(&FieldVal::Int(-1)));
+
+    // Wrong count / short span fail loud (never guessed).
+    let mut bad = Vec::new();
+    bad.extend_from_slice(&399u32.to_le_bytes());
+    bad.extend_from_slice(&vec![0u8; 399 * 0x36]);
+    let mut fb = FrameRecord::new(3, false);
+    fb.push_watch("weapon-anim-bank", bad);
+    assert!(normalize_frame(&fb, Channel::Engine, &reg()).is_err());
+    let mut fs = FrameRecord::new(3, false);
+    fs.push_watch("weapon-anim-bank", vec![0u8; 0x5460 - 1]);
+    assert!(normalize_frame(&fs, Channel::O1ExdDosboxX, &reg()).is_err());
+}
+
+#[test]
+fn t2_projectile_row_maps_the_seven_fields_plus_tail() {
+    // E canonical: u32 count + 50 0x22 records (7 fields + the
+    // modeled-zero tail); O1: the raw 0x6A4 span with a LIVE tail —
+    // the +0x1A/+0x1E words parse on both sides so a live tail
+    // surfaces as a T2 finding, never silence.
+    let mut recs = vec![vec![0u8; 0x22]; 50];
+    recs[3][0x00..0x02].copy_from_slice(&0x66u16.to_le_bytes());
+    recs[3][0x02..0x06].copy_from_slice(&0x0010_0000i32.to_le_bytes());
+    recs[3][0x06..0x0A].copy_from_slice(&(-256i32).to_le_bytes());
+    recs[3][0x0A..0x0E].copy_from_slice(&0x2000i32.to_le_bytes());
+    recs[3][0x0E..0x12].copy_from_slice(&20i32.to_le_bytes());
+    recs[3][0x16..0x1A].copy_from_slice(&(-7i32).to_le_bytes());
+    recs[3][0x1A..0x1E].copy_from_slice(&3i32.to_le_bytes()); // tail_ctr
+    recs[3][0x1E..0x22].copy_from_slice(&12i32.to_le_bytes()); // tail_cdn
+    let mut e_blob = Vec::new();
+    e_blob.extend_from_slice(&50u32.to_le_bytes());
+    for r in &recs {
+        e_blob.extend_from_slice(r);
+    }
+    let o1_span: Vec<u8> = recs.concat();
+
+    let mut fe = FrameRecord::new(1, true);
+    fe.push_watch("projectile-bank", e_blob);
+    let rows_e = normalize_frame(&fe, Channel::Engine, &reg()).unwrap();
+    let mut fo = FrameRecord::new(1, true);
+    fo.push_watch("projectile-bank", o1_span);
+    let rows_o = normalize_frame(&fo, Channel::O1ExdDosboxX, &reg()).unwrap();
+
+    assert_eq!(rows_e[0].fields.len(), 1 + 50 * 9);
+    assert_eq!(rows_e[0].fields, rows_o[0].fields);
+    assert_eq!(rows_e[0].field("p[3].kind"), Some(&FieldVal::Int(0x66)));
+    assert_eq!(rows_e[0].field("p[3].x"), Some(&FieldVal::Int(0x0010_0000)));
+    assert_eq!(rows_e[0].field("p[3].vz"), Some(&FieldVal::Int(-7)));
+    assert_eq!(rows_e[0].field("p[3].tail_ctr"), Some(&FieldVal::Int(3)));
+    assert_eq!(rows_e[0].field("p[3].tail_cdn"), Some(&FieldVal::Int(12)));
+}
