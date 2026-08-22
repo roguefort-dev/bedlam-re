@@ -299,12 +299,13 @@ impl Terrain {
         // the slot bank in file record order (the 7j.16 loader).
         let mut pad_slots = Vec::new();
         for rec in pad.chunks_exact(6) {
-            let x = u16::from_le_bytes([rec[0], rec[1]]) as i32;
+            let x = u16::from_le_bytes([rec[0], rec[1]]);
             let y = u16::from_le_bytes([rec[2], rec[3]]) as i32;
             let level = u16::from_le_bytes([rec[4], rec[5]]) as i32;
-            if x == -1 {
+            if x == 0xFFFF {
                 break; // 0xFFFF fill ends the record run [0x41defa]
             }
+            let x = x as i32;
             pad_slots.push((x, y, level));
             if !(0..8).contains(&level) || x < 0 || y < 0 || x >= width || y >= height {
                 continue;

@@ -110,6 +110,18 @@ pub struct TickState<'a> {
     pub robots: &'a [Robot],
     /// The armed click order (beacon-family + spread-claims source).
     pub order: Option<bedlam_core::mission::Order>,
+    /// The surviving beacon tile words 0x4eabb4/6/8 (§7j.40/4 —
+    /// FUN_0041faf0 clears only the flag/window pair): the
+    /// beacon-family row's post-deploy source. `None` on every
+    /// click-seam scenario (the pre-S6 approximation keeps the
+    /// all-zero clear).
+    pub beacon_latch: Option<(i32, i32, i32)>,
+    /// The surviving spread-claim words 0x4eabba (never released —
+    /// §7j.20/3): the spread-claims row's post-deploy source.
+    pub claims_latch: [bool; 12],
+    /// The extraction dropship record (the T3 `dropship-frame` row,
+    /// W12-S6): `Some` only on pad-step scenarios.
+    pub dropship: Option<bedlam_core::mission::CraftRecord>,
     pub selected: usize,
     pub blink_cursor: i32,
     /// The ORDER-seam write (persists like the 0x4dd484 cells).
@@ -450,31 +462,25 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         }
         f.push_watch("move-target-words", moves);
         let mut beacon = Vec::with_capacity(20);
-        match st.order {
-            None => {
-                beacon.extend_from_slice(&0u32.to_le_bytes());
-                beacon.extend_from_slice(&0u32.to_le_bytes());
-                beacon.extend_from_slice(&0i32.to_le_bytes());
-                beacon.extend_from_slice(&0i32.to_le_bytes());
-                beacon.extend_from_slice(&0i32.to_le_bytes());
-            }
-            Some(o) => {
-                beacon.extend_from_slice(&1u32.to_le_bytes());
-                beacon.extend_from_slice(&(o.window as u32).to_le_bytes());
-                beacon.extend_from_slice(&o.tile.0.to_le_bytes());
-                beacon.extend_from_slice(&o.tile.1.to_le_bytes());
-                beacon.extend_from_slice(&o.tile.2.to_le_bytes());
-            }
-        }
+        // The beacon-family row (0x4eabb0..b8): while armed, the
+        // live order; post-deploy, FUN_0041faf0 clears ONLY the
+        // flag/window pair — the tile words survive in the latch
+        // (§7j.40/4; the click-seam scenarios keep the all-zero
+        // clear — their latch is None).
+        let (b_flag, b_window, b_tile) = match st.order {
+            None => (0u32, 0u32, st.beacon_latch.unwrap_or((0, 0, 0))),
+            Some(o) => (1u32, u32::from(o.window), o.tile),
+        };
+        beacon.extend_from_slice(&b_flag.to_le_bytes());
+        beacon.extend_from_slice(&b_window.to_le_bytes());
+        beacon.extend_from_slice(&b_tile.0.to_le_bytes());
+        beacon.extend_from_slice(&b_tile.1.to_le_bytes());
+        beacon.extend_from_slice(&b_tile.2.to_le_bytes());
         f.push_watch("beacon-family", beacon);
         let mut claims = Vec::with_capacity(24);
-        match st.order {
-            None => claims.extend_from_slice(&[0u8; 24]),
-            Some(o) => {
-                for c in o.claims {
-                    claims.extend_from_slice(&u16::from(c).to_le_bytes());
-                }
-            }
+        let live_claims = st.order.map(|o| o.claims).unwrap_or(st.claims_latch);
+        for c in live_claims {
+            claims.extend_from_slice(&u16::from(c).to_le_bytes());
         }
         f.push_watch("spread-claims", claims);
         let mut pads = Vec::with_capacity(4 + st.armor_pads.len());
@@ -506,6 +512,23 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         if want("T3") {
             f.push_watch("debris-stager", debris_blob(d.debris));
             f.push_watch("splash-records", splash_blob(d.splashes));
+        }
+    }
+    // The extraction dropship row (W12-S6): the T3 craft record
+    // 0x4e6610 — an E-only row (no EXD alias; the differ reports it
+    // as a coverage finding, never fabricated on O1). Gated on the
+    // scenario's pad-step presence.
+    if let Some(c) = &st.dropship {
+        if want("T3") {
+            let mut b = Vec::with_capacity(28);
+            b.extend_from_slice(&u32::from(c.active).to_le_bytes());
+            b.extend_from_slice(&c.phase.to_le_bytes());
+            b.extend_from_slice(&c.x.to_le_bytes());
+            b.extend_from_slice(&c.y.to_le_bytes());
+            b.extend_from_slice(&c.alt.to_le_bytes());
+            b.extend_from_slice(&c.group.to_le_bytes());
+            b.extend_from_slice(&c.dwell.to_le_bytes());
+            f.push_watch("dropship-frame", b);
         }
     }
     if anchor && want("TS") {
@@ -603,6 +626,9 @@ struct Session {
 pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, CanonicalError> {
     let scen = Scenario::parse(scenario_src).map_err(|e| CanonicalError(format!("{e}")))?;
     let (walk, mission) = scen.phases();
+    // The extraction view flag: any pad step in the mission schedule
+    // turns on the T3 dropship row (W12-S6).
+    let extraction = mission.iter().any(|s| matches!(s, Step::Pad { .. }));
     // Walk phase: ONLY Boot steps are consumable (the difficulty seed
     // below). Any other walk step (keystore/order/command/pad — the
     // S0W menu-walk shape) names the missing seam: the E walk waits on
@@ -875,7 +901,15 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         .map(|m| m.view_size())
         .map(|(w, h)| (w as u32, h as u32));
     let mut frames = vec![emit_frame(
-        &tick_state(&host, &session, (0, 0, 0), 0, map_wh, scen.destroy),
+        &tick_state(
+            &host,
+            &session,
+            (0, 0, 0),
+            0,
+            map_wh,
+            scen.destroy,
+            extraction,
+        ),
         &scen.tiers,
         false,
         true,
@@ -896,7 +930,15 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                     check_cadence(executed)?;
                     let no = frame_counter_now(&host);
                     frames.push(emit_frame(
-                        &tick_state(&host, &session, seam_target, no, None, scen.destroy),
+                        &tick_state(
+                            &host,
+                            &session,
+                            seam_target,
+                            no,
+                            None,
+                            scen.destroy,
+                            extraction,
+                        ),
                         &scen.tiers,
                         false,
                         false,
@@ -920,7 +962,15 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
+                    &tick_state(
+                        &host,
+                        &session,
+                        seam_target,
+                        no,
+                        None,
+                        scen.destroy,
+                        extraction,
+                    ),
                     &scen.tiers,
                     true,
                     false,
@@ -947,7 +997,15 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
+                    &tick_state(
+                        &host,
+                        &session,
+                        seam_target,
+                        no,
+                        None,
+                        scen.destroy,
+                        extraction,
+                    ),
                     &scen.tiers,
                     true,
                     false,
@@ -983,17 +1041,61 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
+                    &tick_state(
+                        &host,
+                        &session,
+                        seam_target,
+                        no,
+                        None,
+                        scen.destroy,
+                        extraction,
+                    ),
                     &scen.tiers,
                     true,
                     false,
                 ));
             }
-            Step::Pad { .. } => {
-                return Err(CanonicalError(
-                    "pad steps need the engine extraction arming (S6 pairs it per \
-                     DESIGN §10-W12); no E-side seam yet"
-                        .into(),
+            Step::Pad { slot } => {
+                if frames.len() >= total as usize {
+                    break;
+                }
+                // The W5 pad op CONSUMED (W12-S6, §7j.40): the target
+                // tile is READ from the staged .PAD slot bank at run
+                // time (the D86 capgen contract — bank order = file
+                // record order; a slot the mission never loaded is a
+                // capture error naming the slot). The op writes ONLY
+                // the order-target seam triple — the robot's arrival
+                // arms extraction in-game (FUN_00433980 →
+                // FUN_004247b5). The step also stages the zone set
+                // cell (the pad-script dispatcher keys on
+                // [0x4edd8c] = zone_index+1, D99).
+                let scene = host
+                    .mission_mut()
+                    .ok_or_else(|| CanonicalError("mission not staged".into()))?;
+                let Some((px, py, pz)) = scene.sim().terrain.pad_slot(slot as usize) else {
+                    return Err(CanonicalError(format!(
+                        "pad slot {slot} is not in the staged mission's .PAD bank (active!=1 \
+                         or the 0xFFFF terminator) — a capture error naming the slot"
+                    )));
+                };
+                seam_target = (px, py, pz);
+                scene.sim_mut().stage_zone_set(session.zone + 1);
+                let executed = host.pump_frame(DT_SUBTICKS, &null);
+                check_cadence(executed)?;
+                let no = frame_counter_now(&host);
+                frames.push(emit_frame(
+                    &tick_state(
+                        &host,
+                        &session,
+                        seam_target,
+                        no,
+                        None,
+                        scen.destroy,
+                        extraction,
+                    ),
+                    &scen.tiers,
+                    true,
+                    false,
                 ));
             }
             Step::Capture | Step::UntilAnchor { .. } => {} // runner directives
@@ -1009,7 +1111,15 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         check_cadence(executed)?;
         let no = frame_counter_now(&host);
         frames.push(emit_frame(
-            &tick_state(&host, &session, seam_target, no, None, scen.destroy),
+            &tick_state(
+                &host,
+                &session,
+                seam_target,
+                no,
+                None,
+                scen.destroy,
+                extraction,
+            ),
             &scen.tiers,
             false,
             false,
@@ -1047,7 +1157,8 @@ fn frame_counter_now(host: &GameHost) -> u64 {
 
 /// The per-frame emitter view of the live scene (§6a sources).
 /// `destroy` gates the destroy-family surfaces (the scenario's
-/// staging key — the rows ride only destroy scenarios).
+/// staging key — the rows ride only destroy scenarios);
+/// `extraction` gates the dropship row (the pad-step flag).
 #[allow(clippy::too_many_arguments)]
 fn tick_state<'a>(
     host: &'a GameHost,
@@ -1056,6 +1167,7 @@ fn tick_state<'a>(
     frame_no: u64,
     map_wh: Option<(u32, u32)>,
     destroy: bool,
+    extraction: bool,
 ) -> TickState<'a> {
     let scene = host.mission().expect("mission staged");
     let sim = scene.sim();
@@ -1072,6 +1184,9 @@ fn tick_state<'a>(
         linear: session.linear,
         robots: sim.robots(),
         order: sim.order(),
+        beacon_latch: sim.beacon_tile_latch(),
+        claims_latch: sim.beacon_claims_latch(),
+        dropship: extraction.then_some(sim.dropship()),
         selected: scene.sidebar_selected(),
         blink_cursor: scene.sidebar_cursor(),
         order_target: seam_target,

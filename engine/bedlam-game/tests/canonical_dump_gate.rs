@@ -135,6 +135,9 @@ fn synthetic_grammar_pins_the_6a_bytes() {
         linear: 17,
         robots: std::slice::from_ref(&robot),
         order: Some(order),
+        beacon_latch: None,
+        claims_latch: [false; 12],
+        dropship: None,
         selected: 0,
         blink_cursor: 2,
         order_target: (31, 46, 3),
@@ -331,6 +334,9 @@ fn synthetic_frames() -> Vec<diffharness::dump::FrameRecord> {
             linear: 1,
             robots: sim.robots(),
             order: sim.order(),
+            beacon_latch: sim.beacon_tile_latch(),
+            claims_latch: sim.beacon_claims_latch(),
+            dropship: None,
             selected: 0,
             blink_cursor: 0,
             order_target: (0, 0, 0),
@@ -884,12 +890,33 @@ fn canonical_seam_gates() {
         "short command payload names the record grammar: {err}"
     );
 
-    // PAD names the missing extraction-arming seam (S6, W12).
-    let pad = "scenario = \"SP\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\npad 0\n";
-    let err = run_canonical(pad, &root).unwrap_err();
+    // PAD is CONSUMED by the W12-S6 extraction seam (§7j.40): the
+    // target tile is read from the staged .PAD slot bank, the
+    // order-target seam records it, and the run completes. A slot
+    // outside the mission's live record run fails LOUD naming the
+    // slot (the D86 capgen contract).
+    let pad = "scenario = \"SP\"\ntiers = T0,T1\nframes = 1\nuntil-anchor mission-start\npad 0\n";
+    let stitched = run_canonical(pad, &root);
+    assert!(stitched.is_ok(), "pad step consumed: {:?}", stitched.err());
+    {
+        let dump = decode_dump(&stitched.unwrap().bytes).expect("SP dump verifies");
+        // ZONEA/MISSION1 slot 0 = (5, 61, 0): the triple rides the
+        // anchor+1 frame's order-target row (the seam write).
+        assert_eq!(
+            dump.frames[1].watch("order-target"),
+            Some(
+                &[5i32, 61, 0]
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<u8>>()[..]
+            )
+        );
+    }
+    let bad = "scenario = \"SB\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\npad 900\n";
+    let err = run_canonical(bad, &root).unwrap_err();
     assert!(
-        err.to_string().contains("extraction"),
-        "pad rejection names the extraction seam: {err}"
+        err.to_string().contains("slot 900"),
+        "pad rejection names the missing slot: {err}"
     );
 
     // P-pause (scan 0x19) is banned mid-scenario (DESIGN §2).
@@ -1673,4 +1700,146 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     assert_eq!(state(48, 2), 3, "the arrival clear at frame 48");
     assert_eq!(tile(48, 2), (78, 10));
     assert!(bank(48)[2].snapped(), "snapped at the tile origin");
+}
+
+#[test]
+fn corpus_s6_pad_extraction() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S6 (DESIGN §7 S6 row, §10-W12; §7j.40 the trigger chain, D86
+    // the pad op, D112): the scripted .PAD step-on arms the beacon
+    // through the REAL producer (the pad-script armer, not the click
+    // seam) and the dropship runs its full cycle — deploy at the
+    // trigger frame (the single-robot window-0 expiry), descent,
+    // the extraction sweep (state 3 → 5), the RNG-jittered dwell,
+    // the departure drift, and the completion freeze. 75 records
+    // (anchor + 74), pinned chain.
+    let s6 = fs::read_to_string(scen_path("S6")).expect("S6.scen committed");
+    let run = run_canonical(&s6, &root).expect("S6 canonical run");
+    assert_eq!(run.manifest.frame_count, 75);
+    assert_eq!(
+        run.manifest.chain_digest, "c96f0735df1059ea",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s6, &root).expect("S6 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S6 dump verifies");
+
+    let bank = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap());
+    let state = |f: usize| bank(f)[0].state();
+    let tile = |f: usize| bank(f)[0].tile();
+    let stop = |f: usize| bank(f)[0].i32(39);
+    let beacon = |f: usize| -> Vec<i32> {
+        dump.frames[f]
+            .watch("beacon-family")
+            .unwrap()
+            .chunks_exact(4)
+            .map(|w| i32::from_le_bytes(w.try_into().unwrap()))
+            .collect()
+    };
+    let claims = |f: usize| -> Vec<u16> {
+        dump.frames[f]
+            .watch("spread-claims")
+            .unwrap()
+            .chunks_exact(2)
+            .map(|w| u16::from_le_bytes(w.try_into().unwrap()))
+            .collect()
+    };
+    let craft = |f: usize| -> Vec<i32> {
+        dump.frames[f]
+            .watch("dropship-frame")
+            .unwrap()
+            .chunks_exact(4)
+            .map(|w| i32::from_le_bytes(w.try_into().unwrap()))
+            .collect()
+    };
+    let target = |f: usize| -> Vec<i32> {
+        dump.frames[f]
+            .watch("order-target")
+            .unwrap()
+            .chunks_exact(4)
+            .map(|w| i32::from_le_bytes(w.try_into().unwrap()))
+            .collect()
+    };
+
+    // THE PAD OP (D86): the triple is the .PAD slot 0x12 record
+    // (19,70,0) in raw tile words, written at frame 1 and mirrored
+    // to the tail (the seam write persists; nothing rewrites it).
+    assert_eq!(target(0), vec![0, 0, 0]);
+    assert_eq!(target(1), vec![19, 70, 0]);
+    assert_eq!(target(74), vec![19, 70, 0]);
+
+    // The command-driven walk (the bit0 SELECT auto-arm — the
+    // original's own move mechanism, NOT the click seam): leg 1
+    // walks west state 1, arrives state 0 inside tile (19,73);
+    // leg 2 re-arms and walks north state 1.
+    assert_eq!((tile(0), state(0)), ((21, 73), 0));
+    assert_eq!(state(2), 1, "leg 1 armed at frame 2");
+    assert_eq!(state(6), 0, "leg 1 arrival: state 1 -> idle");
+    assert_eq!(tile(6), (19, 73));
+    assert_eq!(state(9), 1, "leg 2 armed at frame 9");
+    assert_eq!(tile(12), (19, 71), "the approach row, one tile south");
+    // No beacon before the crossing (the click never arms it).
+    assert_eq!(beacon(12), vec![0, 0, 0, 0, 0]);
+    assert_eq!(craft(12), vec![0, 0, 0, 0, 0, 0, 0]);
+
+    // THE TRIGGER at frame 13: the walker crosses (19,70) mid-walk
+    // (state 1 + target present — the dispatcher's dual gate), the
+    // probe matches slot 0x12 at LEVEL 0, the armer halts it state 3
+    // SNAPPED at the beacon tile origin, and the same frame's
+    // MissionShell beacon block deploys (window 0 for one alive
+    // robot; FUN_0041faf0 clears ONLY the flag/window pair).
+    assert_eq!(state(13), 3, "the pad armer's halt");
+    assert_eq!(tile(13), (19, 70));
+    assert!(bank(13)[0].snapped(), "snapped at the beacon tile origin");
+    // The beacon-family row post-deploy: the SURVIVING tile words
+    // 0x4eabb4/6/8 (§7j.40/4) — flag 0, window 0, tile (19,70,31).
+    assert_eq!(beacon(13), vec![0, 0, 19, 70, 31]);
+    assert_eq!(beacon(74), vec![0, 0, 19, 70, 31], "the latch persists");
+    // The claims 0x4eabba are NEVER released (§7j.20/3): slot 0 (the
+    // halted walker's own claim) survives the deploy.
+    assert_eq!(claims(13), vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(claims(74), vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    // The deployed craft: {active 1, phase 1, x = 19·0x20, y =
+    // 70·0x20, alt 0x200, group 0, dwell 0}.
+    assert_eq!(craft(13), vec![1, 1, 608, 2240, 512, 0, 0]);
+
+    // The descent (phase 1): −0x20 while alt ≥ 0x101, then the
+    // (alt>>2)·3 shrink, group flip 0/1.
+    assert_eq!(craft(14), vec![1, 1, 608, 2240, 480, 1, 0]);
+    assert_eq!(craft(21), vec![1, 1, 608, 2240, 256, 0, 0]);
+    assert_eq!(craft(22), vec![1, 1, 608, 2240, 192, 1, 0]);
+    assert_eq!(craft(34), vec![1, 1, 608, 2240, 3, 1, 0]);
+
+    // THE LANDING at frame 35: phase 2 + dwell 10 + the EXTRACTION
+    // SWEEP — the halted walker state 3 → 5, stop_dist 1e6 (the
+    // +0x74 order-target write; the extracted counter rides the
+    // accessor below).
+    assert_eq!(craft(35), vec![1, 2, 608, 2240, 0, 0, 10]);
+    assert_eq!(state(35), 5, "the sweep takes the halted walker");
+    assert_eq!(stop(35), 1_000_000);
+    assert_eq!(stop(74), 1_000_000, "swept robots keep the order target");
+    // The dwell: the RandA()&7==0 altitude jitter (a shared-stream
+    // draw) — exactly one hit in the 10 frames, at frame 40.
+    assert_eq!(craft(39), vec![1, 2, 608, 2240, 0, 0, 6]);
+    assert_eq!(craft(40), vec![1, 2, 608, 2240, 1, 1, 5], "the jitter draw");
+    assert_eq!(craft(44), vec![1, 2, 608, 2240, 0, 1, 1]);
+
+    // The departure (phase 3): the dwell's last frame (45) only
+    // flips the phase word; the alt/group math starts at 46 —
+    // alt += (alt>>2)+1, x −= group·4, the group ramp; completion
+    // freezes the record at frame 69.
+    assert_eq!(craft(45), vec![1, 3, 608, 2240, 0, 0, 0]);
+    assert_eq!(craft(46), vec![1, 3, 608, 2240, 1, 1, 0]);
+    assert_eq!(craft(47), vec![1, 3, 604, 2240, 2, 2, 0], "the group drift");
+    assert_eq!(craft(68), vec![1, 3, 244, 2240, 453, 5, 0]);
+    assert_eq!(
+        craft(69),
+        vec![0, 3, 224, 2240, 567, 4, 0],
+        "alt > 0x200: inactive + complete"
+    );
+    assert_eq!(craft(74), craft(69), "the frozen record to the tail");
 }

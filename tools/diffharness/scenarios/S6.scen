@@ -1,0 +1,92 @@
+# S6 — extraction: the scripted .PAD step-on arms the beacon and the
+# dropship runs its full landing/dwell/departure cycle (DESIGN-
+# DIFFHARNESS.md §7 S6 row + §10-W12; RE-EXW-SIM §7j.40 the trigger
+# chain decode, D86 the pad op, D112).
+#
+# WHY A COMMAND-DRIVEN WALK, NOT `order`: EXW arms the beacon family
+# 0x4eabb0 through EXACTLY ONE caller — the pad-script armer
+# FUN_004247b5 (sole caller the dispatcher FUN_00433980) — a click
+# NEVER arms it (§7j.40/5). E's `order` step is the click-seam
+# approximation that arms the beacon directly, so a pad trigger can
+# never fire while an `order` is pending (the armer's one-at-a-time
+# head gate). The faithful route is the ORIGINAL's own move
+# mechanism: a COMMAND record with flags bit0 SELECT writes the
+# move-target words + auto-arms state 1 + stop 1e6 (FUN_00409138
+# bit0, §7j.37/1) — a WALKING robot with a target and NO pending
+# order, exactly the dispatcher's dual gate (state ∈ {1,4} ∧
+# move-target ≠ −1, §7j.40/2).
+#
+# WHY ONE ROBOT: the beacon window is 0 for a single alive robot
+# (arm_order_at_robot, D89/W6), so the MissionShell beacon block —
+# which runs in the SAME frame's epilogue, after the robots phase —
+# sees window==0 and deploys immediately (FUN_0041faf0 gated on the
+# pad producer tag + no craft in flight). With 2+ alive the window
+# is 0x197 and only the all-state-3-or-dead early expiry can deploy.
+# The MRK squad alone gives exactly 1 robot on ZONEA (D89).
+#
+# THE PAD: `pad 18` = .PAD bank slot 0x12 = (19,70,0), a GROUND
+# extraction pad of the zone-1 census set {8,0x10,0x12,0x18} (§7j.20
+# item 2; slots by bank INDEX, file record order). Slot 8 (2,14,1)
+# is a LEVEL-1 pad: the probe matches the robot's z>>5, and a ground
+# robot (z 0x1F) can never match LEVEL 1 without elevated staging,
+# so the census's ground members are the walkable targets. The op
+# writes ONLY the order-target triple (19,70,0 raw tile words, D86)
+# + stages the zone-set cell [0x4edd8c] := 1 (the dispatcher's zone
+# key — on O1 the live game's own zone staging has already set it).
+#
+# THE ROUTE (terrain-probed, ZONEA/M1): the pad's east neighbor
+# (20,70) is blocked, its row x15..19 is pad-marked; column 19 is
+# open y67..y73. Leg 1 walks the MRK robot (21,73) due west to the
+# (19,73) tile origin — the arrival stops it INSIDE tile 19 (the
+# ARRIVE_RADIUS 0x1400 halts it within 0.625 tile of the target
+# corner, and the approach from the east never crosses below the
+# tile boundary). Leg 2 walks due north through (19,71) → (19,70) →
+# toward (19,67): the pad crossing happens mid-walk, far from
+# arrival, so the sub-tick dispatcher probe fires with state 1 +
+# target present — the probe's tile/LEVEL match (x>>13, y>>13,
+# z>>5 = (19,70,0)) selects slot 0x12, the armer halts the walker
+# state-3 SNAPPED at the beacon tile origin, and the same frame's
+# beacon block deploys.
+#
+#   f1:  `pad 18` — the triple + the zone cell (the D86 op parity)
+#   f2:  leg 1 command — robot 0 arms state 1, walks west
+#   f6:  leg 1 arrival inside tile (19,73), state 0
+#   f9:  leg 2 command — arms state 1 again, walks north
+#   f13: the (19,70) crossing → TRIGGER: state 3 snapped at
+#        (19·0x2000, 70·0x2000), beacon armed window 0, pad tag set;
+#        the same-frame beacon block DEPLOYS the dropship
+#        {active, phase 1, x=608, y=2240, alt 0x200} and clears the
+#        flag/window pair ONLY — the tile words 0x4eabb4/6/8 survive
+#        in the latch (the beacon-family row reads {0,0,19,70,31}
+#        from f13 on) and the claims 0x4eabba persist (slot 0)
+#   f14..f34: phase-1 descent — 8 × −0x20 to 0x100, then the
+#        (alt>>2)·3 shrink, group flip 0/1 each frame
+#   f35: LANDING — phase 2, dwell 10, the EXTRACTION SWEEP: the
+#        walker state 3 → 5, stop_dist 1e6, extracted counter 1
+#   f36..f44: dwell — the RandA&7==0 altitude jitter (a shared-
+#        stream draw; f40 shows alt 1)
+#   f45..f68: phase-3 departure — alt += (alt>>2)+1, x -= group·4,
+#        group ramps to 4/5
+#   f69: alt 567 > 0x200 → active := 0, extraction complete
+#   f70..: the frozen record {0,3,224,2240,567,4,0}
+#
+# TIERS: T0/T1/TS like the walk scenarios + T3 for the dropship
+# row (the dropship-frame watch, an E-only coverage row — the EXD
+# side has no alias, the differ reports it as a finding, never
+# fabricated on O1).
+scenario = "S6"
+tiers = T0,T1,T3,TS
+anchor = mission-start
+frames = 74
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# f1: the pad op — slot 0x12's triple (19,70,0) + the zone-set cell
+pad 18
+# f2: leg 1 — robot 0 (MRK) to the (19,73) origin, Q5 (608,2336):
+# 608 = 0x0260, 2336 = 0x0920
+command 01 00 00 00 00 01 00 60 02 20 09 00 00 00
+step 6
+# f9: leg 2 — due north through the pad to (19,67), Q5 (608,2144):
+# 2144 = 0x0860
+command 01 00 00 00 00 01 00 60 02 60 08 00 00 00
+step 65
