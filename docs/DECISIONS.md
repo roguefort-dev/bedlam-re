@@ -3438,3 +3438,44 @@ Nudge-Worker: aa62f5ed-46c8-4b65-98f4-7b0bbc54929e
    walk (item 3).
 
 Nudge-Worker: ce347a0e-c2b8-4a25-9960-72473bedb8a8
+
+## D97 — 2026-08-22: P4/FORMATS — the .BLD record walk CLOSED as an EDITOR-ONLY format: zero runtime readers in every shipped executable; BLD = the editor SOURCE that compiles to .BDG; the runtime file-family census lands (worker fc88ecf3 claim 2)
+
+1. NEGATIVE RESULT (definitive, byte census): the sequence
+   "BLD" (case-insensitive) occurs ZERO times in BEDLAM.EXW,
+   BEDLAM.EXD, BEDLAM.EXE, the cd-root copies, and the three
+   DIRECTX exes. There is NO .BLD loader; the queue-note
+   hypothesis "loader near the .NME/.POS/.BDG family" is
+   RETIRED. The only `.BDL` string in EXW = "SAVED.BDL"
+   @0x4597d6 — the savegame. Editor-only set (six extensions
+   with zero runtime references): .BLD .CTG .COL .MAP .PTH
+   .TXT (FORMATS §0.2); notably .CTG is never loaded (the
+   language gate picks .LNK or .LNG, FUN_0041dc5a,
+   `cmp [0x4eba1c],1`).
+2. RUNTIME CENSUS: the mission family loader FUN_0041dc5a
+   loads .TOT/.DAT/.CGR/.BIN/.MIN/.LNG-or-.LNK/.PAD from the
+   8-entry 5-B-stride tag table @0x4587d9..0x4587fc, against
+   paths built by FUN_0044670c ("EDITOR\"+"ZONE"+zone+
+   "\MISSION"+n); second .TOT/.BIN/.DAT site 0x446623..0x446677.
+   RE-EXW-SIM §7j.33 + 2 ledger rows.
+3. BLD GRAMMAR (corpus-anchored, FORMATS §17 rewritten):
+   record length = 137 + 64·W·H + variable tail (subsumes the
+   old "201+64k" rule — the "extension blocks" are four
+   template-bank slots of 16·W·H B whose values ARE the BDG
+   banks); head u32s = H/hp/chain/type == the BDG record's;
+   name@+0x60; record j ≡ BDG NON-EMPTY record j (BLD 197 =
+   BDG 282 − 85 EMPTY, ZONEA/M1); no terminator, no count —
+   NOT self-delimiting (parse needs the sibling BDG's W,H);
+   zero fill after the last record; 12-B header with the 5th
+   u16 = 1/3/5 by zone [open]. Verified 7 286/7 907 records
+   (ZONEA/C/D/E + ZONEF M2/M4/M7 fully; ZONEB/G + ZONEF M6
+   desync at a few variable-tail records — bounded, §7j.33).
+   BONUS: zone D DOES ship mission-level BLDs (FORMATS §0 row
+   corrected); zone-level BLDs byte-shared A≡F and B≡G.
+4. E-side seam: NONE (the engine never needs a BLD path).
+   Docs-only; no engine change; objdump-only + read-only corpus
+   probes (scratch /tmp/opencode); manifest verified before and
+   after. Next queued: the MISSIONVIEW §8 mirror producers
+   (the pickup tile-word producer unblock).
+
+Nudge-Worker: fc88ecf3-fd23-459f-99f6-8b9811141b66

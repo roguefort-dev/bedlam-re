@@ -4520,6 +4520,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | TOT-mirror tile record | ONE 0x1E-B record per tile @0x4796bc+0x1E·tile (unifies the scattered tail-byte families, §7j.32): +0x00..+0x0F = the 8 plane words (+2·z); +0x10..+0x17 = the 8 SEEN bytes (restore writes @0x4796cc = base+0x10+z); +0x18 scorch (7j.8/7j.9); +0x19 variant<<4 + 0x1A door byte (7j.12 FUN_00422fd1); +0x1B/+0x1C = the OBJECT-HEIGHT pair (z0, z0+D) — stamped by the objective pass FUN_0044889a (0x448963/0x448975), cleared by FUN_00448b80 on destroy, read by the intact-vs-rubble draw pick (0x406891/0x4068ec); +0x1D zero traffic [open] | §7j.32 |
 | objective-building family | FUN_0044889a (zone gate [0x4edd8c]==7): counts type ids 0x44..0x47 into [0x46cce0] + stamps the +0x1B/+0x1C heights; FUN_00448b80(idx) = the destroy-tail "notify" (SP-only): [0x46cce0]−−, heights cleared, at ZERO → FUN_004239ef(0x28,3)+(0x29,3) + 0x46cd00:=3 / 0x46ccfc:=0x20 / 0x46ccc4:=0x32 (extraction-arm lights, 7j.20 cross-ref); edition≠7 = the script-objective path (0x4eaaee/0x4eaaf2/0x4eab0c walk, tables 0x4557f8/0x456810, code 0x1388) head-decoded | §7j.32 |
 | TRT death stamp | FUN_0041bc1c tail (FORMATS §14 resolver): mirror plane word := word@[0x454a04+4·zone] (per-zone rubble table), seen := 1, DAT volume byte := 0, k15 debris FUN_00420608(×0x20 coords, param −1 delay 0) + splash FUN_00424355 at the FUN_0041bd78 water z — the .BDG-tail death shape minus the restore (no under-bank) | §7j.32 |
+| mission family loader | FUN_0041dc5a (after path builder FUN_0044670c = "EDITOR\"+"ZONE"+[0x4edd8c]+0x40+"\MISSION"+n): loads .TOT/.DAT/.CGR/.BIN/.MIN then the language gate `cmp [0x4eba1c],1` → .LNG else .LNK, then .PAD @0x41de44 — the eight tags are ONE 5-B-stride table @0x4587d9..0x4587fc (no ninth entry); buffer/cell pairs 0x4dca0c/[0x4ede20], 0x4dca0c/[0x4edd58], 0x4dca8c/[0x4edd60], 0x4dca8c/[0x4ede1c], 0x4dca8c/[0x4edd9c]; second .TOT/.BIN/.DAT site 0x446623..0x446677 (tags 0x459795/0x45979a/0x45979f) | §7j.33 |
+| editor-only extension set | ZERO string (case-insensitive byte census) in EXW/EXD/EXE/DIRECTX exes for: .BLD, .CTG, .COL, .MAP, .PTH, .TXT — the runtime never opens them (only "SAVED.BDL" @0x4597d6 = the savegame, unrelated); .BLD = the editor SOURCE of .BDG (record j ≡ BDG non-empty j: same hp/chain/type heads, same four template banks; FORMATS §17 grammar verified) | §7j.33 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff |vx|>0x40 ∨ |vy|>0x40, anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c; the MID-FLIGHT DRAW walk §7j.28 (types 0x65/0x67/0x68 single WEAPONS 0x3C/0x3C/0x38-strip sprites, 0x69 the per-level beam column 0x34-strip, 0x66 NOT drawn) | §7j.13, §7j.28 |
@@ -4876,7 +4878,141 @@ carry that state (bank1 ≡ shipped TOT word at footprints
    [0x46cce0] counter + the +0x1B/+0x1C height bytes via the
    0x4796bc row.
 
+## 7j.33. THE .BLD RECORD WALK + THE MISSION FILE-FAMILY CENSUS — .BLD is EDITOR-ONLY (zero runtime readers); the compiled-pair relationship to .BDG (2026-08-22, worker fc88ecf3 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; corpus probes read-only over game-data, scratch /tmp/opencode)
+
+Ticket: the .BLD names/graphics sibling of the .BDG reader
+(§7j.32 residual; FORMATS §17). HEADLINE: **the EXW runtime
+never opens a .BLD file — there is no .BLD loader.** The byte
+sequence "BLD" (case-insensitive, dot or not) occurs ZERO times
+in BEDLAM.EXW, BEDLAM.EXD, BEDLAM.EXE, cd-root copies, and all
+three DIRECTX exes. The only `.BDL` string in EXW DGROUP is
+`"SAVED.BDL"` @0x4597d6 — the SAVEGAME file (with "HISCORES",
+"Player", "SAVEGAME", "EMPTY" neighbors), unrelated to the
+EDITOR\ZONE* library. The queue-note hypothesis "the loader
+call should sit near the .NME/.POS/.BDG loader family" is
+therefore RETIRED.
+
+### The complete runtime file-extension census [verified]
+
+- **Mission family loader FUN_0041dc5a** (post-call of the path
+  builder FUN_0044670c): loads in order `.TOT`(0x4587d9)→buf
+  0x4dca0c/[0x4ede20], `.DAT`(0x4587de)→0x4dca0c/[0x4edd58],
+  `.CGR`(0x4587e3)→0x4dca8c/[0x4edd60], `.BIN`(0x4587e8)→
+  0x4dca8c/[0x4ede1c], `.MIN`(0x4587ed)→0x4dca8c/[0x4edd9c],
+  then the language gate `cmp [0x4eba1c],1`: ==1 → `.LNG`
+  (0x4587f2) else `.LNK` (0x4587f7), and `.PAD`(0x4587fc) later
+  @0x41de44. All eight tags are ONE contiguous 5-B-stride
+  string table @0x4587d9..0x4587fc (8 entries, no ninth).
+- **Second load site FUN_0044461b-family @0x446623-0x446677**:
+  `.TOT`(0x459795)/`.BIN`(0x45979a)/`.DAT`(0x45979f) re-loads
+  against the same buffer/cell pairs (title/overview path).
+- **Path builder FUN_0044670c**: appends `"EDITOR\"` (0x4597a4)
+  + `"ZONE"` (0x4597ac) + zone char (`[0x4edd8c]+0x40` →
+  'A'..'G') + `"\MISSION"` (0x4597b1) + mission number; the
+  caller appends the extension. The game therefore reads the
+  EDITOR\ZONE{A..G}\MISSION{n}.{ext} tree directly. A second
+  identical string triple sits at 0x4597ba..0x4597c7.
+- **Other loaders already pinned:** `.NME` 0x457a57 (§7j.18),
+  `.TRT` 0x457a5c (§7j.15), `.POS` 0x457a64 + `.BDG` 0x457a69
+  (§7j.25, FUN_0041a4f8, mission-load chain 0x447b3a..0x447c00),
+  `.MRK` 0x457a34.
+- **Consequence (editor-only set):** of the 20 extensions
+  shipped in EDITOR\ZONE*\, exactly SIX never appear as strings
+  anywhere in EXW: **.BLD, .CTG, .COL, .MAP, .PTH, .TXT**.
+  Notably .CTG (FORMATS §6) is ALSO never loaded — the runtime
+  picks ONE of .LNK/.LNG per language gate, never .CTG. The
+  FORMATS §0.1 extension census gains this split (§0.2 there).
+
+### The .BLD record grammar [verified, corpus-anchored]
+
+Probes: sequential walk driven by the sibling .BDG's (W,H)
+(below) + name-run scans over all 43 files; ZONEA/C/D/E + ZONEF
+M2/M4/M7 walk PERFECT (name@+0x60 printable, all four bank-slot
+heads == the BDG bank[0] values, bank-1 array == bank[1:…]) —
+ZONEA 197/197, ZONEC 132/132…163/163, ZONED 197..198/…, ZONEE
+229..245/…, i.e. 7 286 of 7 907 records byte-validated before
+the two documented desync classes.
+
+- **Header (12 B, constant in all 43):** u16 "54" (0x3435) +
+  u16 1 + u16 1 + u16 0 + u16 {1,3,5} + u16 0. The 5th u16 =
+  1 (zones A/B/C/D/F-zone-file/G), 3 (zone E), 5 (zone F
+  mission files) — asset-set/palette id [open].
+- **Records start at +0xC, one per BDG NON-EMPTY record,
+  same order** (ZONEA/M1: BLD 197 = BDG 282 − 85 tail EMPTYs;
+  the EMPTY 2-B BDG rows have NO BLD counterpart).
+- **Record length = 137 + 64·W·H + tail_extra**, W/H/D from
+  the same-index BDG record. This subsumes the FORMATS §17
+  "201 + k×64" name-delta observation (201 = 137+64·1; every
+  observed delta ≡ 201 mod 64). The old "64-B extension
+  blocks" are NOT free-floating blocks — they are the four
+  template-bank slots below.
+- **Record layout:**
+  - +0x00 u32 head: [+0]=H (y-extent; 197/197 for H>1),
+    [+4]=hp, [+8]=chain, [+0xC]=type (all == the BDG values;
+    ZONEA census), [+0x10..0x2F] flag/count words, mostly
+    0/1/2 [open]. W and D are NOT stored anywhere in the
+    record (u32/u16 sweeps over +0x00..0x5F found no match).
+  - +0x60 name, NUL-padded, ~33 B field (data resumes +0x81).
+  - +0x81 FOUR template-bank slots, each **16·W·H bytes**:
+    slot+0 u16 = bank[cell 0]; slot+2.. = u16 array
+    bank[1 : 1+min(n−1,16)] (n = W·H·D; first 16 after cell 0
+    — n>17 truncates, e.g. "small plane 2" n=18 keeps 16);
+    rest zero pad. The slot values ARE the four BDG banks
+    (+0x3E/+0x42/+0x46/+0x4A, §7j.32) — verified equal at
+    every walked record incl. all four heads.
+  - then a **variable tail** (≥8 B): standard = two u32(1)s;
+    "sub tunnel wall" (ZONEB/M1 idx 86) = 12 B (1,5,4,0x1194);
+    "small plane 2" (idx 92) = 16 B (1,1,1,0xFFFF…);
+    ZONEA's last record "EXIT POINT" carries 320 B extra
+    (all zero) — tunnel/animated/exit annotations [open].
+- **File end:** zero fill after the last record (≥12 B; e.g.
+  ZONEA 332 B). There is NO record terminator and NO stored
+  record count: **.BLD is not self-delimiting** — a parser
+  needs the sibling .BDG's per-record (W,H) (or a name-scan
+  heuristic). This answers FORMATS §17's "exact record
+  terminator": none exists.
+
+### The compiled-pair relationship [verified]
+
+BLD record j ≡ BDG non-empty record j: same head scalars, same
+four template banks, same order — .BLD is the editor SOURCE
+format and .BDG the compiled runtime export (u16 fields widened
+to u32, name text dropped, banks compacted 2·W·H·D words,
+effects/chain retained). The r=0.985 size correlation
+(FORMATS §16) follows. Zone-level BLDs have NO zone-level BDG
+(only mission BDGs ship) and are byte-shared across the known
+zone pairs: MISSIONA.BLD ≡ MISSIONF.BLD, MISSIONB.BLD ≡
+MISSIONG.BLD (md5-verified) — the A/F, B/G sharing pattern
+extends to the BLDs (mission-level BLDs are NOT shared).
+
+### Desync classes [open, bounded]
+
+1. ZONEB/ZONEG (7 files each) + ZONEF/M6: the walk desyncs at
+   a handful of records (~j=87/125/154) where the BLD record
+   is LONGER than 137+64·W·H — ZONEB/M1 has exactly two
+   nonconforming name-deltas (405 after "sub tunnel wall",
+   537 after "small plane 2") = the variable tails above;
+   the remaining ZONEB/M1 "bad" rows are cascade effects of
+   stepping past those two records with the BDG-derived
+   length. Re-walking with per-record tail resync (scan
+   forward to the next plausible name@+0x60) should close
+   these; not done in this unit.
+2. ZONEC/M2+M3: BDG non-empty count exceeds the BLD name count
+   by exactly 1 (162 vs 161, 163 vs 162) — one record with a
+   sub-3-char or empty name breaks the name-scan (the BDG
+   walk itself was NOT re-run with the deterministic parser
+   for those two files) [open].
+
+### E-side seam consequences
+
+NONE. The runtime never reads .BLD; the engine's mission
+loader needs no BLD path, and no watch/injection surface
+touches it. The FORMATS §17 record grammar is documentation-
+only (tooling for corpus inspection); the .BDG loader path is
+already covered by §7j.25/§7j.32.
+
 ## 9. Open items (next slices)
+
 
 0a. ~~The critter/POI/exit LOADER section inside FUN_00416458~~ —
    CLOSED 2026-08-21 §7j.18: .NME is the sole feeder (8 fixed

@@ -19,7 +19,7 @@ LIKELY (strong pattern, one interpretive leap) / HYPOTHESIS (needs executable RE
 | A | MISSION1 | 25 × 75 | MISSIONA.{BIN,BLD,CGR,CTG,LNG,LNK,MIN} |
 | B | MISSION1–7 | 100 × 100 | MISSIONB.{BIN,BLD,CGR,CTG,LNG,LNK,MIN,PAL} + MISSION6.BIN |
 | C | MISSION1–7 | 100 × 100 | MISSIONC.{BIN,BLD,CGR,CTG,LNG,LNK,MIN,PAL} |
-| D | MISSION1–7 | 100 × 100 | MISSIOND.{BIN,CGR,CTG,LNG,LNK,MIN} (no BLD/PAL) + MISSION5.BIN |
+| D | MISSION1–7 | 100 × 100 | MISSIOND.{BIN,CGR,CTG,LNG,LNK,MIN} + MISSION5.BIN — no zone-level BLD/PAL, but mission-level MISSION1-7.BLD DO ship (37 mission BLDs total incl. zone D; §17) |
 | E | MISSION1–7 | 100 × 100 | MISSIONE.{BIN,BLD,CGR,CTG,LNG,LNK,MIN} + MISSION6.BIN |
 | F | MISSION1–7 | 100 × 100 | MISSIONF.{BIN,BLD,CGR,CTG,LNG,LNK,MIN} (no PAL) |
 | G | MISSION1 | 100 × 25 | MISSIONG.{BIN,BLD,CGR,CTG,LNG,LNK,MIN,PAL} |
@@ -46,6 +46,22 @@ A suspected fifth mission extension `.MOFO` (from a DGROUP string at
   BEDLAM.EXD, and no `*.MOFO` file exists anywhere in the corpus.
 The mission extension set therefore stands at the 17 shipped
 extensions of §0 with no unresolved member at that dispatcher.
+
+### 0.2 Runtime-loaded vs editor-only extensions (2026-08-22, VERIFIED — EXW §7j.33)
+
+Full dot-extension string census of EXW DGROUP + the two loader
+sites: the RUNTIME loads exactly `.TOT .DAT .CGR .BIN .MIN
+.LNG/.LNK (language gate [0x4eba1c]==1 → .LNG) .PAD` (family
+loader FUN_0041dc5a, tag table @0x4587d9..0x4587fc) plus
+`.NME .TRT .POS .BDG .MRK` (FUN_0041a4f8 etc.) from
+`EDITOR\ZONE{A..G}\MISSION{n}` paths (builder FUN_0044670c).
+Six shipped EDITOR-tree extensions have ZERO references in any
+executable (case-insensitive byte census over EXW/EXD/EXE/
+DIRECTX ×3): **.BLD, .CTG, .COL, .MAP, .PTH, .TXT** — they are
+editor-only data (the game's .LNK/.LNG gate means .CTG is never
+read at runtime; .BLD's content reaches the game only through
+its compiled sibling .BDG, §16/§17). `"SAVED.BDL"` @0x4597d6 is
+the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
 
 ---
 
@@ -424,34 +440,71 @@ What RE must confirm: everything beyond the layout.
   is NO runtime spawn-stamp pass. Value domains: banks 1/2 = tile words
   ≤1868; bank 3 ≤ 102 (DAT domain); bank 4 ≤ 512 (word 0 → seen=1, low
   byte → DAT volume on restore).
-- **Cross-file:** mission-level BDG size vs BLD size Pearson r = 0.985 — BLD
-  carries the same object list's NAMES/graphics; BDG carries the gameplay
-  spec. .POS word 3 (index) selects the BDG/BLD row (§12).
-- **What RE must confirm:** nothing structural; remaining open — the BLD-side
-  record walk (§17).
+- **Cross-file:** mission-level BDG size vs BLD size Pearson r = 0.985 —
+  relationship CLOSED (§17/§7j.33): .BLD is the EDITOR-SOURCE format
+  that compiles to this runtime spec (record j ≡ BDG non-empty record
+  j — same head scalars, same four template banks, names dropped,
+  banks compacted). .POS word 3 (index) selects the BDG row (§12).
+- **What RE must confirm:** nothing structural; the BLD-side record
+  walk is CLOSED (§17, §7j.33 — BLD is editor-only, zero runtime
+  readers).
 
-## 17. BLD — scenery/building object library with names
+## 17. BLD — the EDITOR-SOURCE object library (grammar verified 2026-08-22; EDITOR-ONLY, zero runtime readers)
 
-- **Sizes:** mission-level 29964–96430 B (37 files) + 6 zone-level
-  (MISSION{A,B,C,E,F,G}.BLD — zone D has none) — 43 files total.
-- **Header (VERIFIED constancy):** 12 bytes; u16 view: `(13365, 1, 1, 0, N, 0)`
-  where 13365 = 0x3435 = ASCII "54" (magic/version?) is identical in every
-  file checked; the 5th u16 varies (1 or 5).
-- **Records (LIKELY):** variable-length, **base 201 bytes + k×64-byte extension
-  blocks**. Evidence: string-offset deltas cluster at 201 (ZONEA/M1: ×123) and
-  at 265/329/393/521/649/713 = 201+64k (×11/×7/×20/×4/×4/×8 across files).
-  - Object **name at record offset +96** (file offset 108 for record 0),
-    NUL-padded, e.g. `4barrels\0…`.
-  - Record 0's leading u32s: `(1, 150, 1, 15, 1, …)` (ZONEA) / `(1, 50, 0, 5, 1)`
-    (ZONEB) — 150/50 looks like a count of something per library.
-- **Names found:** `4barrels`, `square crate`, `16 barrels`, `gatepost`,
-  `bio pod`, `streetlight`, `round container`, `FENCE 1`, `fence straight top
-  left`, `secret wall #1`, `guardpost`, `yellow crane part 1`, `telescreen`,
-  `exit point`, `sub obj 2` — scenery pieces, fences, secret walls, mission
-  objects. (177–271 strings per file.)
-- **What RE must confirm:** the 64-byte extension blocks (probably per-facing
-  or per-frame graphics references), the count fields, and the exact record
-  terminator.
+- **Runtime status (VERIFIED, EXW §7j.33):** the game NEVER
+  opens .BLD — the byte sequence "BLD" occurs in NO shipped
+  executable (EXW/EXD/EXE/DIRECTX ×3, case-insensitive). .BLD
+  is the editor's SOURCE format; the runtime consumes only its
+  compiled sibling .BDG (§16). Same for .CTG, .COL, .MAP,
+  .PTH, .TXT (§0.2).
+- **Sizes:** mission-level 29964–96430 B (37 files) + 6
+  zone-level (MISSION{A,B,C,E,F,G}.BLD — zone D DOES ship
+  mission-level BLDs; the §0 row above is corrected) — 43
+  files. Zone-level sharing: MISSIONA.BLD ≡ MISSIONF.BLD,
+  MISSIONB.BLD ≡ MISSIONG.BLD (byte-identical, md5).
+- **Header (VERIFIED constancy, 43/43):** 12 bytes; u16 view
+  `(13365, 1, 1, 0, {1|3|5}, 0)`; 13365 = 0x3435 = ASCII "54".
+  The 5th u16 is 1 (zones A/B/C/D + the F zone file), 3 (zone
+  E), 5 (zone F mission files) — asset-set id [open].
+- **GRAMMAR (VERIFIED corpus-anchored, §7j.33):** records start
+  at +0xC, one per .BDG NON-EMPTY record in the same order
+  (ZONEA/M1: 197 = 282 − 85 tail-EMPTY rows; EMPTY rows have no
+  BLD counterpart). **Record length = 137 + 64·W·H + tail_extra**
+  (W/H from the same-index BDG record) — this subsumes the old
+  "201 B + k×64-B extension blocks" name-delta observation
+  (201 = 137+64·1). The "extension blocks" are actually:
+  - **+0x00 head u32s:** [+0] = H (y-extent), [+4] = hp,
+    [+8] = chain, [+0xC] = type — identical to the BDG values;
+    [+0x10..0x2F] flag/count words [open]. **W and D are NOT
+    stored** in the record (no offset matches them).
+  - **+0x60 name**, NUL-padded (~33 B field; data resumes
+    +0x81). Names: `4barrels`, `square crate`, `gate1`,
+    `FENCE 1..6`, `Building #1..10`, `hiddenwall4..10`,
+    `bio pod`, `streetlight`, `seans hangar 1`, `sub tunnel
+    wall`, `small plane 2`, `EXIT POINT`, … (96–282 records
+    per file).
+  - **+0x81 FOUR template-bank slots, 16·W·H bytes each:**
+    slot+0 u16 = bank[cell 0], slot+2.. u16 array =
+    bank[1 : 1+min(n−1, 16)] (n = W·H·D; arrays cap at 16
+    values), rest zero pad. The slot values ARE the four BDG
+    template banks (+0x3E/+0x42/+0x46/+0x4A, §16) — verified
+    equal at every walked record (ZONEA/C/D/E + ZONEF
+    M2/M4/M7 = 7 286/7 907 records byte-validated).
+  - **Variable tail (≥8 B):** standard two u32(1)s;
+    "sub tunnel wall" +12 B (1,5,4,0x1194), "small plane 2"
+    +16 B (1,1,1,0xFFFF…), ZONEA's last "EXIT POINT" +320 B
+    (zero) — tunnel/animated/exit annotations [open].
+- **File end:** zero fill after the last record (≥12 B). There
+  is **no record terminator and no count field — .BLD is not
+  self-delimiting**; a parser needs the sibling .BDG's (W,H)
+  per record (or a name-scan heuristic). This closes the old
+  "what RE must confirm" item (the 64-B blocks = bank slots;
+  counts live in the BDG; terminator = none).
+- **Desync classes [open, bounded]:** ZONEB/G + ZONEF/M6 walks
+  desync at a few records (BLD longer than the formula = the
+  variable tails; ZONEB/M1 has exactly two); ZONEC/M2+M3 BDG
+  non-empty count exceeds the name-scan count by 1 (one
+  empty/short name). Details §7j.33.
 
 ## 18. CGR — sprite bank: u16 count + u32 offset directory (hypothesis CONFIRMED)
 
@@ -500,9 +553,9 @@ What RE must confirm: everything beyond the layout.
 |------|--------|----------|
 | MAP ⊂ TOT (support superset) | VERIFIED | 0 counterexamples in 37×8 planes; 85 758 added + 4 292 rewritten cells |
 | TOT plane 6/7 values < 2000 = POS slots | LIKELY | max 1868; but ZONEA/M1 tile 642→1355/1356 while POS[1355] is empty ⇒ indirect |
-| POS.index → BLD record | LIKELY | index max per mission < BLD record estimate in all sampled missions |
-| BDG ↔ BLD same object list | VERIFIED linkage (EXW 7j.25: same library — BDG = the loader-parsed gameplay spec incl. selector entries + template banks; BLD = names/graphics; .POS word 3 indexes the row) | size correlation r=0.985 + the loader opens ".POS"/".BDG" back-to-back (FUN_0041a4f8) |
-| LNK ↔ CTG same index space | LIKELY | LNK cycles ⊆ CTG nonzero ranges (partial overlap only) |
+| POS.index → BLD record | SUPERSEDED → indexes the BDG row (7j.25); BLD row count ≡ BDG non-empty count, so the index is bounded by both (ZONEA max 196 < 197) | §7j.25, §7j.33 |
+| BDG ↔ BLD same object list | VERIFIED = COMPILED PAIR (EXW §7j.33: BLD record j ≡ BDG non-empty record j — same hp/chain/type heads + the SAME four template banks; BLD = the editor source, BDG = the compiled runtime spec; .POS word 3 indexes the BDG row; BLD never loaded at runtime) | 7 286/7 907 records walked byte-exact incl. all four bank-slot heads; "SAVED.BDL" is the savegame, unrelated |
+| LNK ↔ CTG same index space | LIKELY; NOTE .CTG is NEVER loaded at runtime (§0.2 — editor-only like .BLD) | LNK cycles ⊆ CTG nonzero ranges (partial overlap only) |
 | LNK, CTG, LNG: three 8192-entry tables | VERIFIED layout / HYPOTHESIS semantics | all exactly 16384 B, near-identity or sparse |
 | PAD ↔ TXT pad notes | LIKELY | TXT explicitly describes "pads" with effects; coordinate transform unresolved |
 | TRT/MRK/PAD type enums (0–6 / 0–7 / 0–6) | HYPOTHESIS | similar small vocabularies, may be one family |
@@ -539,25 +592,26 @@ Notable **negative** results (things that did NOT fit):
 | NME | 16–1492 B | critter/personnel placements: 8 fixed sections (10/10/8/8/10/8/6/8 B), §9 | VERIFIED (loader-anchored, EXW 7j.18) | scatter jitter ranges; w0 marker |
 | PAD | 5994 = N×6 B + 0xFF fill (N≤999) | pads: (x, y, z-level) — loader writes DAT[type][y][x]=0xFF | layout + write VERIFIED (EXW 7c) | interactive trigger path |
 | PAL | 770 = 2 + 256×3 (40 files, all identical) | 6-bit VGA palette | VERIFIED | leading 2 bytes |
-| POS | 32000 = 2000×16 B | object placements (x, y, kind 0–5, BLD-index); empty = all-FF | layout VERIFIED; index link LIKELY | index/kind semantics |
+| POS | 32000 = 2000×16 B | object placements (x, y, kind 0–5, BDG-type index); empty = all-FF | layout VERIFIED; index → BDG row VERIFIED (EXW 7j.25/7j.33) | kind semantics tail |
 | PTH | 2 (`00 00`) everywhere | u16 count=0 path list | content VERIFIED; layout LIKELY | record format |
 | TRT | 2 + count×12 | placed entities (x, y, type 0–6); turrets? | layout VERIFIED; meaning LIKELY | type vocabulary |
-| TXT | 409×33, 1649×4 (CRLF ASCII) | designer notes: score codes; pad reference | VERIFIED | — |
-| BDG | 17100–43644, ≡0 mod 4 | per-building binary data, parallel to BLD | layout partial; BLD link LIKELY (r=.985) | field semantics |
-| BLD | 29964–96430 (+zone files) | scenery library: 12 B header + 201+64k B records, name@+96 | structure LIKELY | extension blocks; counts |
+| TXT | 409×33, 1649×4 (CRLF ASCII) | designer notes: score codes; pad reference | VERIFIED; EDITOR-ONLY (§0.2) | — |
+| BDG | 17100–43644, 282 recs/file | the destructible-object spec library (loader-parsed) | GRAMMAR VERIFIED (EXW 7j.25/7j.32) | — |
+| BLD | 29964–96430 (+6 zone files, A≡F, B≡G) | EDITOR-SOURCE object library (names + template banks); NEVER loaded at runtime | GRAMMAR VERIFIED (§17, EXW 7j.33) — editor-only | head flags; variable tails; zone-level (no BDG sibling) |
 | CGR | 132354 (44 files) | height-map bank: u16 128 + 128×u32 dir + 6 B hdr + raw 1024 B 32×32 maps | directory VERIFIED; codec RESOLVED (raw, EXW 7c) | render-side header use |
 
 ---
 
 ## 21. Suggested RE attack order
 
-1. **CGR pixel codec** — directory is solved; decode sprite 0 with candidate
-   RLE schemes against the shared palette to get a ground-truth image.
-2. **BLD/BDG pair** — parse records from the verified name anchors; BDG is
-   likely a fixed-stride parallel array once BLD record boundaries are known.
+1. **CGR pixel codec** — RESOLVED 2026-08-21 (raw height maps, §18).
+2. **BLD/BDG pair** — CLOSED 2026-08-22 (§16/§17, EXW §7j.33):
+   BLD = the editor source, BDG = the compiled runtime spec;
+   both grammars verified.
 3. **NME loader** — CLOSED 2026-08-21: the game loader FUN_00416458 is
    decoded (§9, EXW §7j.18); no editor disassembly needed.
 4. **TOT writer** — find the code path that produces TOT from MAP (the pad
    "lowers section" mechanics in the TXT notes must be implemented there).
 5. **LNK/CTG/LNG consumers** — one routine likely walks all three; identifying
-   the 8192-object index space unlocks three files at once.
+   the 8192-object index space unlocks three files at once. NOTE (§0.2): only
+   .LNK/.LNG are ever loaded (the language gate); .CTG is editor-only.
