@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-22 P4.2/W12-S5C COMPLETE (worker 82d5a27f claim 2,
+    commit c27b3db, D110): the case-3 OBSERVABILITY variant landed —
+    S5C.scen (the S4 artillery pattern spends the walker to 1256
+    pre-order: a gunner marker ON the walker's tile, loadout
+    9/0xA/0xB, the frame-1 command; the §7j.23 robot lane hits a
+    +0xF00 robot from 4 list-0 pairs/burst = 3744 at f32 on walker
+    AND gunner, clicker −624 at f36, all at state 0/3 pre-order) →
+    case 3 at f41 heals the EXACT +2500 UNCLAMPED (1256→3756; S5B
+    could only show the dispatch). The gunner walks one robot
+    behind, never heals (the negative control); the burst rings
+    detonate the destroy chain cascade (232 off-corridor cells —
+    S5B's six-cell census does not hold for S5C; the cascade rides
+    the SAME aliased T1 rows, differ = the 2 S1-class findings).
+    55 records, chain e0999fcb3455d3ef + double-run byte-identical;
+    differ_gate S5C row; capture-plans/S5C.json byte-pinned (4
+    inject rows). NO engine change — S0..S5B chains re-asserted
+    byte-identical; 54 suites green, fmt+clippy clean, manifest
+    clean, PUSHED. Queue: 1 = [BLOCKED] S0 live session (operator),
+    2 = the MISSIONVIEW §8 water-flag/anim remainder (re-queued
+    from D99), 3 = W12-S6 the extraction scenario unit. NEXT: the
+    water-flag/anim remainder (item 2).
+
   - 2026-08-22 P4.2/dbx-plan-tiers COMPLETE (worker 33a28c84 claim
     2, commits a784e49 + 690d8b0 + 4db7ba1, D109): dbx-plan compiles
     the T2/T3 tiers — S3 (T2) and S4 (T0/T1/T3) capture plans land

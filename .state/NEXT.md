@@ -110,22 +110,32 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4.2/W12-S5C] THE CASE-3 OBSERVABILITY VARIANT unit (small;
-   the D108 follow-up): S5B's case-3 walker spawns AT the hp
-   clamp (5000), so apply_pickup case 3's +2500 is
-   value-invisible in the robot-bank row. Land S5C.scen = the
-   row-10 corridor walk with a PRE-DAMAGED walker (the S4
-   artillery pattern: a loadout-armed gunner command record
-   whose burst box spends walker hp below 5000 before the walk —
-   mind the ORDER_RADIUS staging rule (markers ≤5 tiles from the
-   order tile; the +0xF00 spawn offset makes 6 tiles read 0xC1)
-   + the gunner surviving or dying by design, both fine); the
-   consume census asserts the hp DELTA (+2500 up to the clamp)
-   beside the mirror-row consume; chain pin + S0..S5B
-   byte-identical re-assert + differ_gate row; dbx-plan compile
-   (the loadout seam already records). If the damage path fights
-   the walk timing, tag [BLOCKED] with the concrete frame
-   conflict and stop — do NOT widen the unit.
+2. [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER unit
+   (small, docs-only pattern; re-queued from the D99 plan — the S5
+   series superseded it): the u32[0x456ca8] anim-sequence family +
+   the WATER FLAG producer (RE-EXW-MISSIONVIEW §8's last open
+   items). The 0x12d/0x12e/0x12f flush remaps still carry
+   water-ON semantics; pin who sets/clears the water flag and what
+   anim sequence the u32[0x456ca8] family walks (objdump-only from
+   ghidra-project/exw-text-objdump.txt; read-only corpus probes in
+   /tmp/opencode if a DAT/TOT read is needed). Deliverables: the
+   §8 rows closed + any ledger corrections in RE-EXW-SIM (7j.x) +
+   DECISIONS entry; registry_anchors green; manifest clean before
+   AND after any corpus probe. If the family turns out
+   render-only, record the §0b verdict (no differ watch row) and
+   close it — the D101 precedent.
+3. [P4.2/W12-S6] THE EXTRACTION SCENARIO unit (medium; DESIGN §7 S6
+   row + §10-W12): arm extraction via the scripted .PAD step-on —
+   the E side still REJECTS pad steps naming the S6 seam (D86), so
+   this unit first lands the engine-side extraction arming (the
+   beacon family 0x119628-30, the exit ring phases §7j.19/§7j.27,
+   the objective counters §7j.20, the extraction-arm cells
+   0x46cd00/0x46ccfc/0x46ccc4 per §7j.32), then S6.scen (ZONEA,
+   `pad 8` = the D86 census slot-0 record (5,61,0)) + the canonical
+   gate rows + dbx-plan compile (the pad op already compiles on
+   O1). Re-read the D86/D89 notes first: the pad op writes ONLY the
+   order triple — the robot's arrival arms extraction in-game.
+   Chain pin + S0..S5C byte-identical re-assert + differ_gate row.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -203,12 +213,13 @@ renumbered queue keeps every open item claimable by number).
 - Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT).
 - RE-EXW-MISSIONVIEW sec 8 open items: CLOSED 2026-08-22 (§7j.34/
   D98): the type-DB tail producers (the door animator family + all
-  reader anchors + +0x1D padding). REMAINS open: the u32[0x456ca8]
-  anim sequence + the water flag producer (needed before the
-  0x12d/0x12e/0x12f flush remaps can leave water-off semantics),
-  BIN u32[bank+0] header word (NOTE 7j.16: the ".BIN" load is
-  pinned — header word -> 0x46cdb8; the [0x4ede1c] bank's CONTENT
-  consumers still open). CLOSED: u32[0x4dd444] (7e.4 - the PALTRAN
+  reader anchors + +0x1D padding). CLOSED 2026-08-22 (§7j.36/D101):
+  the BIN u32[bank+0] header word (sprite COUNT → the write-only cell
+  0x46cdb8; the [0x4ede1c] bank's content consumers = the vestigial
+  radar stamp — no differ row). PROMOTED to the Now queue (item 2):
+  the u32[0x456ca8] anim sequence + the water flag producer (needed
+  before the 0x12d/0x12e/0x12f flush remaps can leave water-off
+  semantics). CLOSED: u32[0x4dd444] (7e.4 - the PALTRAN
   ramps); +0x18 producer (7j.8/7j.9 - FUN_00422287, reader raw,
   ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
@@ -259,6 +270,45 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W12-S5C THE CASE-3 OBSERVABILITY VARIANT unit
+  COMPLETE (worker 82d5a27f claim 2, commit c27b3db, D110; scenario
+  + tests + plan, unattended-safe; NO engine change, no Ghidra run,
+  corpus read-only — manifest clean). CLOSED the D108
+  value-invisibility gap: S5B's walker spawned AT the 5000 clamp so
+  apply_pickup case 3's +2500 read 5000→5000; S5C.scen spends the
+  walker to 1256 BEFORE the walk with the S4 artillery pattern (a
+  third marker stages the gunner ON the walker's tile (73,10,3) —
+  ≤5 tiles from the order tile, inside ORDER_RADIUS; loadout
+  9/0xA/0xB 1 ammo each; the frame-1 command fires all three
+  records at the gunner's tile; the §7j.23 robot lane 312/pair
+  box-reaches a +0xF00-offset robot from exactly FOUR list-0 pairs
+  {T,T+1}×{Ty,Ty+1} per burst → 3×4×312 = 3744 at frame 32 on the
+  walker AND the gunner, both survive at 1256; the 0xB outer ring
+  spends the clicker 624 at f36; all damage pre-order at state 0/3
+  — the hp path, a state-4 robot converts damage to a shield tick).
+  `order 78 10 3` arms at f37; CASE 3 AT FRAME 41 heals the EXACT
+  +2500 UNCLAMPED (1256 → 3756 — better than the ticket's
+  clamp-tolerant bar); the gunner claims its own spread slot and
+  walks one robot behind (lower index moves first — reaches no
+  unconsumed cell, hp 1256 through the tail = the same-run negative
+  control); arrival f48 snapped (78,10). CAVEAT recorded: the burst
+  rings detonate the destroy CHAIN CASCADE (232 off-corridor mirror
+  cells change — S5B's six-cell whole-map census does NOT hold;
+  asserts target the corridor cells + the hp schedule; the differ
+  passes with exactly the 2 S1-class findings — the cascade rides
+  the SAME aliased T1 rows). 55 records, chain e0999fcb3455d3ef
+  pinned + double-run byte-identical (canonical_dump_gate
+  corpus_s5c_pickup_case_3_predamaged); differ_gate S5C row;
+  dbx-plan compiles tiers T0/T1/TS (4 inject rows: the frame-1
+  command append CS:0009255C + the frame-37 order triple
+  CS:0010E0A4/A8/AC; the loadout seam in _e_staging; the command
+  record's triple = the order tile in RAW Q5 words (2496,320,3));
+  capture-plans/S5C.json committed + byte-pinned. S0..S5B chains
+  re-asserted BYTE-IDENTICAL (54 suites green, fmt+clippy clean,
+  manifest clean). PUSHED. Queued: the MISSIONVIEW §8 water-flag/
+  anim remainder (item 2, re-queued from the D99 plan — the S5
+  series superseded it) + the W12-S6 extraction scenario unit
+  (item 3).
 - 2026-08-22: P4.2/dbx-plan-tiers THE T2/T3 TIER COMPILE unit
   COMPLETE (worker 33a28c84 claim 2, commits a784e49 (dbx-plan +
   capture-plans) + 690d8b0 (capgen prefix + flow probe) + 4db7ba1
