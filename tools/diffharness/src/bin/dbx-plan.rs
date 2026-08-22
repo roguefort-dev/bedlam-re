@@ -565,6 +565,16 @@ enum InjectWrite {
         count_cell: String,
         bytes: String,
     },
+    /// The DESIGN §5.4 pad op (D86): read the .PAD slot record from the
+    /// bank at the capture-frame stop, validate the loader marks, write
+    /// {x,y,z} i32-LE x3 to the order-target triple (capgen applies it;
+    /// the addresses are registry-derived like every inject row).
+    Pad {
+        frame: u64,
+        bank: String,
+        slot: u32,
+        target: [String; 3],
+    },
 }
 
 /// One WALK-phase write (D84): a plain seam write applied at walk stop
@@ -734,16 +744,51 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     })
                     .collect::<Vec<_>>()
             }
-            Step::Pad { .. } => {
-                // the write target is the order-target triple with the
-                // tile READ from the pad bank at runtime — needs the
-                // capgen runtime pad op together with the alias.
-                return Err(die(
-                    "pad step: order-target EXD alias is a registry gap and the \
-                     runtime pad-slot read op (capgen `pad` op) lands together \
-                     with that alias unit"
-                        .into(),
-                ));
+            Step::Pad { slot } => {
+                // The DESIGN §5.4 pad op (D86): the write target is the
+                // order-target triple with the tile READ from the pad
+                // bank at runtime. The bank is the step's READ anchor —
+                // its own explicit gap error, distinct from the
+                // step_rows WRITE-seam rule; the triple cells follow
+                // the Order step's 3-cell rule.
+                let bank_row = reg
+                    .iter()
+                    .find(|r| r.id == "static-pad-slots")
+                    .ok_or_else(|| die("registry row static-pad-slots missing".into()))?;
+                let bank = exd_cells(&bank_row.exd_addr)
+                    .first()
+                    .copied()
+                    .ok_or_else(|| {
+                        die(format!(
+                            "pad step: static-pad-slots EXD alias is a registry gap \
+                         (status {:?}) — the pad bank is the step's READ anchor and \
+                         is never fabricated",
+                            bank_row.exd_status
+                        ))
+                    })?;
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == "order-target")
+                    .ok_or_else(|| die("registry row order-target missing".into()))?;
+                let cells = exd_cells(&row.exd_addr);
+                if cells.len() != 3 {
+                    return Err(die(
+                        "pad step: order-target EXD alias is a registry gap (needs \
+                         all three xyz cells)"
+                            .into(),
+                    ));
+                }
+                if *slot > 998 {
+                    return Err(die(format!(
+                        "pad step slot {slot} out of range 0..998 (999 .PAD slots)"
+                    )));
+                }
+                vec![InjectWrite::Pad {
+                    frame: boundary,
+                    bank: format!("CS:{bank:08X}"),
+                    slot: *slot,
+                    target: core::array::from_fn(|i| format!("CS:{:08X}", cells[i])),
+                }]
             }
             Step::Command { bytes } => {
                 let ring = reg
@@ -832,6 +877,19 @@ fn inject_json(w: &InjectWrite) -> String {
              \"stride\": 128, \"count_cell\": \"{}\", \"bytes\": \"{bytes}\" }}",
             jstr(base).trim_matches('"'),
             jstr(count_cell).trim_matches('"')
+        ),
+        InjectWrite::Pad {
+            frame,
+            bank,
+            slot,
+            target,
+        } => format!(
+            "    {{ \"frame\": {frame}, \"op\": \"pad\", \"bank\": \"{}\", \"slot\": {slot}, \
+             \"target\": [\"{}\", \"{}\", \"{}\"] }}",
+            jstr(bank).trim_matches('"'),
+            jstr(&target[0]).trim_matches('"'),
+            jstr(&target[1]).trim_matches('"'),
+            jstr(&target[2]).trim_matches('"')
         ),
     }
 }
@@ -1492,6 +1550,49 @@ mod tests {
              \"stride\": 128, \"count_cell\": \"CS:00119588\", \"bytes\": \"01023f\""
         ));
         assert_eq!(emitted.inject_count, 6);
+    }
+
+    #[test]
+    fn pad_step_compiles_op_row() {
+        // D86: the pad step un-gated — the op row's bank comes from
+        // static-pad-slots (the READ anchor, EXD 0xf63c) and the three
+        // targets from order-target; every address registry-derived.
+        let src = "scenario = X\ntiers = T0\nframes = 4\n\
+                   until-anchor mission-start\n\
+                   step 2\n\
+                   pad 8\n";
+        let scen = Scenario::parse(src).unwrap();
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        // boundary: anchor=1, step 2 -> 3 (the same accounting as the
+        // alias test); ZONEA zone-1 census slot 8 as the pick example
+        assert!(emitted.json.contains(
+            "\"frame\": 3, \"op\": \"pad\", \"bank\": \"CS:0000F63C\", \"slot\": 8, \
+             \"target\": [\"CS:0010E0A4\", \"CS:0010E0A8\", \"CS:0010E0AC\"]"
+        ));
+        assert_eq!(emitted.inject_count, 1);
+    }
+
+    #[test]
+    fn pad_step_bank_gap_refused() {
+        // The READ anchor has its own gap error, distinct from the
+        // step_rows write-seam rule: static-pad-slots cleared -> the
+        // pad bank address is never fabricated.
+        let mut reg = registry();
+        for row in reg.iter_mut() {
+            if row.id == "static-pad-slots" {
+                row.exd_addr = String::new();
+            }
+        }
+        let src = "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\npad 3\n";
+        let scen = Scenario::parse(src).unwrap();
+        let err = emit_plan(&scen, &reg)
+            .err()
+            .map(|e| e.to_string())
+            .expect("pad step must not compile without the pad-bank anchor");
+        assert!(
+            err.contains("static-pad-slots") && err.contains("gap"),
+            "error must name the READ-anchor gap: {err}"
+        );
     }
 
     #[test]
