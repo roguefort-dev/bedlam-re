@@ -1,0 +1,42 @@
+# S5B — pickups: the case-3 corridor (DESIGN-DIFFHARNESS.md §7 S5
+# row + §10-W12; D108, the W12-S5 unit; the second half of the
+# two-scenario split — S5 covers cases 1/2/4 on the row-21 z3
+# corridor, this run covers case 3 where it actually lives).
+#
+# Same ZONEB/MISSION1 set-2 staging as S5 (zone/destroy/pickup
+# equivalence seams; the mirror rows carry the REAL staged surface).
+# THE ROW-10 z3 CORRIDOR: (74,10) w0x83 c4, (75,10) w0x83 c4,
+# (76,10) w0x7b CASE 3, (77,10) w0x83 c4, (78,10) w0x83 c4 — five
+# consecutive cells. Markers stage the clicker (78,10,3) and the
+# walker (73,10,3) (≤5 tiles from the order tile — ORDER_RADIUS
+# 0xC0 vs the +0xF00 spawn offset, D108); `order 78 10 3` arms at
+# the clicker, the walker claims slot 1 = (79,10):
+#
+#   frame 1: (74,10) case 4 — award draw (score fold)
+#   frame 3: (75,10) case 4 — award draw
+#   ~frame 5: (76,9) case 4 — a SIDE cell (the column x=76 carries
+#            cells at rows 8..12; the walker's path wanders ±1 row
+#            and the ±0.38-tile probe reach collects it diagonally —
+#            6 cells consumed total, all case-4 draws RNG-pinned in
+#            the chain)
+#   frame 6: (76,10) CASE 3 — hp += 2500 clamped at the 5000
+#            ceiling: the walker spawns AT the clamp, so the body's
+#            field write is value-invisible (the consume + dispatch
+#            still ride the mirror rows; a pre-damaged-walker
+#            variant is the live follow-up, D108)
+#   frame 8: (77,10) case 4 — award draw
+#   frame 10: (78,10) case 4 — collected from (77,9) via the
+#            diagonal probe reach (no standing-on)
+#   frame 12: arrival — state 4→3 at (78,9)
+scenario = "S5B"
+tiers = T0,T1,TS
+anchor = mission-start
+frames = 18
+zone = "B"
+destroy = 1
+pickup = 1
+markers = 78,10,3; 73,10,3
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+order 78 10 3
+step 17

@@ -557,9 +557,15 @@ fn object_instances_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeErro
             want: format!("count <= {OBJECT_SLOTS} records"),
         });
     }
+    // The walk covers the WHOLE dumped span, skipping dead id==-1
+    // slots — the count cell is capture plumbing (never compared:
+    // D105), and the ZONEB .POS bank carries LIVE slots past dead
+    // holes (max slot 1128 over 1096 live — the S5 finding that
+    // pinned this; a count-bounded walk would silently drop 32
+    // live objects). Slot identity stays the watched state.
     let mut fields = Vec::with_capacity(1 + count * 7);
     let mut live = 0usize;
-    for i in 0..count {
+    for i in 0..total {
         let rec = &b[4 + i * 0x14..4 + (i + 1) * 0x14];
         if i32le(&rec[0xC..0x10]) == -1 {
             continue; // dead slot — never live state
@@ -1269,10 +1275,24 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         fields,
     };
     match id {
-        "frame-counter" | "score" | "money" | "difficulty" | "zone" | "mission" | "mode"
+        "frame-counter" | "score" | "money" | "difficulty" | "mission" | "mode"
         | "linear-mission-m" | "selection-triple" => {
             need(id, no, b, "u32 cell", 4)?;
             Ok(row(vec![int("value", u32le(b) as i128)]))
+        }
+        "zone" => {
+            // D108 (§6a zone convention): the guest cell (EXW
+            // 0x4edd8c / EXD 0x107500) is the 1-based terrain SET
+            // (zone_index+1, D99) while E's canonical row carries the
+            // 0-based mission-slot INDEX — canonicalize the cell down
+            // (a 0 cell passes through: an unstaged cell is a
+            // finding, never wrapped).
+            need(id, no, b, "u32 cell", 4)?;
+            let cell = u32le(b) as i128;
+            Ok(row(vec![int(
+                "value",
+                if cell == 0 { cell } else { cell - 1 },
+            )]))
         }
         "rng-state-a" | "rng-state-b" => {
             // Channel-native state word (§6a): u32 LCG state zero
@@ -1733,18 +1753,44 @@ pub fn run_diff(
                     continue;
                 }
                 (Some(ra), Some(rb)) => {
-                    // Row-level field compare.
+                    // Row-level field compare. The name-union join is
+                    // HASH-INDEXED (first occurrence per name — the
+                    // `field()` lookup semantics; rows carry unique
+                    // names by construction): the S5-class mirror
+                    // rows carry ~170k fields per frame and a linear
+                    // union scan + per-name lookup is quadratic.
                     let tier = tier_of(id);
-                    let mut names: Vec<&str> = ra.fields.iter().map(|(n, _)| n.as_str()).collect();
-                    for n in rb.fields.iter().map(|(n, _)| n.as_str()) {
-                        if !names.contains(&n) {
-                            names.push(n);
-                        }
+                    let mut b_first: std::collections::HashMap<&str, &FieldVal> =
+                        std::collections::HashMap::with_capacity(rb.fields.len());
+                    for (n, v) in &rb.fields {
+                        b_first.entry(n.as_str()).or_insert(v);
                     }
-                    for name in names {
-                        let (va, vb) = (ra.field(name), rb.field(name));
-                        match (va, vb) {
-                            (Some(va), Some(vb)) => {
+                    let mut a_counted: std::collections::HashSet<&str> =
+                        std::collections::HashSet::with_capacity(ra.fields.len());
+                    for (n, _) in &ra.fields {
+                        a_counted.insert(n.as_str());
+                    }
+                    // b-only names (first occurrence): field-level
+                    // coverage gaps, one count per frame like the
+                    // old union's dedup.
+                    let mut b_counted: std::collections::HashSet<&str> =
+                        std::collections::HashSet::new();
+                    for name in rb.fields.iter().map(|(n, _)| n.as_str()) {
+                        if a_counted.contains(name) || !b_counted.insert(name) {
+                            continue;
+                        }
+                        let key = format!("{id}.{name}");
+                        let e = coverage_rows.entry(key).or_insert((0, 0, String::new()));
+                        e.1 += 1;
+                    }
+                    let mut a_first: std::collections::HashSet<&str> =
+                        std::collections::HashSet::with_capacity(ra.fields.len());
+                    for (name, va) in ra.fields.iter().map(|(n, v)| (n.as_str(), v)) {
+                        if !a_first.insert(name) {
+                            continue;
+                        }
+                        match b_first.get(name) {
+                            Some(vb) => {
                                 compare_field(
                                     id,
                                     name,
@@ -1763,18 +1809,13 @@ pub fn run_diff(
                                         .and_then(|r| r.field(name).cloned()),
                                 );
                             }
-                            (None, Some(_)) | (Some(_), None) => {
+                            None => {
                                 // Field-level coverage gap (e.g. robot
                                 // fields the O1 map cannot source).
                                 let key = format!("{id}.{name}");
                                 let e = coverage_rows.entry(key).or_insert((0, 0, String::new()));
-                                if va.is_none() {
-                                    e.0 += 1;
-                                } else {
-                                    e.1 += 1;
-                                }
+                                e.0 += 1;
                             }
-                            (None, None) => {}
                         }
                     }
                 }

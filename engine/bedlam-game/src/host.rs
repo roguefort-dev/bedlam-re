@@ -417,6 +417,18 @@ impl GameHost {
         crate::mission::mission_asset_names(zone, mission)
     }
 
+    /// Stage the campaign episode slot — the D51 host seam (W12-S5,
+    /// D108): the host stands in for the campaign-advance (0x41c9e5)
+    /// / save-load-restore (0x43c2b8) shells the engine does not
+    /// model, planting the slot whose mission the next Mission entry
+    /// stages. Must run BEFORE `mission_asset_names`/`load_mission`
+    /// (the zone drives the names, the edge family and the
+    /// robots-per-player count). Returns false on an out-of-range
+    /// slot (never guess).
+    pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
+        self.fsm.stage_episode_slot(stage, mask)
+    }
+
     /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes
     /// the caller fetched, in [`GameHost::mission_asset_names`]
     /// order: TOT, DAT, PAD, CGR, BIN, LNK, SINTABLE, DANTE, GAMEPAL,

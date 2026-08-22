@@ -1,0 +1,60 @@
+# S5 — pickups: the cases-1/2/4 corridor (DESIGN-DIFFHARNESS.md §7 S5
+# row + §10-W12; D108, the W12-S5 unit). Grammar v1.5 keys:
+#
+#   zone = "B"   the episode-slot host seam — the campaign-advance /
+#                save-load shells the host stands in for (D51). Mask 0
+#                → MISSION1, linear stays the fresh-slot 0 (a LIVE O1
+#                campaign-walk session carries its own linear — the
+#                plan records the seam, the counters are never
+#                fabricated).
+#   destroy = 1  the W12-S4 equivalence seam (BDG/POS/TRT staged).
+#   pickup = 1   the mission's OWN .TOT through stage_pickup_surface
+#                AFTER the destroy staging, then the §7j.12/6 hazard
+#                stamper — the original mission-load order. The
+#                typedb-mirror-rows go REAL (15,102 words / 52,715
+#                seen — every ZONEB tile active; S4's recorded
+#                empty-mirror divergence closes for S5-class runs;
+#                the S4 chain itself is untouched — S4 sets no pickup
+#                key).
+#
+# ZONEB/MISSION1 = terrain set 2 (0x75/0x535 range bases). THE
+# ROW-21 z3 CORRIDOR is the only spot in the shipped corpus where
+# cases 1 and 2 co-occur walkably: (26,21) w0x76 → case 1,
+# (27,21) w0x7e → case 2, (28,21) w0x82 → case 4, consecutive
+# tiles at z-level 3 (D108's corridor census). The MRK squad banks
+# ONE robot at (27,71,3); the markers stage the clicker (28,21,3)
+# and the walker (25,21,3) — the walker must stay ≤5 tiles from the
+# ORDER tile (ORDER_RADIUS 0xC0; the marker's +0xF00 spawn offset
+# makes a 6-tile gap read 0xC1 — rejected, D108). `order 28 21 3`
+# arms at the clicker (slot 0, state 3); the walker claims spread
+# slot 1 = (29,21) and walks east:
+#
+#   frame 1: (26,21) case 1 — word := floor 0x48F, seen := 1, DAT
+#            := 0, drop_countdown := 1000 (the reinforcement arm)
+#   frame 2: (27,21) case 2 — shield := 1000
+#   frame 4: (28,21) case 4 — the award draw (score/money row fold)
+#   frame 5: arrival — state 4→3, snapped at the (28,21) origin
+#
+# CASE-4 COVERAGE NOTE: cases 1 and 3 are never co-walkable (61
+# octagonal tiles apart at the nearest) and a second order needs
+# the first cleared (all-alive-state-3 — impossible with the next
+# leg's robots idle — or the 0x197 window expiry ≈ 407 idle frames
+# × ~340 KB/record of REAL mirror rows), so the case-3 leg is the
+# S5B sibling scenario (D108's two-scenario split). DAT-byte
+# visibility ANSWERED: the consume's DAT := 0 needs no dedicated
+# row — the mirror word/seen carry the observation and the
+# walkability change rides the robot-bank rows (the walker crosses
+# the cells it consumes mid-walk; the raw DAT volume is not a guest
+# span).
+scenario = "S5"
+tiers = T0,T1,TS
+anchor = mission-start
+frames = 15
+zone = "B"
+destroy = 1
+pickup = 1
+markers = 28,21,3; 25,21,3
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+order 28 21 3
+step 14

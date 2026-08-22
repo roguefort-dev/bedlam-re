@@ -11,7 +11,7 @@
 //!
 //! Two formats:
 //!
-//! **Scenario grammar v1.1** (`scenarios/*.scen`, committed):
+//! **Scenario grammar v1.5** (`scenarios/*.scen`, committed):
 //! ```text
 //! # comment / blank lines
 //! scenario = S0              ; id (dump header; <=255 bytes)
@@ -19,6 +19,11 @@
 //! anchor = mission-start     ; symbolic anchor event (optional)
 //! frames = 2                 ; per-frame records after the anchor frame
 //! launch = DOS4GW.EXE BEDLAM.EXD   ; autoexec launch line (optional)
+//! markers = 18,73,1; 20,74,1 ; extra squad robots (D91, v1.2)
+//! loadout = 1,0x7,9:2        ; weapon slots per robot (D103, v1.3)
+//! destroy = 1                ; stage .BDG/.POS/.TRT (D105, v1.4)
+//! zone = "B"                 ; episode-slot zone letter (D108, v1.5)
+//! pickup = 1                 ; stage the .TOT pickup surface (D108, v1.5)
 //! step 10                    ; advance N frames, no input      (runner)
 //! capture                    ; force a frame dump              (runner)
 //! until-anchor mission-start ; run to the anchor event         (runner)
@@ -116,6 +121,30 @@ pub struct Scenario {
     /// The key also gates the destroy-family dump rows (they ride
     /// only destroy-staging scenarios — S0..S3 bytes unchanged).
     pub destroy: bool,
+    /// The episode-slot zone key (grammar v1.5 `zone = "B"`,
+    /// W12-S5/D108): stage the campaign episode to the given zone
+    /// letter (A..G → stage 1..7, mask 0 → MISSION1, linear stays
+    /// the fresh-slot 0) through the host's `stage_episode_slot`
+    /// seam — the host stands in for the campaign-advance
+    /// (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine
+    /// does not model. `None` = the boot slot (ZONEA/MISSION1,
+    /// every pre-S5 scenario). A LIVE O1 capture reaches other
+    /// zones by playing the campaign, so its linear/mission
+    /// counters are the live-capture seam — consumers record the
+    /// zone seam, never fabricate the counters.
+    pub zone: Option<char>,
+    /// The pickup-surface staging key (grammar v1.5 `pickup = 1`,
+    /// W12-S5/D108): stage the mission's OWN .TOT through the
+    /// engine's `stage_pickup_surface` host seam (the init_tiles
+    /// TOT fill + the zone/set cell) AFTER any destroy staging,
+    /// then the §7j.12/6 hazard stamper — the original's
+    /// mission-load order. The ORIGINAL stages the same TOT volume
+    /// natively at mission load (FUN_00407e11), so the staged
+    /// CONTENT is identical on both channels (an equivalence seam
+    /// like `destroy`); it is a separate key because the two
+    /// stagings gate different dump rows and S4 must keep its
+    /// empty-staged mirror bytes (its chain is pinned).
+    pub pickup: bool,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
@@ -217,6 +246,8 @@ impl Scenario {
         let mut markers: Vec<(i32, i32, i32)> = Vec::new();
         let mut loadout: Vec<LoadoutRobot> = Vec::new();
         let mut destroy = false;
+        let mut zone: Option<char> = None;
+        let mut pickup = false;
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -595,6 +626,59 @@ impl Scenario {
                             }
                             destroy = true;
                         }
+                        "zone" => {
+                            // W12-S5 (grammar v1.5, D108): the
+                            // episode-slot zone letter A..G. Strictly
+                            // ONE uppercase letter (a typo'd zone must
+                            // fail loud — the runner would otherwise
+                            // stage the wrong mission's assets).
+                            let mut chars = value.chars();
+                            let (Some(z), None) = (chars.next(), chars.next()) else {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "zone key is one letter A..G (e.g. `zone = \"B\"`)",
+                                ));
+                            };
+                            if !z.is_ascii_uppercase() || !('A'..='G').contains(&z) {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "zone letter out of range A..G (the 7 campaign zones)",
+                                ));
+                            }
+                            if zone.is_some() {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "zone staged twice (one key per scenario)",
+                                ));
+                            }
+                            zone = Some(z);
+                        }
+                        "pickup" => {
+                            // W12-S5 (grammar v1.5, D108): the boolean
+                            // pickup-surface staging key — `pickup = 1`
+                            // stages the mission's own .TOT through the
+                            // engine host seam AFTER any destroy staging.
+                            // Strictly `1` (same fail-loud rule as
+                            // destroy).
+                            if value.trim() != "1" {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "pickup key is boolean staging: use `pickup = 1`",
+                                ));
+                            }
+                            if pickup {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "pickup staged twice (one key per scenario)",
+                                ));
+                            }
+                            pickup = true;
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -641,6 +725,8 @@ impl Scenario {
             markers,
             loadout,
             destroy,
+            zone,
+            pickup,
             steps,
         })
     }
@@ -1129,6 +1215,36 @@ mod tests {
         assert!(Scenario::parse(&format!("{base}destroy = 0\n")).is_err());
         assert!(Scenario::parse(&format!("{base}destroy = true\n")).is_err());
         assert!(Scenario::parse(&format!("{base}destroy = 1\ndestroy = 1\n")).is_err());
+    }
+
+    #[test]
+    fn zone_and_pickup_keys_parse_and_gate() {
+        // W12-S5 (grammar v1.5, D108): the episode-slot zone letter
+        // + the boolean pickup-surface staging key — defaults
+        // None/false (S0..S4 bytes unchanged).
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        let s = Scenario::parse(base).unwrap();
+        assert_eq!(s.zone, None);
+        assert!(!s.pickup);
+        let s = Scenario::parse(&format!("{base}zone = \"B\"\npickup = 1\n")).unwrap();
+        assert_eq!(s.zone, Some('B'));
+        assert!(s.pickup);
+        // The whole campaign range, quoted or bare.
+        for z in ['A', 'D', 'G'] {
+            let s = Scenario::parse(&format!("{base}zone = \"{z}\"\n")).unwrap();
+            assert_eq!(s.zone, Some(z));
+            let s = Scenario::parse(&format!("{base}zone = {z}\n")).unwrap();
+            assert_eq!(s.zone, Some(z));
+        }
+        // Fail loud: out of range, multi-char, lowercase, duplicate,
+        // and the pickup strictness mirrors destroy.
+        assert!(Scenario::parse(&format!("{base}zone = \"H\"\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"AB\"\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"b\"\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"1\"\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"A\"\nzone = \"B\"\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}pickup = 0\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}pickup = 1\npickup = 1\n")).is_err());
     }
 
     #[test]

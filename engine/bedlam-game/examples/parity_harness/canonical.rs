@@ -46,7 +46,12 @@
 //! weapon slots + the enable mask through `stage_robot_weapons` —
 //! the fire-path seam S3's COMMAND steps consume (the original fills
 //! the slots at spawn from the session table; an E-side staging
-//! seam, recorded never fabricated).
+//! seam, recorded never fabricated). The `zone` + `pickup` header
+//! keys (W12-S5, grammar v1.5, D108) stage the campaign episode slot
+//! (the host seam standing in for the campaign/save-load shells) and
+//! the mission's own .TOT pickup surface (after any destroy staging,
+//! then the hazard stamper — the original mission-load order) — both
+//! EQUIVALENCE seams recorded in the plan; S5/S5B run ZONEB set 2.
 //!
 //! T2 tier (W12-S3): the scenario's tier list gates the two bank
 //! rows — `weapon-anim-bank` (the 400×0x36 blob, byte layout = the
@@ -628,6 +633,24 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     let palette = [[0u8, 0, 0]; 256];
     let mut host = GameHost::new(&config, &SimConfig::default(), palette);
 
+    // The episode-slot zone staging (W12-S5, grammar v1.5 `zone`,
+    // D108): the host seam stands in for the campaign-advance
+    // (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine
+    // does not model. Letter A..G → stage 1..7; mask 0 → MISSION1;
+    // linear stays the fresh-slot 0 (a played campaign carries its
+    // own counter — the recorded live-capture seam, never
+    // fabricated). Must run BEFORE the asset fetch (the zone drives
+    // the names + the robots-per-player count).
+    if let Some(letter) = scen.zone {
+        let stage = u8::try_from(u32::from(letter) - u32::from(b'A') + 1)
+            .expect("grammar pins the zone letter to A..G");
+        if !host.stage_episode_slot(stage, 0) {
+            return Err(CanonicalError(format!(
+                "zone {letter} maps to stage {stage} outside the campaign slot table"
+            )));
+        }
+    }
+
     // Stage the mission from the episode slot's asset names. The
     // fetch-order mapping below is pinned by suffix asserts (anti-drift).
     let names = host.mission_asset_names();
@@ -754,6 +777,33 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 "destroy staging rejected (terrain not sized / POS length)".into(),
             ));
         }
+    }
+
+    // The pickup-surface staging (W12-S5, grammar v1.5 `pickup = 1`,
+    // D108): the mission's OWN .TOT — `bytes[0]`, the same volume the
+    // terrain staged from — through the init_tiles host seam
+    // (`stage_pickup_surface`), AFTER any destroy staging above (the
+    // destroy staging RESETS the mirror banks — the engine
+    // load-order note in its doc comment), then the §7j.12/6 hazard
+    // stamper (the original's mission-load order: footprint stamp →
+    // init_tiles → hazards). The ORIGINAL stages the same TOT volume
+    // natively at mission load (FUN_00407e11), so the content is
+    // identical on both channels — an EQUIVALENCE seam like `destroy`,
+    // recorded in the plan; it is a separate key because S4's
+    // empty-staged mirror bytes are chain-pinned. The set cell =
+    // zone_index+1 (D99).
+    if scen.pickup {
+        let (zone_idx, _) = host.mission_slot();
+        let zone_set = u32::try_from(zone_idx + 1).unwrap_or(1);
+        let scene = host.mission_mut().expect("mission staged");
+        if !scene.sim_mut().stage_pickup_surface(&bytes[0], zone_set) {
+            return Err(CanonicalError(
+                "pickup staging rejected (the .TOT volume desynced from the staged \
+                 terrain — dims or size mismatch)"
+                    .into(),
+            ));
+        }
+        scene.sim_mut().stamp_hazard_words();
     }
 
     // The LOADOUT staging seam (W12-S3, grammar v1.3): expand the

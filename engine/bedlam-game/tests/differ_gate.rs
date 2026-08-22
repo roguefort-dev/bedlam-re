@@ -134,6 +134,14 @@ fn inv_frame(
                 let v = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
                 (v + menu_frames).to_le_bytes().to_vec()
             }
+            "zone" => {
+                // D108 (§6a): the O1 cell is the 1-based guest SET
+                // (zone_index+1); the E canonical row is the 0-based
+                // slot index — fabricate the true cell so the O1
+                // normalizer's cell−1 canonicalization round-trips.
+                let v = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
+                (v + 1).to_le_bytes().to_vec()
+            }
             "robot-bank" => inv_robot_bank(&w.bytes),
             // The T2 banks (W12-S3): E canonical = u32 count + the
             // records; the O1 raw form = the bare span (no count cell
@@ -321,6 +329,15 @@ fn s0_s1_cross_and_double_run() {
         // yet — 2 more row-level coverage findings, documented
         // never fabricated).
         ("S4", 49u64, "2ddd15ea50c8a14d", 2u64 + 2),
+        // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
+        // no T3 tier (nothing fires/dies/explodes in the walks), so
+        // the debris/splash rows never ride — exactly the 2 S1-class
+        // row-level findings. The REAL-staged mirror rows (every
+        // tile active) fabricate as the full 100x100 guest grid and
+        // parse back through the same compact-tile filter; the zone
+        // row exercises the D108 cell−1 convention end-to-end.
+        ("S5", 16u64, "a4659f25d453b6a1", 2u64),
+        ("S5B", 19u64, "93e976587a98d2a1", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

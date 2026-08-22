@@ -1252,3 +1252,306 @@ fn corpus_s4_destroy_family() {
     assert!(dump0.frames[0].watch("object-instances").is_none());
     assert_eq!(run0.manifest.chain_digest, "8901789a88cf61fe");
 }
+
+/// One typedb-mirror-rows cell (word, seen) at (tile, z) — the
+/// compact-active §6a form `{tile u16, 8×(word u16, seen u8)}`.
+fn mirror_cell(blob: &[u8], tile: usize, z: usize) -> (u16, u8) {
+    let n = u32::from_le_bytes(blob[0..4].try_into().unwrap()) as usize;
+    for i in 0..n {
+        let rec = &blob[4 + i * 26..];
+        if u16::from_le_bytes(rec[0..2].try_into().unwrap()) as usize == tile {
+            let off = 2 + z * 3;
+            return (
+                u16::from_le_bytes(rec[off..off + 2].try_into().unwrap()),
+                rec[off + 2],
+            );
+        }
+    }
+    panic!("tile {tile} not in the compact mirror row");
+}
+
+#[test]
+fn corpus_s5_pickup_cases_1_2_4() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S5 (DESIGN §7 S5 row + §10-W12, D108 — the W12-S5 unit): the
+    // grammar v1.5 keys stage ZONEB/MISSION1 (`zone = "B"` → the
+    // episode-slot host seam, set-2 pickup surface + destroy family
+    // + the hazard stamper) and the row-21 z3 walk fires cases
+    // 1/2/4 — the only spot in the shipped corpus where cases 1 and
+    // 2 co-occur walkably. 16 records (anchor + 15), pinned chain.
+    let s5 = fs::read_to_string(scen_path("S5")).expect("S5.scen committed");
+    let run = run_canonical(&s5, &root).expect("S5 canonical run");
+    assert_eq!(run.manifest.frame_count, 16);
+    assert_eq!(
+        run.manifest.chain_digest, "a4659f25d453b6a1",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s5, &root).expect("S5 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S5 dump verifies");
+
+    // --- the staged-session rows --------------------------------------
+    // The zone row = the staged ZONEB slot INDEX (1; §6a zone
+    // convention, D108); the anchor statics are the 100x100 map;
+    // the mirror rows carry the REAL staged surface (every tile
+    // active — the S4 empty-mirror divergence closes here).
+    for f in &dump.frames {
+        assert_eq!(
+            u32::from_le_bytes(f.watch("zone").unwrap()[..4].try_into().unwrap()),
+            1,
+            "the staged ZONEB episode slot (0-based index)"
+        );
+        assert_eq!(
+            u32::from_le_bytes(
+                f.watch("typedb-mirror-rows").unwrap()[0..4]
+                    .try_into()
+                    .unwrap()
+            ),
+            10_000,
+            "every ZONEB tile is active in the compact mirror row"
+        );
+        assert_eq!(f.watch("tile-word-grid").unwrap().len(), 100 * 100 * 2);
+        assert_eq!(
+            f.watch("object-instances").unwrap().len(),
+            4 + 1096 * 23,
+            "1096 live ZONEB/M1 instances every frame"
+        );
+        assert_eq!(
+            f.watch("trt-array").unwrap().len(),
+            4 + 19 * 20,
+            "19 turrets (fresh-slot linear 0 -> hp 250)"
+        );
+    }
+    let wh = dump.frames[0].watch("static-map-wh").unwrap();
+    assert_eq!(
+        u32::from_le_bytes(wh[..4].try_into().unwrap()),
+        100,
+        "the ZONEB map width"
+    );
+    assert_eq!(
+        u32::from_le_bytes(wh[4..8].try_into().unwrap()),
+        100,
+        "the ZONEB map height"
+    );
+
+    // --- the consume protocol: cases 1, 2, 4 ---------------------------
+    // Anchor: the corridor cells stage their REAL TOT words (seen 0
+    // — the swept DAT volume is nonzero under them). f1: case 1 at
+    // (26,21) — word := table-C floor 0x48F, seen := 1, DAT := 0,
+    // drop_countdown := 1000 (the reinforcement arm). f2: case 2 at
+    // (27,21) — shield := 1000 (then the 2/frame phase-0 decay).
+    // f4: case 4 at (28,21) — the award draw folds into the score
+    // (this seed draws the score row, 1000). f5: the arrival —
+    // state 4→3 snapped at the (28,21) origin, target retained.
+    let m = |f: usize, tile: usize| {
+        mirror_cell(dump.frames[f].watch("typedb-mirror-rows").unwrap(), tile, 3)
+    };
+    let t26 = 21 * 100 + 26;
+    let t27 = 21 * 100 + 27;
+    let t28 = 21 * 100 + 28;
+    assert_eq!(m(0, t26), (0x76, 0), "the c1 cell stages its TOT word");
+    assert_eq!(m(0, t27), (0x7e, 0));
+    assert_eq!(m(0, t28), (0x82, 0));
+    let score = |f: usize| {
+        u32::from_le_bytes(
+            dump.frames[f].watch("score").unwrap()[..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    let money = |f: usize| {
+        u32::from_le_bytes(
+            dump.frames[f].watch("money").unwrap()[..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    let walker_i32 =
+        |f: usize, p: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].i32(p);
+    let walker_state = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].state();
+    let walker_tile = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].tile();
+    let walker_snapped =
+        |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].snapped();
+    let walker_present =
+        |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].present();
+    let walker_target =
+        |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].target_tile();
+    // f1: the claim + the case-1 fire.
+    assert_eq!(m(1, t26), (0x48F, 1), "case 1 consumed at frame 1");
+    assert_eq!(walker_i32(1, 52), 1000, "case 1 arms the drop");
+    assert_eq!(walker_state(1), 4, "the walker claims the order");
+    assert_eq!(walker_present(1), 1);
+    assert_eq!(walker_target(1), (29, 21), "spread slot 1");
+    // f2: the case-2 fire.
+    assert_eq!(m(2, t27), (0x48F, 1), "case 2 consumed at frame 2");
+    assert_eq!(walker_i32(2, 68), 1000, "case 2 fills the shield");
+    assert_eq!(walker_i32(3, 68), 998, "the 2/frame phase-0 decay");
+    // f4: the case-4 fire + the award fold.
+    assert_eq!(m(4, t28), (0x48F, 1), "case 4 consumed at frame 4");
+    assert_eq!(score(3), 0);
+    assert_eq!(score(4), 1000, "the case-4 award folds into the score");
+    assert_eq!(money(15), 4000, "no money draw on this seed");
+    // f5: the arrival.
+    assert_eq!(walker_state(5), 3, "state 4→3 at the arrival");
+    assert_eq!(walker_tile(5), (28, 21));
+    assert!(walker_snapped(5), "snapped at the tile origin");
+    assert_eq!(walker_present(5), 1, "the target is retained");
+    // EXACTLY the three corridor cells consume: the full mirror
+    // (10,000 tiles × 8 planes) changes at precisely those cells —
+    // no other cell on the walker's path decodes under set 2.
+    let cells_of = |blob: &[u8]| -> Vec<u16> {
+        let n = u32::from_le_bytes(blob[0..4].try_into().unwrap()) as usize;
+        (0..n)
+            .map(|i| u16::from_le_bytes(blob[4 + i * 26..6 + i * 26].try_into().unwrap()))
+            .collect()
+    };
+    let full_cells = |blob: &[u8]| -> std::collections::BTreeMap<(u16, u8), (u16, u8)> {
+        let n = u32::from_le_bytes(blob[0..4].try_into().unwrap()) as usize;
+        let mut out = std::collections::BTreeMap::new();
+        for i in 0..n {
+            let rec = &blob[4 + i * 26..];
+            let t = u16::from_le_bytes(rec[0..2].try_into().unwrap());
+            for z in 0..8u8 {
+                let off = 2 + z as usize * 3;
+                out.insert(
+                    (t, z),
+                    (
+                        u16::from_le_bytes(rec[off..off + 2].try_into().unwrap()),
+                        rec[off + 2],
+                    ),
+                );
+            }
+        }
+        out
+    };
+    let tiles_a = cells_of(dump.frames[0].watch("typedb-mirror-rows").unwrap());
+    assert_eq!(tiles_a.len(), 10_000);
+    let a = full_cells(dump.frames[0].watch("typedb-mirror-rows").unwrap());
+    let b = full_cells(dump.frames[15].watch("typedb-mirror-rows").unwrap());
+    let diff: Vec<((u16, u8), (u16, u8))> = a
+        .iter()
+        .filter(|(k, v)| b.get(*k) != Some(*v))
+        .map(|(k, _)| (*k, b.get(k).copied().unwrap_or((0, 0))))
+        .collect();
+    assert_eq!(
+        diff,
+        vec![
+            (((t26 as u16), 3u8), (0x48F, 1)),
+            ((t27 as u16, 3), (0x48F, 1)),
+            ((t28 as u16, 3), (0x48F, 1)),
+        ],
+        "the whole-map consume census: exactly the corridor trio"
+    );
+}
+
+#[test]
+fn corpus_s5b_pickup_case_3() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S5B (DESIGN §7 S5 row, D108 — the case-3 half of the
+    // two-scenario split): the row-10 z3 walk consumes five corridor
+    // cells + the (76,9) side cell the diagonal probe reach collects
+    // (6 total: 5× case 4 + case 3). Case 3's hp body is
+    // value-invisible here — the walker spawns AT the 5000 clamp
+    // (the D108 observability note) — the consume + dispatch still
+    // ride the rows. 19 records (anchor + 18), pinned chain.
+    let s5b = fs::read_to_string(scen_path("S5B")).expect("S5B.scen committed");
+    let run = run_canonical(&s5b, &root).expect("S5B canonical run");
+    assert_eq!(run.manifest.frame_count, 19);
+    assert_eq!(
+        run.manifest.chain_digest, "93e976587a98d2a1",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s5b, &root).expect("S5B canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S5B dump verifies");
+
+    let m = |f: usize, tile: usize| {
+        mirror_cell(dump.frames[f].watch("typedb-mirror-rows").unwrap(), tile, 3)
+    };
+    let score = |f: usize| {
+        u32::from_le_bytes(
+            dump.frames[f].watch("score").unwrap()[..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    let t74 = 10 * 100 + 74;
+    let t75 = 10 * 100 + 75;
+    let t76 = 10 * 100 + 76;
+    let t77 = 10 * 100 + 77;
+    let t78 = 10 * 100 + 78;
+    let t769 = 9 * 100 + 76;
+    // The consume schedule (word := 0x48F + seen := 1 at each).
+    assert_eq!(m(0, t76), (0x7b, 0), "the case-3 word stages");
+    assert_eq!(m(1, t74), (0x48F, 1), "case 4 at frame 1");
+    assert_eq!(m(3, t75), (0x48F, 1), "case 4 at frame 3");
+    assert_eq!(m(5, t769), (0x48F, 1), "the (76,9) side cell at ~f5");
+    assert_eq!(m(6, t76), (0x48F, 1), "CASE 3 at frame 6");
+    assert_eq!(m(8, t77), (0x48F, 1), "case 4 at frame 8");
+    assert_eq!(m(10, t78), (0x48F, 1), "case 4 at frame 10 (diagonal)");
+    // The case-4 award folds: the draws on this seed are all score
+    // (1000/1000/5000/10000/10000 — RNG-pinned by the chain).
+    assert_eq!(score(0), 0);
+    assert_eq!(score(1), 1000);
+    assert_eq!(score(3), 2000);
+    assert_eq!(score(5), 7000);
+    assert_eq!(score(8), 17000);
+    assert_eq!(score(10), 27000);
+    // The case-3 body: hp stays at the 5000 clamp (value-invisible;
+    // the consume census below carries the dispatch proof).
+    let hp = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].i32(56);
+    assert_eq!((hp(5), hp(7)), (5000, 5000));
+    // The arrival at frame 12: state 4→3 snapped at (78,9).
+    let state = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].state();
+    let tile = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap())[2].tile();
+    assert_eq!(state(11), 4);
+    assert_eq!(state(12), 3, "the arrival clear at frame 12");
+    assert_eq!(tile(12), (78, 9));
+    // The whole-map consume census: exactly the six cells.
+    let full = |blob: &[u8]| -> std::collections::BTreeMap<(u16, u8), (u16, u8)> {
+        let n = u32::from_le_bytes(blob[0..4].try_into().unwrap()) as usize;
+        let mut out = std::collections::BTreeMap::new();
+        for i in 0..n {
+            let rec = &blob[4 + i * 26..];
+            let t = u16::from_le_bytes(rec[0..2].try_into().unwrap());
+            for z in 0..8u8 {
+                let off = 2 + z as usize * 3;
+                out.insert(
+                    (t, z),
+                    (
+                        u16::from_le_bytes(rec[off..off + 2].try_into().unwrap()),
+                        rec[off + 2],
+                    ),
+                );
+            }
+        }
+        out
+    };
+    let a = full(dump.frames[0].watch("typedb-mirror-rows").unwrap());
+    let b = full(dump.frames[18].watch("typedb-mirror-rows").unwrap());
+    let diff: Vec<(u16, u8)> = a
+        .iter()
+        .filter(|(k, v)| b.get(*k) != Some(*v))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(
+        diff,
+        vec![
+            (t769 as u16, 3u8),
+            (t74 as u16, 3),
+            (t75 as u16, 3),
+            (t76 as u16, 3),
+            (t77 as u16, 3),
+            (t78 as u16, 3),
+        ],
+        "the whole-map consume census: the corridor five + the (76,9) side cell"
+    );
+}

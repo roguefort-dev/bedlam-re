@@ -1235,72 +1235,102 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // the original loads the mission's .BDG/.POS/.TRT natively at
     // mission load, so the staged content is identical on both
     // channels (no O1 write); the mirror banks stage EMPTY on E
-    // until the S5 init_tiles pairing. Byte-identity: loadout-less
-    // scenarios emit the same bytes as before (the pinned
-    // capture-plans).
-    if !scen.markers.is_empty() || !scen.loadout.is_empty() || scen.destroy {
+    // until the S5 init_tiles pairing. D108 (grammar v1.5): the
+    // zone + pickup keys are the same equivalence discipline (the
+    // campaign-slot shells + the init_tiles TOT fill). Byte-identity:
+    // loadout-less/zone-less/pickup-less scenarios emit the same
+    // bytes as before (the pinned capture-plans).
+    let mut staging: Vec<String> = Vec::new();
+    if !scen.markers.is_empty() {
+        let mut m = String::from("    \"markers\": [\n");
+        for (i, (x, y, z)) in scen.markers.iter().enumerate() {
+            m.push_str(&format!(
+                "      {{ \"x\": {x}, \"y\": {y}, \"z\": {z} }}{}",
+                if i + 1 < scen.markers.len() {
+                    ",\n"
+                } else {
+                    "\n"
+                }
+            ));
+        }
+        m.push_str(
+            "    ],\n    \"note\": \"E-side staging seam (D91): extra squad robots the \
+             ENGINE canonical run banks after the MRK squad. The O1 capture stages \
+             NO equivalent (never fabricated): its robot-count diff vs E is this \
+             scenario seam, not a finding\"",
+        );
+        staging.push(m);
+    }
+    if !scen.loadout.is_empty() {
+        let mut l = String::from("    \"loadout\": [\n");
+        for (i, lr) in scen.loadout.iter().enumerate() {
+            let slots = lr
+                .slots
+                .iter()
+                .map(|(id, ammo)| format!("{id:#x}:{ammo}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            l.push_str(&format!(
+                "      {{ \"robot\": {}, \"mask\": {:#x}, \"slots\": \"{}\" }}{}",
+                lr.robot,
+                lr.mask,
+                slots,
+                if i + 1 < scen.loadout.len() {
+                    ",\n"
+                } else {
+                    "\n"
+                }
+            ));
+        }
+        l.push_str(
+            "    ],\n    \"loadout_note\": \"E-side staging seam (D103, grammar v1.3): \
+             weapon slots staged through the stage_robot_weapons host seam on E. The \
+             O1 capture arms its robots by playing the session (the original fills the \
+             slots from the session table at spawn); the weapon-slot/ammo diff vs E is \
+             this scenario seam, not a finding\"",
+        );
+        staging.push(l);
+    }
+    if scen.destroy {
+        staging.push(
+            "    \"destroy\": true,\n    \"destroy_note\": \"E-side EQUIVALENCE seam \
+             (D105, grammar v1.4): the mission's own .BDG type table + .POS instances \
+             + .TRT structures staged through the stage_destroy_family host seam on E. \
+             The ORIGINAL loads all three files natively at mission load \
+             (FUN_0041a4f8 + FUN_004170a6), so the staged CONTENT is identical on both \
+             channels — no O1 write, no seam diff; the destroy-row bytes compare \
+             directly. The TOT-mirror/seen banks stage EMPTY on E (the init_tiles TOT \
+             fill is the S5 pairing — the recorded mirror-rows divergence until then)\""
+                .to_string(),
+        );
+    }
+    if let Some(z) = scen.zone {
+        staging.push(format!(
+            "    \"zone\": \"{z}\",\n    \"zone_note\": \"E-side EQUIVALENCE seam \
+             (D108, grammar v1.5): the campaign episode slot staged to zone {z} \
+             through the stage_episode_slot host seam (the host stands in for the \
+             campaign-advance / save-load-restore shells). The LIVE O1 capture \
+             reaches this zone by playing the campaign or a save — its own \
+             linear/mission counters are the live-capture seam, never fabricated; \
+             record the session's zone cell (1-based set) for the cross-check\""
+        ));
+    }
+    if scen.pickup {
+        staging.push(
+            "    \"pickup\": true,\n    \"pickup_note\": \"E-side EQUIVALENCE seam \
+             (D108, grammar v1.5): the mission's own .TOT staged through the \
+             stage_pickup_surface host seam (the init_tiles fill + the zone/set \
+             cell + the load-order hazard stamper). The ORIGINAL stages the same \
+             volume natively at mission load (FUN_00407e11), so the mirror-row \
+             bytes compare directly — the S4-era empty-mirror divergence is closed \
+             for pickup scenarios\""
+                .to_string(),
+        );
+    }
+    if !staging.is_empty() {
         j.push_str("  \"_e_staging\": {\n");
-        if !scen.markers.is_empty() {
-            j.push_str("    \"markers\": [\n");
-            for (i, (x, y, z)) in scen.markers.iter().enumerate() {
-                j.push_str(&format!(
-                    "      {{ \"x\": {x}, \"y\": {y}, \"z\": {z} }}{}",
-                    if i + 1 < scen.markers.len() {
-                        ",\n"
-                    } else {
-                        "\n"
-                    }
-                ));
-            }
-            j.push_str(
-                "    ],\n    \"note\": \"E-side staging seam (D91): extra squad robots the \
-                 ENGINE canonical run banks after the MRK squad. The O1 capture stages \
-                 NO equivalent (never fabricated): its robot-count diff vs E is this \
-                 scenario seam, not a finding\"\n",
-            );
-        }
-        if !scen.loadout.is_empty() {
-            j.push_str("    \"loadout\": [\n");
-            for (i, lr) in scen.loadout.iter().enumerate() {
-                let slots = lr
-                    .slots
-                    .iter()
-                    .map(|(id, ammo)| format!("{id:#x}:{ammo}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                j.push_str(&format!(
-                    "      {{ \"robot\": {}, \"mask\": {:#x}, \"slots\": \"{}\" }}{}",
-                    lr.robot,
-                    lr.mask,
-                    slots,
-                    if i + 1 < scen.loadout.len() {
-                        ",\n"
-                    } else {
-                        "\n"
-                    }
-                ));
-            }
-            j.push_str(
-                "    ],\n    \"loadout_note\": \"E-side staging seam (D103, grammar v1.3): \
-                 weapon slots staged through the stage_robot_weapons host seam on E. The \
-                 O1 capture arms its robots by playing the session (the original fills the \
-                 slots from the session table at spawn); the weapon-slot/ammo diff vs E is \
-                 this scenario seam, not a finding\"\n",
-            );
-        }
-        if scen.destroy {
-            j.push_str(
-                "    \"destroy\": true,\n    \"destroy_note\": \"E-side EQUIVALENCE seam \
-                 (D105, grammar v1.4): the mission's own .BDG type table + .POS instances \
-                 + .TRT structures staged through the stage_destroy_family host seam on E. \
-                 The ORIGINAL loads all three files natively at mission load \
-                 (FUN_0041a4f8 + FUN_004170a6), so the staged CONTENT is identical on both \
-                 channels — no O1 write, no seam diff; the destroy-row bytes compare \
-                 directly. The TOT-mirror/seen banks stage EMPTY on E (the init_tiles TOT \
-                 fill is the S5 pairing — the recorded mirror-rows divergence until then)\"\n",
-            );
-        }
-        j.push_str("  },\n");
+        j.push_str(&staging.join(",\n"));
+        j.push_str("\n  },\n");
     }
     j.push_str("  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n");
     j.push_str("  \"boot_commands\": [\n");
@@ -1720,6 +1750,46 @@ mod tests {
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
         assert!(emit_plan(&scen, &registry()).is_err());
+    }
+
+    #[test]
+    fn s5_plan_compiles_the_zone_and_pickup_seams() {
+        // D108 (grammar v1.5): S5 compiles (tiers T0/T1/TS — no T2/T3
+        // rows ride a pickup walk) with the zone + pickup
+        // EQUIVALENCE seams recorded in _e_staging and NO fabricated
+        // O1 write: the zone cell (EXD 0x107500) and the mirror rows
+        // (0xac1e4) carry no inject row — the original stages both
+        // natively at mission load.
+        let s5 = Scenario::parse(include_str!("../../scenarios/S5.scen")).unwrap();
+        assert_eq!(s5.zone, Some('B'));
+        assert!(s5.pickup);
+        assert!(s5.destroy);
+        assert_eq!(s5.markers, vec![(28, 21, 3), (25, 21, 3)]);
+        let emitted = emit_plan(&s5, &registry()).unwrap();
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("\"zone\": \"B\""));
+        assert!(emitted.json.contains("\"pickup\": true"));
+        assert!(emitted
+            .json
+            .contains("The LIVE O1 capture reaches this zone by playing the campaign"));
+        assert!(emitted
+            .json
+            .contains("the S4-era empty-mirror divergence is closed"));
+        // Never fabricated: no inject row touches the zone cell or
+        // the mirror rows.
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            for cell in ["107500", "AC1E4"] {
+                assert!(
+                    !addr.to_uppercase().ends_with(cell),
+                    "ghost staging write to the {cell} cell: {addr}"
+                );
+            }
+        }
+        // S5B compiles the same shape.
+        let s5b = Scenario::parse(include_str!("../../scenarios/S5B.scen")).unwrap();
+        assert_eq!(s5b.zone, Some('B'));
+        assert!(s5b.pickup);
+        assert!(emit_plan(&s5b, &registry()).is_ok());
     }
 
     #[test]

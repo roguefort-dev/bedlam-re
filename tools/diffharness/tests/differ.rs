@@ -358,6 +358,58 @@ fn o1_move_target_span_guards() {
     assert!(rows[0].field("robot[0].target_present").is_none());
 }
 
+#[test]
+fn zone_row_convention_cell_minus_one() {
+    // D108 (§6a zone convention): the guest cell (EXW 0x4edd8c / EXD
+    // 0x107500) is the 1-based terrain SET (zone_index+1, D99); E's
+    // canonical row is the 0-based mission-slot INDEX. The O1
+    // normalizer canonicalizes the cell DOWN so both channels meet
+    // at the index (first exercised by S5/S5B = ZONEB: cell 2 vs
+    // index 1); a 0 cell passes through (an unstaged cell is a
+    // finding, never wrapped).
+    let rows = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("zone", 2u32.to_le_bytes().to_vec())],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap();
+    assert_eq!(rows[0].field("value"), Some(&FieldVal::Int(1)));
+    let rows = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("zone", 1u32.to_le_bytes().to_vec())],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap();
+    assert_eq!(rows[0].field("value"), Some(&FieldVal::Int(0)));
+    let rows = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("zone", 0u32.to_le_bytes().to_vec())],
+        ),
+        Channel::O1ExdDosboxX,
+        &reg(),
+    )
+    .unwrap();
+    assert_eq!(rows[0].field("value"), Some(&FieldVal::Int(0)));
+    // E passes through unchanged (the canonical form).
+    let rows = normalize_frame(
+        &frame(
+            0,
+            vec![WatchRecord::new("zone", 1u32.to_le_bytes().to_vec())],
+        ),
+        Channel::Engine,
+        &reg(),
+    )
+    .unwrap();
+    assert_eq!(rows[0].field("value"), Some(&FieldVal::Int(1)));
+}
+
 // ---------------------------------------------------------------------
 // 2. The E normalizer: the pinned §6a canonical grammar
 // ---------------------------------------------------------------------

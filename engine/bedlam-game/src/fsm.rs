@@ -98,6 +98,28 @@ impl Episode {
         self.linear
     }
 
+    /// Stage the campaign slot to `(stage, mask)` — the D51 host seam
+    /// (W12-S5/D108): the canonical runner stands in for the
+    /// campaign-advance (0x41c9e5) / save-load-restore (0x43c2b8)
+    /// shells the engine does not model, planting the slot whose
+    /// mission the next Mission entry stages. `linear` is left
+    /// untouched (the staged fresh-slot contract; a played campaign
+    /// carries its own counter — the recorded live-capture seam).
+    /// Returns false on an out-of-range stage or a mask that is not
+    /// a sub-mask of the stage's completion mask (never guess).
+    pub fn stage_slot(&mut self, stage: u8, mask: u8) -> bool {
+        if !(1..=MAX_STAGE).contains(&stage) {
+            return false;
+        }
+        let subs = FULL_MASK[stage as usize];
+        if subs == 0 || mask & !subs != 0 {
+            return false;
+        }
+        self.stage = stage;
+        self.mask = mask;
+        true
+    }
+
     /// Register one completed mission: linear +1 (capped at MAX_LINEAR),
     /// the current sub marked done, and when the stage mask fills, the
     /// slot advances and the mask resets (census sec 7). Returns true
@@ -174,6 +196,12 @@ impl SceneFsm {
     /// Episode progression state.
     pub fn episode(&self) -> &Episode {
         &self.episode
+    }
+
+    /// Stage the campaign episode slot — the D51 host seam (W12-S5,
+    /// D108; see [`Episode::stage_slot`]).
+    pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
+        self.episode.stage_slot(stage, mask)
     }
 
     /// Whether the next Debrief advance plays the zone cutscene.
@@ -421,6 +449,36 @@ mod tests {
         }
         assert_eq!(ep.linear(), MAX_LINEAR);
         assert_eq!(ep.stage(), MAX_STAGE, "stage caps too");
+    }
+
+    #[test]
+    fn stage_slot_seam_validates_and_plants() {
+        // W12-S5/D108: the D51 host seam plants the campaign slot
+        // (the canonical runner's `zone` key). Mask must be a
+        // sub-mask of the stage's completion mask; linear untouched.
+        let mut ep = Episode::boot();
+        ep.linear = 4;
+        assert!(ep.stage_slot(2, 0), "stage 2 / mask 0 = ZONEB/MISSION1");
+        assert_eq!((ep.stage(), ep.mask(), ep.linear()), (2, 0, 4));
+        assert!(ep.stage_slot(7, 0b0111), "a valid partial mask");
+        assert_eq!((ep.stage(), ep.mask()), (7, 0b0111));
+        assert!(!ep.stage_slot(0, 0), "stage 0 is not a slot");
+        assert!(!ep.stage_slot(MAX_STAGE + 1, 0), "past the cap");
+        // Stage 1 has ONE sub (FULL_MASK[1] = 1): mask 2 is not a
+        // sub-mask of it.
+        assert!(!ep.stage_slot(1, 2));
+        assert!(ep.stage_slot(1, 1), "the full stage-1 mask");
+        // The planted slot drives the mission-slot selection (the
+        // host.rs integration: zone letter B -> names ZONEB/...).
+        let mut fsm = SceneFsm::new();
+        assert!(fsm.stage_episode_slot(2, 0));
+        assert_eq!(
+            crate::mission::mission_asset_names(
+                crate::mission::zone_for_stage(fsm.episode().stage()),
+                crate::mission::mission_number_for_mask(fsm.episode().mask()),
+            )[0],
+            "ZONEB/MISSION1.TOT"
+        );
     }
 
     #[test]
