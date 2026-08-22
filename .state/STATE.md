@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-22 P4.2/W12-S5-prep COMPLETE (worker f32193a2 claim 2,
+    commits ad43c12 (RE §7h.5) + 7a2dfeb (engine+tests), D107): the
+    E-side PICKUP PRODUCER is in the engine — stage_pickup_surface
+    (init_tiles TOT-word + DAT-gated-seen staging + the zone/set
+    cell), the clear→move→test→fire consume protocol in robots_phase
+    (the latch clear is UNCONDITIONAL like EXW; the ZONEA walk never
+    latches — all mission_corpus_gate hash pins survived), fire_pickup
+    (DAT byte := 0 / mirror word := table C / seen := 1 → dispatch),
+    apply_pickup case-4 score/money draws + the MissionShell fold,
+    cases 8/9 host-seamed. §7h.5 settled the range/floor table
+    INDEXING (zone_index 0-based — the contiguous 7-dword/0x1C-stride
+    DGROUP family) and FLAGGED the pre-existing destroy.rs zone-table
+    head-slot question (corpus-dead; S5/S7 differ arbitrates). Corpus
+    gates: ZONEA ZERO fire traffic (the D99 census re-derived live +
+    pinned; the staged walk hash-trace-identical) + the ZONEB/M1
+    positive control (152 live cells). S0..S4 canonical chains
+    BYTE-IDENTICAL (2ddd15ea50c8a14d in the pinned set); workspace
+    green, fmt+clippy clean, registry_anchors green, manifest clean.
+    Queue: 1 = [BLOCKED] S0 live session, 2 = W12-S5 (the S5.scen
+    unit — grammar v1.5 pickup key + the ZONEB zone-staging
+    question), 3 = dbx-plan-tiers. NEXT: W12-S5 (item 2).
+
   - 2026-08-22 QUEUE HYGIENE (worker 78203f4f claim 2, D106): the
     W12-S4 closure (b8925a9, D105) was RE-VERIFIED green at HEAD
     (differ_gate 7/7, destroy_gate 16/16, canonical_dump_gate

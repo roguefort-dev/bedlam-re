@@ -90,33 +90,38 @@ renumbered queue keeps every open item claimable by number).
    auto-records in `_e_staging` (the O1 side arms robots by
    playing the session — the weapon-slot/ammo diff is the
    scenario seam, never a finding).
- 2. [P4.2/W12-S5-prep] THE E-SIDE PICKUP PRODUCER unit (DESIGN
-   §7 S5 row; the 7h.4/D99 producer list; engine+tests,
-   unattended-safe): model the §7h.4 pickup machinery in the
-   engine so S5 can pair it — (a) the Terrain surface: the TOT
-   plane words + DAT byte + seen flag per tile beside the
-   existing mirror (the substrate 7h.4 pinned: init_tiles
-   copies EVERY nonzero TOT plane word into 0x4796bc; the DAT
-   byte gates ONLY the seen flag); the terrain-set cell
-   (TERRAIN SET [0x4edd8c] = zone_index+1, D99); (b) the FOUR
-   probe-latch writer sites {z/x/y}→0x4dc688/8c/90
-   last-write-wins + the robots() move-sub-tick collect
-   (±0.34..0.38 tile reach, no standing-on); (c) the CONSUMER
-   clear(0x40bef2)→robot_move→test(0x40bf0b) fire protocol
-   (DAT := 0, mirror word := floor word 0x454a90+4·set, seen
-   := 1, MP-only staging FUN_00425647, then FUN_0040eba0);
-   (d) the apply_pickup dispatch by set + word value (the case
-   list 7h.4; case-4 score/money pair) + the score/money folds
-   in the MissionShell (the destroy-score fold precedent);
-   host-seamed where no engine path reaches it (the D51
-   pattern). CONSTRAINTS: pickup cells are corpus-dead on
-   ZONEA (set 1 = 0 cells; ZONEB set 2 = 601, ZONEF set 6 =
-   149 — D99), so engine tests stay synthetic + the corpus
-   gate asserts ZERO pickup traffic on ZONEA (the S5 scenario
-   itself stages the zone seam later); fmt+clippy green;
-   registry_anchors green; manifest checks bracket any
-   corpus-touching run; no live capture; S0..S4 chains
-   BYTE-IDENTICAL (2ddd15ea50c8a14d joins the pinned set).
+2. [P4.2/W12-S5] THE S5.SCEN + CANONICAL-CHAIN unit (DESIGN §7 S5
+   row; the pickup observation instrument; the E-side producer is
+   LANDED — stage_pickup_surface + the clear→move→test→fire
+   protocol + the case-4 folds, D107/§7h.5, commit 7a2dfeb): (a)
+   the canonical runner wiring — a grammar v1.5 staging key (e.g.
+   `pickup = 1`) that loads the mission's OWN .TOT through the
+   host seam and calls stage_pickup_surface AFTER any destroy
+   staging (the load-order note in its doc comment) + the zone
+   set; NOTE THE ZONE STAGING QUESTION: the runner boots
+   ZONEA/MISSION1 fresh hosts, but S5's pickup leg MUST run ZONEB
+   (set 2, 152 live cells in M1 — the positive control in
+   mission_corpus_gate zoneb_mission1_stages_live_pickup_cells) —
+   decide + land the zone staging (a host seam staging
+   ZONEB/MISSION1's full asset set through load_mission is the
+   D51-pattern candidate; the W5 walk-zone/mission calibration
+   remains the LIVE-capture path, not an E-side requirement); the
+   pads leg can stay ZONEA; (b) S5.scen authored over a real
+   ZONEB pickup corridor (walk orders that fire cases 1..4 —
+   case-4 dominant at 140 cells); (c) the canonical pickup
+   coverage — the consumed cells ride the EXISTING
+   typedb-mirror-rows (REAL-staged now, not empty — S4's recorded
+   empty-mirror divergence closes; the S4 chain must NOT move —
+   the pickup key gates its own staging, S4 does not set it) +
+   the score/money rows (the case-4 folds) + the DAT-byte
+   visibility question (the collision-plane consume changes
+   walkability — check whether a differ row needs the DAT plane
+   or the mirror word suffices); (d) differ_gate S5 row +
+   dbx-plan S5 compile (staging recorded in _e_staging, never
+   fabricated); (e) chain pin + S0..S4 BYTE-IDENTICAL re-assert
+   (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
+   49193732e6dbc546 / 2ddd15ea50c8a14d) + manifest checks bracket
+   corpus runs; fmt+clippy green; registry_anchors green.
  3. [P4.2/dbx-plan-tiers] THE T2/T3 TIER COMPILE unit (the
    W12-S3/S4 live-capture prerequisite; tooling, unattended-
    safe): widen dbx-plan SUPPORTED_TIERS beyond T0/T1/TS so
@@ -261,6 +266,38 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W12-S5-prep THE E-SIDE PICKUP PRODUCER unit
+  COMPLETE (worker f32193a2 claim 2, commits ad43c12 (RE notes
+  §7h.5 first) + 7a2dfeb (engine+tests) + D107). bedlam-core::
+  mission: `stage_pickup_surface` (the init_tiles@00407e11 host
+  seam — the .TOT volume parses, EVERY nonzero plane word stages
+  into the mirror, the DAT byte gates ONLY the seen flag, zone :=
+  zone_index+1 per D99), the clear→move→test→fire consume
+  protocol in robots_phase (last_trigger := None @0x40bef2 →
+  robot_move → test @0x40bf0b → fire_pickup: DAT byte := 0 /
+  mirror word := PICKUP_FLOOR_WORD (table C) / seen := 1 → the
+  dispatch; the FOUR probe-latch sites were already modeled in
+  floor_z), apply_pickup WIDENED (case 4 draws row+amount on the
+  shared stream + the pending (score,money) award the MissionShell
+  folds beside the destroy fold + strip arm; cases 8/9 effect ids
+  0xC/0xD host-seamed — no shipped cells stage them), PICKUP_AWARDS
+  moved core-side. §7h.5 DERIVATION: the range/floor tables are
+  zone_index-0-BASED (the 0x454a04..0x454ac8 DGROUP family is one
+  contiguous 7-dword/0x1C-stride run — no head slots, so
+  base+(cell−1)·4; corpus-confirmed) — and the PRE-EXISTING
+  destroy.rs zone tables (RUBBLE/HAZARD/WATER) are raw-cell with
+  heads, FLAGGED for the S5/S7 differ to arbitrate (corpus-dead).
+  VERIFIED: 4 new synthetic tests + the corpus gate (ZONEA/M1
+  stages the real TOT with ZERO fire traffic — the D99 census
+  re-derived live: 80 cells, the exact word multiset pinned, the
+  staged walk hash-trace-identical to the bare walk; ZONEB/M1
+  positive control: 199 cells/152 in-range/case-4 dominant),
+  canonical_dump_gate 7/7 with S0..S4 chains BYTE-IDENTICAL
+  (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
+  49193732e6dbc546 / 2ddd15ea50c8a14d), differ_gate 7/7,
+  destroy_gate 16/16, weapon_fire_gate 28/28, registry_anchors
+  2/2, workspace green, fmt+clippy clean, manifest clean both
+  sides. Queued: W12-S5 the S5.scen unit (item 2).
 - 2026-08-22: QUEUE HYGIENE unit (worker 78203f4f claim 2, D106):
   the claimed queue item 2 (W12-S4) was found ALREADY CLOSED at
   HEAD (b8925a9, D105, pushed) but left as one of five stale
