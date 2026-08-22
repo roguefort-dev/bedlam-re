@@ -1227,25 +1227,63 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // has NO equivalent write (fabricating an 0xA8 robot record +
     // count bump would be ghost staging). Record it explicitly so the
     // live comparison knows the robot-count diff is the scenario
-    // seam, never a finding.
-    if !scen.markers.is_empty() {
-        j.push_str("  \"_e_staging\": {\n    \"markers\": [\n");
-        for (i, (x, y, z)) in scen.markers.iter().enumerate() {
-            j.push_str(&format!(
-                "      {{ \"x\": {x}, \"y\": {y}, \"z\": {z} }}{}",
-                if i + 1 < scen.markers.len() {
-                    ",\n"
-                } else {
-                    "\n"
-                }
-            ));
+    // seam, never a finding. D103 (grammar v1.3): the loadout key is
+    // the same discipline — the O1 side arms robots by playing the
+    // session (the original fills the slots from the session table
+    // at spawn), so the weapon-slot/ammo diff is the recorded seam.
+    // Byte-identity: loadout-less scenarios emit the same bytes as
+    // before (the pinned capture-plans).
+    if !scen.markers.is_empty() || !scen.loadout.is_empty() {
+        j.push_str("  \"_e_staging\": {\n");
+        if !scen.markers.is_empty() {
+            j.push_str("    \"markers\": [\n");
+            for (i, (x, y, z)) in scen.markers.iter().enumerate() {
+                j.push_str(&format!(
+                    "      {{ \"x\": {x}, \"y\": {y}, \"z\": {z} }}{}",
+                    if i + 1 < scen.markers.len() {
+                        ",\n"
+                    } else {
+                        "\n"
+                    }
+                ));
+            }
+            j.push_str(
+                "    ],\n    \"note\": \"E-side staging seam (D91): extra squad robots the \
+                 ENGINE canonical run banks after the MRK squad. The O1 capture stages \
+                 NO equivalent (never fabricated): its robot-count diff vs E is this \
+                 scenario seam, not a finding\"\n",
+            );
         }
-        j.push_str(
-            "    ],\n    \"note\": \"E-side staging seam (D91): extra squad robots the \
-             ENGINE canonical run banks after the MRK squad. The O1 capture stages \
-             NO equivalent (never fabricated): its robot-count diff vs E is this \
-             scenario seam, not a finding\"\n  },\n",
-        );
+        if !scen.loadout.is_empty() {
+            j.push_str("    \"loadout\": [\n");
+            for (i, lr) in scen.loadout.iter().enumerate() {
+                let slots = lr
+                    .slots
+                    .iter()
+                    .map(|(id, ammo)| format!("{id:#x}:{ammo}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                j.push_str(&format!(
+                    "      {{ \"robot\": {}, \"mask\": {:#x}, \"slots\": \"{}\" }}{}",
+                    lr.robot,
+                    lr.mask,
+                    slots,
+                    if i + 1 < scen.loadout.len() {
+                        ",\n"
+                    } else {
+                        "\n"
+                    }
+                ));
+            }
+            j.push_str(
+                "    ],\n    \"loadout_note\": \"E-side staging seam (D103, grammar v1.3): \
+                 weapon slots staged through the stage_robot_weapons host seam on E. The \
+                 O1 capture arms its robots by playing the session (the original fills the \
+                 slots from the session table at spawn); the weapon-slot/ammo diff vs E is \
+                 this scenario seam, not a finding\"\n",
+            );
+        }
+        j.push_str("  },\n");
     }
     j.push_str("  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n");
     j.push_str("  \"boot_commands\": [\n");
@@ -1589,6 +1627,42 @@ mod tests {
     }
 
     #[test]
+    fn loadout_seam_is_recorded_never_fabricated() {
+        // D103 (grammar v1.3): a loadout-bearing scenario records the
+        // seam in _e_staging — E arms through stage_robot_weapons,
+        // the O1 capture arms its robots by PLAYING the session —
+        // and never writes the robot weapon cells. Tiers stay
+        // T0/T1/TS so the plan compiles (S3 itself carries T2, which
+        // dbx-plan refuses until the remaining T2 aliases land).
+        let src = "scenario = LX\ntiers = T0,T1,TS\nframes = 4\nmarkers = 18,73,1\n\
+                   loadout = 0,0x3,9:2,0x10:4; 1,0x1,0x20:2\n";
+        let scen = Scenario::parse(src).unwrap();
+        assert_eq!(scen.loadout.len(), 2, "the v1.3 staging key parses");
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        assert!(emitted.json.contains("\"loadout\": ["));
+        assert!(emitted
+            .json
+            .contains("{ \"robot\": 0, \"mask\": 0x3, \"slots\": \"0x9:2, 0x10:4\" }"));
+        assert!(emitted
+            .json
+            .contains("{ \"robot\": 1, \"mask\": 0x1, \"slots\": \"0x20:2\" }"));
+        assert!(emitted
+            .json
+            .contains("E-side staging seam (D103, grammar v1.3)"));
+        // The markers block + its D91 note ride the same object.
+        assert!(emitted.json.contains("{ \"x\": 18, \"y\": 73, \"z\": 1 }"));
+        assert!(emitted.json.contains("E-side staging seam (D91)"));
+        // Never fabricated: no inject row touches the robot bank /
+        // count cells (the weapon slots live in the robot records).
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert!(
+                !addr.ends_with("F6D34") && !addr.ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+    }
+
+    #[test]
     fn t2_scenario_refused() {
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
@@ -1860,15 +1934,13 @@ mod tests {
         panic!("no frames key");
     }
 
-    /// (frame, addr, bytes) rows of the "inject" section.
+    /// (frame, addr, bytes) rows of the "inject" section. Step-less
+    /// plans carry no inject section at all — empty, not a panic.
     fn extract_injects(json: &str) -> Vec<(Option<u64>, String, String)> {
-        let section = json
-            .split("\"inject\": [")
-            .nth(1)
-            .unwrap()
-            .split("]")
-            .next()
-            .unwrap();
+        let Some(section) = json.split("\"inject\": [").nth(1) else {
+            return Vec::new();
+        };
+        let section = section.split("]").next().unwrap();
         let mut out = Vec::new();
         for line in section.lines() {
             let line = line
