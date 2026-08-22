@@ -1,0 +1,32 @@
+{
+  "_comment": "W5 INJECT probe (D82). Proves the SMV write primitive + the frame-boundary injection machinery headless with NO game (probe conf = empty autoexec): boot trap (BPLM on the BDA tick cell 0x46C) -> arm (BPDEL * + BPINT 8) -> boot_writes (SMV into the classic 0x500-0x51F DOS/BIOS scratch area BEFORE frame 1) -> per-frame inject rows: a plain seam write at frame 1 and frame 2 (marker bytes), a command-ring append at frame 3 (count cell 0000:0510, records at linear 0x520, stride 0x10 — the 0x4dd4a0/0x46cbe0 ring mechanics against low memory) -> readback watches dump the SAME cells each frame so the gate script asserts write-then-read ordering and the count increment. The injected frames must carry the DBXCAP 'frame N 1' flag. These ids are deliberately NOT registry ids - a probe transcript is never stitched.",
+  "logfile": "dbgprobe.log",
+  "time_limit": 240,
+  "boot_timeout": 90,
+  "flat_guard": false,
+  "frames": 3,
+  "boot_commands": [
+    { "cmd": "BPLM 46C", "expect": "Set linear memory breakpoint at 0000046C" }
+  ],
+  "arm_commands": [
+    { "cmd": "BPDEL *", "expect": "Breakpoints deleted" },
+    { "cmd": "BPINT 8", "expect": "Set interrupt breakpoint at INT 08" }
+  ],
+  "resolve": [],
+  "boot_writes": [
+    { "addr": "0000:0500", "bytes": "beefcafe" }
+  ],
+  "inject": [
+    { "frame": 1, "addr": "0000:0504", "bytes": "11" },
+    { "frame": 2, "addr": "0000:0504", "bytes": "22" },
+    { "frame": 3, "op": "command", "base": "0000:0520", "stride": 16, "count_cell": "0000:0510", "bytes": "aa553c" }
+  ],
+  "anchor_watches": [
+    { "id": "probe-inject-bootcell", "addr": "0000:0500", "len": 5 }
+  ],
+  "watches": [
+    { "id": "probe-inject-marker", "addr": "0000:0504", "len": 1 },
+    { "id": "probe-inject-count", "addr": "0000:0510", "len": 4 },
+    { "id": "probe-inject-ring", "addr": "0000:0520", "len": 16 }
+  ]
+}

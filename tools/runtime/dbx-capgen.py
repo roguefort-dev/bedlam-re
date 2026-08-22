@@ -56,6 +56,17 @@ runs from the staged conf's autoexec. Keys:
   resolve [{name,addr,len}]     little-endian cell reads at the arm
       stop (loader statics: map w/h, volume pointer cells); values
       become $name symbols.
+  boot_writes [{addr,bytes}]    W5 BOOT setup (DESIGN §5.5): SMV writes
+      applied at the arm stop after resolve, before frame 1.
+  inject [{frame,addr,bytes} or {frame,op:"command",base,stride,
+      count_cell,bytes}]
+      W5 frame-boundary writes (DESIGN §5): applied at that capture
+      frame's stop BEFORE the watch dumps; the transcript record gets
+      the injected flag (frame N 1). addr/base/count_cell use the
+      SEG:EXPR grammar (CS: = the flat linear identity; numeric segs
+      are real-mode seg<<4 for probes). The command op appends one
+      record to a count-cell ring: reads count u32, writes the payload
+      zero-extended to the stride at base+count*stride, bumps count.
   anchor_watches / watches      frame 1 dumps anchor_watches+watches
       (TS statics ride the anchor frame), frames 2+ dump watches.
       addr "SEG:<expr>" offsets and len may be arithmetic over $names
@@ -307,6 +318,83 @@ def dump_watch(sess, dblog, workdir, dest, addr, length):
             f"MEMDUMP.BIN short read: {len(data)} bytes, wanted {length} ({addr})"
         )
     return data
+
+
+# ---------------------------------------------------------------- W5 inject
+
+
+def addr_to_linear(addr, symbols):
+    """Plan addr form (SEG:EXPR, same grammar as watches) -> the LINEAR
+    address SMV takes. CS: uses the flat-selector identity (base 0,
+    asserted by the boot guard: linear == the EXD object offset); a
+    numeric segment is real-mode seg<<4 (the probe's BDA form)."""
+    seg, off = addr.split(":", 1)
+    if not _HEX_LIT.match(off):
+        off_val = resolve_expr(off, symbols)
+    else:
+        off_val = int(off, 16)
+    seg = seg.strip()
+    if seg.upper() == "CS":
+        if off_val > 0x12583E:
+            raise ValueError(
+                f"CS-linear {off_val:#x} exceeds the EXD image top 0x12583e"
+            )
+        return off_val
+    seg_val = resolve_expr(seg, symbols) if not _HEX_LIT.match(seg) else int(seg, 16)
+    return (seg_val << 4) + off_val
+
+
+def smv_bytes(sess, dblog, linear, data):
+    """SMV <linear> <byte tokens> — the D80-verified write primitive.
+    One round-trip; every token is a 2-hex-digit BYTE (never a register
+    name), ack 'DEBUG: Memory changed (N bytes)'."""
+    if not data:
+        raise ValueError("smv_bytes: empty payload")
+    toks = " ".join(f"{b:02X}" for b in data)
+    send_cmd(sess, f"SMV {linear:X} {toks}")
+    dblog.expect(rb"DEBUG: Memory changed", timeout=20)
+
+
+def apply_inject(sess, dblog, args, dumps, row, symbols):
+    """One plan inject row, applied at a frame-boundary stop BEFORE the
+    watch dumps. Forms:
+      {frame, addr, bytes}                      plain seam write
+      {frame, op:command, base, stride,
+       count_cell, bytes}                       command-ring append:
+                                                read count u32 (LE),
+                                                write the record at
+                                                base+count*stride
+                                                (zero-extended), bump
+                                                the count cell."""
+    data = bytes.fromhex(row.get("bytes", ""))
+    if row.get("op") == "command":
+        stride = int(row["stride"], 0) if isinstance(row["stride"], str) else int(row["stride"])
+        if stride <= 0 or len(data) > stride:
+            raise ValueError(
+                f"command inject payload {len(data)} does not fit stride {stride}"
+            )
+        base_l = addr_to_linear(row["base"], symbols)
+        cell_l = addr_to_linear(row["count_cell"], symbols)
+        dest = os.path.join(dumps, "inject.count.bin")
+        # the read goes through the plan's own SEG:OFF form verbatim
+        # (MEMDUMPBIN resolves register names + pmode selectors itself;
+        # the SMV writes use the linear conversion).
+        cur = dump_watch(sess, dblog, args.workdir, dest, row["count_cell"], 4)
+        count = int.from_bytes(cur, "little")
+        rec = data + b"\x00" * (stride - len(data))
+        smv_bytes(sess, dblog, base_l + count * stride, rec)
+        smv_bytes(sess, dblog, cell_l, (count + 1).to_bytes(4, "little"))
+        print(
+            f"capgen: inject command #{count} -> {base_l + count * stride:#x} "
+            f"({len(data)} B payload), count {count} -> {count + 1}",
+            file=sys.stderr,
+        )
+        return
+    if not data:
+        raise ValueError(f"inject row has no bytes: {row!r}")
+    linear = addr_to_linear(row["addr"], symbols)
+    smv_bytes(sess, dblog, linear, data)
+    print(f"capgen: inject {linear:#x} <- {data.hex()}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- plan v2
@@ -594,6 +682,21 @@ def run_capture(args):
             selector_pin = run_arm(sess, dblog, plan)
             symbols = run_resolve(sess, dblog, plan, args, dumps)
             print(f"capgen: selector pin CS={selector_pin}", file=sys.stderr)
+            # W5 BOOT writes (§5.5): applied at the arm stop, after the
+            # resolve symbols exist, before frame 1.
+            for row in plan.get("boot_writes", []):
+                data = bytes.fromhex(row.get("bytes", ""))
+                if not data:
+                    raise ValueError(f"boot_writes row has no bytes: {row!r}")
+                smv_bytes(sess, dblog, addr_to_linear(row["addr"], symbols), data)
+                print(
+                    f"capgen: boot write {row['addr']} <- {data.hex()}",
+                    file=sys.stderr,
+                )
+
+        inject_by_frame = {}
+        for row in plan.get("inject", []):
+            inject_by_frame.setdefault(int(row["frame"]), []).append(row)
 
         def dump_rows(frame, rows_def):
             rows = []
@@ -614,8 +717,14 @@ def run_capture(args):
                     # No burst seen; proceed anyway — the next ack check
                     # fails loudly if the machine never stopped.
                     print(f"capgen: frame {frame}: no hit burst seen; relying on ack", file=sys.stderr)
+            # W5 injection (§5): apply this frame boundary's rows BEFORE
+            # the dumps (the record carries injection_applied=1).
+            injected = False
+            for row in inject_by_frame.get(frame, []):
+                apply_inject(sess, dblog, args, dumps, row, symbols)
+                injected = True
             rows = dump_rows(frame, anchor_watches + watches if frame == 1 else watches)
-            frames.append((frame, rows))
+            frames.append((frame, rows, injected))
 
         if args.probe:
             send_cmd(sess, "BPDEL *")
@@ -641,8 +750,8 @@ def run_capture(args):
             )
             for name, val in symbols.items():
                 f.write(f"# resolved {name}={val:#x}\n")
-        for frame, rows in frames:
-            f.write(f"frame {frame}\n")
+        for frame, rows, injected in frames:
+            f.write(f"frame {frame} 1\n" if injected else f"frame {frame}\n")
             for wid, data in rows:
                 f.write(f"watch {wid} {data.hex()}\n")
     print(f"capgen: wrote {args.out} ({frames_total} frames, {len(watches) + len(anchor_watches)} watches/frame-1, {len(watches)}/frame-n)")

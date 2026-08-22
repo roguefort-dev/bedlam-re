@@ -159,6 +159,59 @@ MSG
   }
   MODE="${1:-gate}"
   FRAMES="${2:-3}"
+  if [ "$MODE" = "inject" ]; then
+    # W5 INJECT probe (still NO game: probe conf, empty autoexec):
+    # boot trap -> arm -> boot_writes (SMV before frame 1) -> per-frame
+    # inject rows (plain seam writes + one command-ring append) ->
+    # readback watches. Proves: SMV write+ack, write-then-dump ordering,
+    # count-cell read/record-write/count-bump, and the 'frame N 1'
+    # injected flags in the DBXCAP transcript.
+    PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbginject"
+    mkdir -p "$PROBE_OUT"
+    echo "inject probe: W5 SMV emitter + frame-boundary injection, no game launch"
+    python3 "$CAPGEN" \
+      --dbx "$DBG_BIN" \
+      --conf "$PROBE_CONF" \
+      --plan "$REPO_ROOT/tools/runtime/dbgprobe-inject-plan.json" \
+      --workdir "$PROBE_OUT" \
+      --out "$PROBE_OUT/capture.dbxcap"
+    python3 - "$PROBE_OUT/capture.dbxcap" <<'PYCHK'
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+assert lines[0] == "DBXCAP v1", lines[0]
+frames = {}   # no -> (injected, {id: hex})
+cur = None
+for ln in lines:
+    p = ln.split()
+    if not p:
+        continue
+    if p[0] == "frame":
+        cur = int(p[1])
+        frames[cur] = (len(p) > 2 and p[2] == "1", {})
+    elif p[0] == "watch":
+        ok, rows = frames[cur]
+        rows[p[1]] = p[2] if len(p) > 2 else ""
+assert sorted(frames) == [1, 2, 3], f"frame keys {sorted(frames)}"
+# every frame here carries an injection -> flag must be 1
+for no, (inj, _) in frames.items():
+    assert inj, f"frame {no} missing the injected flag"
+# frame 1 (anchor): boot write visible + the frame-1 marker already
+# applied BEFORE the dumps (write-then-read ordering)
+_, f1 = frames[1]
+assert f1["probe-inject-bootcell"] == "beefcafe11", f1
+# frame 2: the plain re-write landed
+_, f2 = frames[2]
+assert f2["probe-inject-marker"] == "22", f2
+# frame 3: the command-ring append — count 0 -> 1, payload zero-extended
+_, f3 = frames[3]
+assert f3["probe-inject-count"] == "01000000", f3
+assert f3["probe-inject-ring"] == "aa553c" + "00" * 13, f3
+print("inject probe: GREEN (SMV write+ack, boot_writes, frame-boundary inject, command-ring append, injected flags)")
+PYCHK
+    echo "inject transcript: $PROBE_OUT/capture.dbxcap"
+    echo "pty log:           $PROBE_OUT/pty.log"
+    return
+  fi
   if [ "$MODE" = "flow" ]; then
     # D81 live-FLOW probe (still NO game: probe conf, empty autoexec):
     # boot trap (BPLM) -> arm (BPDEL * + BPINT 8) -> runtime resolve ->
@@ -300,7 +353,7 @@ case "$1" in
     dbgprobe "$2" "$3"
     ;;
   *)
-    echo "usage: $0 {prepare|smoke|shell|game|dbgprobe [gate|flow] [frames]|diff stage|diff run|diff capture|diff stitch}" >&2
+    echo "usage: $0 {prepare|smoke|shell|game|dbgprobe [gate|flow|inject] [frames]|diff stage|diff run|diff capture|diff stitch}" >&2
     exit 2
     ;;
 esac
