@@ -1491,6 +1491,21 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                 .to_string(),
         );
     }
+    if scen.platforms {
+        staging.push(
+            "    \"platforms\": true,\n    \"platforms_note\": \"E-side arm key \
+             (D113, grammar v1.6): the epilogue creep tick FUN_00422a9c runs \
+             ARMED on E (the MissionShell epilogue call, §7j.41/4). The ORIGINAL \
+             calls it EVERY frame unconditionally — one RandA gate-draw per frame \
+             consumed even with no platform staged — so on O1 the tick needs NO \
+             staging (an equivalence), but the per-frame draw shifts the O1 RNG \
+             stream vs an unarmed E run on EVERY scenario: the rng-state rows are \
+             the channel finding class (budgeted, never a fabricated write). The \
+             platform banks/tick writers need no inject rows — the run's own fire \
+             produces every state change\""
+                .to_string(),
+        );
+    }
     if !staging.is_empty() {
         j.push_str("  \"_e_staging\": {\n");
         j.push_str(&staging.join(",\n"));
@@ -2159,6 +2174,55 @@ mod tests {
                 "ghost staging write to the robot bank/count: {addr}"
             );
         }
+    }
+
+    #[test]
+    fn s7_plan_compiles_the_platform_seams() {
+        // W12-S7 (§7j.41, D113): grammar v1.6 `platforms = 1` arms the
+        // epilogue creep tick on E — an ARM key, recorded in
+        // _e_staging as the RNG-stream equivalence (the ORIGINAL
+        // draws one gate RandA per frame unconditionally). The
+        // platform banks and the tick writers need NO inject rows:
+        // the run's own fire (5 COMMAND records: the frame-1
+        // artillery + the four grenade volleys) produces every state
+        // change; the destroy/pickup/loadout seams record as on
+        // S4/S5/S3.
+        let s7 = Scenario::parse(include_str!("../../scenarios/S7.scen")).unwrap();
+        assert!(s7.platforms);
+        assert!(s7.destroy);
+        assert!(s7.pickup);
+        assert_eq!(s7.markers, vec![(3, 57, 2)], "the gunner ON the trigger tile");
+        let emitted = emit_plan(&s7, &registry()).unwrap();
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("\"platforms\": true"));
+        assert!(emitted
+            .json
+            .contains("one RandA gate-draw per frame consumed even with no platform staged"));
+        assert!(emitted.json.contains("\"destroy\": true"));
+        assert!(emitted.json.contains("\"pickup\": true"));
+        assert!(emitted.json.contains("\"loadout\": ["));
+        // 5 inject rows: the frame-1 artillery command + the four
+        // grenade volleys (f18/f22/f26/f30) — all ring appends, never
+        // a staging write to the robot bank/count or a platform bank.
+        assert_eq!(emitted.inject_count, 5);
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert_eq!(addr, "CS:0009255C", "the command ring append");
+            assert!(
+                !addr.to_uppercase().ends_with("F6D34") && !addr.to_uppercase().ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+    }
+
+    #[test]
+    fn s7_plan_matches_committed_artifact() {
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S7.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S7.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S7.json is stale: regenerate with dbx-plan scenarios/S7.scen --out capture-plans/S7.json");
     }
 
     #[test]
