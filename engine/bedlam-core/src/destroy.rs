@@ -96,6 +96,27 @@ pub const HAZARD_7D2: [i32; 8] = [0, 0x20, 0x49, 0x49, 0x34E, 0x49, 0x77, 0x77];
 /// z-word in `[base, base+4)` → grid word 0x7d3.
 pub const HAZARD_7D3: [i32; 8] = [0, 0x49, 0x77, 0x77, 0x49, 0x4E, 0x4E, 0x349];
 
+/// The per-zone bridge-build TRIGGER CODES of FUN_00422600
+/// [§7j.41/1, table bytes 0x4225e4/0x4225d0]: destroying an
+/// instance whose TYPE row index equals the zone's code builds a
+/// strength-300 ring at the instance's own record. Zone 3 picks
+/// from the MP-mode sub-table by the WITHIN-ZONE mission number
+/// (missions 1..5, else never); zone 6 carries the never-code
+/// 0x2710 (no type index reaches it).
+pub fn zone_trigger_code(zone: u32, mission_no: u32) -> Option<i32> {
+    match zone {
+        1 | 4 => Some(5),
+        2 | 7 => Some(0x84),
+        3 => match mission_no {
+            1..=5 => Some([0x6f, 0x7e, 0x80, 0x79, 0x88][(mission_no - 1) as usize]),
+            _ => None,
+        },
+        5 => Some(0x2f),
+        6 => Some(0x2710),
+        _ => None,
+    }
+}
+
 /// One 8-B effect entry of the .BDG type row [§7j.25]: selector
 /// u16 + x/y/z u16 TILE offsets staged relative to the destroyed
 /// instance's origin. ON DISK at record +0x12+8m (head 0x3A); in
@@ -936,17 +957,36 @@ impl MissionSim {
     }
 
     /// The destroy tail [§7j.25/1-3, §7j.38/1-2, §7j.39/5]:
-    /// objective notify → the GER gate → the footprint terrain
-    /// RESTORE → the five-effect loop → the score award → the four
-    /// perimeter CHAIN walks. The trigger producers
-    /// (FUN_00422e0a/FUN_00422600) are S7-routed no-ops; the
-    /// [0x46cce4] quake notify is presentation.
+    /// objective notify → the trigger producers → the GER gate →
+    /// the footprint terrain RESTORE → the five-effect loop → the
+    /// score award → the four perimeter CHAIN walks. The trigger
+    /// dispatcher FUN_00422600 [§7j.41/1] now MODELED (the
+    /// zone-code match builds the strength-300 ring at the dying
+    /// instance's record); FUN_00422e0a (the delayed-trigger
+    /// payload producer, FUN_00439c20 census-unidentified) stays a
+    /// no-op E-gap; the [0x46cce4] quake notify is presentation.
     fn destroy_tail(&mut self, idx: usize, counter: i32, score_flag: bool) {
         // notify [0x46cce4] := 2 is presentation (the quake
         // countdown — the renderer's shake tables); zone ≠ 1 →
         // the objective notify FUN_00448b80 subset.
         if self.zone != 1 {
             self.objective_notify(idx);
+        }
+        // The bridge-build trigger dispatcher FUN_00422600
+        // [§7j.41/1]: id == the zone's code → the ring at the
+        // dying instance's own (x,y,z), strength 0x12C.
+        {
+            let (bid, bx, by, bz) = {
+                let Some(inst) = self.objects.get(idx) else {
+                    return;
+                };
+                (inst.id, inst.x, inst.y, inst.z)
+            };
+            if let Some(code) = zone_trigger_code(self.zone, self.mission_no) {
+                if bid == code {
+                    self.platform_ring_build(bx, by, bz, 0x12C);
+                }
+            }
         }
         let Some(ty) = self
             .object_types
@@ -1254,12 +1294,21 @@ impl MissionSim {
         self.language = language;
     }
 
+    /// Stage the within-zone mission number [0x4edd88] — the
+    /// zone-3 bridge-trigger sub-dispatch index (§7j.41/1).
+    /// Host-seamed like [`MissionSim::set_language`]; 1 = the
+    /// modeled default.
+    pub fn set_mission_no(&mut self, mission_no: u32) {
+        self.mission_no = mission_no;
+    }
+
     /// Stage one platform tile — the FUN_004228ce write half
-    /// [§7j.12/3]: the water z-structure at the empty level (word =
-    /// the zone water base, seen 1), the 0x7d4 grid word, the
-    /// strength word. The spread-ring BUILD conditions (the
-    /// emptiness/claim/robot-presence gates) are the S7 seam — the
-    /// host stages the result.
+    /// [§7j.12/3 + §7j.41/2]: the water z-structure at the empty
+    /// level (word = the zone water base, volume 2, seen := 0),
+    /// the 0x7d4 grid word, the strength word. The spread-ring
+    /// BUILD conditions now MODELED ([`MissionSim::
+    /// platform_ring_build`]); this host seam stages the result
+    /// directly (the S4-era contract, kept for synthetic tests).
     pub fn stage_platform(&mut self, x: i32, y: i32, z: i32, strength: u16) -> bool {
         let (w, h) = self.terrain.size();
         if x < 0 || y < 0 || x >= w || y >= h || self.object_grid.len() != (w * h) as usize {
@@ -1270,7 +1319,7 @@ impl MissionSim {
             return false;
         };
         let tile = (y * w + x) as usize;
-        self.z_structure_write(x, y, z, base as u16, 0);
+        self.z_structure_write(x, y, z, base as u16, 2);
         self.object_grid[tile] = 0x7d4;
         self.platform_strength[tile] = strength;
         true
@@ -1511,15 +1560,18 @@ impl MissionSim {
     // The platform entry + the script blast + the trap lane
     // -----------------------------------------------------------------
 
-    /// FUN_00422693 — the platform DAMAGE entry [§7j.12/2,
-    /// verified]: bounds; scan z 0..7 for the FIRST water-range
-    /// mirror z-word (none → exit — only real platforms take
-    /// damage); `diff = (i16)strength − damage`; a non-positive
-    /// diff → DESTROY (clear the water z-structure, zero both
-    /// bank words, FIVE k7 debris with 2 RandA draws each — 10
-    /// total); a positive diff → WEAKEN (strength := diff, the +4
-    /// scorch increment, the spread-ring gate is the S7 E-gap).
-    /// Both paths store the creep seed site.
+    /// FUN_00422693 — the platform DAMAGE entry [§7j.12/2 +
+    /// §7j.41/3 re-read, verified]: bounds; scan z 0..7 for the
+    /// FIRST water-range mirror z-word (none → exit — only real
+    /// platforms take damage); `diff = (i16)strength − damage`; a
+    /// non-positive diff → DESTROY (clear the water z-structure,
+    /// zero both bank words, FIVE k7 debris with 2 RandA draws
+    /// each — 10 total, NO site store); a positive diff → WEAKEN
+    /// (strength := diff, the +4 scorch increment, then the RING
+    /// GATE `(old ≥ 200 ∧ new < 200) ∨ (old ≥ 100 ∧ new < 100)`
+    /// [§7j.41/3 — the §7j.12/2 gloss corrected] →
+    /// FUN_00422832(x, y, z, new) + the creep-site latch, ONLY on
+    /// the ring path).
     pub fn platform_damage(&mut self, x: i32, y: i32, damage: i32) {
         let (w, h) = self.terrain.size();
         if x < 0 || y < 0 || x >= w || y >= h {
@@ -1546,10 +1598,10 @@ impl MissionSim {
         };
         let strength = strength as i16;
         let diff = strength as i32 - damage;
-        self.platform_site = (x, y);
         if diff <= 0 {
-            // DESTROY: clear the water z-structure + both banks,
-            // then five k7 debris (delay k·2, param −1).
+            // DESTROY [§7j.41/3]: clear the water z-structure + both
+            // banks, then five k7 debris (delay k·2, param −1). NO
+            // creep-site store on this path.
             self.z_structure_write(x, y, z, 0, 0);
             self.platform_strength[tile] = 0;
             if self.object_grid.get(tile) == Some(&0x7d4) {
@@ -1561,15 +1613,181 @@ impl MissionSim {
                 self.stage_debris(x * 0x20 + dx, y * 0x20 + dy, z * 0x20, 7, k * 2, -1);
             }
         } else {
-            // WEAKEN: strength := diff; the +4 scorch increment
-            // (clamp 7); the spread-ring FUN_00422832 gate is the
-            // S7 seam (needs the zone water range + robot
-            // presence) — recorded, not modeled.
+            // WEAKEN [§7j.41/3]: strength := diff; the +4 scorch
+            // increment (clamp 7); then the ring gate — the ring
+            // passes the NEW strength and latches the creep site.
+            let old = strength as i32;
             if let Some(s) = self.platform_strength.get_mut(tile) {
                 *s = diff as u16;
             }
             self.scorch_increment(x * 0x20, y * 0x20, 4);
+            if (old >= 200 && diff < 200) || (old >= 100 && diff < 100) {
+                self.platform_ring_build(x, y, z, diff as u16);
+                self.platform_site = (x, y);
+            }
         }
+    }
+
+    /// FUN_00422832 — the platform SPREAD RING [§7j.41/2,
+    /// verified 0x422832..0x4228cd]: EIGHT FUN_004228ce calls in
+    /// row-major N→S order over the 3×3-minus-center neighbors —
+    /// the center tile is never built. No RandA draws (the build
+    /// writes are draw-free).
+    pub fn platform_ring_build(&mut self, x: i32, y: i32, z: i32, strength: u16) {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                self.platform_tile_build(x + dx, y + dy, z, strength);
+            }
+        }
+    }
+
+    /// FUN_004228ce — build ONE platform tile, gates in the
+    /// original's instruction order [§7j.41/2, verified
+    /// 0x4228ce..0x422a3c]: bounds; BOTH bank words 0; the
+    /// tile-claim arena byte 0 (host-staged zeros — the
+    /// order-marker writers are the D82 seam); no LIVE robot in
+    /// the candidate's (tx,ty)..(tx+1,ty+1) quadrant block (the
+    /// robot scan over the whole bank, tile =
+    /// (q5 − 0xC)>>5); z ≥ 1; the mirror z-word at the build
+    /// level 0; the DAT volume at level z 0; the DAT volume at
+    /// level z−1 == 1 (the plane-B anchor — the z_base table
+    /// shifted one slot). WRITES: the water z-structure (zone
+    /// stamped-word base, volume 2 — seen := 0), grid word 0x7d4,
+    /// the strength word, scorch +4.
+    fn platform_tile_build(&mut self, x: i32, y: i32, z: i32, strength: u16) -> bool {
+        let (w, h) = self.terrain.size();
+        if x < 0 || y < 0 || x >= w || y >= h {
+            return false;
+        }
+        let tile = (y * w + x) as usize;
+        if self.platform_strength.get(tile).copied().unwrap_or(1) != 0 {
+            return false;
+        }
+        if self.object_grid.get(tile).copied().unwrap_or(1) != 0 {
+            return false;
+        }
+        // The tile-claim byte (0x46af58 arena): host-staged zeros —
+        // the D82 order-marker writers are the unmodeled seam, so
+        // the gate reads 0 by construction [documented E-gap].
+        for r in &self.robots {
+            if !r.alive {
+                continue;
+            }
+            let (qx, qy) = r.q5();
+            let tx = (qx - 0xC) >> 5;
+            let ty = (qy - 0xC) >> 5;
+            if (x == tx || x == tx + 1) && (y == ty || y == ty + 1) {
+                return false;
+            }
+        }
+        if z <= 0 || z > 7 {
+            return false;
+        }
+        if self.mirror_word(tile, z as usize) != 0 {
+            return false;
+        }
+        if self.terrain.dat_type(x, y, z) != 0 {
+            return false;
+        }
+        if self.terrain.dat_type(x, y, z - 1) != 1 {
+            return false;
+        }
+        let zone = self.zone as usize;
+        let Some(&base) = WATER_RANGE.get(zone) else {
+            return false;
+        };
+        self.z_structure_write(x, y, z, base as u16, 2);
+        self.object_grid[tile] = 0x7d4;
+        self.platform_strength[tile] = strength;
+        self.scorch_increment(x * 0x20, y * 0x20, 4);
+        true
+    }
+
+    /// FUN_00422a9c — the platform CREEP tick [§7j.41/4, verified
+    /// 0x422a9c..0x422c70]: RandA draw #1 at entry — the
+    /// UNCONDITIONAL 1/32 gate (the original draws it EVERY frame;
+    /// E arms the whole tick with the platform family, D113); on a
+    /// lucky frame: 2 jitter draws (±(RandA&7)−3 around the creep
+    /// site), bounds, a platform must stand at the seed, the first
+    /// water z (none → exit), the direction draw (up/right/down/
+    /// left), the ray walk while the next tile's z-word is water
+    /// (OOB mid-walk → exit, NO build), one step back onto the
+    /// last water tile, then the ring at strength 199 + the site
+    /// := the tip.
+    pub fn platform_creep_tick(&mut self) {
+        if self.rand_a() & 0x1F != 0 {
+            return;
+        }
+        let (sx, sy) = self.platform_site;
+        let x = sx + (self.rand_a() & 7) as i32 - 3;
+        let y = sy + (self.rand_a() & 7) as i32 - 3;
+        let (w, h) = self.terrain.size();
+        if x < 0 || y < 0 || x >= w || y >= h {
+            return;
+        }
+        let tile = (y * w + x) as usize;
+        if self.platform_strength.get(tile).copied().unwrap_or(0) == 0 {
+            return;
+        }
+        let zone = self.zone as usize;
+        let Some(&base) = WATER_RANGE.get(zone) else {
+            return;
+        };
+        let mut z = 8i32;
+        for zz in 0..8 {
+            let word = self.mirror_word(tile, zz) as i32;
+            if word >= base && word < base + 0xE {
+                z = zz as i32;
+                break;
+            }
+        }
+        if z >= 8 {
+            return;
+        }
+        let (dx, dy) = match self.rand_a() & 3 {
+            0 => (0, -1),
+            1 => (1, 0),
+            2 => (0, 1),
+            _ => (-1, 0),
+        };
+        let (mut wx, mut wy) = (x, y);
+        loop {
+            wx += dx;
+            wy += dy;
+            if wx < 0 || wy < 0 || wx >= w || wy >= h {
+                return; // OOB mid-walk: no build [§7j.41/4]
+            }
+            let t = (wy * w + wx) as usize;
+            let word = self.mirror_word(t, z as usize) as i32;
+            if !(word >= base && word < base + 0xE) {
+                break;
+            }
+        }
+        // Step back onto the last water tile.
+        wx -= dx;
+        wy -= dy;
+        if wx < 0 || wy < 0 || wx >= w || wy >= h {
+            return;
+        }
+        self.platform_ring_build(wx, wy, z, 199);
+        self.platform_site = (wx, wy);
+    }
+
+    /// The platform-family ARMING (grammar `platforms = 1`): the
+    /// original's epilogue creep tick runs EVERY frame; E arms it
+    /// per scenario so the S0..S6 chains stay byte-identical (the
+    /// per-frame gate draw on unarmed paths is the recorded E-gap,
+    /// D113/§7j.41/4).
+    pub fn arm_platform_family(&mut self) {
+        self.platform_family_armed = true;
+    }
+
+    /// Whether the platform epilogue family is armed.
+    pub fn platform_family_armed(&self) -> bool {
+        self.platform_family_armed
     }
 
     /// FUN_004244a1 — the SCRIPT BLAST [§7j.39/1, verified
@@ -1701,5 +1919,95 @@ impl MissionSim {
         let (x, y, z) = (rec.x, rec.y, rec.z);
         self.stage_debris(x >> 8, y >> 8, z >> 8, kind, 0, -1);
         self.enemy_bank[i].kind = 0;
+    }
+}
+
+#[cfg(test)]
+mod s7_tests {
+    //! The §7j.41 pub(crate)-state pins: the creep-site latch
+    //! (ring-path-only), the arming flag, and the zone trigger
+    //! codes. The bank/wire-level assertions live in the
+    //! destroy_gate integration tests.
+
+    use super::{zone_trigger_code, MissionSim};
+    use crate::destroy::ObjectTypeTable;
+    use crate::mission::{AngleTable, Terrain};
+
+    fn sim() -> MissionSim {
+        let terrain =
+            Terrain::from_parts(32, 32, vec![0u8; 8 * 32 * 32], Vec::new()).expect("terrain");
+        let angles = AngleTable::from_thresholds(&[0u16; 64]).expect("thresholds");
+        let mut s = MissionSim::new(terrain, angles, 0x1234_5678);
+        // Stage the destroy banks (empty corpora) so the platform
+        // seams have their grids allocated.
+        let mut pos = vec![0xFFu8; 16 * 2000];
+        for slot in 0..2000 {
+            // the id sentinel only — x/y/z stay 0
+            pos[slot * 16 + 12..slot * 16 + 16].copy_from_slice(&(-1i32).to_le_bytes());
+        }
+        assert!(s.stage_destroy_family(&ObjectTypeTable::default(), &pos, &[0u8, 0], 1, 0));
+        s
+    }
+
+    #[test]
+    fn zone_trigger_codes_match_the_tables() {
+        // §7j.41/1: the 0x4225e4 zone table + the zone-3 mission
+        // sub-table 0x4225d0.
+        assert_eq!(zone_trigger_code(1, 1), Some(5));
+        assert_eq!(zone_trigger_code(4, 7), Some(5));
+        assert_eq!(zone_trigger_code(2, 1), Some(0x84));
+        assert_eq!(zone_trigger_code(7, 1), Some(0x84));
+        assert_eq!(zone_trigger_code(5, 1), Some(0x2f));
+        assert_eq!(zone_trigger_code(6, 1), Some(0x2710), "the never-code");
+        assert_eq!(zone_trigger_code(3, 1), Some(0x6f));
+        assert_eq!(zone_trigger_code(3, 2), Some(0x7e));
+        assert_eq!(zone_trigger_code(3, 5), Some(0x88));
+        assert_eq!(zone_trigger_code(3, 6), None, "missions 6/7 match nothing");
+        assert_eq!(zone_trigger_code(0, 1), None);
+        assert_eq!(zone_trigger_code(8, 1), None);
+    }
+
+    #[test]
+    fn creep_site_latches_only_on_the_ring_path() {
+        // §7j.41/3: the destroy path stores NO site; the weaken
+        // path latches ONLY when the ring gate passes.
+        let mut s = sim();
+        s.zone = 1;
+        s.stage_platform(5, 5, 2, 300);
+        // Destroy (diff ≤ 0): no site store.
+        s.platform_damage(5, 5, 500);
+        assert_eq!(s.platform_site, (0, 0), "destroy stores no site");
+        // Weaken 300 → 225: the gate (old ≥ 200 ∧ new < 200) ∨
+        // (old ≥ 100 ∧ new < 100) rejects (225 ≥ 200 ∧ 225 ≥ 100).
+        let mut s2 = sim();
+        s2.zone = 1;
+        s2.stage_platform(5, 5, 2, 300);
+        s2.platform_damage(5, 5, 75);
+        assert_eq!(s2.platform_site, (0, 0), "no ring → no latch");
+        assert_eq!(s2.platform_strength_word(5, 5), 225);
+        // Weaken 225 → 150: old ≥ 200 ∧ new < 200 → the ring (no
+        // substrate staged → no builds, but the site latches).
+        s2.platform_damage(5, 5, 75);
+        assert_eq!(s2.platform_strength_word(5, 5), 150);
+        assert_eq!(s2.platform_site, (5, 5), "the ring path latches");
+    }
+
+    #[test]
+    fn platform_family_arms_and_advances_draw() {
+        // Unarmed: advance_frame never touches the creep tick (the
+        // S0..S6 no-inject invariant, D113). Armed: every frame
+        // draws at least the 1/32 gate RandA.
+        let mut s = sim();
+        s.zone = 1;
+        let before = s.rand_a_state();
+        for _ in 0..8 {
+            s.advance_frame();
+        }
+        assert_eq!(s.rand_a_state(), before, "unarmed: no draws");
+        s.arm_platform_family();
+        assert!(s.platform_family_armed());
+        let before = s.rand_a_state();
+        s.advance_frame();
+        assert_ne!(s.rand_a_state(), before, "armed: the gate draw ran");
     }
 }

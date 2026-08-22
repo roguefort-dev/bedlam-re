@@ -803,6 +803,9 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 "destroy staging rejected (terrain not sized / POS length)".into(),
             ));
         }
+        // The within-zone mission number [0x4edd88] — the zone-3
+        // bridge-trigger sub-dispatch index (§7j.41/1).
+        scene.sim_mut().set_mission_no(mission_no as u32);
     }
 
     // The pickup-surface staging (W12-S5, grammar v1.5 `pickup = 1`,
@@ -830,6 +833,20 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
             ));
         }
         scene.sim_mut().stamp_hazard_words();
+    }
+
+    // The platform-family arm (W12-S7, grammar v1.6 `platforms = 1`,
+    // D113): arm the epilogue creep tick (FUN_00422a9c, the
+    // MissionShell epilogue call 0x44808a). The ORIGINAL runs the
+    // tick EVERY frame from boot (its 1/32 gate draws one RandA per
+    // frame); E arms it per scenario so the S0..S6 chains stay
+    // byte-identical — the per-frame gate draw on unarmed paths is
+    // the recorded E-gap (§7j.41/4). Purely an E-side arming
+    // decision: nothing is staged on the guest (O1 runs the tick
+    // natively); consumers record the key in `_e_staging`.
+    if scen.platforms {
+        let scene = host.mission_mut().expect("mission staged");
+        scene.sim_mut().arm_platform_family();
     }
 
     // The LOADOUT staging seam (W12-S3, grammar v1.3): expand the

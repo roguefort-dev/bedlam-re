@@ -11,7 +11,7 @@
 //!
 //! Two formats:
 //!
-//! **Scenario grammar v1.5** (`scenarios/*.scen`, committed):
+//! **Scenario grammar v1.6** (`scenarios/*.scen`, committed):
 //! ```text
 //! # comment / blank lines
 //! scenario = S0              ; id (dump header; <=255 bytes)
@@ -24,6 +24,7 @@
 //! destroy = 1                ; stage .BDG/.POS/.TRT (D105, v1.4)
 //! zone = "B"                 ; episode-slot zone letter (D108, v1.5)
 //! pickup = 1                 ; stage the .TOT pickup surface (D108, v1.5)
+//! platforms = 1              ; arm the epilogue creep tick (D113, v1.6)
 //! step 10                    ; advance N frames, no input      (runner)
 //! capture                    ; force a frame dump              (runner)
 //! until-anchor mission-start ; run to the anchor event         (runner)
@@ -145,6 +146,17 @@ pub struct Scenario {
     /// stagings gate different dump rows and S4 must keep its
     /// empty-staged mirror bytes (its chain is pinned).
     pub pickup: bool,
+    /// The platform-family arm key (grammar v1.6 `platforms = 1`,
+    /// W12-S7/D113): arm the epilogue platform CREEP tick
+    /// (FUN_00422a9c, the MissionShell epilogue call 0x44808a).
+    /// The ORIGINAL runs the tick EVERY frame — its 1/32 gate
+    /// draws one RandA per frame from boot — while E arms it per
+    /// scenario so the S0..S6 chains stay byte-identical (the
+    /// per-frame gate draw on unarmed paths is the recorded
+    /// E-gap, D113/§7j.41/4). Purely an E-side arming decision:
+    /// O1 runs the tick natively, nothing is staged on the guest,
+    /// consumers record the key in `_e_staging`.
+    pub platforms: bool,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
@@ -248,6 +260,7 @@ impl Scenario {
         let mut destroy = false;
         let mut zone: Option<char> = None;
         let mut pickup = false;
+        let mut platforms = false;
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -679,6 +692,30 @@ impl Scenario {
                             }
                             pickup = true;
                         }
+                        "platforms" => {
+                            // W12-S7 (grammar v1.6, D113): the boolean
+                            // platform-family arm key — `platforms = 1`
+                            // arms the epilogue creep tick (the original
+                            // runs it every frame; the per-frame gate
+                            // draw on unarmed paths is the recorded
+                            // E-gap). Strictly `1` (same fail-loud
+                            // rule as destroy/pickup).
+                            if value.trim() != "1" {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "platforms key is boolean arming: use `platforms = 1`",
+                                ));
+                            }
+                            if platforms {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "platforms armed twice (one key per scenario)",
+                                ));
+                            }
+                            platforms = true;
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -727,6 +764,7 @@ impl Scenario {
             destroy,
             zone,
             pickup,
+            platforms,
             steps,
         })
     }

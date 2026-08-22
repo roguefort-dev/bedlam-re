@@ -642,3 +642,200 @@ fn no_inject_pass_through() {
     assert_eq!(sim.debris_bank().len(), 128);
     assert_eq!(sim.splash_bank().len(), 250);
 }
+
+// ---------------------------------------------------------------------
+// The W12-S7 platform producers (§7j.41; D113)
+// ---------------------------------------------------------------------
+
+/// Substrate terrain for the ring builds: volume 1 at z=1 under a
+/// tile block, volume 0 at z=2 (the FUN_004228ce plane-A/plane-B
+/// gates, §7j.41/2).
+fn substrate(sim: &mut MissionSim, x0: i32, y0: i32, x1: i32, y1: i32) {
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            sim.terrain.dat_write(x, y, 1, 1);
+        }
+    }
+}
+
+#[test]
+fn platform_ring_builds_gated_tiles() {
+    let table = plain_type(1);
+    let mut sim = synth_sim();
+    sim.stage_destroy_family(&table, &empty_pos(), &trt_empty(), 1, 0);
+    // Substrate under the 3x3 around (5,5) EXCEPT (4,4) (no
+    // volume-1 below → the plane-B gate rejects it) and a live
+    // robot at (6,6) (blocks its own E/S/SE quadrant = itself
+    // here, as a ring candidate).
+    substrate(&mut sim, 4, 4, 6, 6);
+    sim.terrain.dat_write(4, 4, 1, 0);
+    let _robot = sim.spawn_robot((6, 6, 2));
+    let base = draw_count(&sim);
+    sim.platform_ring_build(5, 5, 2, 300);
+    assert_eq!(draw_count(&sim) - base, 0, "the ring build draws nothing");
+    // Seven of the eight neighbors build: (4,4) has no substrate,
+    // (6,6) hosts the robot; (6,5)/(5,6) are OUTSIDE the robot's
+    // blocked quadrant {(6,6),(7,6),(6,7),(7,7)}.
+    let expect = [
+        (4, 4),
+        (5, 4),
+        (6, 4),
+        (4, 5),
+        (6, 5),
+        (4, 6),
+        (5, 6),
+        (6, 6),
+    ];
+    for &(x, y) in &expect {
+        let is_blocked = (x, y) == (4, 4) || (x, y) == (6, 6);
+        let built = sim.platform_strength_word(x, y) == 300;
+        assert_eq!(
+            built, !is_blocked,
+            "tile ({x},{y}): built={built} blocked={is_blocked}"
+        );
+        if built {
+            assert_eq!(sim.object_grid_word(x, y), 0x7d4);
+            let t = ((y * W + x) as usize) * 8 + 2;
+            assert_eq!(sim.mirror_words()[t], 0x25D, "zone-1 water word");
+            assert_eq!(sim.mirror_seen_bank()[t], 0, "volume 2 → seen 0");
+        }
+    }
+    // The center is never built.
+    assert_eq!(sim.platform_strength_word(5, 5), 0);
+    // Re-building over an existing platform refuses (both bank
+    // words must be 0).
+    sim.platform_ring_build(5, 5, 2, 199);
+    assert_eq!(sim.platform_strength_word(6, 5), 300, "no double build");
+}
+
+#[test]
+fn platform_ring_rejects_occupied_levels() {
+    let table = plain_type(1);
+    let mut sim = synth_sim();
+    sim.stage_destroy_family(&table, &empty_pos(), &trt_empty(), 1, 0);
+    substrate(&mut sim, 4, 4, 6, 6);
+    // z = 0 refused outright.
+    sim.platform_ring_build(5, 5, 0, 300);
+    assert_eq!(sim.platform_strength_word(5, 4), 0);
+    // A nonzero mirror z-word at the build level refuses: stage
+    // words at z=2 for the N row.
+    let n = (W * H) as usize;
+    let mut words = vec![0u16; 8 * n];
+    for x in 4..=6 {
+        words[((4 * W + x) as usize) * 8 + 2] = 9;
+    }
+    sim.stage_terrain_mirror(&words);
+    sim.platform_ring_build(5, 5, 2, 300);
+    assert_eq!(sim.platform_strength_word(5, 4), 0, "the N row word blocks");
+    assert_eq!(
+        sim.platform_strength_word(5, 5 + 1),
+        300,
+        "the S row still builds"
+    );
+}
+
+#[test]
+fn trigger_dispatcher_builds_the_ring() {
+    // §7j.41/1: destroying an instance whose TYPE id equals the
+    // zone's code builds the strength-300 ring at the instance's
+    // own record. ZONEA code 5 (the .POS slot-74 shape: type row
+    // 5, W1 H1 D2 hp 75).
+    // The type table with the real row at INDEX 5 (the id-indexed
+    // 0x4dedf2 layout; rows 0..4 empty).
+    let table = ObjectTypeTable {
+        rows: {
+            let mut rows = vec![ObjectType::default(); 5];
+            rows.push(ObjectType {
+                w: 1,
+                h: 1,
+                d: 2,
+                hp: 75,
+                chain: 0,
+                kind: 8,
+                count: 0,
+                effects: [ObjectEffectEntry::default(); 5],
+                bank_current_tot: vec![7; 2],
+                bank_under_tot: vec![0; 2],
+                bank_current_dat: vec![0; 2],
+                bank_under_dat: vec![0; 2],
+            });
+            rows
+        },
+    };
+    // Slot 0 = the type-5 instance at (5,5,2) (the ZONEA slot-74
+    // shape).
+    let pos = pos_with(5, 5, 2, 5);
+    let mut sim = synth_sim();
+    sim.stage_destroy_family(&table, &pos, &trt_empty(), 1, 0);
+    substrate(&mut sim, 4, 4, 6, 6);
+    let base = draw_count(&sim);
+    let destroyed = sim.resolve_object_impact(5 * 0x2000, 5 * 0x2000, 0, 5000, true);
+    assert!(destroyed);
+    // The ring build drew nothing beyond the destroy tail's own
+    // (sel-0 effects draw zero).
+    assert_eq!(draw_count(&sim) - base, 0);
+    // The ring built around (5,5) at strength 300.
+    for &(x, y) in &[
+        (4, 4),
+        (5, 4),
+        (6, 4),
+        (4, 5),
+        (6, 5),
+        (4, 6),
+        (5, 6),
+        (6, 6),
+    ] {
+        assert_eq!(sim.platform_strength_word(x, y), 300, "ring tile ({x},{y})");
+    }
+    // The trigger is id-exact: a NON-code id never builds.
+    let table2 = one_type([ObjectEffectEntry::default(); 5], 0, 8, 75, 0, 0);
+    let mut sim2 = synth_sim();
+    sim2.stage_destroy_family(&table2, &pos_with(5, 5, 2, 0), &trt_empty(), 1, 0);
+    substrate(&mut sim2, 4, 4, 6, 6);
+    assert!(sim2.resolve_object_impact(5 * 0x2000, 5 * 0x2000, 0, 5000, true));
+    assert_eq!(sim2.platform_strength_word(4, 4), 0, "id 0 ≠ code 5");
+    // Zone 6 (the never-code): no build.
+    let mut sim6 = synth_sim();
+    sim6.stage_destroy_family(&table, &pos, &trt_empty(), 6, 0);
+    substrate(&mut sim6, 4, 4, 6, 6);
+    assert!(sim6.resolve_object_impact(5 * 0x2000, 5 * 0x2000, 0, 5000, true));
+    assert_eq!(sim6.platform_strength_word(4, 4), 0, "zone 6 never builds");
+}
+
+#[test]
+fn creep_tick_extends_the_bridge() {
+    // §7j.41/4: the armed tick draws the 1/32 gate every call; on
+    // a lucky frame the jittered site must hold a platform, the
+    // water z-scan finds the platform level, and the direction
+    // walk steps over the water words to build the tip ring at
+    // strength 199. The creep site starts at (0,0) — latch it via
+    // the weaken→ring path first (300 → 225 → 150: the second hit
+    // passes the §7j.41/3 gate), then drive the tick until the
+    // tip ring (strength 199) appears.
+    let table = plain_type(1);
+    let mut sim = synth_sim();
+    sim.stage_destroy_family(&table, &empty_pos(), &trt_empty(), 1, 0);
+    // Substrate at z2 under a wide block; the seed platform strip
+    // y=10, x=10..14 staged via the host seam.
+    substrate(&mut sim, 6, 6, 18, 14);
+    for x in 10..=14 {
+        assert!(sim.stage_platform(x, 10, 2, 300));
+    }
+    // 300 → 225 (no ring), 225 → 150 (RING → the site latches at
+    // (12,10); the ring also builds its neighbors at 150).
+    sim.platform_damage(12, 10, 75);
+    sim.platform_damage(12, 10, 75);
+    assert_eq!(sim.platform_strength_word(12, 10), 150);
+    let mut grew = false;
+    for _ in 0..8192 {
+        sim.platform_creep_tick();
+        if sim.platform_bank().iter().any(|&s| s == 199) {
+            grew = true;
+            break;
+        }
+    }
+    assert!(
+        grew,
+        "the creep built a 199-strength tile within 8192 ticks"
+    );
+}

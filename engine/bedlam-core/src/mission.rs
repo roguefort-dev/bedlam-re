@@ -807,6 +807,15 @@ pub struct MissionSim {
     /// The creep seed site 0x4dc5c8/cc — the last platform-damage
     /// tile (the S7 creep tick's reader).
     pub(crate) platform_site: (i32, i32),
+    /// The within-zone mission number [0x4edd88] — the zone-3
+    /// trigger-code sub-dispatch index (§7j.41/1). Host-staged;
+    /// 1 = the modeled default.
+    pub(crate) mission_no: u32,
+    /// The platform epilogue family ARM (the `platforms = 1`
+    /// grammar key): the original's creep tick runs EVERY frame;
+    /// E arms it per scenario (D113) so the S0..S6 chains stay
+    /// byte-identical.
+    pub(crate) platform_family_armed: bool,
     /// The TOT-mirror plane words, 8 per tile (the 0x1E record
     /// +2·z words at 0x4796bc) [§7j.32/1].
     pub(crate) mirror_words: Vec<u16>,
@@ -889,6 +898,8 @@ impl MissionSim {
             object_grid: Vec::new(),
             platform_strength: Vec::new(),
             platform_site: (0, 0),
+            mission_no: 1,
+            platform_family_armed: false,
             mirror_words: Vec::new(),
             mirror_seen: Vec::new(),
             mirror_heights: Vec::new(),
@@ -1676,6 +1687,18 @@ impl MissionSim {
         // block (0x448012 < 0x448306) — a craft deployed below first
         // animates the NEXT frame [§7j.40/3].
         self.dropship_tick();
+        // The platform CREEP tick (FUN_00422a9c, the epilogue call
+        // 0x44808a — §7j.41/4): the ORIGINAL runs it every frame,
+        // unconditionally drawing the 1/32 gate RandA; E arms it
+        // with the platform family (grammar `platforms = 1`) so
+        // the S0..S6 chains stay byte-identical — the per-frame
+        // gate draw on unarmed paths is the recorded E-gap (D113).
+        // Placement: after the dropship animator draw and before
+        // the beacon block, matching the original's relative draw
+        // order (0x448012 < 0x44808a < 0x448306).
+        if self.platform_family_armed {
+            self.platform_creep_tick();
+        }
         if let Some(order) = &mut self.order {
             if order.window != 0 {
                 order.window -= 1;
