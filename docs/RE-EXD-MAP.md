@@ -124,7 +124,8 @@ anchors (two independent evidence pieces) per the W1 ticket.
   FUN_0001476d = the 14,644-B phase monolith (the W1 "(14,644 B)"
   size belonged here — the earlier line mis-attributed it to
   FUN_0001c7dc). FUN_0001ef61 = the damage applier (EXW 0040e230
-  twin), FUN_0001d9cd = the spawn initializer (EXW 0040cca0 twin),
+  twin), FUN_0001d9cd = the spawn initializer (EXW 0040cca0 twin;
+  count/marker staging one-hop-confirmed both sides — §5d),
   FUN_0001d274 = robot_move, FUN_0001e440 = the probe writer.
 
 ## 3. Mapping method (how EXW rows get EXD aliases)
@@ -164,7 +165,7 @@ to docs/DIVERGENCES.md as a seed.
 | difficulty | 0x46cbf8 | **0x119558** | the 7j.17 range formula EXACT in the epilogue tick FUN_00023967: `iVar14 < (2 − [0x119558])·(−0x40) + 300` → d=0→172/d=1→236/d=2→300 (decompile line 416, the CMP-d/0/1/2 dispatch @0x24035/4d/65) + the respawn-delay table twin `MOV EAX,[0x119558]; CMP/MOV EDX,[EAX*4+0x81050]` @0x24181-9/0x241f5-0x24200 (EXW DAT_00454edc[d] → EXD table **0x81050**, 3 dwords); 44 refs program-wide, all READ except 3 WRITE sites in FUN_0002c6e3 (the mission-reseed/save-load twin @0x2c831/0x2ceae/0x2cec4) | [verified] |
 | zone | 0x4edd8c | **0x107500** | spawn twin per-zone rule `<3∨==7→1, 3→2, else 3` over [0x107500] (EXW FUN_0040cca0 rule exact) + zone-param table reads 0x80bcc/0x80c58 by [0x107500] | [verified] |
 | mission | 0x4edd88 | **0x119610** | TRT hp formula `(m·250)/27+250` EXACT (EXW 250+250·m/27) + pod-stagger `2000−m·1000/27` EXACT (both in EXD read [0x119610]) | [verified] |
-| mode | 0x4edb88 | **0x1075d8** | SP/MP branch `DAT_001075d8 == 0` in the spawn twin + mission-loop `== 2` MP gates + new-game `MOV [0x1075d8],1` | [verified] |
+| mode | 0x4edb88 | **0x1075d8** | SP/MP branch `DAT_001075d8 == 0` in the spawn twin + mission-loop `== 2` MP gates + new-game `MOV [0x1075d8],1`. EXW one-hop PINNED (W8-prep, exw-spawncount-asm.txt): the spawn override gate is `CMP [0x4edb88],0` @0x40cd8d, and the title-menu SP handler @0x43aaa3 sets `0x4edb88=0 ∧ 0x46cbe0=1` (RE-EXW-TITLEMENU §4 [verified]; MP lobby: 1 = Coop, 2 = Head2Head) — the gate is never taken in SP | [verified] |
 | linear mission m | 0x46ae8c | **0x119610** (SAME cell as mission) | the stagger consumer reads 0x119610 — EXD uses ONE scalar where EXW has two (see divergence seed #3) | [verified] |
 | SFX master gate | 0x4ede58 | TODO (gap) | gate lives inside the SFX dispatch twin (DEADMAN1 str ref → FUN_0004c121 is the bank loader); pin when the W2 registry needs it | |
 
@@ -172,7 +173,7 @@ to docs/DIVERGENCES.md as a seed.
 
 | watch | EXW addr | EXD addr | anchors used | tag |
 |---|---|---|---|---|
-| robot bank | 0x4c69e4, count 0x46ccbc | **base 0xf6d34, count 0x11958c** (stride 0xA8 same; cap cell 0x11950c) | armer alive loop `[0x11958c]×0xA8` over [0xf6db0+i]=presence@+0x7C; state w@+0xC via [0xf6d40+i·0xA8]:=3; hp@+0x78 via `[EAX+0xf6dac]=0x1388` (5000 respawn base); **pod timer w@+0x2C** via the stagger store `[0xf6d60+i·0xA8] = 1+k·(2000−m·1000/27)` (formula EXACT) | [verified] |
+| robot bank | 0x4c69e4, count 0x46ccbc | **base 0xf6d34, count 0x11958c** (stride 0xA8 same; cap cell 0x11950c) | armer alive loop `[0x11958c]×0xA8` over [0xf6db0+i]=presence@+0x7C; state w@+0xC via [0xf6d40+i·0xA8]:=3; hp@+0x78 via `[EAX+0xf6dac]=0x1388` (5000 respawn base); **pod timer w@+0x2C** via the stagger store `[0xf6d60+i·0xA8] = 1+k·(2000−m·1000/27)` (formula EXACT). COUNT-MAPPING CORRECTED (W8-prep 2026-08-22, ghidra-project/exw-spawncount-asm.txt): EXW 0x46ccbc is the TOTAL banked count (the spawn staging-loop bound @0x40ce74) = the EXD **cap 0x11950c** twin; EXD **0x11958c is PER-PLAYER** — its true EXW twin is **0x46cbd8** (the zone-rule target @0x40cd5c..0x40cd80; MP := 1 @0x40cdad). In SP both cells equal the zone rule, so this row's SP evidence held; they diverge only in MP (0x46ccbc := [0x46cbe0], 0x46cbd8 := 1). SP S0/S1 plan rows: count = cap = 1, no impact — future MP scenarios must bound the bank dump by the CAP cell | [verified] |
 | selection triple | 0x46cbd4/dc/d8 | **selected idx 0x11954c** (cursor/squad cells TODO) | mission-loop auto-switch: `i != DAT_0011954c` skip-current check + `DAT_0011954c := i` on switch (state write 0x119498 := 3) | [verified] |
 | blink-cursor selector | 0x4dc5d0 | TODO (gap) | 7j.7 producer twin not located this unit; anchor via the effect-row family when W2 needs it | |
 | per-player selected anchor | 0x4c71c4 | **0x971a4** | spawn-tail seed loop `do {[0x971a4+i]=x>>8; [0x971a8+i]=y>>8; [0x971ac+i]=z} ×4 (0x30/0xC)` — EXW 4×0xC {x>>8,y>>8,z} EXACT | [verified] |
@@ -212,7 +213,7 @@ RE-EXW-INPUT / RE-EXW-SIM §7j.16-17 ledger rows.
 | held-keys counter (EXW has none) | **0x107534** | ISR INC/DEC @0x30456/0x30488 (EXD-specific bookkeeping; aux state cell 0x1194c4 set 2/cleared in the ISR) | [verified] |
 | ScanToChar FUN_0041fa02 | **0x307c1-0x307e8** | `keystore[0x2a] (0x894fe) ∨ keystore[0x36] (0x8950a)` → table word>>16: shifted **0x8097a** / unshifted **0x8077a** | [verified] |
 | command records 0x4dd4a0 (stride 0x80) | **0x9255c** (stride 0x80) | builder twin FUN_0005b066 (EXW FUN_00449c94; called FUN_0005b066(1) in the MissionShell loop = EXW's call): append cursor = `&0x9255d + player·0x40` (short-scaled = byte +1 of record player·0x80), marker byte@+0 := DAT_001075c0 (player type), id short@+1 := [0x11954c] (selected idx), spot short@+3 := [0x10e15c] (order word), flags byte@+5 := [0x11a51a], payload = rand&0xf / MP weapon-mask / flags&1 move-words 0x119484/0x119488 / flags&2 the order-target triple words + consumer twin FUN_00019ee9 (EXW FUN_00409138): record walk with id = marker·robot_count([0x11958c]) + slot, flags bit0 SELECT → move-target writes 0xf75ec/0xf761c + auto-arm (state ∉ 2..5 → state:=1, target@+0x74 := 1000000 = 0xf4240 @0xf6da8 base), bit1 ORDER → triple 0x10e0a4/a8/ac := words@+7/+9/+0xB + order-active 0x10e140 := 1 + five clears 0x1076b4/70/90/a4/7c (EXW clears 0x4eb940..50), weapon dispatch on the robot's 7 slots w@+0x36+8k: w 2/3/4 → FUN_0001c3fb (EXW FUN_0040b615) orders 3/2/1, w 6/7/8 → FUN_0001bd8f (EXW FUN_0040af98) 0/1/2, w 9/0xA/0xB artillery → FUN_00023295 free slot + 0x36-stride record into the projectile bank (see below), 39-case bound CMP 0x26 | [verified] |
-| command count 0x46cbe0 | **0x119588** | consumer loop bound `if ([0x119588] <= rec) → cooldown-tail/return` + the ring-modulo read `(_DAT_00107688 + 1) % [0x119588]` + `_DAT_00107658 += [0x119588]` (builder family FUN_0005b066 ×8 reads) + 6 WRITE sites in FUN_0004c80c (the net/input pump — also the keystore[ESC] reader; mission-start resets @0x4ccd8/0x4cd6a) | [verified] |
+| command count 0x46cbe0 | **0x119588** | consumer loop bound `if ([0x119588] <= rec) → cooldown-tail/return` + the ring-modulo read `(_DAT_00107688 + 1) % [0x119588]` + `_DAT_00107658 += [0x119588]` (builder family FUN_0005b066 ×8 reads) + 6 WRITE sites in FUN_0004c80c (the net/input pump — also the keystore[ESC] reader; mission-start resets @0x4ccd8/0x4cd6a). SP staging PINNED (W8-prep, §5d): title-menu "New Single Player Game" @0x43aaa3 sets 0x46cbe0 := 1 (the host marker only); the spawn override that would read it is gated on `[0x4edb88] != 0` @0x40cd8d and is never taken in SP | [verified] |
 | order-active flag 0x4dc6bc | **0x10e140** | consumer bit1 branch `:= 1` (EXW `_DAT_004dc6bc := 1`); also cleared 0 at MissionShell boot (probe7 line 81) | [verified] |
 | order spot staging (EXW: none separate) | **0x10e15c** | consumer stores record word@+3 → 0x10e15c; builder reads it back as the spot short — EXD keeps a staging cell EXW inlines | [verified] |
 | command flags staging (EXW: none separate) | **0x11a51a** | builder reads flags byte from it; MissionShell ORs 4 into it on the MP path (DAT_001075d8 != 0, probe7 line 480) | [verified] |
@@ -226,6 +227,43 @@ monolith as mapped in §5).
 
 Divergence seeds found this unit → §7 items 6-7 (attack-break
 randomness source; EXD-only staging cells).
+
+### 5d. The W8 robot-count override pin (2026-08-22) — ANSWERED
+
+**Question (DESIGN §10-W8 / D85): does the original SP path fill the
+network-marker override at 0x46cbe0?** No. Pinned both sides:
+
+- **EXW** (FUN_0040cca0 @0x40cd4c..0x40ce23, raw disasm
+  ghidra-project/exw-spawncount-asm.txt, no new Ghidra run — extracted
+  from the 7j.27 exw-text-objdump): `per_player [0x46cbd8] := zone
+  rule (zone [0x4edd8c]: <3∨==7→1, ==3→2, else 3)`; `total [0x46ccbc]
+  := per_player`; **the override branch is gated on `[0x4edb88] != 0`
+  @0x40cd8d** — taken only for network sessions, where `total :=
+  [0x46cbe0]` (command count = players), `per_player := 1`, and
+  markers `record[i]+0x2A := i` for i < cmd count.
+- **EXD** (FUN_0001d9cd, exd-robot-backhalf2.txt lines 466-495): the
+  instruction-for-instruction twin — `if (mode [0x1075d8] == 0)` SP
+  keeps the zone rule (count 0x11958c, cap 0x11950c := count); MP sets
+  `cap := 0x119588`, `count := 1`, markers `record[i]+0x2A := i`.
+- **SP staging source** (RE-EXW-TITLEMENU §4 [verified]): "New Single
+  Player Game" @0x43aaa3 sets `0x4edb88 := 0` **and** `0x46cbe0 := 1`
+  (the host's own marker only). The MP lobby sets `0x4edb88 := 1`
+  (Coop) / `2` (Head2Head). So in every local session the gate is
+  closed and `[0x46cbe0]` holds just the host default.
+
+**Consequences:** (1) SP ZONEA banks **one** robot in EXW, EXD, and E
+(D85 host-default staging) — robot-count parity holds across all three
+channels; robot-count diffs in SP scenarios are a genuine finding
+class, not a staging artifact. No E-side staging seam changes (the
+conditional "(if the original fills it)" deliverable is moot). (2) The
+count-cell mapping correction in the §5 robot-bank row. (3) Faithful
+quirk recorded: the SP marker write targets `record[12]+0x2A` — one
+past the 12-record bank — because the index register still holds the
+finished 12-iteration MRK-copy counter; both twins do it identically
+(EXW lands at 0x4c71ee inside the 0x4c71c4 anchor bank, which this
+function's own tail @0x40d175..0x40d18d re-stamps immediately after;
+EXD lands in the dead gap 0xf7514..0xf75ec). No diff surface: the
+anchor-bank watch reads post-stamp state.
 
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 

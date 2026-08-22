@@ -618,9 +618,19 @@ differ come before any new scenario depth.
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).
    NOTE (W6 addendum, D85 completion): the E runner stages the
    host-default marker set — no network-marker override — so ZONEA is
-   a single-robot squad on E; W8 must pin whether the original SP
+   a single-robot squad on E. ~~W8 must pin whether the original SP
    fills the 0x46cbe0 override (robot-count parity) before reading
-   robot-count diffs as findings.
+   robot-count diffs as findings.~~ PINNED 2026-08-22 (W8-prep unit,
+   RE-EXD-MAP §5d, D89): the original SP does NOT fill the override —
+   the spawn branch (EXW FUN_0040cca0 @0x40cd8d / EXD FUN_0001d9cd
+   mode==0) applies the zone rule unless `[0x4edb88] != 0`
+   (= EXD mode 0x1075d8), and the title menu sets `0x4edb88 := 0 ∧
+   0x46cbe0 := 1` for "New Single Player Game". SP ZONEA banks ONE
+   robot in EXW, EXD, and E alike: robot-count parity holds, and
+   robot-count diffs in SP scenarios are a genuine finding class.
+   (Count-cell note for future MP scenarios: the bank dump must bound
+   by the CAP cell — EXW 0x46ccbc total / 0x46cbd8 per-player, EXD
+   0x11950c cap / 0x11958c per-player; in SP all equal the zone rule.)
 9. **W9 — gates/CI wiring** (DH-G3 + corpus-gated CI job).
 10. **W10 — 8street instrumented comparator (O3).** Rebuild 8street at the
     pinned commit with state-dump hooks emitting the W3 schema (test-only

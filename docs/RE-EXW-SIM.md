@@ -640,9 +640,19 @@ was where the tables filled: 0x41d954 only allocates.)
 7. **Markers → robots** [verified 0x40cca0..0x40d098]: load_markers stages
    the 12×16 B MRK records into 12×12 B at `0x4e6430` (flag dropped),
    clears 12×0xA8 robot records + targets, then robot i (i <
-   DAT_0046ccbc = robots_per_player: zone<3||zone==7 → 1, zone 3 → 2,
-   else 3; overridden to `0x46cbe0` when `0x4edb88 != 0` — network
-   player count) takes MRK record i VERBATIM:
+   DAT_0046ccbc = the TOTAL banked count; robots_per_player is the
+   separate cell DAT_0046cbd8: zone<3||zone==7 → 1, zone 3 → 2,
+   else 3 — both cells get the zone rule in SP, `total := per_player`;
+   in a network session `[0x4edb88] != 0` the override @0x40cd8d sets
+   `total [0x46ccbc] := [0x46cbe0]` (player count) and
+   `per_player [0x46cbd8] := 1`, stamping markers
+   `record[i]+0x2A := i` — CORRECTED W8-prep 2026-08-22, raw disasm
+   ghidra-project/exw-spawncount-asm.txt; the SP branch instead stamps
+   player type `[0x4edb90]` at `record[12]+0x2A` (stale MRK-copy
+   counter — one past the bank; harmless, the spawn tail re-stamps the
+   0x4c71c4 anchor bank after; the EXD twin does it identically). SP
+   never takes the override: the title menu sets 0x4edb88=0 ∧
+   0x46cbe0=1 — RE-EXD-MAP §5d, the W8 pin) takes MRK record i VERBATIM:
    `pos = (x<<13)+0xF00, (y<<13)+0xF00`, `z = word3<<5 − 1` — so **MRK
    word 3 is the spawn Z LEVEL** (1 = ground), not a "type"; a word-3=0
    marker seeds z −1 and only settles on a height-≤3 ground tile

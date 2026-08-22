@@ -3080,3 +3080,40 @@ Nudge-Worker: c594df62-4614-47f6-b32d-f96b7a04db19
    (2,712 B per-phase tick) — sec-1b corrected.
 
 Nudge-Worker: 03be9318-237b-4c9c-aa78-83bc504a48ef
+
+## D89 — 2026-08-22: the W8 robot-count override pin — original SP does NOT fill 0x46cbe0; robot-count parity across EXW/EXD/E (W8-prep, worker b0656949 claim 2)
+
+1. THE QUESTION (D85/DESIGN §10-W8): E stages the host-default
+   markers → ZONEA single-robot squad; if the ORIGINAL SP spawned the
+   full squad via the 0x46cbe0 network-marker override, robot-count
+   diffs would be a staging artifact, not findings.
+2. THE PIN (docs-only; no new Ghidra run — the EXW disasm was already
+   in ghidra-project/exw-text-objdump.txt, extracted verbatim to
+   ghidra-project/exw-spawncount-asm.txt with the desync/realignment
+   note; EXD twin = exd-robot-backhalf2.txt lines 414-540):
+   - EXW FUN_0040cca0 @0x40cd4c..0x40ce23: per_player [0x46cbd8] :=
+     zone rule (zone [0x4edd8c]: <3∨==7→1, ==3→2, else 3); total
+     [0x46ccbc] := per_player; the override branch is gated on
+     `[0x4edb88] != 0` @0x40cd8d (EXD twin: mode [0x1075d8] == 0
+     branch) — network sessions only, where total := [0x46cbe0],
+     per_player := 1, markers record[i]+0x2A := i. Instruction-for-
+     instruction the EXD twin (cap 0x11950c := 0x119588, count
+     0x11958c := 1).
+   - SP staging source (RE-EXW-TITLEMENU §4 [verified]): "New Single
+     Player Game" @0x43aaa3 sets 0x4edb88 := 0 AND 0x46cbe0 := 1; the
+     MP lobby sets 0x4edb88 := 1 (Coop) / 2 (Head2Head).
+3. ANSWER + CONSEQUENCES: the override never fires in SP — SP ZONEA
+   banks ONE robot in EXW, EXD, and E alike. Robot-count parity
+   holds; robot-count diffs in SP scenarios are a genuine finding
+   class. NO E-side staging seam changes (the conditional deliverable
+   is moot). CORRECTION recorded: EXW 0x46ccbc = TOTAL (EXD cap
+   0x11950c twin), EXW 0x46cbd8 = PER-PLAYER (EXD 0x11958c twin) —
+   RE-EXD-MAP §5 robot-bank row + RE-EXW-SIM §7c.7 corrected (in SP
+   both equal the zone rule, so all prior SP evidence held; future MP
+   scenarios must bound the bank dump by the CAP cell). Faithful
+   quirk: the SP marker write hits record[12]+0x2A (stale MRK-copy
+   counter, one past the bank) in BOTH twins; harmless (EXW: inside
+   the 0x4c71c4 anchor bank, re-stamped by the same function's tail;
+   EXD: dead gap) — no diff surface.
+
+Nudge-Worker: b0656949-cebf-46d7-b08c-1bcdff462127
