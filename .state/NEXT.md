@@ -1,35 +1,40 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/DH-G0-live] S0 LIVE + DH-G1 DETERMINISM (INTERACTIVE-GATED,
-   operator/desktop session; the D80 channel is proven headless —
-   RUNTIME.md "DH-G0 channel re-pin" + "D80 channel probe results"):
-   (a) `tools/runtime/dosbox-harness.sh diff stage
-   tools/diffharness/scenarios/S0.scen` then FORCE_DIFF_RUN=1 `diff
-   run` (or `diff capture` once a capture-plan.json exists) in a
-   desktop session; (b) the PMODE FLAT-SELECTOR PROOF: INT3 at EXD
-   _entry 0x5fbb0 (BPINT 3), SELINFO/LDT to pin the flat CS/DS
-   selectors, then BP at the present-tail linear 0x5a6eb (EXD frame
-   counter 0x1195f0++ after the CALL FUN_00010670 — the W1-pinned S0
-   trigger); (c) author the S0 capture-plan.json (pre_commands arming
-   the frame-tail BP + resolved T0/TS watch addr/len from
-   watches.toml — extent EXPRESSIONS need the loader statics: map
-   w/h 0x1074b8/0x10748c read first, then resolve w*h forms; counts
-   from 0x11958c/0x119554/0x11949c); (d) first golden S0 dump × 2 runs
-   → identical chains = DH-G1 green (record fingerprints; dumps stay
-   runtime/-only); (e) cycles=fixed 60000 calibration (audio dropouts?
-   deliberate re-pin per D19). Manifest checks bracket any
-   corpus-touching step.
+1. [P4.2/DH-G0-live] S0 LIVE SESSION — INTERACTIVE-ONLY REMAINDER
+   (operator/desktop; ALL machinery landed + headless-verified by the
+   fa49e9cf unattended prep, commits f659db5 + d5550a3 + ee2f0d4, D81 —
+   follow docs/RUNTIME.md "S0 LIVE SESSION CHECKLIST" step by step):
+   (a) `dbgprobe gate` + `dbgprobe flow` regression, `diff stage
+   S0.scen` + copy/regenerate the plan; (b) FORCE_DIFF_RUN=1
+   `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
+   the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
+   retry) → BP CS:0005A6EB arm (the ack echoes the selector = the
+   per-run pin) → resolve w/h + TOT/DAT/claim pointers → 3-record
+   capture (the INT3-at-entry proof step is SUPERSEDED — CS-register
+   addressing needs no selector); (c) `diff stitch` × 2 runs;
+   (d) DH-G1 verdict = identical chains MODULO the frame-counter/RNG
+   blob bytes (no counter reset exists — 14 INC sites incl. menus;
+   T2/T3 classes per DESIGN §6; any OTHER byte diff = a channel
+   finding, record + stop); (e) cycles=fixed 60000 listen calibration
+   (audio-live plan env variant). Record fingerprints (chain/dump
+   sha256, selector pin, w/h, pointers) in RUNTIME.md; DECISIONS if a
+   pin changed. NOTE the 6 deferred TS rows (cgr/bin/min/lnk/
+   order-table/yline — extent formulas unpinned) are consciously OUT
+   of the first golden; adding them later is additive (re-baseline
+   chains deliberately). Manifest checks bracket corpus-touching steps.
 2. [P4.2/W5] THE INJECTOR (unattended): extend the scenario grammar v1
    with the DESIGN §5 vocabulary (keystore/order/command/pad steps →
    runner-side writes) + the SMV linear-write emitter in dbx-capgen.py
-   (verified primitive; the O1 addr form is the EXD linear address —
-   same as the watch reads) + the capture-plan compiler (scenario
-   tiers → resolved watch list; needs the extent-expression resolver:
-   w/h forms, count*N forms — read the count cells at plan-build time
-   or per-frame at capture time). Testable headless against the probe
-   (SMV into BDA + readback — no game). Emits injection_applied=1
-   frames in the W3 dump.
+   (verified primitive; D81: the O1 addr form is the CS: register
+   form, same as the watch reads) + the capture-plan compiler for T1+
+   tiers (count-cell resolve rows + count*N extent exprs — the capgen
+   v2 resolve machinery is LANDED, extend dbx-plan's resolution table
+   past T0/TS; robot count 0x11958c, object count 0x119554, TRT count
+   0x11949c are the first three). The BOOT/KEYSTATE steps here are
+   what make DH-G1 byte-identical (scripted menu walk). Testable
+   headless against the probe (SMV into BDA + readback — no game).
+   Emits injection_applied=1 frames in the W3 dump.
 
 ## Backlog (not yet started)
 - [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
@@ -165,6 +170,43 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/DH-G0-live the UNATTENDED PREP unit COMPLETE (worker
+  fa49e9cf claim 1, commits f659db5 + d5550a3 + ee2f0d4, D81). The S0
+  live-capture machinery landed + headless-verified; the queue's
+  interactive item is now a turnkey checklist (RUNTIME.md "S0 LIVE
+  SESSION CHECKLIST"). RE FACTS (source-pinned at e522642, RUNTIME.md
+  "S0 live channel mechanics"): GetHexValue resolves REGISTER NAMES in
+  the default MEMDUMPBIN/BP parse path → `CS:001195F0` addressing with
+  NO numeric selector (the BP ack echoes it — the per-run pin; the
+  INT3-at-entry proof step is SUPERSEDED); BP locations resolve
+  EAGERLY at arm time (pre-boot arming mis-resolves) vs BPLM LAZY
+  per-instruction (the boot trap on the frame-counter cell 0x1195f0);
+  SELINFO rides the logfile (the flat-CS guard, loader-stub stops
+  retry); debuggerrun=watch would free-run (staged conf flips to
+  debugger — channel-mode only, sim pins untouched); NO counter reset
+  exists (14 INC sites incl. menu screens) → the live DH-G1 verdict is
+  identical-chains-MODULO frame-counter/RNG cells (T2/T3, DESIGN §6);
+  SDL dummy video has no keyboard (live plans unset SDL_VIDEODRIVER).
+  CODE: capgen plan v2 (boot_commands/boot-trap retry loop/arm_commands
+  + selector-pin capture/resolve cells + ast-whitelisted arithmetic
+  addr-len exprs/anchor-vs-per-frame watch split/plan env overrides/
+  plan-level frames+time_limit; fixed the plan-named logfile being
+  resolved against the wrong CWD) — `dbgprobe flow` gate GREEN headless
+  (BPLM 46C trap → arm → resolve com1=0x3f8 → expr rows carrying REAL
+  IVT f000:ca60 + BDA COM1/COM2/LPT1 bytes; legacy `dbgprobe gate`
+  regression-green; both unattended-safe, no game). dbx-plan
+  (tools/diffharness Rust bin): compiles scenario tiers + watches.toml
+  into the plan with EVERY address derived from registry rows
+  (anti-ghost asserts on extents/cell layouts; committed artifact
+  capture-plans/S0.json pinned by a byte-equality test); 9 T0 + 9 TS
+  rows resolved (TOT/DAT extents = 4+16wh / 4+8wh, cross-check: ZONEA/
+  M1 evaluates to 30004/15004 = the FORMATS-pinned file sizes; map-wh
+  two-cell span; claim-bank pointer read), 6 TS rows DEFERRED with
+  explicit unpinned-extent reasons (cgr/bin/min bank-sized, lnk
+  map-sized, order row count, yline tables) + the 2 T0 gaps; S0 staged
+  + plan deployed. 42 diffharness tests, fmt+clippy clean, workspace
+  build green; manifest verified around the corpus rsync. PUSHED
+  ee2f0d4. Queued: the interactive-only live session (item 1) + W5.
 - 2026-08-22: P4.2/DH-G0 the O1 CAPTURE-CHANNEL RE-PIN unit COMPLETE
   (worker 4deb0081 claim 1, commits 395180b + d858728 + 1e7392f, D80).
   DECISION (a): self-built DOSBox-X at e522642 with --enable-debug=heavy

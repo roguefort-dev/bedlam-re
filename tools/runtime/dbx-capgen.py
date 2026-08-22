@@ -388,9 +388,29 @@ def watch_target(w, symbols):
 
 
 def selinfo_cs(sess, dblog):
-    """SELINFO CS through the logfile; returns (base, limit) ints-or-None."""
+    """SELINFO CS through the logfile; returns (base, limit) ints-or-None.
+
+    Patient by design: during the operator's menu walk the machine RUNS
+    for minutes; a wait_hit false positive (stray redraw bytes) sends
+    this early and the ack only lands at the REAL boot-trap stop — soak
+    with wait_hit until the queued command executes instead of aborting
+    the session."""
     send_cmd(sess, "SELINFO CS")
-    dblog.expect(rb"SelectorInfo CS:", timeout=15)
+    got = False
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        try:
+            dblog.expect(rb"SelectorInfo CS:", timeout=15)
+            got = True
+            break
+        except TimeoutError:
+            sess.wait_hit(timeout=60)  # soak until the real stop; the
+            # queued command acks then (count growth). Re-send each
+            # round: expect() re-bases its count on entry, so a fresh
+            # ack is what the next expect matches.
+            send_cmd(sess, "SELINFO CS")
+    if not got:
+        raise RuntimeError("capgen: SELINFO CS never acked (no stop within 10 min)")
     base = limit = None
     m = dblog.last_match(rb"CS: b:([0-9A-Fa-f]{8})")
     if m:

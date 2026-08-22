@@ -1,3 +1,30 @@
+# STATE - project state snapshot (rewrite the head when the phase moves)
+
+  - OPEN 2026-08-22 (P4.2/DH-G0-live prep, worker fa49e9cf claim 1,
+    commits f659db5 + d5550a3 + ee2f0d4, D81): the S0 live-capture
+    MACHINERY is landed and headless-verified; only the interactive
+    desktop session remains (RUNTIME.md "S0 LIVE SESSION CHECKLIST"):
+    capgen plan v2 (BPLM boot trap on the frame-counter cell → SELINFO
+    flat-CS guard with loader-stub retry → BP CS:0005A6EB arm → runtime
+    resolve of map w/h + TOT/DAT/claim pointer cells → anchor/per-frame
+    capture), proven headless by `dbgprobe flow` (real IVT/BDA bytes
+    through expression addr/len from a live cell read; no game).
+    KEY D81 FACTS: GetHexValue resolves REGISTER NAMES in the default
+    MEMDUMPBIN/BP parse path — `CS:001195F0` addressing eliminates the
+    numeric-selector parameter entirely (the BP ack echoes it = the
+    per-run pin); BP locations resolve EAGERLY at arm time (pre-boot
+    arming mis-resolves) while BPLM is LAZY per-instruction (the boot
+    trap); SELINFO output rides the logfile (the guard); the staged
+    diff conf flips debuggerrun watch→debugger (watch free-runs past
+    the parked halt). dbx-plan (tools/diffharness) compiles scenario
+    tiers + watches.toml into the plan — every address DERIVED from
+    registry rows (anti-ghost asserts; byte-equality test pins the
+    committed capture-plans/S0.json); 6 TS rows deferred with explicit
+    unpinned-extent reasons; TOT/DAT extents cross-check = 30004/15004
+    (the FORMATS-pinned ZONEA/M1 file sizes). EXPECTATION SET: no
+    counter reset exists (14 INC sites incl. menu screens) — the live
+    double-run is identical-chains-modulo frame-counter/RNG cells
+    (T2/T3, DESIGN §6); byte-identical needs the W5 scripted walk.
   - CLOSED 2026-08-22 (P4.2/DH-G0 the O1 CAPTURE-CHANNEL RE-PIN unit
     COMPLETE, worker 4deb0081 claim 1, commits 395180b + d858728 +
     1e7392f, D80): DECISION (a) — O1's instrument = REPO-LOCAL

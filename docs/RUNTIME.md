@@ -347,6 +347,57 @@ capture plan needs NO numeric selector parameter at all.
    frame-counter watch value (DESIGN §2), so the one-frame shift is a
    recorded constant, not a divergence.
 
+## S0 LIVE SESSION CHECKLIST (interactive; the machinery is landed + headless-verified — this is all that remains)
+
+Everything below was prepared by the unattended units (commits f659db5
++ d5550a3 + ee2f0d4): capgen plan v2 (boot trap → flat guard → arm →
+resolve → anchor/per-frame capture), dbx-plan (scenario + registry →
+plan), the committed S0 plan artifact, the staged-conf channel flip.
+The flow machinery itself is proven headless by `dbgprobe flow`
+(BPLM 46C trap → arm → resolve com1=0x3f8 → expr rows = real IVT/BDA
+bytes; no game, unattended-safe — safe to re-run any time).
+
+0. Preconditions (already done once; re-run if runtime/ was cleaned):
+   - tools/runtime/dosbox-harness.sh dbgprobe gate   # legacy channel
+   - tools/runtime/dosbox-harness.sh dbgprobe flow   # v2 machinery
+   - tools/runtime/dosbox-harness.sh diff stage tools/diffharness/scenarios/S0.scen
+   - cp tools/diffharness/capture-plans/S0.json runtime/harness-out/diff/S0/capture-plan.json
+     (regenerate instead if the registry changed:
+      cargo run -q -p diffharness --bin dbx-plan -- tools/diffharness/scenarios/S0.scen --out …)
+   - sha256sum -c MANIFEST.sha256 (bracket the corpus rsync)
+1. CAPTURE RUN A (desktop with X; the game window takes the keyboard,
+   the debugger rides the PTY — do not type debugger commands into the
+   game window):
+     FORCE_DIFF_RUN=1 tools/runtime/dosbox-harness.sh diff capture tools/diffharness/scenarios/S0.scen
+   capgen parks at -break-start, arms `BPLM 1195F0`, RUNWATCHes; the
+   game boots — WALK THE TITLE MENU to ZONEA/MISSION1 (new campaign).
+   At the first mission frame tail the trap fires; capgen checks the
+   flat CS (SELINFO base==0 — a loader-stub stop retries automatically),
+   arms `BP CS:0005A6EB`, reads map w/h + the TOT/DAT/claim pointer
+   cells, then captures 3 records (anchor + 2). stderr prints the
+   selector pin + resolved cells; the transcript header records them.
+2. STITCH + RECORD:
+     tools/runtime/dosbox-harness.sh diff stitch tools/diffharness/scenarios/S0.scen
+   → runtime/harness-out/diff/S0/S0.bdld + S0.manifest.json (dumps stay
+   runtime/-only). MOVE RUN A ASIDE (mv S0.bdld S0.A.bdld etc — run B
+   overwrites). Record in this file: chain digest, dump sha256, the
+   selector pin, w/h, the three volume pointers.
+3. CAPTURE RUN B: repeat 1–2 (fresh boot, walk the menu again).
+4. DH-G1 VERDICT (the queue's (d), expectation per fact #5 above):
+   `cmp S0.A.bdld S0.B.bdld` — divergent bytes must fall ONLY inside the
+   frame-counter / rng-state-a / rng-state-b blob ranges (T2/T3 cells,
+   menu-timing dependent). Identical modulo those cells = GREEN; record
+   which cells moved. ANY other byte diff is a channel finding: record
+   and stop (do not hand-tune). Byte-identical chains INCLUDING those
+   cells need the W5 scripted walk — that is DH-G1's headless-S1 form,
+   not this session's goal.
+5. CYCLES CALIBRATION (queue's (e)): one more capture session with
+   audio live (edit the staged plan: "env": {"SDL_VIDEODRIVER": "",
+   "SDL_AUDIODRIVER": ""}) and LISTEN for audio dropouts during the
+   mission; if starved, re-pin cycles DELIBERATELY per D19 + DECISIONS.
+6. Close out: verdicts + fingerprints here, DECISIONS.md if any pin
+   changed, .state/NEXT.md item closed, STATE.md if the phase moved.
+
 CPU BASELINE (the other side of the diff): cargo run --release --example
 parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced
 byte-identically twice this unit): scene chain 0xcae25cd08d7cbc08, sim
