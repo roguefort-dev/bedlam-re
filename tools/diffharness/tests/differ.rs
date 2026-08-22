@@ -38,8 +38,11 @@ fn dump_bytes(scenario_src: &str, frames: Vec<FrameRecord>, channel: Channel) ->
 // 1. The O1 normalizer: hand-built EXD-layout fixtures
 // ---------------------------------------------------------------------
 
-/// A 0xA8 EXD robot record with the §8-mapped fields set to distinct
-/// values (everything else zero — the record layout is opaque to the
+/// A 0xA8 EXD robot record carrying every §8-mapped field (D88 back
+/// half). The eight parameters set the W7-era front fields; the back
+/// half is written with the SAME constants as `canon_robot_bank` so
+/// the two normalizers' rows can be compared field-for-field on the
+/// shared/mapped set (the record layout stays opaque to the
 /// normalizer beyond the pinned offsets).
 #[allow(clippy::too_many_arguments)]
 fn exd_robot_record(
@@ -47,7 +50,7 @@ fn exd_robot_record(
     y: i32,
     z: i32,
     state: u16,
-    pod: u16,
+    drop: i32,
     stop: i32,
     hp: i32,
     alive: i32,
@@ -57,15 +60,36 @@ fn exd_robot_record(
     r[0x04..0x08].copy_from_slice(&y.to_le_bytes());
     r[0x08..0x0C].copy_from_slice(&z.to_le_bytes());
     r[0x0C..0x0E].copy_from_slice(&state.to_le_bytes());
-    r[0x2C..0x2E].copy_from_slice(&pod.to_le_bytes());
+    // Back half: the canon_robot_bank constants (independent §8
+    // transcription of the same table).
+    r[0x0E..0x10].copy_from_slice(&42u16.to_le_bytes()); // dir_byte
+    r[0x10..0x12].copy_from_slice(&3u16.to_le_bytes()); // facing
+    r[0x12..0x14].copy_from_slice(&7u16.to_le_bytes()); // anim
+    r[0x18..0x1A].copy_from_slice(&2u16.to_le_bytes()); // variant
+    for k in 0..8 {
+        let v = (0x0102 + k * 0x0202) as u16; // 0x0102 .. 0x0F10
+        r[0x1A + 2 * k..0x1C + 2 * k].copy_from_slice(&v.to_le_bytes());
+    }
+    r[0x2A..0x2C].copy_from_slice(&0u16.to_le_bytes()); // kind
+    r[0x2E..0x30].copy_from_slice(&2u16.to_le_bytes()); // hit_flash
+    r[0x30..0x32].copy_from_slice(&(-25i16).to_le_bytes()); // armor (i16)
+    r[0x34..0x36].copy_from_slice(&100u16.to_le_bytes()); // alarm
     r[0x74..0x78].copy_from_slice(&stop.to_le_bytes());
     r[0x78..0x7C].copy_from_slice(&hp.to_le_bytes());
     r[0x7C..0x80].copy_from_slice(&alive.to_le_bytes());
+    r[0x80..0x84].copy_from_slice(&drop.to_le_bytes()); // D88: +0x80 gate word
+    r[0x88..0x8C].copy_from_slice(&32i32.to_le_bytes()); // shield
+    r[0x8C..0x90].copy_from_slice(&5i32.to_le_bytes()); // shield_charges
+    r[0x94..0x98].copy_from_slice(&10i32.to_le_bytes()); // battery
+    r[0x98..0x9C].copy_from_slice(&2000i32.to_le_bytes()); // armor_pool
+    r[0x9C..0x9E].copy_from_slice(&0u16.to_le_bytes()); // death_flag
+    r[0xA0..0xA4].copy_from_slice(&0i32.to_le_bytes()); // shield_boost
+    r[0xA4..0xA8].copy_from_slice(&(-99i32).to_le_bytes()); // alarm_ctr
     r
 }
 
 #[test]
-fn o1_robot_bank_maps_only_the_pinned_fields() {
+fn o1_robot_bank_maps_the_pinned_fields() {
     let mut blob = Vec::new();
     blob.extend(exd_robot_record(
         21 << 13,
@@ -83,7 +107,9 @@ fn o1_robot_bank_maps_only_the_pinned_fields() {
     assert_eq!(rows.len(), 1);
     let row = &rows[0];
     assert_eq!(row.id, "robot-bank");
-    // Field set = count + exactly the 8 §8-mapped fields per robot.
+    // Field set = count + exactly the 31 §8-mapped leaf fields per
+    // robot (probe_z = 8 leaves; the canonical target trio is NOT
+    // record-sourced — RE-EXD-MAP §8 move-target note).
     let mut expect: Vec<String> = vec!["count".to_string()];
     for i in 0..2 {
         for n in [
@@ -91,10 +117,33 @@ fn o1_robot_bank_maps_only_the_pinned_fields() {
             "pos_y",
             "z",
             "state",
-            "drop_countdown",
+            "dir_byte",
+            "facing",
+            "anim",
+            "variant",
+            "probe_z[0]",
+            "probe_z[1]",
+            "probe_z[2]",
+            "probe_z[3]",
+            "probe_z[4]",
+            "probe_z[5]",
+            "probe_z[6]",
+            "probe_z[7]",
+            "kind",
+            "hit_flash",
+            "armor",
+            "alarm",
             "stop_dist",
             "hp",
             "alive",
+            "drop_countdown",
+            "shield",
+            "shield_charges",
+            "battery",
+            "armor_pool",
+            "death_flag",
+            "shield_boost",
+            "alarm_ctr",
         ] {
             expect.push(format!("robot[{i}].{n}"));
         }
@@ -115,15 +164,36 @@ fn o1_robot_bank_maps_only_the_pinned_fields() {
     );
     assert_eq!(get("robot[0].z"), Some(FieldVal::Int(65)));
     assert_eq!(get("robot[0].state"), Some(FieldVal::Int(3)));
+    // D88: drop_countdown reads the +0x80 phase-gate dword.
     assert_eq!(get("robot[0].drop_countdown"), Some(FieldVal::Int(41)));
     assert_eq!(get("robot[0].stop_dist"), Some(FieldVal::Int(1000000)));
     assert_eq!(get("robot[0].hp"), Some(FieldVal::Int(5000)));
     assert_eq!(get("robot[0].alive"), Some(FieldVal::Int(1)));
     assert_eq!(get("robot[1].alive"), Some(FieldVal::Int(0)));
-    // Anti-fabrication: none of the unmapped canonical fields appear.
-    assert!(get("robot[0].facing").is_none());
-    assert!(get("robot[0].probe_z[0]").is_none());
-    assert!(get("robot[0].armor").is_none());
+    // Back-half reads incl. the sign-extended i16 armor + the u16
+    // zero-extends + the negative dword.
+    assert_eq!(get("robot[0].dir_byte"), Some(FieldVal::Int(42)));
+    assert_eq!(get("robot[0].facing"), Some(FieldVal::Int(3)));
+    assert_eq!(get("robot[0].anim"), Some(FieldVal::Int(7)));
+    assert_eq!(get("robot[0].variant"), Some(FieldVal::Int(2)));
+    assert_eq!(get("robot[0].probe_z[0]"), Some(FieldVal::Int(0x0102)));
+    assert_eq!(get("robot[0].probe_z[7]"), Some(FieldVal::Int(0x0F10)));
+    assert_eq!(get("robot[0].kind"), Some(FieldVal::Int(0)));
+    assert_eq!(get("robot[0].hit_flash"), Some(FieldVal::Int(2)));
+    assert_eq!(get("robot[0].armor"), Some(FieldVal::Int(-25)));
+    assert_eq!(get("robot[0].alarm"), Some(FieldVal::Int(100)));
+    assert_eq!(get("robot[0].shield"), Some(FieldVal::Int(32)));
+    assert_eq!(get("robot[0].shield_charges"), Some(FieldVal::Int(5)));
+    assert_eq!(get("robot[0].battery"), Some(FieldVal::Int(10)));
+    assert_eq!(get("robot[0].armor_pool"), Some(FieldVal::Int(2000)));
+    assert_eq!(get("robot[0].death_flag"), Some(FieldVal::Int(0)));
+    assert_eq!(get("robot[0].shield_boost"), Some(FieldVal::Int(0)));
+    assert_eq!(get("robot[0].alarm_ctr"), Some(FieldVal::Int(-99)));
+    // Anti-fabrication: the canonical target trio is record-external
+    // (§5 move-target arrays) — never invented from record bytes.
+    assert!(get("robot[0].target_present").is_none());
+    assert!(get("robot[0].target_x").is_none());
+    assert!(get("robot[0].target_y").is_none());
 }
 
 #[test]
@@ -574,13 +644,14 @@ fn coverage_asymmetry_is_reported_never_silent() {
         .iter()
         .any(|f| f.row == "static-type-table" && f.class == Class::Coverage));
     // Field-level: the unmapped canonical robot fields are coverage
-    // findings (34 canonical record fields - 8 mapped = 26 gaps).
+    // findings (34 canonical record fields - 31 mapped = 3 gaps: the
+    // target trio, record-external per RE-EXD-MAP §8).
     let robot_gaps = res
         .findings
         .iter()
         .filter(|f| f.row == "robot-bank" && f.class == Class::Coverage && f.field != "count")
         .count();
-    assert_eq!(robot_gaps, 26, "34 canonical record fields - 8 mapped");
+    assert_eq!(robot_gaps, 3, "34 canonical record fields - 31 mapped");
     // And nothing was fabricated into a VALUE compare: no engine-bug
     // findings on the shared fields (the EXD record was built to match
     // the canonical one on the mapped set).

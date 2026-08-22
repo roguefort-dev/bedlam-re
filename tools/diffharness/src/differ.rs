@@ -233,42 +233,62 @@ fn u64le(b: &[u8]) -> u64 {
     u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
 }
 
-/// The EXD robot-record field map (RE-EXD-MAP §8, all [verified]).
-/// Offsets in the 0xA8-stride record; (offset, wide-to-i32) pairs.
-const EXD_ROBOT_MAP: &[(&str, usize, bool)] = &[
-    // (canonical field, offset, zero-extend u16 -> i32)
-    ("pos_x", 0x00, false),
-    ("pos_y", 0x04, false),
-    ("z", 0x08, false),
-    ("state", 0x0C, true),
-    ("drop_countdown", 0x2C, true),
-    ("stop_dist", 0x74, false),
-    ("hp", 0x78, false),
-    ("alive", 0x7C, false), // i32 presence word -> !=0 (applied below)
+/// Robot-record field read kinds for the raw-channel maps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FieldKind {
+    /// dword i32.
+    I32,
+    /// word u16, zero-extended to i32.
+    U16,
+    /// word i16, sign-extended to i32 (canonical `armor`).
+    I16,
+}
+
+/// The EXD robot-record field map (RE-EXD-MAP §8, all [verified];
+/// back half pinned by the W7-followup probe, D88 — every EXW §3/§7f/§7g
+/// offset coincides in EXD with the semantic twin EXACT).
+/// Offsets in the 0xA8-stride record; (offset, kind) pairs.
+const EXD_ROBOT_MAP: &[(&str, usize, FieldKind)] = &[
+    ("pos_x", 0x00, FieldKind::I32),
+    ("pos_y", 0x04, FieldKind::I32),
+    ("z", 0x08, FieldKind::I32),
+    ("state", 0x0C, FieldKind::U16),
+    ("dir_byte", 0x0E, FieldKind::U16),
+    ("facing", 0x10, FieldKind::U16),
+    ("anim", 0x12, FieldKind::U16),
+    ("variant", 0x18, FieldKind::U16),
+    ("probe_z[0]", 0x1A, FieldKind::U16),
+    ("probe_z[1]", 0x1C, FieldKind::U16),
+    ("probe_z[2]", 0x1E, FieldKind::U16),
+    ("probe_z[3]", 0x20, FieldKind::U16),
+    ("probe_z[4]", 0x22, FieldKind::U16),
+    ("probe_z[5]", 0x24, FieldKind::U16),
+    ("probe_z[6]", 0x26, FieldKind::U16),
+    ("probe_z[7]", 0x28, FieldKind::U16),
+    ("kind", 0x2A, FieldKind::U16),
+    ("hit_flash", 0x2E, FieldKind::U16),
+    ("armor", 0x30, FieldKind::I16),
+    ("alarm", 0x34, FieldKind::U16),
+    ("stop_dist", 0x74, FieldKind::I32),
+    ("hp", 0x78, FieldKind::I32),
+    ("alive", 0x7C, FieldKind::I32), // presence word -> !=0 (applied below)
+    ("drop_countdown", 0x80, FieldKind::I32), // D88: the phase-4/5 gate
+    // word, NOT the +0x2C pod timer
+    ("shield", 0x88, FieldKind::I32),
+    ("shield_charges", 0x8C, FieldKind::I32),
+    ("battery", 0x94, FieldKind::I32),
+    ("armor_pool", 0x98, FieldKind::I32),
+    ("death_flag", 0x9C, FieldKind::U16),
+    ("shield_boost", 0xA0, FieldKind::I32),
+    ("alarm_ctr", 0xA4, FieldKind::I32),
 ];
 
 /// The EXW robot-record field map (RE-EXW-SIM §3 + §7f/§7g; the §8
 /// seed-#1 EXW-front conflict is OPEN — this is the per-field-evidence
-/// table). Same tuple shape as [`EXD_ROBOT_MAP`].
-const EXW_ROBOT_MAP: &[(&str, usize, bool)] = &[
-    ("pos_x", 0x00, false),
-    ("pos_y", 0x04, false),
-    ("z", 0x08, false),
-    ("state", 0x0C, true),
-    ("dir_byte", 0x0E, true),
-    ("facing", 0x10, true),
-    ("anim", 0x12, true),
-    ("variant", 0x18, true),
-    ("drop_countdown", 0x2C, true),
-    ("hit_flash", 0x2E, true),
-    ("armor", 0x30, true), // word @+0x30 (§7f: the +0x2E gloss was the flash)
-    ("stop_dist", 0x74, false),
-    ("hp", 0x78, false),
-    ("shield", 0x88, false),
-    ("shield_charges", 0x8C, true),
-    ("battery", 0x94, true),
-    ("alive", 0x7C, false),
-];
+/// table). Same tuple shape as [`EXD_ROBOT_MAP`]; the offsets coincide
+/// with EXD on every pinned row (§8 back-half probe, D88) except the
+/// front x/y pair under arbitration.
+const EXW_ROBOT_MAP: &[(&str, usize, FieldKind)] = EXD_ROBOT_MAP;
 
 const ROBOT_STRIDE: usize = 0xA8;
 
@@ -310,7 +330,7 @@ fn robot_row_from_map(
     id: &str,
     frame_no: u64,
     bytes: &[u8],
-    map: &[(&'static str, usize, bool)],
+    map: &[(&'static str, usize, FieldKind)],
 ) -> Result<NormRow, NormalizeError> {
     if !bytes.len().is_multiple_of(ROBOT_STRIDE) {
         return Err(NormalizeError::BadLength {
@@ -324,14 +344,16 @@ fn robot_row_from_map(
     let mut fields = vec![("count".to_string(), FieldVal::Int(n as i128))];
     for i in 0..n {
         let rec = &bytes[i * ROBOT_STRIDE..(i + 1) * ROBOT_STRIDE];
-        for (name, off, wide) in map {
+        for (name, off, kind) in map {
             let path = format!("robot[{i}].{name}");
             let v = if *name == "alive" {
                 FieldVal::Int(i32::from(i32le(&rec[*off..*off + 4]) != 0) as i128)
-            } else if *wide {
-                FieldVal::Int(u16le(&rec[*off..*off + 2]) as i128)
             } else {
-                FieldVal::Int(i32le(&rec[*off..*off + 4]) as i128)
+                match kind {
+                    FieldKind::U16 => FieldVal::Int(u16le(&rec[*off..*off + 2]) as i128),
+                    FieldKind::I16 => FieldVal::Int(i16le(&rec[*off..*off + 2]) as i128),
+                    FieldKind::I32 => FieldVal::Int(i32le(&rec[*off..*off + 4]) as i128),
+                }
             };
             fields.push((path, v));
         }

@@ -10,9 +10,9 @@
 //!
 //! 1. CROSS-CHANNEL (E vs fabricated O1): verdict PASS-WITH-NOTES
 //!    with exactly the expected coverage findings (blink-cursor +
-//!    move-target-words rows are E-only; the 26 unmapped robot
-//!    fields per robot) + the one T2 frame-counter note (the O1
-//!    counter carries menu frames — never matches E by construction).
+//!    move-target-words rows are E-only; the 3 record-external robot
+//!    target fields per robot) + the one T2 frame-counter note (the
+//!    O1 counter carries menu frames — never matches E by construction).
 //!    No engine-bug/structural findings: the mapped-field contract
 //!    holds on the real corpus.
 //! 2. DOUBLE-RUN (fabricated O1 vs perturbed copy): the DH-G1 verdict
@@ -50,8 +50,10 @@ fn corpus_present() -> bool {
 // The inverse normalizer (canonical -> EXD raw; test-only)
 // ---------------------------------------------------------------------
 
-/// Robot canonical record (94 B) -> EXD 0xA8 record with the 8
-/// RE-EXD-MAP §8-mapped fields placed (everything else zero).
+/// Robot canonical record (94 B) -> EXD 0xA8 record with the 31
+/// RE-EXD-MAP §8-mapped leaf fields placed (everything else zero;
+/// the canonical target trio is record-external — §5 move-target
+/// arrays — so it is never placed).
 fn inv_robot_bank(canon: &[u8]) -> Vec<u8> {
     assert!(canon.len() >= 4);
     let n = u32::from_le_bytes(canon[0..4].try_into().unwrap()) as usize;
@@ -60,24 +62,41 @@ fn inv_robot_bank(canon: &[u8]) -> Vec<u8> {
     for i in 0..n {
         let rec = &canon[4 + i * 94..4 + (i + 1) * 94];
         // §6a order: alive@0, pos_x@1, pos_y@5, z@9, state@13,
-        // drop_countdown@52, hp@56 (stop_dist@39).
+        // dir_byte@15, facing@17, anim@19, variant@21, probe_z@23(16B),
+        // stop_dist@39, target@43(9B), drop@52, hp@56, armor@60,
+        // hit_flash@62, alarm@64, kind@66, shield@68, charges@72,
+        // boost@76, battery@80, pool@84, ctr@88, death@92.
         let mut r = vec![0u8; 0xA8];
+        let u16at = |p: usize| u16::from_le_bytes(rec[p..p + 2].try_into().unwrap());
+        let i32at = |p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+        r[0x00..0x04].copy_from_slice(&i32at(1).to_le_bytes());
+        r[0x04..0x08].copy_from_slice(&i32at(5).to_le_bytes());
+        r[0x08..0x0C].copy_from_slice(&i32at(9).to_le_bytes());
+        r[0x0C..0x0E].copy_from_slice(&u16at(13).to_le_bytes());
+        r[0x0E..0x10].copy_from_slice(&u16at(15).to_le_bytes());
+        r[0x10..0x12].copy_from_slice(&u16at(17).to_le_bytes());
+        r[0x12..0x14].copy_from_slice(&u16at(19).to_le_bytes());
+        r[0x18..0x1A].copy_from_slice(&u16at(21).to_le_bytes());
+        for k in 0..8 {
+            r[0x1A + 2 * k..0x1C + 2 * k].copy_from_slice(&u16at(23 + 2 * k).to_le_bytes());
+        }
+        r[0x2A..0x2C].copy_from_slice(&u16at(66).to_le_bytes());
+        r[0x2E..0x30].copy_from_slice(&u16at(62).to_le_bytes());
+        r[0x30..0x32]
+            .copy_from_slice(&i16::from_le_bytes(rec[60..62].try_into().unwrap()).to_le_bytes());
+        r[0x34..0x36].copy_from_slice(&u16at(64).to_le_bytes());
+        r[0x74..0x78].copy_from_slice(&i32at(39).to_le_bytes());
+        r[0x78..0x7C].copy_from_slice(&i32at(56).to_le_bytes());
         let alive = rec[0];
-        let pos_x = i32::from_le_bytes(rec[1..5].try_into().unwrap());
-        let pos_y = i32::from_le_bytes(rec[5..9].try_into().unwrap());
-        let z = i32::from_le_bytes(rec[9..13].try_into().unwrap());
-        let state = u16::from_le_bytes(rec[13..15].try_into().unwrap());
-        let stop = i32::from_le_bytes(rec[39..43].try_into().unwrap());
-        let drop = i32::from_le_bytes(rec[52..56].try_into().unwrap());
-        let hp = i32::from_le_bytes(rec[56..60].try_into().unwrap());
-        r[0x00..0x04].copy_from_slice(&pos_x.to_le_bytes());
-        r[0x04..0x08].copy_from_slice(&pos_y.to_le_bytes());
-        r[0x08..0x0C].copy_from_slice(&z.to_le_bytes());
-        r[0x0C..0x0E].copy_from_slice(&state.to_le_bytes());
-        r[0x2C..0x2E].copy_from_slice(&(drop as u16).to_le_bytes());
-        r[0x74..0x78].copy_from_slice(&stop.to_le_bytes());
-        r[0x78..0x7C].copy_from_slice(&hp.to_le_bytes());
         r[0x7C..0x80].copy_from_slice(&(alive as i32).to_le_bytes());
+        r[0x80..0x84].copy_from_slice(&i32at(52).to_le_bytes()); // D88: +0x80
+        r[0x88..0x8C].copy_from_slice(&i32at(68).to_le_bytes());
+        r[0x8C..0x90].copy_from_slice(&i32at(72).to_le_bytes());
+        r[0x94..0x98].copy_from_slice(&i32at(80).to_le_bytes());
+        r[0x98..0x9C].copy_from_slice(&i32at(84).to_le_bytes());
+        r[0x9C..0x9E].copy_from_slice(&u16at(92).to_le_bytes());
+        r[0xA0..0xA4].copy_from_slice(&i32at(76).to_le_bytes());
+        r[0xA4..0xA8].copy_from_slice(&i32at(88).to_le_bytes());
         out.extend(r);
     }
     out
@@ -167,10 +186,11 @@ fn s0_s1_cross_and_double_run() {
 
     // S0 = T0+TS only (no T1 rows -> no coverage asymmetry); S1 adds
     // the T1 slice: blink-cursor + move-target-words rows are E-only
-    // and the robot field gaps are 26 per robot (1 robot on ZONEA).
+    // and the robot field gaps are 3 per robot (the record-external
+    // target trio; 34 canonical leaves - 31 mapped, RE-EXD-MAP §8).
     for (id, frames_total, pinned_chain, expect_coverage) in [
         ("S0", 3u64, "8901789a88cf61fe", 0u64),
-        ("S1", 401u64, "1c4e7b4c9d9b0947", 2 + 26),
+        ("S1", 401u64, "1c4e7b4c9d9b0947", 2 + 3),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -213,7 +233,8 @@ fn s0_s1_cross_and_double_run() {
         assert_eq!(res.count(Class::EngineBug), 0, "{id}");
         assert_eq!(res.count(Class::Structural), 0, "{id}");
         // blink-cursor + move-target-words rows are E-only (S1); the
-        // robot field gaps are 26 per robot per frame (S1: 1 robot).
+        // robot field gaps are the target trio per robot per frame
+        // (S1: 1 robot).
         assert_eq!(res.count(Class::Coverage), expect_coverage, "{id}");
         if expect_coverage > 0 {
             assert!(res
