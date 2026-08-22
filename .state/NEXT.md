@@ -22,42 +22,61 @@
    (2026-08-22): S0.json was REGENERATED (difficulty row now dumps;
    19 anchor + 10 per-frame) — re-stage before the session (the
    fa49e9cf byte-identical check predates this; regenerate +
-   re-diff `diff stage`). The operator session is TURNKEY — start at
-   checklist step 1, no prep left.
+   re-diff `diff stage`). NOTE D84 (2026-08-22): S0.json regenerated
+   AGAIN (resolve_at=anchor — resolve now reads the loader statics at
+   the ANCHOR stop, mission start, not the arm stop; the S0 checklist
+   step-1 text is amended in RUNTIME.md) — re-stage again before the
+   session (dbx-plan scenarios/S0.scen --out ...). The operator
+   session is TURNKEY — start at checklist step 1, no prep left.
+   D84 BONUS HOOK: the same session can calibrate the committed S0W
+   scripted walk (`diff capture scenarios/S0W.scen` once — its
+   per-stop `# walk stop N walk-mode/zone/mission ...` transcript
+   comments map menu transitions to stop indices; then rewrite the
+   DRAFT stop counts in S0W.scen — pure data, no code).
    OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
    `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
    the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
    retry) → BP CS:0005A6EB arm (the ack echoes the selector = the
-   per-run pin) → resolve w/h + TOT/DAT/claim pointers → 3-record
-   capture (the INT3-at-entry proof step is SUPERSEDED — CS-register
-   addressing needs no selector); (c) `diff stitch` × 2 runs;
-   (d) DH-G1 verdict = identical chains MODULO the frame-counter/RNG
-   blob bytes (no counter reset exists — 14 INC sites incl. menus;
-   T2/T3 classes per DESIGN §6; any OTHER byte diff = a channel
-   finding, record + stop); (e) cycles=fixed 60000 listen calibration
-   (audio-live plan env variant). Record fingerprints (chain/dump
-   sha256, selector pin, w/h, pointers) in RUNTIME.md; DECISIONS if a
-   pin changed. NOTE the 6 deferred TS rows (cgr/bin/min/lnk/
-   order-table/yline — extent formulas unpinned) are consciously OUT
-   of the first golden; adding them later is additive (re-baseline
-   chains deliberately). Manifest checks bracket corpus-touching steps.
-2. [P4.2/W5-walk] THE SCRIPTED-MENU-WALK DRIVER (unattended; unblocked
-   by D83 — the keystore alias 0x894d4 landed): the BPLM-on-frame-
-   counter walk driver that replaces the human title-menu walk — walk
-   stops (BPLM on the frame-counter cell 0x1195f0 with per-stop
-   keystore/menu inputs) + mission-start detection (the S0 anchor BP
-   CS:0005A6EB fires) so S0/S1 captures become byte-identical-chains
-   reproducible unattended. ENTRY FACTS (all pinned): keystore 0x894d4
-   (+ESC byte 0x894d5, arrows via OR-0x80 → 0x8959c/9f/a1/a4),
-   AnyKeyWait twin FUN_0041f9d1→FUN_00030792 consumes a byte on read
-   (the walk driver must re-arm keys per stop), capgen SMV inject rows
-   + boot_writes already landed (D82), the grammar's walk-phase steps
-   are future work per D82 item 5 — THIS unit lands them (walk-phase
-   keystore steps + a menu-walk scenario S0W with until-anchor =
-   mission-start). The PAD step's runtime pad-slot op (capgen `pad`
-   op) lands here too or stays its own unit — implementer's call per
-   bounded scope. Verify headless (dbgprobe flow patterns, no desktop
-   game session).
+   per-run pin) → resolve w/h + TOT/DAT/claim pointers (AT THE ANCHOR
+   STOP per D84) → 3-record capture (the INT3-at-entry proof step is
+   SUPERSEDED — CS-register addressing needs no selector); (c) `diff
+   stitch` × 2 runs; (d) DH-G1 verdict = identical chains MODULO the
+   frame-counter/RNG blob bytes (no counter reset exists — 14 INC
+   sites incl. menus; T2/T3 classes per DESIGN §6; any OTHER byte
+   diff = a channel finding, record + stop); (e) cycles=fixed 60000
+   listen calibration (audio-live plan env variant). Record
+   fingerprints (chain/dump sha256, selector pin, w/h, pointers) in
+   RUNTIME.md; DECISIONS if a pin changed. NOTE the 6 deferred TS rows
+   (cgr/bin/min/lnk/order-table/yline — extent formulas unpinned) are
+   consciously OUT of the first golden; adding them later is additive
+   (re-baseline chains deliberately). Manifest checks bracket
+   corpus-touching steps.
+2. [P4.2/W6] THE ENGINE DUMP EMITTER (unattended; DESIGN §10-W6, the E
+   side of the differ): parity_harness gains `--canonical` — per-tick
+   canonical records in the W3 dump schema (tools/diffharness dump.rs,
+   channel E), consumed by the future differ (W7). Scope: T0/T1 field
+   maps first (frame counter, RNG A/B, score/money, difficulty, zone/
+   mission/mode, linear-m — then the robot bank 0xA8-stride fields,
+   selection/anchor, order-target, beacon family, tile-grid derived
+   forms) mapping MissionSim/MissionScene state per tick into the
+   registry-ordered watch blobs; one dump per tick at the same dump
+   point the O1 channel uses (the present tail), chain via the D28
+   FNV construction (dump.rs already mirrors it). The v1.1 grammar
+   steps are the shared seam (D82): the emitter consumes the SAME
+   scenario step list (keystore→InputFrame, order→the click-order
+   seam, command→the fire seam) so one script drives both sides.
+   Deliverable: engine-side dumps + a comparison fixture vs a
+   synthetic reference; corpus-gated tests follow the
+   mission_corpus_gate pattern. Verify: cargo workspace green; no
+   Ghidra, no emulator needed.
+3. [P4.2/W5-pad] THE CAPGEN PAD OP (small, unattended; D84 item 4):
+   the runtime pad-slot read op for the PAD step (§5.4 — read the
+   .PAD slot's tile from the pad bank at capture time, then write the
+   order-target triple to it): needs the §7j.20 pad census semantics
+   (the ~25 extraction-pad (zone,slot) pairs + the 0xf63c bank layout
+   — FORMATS/RE-EXD-MAP rows) + a capgen `{op:"pad"}` inject form +
+   un-gating Step::Pad in dbx-plan. S6 (extraction) pulls this; land
+   it before W8 wiring.
 
 ## Backlog (not yet started)
 - [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
@@ -194,6 +213,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W5-walk THE SCRIPTED-MENU-WALK DRIVER unit COMPLETE
+  (worker 845abdc5 claim 2, commits 59ec9a5 + b67dcaa + 33b2c17, D84).
+  (a) DESIGN FIRST (59ec9a5, RUNTIME.md "W5 walk driver"): the stop
+  model — the BPLM boot trap on the frame-counter cell 0x1195f0
+  doubles as the walk driver, one stop per counter-writing screen
+  frame; SMV writes at stop i become screen frame i+1's input;
+  keystore re-arm per input (AnyKeyWait twin consumes on read);
+  anchor BP CS:0005A6EB arms only AT THE LAST WALK STOP (BPDEL * drops
+  the trap — no stop-type ambiguity). (b) COMPILER (b67dcaa):
+  walk-phase keystore steps -> stop-indexed plan rows ("walk" key;
+  Advance consumes stops; runaway 1M guard; order/pad/command refused
+  as "not menu-walk steps"); registry-derived walk_watches calibration
+  trio (walk-mode 0x1075d8 / walk-zone 0x107500 / walk-mission
+  0x119610); resolve_at=anchor emitted for ALL plans — FIXES the
+  latent D81 gap (loader statics are mission-load values; the
+  arm-stop read was pre-mission garbage feeding len exprs); S0/S1
+  regenerated, S0W.scen + capture-plans/S0W.json committed (STRUCTURAL
+  DRAFT schedule — stop indices calibrate live via the per-stop
+  transcript comments; then pure data). (c) CAPGEN plan v3: the walk
+  loop (write-then-dump per stop, arm-at-walk-end), walk_watches
+  transcript comments, resolve_at=anchor, boot_writes at the accept
+  stop (identical for walk-less plans). (d) VERIFIED headless:
+  `dbgprobe walk` GREEN (stop indexing incl. a pure-skip stop,
+  calibration notes, arm-at-walk-end, anchor resolve feeding expr
+  lens); gate/flow/inject regression-GREEN; 52 diffharness tests (4
+  new), fmt+clippy clean, manifest clean. PAD op deliberately its own
+  unit (queued item 3). Queued: item 2 = W6 the engine dump emitter.
 - 2026-08-22: P4.2/W5-followup THE EXD INPUT-TWIN CENSUS unit COMPLETE
   (worker ef11271c claim 2, commits 79362a9 + 110718d, D83). Four
   Ghidra probe passes (-process BEDLAM.EXD -noanalysis): (a) KEYSTORE

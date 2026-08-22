@@ -1,5 +1,23 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W5-walk THE SCRIPTED-MENU-WALK DRIVER unit
+    COMPLETE, worker 845abdc5 claim 2, commits 59ec9a5 + b67dcaa +
+    33b2c17, D84): the human title-menu walk is now scriptable — the
+    BPLM boot trap on the frame-counter cell 0x1195f0 doubles as the
+    walk driver (one stop per counter-writing screen frame; SMV at
+    stop i = screen frame i+1's input; keystore re-arm per input
+    because AnyKeyWait consumes on read; anchor BP arms at the LAST
+    walk stop). Compiler: walk-phase keystore steps -> stop-indexed
+    "walk" plan rows + registry-derived walk_watches calibration trio;
+    resolve_at=anchor for ALL dbx-plan plans (fixes the latent D81
+    gap: loader statics are mission-load values, the arm-stop read
+    was pre-mission garbage). S0W.scen + capture-plans/S0W.json
+    committed (draft schedule; calibrates live via per-stop transcript
+    comments). capgen plan v3 walk loop GREEN headless (`dbgprobe
+    walk`; gate/flow/inject regression-green; 52 tests). The pad op
+    queued as its own unit. NEXT HEADS: W6 the engine dump emitter
+    (queue item 2, unattended) + the operator S0 live session (item 1,
+    interactive-gated — now also carries the S0W calibration hook).
   - OPEN 2026-08-22 (P4.2/W5-followup EXD INPUT-TWIN CENSUS unit
     COMPLETE, worker ef11271c claim 2, commits 79362a9 + 110718d,
     D83): the four §5 seam aliases are PINNED and REGISTERED — EXD
