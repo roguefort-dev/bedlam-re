@@ -1,22 +1,22 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/W2] WATCH REGISTRY (second ticket of the DESIGN-DIFFHARNESS.md
-   build order, docs/DECISIONS.md D77): commit the DESIGN §4 watch set
-   as data at tools/diffharness/watches.toml — per row: id, exw_addr,
-   exd_addr, extent, layout ref, tier, anchor ref (ledger row heading).
-   Fill exd_addr from docs/RE-EXD-MAP.md §4/§5/§5b (T0/T1 rows mapped
-   2026-08-22; carry the `indirect` flag for the pointer-cell rows:
-   object bank *(0x119584), TOT/DAT/CGR/BIN/MIN volumes, claim bank
-   *(0x119564); leave exd_addr empty for the 6 tagged gaps — difficulty,
-   SFX gate, blink-cursor, order target, no-extract latch, selection
-   cursor/squad — the schema makes gaps explicit, never guess). Include
-   the S0 trigger row (EXD 0x5a6eb / EXW PresentEnd tail) + the
-   static-after-load one-shot rows (§5b). Add the validation test
-   asserting every anchor string resolves to a ledger row heading
-   (mechanical anti-ghost guard, same spirit as the B2
-   ghost-fabrication lesson). Bounded: registry + test ONLY; T2-T4 rows
-   stay exd-empty; W3 schema is a later unit.
+1. [P4.2/W3] DUMP SCHEMA (third ticket of the DESIGN-DIFFHARNESS.md build
+   order, D77; W2 landed as commit 01a6847): implement the DESIGN §3 dump
+   format in the tools/diffharness crate — the versioned frame-record
+   stream shared by O1/O2/O3/E: header {schema_ver, channel, build_sha256,
+   pin versions, scenario id}, per frame {frame_no, injection_applied,
+   per-watch {id, raw bytes, len}}, trailer digest; per-frame digest =
+   FNV-1a-64 over the canonicalized records with the `BDLD` tag — REUSE
+   the engine's StateHash hash util (find it via the parity_harness/D28
+   path in engine/; if reuse would drag engine deps into the zero-dep
+   guard crate, mirror the util as a small pure function + a cross-check
+   test against the engine's expected outputs). Encoders for raw watch
+   blobs driven by the committed registry (tools/diffharness/watches.toml
+   — parse via diffharness::registry()). Bounded: schema + encoders +
+   unit tests ONLY; no runner (W4), no engine-side emitter (W6). Keep the
+   crate zero-dependency so CI stays offline-safe. Dump blobs themselves
+   are asset-derived data (runtime/harness-out only, never git).
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -147,6 +147,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W2 the WATCH REGISTRY unit COMPLETE (worker 873ebd5e
+  claim 1, commit 01a6847). tools/diffharness/watches.toml = the DESIGN
+  §4 watch set as data, 73 rows: S0 trigger (EXW PresentEnd 0x425a03 /
+  EXD instruction 0x5a6eb), T0 (11 rows, EXD aliases filled: frame
+  counter 0x1195f0, RNG A/B 0x107470/74, score 0x10da28, money 0x119600,
+  zone 0x107500, mission 0x119610, mode 0x1075d8, linear-m 0x119610),
+  T1 (17 rows: robot bank 0xf6d34/count 0x11958c, selection triple
+  0x11954c selected-idx only, per-player anchor 0x971a4, move-target
+  0xf75ec/0xf761c, beacon family 0x119628-30, claims 0x119632, tile grid
+  0xfe37c, platform bank 0xf93cc, type-DB mirror 0xac1e4 + derived
+  +0x18/+0x19/+0x1A rows, object bank *(0x119584) indirect + count
+  0x119554, TRT 0x95264 + count 0x11949c, armor-pad alias), TS (all 15
+  static-after-load §5b rows incl. the volume pointer cells
+  0x107454/0x107518/0x107540/0x107434/0x107538 indirect, PAD 0xf63c,
+  order table 0x91ee4, player type 0x1075c0, dither 0x8ded4, EXD-only
+  cursor clamp), T2/T3/T4 (exd-empty per the W1 ticket) + TI (the six
+  injection-surface rows anchored on RE-EXW-INPUT). The 6 tagged gaps
+  (difficulty, SFX gate, blink-cursor, order target, no-extract latch,
+  selection cursor/squad) stay explicitly exd-empty. NEW zero-dep
+  workspace member tools/diffharness: minimal TOML-subset registry
+  parser + tests/registry_anchors.rs = the mechanical anti-ghost guard
+  (every anchor string must resolve EXACTLY to a ledger row heading /
+  markdown heading in its named doc; guard verified to bite on a
+  fabricated anchor) + schema invariants (tier set, exd_status vs
+  exd_addr consistency, T2-T4/TI exd-emptiness, indirect-pointer rules,
+  gap discipline). cargo test/fmt/clippy green; manifest verified.
+  PUSHED 01a6847. Queued: W3 (dump schema).
 - 2026-08-22: P4.2/W1 the EXD IMPORT + EXW->EXD ADDRESS MAP unit COMPLETE
   (worker d06341cf claim 1, commits 350b53a + 10aea57 + f6e067a + 8447ba7,
   docs + 8 Ghidra probe scripts). BEDLAM.EXD imported ONCE into

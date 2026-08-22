@@ -1,3 +1,21 @@
+  - CLOSED 2026-08-22 (P4.2/W2 the WATCH REGISTRY unit COMPLETE, worker
+    873ebd5e claim 1, commit 01a6847): the DESIGN-DIFFHARNESS §4 watch
+    set committed as data — tools/diffharness/watches.toml, 73 rows
+    (S0 trigger 0x5a6eb/0x425a03; T0 11 rows with EXD aliases; T1 17
+    rows; all 15 §5b static one-shot rows; T2/T3/T4 exd-empty per the
+    W1 ticket; 6 TI injection rows), schema per row = id/tier/exw_addr/
+    exd_addr/indirect/extent/layout/exd_status/anchor_doc/anchor. The
+    pointer-cell rows (object bank *(0x119584), TOT/DAT/CGR/BIN/MIN
+    volumes, claim bank *(0x119564)) carry indirect = true; the 6 tagged
+    gaps (difficulty, SFX gate, blink-cursor, order target, no-extract
+    latch, selection cursor/squad) are explicitly exd-empty, never
+    guessed. New zero-dep workspace crate tools/diffharness =
+    registry parser + the anti-ghost validity test (every anchor string
+    must resolve EXACTLY to a ledger row heading in its named doc —
+    verified to bite on a fabricated anchor) + schema-invariant checks.
+    cargo test/fmt/clippy green; MANIFEST verified. PUSHED 01a6847.
+    Next P4.2 head: W3 (dump schema: versioned frame-record stream +
+    FNV-1a-64 BDLD chain + raw-blob encoders, tools-side only).
  - CLOSED 2026-08-22 (P4.2/W1 the EXD IMPORT + EXW->EXD ADDRESS MAP
    unit COMPLETE, worker d06341cf claim 1, commits 350b53a + 10aea57 +
    f6e067a + 8447ba7): BEDLAM.EXD imported ONCE into BedlamWatcom
