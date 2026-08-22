@@ -1,3 +1,25 @@
+  - CLOSED 2026-08-22 (P4.2/W4 the DOSBOX-X RUNNER unit COMPLETE via the
+    ticket's split clause, worker d35c7066 claim 1, commits d9a3f77 +
+    19c3bdf, D79): (a) unattended-safe slice — dosbox-harness.sh `diff
+    stage|run|stitch` (EXD corpus scratch runtime/harness-corpus-exd;
+    launch pinned DOS4GW.EXE BEDLAM.EXD — the 269k BEDLAM.EXE is the
+    PE32 launcher, the 655k .EXD the LE game image), scenario grammar
+    v1 + committed S0/S1 scenarios, DBXCAP v1 channel-agnostic capture
+    transcript + zero-dep dbx-stitch bin (anti-ghost guards: registry
+    membership, scenario tiers, O1 exd_addr non-empty; anchor+frames
+    count contract) producing the W3 dump + JSON digest manifest
+    (self-contained SHA-256, FIPS vectors); synthetic replay fixture
+    decode-tests pin chain vector 1685e11311ae5b21; workspace
+    fmt/clippy/tests green; MANIFEST verified around the corpus read.
+    (b) live piece [BLOCKED]-on-DH-G0-channel-repin — the D79 audit
+    (3 headless probes + binary strings + upstream source at banner
+    commit e522642) proved the pinned flathub DOSBox-X 2026.08.02 has
+    NO integrated debugger (debuggerrun/-break-start inert) and
+    log-only JS (console.log -> [log] misc, enable misc=true); D29's
+    debugger-presence claim corrected in RUNTIME.md; DESIGN §3/§9/§11
+    + watch skeleton amended. Queue head: the channel re-pin unit
+    (option (a) self-build --enable-debug=heavy default, (b) GameLink
+    spike, (c) O2 ptrace; then the interactive S0 live run + DH-G1).
   - CLOSED 2026-08-22 (P4.2/W3 the DUMP SCHEMA unit COMPLETE, worker
     6f14cea1 claim 1, commit fca6657): the DESIGN §3 dump format
     implemented in the zero-dep crate — tools/diffharness/src/dump.rs

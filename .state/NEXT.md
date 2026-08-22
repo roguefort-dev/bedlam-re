@@ -1,32 +1,27 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/W4] DOSBOX-X RUNNER (fourth ticket of the DESIGN-DIFFHARNESS.md
-   build order, D78; W3 landed as commit fca6657): extend
-   tools/runtime/dosbox-harness.sh with a `diff` mode per DESIGN §3/§10:
-   scenario script → pinned conf copy (D29 pins: core=normal,
-   cputype=pentium, cycles=60000) → debugger automation (BPINT/BPLM/D
-   forms, watch-mode logging, or the fallback linear breakpoint at the
-   frame-tail site whose handler reads the whole tier list) → per-frame
-   bulk reads of the scenario's watch tiers → D: dumps in the W3 schema
-   (emit via a small Rust bin in tools/diffharness consuming the
-   registry + dump encoders, or a shell/python stitcher that pipes
-   debugger output into it — implementer's choice, keep the crate
-   itself zero-dep) → digest manifest (sha256 + chain fingerprints).
-   FIRST TARGET: S0 headless (boot → menu walk → mission start → N
-   steady-state frames). CRITICAL DEPENDENCY: the §3 trigger surface is
-   [pin-unverified] — the DH-G0 interactive session must pin the exact
-   DOSBox-X debugger command surface (startup.js automation route,
-   breakpoint-at-0x5a6eb handler shape, bulk-read command forms) and
-   convert the UNCERTAINs into committed runbook facts in
-   docs/RUNTIME.md BEFORE or AS PART of this unit; if the interactive
-   pin cannot run unattended, split the unit: (a) conf copy + corpus
-   rsync scratch + D: output staging + the S0 scenario script grammar
-   (all unattended-safe), (b) the live debugger automation (tag the
-   remaining piece [BLOCKED]-on-DH-G0-interactive and stop). Bounded:
-   no injector (W5), no engine emitter (W6), no differ (W7). Dump blobs
-   are asset-derived (runtime/harness-out only, never git); MANIFEST
-   checks bracket every corpus-touching run.
+1. [P4.2/DH-G0-channel] O1 CAPTURE-CHANNEL RE-PIN (unblocks the W4
+   live piece; D79 in DECISIONS + RUNTIME.md "DH-G0 channel audit"):
+   the pinned flathub DOSBox-X 2026.08.02 has NO debugger (inert
+   debuggerrun/-break-start) and log-only JS, so decide + land the
+   replacement channel. Options: (a) self-build DOSBox-X at the
+   pinned upstream commit e522642 (the binary's own banner commit;
+   autotools --enable-sdl2 --enable-debug=heavy inside runtime/,
+   D19 discipline: deliberate pin + smoke gate + record in RUNTIME.md;
+   conf pins all carry over) — DEFAULT if no operator input; (b)
+   bounded GameLink GC4 feasibility spike (read src/gamelink/ at the
+   pinned commit + a host shared-memory client probe; question: can it
+   read DPMI/flat linear addresses 0x10000/0x80000 objects?); (c)
+   promote O2 ptrace (W11) to primary. Unit bounds: decision + build/
+   probe + pin the debugger command surface (BPINT/BPLM/D forms, the
+   INT3-at-_entry 0x5fbb0 linear-conversion proof) as RUNTIME.md facts
+   + wire the chosen channel's DBXCAP emitter (the W4 stitcher is
+   channel-agnostic and landed). NO game diff yet — the live game run
+   stays interactive-gated (desktop session; dosbox-harness.sh
+   `diff run` FORCE_DIFF_RUN=1 gate) for the NEXT unit (S0 live +
+   DH-G1 determinism). Manifest checks bracket any corpus-touching
+   run; the pinned binaries stay hash-recorded (oracle rule).
 
 ## Backlog (not yet started)
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -157,6 +152,29 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W4 the DOSBOX-X RUNNER unit COMPLETE via the ticket's
+  split clause (worker d35c7066 claim 1, commits d9a3f77 + 19c3bdf, D79).
+  (a) unattended-safe slice LANDED: dosbox-harness.sh `diff
+  stage|run|stitch` (EXD corpus scratch runtime/harness-corpus-exd from
+  game-data/BEDLAM — launch line pinned DOS4GW.EXE BEDLAM.EXE[launcher]/
+  BEDLAM.EXD[LE image] via header+launcher-string evidence; per-scenario
+  conf deploy; run=refused-unattended gate); scenario grammar v1 + S0/S1
+  scenario files; DBXCAP v1 channel-agnostic capture transcript + the
+  zero-dep dbx-stitch bin (registry/tier/O1-exd_addr anti-ghost guards,
+  frame-count contract, W3 encode + JSON digest manifest with
+  self-contained SHA-256, FIPS-vector-pinned); synthetic replay fixture
+  test decodes the dump + pins chain vector 1685e11311ae5b21; fmt+clippy
+  green workspace-wide; MANIFEST verified both sides of the corpus read;
+  staged fingerprints cross-checked vs sha256sum. (b) live piece
+  [BLOCKED]-on-DH-G0-channel-repin: the D79 AUDIT found the pinned
+  flathub DOSBox-X has NO integrated debugger (configure.ac --enable-
+  debug off; flathub builds --enable-sdl2 only; debuggerrun/-break-start
+  inert across piped/PTY probes) and its Duktape startup.js is LOG-ONLY
+  (enumerated: _emu.emulator/version/log + console.log -> [log] misc
+  channel, needs misc=true; Buffer/CBOR with no I/O; no memory access,
+  no hooks) — D29's debugger-presence claim corrected in RUNTIME.md;
+  DESIGN §3/§9/§10-W4/§11 + the watch skeleton amended. Next head: the
+  channel re-pin unit (queue item 1).
 - 2026-08-22: P4.2/W3 the DUMP SCHEMA unit COMPLETE (worker 6f14cea1
   claim 1, commit fca6657). tools/diffharness/src/dump.rs = the DESIGN
   §3 format as code, schema_ver 1, all-LE: "BDLD" header {channel 1..4
