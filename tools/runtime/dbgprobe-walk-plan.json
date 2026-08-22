@@ -1,0 +1,36 @@
+{
+  "_comment": "W5 WALK probe (D84). Proves the scripted-menu-walk driver machinery headless with NO game (probe conf = empty autoexec): boot trap (BPLM on the BDA tick cell 0x46C) -> boot_writes at the ACCEPT stop (frame 0) -> WALK phase on the still-armed BPLM: stop-indexed SMV writes with stop 2 a pure skip (proves indexing), two rows on stop 3, and a per-stop calibration watch dumped write-then-read (riding the transcript as '# walk stop N ...' comments) -> arm at the LAST walk stop (BPDEL * + BPINT 8 surrogate anchor) -> resolve_at=anchor (the D84 position: symbols read at the anchor stop, feeding expr lens) -> anchor/per-frame capture. The gate asserts: walk-note write-then-read per stop, the skip-stop indexing, the anchor resolve value, the expr len evaluated from it, and stable state rows. These ids are deliberately NOT registry ids - a probe transcript is never stitched.",
+  "logfile": "dbgprobe.log",
+  "time_limit": 240,
+  "boot_timeout": 90,
+  "flat_guard": false,
+  "frames": 3,
+  "boot_commands": [
+    { "cmd": "BPLM 46C", "expect": "Set linear memory breakpoint at 0000046C" }
+  ],
+  "boot_writes": [
+    { "addr": "0000:0500", "bytes": "beefcafe" }
+  ],
+  "walk": [
+    { "stop": 1, "addr": "0000:0504", "bytes": "11" },
+    { "stop": 3, "addr": "0000:0504", "bytes": "33" },
+    { "stop": 3, "addr": "0000:0508", "bytes": "a1" }
+  ],
+  "walk_watches": [
+    { "id": "probe-walk-marker", "addr": "0000:0504", "len": 1 }
+  ],
+  "arm_commands": [
+    { "cmd": "BPDEL *", "expect": "Breakpoints deleted" },
+    { "cmd": "BPINT 8", "expect": "Set interrupt breakpoint at INT 08" }
+  ],
+  "resolve_at": "anchor",
+  "resolve": [
+    { "name": "mark", "addr": "0000:0504", "len": 1 }
+  ],
+  "anchor_watches": [
+    { "id": "probe-walk-lenexpr", "addr": "0000:0000", "len": "$mark-48" }
+  ],
+  "watches": [
+    { "id": "probe-walk-state", "addr": "0000:0500", "len": 9 }
+  ]
+}

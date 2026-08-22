@@ -1,0 +1,51 @@
+# S0W — scripted menu walk -> mission start (DESIGN-DIFFHARNESS.md §7;
+# the D84 W5-walk driver scenario: S0 with the human title-menu walk
+# replaced by stop-indexed keystore writes, making the capture
+# unattended-reproducible - byte-identical chains incl. the
+# frame-counter/RNG cells, not just modulo them).
+#
+# STOP MODEL: walk stops = frame-counter-cell (EXD 0x1195f0) BPLM hits,
+# one per counter-writing screen frame; a write at stop i is screen
+# frame i+1's input. Keystore cells (EXD): ESC 0x894d5, ENTER 0x894f0
+# (scan 0x1c), arrows 0x8959c/9f/a1/a4. The AnyKeyWait twin CONSUMES a
+# byte on read, so each menu advance needs a fresh write; explicit 0
+# releases follow presses where a menu polls without consuming.
+#
+# *** THE STOP COUNTS BELOW ARE A STRUCTURAL DRAFT *** — placeholder
+# indices, NOT calibrated. Calibrate at the first live session via the
+# plan's walk_watches transcript comments (mode/zone/mission per stop),
+# then this schedule is pure data. Menu shape per RE-EXW-TITLEMENU §1-2:
+# boot attract -> main menu (menu 1, sel=-1, item 0 = New Single Player
+# Game) -> ENTER -> episode loop -> ZONEA/MISSION1 -> MissionShell.
+scenario = "S0W"
+tiers = T0,TS
+anchor = mission-start
+frames = 2
+launch = "DOS4GW.EXE BEDLAM.EXD"
+
+# ---- walk phase (DRAFT stops; calibrate live) ----
+# boot attract / intro screens settle
+step 90
+# ESC: skip the attract
+keystore 0x01=1
+step 3
+# ESC release
+keystore 0x01=0
+# main menu settles (sel=-1 -> item 0 armed)
+step 30
+# ENTER: select "New Single Player Game"
+keystore 0x1c=1
+step 3
+keystore 0x1c=0
+step 8
+# ENTER: activate (two-press form; harmless if the menu activates on
+# one press - the surplus lands on the loading screen and is
+# consumed/ignored)
+keystore 0x1c=1
+step 3
+keystore 0x1c=0
+# loading -> mission load -> MissionShell first pass
+step 40
+until-anchor mission-start
+
+# ---- mission phase: no injection; T0+TS at the anchor + 2 frames ----

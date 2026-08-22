@@ -53,11 +53,28 @@ runs from the staged conf's autoexec. Keys:
       default MEMDUMPBIN/BP parse path, so no numeric selector is ever
       needed; the BP ack echoes it, captured into the transcript
       header as the selector pin).
-  resolve [{name,addr,len}]     little-endian cell reads at the arm
-      stop (loader statics: map w/h, volume pointer cells); values
-      become $name symbols.
+  resolve [{name,addr,len}]     little-endian cell reads; values
+      become $name symbols. Position is governed by resolve_at:
+      "arm" (default, legacy) = read at the arm stop; "anchor" (D84,
+      what dbx-plan emits) = read at the ANCHOR stop (mission start)
+      — the loader statics (map w/h, TOT/DAT/claim pointers) are
+      mission-load values and read garbage pre-mission.
   boot_writes [{addr,bytes}]    W5 BOOT setup (DESIGN §5.5): SMV writes
-      applied at the arm stop after resolve, before frame 1.
+      applied at the accepted boot stop, before any walk stop (frame
+      0; identical stop to the legacy arm position when no walk).
+  walk [{stop,addr,bytes}]      W5-walk (D84): the scripted menu walk.
+      The BPLM boot trap STAYS ARMED; one stop per counter-writing
+      screen frame; stop i's rows apply via SMV at that stop (they
+      become screen frame i+1's input — keystore writes re-arm per
+      input because the AnyKeyWait twin consumes bytes on read).
+      Literal addresses only ($symbols do not exist yet — resolve
+      runs at the anchor). arm_commands run at the LAST walk stop
+      (BPDEL * drops the BPLM; BP arms the anchor); the machine then
+      free-runs through the mission load to the anchor hit.
+  walk_watches [{id,addr,len}]  optional calibration rows dumped at
+      EVERY walk stop; values ride the transcript as
+      "# walk stop N <id> <hex>" comments (the parser skips them) so
+      a calibration run maps menu transitions to stop indices.
   inject [{frame,addr,bytes} or {frame,op:"command",base,stride,
       count_cell,bytes}]
       W5 frame-boundary writes (DESIGN §5): applied at that capture
@@ -404,7 +421,7 @@ def apply_inject(sess, dblog, args, dumps, row, symbols):
 # "S0 live channel mechanics" #1/#3).
 MIN_FLAT_LIMIT = 0x12583E
 
-V2_KEYS = ("boot_commands", "arm_commands", "resolve", "anchor_watches")
+V2_KEYS = ("boot_commands", "arm_commands", "resolve", "anchor_watches", "walk")
 
 
 def resolve_expr(expr, symbols):
@@ -575,6 +592,54 @@ def run_resolve(sess, dblog, plan, args, dumps):
     return symbols
 
 
+def run_walk(sess, dblog, plan, args, dumps, notes):
+    """v3 WALK phase (D84): the BPLM boot trap stays armed — one stop
+    per counter-writing screen frame. Stop i applies its `walk` rows
+    via SMV (they become screen frame i+1's input); optional
+    walk_watches are dumped per stop AFTER the writes (same
+    write-then-dump ordering as the frame loop) into transcript
+    comments. arm_commands run at the LAST walk stop (BPDEL * drops
+    the BPLM; the anchor BP arms). Returns the selector pin.
+
+    Walk rows are LITERAL addresses: $symbols do not exist yet (resolve
+    runs at the anchor, after the walk)."""
+    rows = plan.get("walk") or []
+    if not rows:
+        raise ValueError("capgen: walk plan has no rows")
+    by_stop = {}
+    for row in rows:
+        stop = int(row["stop"])
+        if stop < 1:
+            raise ValueError(f"capgen: walk stop indices are 1-based (got {stop})")
+        if row.get("op"):
+            raise ValueError(
+                "capgen: walk rows are plain writes only (command ops are "
+                "mission-phase seams; a menu walk needs no ring appends)"
+            )
+        by_stop.setdefault(stop, []).append(row)
+    last = max(by_stop)
+    watch_defs = plan.get("walk_watches") or []
+    for stop in range(1, last + 1):
+        send_cmd(sess, "RUNWATCH")
+        if not sess.wait_hit(timeout=args.hit_timeout):
+            print(f"capgen: walk stop {stop}: no hit burst seen; relying on ack", file=sys.stderr)
+        wrote = 0
+        for row in by_stop.get(stop, []):
+            apply_inject(sess, dblog, args, dumps, row, {})
+            wrote += 1
+        for w in watch_defs:
+            addr, length = watch_target(w, {})
+            dest = os.path.join(dumps, f"walk{stop:05d}.{w['id']}.bin")
+            data = dump_watch(sess, dblog, args.workdir, dest, addr, length)
+            notes.append(f"walk stop {stop} {w['id']} {data.hex()}")
+        print(
+            f"capgen: walk stop {stop}/{last} ({wrote} writes)", file=sys.stderr
+        )
+    # At the last walk stop: drop the BPLM, arm the anchor. The machine
+    # then free-runs through the mission load to the anchor hit.
+    return run_arm(sess, dblog, plan)
+
+
 def run_capture(args):
     with open(args.plan) as f:
         plan = json.load(f)
@@ -654,6 +719,7 @@ def run_capture(args):
     boot_facts = (None, None)
     symbols = {}
     frames = []
+    walk_notes = []
     try:
         # Liveness: the one-time help banner goes through DEBUG_ShowMsg.
         if not dblog.wait_present(rb"TYPE HELP", timeout=90):
@@ -674,16 +740,17 @@ def run_capture(args):
 
         if v2:
             # The machine is parked pre-boot at -break-start: run into the
-            # boot trap, accept only a flat-CS stop, arm the real frame-tail
-            # BP there, read the resolve cells — all before frame 1.
+            # boot trap, accept only a flat-CS stop, then (D84 flow) boot
+            # writes at that stop, the WALK phase on the still-armed BPLM
+            # (arm lands at the LAST walk stop), the anchor stop = frame 1.
             if args.probe:
                 sys.exit("capgen: --probe is the legacy path; a v2 plan (boot/arm/resolve/anchor keys) must not combine with it")
             boot_facts = run_boot_trap(sess, dblog, plan, args)
-            selector_pin = run_arm(sess, dblog, plan)
-            symbols = run_resolve(sess, dblog, plan, args, dumps)
-            print(f"capgen: selector pin CS={selector_pin}", file=sys.stderr)
-            # W5 BOOT writes (§5.5): applied at the arm stop, after the
-            # resolve symbols exist, before frame 1.
+            # W5 BOOT writes (§5.5): applied at the accepted boot stop —
+            # frame 0, before any walk stop (the SAME stop as the legacy
+            # arm position when no walk phase exists, so behavior is
+            # unchanged for walk-less plans). Literal addresses only:
+            # $symbols do not exist yet in the resolve_at=anchor flow.
             for row in plan.get("boot_writes", []):
                 data = bytes.fromhex(row.get("bytes", ""))
                 if not data:
@@ -693,6 +760,26 @@ def run_capture(args):
                     f"capgen: boot write {row['addr']} <- {data.hex()}",
                     file=sys.stderr,
                 )
+            # D84 walk phase (the scripted menu walk): stop-indexed SMV
+            # writes, one stop per counter-writing screen frame; the arm
+            # commands run at the LAST walk stop.
+            if plan.get("walk"):
+                selector_pin = run_walk(sess, dblog, plan, args, dumps, walk_notes)
+            else:
+                selector_pin = run_arm(sess, dblog, plan)
+            print(f"capgen: selector pin CS={selector_pin}", file=sys.stderr)
+            # resolve position (D84): "arm" (legacy default) reads at the
+            # arm stop; "anchor" (what dbx-plan emits) defers to the
+            # frame-1 stop — the loader statics (map w/h, TOT/DAT/claim
+            # pointers) are MISSION-load values and read garbage at any
+            # pre-mission stop.
+            if plan.get("resolve_at", "arm") != "anchor":
+                symbols.update(run_resolve(sess, dblog, plan, args, dumps))
+                resolve_pending = False
+            else:
+                resolve_pending = True
+        else:
+            resolve_pending = False
 
         inject_by_frame = {}
         for row in plan.get("inject", []):
@@ -710,13 +797,20 @@ def run_capture(args):
         for frame in range(1, frames_total + 1):
             # v1 keeps frame 1 at the parked pre-boot halt (the probe
             # shape); v2 RUNWATCHes into every frame incl. 1 — the first
-            # hit is the armed frame-tail BP (mission frame 2's tail).
+            # hit is the anchor (mission start; with a walk phase, the
+            # first hit of the BP armed at the last walk stop).
             if v2 or frame > 1:
                 send_cmd(sess, "RUNWATCH")
                 if not sess.wait_hit(timeout=args.hit_timeout):
                     # No burst seen; proceed anyway — the next ack check
                     # fails loudly if the machine never stopped.
                     print(f"capgen: frame {frame}: no hit burst seen; relying on ack", file=sys.stderr)
+                if frame == 1 and resolve_pending:
+                    # D84 resolve_at=anchor: the loader statics are read
+                    # at the anchor stop, before any dump needs the
+                    # $symbols (expr lens evaluate per dump).
+                    symbols.update(run_resolve(sess, dblog, plan, args, dumps))
+                    resolve_pending = False
             # W5 injection (§5): apply this frame boundary's rows BEFORE
             # the dumps (the record carries injection_applied=1).
             injected = False
@@ -750,6 +844,8 @@ def run_capture(args):
             )
             for name, val in symbols.items():
                 f.write(f"# resolved {name}={val:#x}\n")
+        for note in walk_notes:
+            f.write(f"# {note}\n")
         for frame, rows, injected in frames:
             f.write(f"frame {frame} 1\n" if injected else f"frame {frame}\n")
             for wid, data in rows:

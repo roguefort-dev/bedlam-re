@@ -567,15 +567,42 @@ enum InjectWrite {
     },
 }
 
-fn compile_steps(
-    scen: &Scenario,
-    reg: &[diffharness::Watch],
-) -> Result<(Vec<InjectWrite>, Vec<InjectWrite>), PlanError> {
-    // Walk phase: BOOT writes are frame-0 (arm stop); walk-phase
-    // KEYSTATE/ORDER/PAD/COMMAND need the per-frame walk driver, which
-    // is a future unit — refuse loudly instead of half-driving a walk.
+/// One WALK-phase write (D84): a plain seam write applied at walk stop
+/// `stop` (BPLM-on-frame-counter hit; one stop per counter-writing
+/// screen frame — the write becomes the NEXT screen frame's input).
+/// Literal addresses only: resolve ($symbols) runs at the anchor, after
+/// the walk.
+#[derive(Debug, Clone)]
+struct WalkWrite {
+    stop: u64,
+    addr: String,
+    bytes: String,
+}
+
+/// Calibration rows dumped at EVERY walk stop (D84): registry-anchored
+/// T0 screen-state cells; values ride the transcript as comments so a
+/// calibration run maps menu transitions to stop indices mechanically.
+#[derive(Debug, Clone)]
+struct WalkWatch {
+    id: String,
+    addr: String,
+    len: u32,
+}
+
+/// The compiled plan sections (DESIGN §5 vocabulary): frame-0 boot
+/// writes, anchor-relative mission inject rows, stop-indexed walk rows.
+type CompiledSteps = (Vec<InjectWrite>, Vec<InjectWrite>, Vec<WalkWrite>);
+
+fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<CompiledSteps, PlanError> {
+    // Walk phase (before until-anchor): BOOT writes at frame 0 + the
+    // SCRIPTED MENU WALK (D84) — stop-indexed keystore writes, one stop
+    // per counter-writing screen frame, re-armed per input because the
+    // AnyKeyWait twin consumes bytes on read. ORDER/PAD/COMMAND are
+    // mission-phase seams — the menu walk is keyboard-driven.
     let (walk, mission) = scen.phases();
     let mut boot: Vec<InjectWrite> = Vec::new();
+    let mut walk_rows: Vec<WalkWrite> = Vec::new();
+    let mut walk_boundary: u64 = 0;
     for step in walk {
         match step {
             Step::Boot { key, value } => {
@@ -603,19 +630,46 @@ fn compile_steps(
                         .collect(),
                 });
             }
-            Step::Keystore { .. }
-            | Step::Order { .. }
-            | Step::Pad { .. }
-            | Step::Command { .. } => {
+            Step::Keystore { entries } => {
+                walk_boundary += 1;
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == "inj-key-state")
+                    .ok_or_else(|| die("registry row inj-key-state missing".into()))?;
+                let base = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+                    die(
+                        "walk keystore step: inj-key-state EXD alias is a registry gap \
+                         (status {:?}) — anchor it before this scenario can compile for O1"
+                            .to_string(),
+                    )
+                })?;
+                for (scan, val) in entries {
+                    walk_rows.push(WalkWrite {
+                        stop: walk_boundary,
+                        addr: format!("CS:{:08X}", base + *scan as u64),
+                        bytes: format!("{val:02x}"),
+                    });
+                }
+            }
+            Step::Order { .. } | Step::Pad { .. } | Step::Command { .. } => {
                 return Err(die(
-                    "walk-phase injection steps need the per-frame walk driver \
-                     (scripted menu walk = a future unit; the interactive S0 \
-                     session walks manually)"
+                    "walk-phase order/pad/command steps are not menu-walk steps: the \
+                     walk phase supports boot + keystore only (the title menu is \
+                     keyboard-driven; order/command are mission-phase seams — DESIGN §5)"
                         .into(),
                 ))
             }
-            Step::Advance { .. } | Step::Capture | Step::UntilAnchor { .. } => {}
+            Step::Advance { frames } => {
+                walk_boundary += frames;
+            }
+            Step::Capture | Step::UntilAnchor { .. } => {}
         }
+    }
+    if walk_boundary > 1_000_000 {
+        return Err(die(format!(
+            "walk schedule exceeds 1,000,000 stops ({walk_boundary}) — a runaway \
+             `step` count would stall the capture run on the plan time limit"
+        )));
     }
 
     // Mission phase: anchor-relative boundary numbering = capture frame
@@ -740,7 +794,7 @@ fn compile_steps(
         out.extend(writes);
         boundary += 1;
     }
-    Ok((boot, out))
+    Ok((boot, out, walk_rows))
 }
 
 fn step_kind(step: &Step) -> &'static str {
@@ -782,6 +836,45 @@ fn inject_json(w: &InjectWrite) -> String {
     }
 }
 
+fn walk_json(w: &WalkWrite) -> String {
+    format!(
+        "    {{ \"stop\": {}, \"addr\": \"{}\", \"bytes\": \"{}\" }}",
+        w.stop,
+        jstr(&w.addr).trim_matches('"'),
+        w.bytes
+    )
+}
+
+/// The fixed calibration trio for walk scenarios: the T0 screen-state
+/// cells (mode/zone/mission), every address registry-derived (the
+/// anti-ghost rule holds for calibration rows too).
+fn walk_watches(reg: &[diffharness::Watch]) -> Result<Vec<WalkWatch>, PlanError> {
+    let mut out = Vec::new();
+    for (row_id, cal_id) in [
+        ("mode", "walk-mode"),
+        ("zone", "walk-zone"),
+        ("mission", "walk-mission"),
+    ] {
+        let row = reg
+            .iter()
+            .find(|r| r.id == row_id)
+            .ok_or_else(|| die(format!("walk calibration row {row_id:?} missing")))?;
+        let Some(cell) = exd_cells(&row.exd_addr).first().copied() else {
+            return Err(die(format!(
+                "walk calibration row {row_id}: EXD alias is a registry gap \
+                 (status {:?}) — calibration rows never fabricate addresses",
+                row.exd_status
+            )));
+        };
+        out.push(WalkWatch {
+            id: cal_id.to_string(),
+            addr: format!("CS:{cell:08X}"),
+            len: 4,
+        });
+    }
+    Ok(out)
+}
+
 /// Every `$name` referenced by a len expression.
 fn expr_symbols(expr: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -815,6 +908,7 @@ struct Emitted {
     anchor_count: usize,
     frame_count: usize,
     inject_count: usize,
+    walk_count: usize,
 }
 
 fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, PlanError> {
@@ -830,40 +924,60 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     }
 
     // W5 step compilation (DESIGN §5): boot writes + frame-boundary
-    // inject rows, gated on registry aliases (gaps are named, never
-    // fabricated). Emitted keys exist only when the scenario carries
-    // steps (S0/S1 artifacts stay byte-identical).
-    let (boot_writes, inject_rows) = compile_steps(scen, reg)?;
-    let step_json = if boot_writes.is_empty() && inject_rows.is_empty() {
-        String::new()
+    // inject rows + the D84 walk rows (the scripted menu walk), all
+    // gated on registry aliases (gaps are named, never fabricated).
+    // Emitted keys exist only when the scenario carries them (S0/S1
+    // artifacts stay minimal).
+    let (boot_writes, inject_rows, walk_rows) = compile_steps(scen, reg)?;
+    let walk_cal = if walk_rows.is_empty() {
+        Vec::new()
     } else {
-        let mut s = String::new();
-        if !boot_writes.is_empty() {
-            s.push_str("  \"boot_writes\": [\n");
-            for (i, w) in boot_writes.iter().enumerate() {
-                s.push_str(&inject_json(w));
-                s.push_str(if i + 1 < boot_writes.len() {
-                    ",\n"
-                } else {
-                    "\n"
-                });
-            }
-            s.push_str("  ],\n");
-        }
-        if !inject_rows.is_empty() {
-            s.push_str("  \"inject\": [\n");
-            for (i, w) in inject_rows.iter().enumerate() {
-                s.push_str(&inject_json(w));
-                s.push_str(if i + 1 < inject_rows.len() {
-                    ",\n"
-                } else {
-                    "\n"
-                });
-            }
-            s.push_str("  ],\n");
-        }
-        s
+        walk_watches(reg)?
     };
+    let mut step_json = String::new();
+    if !walk_rows.is_empty() {
+        step_json.push_str("  \"walk\": [\n");
+        for (i, w) in walk_rows.iter().enumerate() {
+            step_json.push_str(&walk_json(w));
+            step_json.push_str(if i + 1 < walk_rows.len() { ",\n" } else { "\n" });
+        }
+        step_json.push_str("  ],\n");
+        step_json.push_str("  \"walk_watches\": [\n");
+        for (i, w) in walk_cal.iter().enumerate() {
+            step_json.push_str(&format!(
+                "    {{ \"id\": {}, \"addr\": \"{}\", \"len\": {} }}",
+                jstr(&w.id),
+                w.addr,
+                w.len
+            ));
+            step_json.push_str(if i + 1 < walk_cal.len() { ",\n" } else { "\n" });
+        }
+        step_json.push_str("  ],\n");
+    }
+    if !boot_writes.is_empty() {
+        step_json.push_str("  \"boot_writes\": [\n");
+        for (i, w) in boot_writes.iter().enumerate() {
+            step_json.push_str(&inject_json(w));
+            step_json.push_str(if i + 1 < boot_writes.len() {
+                ",\n"
+            } else {
+                "\n"
+            });
+        }
+        step_json.push_str("  ],\n");
+    }
+    if !inject_rows.is_empty() {
+        step_json.push_str("  \"inject\": [\n");
+        for (i, w) in inject_rows.iter().enumerate() {
+            step_json.push_str(&inject_json(w));
+            step_json.push_str(if i + 1 < inject_rows.len() {
+                ",\n"
+            } else {
+                "\n"
+            });
+        }
+        step_json.push_str("  ],\n");
+    }
     let inject_count = inject_rows.len();
 
     // The two registry anchors of the live flow (anti-ghost: derived, not typed).
@@ -1023,7 +1137,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     let mut j = String::new();
     j.push_str("{\n");
     j.push_str(&format!(
-        "  \"_comment\": \"{} live capture plan (D81; GENERATED by dbx-plan from watches.toml - do not hand-edit, regenerate). Boot trap: BPLM {fc_cell:X} (the frame-counter cell) armed at the parked pre-boot halt fires on the first post-boot write. Arm stop: SELINFO CS flat guard (base==0), then BP CS:{tail:08X} = the registry s0-trigger row (the BP ack echoes the numeric selector - the per-run pin). Anchor frame = the first BP hit = mission frame 2 tail (frame 1 passed before the trap fired; alignment is by the frame-counter watch). TS statics ride the anchor frame; T0 rows every frame. Deferred TS rows carry unpinned extents (see _deferred). INTERACTIVE: the operator walks the title menu on the desktop; the anchor frame-counter and RNG bytes are menu-timing dependent across runs (T2/T3 classes, DESIGN section 6) - the live double-run verdict is identical-chains-modulo-those-cells; byte-identical chains need the W5 scripted walk.\",\n",
+        "  \"_comment\": \"{} live capture plan (D81/D84; GENERATED by dbx-plan from watches.toml - do not hand-edit, regenerate). Boot trap: BPLM {fc_cell:X} (the frame-counter cell) armed at the parked pre-boot halt fires on the first post-boot write. Arm stop: SELINFO CS flat guard (base==0), then BP CS:{tail:08X} = the registry s0-trigger row (the BP ack echoes the numeric selector - the per-run pin). resolve_at=anchor: the loader statics (map w/h, TOT/DAT/claim pointers) are MISSION-load values - they are read at the anchor stop (mission start), never at the pre-mission arm stop (D84). WALK phase (D84, when the walk key is present): the BPLM stays armed after the accept stop; one stop per counter-writing screen frame; stop i applies its rows via SMV (they become screen frame i+1 input - keystore writes need re-arm per input, the AnyKeyWait twin consumes on read); arm_commands run at the LAST walk stop (BPDEL * drops the BPLM, BP arms the anchor); walk_watches are calibration dumps at every stop riding the transcript as comments. Anchor frame = the first BP hit after arm; alignment is by the frame-counter watch. TS statics ride the anchor frame; T0 rows every frame. Deferred TS rows carry unpinned extents (see _deferred). Without a walk key the operator walks the title menu on the desktop; the anchor frame-counter and RNG bytes are menu-timing dependent across runs (T2/T3 classes, DESIGN section 6) - the live double-run verdict is identical-chains-modulo-those-cells; byte-identical chains need the scripted walk (S0W).\",\n",
         scen.id
     ));
     j.push_str("  \"logfile\": \"dosbox-harness.log\",\n");
@@ -1031,6 +1145,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     j.push_str("  \"boot_timeout\": 1800,\n");
     j.push_str("  \"boot_retries\": 24,\n");
     j.push_str(&format!("  \"frames\": {},\n", scen.frames + 1));
+    j.push_str("  \"resolve_at\": \"anchor\",\n");
     j.push_str("  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n");
     j.push_str("  \"boot_commands\": [\n");
     j.push_str(&format!(
@@ -1082,6 +1197,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         anchor_count: anchor.len(),
         frame_count: per_frame.len(),
         inject_count,
+        walk_count: walk_rows.len(),
     })
 }
 
@@ -1136,13 +1252,14 @@ fn main() -> ExitCode {
         }
     };
     eprintln!(
-        "dbx-plan: scenario {} -> {} anchor rows + {} per-frame rows, {} deferred, {} inject rows; \
+        "dbx-plan: scenario {} -> {} anchor rows + {} per-frame rows, {} deferred, {} inject rows, {} walk rows; \
          frames={} (anchor + {} post-anchor records for the stitcher)",
         scen.id,
         emitted.anchor_count,
         emitted.frame_count,
         emitted.deferred.len(),
         emitted.inject_count,
+        emitted.walk_count,
         scen.frames + 1,
         scen.frames
     );
@@ -1388,6 +1505,93 @@ mod tests {
             .err()
             .map(|e| e.to_string())
             .is_some_and(|e| e.contains("past the capture window")));
+    }
+
+    #[test]
+    fn walk_phase_compiles_stop_indexed_keystore() {
+        // D84: walk-phase keystore steps -> stop-indexed rows; Advance
+        // consumes stops; boot rides at frame 0; the calibration trio
+        // is registry-derived; resolve_at is anchor.
+        let src = "scenario = X\ntiers = T0\nframes = 2\n\
+                   boot difficulty=1\n\
+                   step 5\n\
+                   keystore 0x01=1\n\
+                   step 3\n\
+                   keystore 0x01=0, 0x1c=1\n\
+                   until-anchor mission-start\n";
+        let scen = Scenario::parse(src).unwrap();
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        // boundaries: stop 6 = ESC press (0x894d4+1), stop 10 = ESC
+        // release + ENTER press (0x894d4+0x1c)
+        assert!(emitted
+            .json
+            .contains("\"stop\": 6, \"addr\": \"CS:000894D5\", \"bytes\": \"01\""));
+        assert!(emitted
+            .json
+            .contains("\"stop\": 10, \"addr\": \"CS:000894D5\", \"bytes\": \"00\""));
+        assert!(emitted
+            .json
+            .contains("\"stop\": 10, \"addr\": \"CS:000894F0\", \"bytes\": \"01\""));
+        assert_eq!(emitted.walk_count, 3);
+        // calibration trio: registry T0 cells, prefixed ids
+        for (cal, cell) in [
+            ("walk-mode", "CS:001075D8"),
+            ("walk-zone", "CS:00107500"),
+            ("walk-mission", "CS:00119610"),
+        ] {
+            assert!(
+                emitted.json.contains(&format!(
+                    "{{ \"id\": \"{cal}\", \"addr\": \"{cell}\", \"len\": 4 }}"
+                )),
+                "missing calibration row {cal}"
+            );
+        }
+        // boot write + resolve position
+        assert!(emitted.json.contains("\"boot_writes\""));
+        assert!(emitted.json.contains("\"resolve_at\": \"anchor\""));
+        // no mission-phase inject rows
+        assert_eq!(emitted.inject_count, 0);
+        assert!(!emitted.json.contains("\"inject\""));
+    }
+
+    #[test]
+    fn walk_phase_rejects_mission_seam_steps() {
+        // steps BEFORE until-anchor are walk phase (runner.rs phases())
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        for src in [
+            format!("{base}order 1 2 3\nuntil-anchor mission-start\n"),
+            format!("{base}pad 3\nuntil-anchor mission-start\n"),
+            format!("{base}command 01\nuntil-anchor mission-start\n"),
+        ] {
+            let scen = Scenario::parse(&src).unwrap();
+            let err = emit_plan(&scen, &registry())
+                .err()
+                .map(|e| e.to_string())
+                .expect("walk-phase mission-seam step must not compile");
+            assert!(
+                err.contains("not menu-walk steps"),
+                "error must name the walk gate: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn walk_runaway_stop_count_refused() {
+        let src = "scenario = X\ntiers = T0\nframes = 1\n\
+                   step 2000000\nkeystore 0x01=1\nuntil-anchor mission-start\n";
+        let scen = Scenario::parse(src).unwrap();
+        assert!(emit_plan(&scen, &registry())
+            .err()
+            .map(|e| e.to_string())
+            .is_some_and(|e| e.contains("runaway")));
+    }
+
+    #[test]
+    fn s0w_plan_matches_committed_artifact() {
+        let scen = Scenario::parse(include_str!("../../scenarios/S0W.scen")).unwrap();
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        let committed = include_str!("../../capture-plans/S0W.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S0W.json is stale: regenerate with dbx-plan scenarios/S0W.scen --out capture-plans/S0W.json");
     }
 
     /// The committed registry with the §5 seam aliases CLEARED — the

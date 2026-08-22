@@ -49,6 +49,9 @@
 #            BPINT 8 hit surrogate, MEMDUMPBIN round-trips, RUNWATCH
 #            resume. Converts the source-pinned channel facts in
 #            RUNTIME.md to behaviorally [verified].
+#            MODES: gate (default) | inject (W5 SMV/frame injection) |
+#            flow (v2 live machinery) | walk (D84 scripted-menu-walk
+#            driver machinery).
 #
 # The conf pins cycles/machine/core/mixer (D29); -set overrides are for
 # throwaway experiments only, never golden runs.
@@ -256,6 +259,75 @@ print("flow probe: GREEN (boot trap + arm + resolve + expr addr/len + anchor spl
 PYCHK
     echo "flow transcript: $PROBE_OUT/capture.dbxcap"
     echo "pty log:         $PROBE_OUT/pty.log"
+    return
+  fi
+  if [ "$MODE" = "walk" ]; then
+    # W5 WALK probe (still NO game: probe conf, empty autoexec):
+    # boot trap -> boot_writes at the ACCEPT stop -> WALK phase on the
+    # still-armed BPLM (stop-indexed writes; stop 2 = a pure skip; a
+    # per-stop calibration watch) -> arm at the LAST walk stop ->
+    # resolve_at=anchor -> anchor/per-frame capture. Proves: the D84
+    # walk loop, stop indexing, per-stop write-then-read calibration
+    # notes, arm-at-walk-end, and the anchor-position resolve feeding
+    # expr lens.
+    PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbgwalk"
+    mkdir -p "$PROBE_OUT"
+    echo "walk probe: W5 scripted-menu-walk driver machinery, no game launch"
+    python3 "$CAPGEN" \
+      --dbx "$DBG_BIN" \
+      --conf "$PROBE_CONF" \
+      --plan "$REPO_ROOT/tools/runtime/dbgprobe-walk-plan.json" \
+      --workdir "$PROBE_OUT" \
+      --out "$PROBE_OUT/capture.dbxcap"
+    python3 - "$PROBE_OUT/capture.dbxcap" <<'PYCHK'
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+assert lines[0] == "DBXCAP v1", lines[0]
+frames = {}
+notes = []      # ("walk", stop, id, hex)
+resolved = {}
+cur = None
+for ln in lines:
+    p = ln.split()
+    if not p:
+        continue
+    if p[0] == "#" and len(p) >= 4 and p[1] == "walk" and p[2] == "stop":
+        notes.append((int(p[3]), p[4], p[5] if len(p) > 5 else ""))
+    elif p[0] == "#" and len(p) >= 3 and p[1] == "resolved" and "=" in p[2]:
+        name, val = p[2].split("=", 1)
+        resolved[name] = val
+    elif p[0] == "frame":
+        cur = int(p[1])
+        frames[cur] = (len(p) > 2 and p[2] == "1", {})
+    elif p[0] == "watch":
+        ok, rows = frames[cur]
+        rows[p[1]] = p[2] if len(p) > 2 else ""
+assert sorted(frames) == [1, 2, 3], f"frame keys {sorted(frames)}"
+# walk calibration notes: write-then-read at the SAME stop (stop 1 ->
+# 11 immediately), stop 2 = a pure skip (value unchanged), stop 3 ->
+# 33 (re-write landed at stop 3, proving indexing)
+by_stop = {}
+for stop, wid, val in notes:
+    by_stop[stop] = (wid, val)
+assert by_stop[1] == ("probe-walk-marker", "11"), by_stop
+assert by_stop[2] == ("probe-walk-marker", "11"), by_stop
+assert by_stop[3] == ("probe-walk-marker", "33"), by_stop
+# anchor-position resolve: mark read at the anchor stop = 0x33 (the
+# walk-phase value), feeding the expr len
+assert resolved.get("mark") == "0x33", resolved
+_, f1 = frames[1]
+assert len(f1["probe-walk-lenexpr"]) == 6, f1  # $mark-48 = 3 bytes
+# state rows: boot write + walk writes, stable across frames (assert
+# only the cells we wrote — 0x505-0x507 are not ours to assume)
+for no, (_, rows) in frames.items():
+    h = rows["probe-walk-state"]
+    assert len(h) == 18, (no, h)  # 9 bytes
+    assert h[0:10] == "beefcafe33", (no, h)
+    assert h[16:18] == "a1", (no, h)
+print("walk probe: GREEN (walk loop + stop indexing + calibration notes + arm-at-walk-end + resolve_at=anchor)")
+PYCHK
+    echo "walk transcript: $PROBE_OUT/capture.dbxcap"
+    echo "pty log:        $PROBE_OUT/pty.log"
     return
   fi
   PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbgprobe2"
