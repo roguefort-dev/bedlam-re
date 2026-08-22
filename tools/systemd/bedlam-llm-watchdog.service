@@ -1,6 +1,10 @@
 [Unit]
 Description=Bedlam autonomous LLM health supervisor (single GLM-5.3: observe, then fix)
 After=network-online.target
+# Storm beacons fire this service repeatedly; bound supervisor sessions
+# (the singleton lock plus the in-script min-interval guard dedup the rest).
+StartLimitIntervalSec=600
+StartLimitBurst=6
 
 [Service]
 Type=oneshot

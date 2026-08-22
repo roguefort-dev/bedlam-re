@@ -29,6 +29,21 @@ NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 SYSTEMD_RUN=${SYSTEMD_RUN_OVERRIDE:-systemd-run}
 
 mkdir -p "$STATE" "$CLAIMS"
+
+# Self-heal the event trigger layer: a start-limit hit on a path unit
+# (observed 2026-08-22 04:29) silently kills the claims/taskfails event
+# edges and the loop degrades to chain+timer only. Re-arm on every pass;
+# idempotent, guarded for hermetic runs.
+if [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ]; then
+  if [ -n "${SYSTEMCTL_OVERRIDE:-}" ]; then SCMD="$SYSTEMCTL_OVERRIDE"; else SCMD=systemctl; fi
+  for pu in bedlam-nudge.path bedlam-llm-watchdog.path; do
+    if ! "$SCMD" --user is-active --quiet "$pu" 2>/dev/null; then
+      "$SCMD" --user reset-failed "$pu" >/dev/null 2>&1 || true
+      "$SCMD" --user start "$pu" >/dev/null 2>&1 || true
+      echo "$(date -Is) re-armed event trigger $pu (was inactive/failed)" >> "$STATE/nudge.log"
+    fi
+  done
+fi
 [ -f "$STATE/PLAN-COMPLETE" ] && exit 0
 # A watchdog-owned PAUSE whose owning pid is dead (e.g. reboot mid-repair)
 # strands the loop: PAUSE blocks workers, no workers means no taskfails events,

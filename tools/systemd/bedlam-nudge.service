@@ -1,5 +1,10 @@
 [Unit]
 Description=bedlam-re continuation nudge (check stall, maybe spawn agent)
+# Event-driven design: chain + path + re-trigger legitimately burst starts
+# within seconds; the old 5/10s default permanently killed the path unit
+# (unit-start-limit-hit, 2026-08-22 04:29). Passes are stateless and cheap.
+StartLimitIntervalSec=60
+StartLimitBurst=20
 
 [Service]
 Type=oneshot

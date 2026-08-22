@@ -47,6 +47,18 @@ exec 9>"$LOCK"
 flock -n 9 || exit 0
 cd "$PLAN_DIR" || exit 1
 
+# Supervisor-session dedup (NOT a work cooldown - worker retries are
+# never delayed): transport storms beacon this service on every failure;
+# a cycle starting within MIN_INTERVAL of the last verdict just stands
+# down so a storm cannot burn a session per worker failure.
+wd_mi="${LLM_WATCHDOG_MIN_INTERVAL:-120}"
+if [ "$wd_mi" -gt 0 ] 2>/dev/null && [ -f "$VERDICT" ]; then
+  wd_last=$(stat -c %Y "$VERDICT" 2>/dev/null || echo 0)
+  if [ $(( $(date +%s) - wd_last )) -lt "$wd_mi" ]; then
+    exit 0
+  fi
+fi
+
 log() { echo "$(date -Is) $*" >> "$LOG"; }
 notify() {
   if [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then

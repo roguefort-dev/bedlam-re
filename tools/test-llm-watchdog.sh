@@ -68,7 +68,7 @@ chmod +x "$TMP/mock-proc-check"
 # Process matchers must accept the absolute executable path used by systemd.
 grep -q "\^\[\^ \]\*opencode2 run" "$ROOT/tools/llm-watchdog.sh"
 ! grep -q "\"^opencode2 run" "$ROOT/tools/llm-watchdog.sh"
-common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 NOTIFY_SEND="$TMP/mock-notify-send")
+common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 LLM_WATCHDOG_MIN_INTERVAL=0 NOTIFY_SEND="$TMP/mock-notify-send")
 
 # ANSI/CR final marker is accepted as healthy and does not invoke repair agent.
 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/healthy.lock" "$ROOT/tools/llm-watchdog.sh"
@@ -163,7 +163,7 @@ grep -q "human PAUSE present" "$PLAN/.state/llm-watchdog.log"
 rm -f "$PLAN/.state/PAUSE"
 
 # --- Full resume path (production mode) with fake systemd control ---
-real=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl" RESUME_PROC_CHECK="$TMP/mock-proc-check" SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 NOTIFY_SEND="$TMP/mock-notify-send" RESUME_WAIT_LOOPS=10 RESUME_WAIT_SLEEP=1)
+real=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl" RESUME_PROC_CHECK="$TMP/mock-proc-check" SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 LLM_WATCHDOG_MIN_INTERVAL=0 NOTIFY_SEND="$TMP/mock-notify-send" RESUME_WAIT_LOOPS=10 RESUME_WAIT_SLEEP=1)
 
 # A fresh locked claim with matching item and non-empty worker id resumes GLM.
 (
