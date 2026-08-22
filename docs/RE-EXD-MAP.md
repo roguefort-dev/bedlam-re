@@ -180,6 +180,20 @@ to docs/DIVERGENCES.md as a seed.
 | object instances | 0x46cbf4, count 0x46cbe8 | ***(0x119584) bank, count 0x119554** (indirect: EXD stores the bank in a pointer cell) | .POS/.BDG loader FUN_0002adb4: 2000×0x10 reads (cap CMP 0x7d0 @0x2ae45/86), id≠−1 → count, stride 0x14 (piVar1+5); footprint stamper FUN_0002b0af tail | [verified] |
 | TRT array | 0x4cccf8, count 0x46ccd4 | **0x95264 (static), count 0x11949c** | .TRT loader FUN_000279e3: u16 count read, stride 0x20 (i·8 dwords), hp `(m·0xfa)/0x1b+0xfa` EXACT, active=1/state=1 stamps, tile-0x66 DAT byte + TOT word 1 | [verified] |
 
+**W5 input-twin note (2026-08-22, probe ghidra-project/
+exd-input-probe.txt via EXDInputProbe.java):** the EXD KEYSTORE
+alias (EXW g_keystore 0x4edc44, 256 B scan-indexed) is STILL a
+gap. The candidate suggested by the MissionShell pause spin —
+FUN_0002ec12 — is NOT a keystore reader: disassembly shows only
+`MOV [0x1075b4],0; CMP EAX,[0x1075b4]; JG` = a WAIT-for-latch
+spin on the P-pause latch 0x1075b4 (it never reads a 256-byte
+array). The keystore twin needs a proper reader census (start:
+the any-key scan family twin, EXW FUN_0041f9d1 scanning codes
+1..0xFE, and the InputReset memset-256 twin EXW 0x4207b5). Until
+then KEYSTATE/ORDER/PAD/COMMAND/BOOT injection steps cannot
+compile to O1 addresses (dbx-plan errors, naming the gap) — the
+engine side consumes the same steps directly (W6).
+
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
 | EXW | EXD | anchor | tag |

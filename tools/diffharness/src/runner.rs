@@ -11,7 +11,7 @@
 //!
 //! Two formats:
 //!
-//! **Scenario grammar v1** (`scenarios/*.scen`, committed):
+//! **Scenario grammar v1.1** (`scenarios/*.scen`, committed):
 //! ```text
 //! # comment / blank lines
 //! scenario = S0              ; id (dump header; <=255 bytes)
@@ -22,11 +22,22 @@
 //! step 10                    ; advance N frames, no input      (runner)
 //! capture                    ; force a frame dump              (runner)
 //! until-anchor mission-start ; run to the anchor event         (runner)
+//! keystore 0x1f=1,0x2a=0     ; KEYSTATE write, ONE frame boundary (W5)
+//! order 29 18 0              ; ORDER target write, one boundary (W5)
+//! pad 3                      ; .PAD step-on order, one boundary  (W5)
+//! command fire 1 5 [flags 2] ; COMMAND record write, one boundary (W5)
+//! boot difficulty=1          ; pre-mission BOOT setup, frame 0    (W5)
 //! ```
 //! Step directives are validated but do not drive the stitcher (the
-//! transcript is the ground truth for what was captured). W5 extends the
-//! vocabulary with injection steps (keystore/order/command/pad per
-//! DESIGN §5); they are NOT accepted yet — unknown directive = error.
+//! transcript is the ground truth for what was captured). The W5
+//! injection steps are the DESIGN §5 vocabulary as runner-side writes:
+//! one script line per frame boundary, applied between the previous
+//! frame's present and this frame's input read. `until-anchor` splits
+//! the schedule for the compiler (dbx-plan): injection steps before it
+//! are the WALK phase (pre-mission, e.g. the scripted menu walk), steps
+//! after it are MISSION phase (anchor-relative frame numbers); with no
+//! `until-anchor` step every injection step is mission phase. `boot`
+//! steps apply at frame 0 (the arm stop, pre-walk).
 //!
 //! **DBXCAP transcript v1** (produced by the capture channel; lives under
 //! runtime/ only — asset-derived data per D77 hygiene):
@@ -69,12 +80,54 @@ pub struct Scenario {
     pub steps: Vec<Step>,
 }
 
-/// Scenario step directives (grammar v1 — runner directives only).
+/// Scenario step directives (grammar v1.1 — runner directives + the
+/// DESIGN §5 W5 injection vocabulary).
+///
+/// Injection steps are FRAME-BOUNDARY writes: each step line applies at
+/// the next frame boundary (between the previous frame's present and
+/// this frame's input read, DESIGN §5); `step N` consumes N boundaries
+/// with no writes. The first `until-anchor` splits WALK phase (before:
+/// pre-mission, e.g. the scripted menu walk) from MISSION phase (after:
+/// anchor-relative boundaries — the same numbering as capture frames).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
-    Advance { frames: u64 },
+    Advance {
+        frames: u64,
+    },
     Capture,
-    UntilAnchor { name: String },
+    UntilAnchor {
+        name: String,
+    },
+    /// KEYSTATE (§5.1): set g_keystore bytes for one frame boundary.
+    /// Each entry is (scan code, held 0|1); unlisted scans unchanged.
+    Keystore {
+        entries: Vec<(u8, u8)>,
+    },
+    /// ORDER (§5.2): write the click-order target triple (skips the
+    /// click/pick UI).
+    Order {
+        x: i32,
+        y: i32,
+        z: i32,
+    },
+    /// PAD step-on (§5.4): an ORDER whose target is .PAD slot `slot`'s
+    /// tile (the sanctioned extraction armer).
+    Pad {
+        slot: u32,
+    },
+    /// COMMAND record (§5.3): append `bytes` (≤0x80) as the next
+    /// record at the command ring; the runner reads the count cell,
+    /// writes the record, bumps the count. Raw bytes on purpose — the
+    /// builder-side field packing is pinned, the sugar comes with S3.
+    Command {
+        bytes: Vec<u8>,
+    },
+    /// BOOT setup (§5.5): pre-mission writes (frame 0, before the
+    /// walk). Legal in WALK phase only.
+    Boot {
+        key: String,
+        value: i64,
+    },
 }
 
 #[derive(Debug)]
@@ -99,6 +152,16 @@ fn scen_err(line_no: usize, line: &str, reason: &str) -> ScenarioError {
         line_no,
         line: line.to_string(),
         reason: reason.to_string(),
+    }
+}
+
+/// Integer with optional 0x/0X prefix, sign allowed (grammar numbers).
+fn parse_num(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        i64::from_str_radix(hex, 16).ok()
+    } else {
+        s.parse::<i64>().ok()
     }
 }
 
@@ -137,6 +200,140 @@ impl Scenario {
                         .ok_or_else(|| scen_err(line_no, line, "until-anchor needs a name"))?;
                     steps.push(Step::UntilAnchor {
                         name: name.to_string(),
+                    });
+                }
+                "keystore" => {
+                    let mut entries = Vec::new();
+                    for tok in parts {
+                        let tok = tok.trim_end_matches(',');
+                        let Some((scan_s, val_s)) = tok.split_once('=') else {
+                            return Err(scen_err(
+                                line_no,
+                                line,
+                                "keystore entries are scan=val pairs (e.g. 0x1f=1)",
+                            ));
+                        };
+                        let scan: i64 = parse_num(scan_s).ok_or_else(|| {
+                            scen_err(line_no, line, "keystore scan code must be an integer")
+                        })?;
+                        let val: i64 = parse_num(val_s).ok_or_else(|| {
+                            scen_err(line_no, line, "keystore value must be 0 or 1")
+                        })?;
+                        if !(0..=0xFF).contains(&scan) {
+                            return Err(scen_err(
+                                line_no,
+                                line,
+                                "keystore scan code out of range 0..0xFF",
+                            ));
+                        }
+                        if !(0..=1).contains(&val) {
+                            return Err(scen_err(line_no, line, "keystore value must be 0 or 1"));
+                        }
+                        entries.push((scan as u8, val as u8));
+                    }
+                    if entries.is_empty() {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "keystore needs at least one scan=val pair",
+                        ));
+                    }
+                    steps.push(Step::Keystore { entries });
+                }
+                "order" => {
+                    let mut nums = [0i64; 3];
+                    for (i, slot) in nums.iter_mut().enumerate() {
+                        let tok = parts.next().ok_or_else(|| {
+                            scen_err(line_no, line, "order needs x y z (3 integers)")
+                        })?;
+                        let _ = i;
+                        *slot = parse_num(tok).ok_or_else(|| {
+                            scen_err(line_no, line, "order coordinates must be integers")
+                        })?;
+                    }
+                    if parts.next().is_some() {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "order takes exactly 3 values (x y z)",
+                        ));
+                    }
+                    let [x, y, z] = nums.map(|v| v as i32);
+                    steps.push(Step::Order { x, y, z });
+                }
+                "pad" => {
+                    let tok = parts
+                        .next()
+                        .ok_or_else(|| scen_err(line_no, line, "pad needs a slot index"))?;
+                    let slot: i64 = parse_num(tok)
+                        .ok_or_else(|| scen_err(line_no, line, "pad slot must be an integer"))?;
+                    if !(0..=998).contains(&slot) {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "pad slot out of range 0..998 (999 .PAD slots)",
+                        ));
+                    }
+                    if parts.next().is_some() {
+                        return Err(scen_err(line_no, line, "pad takes exactly one slot index"));
+                    }
+                    steps.push(Step::Pad { slot: slot as u32 });
+                }
+                "command" => {
+                    let mut bytes = Vec::new();
+                    for tok in parts {
+                        let tok = tok.trim_end_matches(',');
+                        if tok.len() != 2 || !tok.bytes().all(|b| b.is_ascii_hexdigit()) {
+                            return Err(scen_err(
+                                line_no,
+                                line,
+                                "command payload tokens are hex BYTE pairs (e.g. 01 3F)",
+                            ));
+                        }
+                        bytes.push(u8::from_str_radix(tok, 16).expect("checked"));
+                    }
+                    if bytes.is_empty() {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "command needs at least one payload byte",
+                        ));
+                    }
+                    if bytes.len() > 0x80 {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "command payload exceeds the 0x80 record stride",
+                        ));
+                    }
+                    steps.push(Step::Command { bytes });
+                }
+                "boot" => {
+                    let tok = parts
+                        .next()
+                        .ok_or_else(|| scen_err(line_no, line, "boot needs key=value"))?;
+                    let Some((key, val_s)) = tok.split_once('=') else {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "boot entries are key=value (e.g. difficulty=1)",
+                        ));
+                    };
+                    let value: i64 = parse_num(val_s)
+                        .ok_or_else(|| scen_err(line_no, line, "boot value must be an integer"))?;
+                    if !["difficulty"].contains(&key) {
+                        return Err(scen_err(
+                            line_no,
+                            line,
+                            "unknown boot key (known: difficulty)",
+                        ));
+                    }
+                    if parts.next().is_some() {
+                        return Err(scen_err(line_no, line, "boot takes exactly one key=value"));
+                    }
+                    steps.push(Step::Boot {
+                        key: key.to_string(),
+                        value,
                     });
                 }
                 other_key => {
@@ -194,6 +391,23 @@ impl Scenario {
         if id.is_empty() {
             return Err(scen_err(0, "", "scenario id must not be empty"));
         }
+        // BOOT writes are pre-mission by definition (§5.5): after the
+        // first until-anchor they would land mid-mission — reject.
+        let anchor_idx = steps
+            .iter()
+            .position(|s| matches!(s, Step::UntilAnchor { .. }));
+        if let Some(i) = anchor_idx {
+            if steps[i + 1..]
+                .iter()
+                .any(|s| matches!(s, Step::Boot { .. }))
+            {
+                return Err(scen_err(
+                    0,
+                    "",
+                    "boot steps are walk-phase only (before until-anchor)",
+                ));
+            }
+        }
         Ok(Scenario {
             id,
             tiers,
@@ -210,6 +424,22 @@ impl Scenario {
     /// strings name `.\bedlam.exd` + `DOS4GW.EXE`).
     pub fn launch_line(&self) -> &str {
         self.launch.as_deref().unwrap_or("DOS4GW.EXE BEDLAM.EXD")
+    }
+
+    /// Split the step list at the FIRST `until-anchor`: everything
+    /// before it is WALK phase (pre-mission: boot writes + the scripted
+    /// menu walk), everything after is MISSION phase (anchor-relative
+    /// boundaries, the same numbering as capture frames). With no
+    /// `until-anchor` step, every step is mission phase.
+    pub fn phases(&self) -> (&[Step], &[Step]) {
+        match self
+            .steps
+            .iter()
+            .position(|s| matches!(s, Step::UntilAnchor { .. }))
+        {
+            Some(i) => (&self.steps[..i], &self.steps[i + 1..]),
+            None => (&[], &self.steps[..]),
+        }
     }
 }
 
@@ -592,9 +822,75 @@ mod tests {
         assert!(Scenario::parse("scenario = X\nframes = 1\n").is_err()); // no tiers
         assert!(Scenario::parse("scenario = X\ntiers = T0\n").is_err()); // no frames
         assert!(Scenario::parse("scenario = X\ntiers = T0\nframes = 1\nfoo = 1\n").is_err());
-        assert!(
-            Scenario::parse("scenario = X\ntiers = T0\nframes = 1\nkeystore 0x1f=1\n").is_err()
+        assert!(Scenario::parse("scenario = X\ntiers = T0\nframes = 1\nfrobnicate 3\n").is_err());
+    }
+
+    #[test]
+    fn injection_steps_parse() {
+        let s = Scenario::parse(
+            "scenario = X\ntiers = T0\nframes = 1\n\
+             boot difficulty=1\n\
+             until-anchor mission-start\n\
+             step 2\n\
+             keystore 0x1f=1, 0x2a=0\n\
+             order 29 18 0\n\
+             pad 3\n\
+             command 01 02 3F 00\n",
+        )
+        .unwrap();
+        let (walk, mission) = s.phases();
+        assert_eq!(
+            walk,
+            &[Step::Boot {
+                key: "difficulty".into(),
+                value: 1
+            }]
         );
+        assert_eq!(
+            mission,
+            &[
+                Step::Advance { frames: 2 },
+                Step::Keystore {
+                    entries: vec![(0x1f, 1), (0x2a, 0)]
+                },
+                Step::Order { x: 29, y: 18, z: 0 },
+                Step::Pad { slot: 3 },
+                Step::Command {
+                    bytes: vec![0x01, 0x02, 0x3f, 0x00]
+                },
+            ][..]
+        );
+        // no until-anchor: everything is mission phase
+        let s2 = Scenario::parse("scenario = X\ntiers = T0\nframes = 1\norder 1 2 3\n").unwrap();
+        assert_eq!(s2.phases().0.len(), 0);
+        assert_eq!(s2.phases().1.len(), 1);
+    }
+
+    #[test]
+    fn injection_step_validation() {
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        // keystore
+        assert!(Scenario::parse(&format!("{base}keystore 0x100=1\n")).is_err()); // scan > 0xFF
+        assert!(Scenario::parse(&format!("{base}keystore 0x1f=2\n")).is_err()); // val not 0|1
+        assert!(Scenario::parse(&format!("{base}keystore 1f\n")).is_err()); // not scan=val
+        assert!(Scenario::parse(&format!("{base}keystore\n")).is_err()); // empty
+                                                                         // order
+        assert!(Scenario::parse(&format!("{base}order 1 2\n")).is_err()); // too few
+        assert!(Scenario::parse(&format!("{base}order 1 2 3 4\n")).is_err()); // too many
+        assert!(Scenario::parse(&format!("{base}order 1 x 3\n")).is_err()); // non-int
+                                                                            // pad
+        assert!(Scenario::parse(&format!("{base}pad 999\n")).is_err()); // out of range
+        assert!(Scenario::parse(&format!("{base}pad 1 2\n")).is_err()); // too many
+                                                                        // command
+        assert!(Scenario::parse(&format!("{base}command 1\n")).is_err()); // not a byte pair
+        assert!(Scenario::parse(&format!("{base}command\n")).is_err()); // empty
+        let long = "01 ".repeat(0x81);
+        assert!(Scenario::parse(&format!("{base}command {long}\n")).is_err()); // > 0x80
+                                                                               // boot
+        assert!(Scenario::parse(&format!("{base}boot volume=5\n")).is_err()); // unknown key
+        assert!(Scenario::parse(&format!("{base}boot difficulty\n")).is_err()); // no =value
+        assert!(Scenario::parse(&format!("{base}until-anchor m\nboot difficulty=1\n")).is_err());
+        // boot in mission phase
     }
 
     #[test]
