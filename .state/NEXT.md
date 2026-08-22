@@ -78,58 +78,58 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. DONE 2026-08-22 (worker 57ba8753 claim 2, commit bee4336,
-      D100, §7j.35): [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM
-      REMAINDER unit — CLOSED (docs-only; objdump-only from
-      exw-text-objdump.txt + read-only DGROUP/TOT probes in
-      /tmp/opencode, no Ghidra run; the engine seam stays
-      host-seamed BY CORPUS FACT — ZONEA/M1 stages ZERO water,
-      the D98/D99 pattern; §8 is now FULLY closed). ANIM SEQUENCE:
-      u32[0x456ca8] is a STATIC DGROUP const {0,1,2,3,4,5,6,7,
-      7,6,5,4,3,2,1,0} — a 16-phase PING-PONG over the 8 PALTRAN
-      ramps (0x4dd444, slot 0 NULL = plain), ZERO .text writers,
-      2 readers (0x40691a seen-level draw + 0x406a2c chase
-      column, both seq[frame&0xf] → ramp → FUN_00401471/
-      0040167a); the STATIC branch indexes the SAME ramps by the
-      +0x18 SCORCH byte (scorch n → ramp n — scorch darkening IS
-      ramp selection); the anim-window (+0x1b/+0x1c) branch is
-      ZONEG-only (the §7j.32 objective family). WATER FLAG:
-      [0x4edbd4] ≡ 1 in EVERY mission — sole persistent writer =
-      the campaign-boot defaults FUN_004252c0@0x4252d8 (:= 1,
-      every "New Single Player Game"); one scoped save/restore
-      (0x41c649/0x41c65a) around the SELECTOR screen
-      FUN_0043e7d4 (GAMEGFX\SELECTOR.BIN/.PAL; esi = the
-      mission-index reg = 1 on both paths); NO config/options/
-      save/MP writer — the water-off arms of the 0x12d/0x12e/
-      0x12f dispatches + the remap-XLAT gate are DEAD CODE in
-      shipped play (E may hard-code water-ON). CORRECTION:
-      7j.12's zone-table lists were off by one — all zone tables
-      (0x454a20/0x454a3c/0x454aac/0x454ae4, one contiguous u32
-      array at 0x1C strides) are indexed by the RAW set
-      [0x4edd8c] 1..7; entry 0 = the previous array's tail;
-      set-indexed bases landed in §7j.35. CORPUS: water sprites
-      stage ONLY in ZONEB/M1 (12 cells), ZONEB/M6 (78), ZONEC/M4
-      (33), ZONED/M1 (1), ZONEF/M7 (4824) — ZONEA/M1 ZERO in
-      both the sprite range and the platform/splash word range
-      (which appears in NO shipped file, runtime-only); side
-      finding: 44 0x7d2 hazard cells in ZONEA/M1 → the load
-      stamper FUN_00422f18 pre-stages the 0x460dfa hazard grid
-      in every gate run (the 7g.5 robots() hazard path is live).
-      Deliverables: RE-EXW-SIM §7j.35 + 2 new + 1 rewritten
-      ledger row + MISSIONVIEW §8.2 closure + §1/§3/§4/§5c
-      refreshes + DESIGN-DIFFHARNESS S5 row (the water leg
-      shares the S5 zone-walk staging: ZONEB/M1|M6, ZONEC/M4 or
-      ZONEF/M7) + D100. registry_anchors green; manifest clean
-      both sides; PUSHED.
-   2. [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit (7j.16
-      residue): the ".BIN" load is pinned (header word → 0x46cdb8;
-      MISSION{A..G}.BIN sprites staged at [0x4ede1c]) but the bank's
-      CONTENT readers are open — census the bank's readers
-      (MISSIONVIEW §1/§4 point at the terrain sprite family), pin
-      the sprite record grammar, and check the corpus path (the
-      gates' terrain draws read it — but is any of it STATE the
-      differ must watch, or is it render-only presentation per the
-      §0b budget?).
+2. DONE 2026-08-22 (worker d6b238f4 claim 2, commit cd304c6,
+       D101, §7j.36): [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT
+       CONSUMERS unit — CLOSED (docs-only; objdump-only from
+       exw-text-objdump.txt + read-only corpus probes in
+       /tmp/opencode, no Ghidra run). CONTAINER GRAMMAR pinned
+       instruction-exact + corpus 11/11 banks: u16[bank+0] = sprite
+       COUNT (→ WRITE-ONLY cell 0x46cdb8 — no .text reader; blits
+       mask id&0xFFF); directory entry = bank+2+4·id, sprite =
+       entry + u32[entry] SELF-relative; records u16
+       fmt/dy/dx/gate/rows + stream (gate==0 or rows==0 → draws
+       nothing; FUN_0040167a reads gate but IGNORES it; ALL real
+       terrain = fmt 7; MISSIONVIEW §4 directory gloss CORRECTED,
+       FORMATS §18 cross-ref assumed→VERIFIED). READER CENSUS
+       (12 sites, complete): loaders + terrain loop (4 ESI loads)
+       + the restamp drawer FUN_00440dc2 + FUN_00401010 = the
+       9-sprite RADAR STAMP (the bank's ONLY runtime writer: 5×
+       downsample + 2:1 iso deshear of the 480×480 viewport into
+       scratch ids u32[0x454b00+4·set]..+8 {1168,1773,1592,1168,
+       58,58,1773}) — and the STAMP IS VESTIGIAL: its fmt-0 stub
+       records (6-B head + 4096-B image, span 0x1006) carry
+       gate=rows=0 forever, LNK is IDENTITY on all 63 ids × 7
+       zones, nothing draws them (A/B/C/D TOT refs render nothing;
+       the stamp still runs every present — wasted writes). §0b
+       VERDICT: the bank is render-only presentation — NO differ
+       watch row (bank/directory/0x46cdb8 all below the
+       emptiness-rule threshold; the state surface stays the TOT
+       words/type-DB mirror rows; E models only the 7j.35 seam
+       list). Deliverables: RE-EXW-SIM §7j.36 + 2 new + 2
+       rewritten ledger rows + MISSIONVIEW §1/§4 corrections +
+       FORMATS §18. registry_anchors green; manifest clean before
+       AND after; PUSHED.
+   2. [P4.2/W12-S3-prep] THE E-SIDE WEAPON-FIRE COMMAND PRODUCER
+       unit (DESIGN §7 S3 row + §10-W12; engine+tests ONLY — the
+       S3.scen/canonical-chain unit is the follow-up): model in
+       bedlam-game MissionSim the COMMAND-record weapon dispatch —
+       consumer EXW 00409138 (EXD twin FUN_00019ee9, D83) over the
+       0x4dd4a0 ring (stride 0x10, the EXISTING W5 injection seam —
+       reuse it, do not add a new one), weapon-slot dispatch
+       w2/3/4→FUN_0041c3fb-family, w6/7/8→FUN_0041bd8f-family,
+       artillery→projectile bank 0x36-stride records — per the
+       7j.22/7j.13/7j.28 EXW decodes (per-type cadences, ballistic
+       arcs, rocket launch-delay, homing target classes); damage
+       application via the FUN_00419aff tables (7j.17/7j.18 — the
+       open 0x69-vs-table question stays open, model the pinned
+       rows only). T2 watch surface: the 0x4c71f4 0x36-stride
+       weapon records + the 0x4cc654 0x22-stride projectile
+       records (lifecycle: spawn/active/free). CONSTRAINTS:
+       canonical_dump_gate S0/S1/S2 chains (8901789a88cf61fe /
+       1c4e7b4c9d9b0947 / 809f4961b7757da4) must stay BYTE-IDENTICAL
+       (no fire fires without COMMAND records — assert the no-inject
+       path is untouched); cargo fmt+clippy green; registry_anchors
+       green; no live capture (unattended-safe).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -263,6 +263,30 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit
+  COMPLETE (worker d6b238f4 claim 2, commit cd304c6, D101,
+  docs-only; objdump-only from exw-text-objdump.txt + read-only
+  corpus probes in /tmp/opencode, no Ghidra run). CLOSED with the
+  grammar + census + verdict triple: (a) container grammar pinned
+  instruction-exact (FUN_00401471 0x401477..0x4014c8) + corpus
+  11/11 banks — u16[bank+0] = sprite COUNT → WRITE-ONLY cell
+  0x46cdb8; directory entry = bank+2+4·id, sprite = entry +
+  u32[entry] SELF-relative (MISSIONVIEW §4 "bank+4+id*4 bank-
+  relative" gloss CORRECTED; FORMATS §18 assumed→VERIFIED);
+  records u16 fmt/dy/dx/gate/rows + stream, gate==0/rows==0 →
+  draws nothing, FUN_0040167a ignores gate, ALL real terrain =
+  fmt 7 + exactly 9 fmt-0 scratch records per bank; (b) reader
+  census complete (12 [0x4ede1c] sites): terrain loop (4) + the
+  restamp drawer FUN_00440dc2 + FUN_00401010 the RADAR STAMP (the
+  bank's ONLY runtime writer: 5× downsample + 2:1 iso deshear of
+  the 480×480 viewport into ids u32[0x454b00+4·set]..+8) — VESTIGIAL:
+  stubs gate=rows=0 forever, LNK identity ×63 ids ×7 zones, never
+  drawn (A–D TOT refs render nothing; stamp runs every present);
+  (c) §0b verdict: render-only presentation, NO differ watch row.
+  Deliverables: RE-EXW-SIM §7j.36 + 2 new + 2 rewritten ledger
+  rows + MISSIONVIEW §1/§4 + FORMATS §18 + D101. registry_anchors
+  green; manifest clean both sides; PUSHED. Queued: the W12-S3-prep
+  E-side weapon-fire COMMAND producer unit (item 2).
 - 2026-08-22: P4/RE THE 7h.3 PICKUP TILE-WORD PRODUCER unit COMPLETE
   (worker f461ea05 claim 2, commit 187f0aa, D99, docs-only; objdump-only
   from exw-text-objdump.txt + read-only corpus probes in /tmp/opencode,

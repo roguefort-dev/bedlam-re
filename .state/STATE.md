@@ -1,5 +1,41 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE [0x4ede1c] BIN-BANK CONTENT
+    CONSUMERS unit COMPLETE, worker d6b238f4 claim 2, commit
+    cd304c6, D101, docs-only): the 7j.16 residue is CLOSED.
+    Container grammar pinned instruction-exact + corpus 11/11
+    banks: u16[bank+0] = sprite COUNT → WRITE-ONLY cell 0x46cdb8
+    (no .text reader; blits mask id&0xFFF); directory entry =
+    bank+2+4·id, sprite = entry + u32[entry] SELF-relative;
+    records = u16 fmt/dy/dx/gate/rows + stream (gate==0 or
+    rows==0 → draws nothing; FUN_0040167a reads gate but IGNORES
+    it; ALL real terrain = fmt 7; each bank carries exactly 9
+    fmt-0 scratch records). MISSIONVIEW §4's directory gloss
+    CORRECTED (the self-relative form; §5c was right); FORMATS
+    §18 cross-ref assumed→VERIFIED. Reader census complete (12
+    [0x4ede1c] sites): loaders + the terrain loop (4 ESI loads) +
+    the scroll-restamp drawer FUN_00440dc2 + FUN_00401010 = the
+    9-sprite RADAR STAMP, the bank's ONLY runtime content writer
+    (5× downsample + 2:1 iso deshear of the 480×480 viewport at
+    the camera into scratch ids u32[0x454b00+4·set]..+8
+    {1168,1773,1592,1168,58,58,1773}) — and the STAMP IS
+    VESTIGIAL: its stub records carry gate=rows=0 forever (the
+    stamp writes only image+0x20..), LNK is IDENTITY on all 63
+    family ids in all 7 zones, and no code ever draws them — the
+    A/B/C/D TOT references render NOTHING (the stamp still runs
+    every present; zero observable effect). §0b VERDICT: the
+    bank is render-only presentation — NO differ watch row for
+    the bank/directory/0x46cdb8 (all below the emptiness-rule
+    threshold); the state surface stays the TOT words/type-DB
+    mirror rows; E models only the 7j.35 seam list (u8-RLE +
+    per-tile remap). Deliverables: RE-EXW-SIM §7j.36 + 2 new +
+    2 rewritten ledger rows + MISSIONVIEW §1/§4 corrections +
+    FORMATS §18 + D101. registry_anchors green; manifest clean
+    before AND after the corpus probes; PUSHED. NEXT: the
+    W12-S3-prep E-side weapon-fire COMMAND producer unit (queued
+    item 2, engine+tests, unattended-safe) — then the
+    operator-adjacent W10/W11 tail.
+
   - OPEN 2026-08-22 (P4/RE THE MISSIONVIEW §8 WATER-FLAG/ANIM
     REMAINDER unit COMPLETE, worker 57ba8753 claim 2, commit
     bee4336, D100, docs-only): §8 is now FULLY closed (the last
