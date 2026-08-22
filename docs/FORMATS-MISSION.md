@@ -102,6 +102,14 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
   per-frame runtime view** (where the TRT structure animation frames
   1..0x1E live). FUN_0044661b re-loads .TOT/.BIN/.DAT on the
   save/EDITOR\ZONE restore path.
+- **Load-time mirror staging CORRECTED (EXW §7h.4, 2026-08-22):**
+  the FULL load-time build is init_tiles@00407e11 (0x407fb0..0x407ff8),
+  and it copies **every nonzero TOT plane word** into the mirror —
+  the DAT byte gates ONLY the seen flag (`DAT[z]==0 → seen=1`). The
+  DAT==0 word gate belongs to FUN_00440a2d's incremental restamp path
+  alone. Consequence: words at DAT≠0 cells (the pickup substrate —
+  DAT type 3 + word in the terrain-set pickup ranges, §7h.4) DO
+  mirror-stage at load with seen=0.
 - **Mirror-record grammar + pre-stamped footprints (EXW §7j.32,
   2026-08-22; tail semantics completed §7j.34):** the TOT MIRROR
   is one **0x1E-B record per tile** @0x4796bc+0x1E·tile: `+2·z`
@@ -176,6 +184,17 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
   sweep, then the ".PAD" parse stamps `0xFF`; the ".TRT" loader
   FUN_004170a6 additionally stamps tile **0x66** (the terrain-structure/
   turret tile, sibling of the 0x62 trap tile) at each turret's (x,y,z).
+- **Type-3 cells = the pickup/trigger substrate (EXW §7h.4,
+  2026-08-22):** a DAT==3 cell whose sibling TOT plane word lies in the
+  terrain-set pickup ranges ([A,A+0x10) ∪ [B,B+0xC), tables
+  0x454a58/0x454a74, set [0x4edd8c] = zone_index+1) is a PICKUP — any
+  move_is_possible probe touching it consumes it (DAT byte := 0, TOT
+  mirror word := floor word 0x454a90+4·set, seen := 1) and dispatches
+  FUN_0040eba0. Corpus census (read-only): ZONEA/M1 has 80 type-3
+  cells but ZERO in set-1 pickup range; ZONEB (set 2) 601 pickup
+  cells, ZONEF (set 6) 149, zones C/D/E/G none — the type-3 bytes
+  with out-of-range words (ZONEA's 0x81..0x84/0x230-family) are
+  other trigger scenery, inert to the pickup walk.
 
 ## 5. LNK — u16[8192] rotation/permutation link table
 

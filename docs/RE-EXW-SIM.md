@@ -1192,6 +1192,11 @@ state). Presentation (SFX 0x43a48e, the 0x4dc5d0 effect rows, the
 MP FUN_00425647 tail) stays unwired; `PickupOutcome` exposes the
 per-case effect id for that future slice. Nothing on the default
 corpus path invokes the seam — the sim pins stay frozen.
+[Superseded 2026-08-22 §7h.4: the producer chain is now DECODED
+end-to-end (init_tiles staging + the four-site type-3 latch + the
+clear→move→test consume + set = zone+1) and the corpus verdict is
+ZERO pickup cells on ZONEA/M1 — the seam stays host-seamed BY
+CORPUS FACT, not by unknowns; P4.2 hooks D99.]
 
 ## 7i. Amendment 2026-08-21 (worker efc8b1e0, the dead/hit dither
 overlay — FUN_00401ae6 + the 0x4e6ed8 noise bank)
@@ -4600,7 +4605,9 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | MAPTRAN ramps | u32@(0x4dd464+4i) ← GAMEGFX\MAPTRAN{i}.TRN (256 B each, i 0..7); ramp[mask byte] = palette byte | §7e |
 | PALTRAN ramps | u32@(0x4dd444+4i) ← GAMEGFX\PALTRAN{i}.TRN, slot 0 NULLed after load (MISSIONVIEW §8.2 producer closed) | §7e |
 | LNK map lookup | cw = word@(0x45cdda + 2*w) — the LNK image doubles as the map type→mask index; masks = .MIN bank [0x4edd9c] (16 B/cw) | §7e |
-| pickup range tables | A/B dwords @0x454a58/0x454a74 (7 terrain sets, 4-word closed groups → cases 1/3/2/4 + 9/7/8); floor word table @0x454a90 | §7h |
+| pickup range tables | A/B dwords @0x454a58/0x454a74 (7 terrain sets, 4-word closed groups → cases 1/3/2/4 + 9/7/8); floor word table @0x454a90; the set [0x4edd8c] = zone_index+1 ('A'+set−1 = the path zone letter, §7h.4) | §7h, §7h.4 |
+| pickup probe latch | {z@0x4dc688, x@0x4dc68c, y@0x4dc690}: FOUR writer sites in get_z_pos (z / z+1 / z−2 empty-search / slope z+1), each gated on the probed DAT plane byte == 3, last-write-wins, no auto-clear; SOLE consumer = the robots() move-toward-target block: clear −1 (0x40bef2) → robot_move (0x40bf06) → test ≠ −1 (0x40bf0b) → mirror-word range test → DAT byte := 0 + mirror word := floor word + seen := 1 + {x,y,z} staged 0x4dc6ac/b0/b4 (MP-only FUN_00425647 tails) → FUN_0040eba0; corpus: ZERO pickup cells ZONEA/M1 (set 1), 601 ZONEB (set 2) + 149 ZONEF (set 6), zones C/D/E/G none | §7h.4 |
+| TOT mirror staging | init_tiles@00407e11 (MissionShell load): EVERY nonzero TOT plane word → mirror @0x4796bc+30·tile+2z (DAT byte UNCONDITIONAL); the DAT==0 gate is the SEEN flag only (byte @+0x10+z := 1) — the pickup/decoration words at DAT≠0 cells DO stage (corrects the §7j.16 gloss; FUN_00440a2d restamp = the incremental word+seen path) | §7h.4 |
 | map present | FUN_00401107 map mode: 480×480 from backbuffer base, stride 640; button chrome 0x8f/0x5f/0x5e @ (0x213,0x1b5) | §7e |
 | backbuffer | [0x4ede18] = ArenaAlloc(0x64000) = 640×640; overlay clears 0x4b000 (480 rows) | §7e |
 | order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
@@ -5169,6 +5176,116 @@ tile z-stack when a door finishes opening/closing.**
     row form, and the DAT volume door-frame bytes 0x40..0x5E
     are a divergence class of their own.
 
+## 7h.4. THE PICKUP TILE-WORD PRODUCER (7h.3) — CLOSED: the staging is init_tiles (ALL nonzero TOT words mirror-staged; the DAT byte gates only SEEN), the terrain set = zone+1 CONFIRMED, and the ZONEA corpus verdict is ZERO pickup cells (2026-08-22, worker f461ea05 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; corpus probes read-only over game-data, scratch /tmp/opencode)
+
+Closes the queue's standing 7h.3 item (the last open piece of the
+§7h pickup consumer unit): where the pickup words COME FROM, how the
+probe latch walks, and whether the machinery stages on the harness
+corpus path. All items [verified] asm unless tagged.
+
+1. **THE STAGING PRODUCER = init_tiles@00407e11, and it copies EVERY
+   nonzero TOT word** [verified 0x407fb0..0x407ff8]: the load-time
+   mirror build clears 0x4ab50 B at 0x4796bc (0x407ee4) then walks
+   every tile × 8 z: `cx = TOT word; test cx,cx; je skip; word[edx +
+   0x4796bc] = cx` — the mirror write is UNCONDITIONAL on the DAT
+   byte; only the SEEN flag is DAT-gated: `if byte[DAT + z·pitch]
+   == 0 → byte[+0x10+z mirror] = 1`. CORRECTION to the §2/§7j.16
+   gloss ("copies every nonzero TOT word whose DAT byte is 0"):
+   that DAT==0 condition is the SEEN gate (and the incremental
+   FUN_00440a2d restamp path), NOT a word-staging gate — the pickup
+   substrate rides the ordinary TOT volume into the mirror at load
+   (seen=0 until the draw walks it).
+2. **The probe latch walk — get_z_pos writes the trigger triple at
+   FOUR sites, all gated on the probed DAT plane byte == 3**
+   [verified 0x41e231..0x41e410]: `{z→0x4dc688, tile_x→0x4dc68c,
+   tile_y→0x4dc690}` after (a) the level-z probe (0x41e282), (b) the
+   z+1 empty-search probe (0x41e2c1), (c) the z−2 empty-search probe
+   (0x41e302), (d) the slope-continuity z+1 probe when the CGR byte
+   == 0x1F (0x41e399, z = esi+1 from [esp]). Last write wins within
+   one call; the latch is a persistent dword with NO auto-clear —
+   absolute census: the ONLY other 0x4dc688/8c/90 traffic is the
+   consumer pair below (clear + test). Type 3 is NOT in the empty
+   set {0, 0x2A} (§4), so pickup cells are solid — the robot probes
+   them walking PAST, not through.
+3. **The consume protocol — one call site, clear→move→test→fire**
+   [verified 0x40bef2..0x40bff8; full 0x4dc688-family census]: ONLY
+   the robots() move-toward-target block (state ∈ {1,4}, target ≠
+   −1, non-arrive branch): `[0x4dc688] := −1` (0x40bef2) →
+   robot_move (0x40bf06; its move_is_possible runs the 8 footprint
+   probes (±11/±12 Q5) + the center settle — each calls get_z_pos,
+   so a probe TOUCHING a type-3 cell sets the latch) → `cmp −1; je
+   skip` (0x40bf0b) → the fire block: mirror word =
+   `dword[0x4796ba + 30·tile + 2z] >> 16` of the latched cell;
+   range test `A ≤ w < A+0x10` (signed) else `B ≤ w < B+0xC` per
+   the set tables; on hit (a) `DAT[z][tile] := 0` (consumed from
+   the collision plane — the cell becomes empty), (b) mirror word
+   := floor word `word[0x454a90 + 4·set]`, (c) seen :=
+   `byte[0x4796cc + 30·tile + z] = 1`, (d) {x,y,z} staged at
+   0x4dc6ac/b0/b4 — read ONLY by the MP tails
+   (`[0x4edb88]==2` → FUN_00425647) of case 8 (0x40eda7) and case 1
+   (0x40ef57), staging the pickup tile for the network session —
+   then `FUN_0040eba0(word, robot_idx)` (the §7h dispatch). The
+   OTHER robot_move call site (0x40dc0e, the wander/drift family)
+   has NO clear/test — latches set there linger until the next
+   move-toward-target clear. So a robot collects a pickup when any
+   of the 9 probes of ONE move sub-tick touches the cell — no
+   standing-on required (±11/12 Q5 ≈ ±0.34..0.38 tile reach).
+4. **The terrain set [0x4edd8c] = zone_index+1 — CONFIRMED and
+   sharpened** [verified]: the mission path builder writes the zone
+   letter as `'A' + set − 1` (`mov al,[0x4edd8c]; add al,0x40` at
+   0x446771/0x446879/0x4468d2) — ZONEA ⇔ set 1, ZONEB ⇔ set 2, …
+   ZONEG ⇔ set 7. Writer census (absolute, all sites): GameMain
+   boot := 1 (0x41c41c..430, with [0x4edd88] := 1 and the campaign
+   episode counter [esp+0x31c] seeded); the campaign episode
+   advance `set++; episode++; loop while episode < 7`
+   (0x41c9d6..0x41c9e5 → 0x41c454 — the 7-episode SP campaign
+   walks sets 1..7 = zones A..G in order); the save-load restore :=
+   `movsx word` from the 0xB4-stride save record +4 (0x43c2b3..b8,
+   behind FUN_0044745e); the network-session episode advance :=
+   word from the stack pair alongside FUN_00449c94(2) (0x43f341..b);
+   and the MP mission picker (0x43edcb/0x43ede8/0x43ee04/
+   0x43ee18/0x43ee3d) mapping MP list rows 1..10 → sets 2..6 —
+   MP-ONLY (gated `[0x4edb88]==2` at 0x43edb9; the SP branch
+   0x43ee48 only DERIVES [0x4edd88] = mission-within-set, never
+   writes the set). The §7h "set = zone+1, boot-consistent"
+   hypothesis is CONFIRMED with zone A 0-based.
+5. **THE CORPUS VERDICT — ZONEA/M1 stages ZERO pickup cells; the
+   harness corpus path does NOT fire** [verified, read-only probes
+   /tmp/opencode/pickup-probe{,2}.py over the shipped TOT/DAT]: a
+   pickup cell = DAT plane byte 3 ∧ TOT word in the set range.
+   ZONEA/M1 (SP fresh boot → set 1, ranges [0x4E,0x5D) ∪
+   [0x75,0x80)): the map has 80 DAT==3 cells, but their words
+   (0x81..0x84 ×37, 0x131, 0x230..0x237 ×44, 0x28D, 0x53D) fall in
+   NO set-1 range — the 0x81..0x84/0x53D words are set-2/5 ranges
+   only (case-4 score/money and case-8 ammo shapes: A+12..15 /
+   B+8), INERT under set 1. Campaign-set census across the corpus:
+   ZONEB (set 2) stages 601 pickup cells (M1 152 / M2 107 / M3 93 /
+   M4 106 / M5 95 / M6 30 / M7 18 — cases 1/2/3/4 all present,
+   case-4 dominant); ZONEF (set 6) 149 cells (cases 1/2/3/4);
+   zones C/D/E/G stage NONE under their campaign sets. So S0/S1/S2
+   (all ZONEA/M1 fresh-SP boots) never fire the pickup machinery,
+   and the probe-latch/consume machinery is invisible on the
+   current harness path.
+
+Engine seam (this unit, D98 pattern): the corpus path does NOT
+fire for ZONEA/M1, so the tile-word producer stays host-seamed —
+`pickup_case`/`apply_pickup` (7h.2) and the host `pickup()` seam
+are unchanged, no engine code this unit (never-invent). P4.2 hooks
+(D99): any S3+ scenario on ZONEB/ZONEF WILL hit pickups on
+ordinary walks (ZONEB/M1: 152 cells) — E needs, before such a
+scenario, (a) the TOT words staged beside the DAT planes in
+`Terrain` (init_tiles semantics: ALL nonzero words), (b) the
+terrain set (= zone+1; E already keys the zone letter), (c) the
+probe latch in `move_is_possible` + the clear→move→test protocol
+in the move-toward-target block, (d) the consume writes (DAT byte
+0 / mirror word := floor word / seen 1) + the apply_pickup
+dispatch — until then an O1 capture on those zones diverges by
+construction (the original consumes pickups; E cannot), which the
+differ would report as structural robot-bank + terrain rows. The
+watch surface for a pickup scenario: the mirror row word + seen +
+the DAT plane byte at the consumed cell, plus the case-4
+score/money pair (the D52 seam fields).
+
 ## 9. Open items (next slices)
 
 
@@ -5237,10 +5354,13 @@ tile z-stack when a door finishes opening/closing.**
    (the debris/death RNG interleaving included — 10 shared draws),
    the armor pad charge/bleed + the phase-0 shield family run per
    frame, and the sim hashes were re-pinned ONCE for that reason.
-   Still host-seamed: the FUN_0040eba0 TILE-WORD PRODUCER (the
-   type-DB mirror + probe-latch walk, DECODED 2026-08-21 §7h —
-   the dispatch decode + the case-1/2/3/7 bodies landed as
-   pickup_case/apply_pickup seams the same day; case 4
+   Still host-seamed: the FUN_0040eba0 TILE-WORD PRODUCER —
+   DECODED 2026-08-22 §7h.4 (init_tiles staging + the four-site
+   type-3 probe latch + the clear→move→test consume + set =
+   zone+1; ZONEA/M1 stages ZERO pickup cells, ZONEB/ZONEF stage
+   hundreds — the seam stays host-seamed by corpus fact, P4.2
+   hooks D99; the dispatch decode + the case-1/2/3/7 bodies
+   landed as pickup_case/apply_pickup seams §7h; case 4
    remains the D52 seam), the 0x7d2 hazard caller, and the
    projectile callers. The dead/hit dither (FUN_00401ae6 + the
    0x4e6ed8 bank) was DECODED 2026-08-21 amendment §7i and WIRED

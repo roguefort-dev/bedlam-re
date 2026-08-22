@@ -3537,3 +3537,58 @@ Nudge-Worker: fc88ecf3-fd23-459f-99f6-8b9811141b66
    fully enumerated).
 
 Nudge-Worker: a42c6027-6acd-491d-b4a7-47ae4b4ae69f
+
+## D99 — 2026-08-22: P4/RE — the 7h.3 pickup tile-word producer CLOSED: staging = init_tiles (ALL nonzero TOT words mirror-staged, DAT gates only SEEN), the terrain set = zone+1 confirmed, ZONEA/M1 stages ZERO pickup cells (the harness path never fires; ZONEB 601 / ZONEF 149 do) (worker f461ea05 claim 2)
+
+1. THE STAGING PRODUCER (the piece 7h.3 hunted): init_tiles@00407e11
+   (0x407fb0..0x407ff8) copies EVERY nonzero TOT plane word into the
+   0x4796bc mirror at mission load — the DAT byte gates ONLY the seen
+   flag (byte @+0x10+z := 1 when DAT[z]==0). The §2/§7j.16 "word needs
+   DAT==0" gloss is CORRECTED: that gate is the seen flag + the
+   FUN_00440a2d incremental restamp path, not word staging — FORMAT
+   docs §2 amended. Pickup words ride the ordinary TOT volume.
+2. THE PROBE LATCH (get_z_pos): {z→0x4dc688, x→0x4dc68c, y→0x4dc690}
+   written at FOUR sites (the z / z+1 / z−2 empty-search probes + the
+   slope-continuity z+1 probe when the CGR byte == 0x1F), each gated
+   on the probed DAT plane byte == 3, last-write-wins, no auto-clear.
+   THE CONSUME PROTOCOL (sole consumer): the robots()
+   move-toward-target block clears [0x4dc688] := −1 (0x40bef2) →
+   robot_move (0x40bf06; the 8 footprint probes ±11/±12 Q5 + center
+   set the latch on type-3 cells) → test ≠ −1 (0x40bf0b) → mirror-word
+   range test per the set tables → DAT byte := 0 + mirror word :=
+   floor word [0x454a90+4·set] + seen := 1 + {x,y,z} staged at
+   0x4dc6ac/b0/b4 (MP-only FUN_00425647 tails of cases 8/1) →
+   FUN_0040eba0 dispatch. The wander-family robot_move call (0x40dc0e)
+   has no clear/test — a robot collects a pickup when ANY of the 9
+   probes of one move sub-tick touches the cell (±0.34..0.38 tile
+   reach; no standing-on required).
+3. THE TERRAIN SET [0x4edd8c] = zone_index+1 — the 7h hypothesis
+   CONFIRMED and sharpened: the mission path builder writes the zone
+   letter as 'A'+set−1 (0x446771/0x446879/0x4468d2). Writer census:
+   GameMain boot := 1; campaign episode advance set++ (0x41c9e5, the
+   7-episode loop = zones A..G in order); save-load restore (0x43c2b8,
+   movsx from the 0xB4-stride save record); the network episode
+   advance (0x43f34b); the MP mission picker rows 1..10 → sets 2..6
+   (0x43edcb..0x43ee3d, MP-ONLY — the SP branch 0x43ee48 never writes
+   the set). SP fresh ZONEA runs set 1.
+4. THE CORPUS VERDICT (read-only probes, /tmp/opencode): a pickup
+   cell = DAT byte 3 ∧ TOT word in the set range. ZONEA/M1: 80
+   type-3 cells, ZERO in set-1 range (their words 0x81..0x84/0x131/
+   0x230-family/0x28D/0x53D are set-2/5 shapes or non-pickup trigger
+   scenery — inert under set 1). Campaign-set census: ZONEB 601
+   pickup cells (M1 152 … M7 18; cases 1/2/3/4), ZONEF 149, zones
+   C/D/E/G none. S0/S1/S2 never fire the machinery.
+5. Engine seam: NONE (the corpus path does not fire; never-invent —
+   the D98 pattern). P4.2 HOOKS: S5's pickup leg must run ZONEB or
+   ZONEF (DESIGN §7 S5 row updated) and needs the E-side producer
+   first: TOT words beside the DAT planes in Terrain + set = zone+1 +
+   the probe-latch/clear→move→test protocol + the consume writes +
+   the apply_pickup dispatch; until then O1 captures on those zones
+   diverge by construction (structural rows, never findings).
+6. Deliverables: RE-EXW-SIM §7h.4 + the §7h seam note superseded +
+   1 rewritten + 2 new ledger rows + §9 item 4 refresh; FORMATS §2
+   staging correction + §4 type-3 substrate note; DESIGN-DIFFHARNESS
+   S5 row. registry_anchors green; manifest clean before AND after
+   the corpus probes; docs-only, no engine pins touched.
+
+Nudge-Worker: f461ea05-7a4d-4663-8955-eab1766f74a4
