@@ -57,34 +57,45 @@
    the live session's O1 chains compare against THOSE with the
    LANDED W7 differ (D87, `dbx-diff` -- cross-channel mode handles
    the counter/RNG classes + the coverage findings automatically;
-   RUNTIME.md 'W7 the differ').
-2. [P4.2/W7-followup] THE EXD ROBOT BACK-HALF PROBE (unattended;
-   bounded Ghidra -process pass on BEDLAM.EXD): pin the remaining 26
-   canonical robot-record field offsets in EXD (dir_byte, facing,
-   anim, variant, probe_z[8], target fields, armor, hit_flash, alarm,
-   kind, shield x3, battery, armor_pool, alarm_ctr, death_flag — the
-   RE-EXD-MAP sec 8 coverage-gap census) by decoding the robots()
-   monolith FUN_0001c7dc's record accesses (the EXW offsets in
-   RE-EXW-SIM sec 3/7f/7g are the hypotheses: front {x@0,y@4,z@8,
-   state@0xC} is EXD-verified; back {drop@+0x2C, slots@+0x36,
-   stop@+0x74, hp@+0x78, alive@+0x7C} coincide EXACTLY in both, so
-   the transfer is plausible but unpinned). Deliverable: extend
-   RE-EXD-MAP sec 8's table with per-field provenance, then widen
-   EXD_ROBOT_MAP in tools/diffharness/src/differ.rs + re-pin the
-   differ_gate.rs coverage counts (26 -> 0 on S1 when fully pinned).
-   Verify: workspace green; the differ tests' gap math updated
-   deliberately. Ghidra discipline: NEVER re-import (-process
-   BEDLAM.EXD -noanalysis); check pgrep first.
-3. [P4.2/W8-prep] THE ROBOT-COUNT OVERRIDE PIN (unattended; bounded
+   RUNTIME.md 'W7 the differ'). NOTE D88 (2026-08-22): the differ's
+   robot maps now carry the FULL 31-leaf pin (S1 coverage = the 2
+   E-only rows + the target trio per robot) + drop_countdown reads
+   raw +0x80 (the phase-gate word; the +0x2C pod timer is not
+   canonical, E never emits it). Expect the alarm_ctr decay question
+   (EXD decrements it per phase-0 pass, EXW 7g.1 documents no decay)
+   to surface as the first candidate finding if any damage happens
+   in-scenario.
+2. [P4.2/W8-prep] THE ROBOT-COUNT OVERRIDE PIN (unattended; bounded
    probe, the DESIGN sec 10-W8 NOTE): does the original SP path fill
    the network-marker override at 0x46cbe0/EXD 0x119588-adjacent
    staging (E stages the host-default markers -> ZONEA single-robot
    squad; if the ORIGINAL spawns the full squad, robot-count diffs
    are a finding class of their own)? Anchor: the W5-followup command
-   count cell 0x46cbe0 + the spawn path FUN_0040cca0 twin. Deliverable:
+   count cell 0x46cbe0 + the spawn path FUN_0040cca0 twin. NOTE D88:
+   the EXD spawn initializer is PINNED = FUN_0001d9cd (ghidra-project/
+   exd-robot-backhalf2.txt) — SP writes count 0x11958c := 1 (zone<3
+   || 7) / 2 (zone 3) / 3 (else) and cap 0x11950c := count (MP: cap
+   := command count 0x119588), i.e. the SP ZONEA live game banks ONE
+   robot exactly like E; only the EXW side (FUN_0040cca0) needs the
+   same one-hop confirmation to close W8. Deliverable:
    the pinned answer in RE-EXD-MAP/DESIGN + (if the original fills
    it) the E-side staging seam named for W8. Verify: docs-only or a
    small engine test if a staging seam changes.
+3. [P4.2/W7-followup2] THE MOVE-TARGET PLAN-ROW FILL (unattended; the
+   D88 follow-up — takes S1 robot coverage 3 -> 0): (a) dbx-plan
+   emits the move-target-words row for S1 (extent formula now PINNED:
+   the fixed 0x60-B span at EXD 0xf75ec covers x[12]+y[12]; the
+   RE-EXD-MAP sec 5 row) — regenerate capture-plans/S1.json + re-pin
+   the byte-equality test; (b) differ.rs: parse the O1/O2
+   move-target-words span (x[i] u32 @+4i, y[i] u32 @+0x30+4i,
+   present = x != -1, robots bounded by the same frame's robot-bank
+   count) and SPLICE target_present/tx/ty into the robot-bank row so
+   the E canonical target fields compare (replaces the UnpinnedForm
+   error); (c) E side: re-check the sec 6a move-target-words row
+   semantics against the splice (Q5 tile<<5 vs canonical i32 — the
+   live contract). Verify: differ_gate.rs S1 coverage 2+3 -> 2 (the
+   inverse fabricator gains the row), workspace green, plans
+   byte-pinned deliberately.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -219,6 +230,44 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W7-followup THE EXD ROBOT BACK-HALF PROBE unit
+  COMPLETE (worker 03be9318 claim 2, commits 455ca41 + 206b776, D88).
+  (a) RE NOTES FIRST (455ca41): two `-process BEDLAM.EXD -noanalysis`
+  passes (EXDRobotBackhalf{,2}.java; dumps ghidra-project/
+  exd-robot-backhalf{,2}.txt) — hop 1 program-wide census of the
+  0xf6d34..0xf6ddc family (every hypothesis offset has traffic;
+  `[i·0xA8+const]` + `[i·0x15·8+const]` idioms) + the FUN_0001c7dc
+  per-phase-tick disasm/decompile (the phase-4/5 gate, decay family,
+  stop 0xf4240 arm, arrive snap, beacon auto-order, pod-gate tail);
+  hop 2 the writer family: FUN_0001ef61 = the DAMAGE APPLIER (EXW
+  0040e230 twin — hit_flash +=1 first, alarm trip 100, alarm_ctr +3/
+  >100/reset, shield absorb/decay, hp ceiling battery·100+5000,
+  death paths := death_flag 1), FUN_0001d9cd = the SPAWN INITIALIZER
+  (EXW 0040cca0 twin — kind := player type, variant := RandA&3,
+  facing := 0xFFFF, probe_z 8-word seed, stat switch 0x2A/0x2B/
+  0x2C×200 → charges/battery/pool, MRK pos formula, stagger, cap
+  0x11950c := count 0x11958c), FUN_0001d274 = robot_move (dir_byte
+  := angle, facing cardinals, anim ((a+4)&0xFF)>>3), FUN_0001e440
+  probes, FUN_00020dea pad charge (armor +20 clamp 3000 bar 2500,
+  pool gate), FUN_000180a1 portrait clamp-5, FUN_0005961c = the SP
+  all-dead sweep (death_flag READER — closes 7g.6). §8 table
+  rewritten: 23 fields + per-field provenance; coverage gaps 26 → 3
+  (target trio, record-external); move-target EXTENT pinned (0x60-B
+  span at 0xf75ec); §1b size fix (14,644 B = FUN_0001476d). (b) CODE
+  (206b776): EXD_ROBOT_MAP/EXW_ROBOT_MAP widened to the 31-leaf pin
+  (FieldKind {I32,U16,I16}, armor i16); drop_countdown rebound
+  +0x2C → +0x80 (the ENGINE field's semantics — the W7 binding was
+  the pod timer); differ.rs fixture = the full independent
+  transcription (anti-fabrication now the target trio, 34−31=3);
+  differ_gate.rs inverse fabricator places all mapped fields, S1
+  coverage re-pinned 2+26 → 2+3 with the pinned chains
+  8901789a88cf61fe / 1c4e7b4c9d9b0947 re-asserted GREEN. Workspace 52
+  suites green, fmt+clippy clean, manifest clean before/after the
+  Ghidra runs. NOTE for W8/live: EXD alarm_ctr has a phase-0 decay
+  EXW 7g.1 does not document (evidence gap); EXD SP banks exactly 1
+  robot on ZONEA like E. Queued: W8 the robot-count override pin
+  (item 2, now half-answered) + the move-target plan-row fill (item
+  3, coverage 3 → 0).
 - 2026-08-22: P4.2/W7 THE DIFFER unit COMPLETE (worker
   c594df62 claim 2, commits a9d741f + 04d1d27 + 0dfdb0c, D87 + the
   RE-EXD-MAP sec 8 basis). (a) RE NOTES FIRST (a9d741f): the EXD

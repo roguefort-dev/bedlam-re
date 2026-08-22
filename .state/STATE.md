@@ -1,5 +1,31 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W7-followup THE EXD ROBOT BACK-HALF PROBE
+    unit COMPLETE, worker 03be9318 claim 2, commits 455ca41 + 206b776,
+    D88): the robot-record canonical coverage is 31 of 34 leaves on
+    BOTH raw channels. Two `-process BEDLAM.EXD -noanalysis` probe
+    passes (EXDRobotBackhalf{,2}.java; dumps ghidra-project/
+    exd-robot-backhalf{,2}.txt) pinned the 23 remaining fields with
+    semantic twins EXACT vs EXW (damage applier FUN_0001ef61, spawn
+    initializer FUN_0001d9cd with the stat 0x2A/0x2B/0x2C switch,
+    robot_move FUN_0001d274, probes FUN_0001e440, portrait
+    FUN_000180a1, all-dead sweep FUN_0005961c = the death_flag
+    reader). CORRECTION: canonical drop_countdown = raw +0x80 (the
+    phase-4/5 gate word), NOT +0x2C (the pod-descent timer, not
+    engine-modeled) — both maps rebound. differ.rs maps widened
+    (FieldKind enum, i16 armor); S1 differ-gate coverage re-pinned
+    2+26 → 2+3 (blink-cursor + move-target-words rows + the target
+    trio; pinned chains re-asserted green; workspace 52 suites,
+    fmt/clippy clean). The move-target EXTENT is pinned (cap-bounded
+    ≤12, 0x60-B span at 0xf75ec covers x[12]+y[12]) — the deferred
+    dbx-plan row is fillable (queued). NOTE: EXD decrements
+    alarm_ctr(+0xA4) per phase-0 pass — EXW 7g.1 documents no decay
+    (evidence gap; divergence-seed candidate for the live S1 diff).
+    NEXT HEADS: the W8 robot-count override pin (item 2, unattended)
+    + the move-target plan-row fill (item 3, unattended, coverage
+    3 → 0) + the operator S0 live session (item 1, interactive-gated,
+    S0W calibration hook).
+
   - OPEN 2026-08-22 (P4.2/W7 THE DIFFER unit COMPLETE, worker
     c594df62 claim 2, commits a9d741f + 04d1d27 + 0dfdb0c, D87):
     the P4.2 comparison core EXISTS — `tools/diffharness/src/
@@ -13,16 +39,8 @@
     rng T3, draw-count checks still apply) + cross-channel (per-field
     classes + O2 arbitration engine-bug vs original-divergence; the
     `coverage` bucket notes-not-fails). Report + fingerprint
-    manifest (git-carried digests; dumps runtime-only). Verified:
-    15 differ tests + the corpus-gated differ_gate.rs (S0/S1 pinned
-    E chains × the inverse normalizer → cross PASS-WITH-NOTES with
-    exactly 2+26 coverage + the one T2 counter note on S1; double-run
-    PASS modulo counter/RNG, FAIL on money). The S0 live-session
-    checklist step 4 now uses dbx-diff. NEXT HEADS: the EXD robot
-    back-half probe (item 2, unattended — collapses the 26 coverage
-    gaps before the live S1 diff) + the W8 robot-count override pin
-    (item 3, unattended) + the operator S0 live session (item 1,
-    interactive-gated, S0W calibration hook).
+    manifest (git-carried digests; dumps runtime-only). The S0 live-session
+    checklist step 4 now uses dbx-diff.
 
   - OPEN 2026-08-22 (P4.2/W5-pad THE CAPGEN PAD OP unit COMPLETE,
     worker 85dedea3 claim 2, commits fb92286 + b5d1920, D86): the
