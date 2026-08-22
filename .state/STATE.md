@@ -1,5 +1,44 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE MISSIONVIEW §8 WATER-FLAG/ANIM
+    REMAINDER unit COMPLETE, worker 57ba8753 claim 2, commit
+    bee4336, D100, docs-only): §8 is now FULLY closed (the last
+    open §8 row). The anim sequence u32[0x456ca8] is a STATIC
+    DGROUP const {0,1,2,3,4,5,6,7,7,6,5,4,3,2,1,0} — a 16-phase
+    ping-pong over the 8 PALTRAN ramps, ZERO .text writers, 2
+    readers (0x40691a/0x406a2c in the terrain loop); the STATIC
+    branch indexes the SAME ramps by the +0x18 scorch byte (scorch
+    n → ramp n — scorch darkening IS ramp selection); the
+    anim-window (+0x1b/+0x1c) branch is ZONEG-only. The water
+    flag [0x4edbd4] ≡ 1 in EVERY mission: sole persistent writer
+    = the campaign-boot defaults FUN_004252c0@0x4252d8 (:= 1,
+    every "New Single Player Game"); one scoped save/restore
+    (0x41c649/0x41c65a) around the SELECTOR screen FUN_0043e7d4;
+    NO config/options/save/MP writer — the water-off arms of the
+    0x12d/0x12e/0x12f dispatches + the remap-XLAT gate are DEAD
+    CODE in shipped play (E may hard-code water-ON). 7j.12
+    zone-table off-by-one CORRECTED (all tables set-indexed 1..7
+    by the RAW [0x4edd8c]; entry 0 = the previous array's tail;
+    one contiguous u32 array at 0x1C strides). CORPUS VERDICT:
+    water sprites stage ONLY in ZONEB/M1 (12 cells), ZONEB/M6
+    (78), ZONEC/M4 (33), ZONED/M1 (1), ZONEF/M7 (4824) —
+    ZONEA/M1 ZERO in both the sprite range and the
+    platform/splash word range (which appears in NO shipped
+    file); side finding: 44 0x7d2 hazard cells in ZONEA/M1 → the
+    load stamper pre-stages the 0x460dfa hazard grid in every
+    gate run (the 7g.5 hazard path is live). Engine seam: NONE
+    (D98/D99 pattern — the corpus path does not fire;
+    DrawParams.remap stays the host seam, pixel-side). P4.2
+    hooks on the DESIGN S5 row: the water leg shares the S5
+    zone-walk staging and must run ZONEB/M1|M6, ZONEC/M4 or
+    ZONEF/M7. Deliverables: RE-EXW-SIM §7j.35 + 2 new + 1
+    rewritten ledger rows + MISSIONVIEW §8.2 closure + §1/§3/§4/
+    §5c refreshes + DESIGN S5 row + D100. registry_anchors
+    green; manifest clean before AND after the corpus probes;
+    PUSHED. NEXT: the [0x4ede1c] BIN-bank content consumers
+    (queued item 2) — then the operator-adjacent W10/W11/W12
+    tail.
+
   - OPEN 2026-08-22 (P4/RE THE 7h.3 PICKUP TILE-WORD PRODUCER unit
     COMPLETE, worker f461ea05 claim 2, commit 187f0aa, D99,
     docs-only): the producer chain is decoded end-to-end —

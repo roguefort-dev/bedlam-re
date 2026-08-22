@@ -78,59 +78,58 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. DONE 2026-08-22 (worker f461ea05 claim 2, commit 187f0aa, D99,
-     §7h.4): [P4/RE] THE 7h.3 PICKUP TILE-WORD PRODUCER unit —
-     CLOSED (docs-only; objdump-only from exw-text-objdump.txt +
-     read-only corpus probes in /tmp/opencode, no Ghidra run; the
-     engine seam stays host-seamed BY CORPUS FACT — ZONEA/M1 stages
-     ZERO pickup cells, the D98 pattern). STAGING: init_tiles@00407e11
-     copies EVERY nonzero TOT plane word into the 0x4796bc mirror
-     (the DAT byte gates ONLY the seen flag — the §2/§7j.16 gloss
-     corrected; the DAT==0 word gate belongs to the FUN_00440a2d
-     restamp path alone). LATCH: get_z_pos writes {z,x,y}→
-     0x4dc688/8c/90 at FOUR sites (z / z+1 / z−2 empty-search /
-     slope z+1), each gated on the probed DAT byte == 3,
-     last-write-wins, no auto-clear. CONSUME: the robots()
-     move-toward-target block ONLY — clear −1 (0x40bef2) →
-     robot_move (0x40bf06) → test ≠ −1 (0x40bf0b) → mirror-word
-     range test → DAT byte := 0 + mirror word := floor word + seen
-     := 1 + MP-only {x,y,z} stage 0x4dc6ac/b0/b4 → FUN_0040eba0;
-     any of the 9 probes of one move sub-tick collects (±0.34..0.38
-     tile reach; the wander-family robot_move call 0x40dc0e has no
-     clear/test). SET: [0x4edd8c] = zone_index+1 CONFIRMED (path
-     zone letter 'A'+set−1 @0x446771; boot 1, campaign episode
-     advance ++ @0x41c9e5, save-load restore @0x43c2b8, MP picker
-     MP-only). CORPUS: ZONEA/M1 = 80 type-3 cells, ZERO in set-1
-     range (0x81..0x84/0x53D are set-2/5 shapes, inert under set 1);
-     ZONEB (set 2) 601 pickup cells, ZONEF (set 6) 149, zones
-     C/D/E/G none — S0/S1/S2 never fire the machinery. P4.2 hooks:
-     S5's pickup leg must run ZONEB/ZONEF + the E-side producer
-     list (DESIGN §7 S5 row). Deliverables: RE-EXW-SIM §7h.4 + §7h
-     seam note superseded + 1 rewritten + 2 new ledger rows + §9
-     item 4 refresh; FORMATS §2 correction + §4 type-3 note; D99.
-     registry_anchors green; manifest clean both sides; PUSHED.
-  2. [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER unit: the
-     u32[0x456ca8] anim sequence + the water flag producer — the
-     last open §8 items (needed before the 0x12d/0x12e/0x12f flush
-     remaps can leave water-off semantics; RE-EXW-MISSIONVIEW §8
-     open list). Anchor in ghidra-project/exw-text-objdump.txt; the
-     7j.12 platform family (FUN_00422832/0042394a water z-structure
-     writer, [0x4edd58] plane-A/B occupancy reads) is the decoded
-     neighbor; land RE-EXW-SIM ledger rows + the §8 closure + the
-     corpus check (does water stage anywhere in ZONEA/M1? the
-     0x7d2/0x7d3 stamper FUN_00422f18 tables 0x454a20/0x454a3c +
-     the 0x454ae4 zone-water words are the file-side substrate) +
-     engine seam only if the corpus path fires (else docs-only +
-     P4.2 hooks per the D98/D99 pattern).
-  3. [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit (7j.16
-     residue): the ".BIN" load is pinned (header word → 0x46cdb8;
-     MISSION{A..G}.BIN sprites staged at [0x4ede1c]) but the bank's
-     CONTENT readers are open — census the bank's readers
-     (MISSIONVIEW §1/§4 point at the terrain sprite family), pin
-     the sprite record grammar, and check the corpus path (the
-     gates' terrain draws read it — but is any of it STATE the
-     differ must watch, or is it render-only presentation per the
-     §0b budget?).
+2. DONE 2026-08-22 (worker 57ba8753 claim 2, commit bee4336,
+      D100, §7j.35): [P4/RE] THE MISSIONVIEW §8 WATER-FLAG/ANIM
+      REMAINDER unit — CLOSED (docs-only; objdump-only from
+      exw-text-objdump.txt + read-only DGROUP/TOT probes in
+      /tmp/opencode, no Ghidra run; the engine seam stays
+      host-seamed BY CORPUS FACT — ZONEA/M1 stages ZERO water,
+      the D98/D99 pattern; §8 is now FULLY closed). ANIM SEQUENCE:
+      u32[0x456ca8] is a STATIC DGROUP const {0,1,2,3,4,5,6,7,
+      7,6,5,4,3,2,1,0} — a 16-phase PING-PONG over the 8 PALTRAN
+      ramps (0x4dd444, slot 0 NULL = plain), ZERO .text writers,
+      2 readers (0x40691a seen-level draw + 0x406a2c chase
+      column, both seq[frame&0xf] → ramp → FUN_00401471/
+      0040167a); the STATIC branch indexes the SAME ramps by the
+      +0x18 SCORCH byte (scorch n → ramp n — scorch darkening IS
+      ramp selection); the anim-window (+0x1b/+0x1c) branch is
+      ZONEG-only (the §7j.32 objective family). WATER FLAG:
+      [0x4edbd4] ≡ 1 in EVERY mission — sole persistent writer =
+      the campaign-boot defaults FUN_004252c0@0x4252d8 (:= 1,
+      every "New Single Player Game"); one scoped save/restore
+      (0x41c649/0x41c65a) around the SELECTOR screen
+      FUN_0043e7d4 (GAMEGFX\SELECTOR.BIN/.PAL; esi = the
+      mission-index reg = 1 on both paths); NO config/options/
+      save/MP writer — the water-off arms of the 0x12d/0x12e/
+      0x12f dispatches + the remap-XLAT gate are DEAD CODE in
+      shipped play (E may hard-code water-ON). CORRECTION:
+      7j.12's zone-table lists were off by one — all zone tables
+      (0x454a20/0x454a3c/0x454aac/0x454ae4, one contiguous u32
+      array at 0x1C strides) are indexed by the RAW set
+      [0x4edd8c] 1..7; entry 0 = the previous array's tail;
+      set-indexed bases landed in §7j.35. CORPUS: water sprites
+      stage ONLY in ZONEB/M1 (12 cells), ZONEB/M6 (78), ZONEC/M4
+      (33), ZONED/M1 (1), ZONEF/M7 (4824) — ZONEA/M1 ZERO in
+      both the sprite range and the platform/splash word range
+      (which appears in NO shipped file, runtime-only); side
+      finding: 44 0x7d2 hazard cells in ZONEA/M1 → the load
+      stamper FUN_00422f18 pre-stages the 0x460dfa hazard grid
+      in every gate run (the 7g.5 robots() hazard path is live).
+      Deliverables: RE-EXW-SIM §7j.35 + 2 new + 1 rewritten
+      ledger row + MISSIONVIEW §8.2 closure + §1/§3/§4/§5c
+      refreshes + DESIGN-DIFFHARNESS S5 row (the water leg
+      shares the S5 zone-walk staging: ZONEB/M1|M6, ZONEC/M4 or
+      ZONEF/M7) + D100. registry_anchors green; manifest clean
+      both sides; PUSHED.
+   2. [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit (7j.16
+      residue): the ".BIN" load is pinned (header word → 0x46cdb8;
+      MISSION{A..G}.BIN sprites staged at [0x4ede1c]) but the bank's
+      CONTENT readers are open — census the bank's readers
+      (MISSIONVIEW §1/§4 point at the terrain sprite family), pin
+      the sprite record grammar, and check the corpus path (the
+      gates' terrain draws read it — but is any of it STATE the
+      differ must watch, or is it render-only presentation per the
+      §0b budget?).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
