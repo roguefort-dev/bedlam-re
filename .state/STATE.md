@@ -1,5 +1,25 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W5 THE INJECTOR unit COMPLETE, worker
+    683a65d6 claim 2, commits c443207 + fa31828 + 5e882cd + 28ef5e7,
+    D82): the DESIGN §5 injection vocabulary is LANDED end-to-end and
+    headless-verified — scenario grammar v1.1 (keystore/order/pad/
+    command/boot steps; until-anchor splits walk/mission phases), the
+    capgen SMV emitter (boot_writes at the arm stop + frame-keyed
+    inject rows applied before the watch dumps → `frame N 1` injected
+    flags; the command-ring append op = count read → zero-extended
+    record → count bump), and dbx-plan's T1 count-cell compiler
+    (robot 0x11958c / TRT 0x11949c / object 0x119554 resolve rows +
+    count·stride extents + map-w/h grid exprs; S1.json committed +
+    byte-pinned). `dbgprobe inject` GREEN headless (no game; gate +
+    flow regression-green). THE REMAINING GATES ARE RE FACTS, NOT
+    MACHINERY: the EXD aliases for the §5 seams (keystore,
+    order-target, command ring, difficulty) are registry gaps —
+    scenarios carrying those steps fail compilation naming the seam
+    (the EXD input twin is NOT FUN_0002ec12 = only the P-latch spin;
+    RE-EXD-MAP W5 note). The scripted-menu-walk driver (BPLM-on-
+    frame-counter walk stops + mission-start detect) is the follow-up
+    unit once the keystore alias lands.
   - OPEN 2026-08-22 (P4.2/DH-G0-live prep, worker fa49e9cf claim 1,
     commits f659db5 + d5550a3 + ee2f0d4, D81): the S0 live-capture
     MACHINERY is landed and headless-verified; only the interactive

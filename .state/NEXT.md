@@ -37,23 +37,27 @@
    order-table/yline — extent formulas unpinned) are consciously OUT
    of the first golden; adding them later is additive (re-baseline
    chains deliberately). Manifest checks bracket corpus-touching steps.
-2. [P4.2/W5] THE INJECTOR (unattended): extend the scenario grammar v1
-   with the DESIGN §5 vocabulary (keystore/order/command/pad steps →
-   runner-side writes) + the SMV linear-write emitter in dbx-capgen.py
-   (verified primitive; D81: the O1 addr form is the CS: register
-   form, same as the watch reads) + the capture-plan compiler for T1+
-   tiers (count-cell resolve rows + count*N extent exprs — the capgen
-   v2 resolve machinery is LANDED, extend dbx-plan's resolution table
-   past T0/TS; robot count 0x11958c, object count 0x119554, TRT count
-   0x11949c are the first three). The BOOT/KEYSTATE steps here are
-   what make DH-G1 byte-identical (scripted menu walk). Testable
-   headless against the probe (SMV into BDA + readback — no game).
-   Emits injection_applied=1 frames in the W3 dump.
+2. [P4.2/W5-followup] THE EXD INPUT-TWIN CENSUS (unattended, RE
+   unit): pin the EXD keystore alias (EXW g_keystore 0x4edc44, 256 B
+   scan-indexed) + the order-target triple + the command-ring/count
+   twins + difficulty, and fill the registry exd_addr gaps so the W5
+   injection steps compile for O1 (D82 machinery is landed + proven;
+   ONLY the aliases are missing). ENTRY POINTS: the any-key scan
+   family twin (EXW FUN_0041f9d1 scans 1..0xFE), the InputReset
+   memset-256 twin (EXW 0x4207b5), the MissionShell consumer-call
+   twin (@EXW 0x448030 → the EXD command ring), the (d+1)%3
+   difficulty site. KNOWN DEAD END: FUN_0002ec12 = only the P-latch
+   spin (ghidra-project/exd-input-probe.txt, EXDInputProbe.java).
+   Fill watches.toml rows (exd_status verified) + RE-EXD-MAP sec 4/5
+   — dbx-plan compiles them automatically. AFTER the keystore alias:
+   the scripted-menu-walk driver (BPLM-on-frame-counter walk stops +
+   mission-start detect) becomes its own unit.
 
 ## Backlog (not yet started)
 - [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
   canonical records in the W3 schema, T0/T1 field maps first) — the E
-  side of the differ.
+  side of the differ; consumes the v1.1 grammar steps directly
+  (shared seam, D82).
 - [P4.2/W7] THE DIFFER: normalizer + DESIGN §6 comparison modes +
   report writer + fingerprint manifest.
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
@@ -184,6 +188,37 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W5 THE INJECTOR unit COMPLETE (worker 683a65d6
+  claim 2, commits c443207 + fa31828 + 5e882cd + 28ef5e7, D82).
+  (a) grammar v1.1: keystore/order/pad/command/boot steps, one frame
+  boundary per line; until-anchor splits walk/mission phases; boot is
+  walk-phase only; command payloads raw hex <=0x80. (b) capgen SMV
+  emitter: boot_writes at the arm stop + frame-keyed inject rows
+  applied BEFORE the watch dumps (`frame N 1` injected flags in
+  DBXCAP = injection_applied in the W3 dump); the command-ring append
+  OP (count u32 read via the plan's own SEG:OFF form, payload
+  zero-extended to the stride at base+count*stride, count bump);
+  addr_to_linear: CS: flat identity (bounded to image top), numeric
+  segs seg<<4; byte-only tokens. `dbgprobe inject` GREEN headless
+  (boot beefcafe at 0000:0500 in the anchor frame, marker re-writes
+  read back same-frame, command append count 0->1 + zero-extended
+  0x10-stride record, all frames flagged; gate + flow
+  regression-green). (c) dbx-plan T1: Form::CountExpr + count-cell
+  resolve rows (robot 0x11958c / TRT 0x11949c / object *(0x119584)
+  count 0x119554) + map-w/h grid exprs; S1.scen compiles ->
+  capture-plans/S1.json committed + byte-pinned; S0.json verified
+  byte-identical; anti-fabrication: selection-triple dumps only the 4
+  verified alias bytes, beacon-family its 5 u16 cells (10 B).
+  (d) step compiler: boot_writes/inject plan rows with HARD alias
+  gates (keystore/order-target/command-ring/difficulty are registry
+  gaps -> scenarios carrying them fail naming the seam; emission paths
+  proven against a fabricated-address registry in tests only); two TI
+  registry rows formalize the command seam (0x4dd4a0/0x46cbe0). RE
+  FACT: FUN_0002ec12 = the P-latch spin only, NOT the EXD keystore
+  (exd-input-probe.txt; RE-EXD-MAP W5 note) — the input-twin census is
+  the queued follow-up. 49 diffharness tests; workspace test/fmt/
+  clippy green; manifest clean. PUSHED 28ef5e7. Queued: item 2 =
+  the EXD input-twin census.
 - 2026-08-22: P4.2/DH-G0-live the UNATTENDED PREP unit COMPLETE (worker
   fa49e9cf claim 1, commits f659db5 + d5550a3 + ee2f0d4, D81). The S0
   live-capture machinery landed + headless-verified; the queue's
