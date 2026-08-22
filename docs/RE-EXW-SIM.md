@@ -5709,6 +5709,127 @@ contradicted; three rows are rewritten/added.
    spawn producers (enemy fire — the critter family), and the
    0x69-vs-table question (unchanged).
 
+## 7j.38. THE S4-PREP RE ADDENDUM — the destroy-family RNG-draw
+census + the chain-walk geometry + the four missing DGROUP tables
+(2026-08-22, worker 1b45efab claim 2; objdump/dump-only from the
+COMMITTED ghidra-project/exw-destroytail-asm.txt + one read-only
+DGROUP probe of BEDLAM.EXW over the PE section table, scratch
+/tmp/opencode/s4prep-dgroup-probe.py; prep for the E-side W12-S4
+impact-application + destroy-resolver producer unit)
+
+Purpose: the E-side destroy model must consume RandA in the
+original's exact order/count (rand_a is hashed — a draw-count
+error is a chain divergence the moment a destroy happens in an
+S4+ scenario). Everything below is [verified] against the named
+dump unless tagged. No prior row is contradicted; this section
+makes 7j.25's effect table DRAW-EXACT and pins the tables the
+resolver/structure-death need.
+
+1. **THE FIVE-EFFECT LOOP, DRAW-EXACT** (case bodies in
+   exw-destroytail-asm.txt; "R" = one FUN_00402975 RandA draw,
+   "B" = one FUN_004029b6 RandB draw — RandB feeds only the
+   T4 SFX bank pick, unhashed/unmodeled):
+   - sel 1 (0x41ac77): k14 debris (0x41ace7) → the 12-slot
+     effects-bank stager FUN_0041a225 (0x41ad2d — RandB draws
+     ONLY, unmodeled T3) → ONE plain splash at the entry center
+     (probe 0x41ad75 + FUN_00424355 0x41ad84, NO jitter draws) →
+     a 4-iteration loop (0x41adce..0x41adc8): per iteration 2R
+     (x−=R&1 at 0x41ade7, y−=R&1 at 0x41ae18) + probe (0x41ae3b,
+     → z or 7) + splash (0x41ada2). **Total 8 RandA.**
+   - sel 2 (0x41b298): k18 debris (0x41b302) → 4-iteration
+     splash loop (2R + probe + splash each; draw sites
+     0x41b337/0x41b368). **Total 8 RandA, NO plain splash.**
+   - sel 3 (0x41b3c1): k17 (0x41b42b); draws 0x41b460/0x41b491.
+     **8 RandA.**
+   - sel 4 (0x41b4ea): k16 (0x41b554); draws 0x41b589/0x41b5ba.
+     **8 RandA.**
+   - sel 5 (0x41b613): k19 (0x41b67a); draws 0x41b6b2/0x41b6e3.
+     **8 RandA.**
+   - sel 6 (0x41b1fe) / 7 (0x41b11c): k10 debris (0x41b26e /
+     0x41b185) + ONE RandB draw (0x4029b6 at 0x41b273/0x41b18a)
+     &1 → the DEADMAN1/DEADMAN2 bank pick (T4, unmodeled).
+     **0 RandA.**
+   - sel 8 (0x41af96): k14 at the entry center (0x41b002) →
+     24-iteration shower (0x41b063..0x41b111, i < 0x18): per
+     iteration 3R (x = base + R&7 − 3 @0x41b063, y = base + R&7 −
+     3 @0x41b07c, z = base + R&3 @0x41b086) + the water-z probe
+     (0x41b0ac) + k14 debris at (x,y,probe_z) (0x41b0dc) +
+     splash (0x41b0eb) + FUN_0041a225 (0x41b0fa); the delay =
+     counter + (i>>3). **Total 72 RandA.**
+   - sel 9 (0x41ae53): k20 debris (0x41aebf) → ONE plain probe
+     at (x−1, y−1) (0x41af0b, no draws, z clamped ≤ 7) → a 3×3
+     double loop (outer [c, c+3), inner [r, r+3) — the ring
+     x−1..x+1 × y−1..y+1): per cell 1R (&3 added to the DELAY
+     arg, 0x41af6b) + splash (0x41af8b). **Total 9 RandA.**
+   The loop runs m = 0..4 over the 5 entries; selector 0 or >9
+   skips the entry with NO draws.
+2. **THE FOUR PERIMETER CHAIN WALKS** (0x41b771..0x41bc06;
+   entry x/y = the destroyed instance's footprint origin, W/H =
+   its type row's extent words):
+   - Walk 1 — the N row: y' = y−1 fixed; the x Q13 accumulator
+     starts at the x−1 tile and steps +0x2000; j runs −1..W
+     (bound W+1, 0x41b7dd..0x41b7f0).
+   - Walk 2 — the W edge: x' = x−1 fixed (accumulator x·0x2000 −
+     0x2000, 0x41b8bb..0x41b8cc); the row index walks j from −1
+     while j < W+1 (0x41b8f7 reads the W word@row+0 — the bound
+     is W for a VERTICAL walk, a faithful original quirk
+     [verified bytes; flagged hypothesis on intent]).
+   - Walk 3 — the S row: y' = y+H fixed ([esp+0x98] rows, H read
+     at 0x41ba34); x walks j from −1, bound W+1 (0x41ba2d).
+   - Walk 4 — the E edge: x' = x+W (0x41bb46..0x41bb6c adds W);
+     the row walks j from 0, bound H (0x41bb31/0x41bb40 reads
+     H, exit jle).
+   - Per candidate tile (all walks): skip unless 0 < x' < w ∧
+     0 < y' < h (STRICT — `test/jle` + map-word compares); the
+     grid word −1 (signed) > 0; instance[word−1] id dword <
+     0x4000 (alive); type-row(id).chain word ≠ 0; then ONE RandA
+     draw (`&3 == 0 → counter++` at 0x41b871/0x41b99b/0x41bbbd/
+     0x41bbcc — the roll ALWAYS draws, the counter bump is the
+     1-in-4) and the recursive
+     FUN_0041a894(x'_q13, y'_q13, counter, 1000, forwarded
+     score flag). The recursion's own destroy tail re-walks
+     (depth-first, shared counter).
+3. **THE RUBBLE WORD TABLE 0x454a04** [DGROUP bytes, PE-mapped]:
+   {0xFFFFFFFF, 0x20, 0x20, 0x348, 0x20, 0x20, 0x20} — zone-
+   indexed 1..7 (index 0 is the unused cell); zone 3 (ZONEC)
+   restores word 0x348, every other zone word 0x20. This is the
+   FUN_0041bc1c death stamp source (7j.32/8).
+4. **THE WATER TABLES** [DGROUP bytes, recorded for the S4
+   splash-tick pairing]: base 0x454aac {0x24C, 0x15F, 0x4B3,
+   0x5B8, 0x15F, 0x141, 0xFB} (zone 1..7 — index 0 unused), range
+   base 0x454ae4 {0x25D, 0xBD, 0x3BD, 0x5E8, 0xBD, 0xEC, 0xC3}
+   (range = [base, base+0xE) per 7j.12).
+5. **THE ARTILLERY BURST PAIR LISTS** (0x456bf0 ptrs {0x45687c,
+   0x4568a2, 0x4568d4, 0x456936, 0x456998, 0x456a1a, 0x456adc};
+   each list = (Δy,Δx) i16 pairs until the first-short 500
+   sentinel): expanding SQUARE rings — list 0 = the full 3×3
+   block INCLUDING the center (9), 1 = radius-2 ring (12), 2 =
+   radius-3 ring (24), 3 = radius-4 (24), 4 = radius-5 (32), 5 =
+   radius-6 (48), 6 = radius-7 ring with a 2-pair TAIL DUPLICATE
+   ((−6,−5),(−6,−4) repeat — the original fires those two tiles
+   TWICE [faithful]); 68 pairs. Durations table 0x456c78 re-read:
+   {1,7,2,6,4,3,1,8,5, 2, 4, 7} — idx 9/0xA/0xB = 2/4/7 ✓ (the
+   7j.37 landing re-confirmed).
+6. **Scope notes for the E model** (what S4-prep models vs what
+   its scenarios pair later): the SPLASH TICK body (the 7j.10
+   odd-frame fall/absorb + the per-tick 5-draw scorch re-roll +
+   the water stamps at ages 1/40/47) stays UNMODELED until a
+   scenario exercises water (S4's T3/T4 coverage names it — never
+   silence); the stager itself (gates + 250×0xA bank + eviction)
+   IS modeled — the five-effect loop's splash calls are recorded
+   rows, and the stage gates consume NO RNG. The platform SPREAD
+   ring FUN_00422832 + the CREEP tick = the S7 seam (they need
+   the zone water range + the robot-presence checks); the
+   resolver's platform ENTRY (FUN_00422693 destroy/weaken
+   arithmetic) IS modeled over host-staged strength/grid words.
+   The trigger producers FUN_00422e0a/FUN_00422600 (bridge
+   builds) are S7-routed no-ops. The trap lane's intra-walk order
+   vs the armor pass (FUN_0040fe93 @0x40bc44 sits between the
+   pad-byte read 0x40bbab and the charge call 0x40bc60) is
+   modeled armor-first with the exact interleaving unpinned
+   [hypothesis — matters only when a trap shares a pad tile,
+   corpus-never].
+
 ## 9. Open items (next slices)
 
 
