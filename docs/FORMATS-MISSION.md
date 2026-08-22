@@ -556,7 +556,18 @@ What RE must confirm: everything beyond the layout.
   this exact container grammar — u16 count word0 + u32-offset directory at
   +2, offsets relative to their own slot — decoded from EXW FUN_00401e39
   and corpus-verified 24/24 DEBRIS / 160/160 DANTE (docs/RE-EXW-MISSIONVIEW
-  §5f). The MISSION*.BIN zone sprite banks follow the same layout.
+  §5f). **VERIFIED 2026-08-22 (7j.36): the MISSION{A..G}[.BIN] zone sprite
+  banks follow the SAME self-relative grammar** (u16[0] = count 989..1872;
+  entry = bank+2+4·id, sprite = entry + u32[entry]; 11/11 shipped banks
+  incl. MISSION6.BIN/MISSION5.BIN monotone and in-file; last record runs
+  to EOF). Record grammar: u16 fmt/dy/dx/gate/rows + stream (FUN_00401471
+  0x401477..0x4014c8: fmt ≥ 4 u8-RLE, 1..3 u16-RLE, 0 raw; gate==0 or
+  rows==0 → draws nothing); ALL real terrain sprites are fmt 7; each zone
+  bank carries EXACTLY 9 fmt-0 stub records (6-B head {0,64,64} + 4096-B
+  image, span 0x1006) = the VESTIGIAL radar-stamp scratch family
+  (u32[0x454b00+4·set]-indexed; written every present by FUN_00401010,
+  never drawn — gate/rows 0 forever, LNK identity; TOT refs in zones A–D
+  render nothing). [EXW §7j.36]
  - **Bank census add-on (2026-08-22, 7j.28):** the boot loader's
    arena→file pairs pinned from the string block 0x45884e..0x4588c3 +
    corpus headers: WEAPONS 70 imgs (0x4F86 B → [0x4eddbc], alloc

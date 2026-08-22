@@ -19,7 +19,23 @@ load_mission (7c)            init_tiles@00407e11         FUN_00403938 per frame
 - **BIN** = `EDITOR\ZONE{A..G}\MISSION{A..G}.BIN` (path2 + `.BIN`,
   7c §1) — the zone TERRAIN SPRITE BANK (ZONEA: MISSIONA.BIN, 2.0 MB),
   read into `_DAT_004ede1c` [verified: FUN_00403938 loads ESI from
-  0x4ede1c before every FUN_00401471 call, 0x40693c/0x406a54/0x406b1f].
+  0x4ede1c before every FUN_00401471 call, 0x40693c/0x406a54/0x406b1f;
+  0x4069f5 is the 4th load site]. UPDATE 2026-08-22 (§7j.36 — the
+  full content-consumer census): the bank has exactly THREE reader
+  clusters + the loaders — (a) the terrain loop (above), (b) the
+  scroll/camera RESTAMP DRAWER FUN_00440dc2 (0x440d1c/0x440d93:
+  type-DB word → FUN_00401471, EBX=0, dest bounds-checked into the
+  backbuffer window — the draw side of the FUN_00440a2d stager),
+  and (c) FUN_00401010 = a 9-sprite RADAR STAMP that WRITES INTO
+  the bank (5× downsample + 2:1 deshear of the 480×480 viewport at
+  the camera, into scratch sprites u32[0x454b00+4·set]..+8 — a
+  shipped-inert feature: those records are fmt-0 stubs with
+  gate=rows=0, LNK is identity on their ids, and no code ever
+  draws them; the TOT references in zones A–D render nothing).
+  Container grammar (§7j.36, 11/11 banks): u16[bank+0] = count
+  (→ write-only 0x46cdb8); directory entry = bank+2+4·id, sprite =
+  entry + u32[entry] SELF-relative; records = u16 fmt/dy/dx/gate/
+  rows + stream, all real terrain = fmt 7.
 - **LNK** = u16[8192] near-identity permutation (FORMATS-MISSION §5),
   loaded to the IN-IMAGE buffer 0x45cdda (0x8000) [7c §2]. Consumer
   FOUND (this pass): it is the **tile animation link table** — the
@@ -160,8 +176,11 @@ terrain crop but decoded while present.)
 `FUN_00401471(EAX=sprite_id, EDX=scratch, EBX=remap_table|0)`, ESI =
 bank (BIN), EDI = dest ptr in the 0x64000 buffer.
 
-- Directory: `sprite = bank + u32[bank + 4 + id*4]` (u32[bank+0] not
-  read here — likely count).
+- Directory (CORRECTED 2026-08-22, §7j.36 — asm 0x401477..0x401485):
+  `entry = bank + 4·id + 2; sprite = entry + u32[entry]` (the offset
+  is SELF-relative, exactly §5c's form; the old gloss
+  "bank + u32[bank + 4 + id*4]" was wrong in both base and anchor;
+  u16[bank+0] = the sprite count, never read by the blits).
 - Header (10 B): `u16 fmt; u16 dy; u16 dx; u16 gate(≠0 else return);
   u16 rows;` then the stream. Dest = EDI + dy*0x280 + dx (stride 640).
 - **fmt 0**: raw 64×64, transparency color 0, row stride 640
@@ -178,10 +197,11 @@ bank (BIN), EDI = dest ptr in the 0x64000 buffer.
   palette effect; per-frame remap tables come from `u32[0x4dd444 +
   frame*4]`.
 
-FUN_0040167a (water variant): same header, forces u8-RLE decode, each
-literal byte written as TXPAL1-relative lookup (bank 0x4edbfc)
-[secondary; ZONEA unaffected — the water sprite family stages ZERO
-cells in ZONEA/M1, §8.2].
+FUN_0040167a (water variant): same head but gate is READ AND IGNORED
+(0x4016ad — no test; rows 0 still draws nothing, §7j.36), forces u8-RLE
+decode, each literal byte written as TXPAL1-relative lookup (bank
+0x4edbfc) [secondary; ZONEA unaffected — the water sprite family stages
+ZERO cells in ZONEA/M1, §8.2].
 
 ## 5. FUN_0040798e — sprite-list enqueue (entities/overlays) [verified, asm-anchored]
 

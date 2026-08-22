@@ -3632,3 +3632,56 @@ Nudge-Worker: f461ea05-7a4d-4663-8955-eab1766f74a4
    §8.2 closure + §1/§3/§4/§5c refreshes; DESIGN S5 row.
 
 Nudge-Worker: 57ba8753-c3b0-471f-b960-5c67704d0b41
+
+## D101 — 2026-08-22: P4/RE — the [0x4ede1c] BIN-bank content consumers CLOSED: container grammar pinned (u16 count + SELF-relative u32 directory at +2, 11/11 banks); every content reader is a pixel blit; the 9-sprite radar stamp is the bank's only runtime writer and its output is NEVER drawn (vestigial) — the bank is render-only presentation, NO differ watch row (worker d6b238f4 claim 2)
+
+1. CONTAINER GRAMMAR (the unit's grammar deliverable): u16[bank+0]
+   = sprite COUNT (989..1872; → 0x46cdb8 — a WRITE-ONLY cell, no
+   .text reader; blits mask id&0xFFF instead); directory entry =
+   bank+2+4·id, sprite = entry + u32[entry] SELF-relative
+   (monotone, in-file, all 11 shipped banks incl. the B6/D5/E6
+   mission-extras; last record runs to EOF). Records = u16
+   fmt/dy/dx/gate/rows + stream; FUN_00401471 (0x401477..0x4014c8):
+   fmt≥4 u8-RLE, 1..3 u16-RLE, 0 raw, gate==0 → RETURN, rows==0 →
+   RETURN; FUN_0040167a reads gate but IGNORES it; FUN_0040179b =
+   +2 head, gate skipped. ALL real terrain sprites are fmt 7.
+   MISSIONVIEW §4's "bank + u32[bank+4+id*4]" CORRECTED to the
+   self-relative form (§5c was right); FORMATS §18's "MISSION*.BIN
+   follow the same layout" cross-ref UPGRADED assumed→VERIFIED.
+2. READER CENSUS (12 absolute [0x4ede1c] sites, complete): loaders
+   (0x41d670, .BIN leg 0x41dcc6/dd22, restore reload 0x446649/6fa)
+   + THREE content-reader clusters — the terrain loop (4 ESI loads),
+   the RESTAMP DRAWER FUN_00440dc2 (0x440d1c/0x440d93: type-DB word
+   → FUN_00401471 into the backbuffer; the draw side of the 7j.26
+   FUN_00440a2d stager), and FUN_00401010 = the 9-sprite RADAR
+   STAMP (the bank's ONLY runtime content writer).
+3. THE STAMP IS VESTIGIAL: [0x4edd94] := u32[0x454b00+4·set]
+   (bases {1168,1773,1592,1168,58,58,1773}); the 9 records are
+   fmt-0 stubs (6-B head + 4096-B image, span 0x1006) with
+   gate=rows=0 as shipped and forever (the stamp writes only
+   image+0x20.., a 5× downsample + 2:1 deshear of the 480×480
+   viewport at the camera, 3 pages/call × 3 calls); NOTHING ever
+   draws them — no reader of [0x4edd94]/0x454b00 besides the
+   stamp/boot, LNK is IDENTITY on all 63 family ids in all 7 zones,
+   and gate-0 short-circuits the blit. Zones A/B/C/D reference all
+   9 ids from TOT words (E/F/G none) — those tiles render NOTHING.
+   The stamp still runs every present (head of FUN_00401107) —
+   wasted writes, zero observable effect.
+4. §0b VERDICT (the unit's budget question): the bank is RENDER-
+   ONLY presentation — every content reader is a pixel blit, the
+   bank never feeds simulation state (get_z_pos reads .CGR, not
+   BIN; the type-DB words index INTO the bank, never the reverse),
+   and the only in-place writer reads the backbuffer and writes
+   never-drawn scratch. DECISION: NO differ watch row for the bank,
+   its directory, or 0x46cdb8 (write-only = below the emptiness-
+   rule threshold); the state surface stays the TOT words/type-DB
+   mirror rows (already covered). E-side needs only the 7j.35
+   seam list (u8-RLE + per-tile remap); the scratch family/stamp
+   need NOT be modeled.
+5. Deliverables: RE-EXW-SIM §7j.36 + 2 new + 2 rewritten ledger
+   rows (terrain bank; 7j.16 count gloss); MISSIONVIEW §1 census +
+   §4 directory/gate corrections; FORMATS §18 cross-ref upgrade.
+   registry_anchors green; manifest clean before AND after the
+   corpus probes.
+
+Nudge-Worker: d6b238f4-c0d3-4954-b02b-ede9b5eba5a4

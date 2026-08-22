@@ -4579,7 +4579,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | terrain-structure loader | FUN_004170a6 (call 0x416487 in the dispatcher FUN_00416458): ".TRT" section @staging buf 0x4dca0c; clears 250×0x20 @0x4cccf8; count→[0x46ccd4]; rec (canonical frame, active@0x4cccf8): active=1, state=1, frame=0, fire=0, hp=250+(250·mission)/27, x/y/z tiles; stamps tile 0x66 @byte[[0x4edd58]+x+y·w+z·w·h] + word 1 @word[[0x4ede20]+2(x+y·w+z·w·h)] (the .DAT/.TOT file volumes) | §7j.15 |
 | TRT anim/fire machine | FUN_00417264 (MissionShell @0x44807b, every frame): states 1 idle→2 alert (frames 0..7→TOT word frame+1)→5/6/7/8 aim S/N/W/E (octant vs nearest robot FUN_00417c00 dist<0x81)→FUN_00417698 fire at frame top + 4-frame muzzle (words 0x17..0x1E); 3/4 = death/settle; FUN_00417210(idx,n) = mirror word n+1; FUN_00417652 = frame remap 0xF→7, 6→0xE | §7j.16 |
 | TRT fire routine | FUN_00417698: lane test |lateral|<0x28 px + direction + ≤2 levels vs robot bank 0x4c69e4/0xA8; arms fire_ctr@+0xC; odd ctr → FUN_0041286f free slot → projectile type 0x66 (damage (d+1)·300) @0x4cc654+slot·0x22 {x,y tile·0x2000+0xF00, z<<0xD, +0x16=0x14, unit vx/vy}; structures never move | §7j.16 |
-| map volume loader | FUN_0041dc5a (MissionShell @0x447b3a): ".TOT"→[0x4ede20] (u16 W,u16 H header + 8 planes W·H u16 → [0x4eddec]/[0x4eddf0]/[0x4eddf4]), ".DAT"→[0x4edd58] (same header, u8 planes, >0x7F sanitized→0), ".CGR"→[0x4edd60], ".BIN"→[0x4ede1c] (word→[0x46cdb8]), ".MIN"→[0x4edd9c], .LNG/.LNK→0x45cdda, ".PAD"→999×8B slots 0x4e44f8 stamping 0xFF; FUN_0044661b = the EDITOR\ZONE restore reload; FUN_0041dbed/FUN_0041cd90 = path/section opener (handle 0x4eba20) | §7j.16 |
+| map volume loader | FUN_0041dc5a (MissionShell @0x447b3a): ".TOT"→[0x4ede20] (u16 W,u16 H header + 8 planes W·H u16 → [0x4eddec]/[0x4eddf0]/[0x4eddf4]), ".DAT"→[0x4edd58] (same header, u8 planes, >0x7F sanitized→0), ".CGR"→[0x4edd60], ".BIN"→[0x4ede1c] (u16[bank+0] = the sprite COUNT → write-only cell [0x46cdb8], §7j.36), ".MIN"→[0x4edd9c], .LNG/.LNK→0x45cdda, ".PAD"→999×8B slots 0x4e44f8 stamping 0xFF; FUN_0044661b = the EDITOR\ZONE restore reload; FUN_0041dbed/FUN_0041cd90 = path/section opener (handle 0x4eba20) | §7j.16 |
 | TOT materializer | FUN_00440a2d (caller FUN_00440dc2): 7×7 tiles × 8 z: TOT word≠0 ∧ DAT byte==0 → mirror word@0x4796bc = word + seen@0x4796cc; bridges the .TOT volume into the runtime mirror (how TRT word-1 stamps become visible) | §7j.16 |
 | map-click pick | FUN_00419943 (caller FUN_00410644 ← MissionShell @0x448021): rect list 0x4787c4/{center@+8/+0xC, w@+0x14} count [0x46ccd8] (written by renderer FUN_00403938) with octile cost FUN_0041ebf8; else screen→iso ((p−0xF0)·[0x4ede54])/0x1E0 + TRT scan; ret 0=ground / k+1=rect / (idx+1)\|0x2000=structure; FUN_00418a9f = empty stub | §7j.16 |
 | click order target | {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c written by FUN_00410644 (ground iso / rect / structure tile-center) AND by FUN_00409138 (command-record bit1, words@+7/+9/+0xB); readers FUN_00409138 ×6, FUN_0040af98 ×3, FUN_0040a56f/0xa7a1/0xace8/0xb615/0xa9ff ×2 each, FUN_00449c94 | §7j.16/§7j.17 |
@@ -4617,7 +4617,9 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | MRK word 3 | spawn z level (z = w3<<5 − 1) | 0x40d06d, 7c |
 | CGR/DB ptrs | DAT_004edd60 (CGR), DAT_004edd58 (DAT), 0x4796bc/cc (type DB 0x1E stride) | 0041e231, 00407e11 |
 | viewport cache | DAT_004ede24 36×36×12 B (screen off + tile deltas), count DAT_004ede28 | 00407e11, MISSIONVIEW §2 |
-| terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link | MISSIONVIEW §1/§4 |
+| terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link; §7j.36 census: content readers = the terrain loop (0x40692e/0x4069f5/0x406a40/0x406b15) + the restamp drawer FUN_00440dc2 (0x440d1c/0x440d93, type-DB word → FUN_00401471 into the backbuffer) — pixel paths only | MISSIONVIEW §1/§3/§4, §7j.36 |
+| BIN container grammar | u16[bank+0] = sprite COUNT (→ write-only cell 0x46cdb8, no .text reader; blits mask id&0xFFF); directory entry = bank+2+4·id, sprite = entry + u32[entry] SELF-relative (monotone, in-file, 11/11 banks incl. B6/D5/E6); record = u16 fmt@+0/dy@+2/dx@+4/gate@+6/rows@+8 + stream; FUN_00401471: fmt≥4 u8-RLE, 1..3 u16-RLE, 0 raw, gate==0 → RETURN, rows==0 → RETURN; FUN_0040167a reads gate but IGNORES it; FUN_0040179b = +2 head, gate skipped; all real terrain sprites fmt 7; MISSIONVIEW §4 "bank + u32[bank+4+id*4]" CORRECTED to the self-relative form | §7j.36 |
+| BIN 9-sprite scratch family + stamp | [0x4edd94] := u32[0x454b00+4·set] @0x4479b4 — bases {0x490,0x6ED,0x638,0x490,0x3A,0x3A,0x6ED}; records = 6-B stub {fmt=0,dy=64,dx=64} + 4096-B image (span 0x1006), image[0..3]=0 → gate/rows 0 → UNDRAWABLE forever (stamp never writes image[0..0x1F]); FUN_00401010 (0x401010/0x40108b, head of the PRESENT FUN_00401107, every present) downsamples the 480×480 viewport 5× and deshears (2:1) 9 tiles at image+0x20 row-stride 0x40 page-step 0x806 — but NO code ever draws them (LNK identity on all 63 ids ×7 zones; [0x4edd94]/0x454b00 sole readers = the stamp/boot); A/B/C/D TOTs reference all 9 ids (E/F/G none) and render NOTHING (gate-0 return) — VESTIGIAL | §7j.36 |
 | dither noise bank | 0x4e6ed8 (2048 B .bss ring, cursor 0x4ddb30), bytes {0,0xFF}, `RandB()&3==0` 25%; boot fill MissionShell 0x447b13, churn 15 B/frame 0x448147 | §7i |
 | dither blit | FUN_00401ae6(y,h,x,w,src_off,mode): mode 0 = rep-movsb full copy (dead/unoccupied boxes), mode ≠ 0 = nonzero-only overlay (hit flash); reseed `RandB()&0x1ff` when src_off+96 ≥ 0x800; seed `(RandB()&0x7fff)/15` clamp ≤ 0x7f5 | §7i |
 | SFX bank→name map (COMPLETE) | 202 durable assignments, zero unnamed durable cells: mission set 0x4edf60..0x4edfbc+ELEV/BEEP/TEXTBOX = 27 registers by FUN_0043a1d3 (MIDIGUN dup at 0x4edf70 quirk), screen sets MENU1/2+BEEP1/4/5/7+TEXTBOX1+DOOROPEN/DOORCLSE (0x4edfc0..0x4edfec, cells reused per screen; 0x4ee00c/0x4ee010 = the debrief MENU1/2 alias), mission-extra 0x4edfe0..0x4ee008 (BEAMIN/THROW/BIOFIRE/PEXPLODE/CACODETH/SQUAWK/GRUNT1..3), speech 0x4ee014+8i 53 records {A,B} (95 files, 11 empty +4 slots, pair slot-order flip at SPCH16); GFX 0x46af2c..0x46af54 + 0x4eddXX/0x4edeXX/0x46cbXX families + G-variant picks (language index 0x4eba1c==1, edition gate [0x4edd8c]>4 → GRILLA family); palettes SHARE role cells (0x4edbf8 current-screen PAL ×6 names, 0x4edbfc TXPAL1..3, 0x4edc00 DARKPAL family); full dump ghidra-project/exw-banknames.txt | §7j.30 |
@@ -5409,6 +5411,127 @@ sprite-range branch in the chase path (FUN_0040167a/TXPAL1),
 terrain mirror rows (water words already covered by the mirror
 row) — nothing new to watch. The 0x12d/0x12e/0x12f flush
 semantics may hard-code water-ON.
+
+## 7j.36. THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS — container grammar pinned (u16 count + SELF-relative u32 directory at +2); every content reader is a pixel blit; the 9-sprite radar stamp is the only in-place writer and its output is NEVER drawn (vestigial); the bank is render-only presentation (2026-08-22, worker d6b238f4 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; DGROUP bytes + corpus banks/TOTs/LNKs re-read read-only, scratch /tmp/opencode)
+
+Closes the 7j.16 residue (NEXT item: the [0x4ede1c] bank's CONTENT
+readers, the sprite record grammar, and the §0b state-vs-presentation
+question). All [verified] asm/DGROUP/corpus unless tagged.
+
+1. **Complete [0x4ede1c] traffic census (12 absolute .text sites —
+   nothing else references the cell):**
+   - LOADERS (writers of the pointer): 0x41d670 (FUN_0041dc5a arena
+     install), the `.BIN` leg 0x41dcc6/0x41dd22 (tag 0x4587e8 via
+     staging 0x4dca8c; `u16[bank+0] → 0x46cdb8` @0x41dd37), and the
+     FUN_0044661b EDITOR\ZONE restore reload 0x446649/0x4466fa with
+     the same store @0x446702. **0x46cdb8 is WRITE-ONLY in .text**
+     (2 writer sites, zero readers): the sprite count is stored but
+     no code ever bounds-checks an id against it — the blits mask
+     `id & 0xFFF` instead (0x401477/0x40167a/0x4017e6 family).
+   - CONTENT readers, exactly three clusters:
+     a. **FUN_00403938 terrain loop** — 0x40692e/0x4069f5/0x406a40/
+        0x406b15 load ESI for the FUN_00401471/FUN_0040167a blits
+        (MISSIONVIEW §3; 0x4069f5 is the 4th site, added to the §1
+        census of three).
+     b. **FUN_00440dc2 = the scroll/camera RESTAMP DRAWER** —
+        0x440d1c/0x440d93: `FUN_00401471(EAX = u16[type-DB word @
+        0x4796bc+…], EBX = 0 remap, EDI = dest)` with the dest
+        bounds-checked into the backbuffer window
+        ([0x4ede18] .. +0x5a000) — the draw side of the 7j.26
+        restamp stager FUN_00440a2d (renders a type-DB word back
+        into the backbuffer on scroll; pixel path only).
+     c. **FUN_00401010 = the 9-sprite RADAR STAMP** (item 3) — the
+        ONLY writer into bank content at runtime.
+2. **Container grammar — instruction-exact AND corpus-verified on
+   all 11 shipped MISSION*.BIN banks** (7 zone-level + B6/D5/E6):
+   - `u16[bank+0]` = sprite COUNT (A/D 1450, B/G 1872, C 1743,
+     E 1455, F 989, B6/D5 1443, E6 1120) — this is the word the
+     loader stores to 0x46cdb8.
+   - **Directory: entry = bank + 2 + 4·id; sprite record =
+     entry + u32[entry] (SELF-relative).** Verified monotone with
+     every entry in-file in all 11 banks; the last record runs to
+     EOF (tails 10..1835 B are the final record's own extent).
+   - Record grammar (normal sprites): u16 fmt@+0, dy@+2, dx@+4,
+     gate@+6, rows@+8, then the stream (dest = EDI + dy·0x280 + dx).
+     FUN_00401471 dispatch (0x401487..0x4014c8): fmt ≥ 4 → u8-RLE;
+     fmt 1..3 → u16-RLE; fmt 0 → raw; **gate == 0 → RETURN (draws
+     nothing); rows == 0 → RETURN.** FUN_0040167a parses the same
+     head but **reads gate and IGNORES it** (0x4016ad, no test) —
+     rows 0 still draws nothing; FUN_0040179b takes the +2 view
+     (fmt skipped), skips gate, rows@+8, always-u16-RLE decode.
+   - **MISSIONVIEW §4 CORRECTED:** "sprite = bank + u32[bank +
+     4 + id*4]" is wrong in both base and anchor. The correct form
+     (asm 0x401477..0x401485, the same `4·id+2` idiom at
+     0x40108b/0x40167f/0x4017e6 + 13 more sites of the generic
+     bank-draw family) is the §5c form: entry = bank + 4·id + 2,
+     sprite = entry + u32[entry]. GAMEGFX .BIN banks share it
+     (FORMATS §18 cross-ref now VERIFIED, not assumed).
+   - fmt census [corpus]: every zone bank carries fmt 7 (u8-RLE)
+     for ALL real terrain sprites + EXACTLY 9 fmt-0 records (the
+     scratch family, item 3). gate==0 ≡ rows==0 id sets: A 83,
+     B 47, F 40 (the 9 + assorted unused slots — A: {212, 641,
+     662, 859–872, 1134–1142, 1168–1176, 1221–1246, 1357–1378};
+     B: {575, 704–706, 1362–1372, 1435–1442, 1503–1512, 1772–1781,
+     1801, 1869–1871}; F: {58–66, 448, 458, 758, 961–988}) —
+     inert-by-construction sprite slots (draw nothing via 01471;
+     most also 0179b-dead via rows 0).
+3. **The 9-sprite SCRATCH family + the stamp (the bank's only
+   runtime mutation — and it is VESTIGIAL):**
+   - Set table: `[0x4edd94] := u32[0x454b00 + 4·set]` @0x4479b4
+     (mission-boot reset; set = RAW [0x4edd8c] 1..7) — bases
+     {0x490, 0x6ED, 0x638, 0x490, 0x3A, 0x3A, 0x6ED} = sprite ids
+     {1168, 1773, 1592, 1168, 58, 58, 1773}; +9 always ≤ count.
+     [0x4edd94] has exactly 4 refs total: the boot write + 3 reads
+     inside the stamp itself.
+   - Family record layout [corpus]: a 6-byte stub {fmt=0, dy=64,
+     dx=64} + a 4096-B image — span-to-next exactly 0x1006, i.e.
+     the data starts at +6 (NOT the 10-byte head; in the §4 view
+     gate/rows = image bytes [0..3] = ZERO as shipped) — so the
+     family is UNDRAWABLE by every blit, and stays so: the stamp
+     never writes image[0..0x1F]. Images are ~empty (24..39
+     nonzero bytes of 4096, none in the first 0x20).
+   - **FUN_00401010** (entry 0x401010, helper 0x40108b): runs at
+     the head of the PRESENT function FUN_00401107 (call 0x401107;
+     callers 0x447ca0/0x448099 = MissionShell) on EVERY present.
+     It samples the backbuffer at the camera ([0x4ede18] + 0xa040
+     + the §5d iso sub-tile cam offset), source grid +5 px in x
+     and +0xc80 (5 rows) in y — a 5× downsample of the 480×480
+     viewport — and writes 1 byte per row step at dest row stride
+     0x40 into THREE consecutive sprites per call at image+0x20
+     (page step 0x806 lands exactly at image(K+i)+0x20 for
+     i = 0,1,2 — records 0x1006 apart; verified arithmetically),
+     the outer column loop stepping +1 with an extra +0x40 every
+     2nd iteration = dest (row ≈ j/2, col 32+j) — a 2:1 SHEAR, the
+     iso→top-down deshear. Three calls at source +0xa0 steps
+     (ids +0/+3/+6, 3 sprites each) tile the whole window into
+     the 9 sprites: a 3×3 radar-style capture, dest footprint
+     cols 32..63 rows 0..46 of each image.
+   - **THE OUTPUT IS NEVER DRAWN [complete census]:** no [0x4edd94]
+     reader besides the stamp; 0x454b00 has no other reader; the
+     terrain loop could only reach the family via TOT words → LNK,
+     and **LNK is IDENTITY on all 63 family ids in all 7 zones**
+     (self-map, no cycle — static); gate/rows stay 0. Zones A/B/C/D
+     DO reference all 9 family ids from TOT plane words (E/F/G
+     reference none) — those tiles stage/mirror normally but the
+     blit returns at gate==0: **they render NOTHING**. The stamp +
+     family is a shipped-inert radar/in-world-monitor capture
+     (the stamp still runs every present — wasted writes, zero
+     observable effect).
+4. **§0b STATE-vs-PRESENTATION verdict — the bank is RENDER-ONLY
+   presentation; NO differ watch row:**
+   - every content reader is a pixel blit into the backbuffer
+     (2a/2b); the bank never feeds simulation state (get_z_pos
+     reads .CGR heights, never BIN; the type-DB words index INTO
+     the bank, never the reverse);
+   - the only in-place writer (the stamp) reads the backbuffer and
+     writes never-drawn scratch — no state coupling;
+   - 0x46cdb8 is write-only (below the emptiness-rule threshold —
+     no observable divergence can originate there).
+   DIFFER consequence: no watch row for the bank, its directory, or
+   0x46cdb8; the state surface stays the TOT words / type-DB mirror
+   rows (already covered). E-side: the terrain blit seam is exactly
+   the 7j.35 list (u8-RLE decode + per-tile remap selection) — the
+   scratch family and the stamp need NOT be modeled at all.
 
 ## 9. Open items (next slices)
 
