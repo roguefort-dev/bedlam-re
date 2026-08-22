@@ -1,5 +1,100 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W12-S4-prep THE E-SIDE
+    IMPACT-APPLICATION + DESTROY-RESOLVER PRODUCER unit COMPLETE;
+    RE 7j.38/7j.39 by worker 460d294e claim 2, commits dcc8865 +
+    acf09ff; engine+tests built by worker d57a4dec claim 2 but
+    left uncommitted by session death — ADOPTED + INDEPENDENTLY
+    RE-VALIDATED + COMMITTED + PUSHED by continuation worker
+    3e93a4b1 claim 2, D104): the E-side destroy family is live
+    in bedlam-core::destroy — the mission-load STAGING (the .BDG
+    ≤282-row EOF-exact parser pinned against all 37 shipped
+    files / the .POS 2000×16-B instance list with the
+    footprint+hp re-stamp / the .TRT turret bank, host-seamed
+    per the D51 pattern; the 0x7d2/0x7d3 hazard stamper + the
+    TOT-mirror/seen banks), the two RESOLVERS (FUN_0041a894
+    objects incl. the platform 0x7d4 destroy/weaken entry +
+    FUN_0041bc1c structures with the rubble stamp), the destroy
+    TAIL (objective notify → the GER gate → the +0x46/+0x4A
+    template RESTORE → the five-effect loop with the §7j.38
+    draw table 8/8/8/8/8/0/0/72/9 → the score award → the four
+    perimeter CHAIN walks with the §7j.39/5 corrected geometry),
+    the widened 20-kind debris stager (the 11 seq tables + the
+    LRU allocator + the scorch classes), the splash stager +
+    the water-z probe, the script blast FUN_004244a1 (the robot
+    box-lane), the tile-0x62 trap lane, both disbursers (the
+    §7j.14 0xF-persist / 0x65-clear corrections), and the
+    weapon-tick IMPACT LANES wired in the §7j.39/2 call orders
+    (bullets/shell/0x24/0x29 floors — 0x29 REVERSED, the
+    artillery burst pairs + the k6/k11 gates, the mortar 3-cell
+    at the post-halving offsets, the class-0 quadrant body, the
+    projectile type-1/2/3 branches). NONE of it enters
+    state_hash (the W6 split — debris/splash are T3 rows).
+    The D104 DIFFER CONTRACT: the armor-pad-reads/
+    typedb-fade-byte rows canonicalize BOTH channels to the
+    last-nonzero prefix (E's lazily-materialized +0x18 bank vs
+    the full-size guest grid — identical content now
+    canonicalizes identically; keeps the widened scorch writers
+    differ-safe). VERIFIED: destroy_gate 16/16 (synthetic
+    CI-safe core + the corpus BDG census row), weapon_fire_gate
+    28/28, S0/S1/S2 chains BYTE-IDENTICAL (8901789a88cf61fe /
+    1c4e7b4c9d9b0947 / 809f4961b7757da4 — the no-inject
+    invariant), S3 re-pinned ONCE e29f76f5585401e1 BEFORE any
+    O1 S3 capture exists (D103's dbx-plan T2-tier unit precedes
+    a live S3), workspace tests green, fmt+clippy clean,
+    registry_anchors green, manifest clean both sides.
+    E-GAPS documented in D104/7j.39/8 (the splash tick body,
+    the platform spread ring + creep, the trigger producers,
+    the effects bank, the critter lane, the debris physics, the
+    objective at-zero arm tail, all SFX). NEXT: the W12-S4
+    S4.scen + canonical-chain unit (item 2) — volleys onto
+    staged ZONEA destructibles + the destroy-family dump rows.
+
+  - OPEN 2026-08-22 (P4.2/W12-S3 THE S3.SCEN + CANONICAL-CHAIN
+    unit COMPLETE; engine+tests by worker 0bef7bae claim 2,
+    commits 774eed4 + ae8be6b + a928ad8 + af5c2b8; the
+    differ/registry leg left uncommitted by session death —
+    ADOPTED + VALIDATED + COMPLETED by continuation worker
+    16ebe0c4 claim 2, commits 51fa937 + f211684 + d407ca6,
+    D103): the weapon-fire T2 slice is live END-TO-END on E +
+    the differ + the plan compiler. (a) EXD twins PINNED and
+    REGISTERED (ghidra-project/exd-projbank.txt): weapon-anim
+    bank 0x980d4 (free-slot finder FUN_00023295 bound
+    0x5460 = 400·0x36 EXACT; tick twin FUN_000212f2 with the
+    0x17 3-clone split) + projectile bank 0x10e174 (tick twin
+    FUN_00022a52 50-slot walk; the +0x1A clamp-0..7 / +0x1E
+    −1-countdown tail words beyond the 7 E-modeled fields —
+    O1-only coverage surface parsed on BOTH channels, a live
+    tail is a finding, never silence). (b) the COMMAND payload
+    off-by-one fixed (+7/+9/+0xB — the ae8be6b decompile
+    re-verification). (c) grammar v1.3 `loadout` staging key
+    through stage_robot_weapons (D51/markers discipline;
+    dbx-plan RECORDS the seam in _e_staging, never fabricates —
+    f211684). (d) canonical emits BOTH banks as u32 count + the
+    FULL records (the record field order IS the guest layout;
+    out of state_hash — the W6 split); S3.scen = 8 COMMAND
+    volleys over 133 records / 132 frames covering every
+    inline-spawn class (artillery 9/0xA/0xB, mines 0xF/0x13,
+    grenades 0x1A/0x1F, rocket 0x24) + cadences, the artillery
+    disarm, the per-record ammo gate, the auto-rearm cascade,
+    the full spawn/active/free lifecycle; bullets/shell/0x17/
+    homing are documented E-gaps (their producers are the
+    unmodeled AI-order families + the mortar — live records
+    surface as the differ's coverage class). Chain
+    49193732e6dbc546 pinned, double-run byte-identical.
+    (e) differ normalizes both banks on BOTH channels through
+    the same field walk (E count+records fail-loud; O1 the bare
+    span); differ_gate S3 = cross PASS-WITH-NOTES (exactly the
+    2 E-only rows, zero field gaps, zero T2 diffs). S0/S1/S2
+    chains re-asserted BYTE-IDENTICAL (the no-inject invariant
+    holds). VERIFIED: workspace tests green, fmt+clippy clean,
+    registry_anchors green, manifest clean both sides. NEXT: the
+    W12-S4-prep E-side impact-application + destroy-resolver
+    producer unit (queued item 2) — the 7j.25/7j.32 decodes are
+    complete upstream, the engine work is staging + impact +
+    restore + effects; a live S3 capture additionally needs the
+    dbx-plan T2-tier unit (it still refuses T2 scenarios).
+
   - OPEN 2026-08-22 (P4.2/W12-S3-prep THE E-SIDE WEAPON-FIRE
     COMMAND PRODUCER unit COMPLETE, worker 95ab9206 claim 2,
     commits 5cf5078 + 5f2963a + 642be37, D102, engine+tests):
