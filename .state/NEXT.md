@@ -1,29 +1,42 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/DH-G0-channel] O1 CAPTURE-CHANNEL RE-PIN (unblocks the W4
-   live piece; D79 in DECISIONS + RUNTIME.md "DH-G0 channel audit"):
-   the pinned flathub DOSBox-X 2026.08.02 has NO debugger (inert
-   debuggerrun/-break-start) and log-only JS, so decide + land the
-   replacement channel. Options: (a) self-build DOSBox-X at the
-   pinned upstream commit e522642 (the binary's own banner commit;
-   autotools --enable-sdl2 --enable-debug=heavy inside runtime/,
-   D19 discipline: deliberate pin + smoke gate + record in RUNTIME.md;
-   conf pins all carry over) — DEFAULT if no operator input; (b)
-   bounded GameLink GC4 feasibility spike (read src/gamelink/ at the
-   pinned commit + a host shared-memory client probe; question: can it
-   read DPMI/flat linear addresses 0x10000/0x80000 objects?); (c)
-   promote O2 ptrace (W11) to primary. Unit bounds: decision + build/
-   probe + pin the debugger command surface (BPINT/BPLM/D forms, the
-   INT3-at-_entry 0x5fbb0 linear-conversion proof) as RUNTIME.md facts
-   + wire the chosen channel's DBXCAP emitter (the W4 stitcher is
-   channel-agnostic and landed). NO game diff yet — the live game run
-   stays interactive-gated (desktop session; dosbox-harness.sh
-   `diff run` FORCE_DIFF_RUN=1 gate) for the NEXT unit (S0 live +
-   DH-G1 determinism). Manifest checks bracket any corpus-touching
-   run; the pinned binaries stay hash-recorded (oracle rule).
+1. [P4.2/DH-G0-live] S0 LIVE + DH-G1 DETERMINISM (INTERACTIVE-GATED,
+   operator/desktop session; the D80 channel is proven headless —
+   RUNTIME.md "DH-G0 channel re-pin" + "D80 channel probe results"):
+   (a) `tools/runtime/dosbox-harness.sh diff stage
+   tools/diffharness/scenarios/S0.scen` then FORCE_DIFF_RUN=1 `diff
+   run` (or `diff capture` once a capture-plan.json exists) in a
+   desktop session; (b) the PMODE FLAT-SELECTOR PROOF: INT3 at EXD
+   _entry 0x5fbb0 (BPINT 3), SELINFO/LDT to pin the flat CS/DS
+   selectors, then BP at the present-tail linear 0x5a6eb (EXD frame
+   counter 0x1195f0++ after the CALL FUN_00010670 — the W1-pinned S0
+   trigger); (c) author the S0 capture-plan.json (pre_commands arming
+   the frame-tail BP + resolved T0/TS watch addr/len from
+   watches.toml — extent EXPRESSIONS need the loader statics: map
+   w/h 0x1074b8/0x10748c read first, then resolve w*h forms; counts
+   from 0x11958c/0x119554/0x11949c); (d) first golden S0 dump × 2 runs
+   → identical chains = DH-G1 green (record fingerprints; dumps stay
+   runtime/-only); (e) cycles=fixed 60000 calibration (audio dropouts?
+   deliberate re-pin per D19). Manifest checks bracket any
+   corpus-touching step.
+2. [P4.2/W5] THE INJECTOR (unattended): extend the scenario grammar v1
+   with the DESIGN §5 vocabulary (keystore/order/command/pad steps →
+   runner-side writes) + the SMV linear-write emitter in dbx-capgen.py
+   (verified primitive; the O1 addr form is the EXD linear address —
+   same as the watch reads) + the capture-plan compiler (scenario
+   tiers → resolved watch list; needs the extent-expression resolver:
+   w/h forms, count*N forms — read the count cells at plan-build time
+   or per-frame at capture time). Testable headless against the probe
+   (SMV into BDA + readback — no game). Emits injection_applied=1
+   frames in the W3 dump.
 
 ## Backlog (not yet started)
+- [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
+  canonical records in the W3 schema, T0/T1 field maps first) — the E
+  side of the differ.
+- [P4.2/W7] THE DIFFER: normalizer + DESIGN §6 comparison modes +
+  report writer + fingerprint manifest.
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
    animator map, 7×5 grid correction, latch census, the 0x4c71f4
    pass head). CLOSED by 7j.26: the [0x4ede24]/[0x4ede28] "7×7 screen-address
@@ -152,6 +165,29 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/DH-G0 the O1 CAPTURE-CHANNEL RE-PIN unit COMPLETE
+  (worker 4deb0081 claim 1, commits 395180b + d858728 + 1e7392f, D80).
+  DECISION (a): self-built DOSBox-X at e522642 with --enable-debug=heavy
+  (+ --disable-sdlnet --disable-avcodec: host gaps, harness-irrelevant),
+  repo-local under runtime/, C_DEBUG+C_HEAVY_DEBUG verified in config.h,
+  binary sha256 24f71092… recorded; flathub pin stays as the D29 sandbox
+  baseline; GameLink + O2-ptrace rejected as primary (D80 rationale).
+  CHANNEL PROVEN HEADLESS (no game): tools/runtime/dbx-capgen.py — the
+  PTY driver with count-based [log]-logfile acks, a mandatory drain
+  thread, and a 1.0s post-ack settle (the three empirically-bisected
+  gotchas = RUNTIME.md "D80 CHANNEL GOTCHAS") — wired as
+  dosbox-harness.sh `dbgprobe` (unattended-safe; GREEN: 3 frames × 3
+  watches; frame1 pre-boot zeros → frame2 POST IVT f000:ca60 + BDA
+  COM1/COM2/LPT1 → frame3 DOS-kernel vectors 0070:000e) and `diff
+  capture` (FORCE_DIFF_RUN=1 interactive gate; consumes the staged
+  capture-plan.json = the live unit's deliverable). BPINT/BPLM/
+  MEMDUMPBIN/RUNWATCH/SMV all behaviorally verified (SMV linear
+  write+readback pins real-mode linear==seg<<4; BPLM arm+fire on the
+  next write). RUNTIME.md D80 sections + DECISIONS D80 + watch skeleton
+  updated; live-unit checklist = pmode flat-selector proof (INT3@entry
+  0x5fbb0 → SELINFO/LDT → present-tail BP@0x5a6eb) + DH-G1 double-run
+  + cycles calibration. Manifest verified. PUSHED 1e7392f. Queued:
+  DH-G0-live (interactive-gated) + W5 injector (unattended).
 - 2026-08-22: P4.2/W4 the DOSBOX-X RUNNER unit COMPLETE via the ticket's
   split clause (worker d35c7066 claim 1, commits d9a3f77 + 19c3bdf, D79).
   (a) unattended-safe slice LANDED: dosbox-harness.sh `diff

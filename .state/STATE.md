@@ -1,3 +1,37 @@
+  - CLOSED 2026-08-22 (P4.2/DH-G0 the O1 CAPTURE-CHANNEL RE-PIN unit
+    COMPLETE, worker 4deb0081 claim 1, commits 395180b + d858728 +
+    1e7392f, D80): DECISION (a) — O1's instrument = REPO-LOCAL
+    SELF-BUILT DOSBox-X at upstream e522642 (the flathub pin's own
+    banner commit), configured --enable-sdl2 --enable-debug=heavy
+    --disable-sdlnet --disable-avcodec (host lacks SDL2_net; ffmpeg 8
+    broke upstream avcodec code; neither touches the harness), built
+    out-of-tree under runtime/ (src/ 474M checkout + build/, binary
+    144MB sha256 24f71092..., C_DEBUG+C_HEAVY_DEBUG verified in
+    config.h; host toolchain recorded as part of the pin: gcc 16.2.1,
+    SDL2 2.32.70, ncursesw 6.6, autotools). Flathub runtime STAYS as
+    the D29 sandbox baseline. GameLink (b) rejected: client-poll
+    real-mode oriented, unproven DPMI model = a second research
+    project; O2-ptrace (c) rejected as primary: abandons the DOS-side
+    oracle. CHANNEL PROVEN HEADLESS (no game, dbgprobe mode):
+    -break-start prompt over a host PTY (the isatty gate),
+    BPINT-8/BPLM/RUNWATCH/MEMDUMPBIN/SMV all behaviorally verified —
+    incl. SMV linear write + readback (real-mode linear==seg<<4) and
+    BPLM arm+fire; 3-frame probe transcript shows real state deltas
+    (pre-boot zeros → POST IVT/BDA COM1/COM2/LPT1 → DOS-kernel
+    vectors 0070:000e). Driver tools/runtime/dbx-capgen.py (PTY +
+    count-based [log]-logfile acks) wired into dosbox-harness.sh as
+    `dbgprobe` (unattended-safe) + `diff capture` (FORCE_DIFF_RUN=1,
+    interactive-gated, needs the staged capture-plan.json). THREE
+    CHANNEL GOTCHAS pinned + baked into the driver (RUNTIME.md "D80
+    CHANNEL GOTCHAS"): the [log] logfile is REWRITTEN at debugger init
+    (count-match acks, never seek-tail), a permanent PTY drain is
+    mandatory (ncurses redraws fill the ~64KB pty buffer → wrefresh
+    deadlocks the debugger loop), 1.0s post-ack settle before each
+    send (0.01s-gap input stalls tens of seconds). STILL OPEN (the
+    live interactive unit): pmode flat-selector proof (INT3 at EXD
+    _entry 0x5fbb0, SELINFO/LDT, present-tail BP at 0x5a6eb), cycles
+    calibration, first golden S0 dumps + DH-G1 double-run determinism.
+    Manifest verified. PUSHED 1e7392f.
   - CLOSED 2026-08-22 (P4.2/W4 the DOSBOX-X RUNNER unit COMPLETE via the
     ticket's split clause, worker d35c7066 claim 1, commits d9a3f77 +
     19c3bdf, D79): (a) unattended-safe slice — dosbox-harness.sh `diff
@@ -11,15 +45,11 @@
     (self-contained SHA-256, FIPS vectors); synthetic replay fixture
     decode-tests pin chain vector 1685e11311ae5b21; workspace
     fmt/clippy/tests green; MANIFEST verified around the corpus read.
-    (b) live piece [BLOCKED]-on-DH-G0-channel-repin — the D79 audit
-    (3 headless probes + binary strings + upstream source at banner
-    commit e522642) proved the pinned flathub DOSBox-X 2026.08.02 has
-    NO integrated debugger (debuggerrun/-break-start inert) and
-    log-only JS (console.log -> [log] misc, enable misc=true); D29's
-    debugger-presence claim corrected in RUNTIME.md; DESIGN §3/§9/§11
-    + watch skeleton amended. Queue head: the channel re-pin unit
-    (option (a) self-build --enable-debug=heavy default, (b) GameLink
-    spike, (c) O2 ptrace; then the interactive S0 live run + DH-G1).
+    (b) live piece [BLOCKED]-on-DH-G0-channel-repin — RESOLVED by the
+    D80 unit above (channel exists; live run stays interactive-gated).
+    D79 audit facts (flathub: no debugger, log-only JS; [log] misc
+    gate) stand recorded in RUNTIME.md; DESIGN §3/§9/§11 + watch
+    skeleton amended.
   - CLOSED 2026-08-22 (P4.2/W3 the DUMP SCHEMA unit COMPLETE, worker
     6f14cea1 claim 1, commit fca6657): the DESIGN §3 dump format
     implemented in the zero-dep crate — tools/diffharness/src/dump.rs
