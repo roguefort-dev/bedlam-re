@@ -2799,3 +2799,55 @@ BEDLAM.EXD -noanalysis` probe passes (EXDInputTwin{,2,3,4}.java).
    pad-slot op.
 
 Nudge-Worker: ef11271c-539d-4331-9689-ffc84b2848ee
+
+## D84 — 2026-08-22: the scripted-menu-walk driver lands (W5-walk): stop-indexed walk rows, arm-at-walk-end, resolve_at=anchor
+
+Worker 845abdc5 claim 2 (queue item 2; commits 59ec9a5 + b67dcaa).
+Design first (RUNTIME.md "W5 walk driver"), implementation follows.
+
+1. THE STOP MODEL (derived from pinned facts; RUNTIME.md section):
+   the BPLM boot trap on the frame-counter cell 0x1195f0 doubles as
+   the walk driver — one stop per counter-writing screen frame. A
+   walk row applied at stop i (SMV between the INC and the next loop
+   input read) becomes screen frame i+1's input. Keystore writes
+   re-arm per input (the AnyKeyWait twin FUN_00030792 consumes the
+   byte on read; polling menus need explicit 0 releases). The anchor
+   BP CS:0005A6EB arms only AT THE LAST WALK STOP (BPDEL * drops the
+   BPLM first) — mission-start detection with no stop-type ambiguity
+   during the walk. Walk rows are plain writes only (command ops are
+   mission-phase seams).
+2. resolve_at=anchor FIXES A LATENT D81 GAP: the loader statics (map
+   w/h 0x1074b8/0x10748c, TOT/DAT/claim pointer cells) are
+   MISSION-load values; the legacy arm-stop read (first post-boot
+   counter write = an early pre-mission screen) reads pre-mission
+   bytes, so len exprs (4+16·w·h, ...) evaluated from garbage.
+   dbx-plan now emits "resolve_at": "anchor" for ALL plans and capgen
+   reads the resolve cells at the anchor stop (mission start) — S0/S1
+   regenerated; legacy plans keep the arm position (dbgprobe flow/
+   inject unchanged, regression-green).
+3. GRAMMAR/COMPILER: walk-phase keystore steps compile to stop-indexed
+   rows (boot at the accept stop, Advance consumes stops, runaway
+   guard 1M); order/pad/command refused in walk phase ("not menu-walk
+   steps"); the walk_watches calibration trio (walk-mode/zone/mission)
+   is registry-derived (anti-ghost holds for calibration rows).
+   S0W.scen + capture-plans/S0W.json committed — the walk schedule is
+   a STRUCTURAL DRAFT; stop indices calibrate at the first live
+   session via the transcript's per-stop `# walk stop N <id> <hex>`
+   comments (then the schedule is pure data).
+4. VERIFICATION: `dbgprobe walk` GREEN headless (probe conf, NO game;
+   walk loop + stop indexing incl. a pure-skip stop + write-then-read
+   calibration notes + arm-at-walk-end + the anchor-position resolve
+   feeding expr lens); dbgprobe gate/flow/inject regression-GREEN;
+   52 diffharness tests (4 new walk tests), workspace fmt+clippy
+   clean. THE PAD STEP KEEPS ITS OWN UNIT: the capgen runtime
+   pad-slot read op stays out of scope deliberately (needs the
+   §7j.20 pad census semantics; S6 will pull it).
+5. WHAT THIS MAKES POSSIBLE: S0/S1 captures unattended-reproducible
+   with byte-identical chains (frame-counter/RNG menu churn becomes
+   script-determined, not operator-timing-dependent) — DH-G1's
+   headless form. Known limits recorded in RUNTIME.md (counter-silent
+   screens are transparent; a schedule overrunning into the mission
+   anchors mid-mission, detectable via watch values; queued SMV
+   relies on acks as before).
+
+Nudge-Worker: 845abdc5-ded1-4499-9286-85bbebcccfdc

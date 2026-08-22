@@ -1443,7 +1443,7 @@ mod tests {
             "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\norder 1 2 3\n",
             "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\npad 3\n",
             "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\ncommand 01 02\n",
-            // walk-phase injection (the scripted menu walk) is future work
+            // walk-phase keystore with a cleared alias must name the gap
             "scenario = X\ntiers = T0\nframes = 4\nkeystore 0x1f=1\n",
         ] {
             let scen = Scenario::parse(src).unwrap();

@@ -442,6 +442,20 @@ differ come before any new scenario depth.
    those steps fail compilation naming the seam until the EXD input/
    command twins are pinned (the walk driver unit follows the keystore
    alias). `dbgprobe inject` proves the machinery headless (no game).
+   **W5-walk ADDENDUM 2026-08-22 (D84):** the scripted MENU WALK
+   driver LANDED + headless-verified (`dbgprobe walk`, no game). The
+   four §5 seam aliases were closed by the input-twin census (D83), so
+   walk-phase KEYSTORE steps now compile to stop-indexed plan rows —
+   one stop per counter-writing screen frame (the BPLM-on-frame-counter
+   boot trap doubles as the walk driver), SMV writes re-armed per input
+   (AnyKeyWait consumes on read), mission-start detection = the anchor
+   BP armed at the LAST walk stop. `resolve_at=anchor` moves the
+   loader-static reads to the mission-start stop (they are mission-
+   load values — the D81 arm-stop read was a latent gap, fixed for
+   S0/S1 too). The S0W scenario + draft schedule are committed; stop
+   indices calibrate at the first live session via `walk_watches`
+   transcript comments. The PAD step keeps its own unit (the capgen
+   runtime pad-slot read op still pending, deliberately out of scope).
 6. **W6 — engine dump emitter.** parity_harness gains `--canonical`:
    per-tick canonical records in the W3 schema (MissionSim/MissionScene
    field maps for T0/T1 first).

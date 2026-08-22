@@ -373,9 +373,17 @@ bytes; no game, unattended-safe — safe to re-run any time).
    game boots — WALK THE TITLE MENU to ZONEA/MISSION1 (new campaign).
    At the first mission frame tail the trap fires; capgen checks the
    flat CS (SELINFO base==0 — a loader-stub stop retries automatically),
-   arms `BP CS:0005A6EB`, reads map w/h + the TOT/DAT/claim pointer
-   cells, then captures 3 records (anchor + 2). stderr prints the
+   arms `BP CS:0005A6EB`, then captures 3 records (anchor + 2); the
+   loader statics (map w/h, TOT/DAT/claim pointers) are read AT THE
+   ANCHOR STOP (D84 resolve_at=anchor — they are mission-load values;
+   the pre-mission arm stop reads garbage). stderr prints the
    selector pin + resolved cells; the transcript header records them.
+   W5-walk note (D84, landed after this checklist was written): the
+   same session can calibrate S0W's draft walk schedule — run
+   `diff capture tools/diffharness/scenarios/S0W.scen` once (it stops
+   per menu frame; the transcript's `# walk stop N walk-mode ...`
+   comments map menu transitions to stop indices) and rewrite the
+   placeholder stop counts in S0W.scen from them.
 2. STITCH + RECORD:
      tools/runtime/dosbox-harness.sh diff stitch tools/diffharness/scenarios/S0.scen
    → runtime/harness-out/diff/S0/S0.bdld + S0.manifest.json (dumps stay
@@ -494,9 +502,13 @@ KNOWN LIMITS (documented, not blockers):
 
 S0W calibration: the committed S0W.scen walk schedule is a STRUCTURAL
 DRAFT (stop counts are placeholders) — the first live session calibrates
-the indices via `walk_watches` output; the schedule itself is then just
-data (no code change). Headless verification = `dbgprobe walk` (probe
-conf, no game; BDA tick cell 0x46C as the surrogate counter).
+the indices via `walk_watches` output (see the S0 checklist note); the
+schedule itself is then just data (no code change). Headless
+verification: `dbgprobe walk` GREEN 2026-08-22 (walk loop + stop
+indexing incl. a pure-skip stop + write-then-read calibration notes +
+arm-at-walk-end + resolve_at=anchor feeding expr lens; probe conf, no
+game, BDA tick cell 0x46C as the surrogate counter); `dbgprobe
+gate/flow/inject` regression-GREEN after the capgen restructure.
 
 ## Wine prefix for EXW (golden pipeline comparator)
 
