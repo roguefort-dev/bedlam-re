@@ -78,13 +78,21 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. [P4.2/W9] GATES/CI WIRING unit (unattended; DESIGN §10-W9, DH-G3):
-   wire the corpus-gated test set into CI (the runner must skip
-   cleanly without game-data — the `corpus_present()` pattern), add
-   the DH-G3 gate doc section (what CI proves vs what the live
-   session proves), and sweep the workspace for non-skipping corpus
-   dependencies. Small, mechanical, closes the W-series unattended
-   tail before W10/W11 (both need operator-adjacent setup).
+2. [P4/FORMATS] THE .MOFO LOADER unit (unattended, bounded RE): pin
+   FUN_00416458's last unparsed sibling @0x457a4c (the .MOFO loader —
+   .NME/.TRT/.POS/.BDG all CLOSED per 7j.15/7j.18/7j.25). Objdump-first
+   from existing dumps (ghidra-project/exw-text-objdump.txt covers
+   0x401000..0x460000; run analyzeHeadless -process ONLY if the range
+   needs decompile and nothing is already running). Deliverable: the
+   FORMATS §entry + the ledger row + RE-EXW note; corpus-verify the
+   .MOFO file grammar (game-data read-only, manifest bracket).
+3. [P4/RE] THE SFX BANK-NAME WALK unit (unattended, bounded RE):
+   7j.25 pinned the destroy-thud pair 0x4edfb8/0x4edfbc =
+   DEADMAN1/DEADMAN2.RAW via loader strings 0x43a29b..0x43a368 — walk
+   the FUN_0043a48e bank-name block 0x45884e.. fully (string-table
+   read + the bank-pointer cells 0x4edfXX/0x46afXX census) and land
+   the complete bank→name map (RE-EXW-SIM sec 9 item 5's data
+   prerequisite; pure decode, no engine change).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -219,6 +227,28 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W9 GATES/CI WIRING unit COMPLETE (worker cd3ebd73
+  claim 2, commit 5026afc, D92). (a) CI LEG: the named
+  `diffharness` job in .github/workflows/ci.yml (`cargo test -p
+  diffharness` + `cargo test -p bedlam-game --test
+  canonical_dump_gate --test differ_gate`) — DESIGN §9 DH-G3 section
+  landed with the CI-proves-vs-live-session split (CI: compile +
+  skip-cleanly + the corpus-free tests; the pinned chains
+  8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 run on
+  corpus-present machines; original-side NEVER in CI). (b) THE SWEEP
+  was empirical, not grep-only: fresh corpus-free git clone (faithful
+  CI-checkout sim; game-data never committed) + `cargo test
+  --workspace --no-fail-fast` → exactly ONE non-skipping corpus
+  dependency: menu_gate, 3 of 5 tests panicking via corpus_host()'s
+  expect on the absent corpus. (c) FIX: menu_gate gains
+  corpus_present() (LANGUAGE.ENG marker) + the three guards in the
+  file's own pattern; the expects stay as corrupt-corpus tripwires.
+  Post-fix: clone 52/52 targets green, workspace 565 tests green
+  (all 5 menu_gate tests executing for real with the corpus), fmt/
+  clippy clean, manifest clean both sides. Recipe in DESIGN §9:
+  re-run the clone test whenever a new corpus gate lands (the named
+  job enforces it). Queued: the .MOFO loader unit (item 2) + the SFX
+  bank-name walk (item 3).
 - 2026-08-22: P4.2/W8-s2 THE S2 ORDER SCENARIO unit COMPLETE (worker
   7faaeb53 claim 2, commits a9e6964 + 786c9fb, D91). (a) STAGING
   DESIGN (docs-first): grammar v1.2 `markers = x,y,z[; ...]` header

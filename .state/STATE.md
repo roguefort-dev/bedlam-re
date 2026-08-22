@@ -1,5 +1,32 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W9 GATES/CI WIRING unit COMPLETE, worker
+    cd3ebd73 claim 2, commit 5026afc, D92): the W-series unattended
+    tail is CLOSED — the corpus-gated harness set runs in CI as a
+    NAMED workflow job (.github/workflows/ci.yml `diffharness`:
+    `cargo test -p diffharness` + `cargo test -p bedlam-game --test
+    canonical_dump_gate --test differ_gate`). CI PROVES compile +
+    the SKIP-CLEANLY property + the corpus-FREE tests (synthetic §6a
+    fixture, dump schema, registry anchors, stitch replay, differ
+    units); the pinned-chain corpus assertions run on corpus-present
+    machines (same commands); original-side runs NEVER in CI
+    (desktop-gated, unchanged). THE SWEEP was empirical: a fresh
+    corpus-free git clone (faithful CI-checkout sim) +
+    `cargo test --workspace --no-fail-fast` found exactly ONE
+    non-skipping corpus dependency — menu_gate, 3 of 5 tests
+    panicking on the absent corpus via corpus_host()'s expect —
+    fixed with the corpus_present() guard (LANGUAGE.ENG marker, the
+    file's own pattern). Post-fix: clone run 52/52 targets green;
+    workspace run 565 tests green with all 5 menu_gate tests
+    executing for real; fmt/clippy clean; manifest clean both sides.
+    DESIGN §9 DH-G3/CI-wiring sections + §10-W9 LANDED; DECISIONS
+    D92. Recipe recorded: re-run the corpus-free clone test whenever
+    a new corpus gate lands (the named CI job enforces it).
+    REMAINING P4.2 work is operator-adjacent: W10 (8street O3
+    comparator), W11 (Wine/EXW O2 tiebreak), W12 (S3+ scenario
+    depth as producer families land) — all need live-session or
+    off-repo setup; plus the interactive item 1 (S0 live session).
+
   - OPEN 2026-08-22 (P4.2/W8-s2 THE S2 ORDER SCENARIO unit COMPLETE,
     worker 7faaeb53 claim 2, commits a9e6964 + 786c9fb, D91): the
     order→walk corpus slice is live end-to-end on E + the differ +
