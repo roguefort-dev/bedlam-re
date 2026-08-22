@@ -5281,24 +5281,105 @@ corpus path. All items [verified] asm unless tagged.
    and the probe-latch/consume machinery is invisible on the
    current harness path.
 
-Engine seam (this unit, D98 pattern): the corpus path does NOT
-fire for ZONEA/M1, so the tile-word producer stays host-seamed —
-`pickup_case`/`apply_pickup` (7h.2) and the host `pickup()` seam
-are unchanged, no engine code this unit (never-invent). P4.2 hooks
-(D99): any S3+ scenario on ZONEB/ZONEF WILL hit pickups on
-ordinary walks (ZONEB/M1: 152 cells) — E needs, before such a
-scenario, (a) the TOT words staged beside the DAT planes in
-`Terrain` (init_tiles semantics: ALL nonzero words), (b) the
-terrain set (= zone+1; E already keys the zone letter), (c) the
-probe latch in `move_is_possible` + the clear→move→test protocol
-in the move-toward-target block, (d) the consume writes (DAT byte
-0 / mirror word := floor word / seen 1) + the apply_pickup
-dispatch — until then an O1 capture on those zones diverges by
-construction (the original consumes pickups; E cannot), which the
-differ would report as structural robot-bank + terrain rows. The
-watch surface for a pickup scenario: the mirror row word + seen +
-the DAT plane byte at the consumed cell, plus the case-4
-score/money pair (the D52 seam fields).
+Engine seam (superseded by §7h.5 — the producer LANDED in the
+engine 2026-08-22; this paragraph's (a)-(d) list is the spec it
+was built against). The watch surface for a pickup scenario: the
+mirror row word + seen + the DAT plane byte at the consumed cell,
+plus the case-4 score/money pair (the D52 seam fields).
+
+## 7h.5. THE E-SIDE PICKUP PRODUCER PAIRING — the engine mapping + the range-table INDEXING derivation (2026-08-22, worker f32193a2 claim 2, W12-S5-prep; the §7h.4 decode implemented engine-side, docs-first hop)
+
+The engine-modeling notes for the W12-S5-prep unit. Nothing here
+re-decodes the binary — it pins WHICH §7h.4 site maps to which
+engine seam and settles the one open gloss the implementation
+needed. [verified] = §7h.2/§7h.4 asm; [derived] = this hop.
+
+1. **The range/floor tables are indexed by zone_index (0-based),
+   NOT the raw cell — [derived, structural].** The DGROUP family
+   0x454a04(rubble)/0x454a20(hazard-7d2)/0x454a3c(7d3)/
+   0x454a58(A)/0x454a74(B)/0x454a90(C)/0x454aac(water-sprite) is
+   ONE contiguous run of 7-dword tables at exact 0x1C strides —
+   there is NO unused head slot inside A/B/C (a `base + cell*4`
+   read with cell ∈ 1..7 would run off the end of table A into
+   table B's first dword, which is nonsense for a per-set
+   selector). The consistent reading is `base + (cell−1)*4` =
+   zone_index 0-based, which is exactly the form the landed
+   `pickup_case(word, set)` + its corpus-validated tests already
+   use (7h.2): ZONEA(idx 0) → A=0x4E, ZONEB(idx 1) → A=0x75, …
+   — and the §7h.4/5 corpus probe CONFIRMS it behaviorally (the
+   0x81..0x84 words are case-4 only under idx 1 = ZONEB, INERT
+   under ZONEA's idx-0 ranges; under the raw-cell reading ZONEA
+   itself would fire them, contradicting the shipped-map
+   verdict). The floor-word table C rides the same form:
+   `[0x70b, 0x48f, 0x24c, 0x368, 0x48f, 0x39, 0x39]` indexed by
+   zone_index. CAVEAT recorded: the destroy-family tables in
+   `destroy.rs` (RUBBLE_WORD/HAZARD_7D2/7D3/WATER_RANGE) were
+   landed as 8-entry arrays indexed by the RAW cell with an
+   "unused head" — under the same structural argument their
+   heads should be dropped and the values shifted (e.g. 7j.35's
+   zone-A hazard base 0x49 vs destroy.rs's cell-1 entry 0x20).
+   That is a pre-existing, corpus-dead question (the hazard
+   stamp runs only in synthetic destroy_gate tests; no canonical
+   chain covers it) — left untouched by this unit, flagged for
+   the S5/S7 differ rows to arbitrate.
+2. **The wiring map** [derived; every EXW site from §7h.4/2-3]:
+   - init_tiles@00407e11 → `MissionSim::stage_pickup_surface` (a
+     NEW host seam beside the destroy unit's
+     `stage_terrain_mirror`, which stages words only): parses the
+     mission `.TOT` volume (`u16 w + u16 h + 8 × w·h u16`
+     plane-major, FORMATS §2), copies EVERY plane word into
+     `mirror_words` (the pre-cleared mirror makes the
+     nonzero-filter equivalent to a plain copy), stages
+     `mirror_seen[tile·8+z] := 1` exactly when the swept+PAD DAT
+     volume byte `dat[z·w·h + tile] == 0`, and writes the
+     terrain-set cell `zone := zone_index+1` (D99). The heights
+     pair (+0x1B/+0x1C) is NOT staged — its producer is the
+     zone-7 objective family (§7j.32), corpus-dead elsewhere.
+   - the FOUR get_z_pos type-3 latch sites → ALREADY MODELED:
+     `Terrain::floor_z` writes `last_trigger` at exactly the four
+     §7h.4/2 sites (level probe / z+1 empty-search / z−2
+     empty-search / the 0x1F slope z+1), last-write-wins, no
+     auto-clear.
+   - the consumer 0x40bef2 clear → `robots_phase`'s
+     move-toward-target else-branch: `last_trigger := None` (the
+     −1 sentinel) immediately BEFORE `robot_move`, then the
+     0x40bf0b `≠ −1` test immediately AFTER → `fire_pickup`.
+     UNCONDITIONAL (the EXW clear runs in every move sub-tick,
+     armed or not — with no staged mirror words the range test
+     reads word 0 and never fires, so S0..S4 stay byte-identical;
+     the only observable delta on old paths is the latch clear
+     itself, which no canonical row covers).
+   - the fire block 0x40bf18..0x40bff8 → `fire_pickup(idx, z, tx,
+     ty)`: word = `mirror_words[(ty·w+tx)·8+z]`; `pickup_case`
+     over the staged set; on a case — (a) `dat_write(tx,ty,z,0)`
+     (the collision-plane consume; the cell becomes EMPTY —
+     walkable-through afterward), (b) `mirror_words[·] :=
+     PICKUP_FLOOR_WORD[zone_index]` (table C), (c)
+     `mirror_seen[·] := 1`, (d) the MP-only 0x4dc6ac/b0/b4
+     staging is SP-only-unreachable (gated [0x4edb88]==2) —
+     unwired by design; then the §7h.2 dispatch.
+   - the dispatch → `apply_pickup` WIDENED: cases 1/2/3/7 write
+     the robot fields as landed (7h.2); case 4 [7f.6] draws
+     `row = RandA()&1` then `amount = [1000,2000,5000,10000] /
+     [10,50,100,250][RandA()&3]` on the sim stand-in stream and
+     stages a pending (score, money) award the MissionShell folds
+     beside the destroy-score fold (the [0x4dd40c]/[0x46ae70]
+     cells are shell session state); cases 8 (ammo, effect 0xC)
+     and 9 (episode, effect 0xD) return their effect ids with NO
+     field writes — host-seamed (the robot weapons[7] bank is the
+     D51 host seam, W12-S3; no shipped mission stages case-8/9
+     cells: the 0x53D word is a set-5 shape INERT on ZONEA, and
+     the ZONEB/ZONEF censuses show cases 1..4 only).
+3. **The corpus-dead invariant, engine-side** [derived from
+   §7h.4/5]: with the surface fully staged on ZONEA/MISSION1
+   (set 1), every DAT==3 cell's staged word decodes to `None`
+   under idx 0 — a walk over them latches and clears but never
+   fires. The corpus gate asserts exactly this (zero fire
+   traffic: mirror/seen/DAT unchanged, zero award) across the
+   S2-style order walk, making the staging a provable no-op on
+   the S0..S4 paths (the pinned chains 8901789a88cf61fe /
+   1c4e7b4c9d9b0947 / 809f4961b7757da4 / 49193732e6dbc546 /
+   2ddd15ea50c8a14d re-assert byte-identical).
 
 ## 7j.35. THE MISSIONVIEW §8 WATER-FLAG/ANIM REMAINDER — u32[0x456ca8] = a STATIC ping-pong const (producer = the file image); [0x4edbd4] ≡ 1 for every mission (no gameplay writer exists); ZONEA/M1 stages ZERO water (2026-08-22, worker 57ba8753 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; DGROUP bytes + corpus TOTs re-read read-only, scratch /tmp/opencode)
 
