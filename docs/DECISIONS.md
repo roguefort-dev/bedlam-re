@@ -2713,3 +2713,49 @@ Nudge-Worker: 4deb0081-12f4-4fdd-a60e-36363119d216
    those cells" + the diff detail as its verdict form.
 
 Nudge-Worker: fa49e9cf-487a-4005-8bba-83ac6e2b6776
+
+## 2026-08-22 P4.2/W5 — the injector lands as grammar + SMV emitter + count-cell compiler, with the O1 alias gaps as hard gates (D82)
+
+1. GRAMMAR v1.1 (shared seam): scenario files gain keystore/order/pad/
+   command/boot steps (one frame boundary per line; `until-anchor`
+   splits walk phase from mission phase; boot is walk-phase only).
+   The ENGINE side consumes the same steps (W6) — one script drives
+   both sides per DESIGN §5. Command payloads are RAW hex bytes
+   (≤0x80) by design: the builder-side field packing is pinned
+   (§7j.17) but the sugar lands with S3, not guessed now.
+2. THE O1 WRITE PRIMITIVE IS SMV (linear), not SM: SMV is the
+   D80-behaviorally-verified primitive; capgen converts the plan's
+   SEG:EXPR addr forms — `CS:` = the flat-identity (base 0, boot-guard
+   asserted, linear == the EXD offset, bounded to the image top),
+   numeric segs = real-mode seg<<4 (probe form). Byte tokens only
+   (never register names). The command-ring append is a capgen OP
+   (read count u32 via MEMDUMPBIN on the plan's own SEG:OFF form,
+   write payload zero-extended to the stride, bump count) — proven
+   headless by `dbgprobe inject` (GREEN: write-then-readback ordering,
+   count 0→1, `frame N 1` injected flags; gate + flow regression-green).
+3. T1 COMPILES COUNT-DRIVEN (the W5 ticket list): robot-bank
+   $robot_count·0xA8 (0x11958c), trt-array $trt_count·0x20 (0x11949c),
+   object-instances *(0x119584) $obj_count·0x14 (0x119554) as resolve
+   rows + len expressions; grids derive from the map w/h cells.
+   S1.scen compiles (capture-plans/S1.json committed + byte-pinned).
+   TWO anti-fabrication calls: selection-triple dumps only the 4
+   verified alias bytes (the 12-byte triple would read the EXD
+   cursor/squad gap cells), beacon-family dumps its five u16-spaced
+   cells (10 B — the registry 0x18 extent gloss would read into
+   spread-claims).
+4. THE §5 SEAM ROWS STAY GAPS ON O1: keystore/order-target/command
+   ring (+difficulty) have no EXD aliases yet (the EXD input twin is
+   NOT FUN_0002ec12 — probe exd-input-probe.txt shows only the
+   P-latch spin; RE-EXD-MAP W5 note). dbx-plan REFUSES any scenario
+   carrying those steps, naming the seam — no unanchored address ever
+   enters a plan. The compiler's alias-gated paths are proven by tests
+   against a fabricated-address registry (never committed). Two new
+   TI registry rows (inj-command-ring 0x4dd4a0 / inj-command-count
+   0x46cbe0, anchored at the §7j.17 ledger row) formalize the seam.
+5. WALK-PHASE INJECTION IS FUTURE WORK BY DESIGN: the scripted menu
+   walk needs a per-frame walk driver (BPLM-on-frame-counter stops
+   during menu screens + mission-start detection) — that is its own
+   unit once the keystore alias lands; the interactive S0 session
+   walks manually meanwhile.
+
+Nudge-Worker: 683a65d6-c1ae-485b-9188-cd9413234442

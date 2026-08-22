@@ -429,6 +429,19 @@ differ come before any new scenario depth.
    pin; startup.js log-only).
 5. **W5 — injector.** The §5 vocabulary as runner-side writes (script
    grammar extension shared with the engine emitter).
+   **STATUS 2026-08-22 (D82):** LANDED + headless-verified. Grammar
+   v1.1 steps (keystore/order/pad/command/boot; walk/mission phases
+   split at until-anchor), the capgen SMV emitter (boot_writes at the
+   arm stop + per-frame inject rows applied BEFORE the watch dumps,
+   `frame N 1` injected flags in DBXCAP, the command-ring append op:
+   count read → zero-extended record → count bump), and dbx-plan's
+   count-cell compiler for T1 (robot/object/TRT count resolve rows +
+   count·stride extents; S1.json committed + byte-pinned). The O1
+   alias gates are HARD: every §5 seam row (keystore, order target,
+   command ring, difficulty) is a registry gap — scenarios carrying
+   those steps fail compilation naming the seam until the EXD input/
+   command twins are pinned (the walk driver unit follows the keystore
+   alias). `dbgprobe inject` proves the machinery headless (no game).
 6. **W6 — engine dump emitter.** parity_harness gains `--canonical`:
    per-tick canonical records in the W3 schema (MissionSim/MissionScene
    field maps for T0/T1 first).

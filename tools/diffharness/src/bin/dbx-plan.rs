@@ -22,7 +22,7 @@
 //! `capture-plans/<id>.json` (tests/plan_regen.rs pins byte-equality).
 
 use diffharness::registry;
-use diffharness::runner::Scenario;
+use diffharness::runner::{Scenario, Step};
 use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -506,7 +506,258 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     }
 }
 
-// ----------------------------------------------------------------- emit
+// ------------------------------------------------------- W5 step compile
+
+/// The seam row id a boot key writes (§5.5 keys are registry rows).
+fn boot_row_id(key: &str) -> Option<&'static str> {
+    match key {
+        "difficulty" => Some("difficulty"),
+        _ => None,
+    }
+}
+
+/// The registry rows an injection step WRITES; every one must carry an
+/// EXD alias or the step cannot compile for O1 (anti-ghost: gaps are
+/// named, never fabricated).
+fn step_rows(step: &Step) -> &'static [&'static str] {
+    match step {
+        Step::Keystore { .. } => &["inj-key-state"],
+        Step::Order { .. } | Step::Pad { .. } => &["order-target"],
+        Step::Command { .. } => &["inj-command-ring", "inj-command-count"],
+        Step::Boot { .. } | Step::Advance { .. } | Step::Capture | Step::UntilAnchor { .. } => &[],
+    }
+}
+
+/// One injected write as a plan JSON body (no trailing comma).
+#[derive(Debug, Clone)]
+enum InjectWrite {
+    Plain {
+        frame: Option<u64>,
+        addr: String,
+        bytes: String,
+    },
+    Command {
+        frame: u64,
+        base: String,
+        count_cell: String,
+        bytes: String,
+    },
+}
+
+fn compile_steps(
+    scen: &Scenario,
+    reg: &[diffharness::Watch],
+) -> Result<(Vec<InjectWrite>, Vec<InjectWrite>), PlanError> {
+    // Walk phase: BOOT writes are frame-0 (arm stop); walk-phase
+    // KEYSTATE/ORDER/PAD/COMMAND need the per-frame walk driver, which
+    // is a future unit — refuse loudly instead of half-driving a walk.
+    let (walk, mission) = scen.phases();
+    let mut boot: Vec<InjectWrite> = Vec::new();
+    for step in walk {
+        match step {
+            Step::Boot { key, value } => {
+                let Some(row_id) = boot_row_id(key) else {
+                    return Err(die(format!("boot key {key:?} has no seam row")));
+                };
+                let row = reg.iter().find(|r| r.id == row_id).ok_or_else(|| {
+                    die(format!("boot key {key:?}: registry row {row_id:?} missing"))
+                })?;
+                let cells = exd_cells(&row.exd_addr);
+                if cells.is_empty() {
+                    return Err(die(format!(
+                        "boot write {key} ({row_id}): EXD alias is a registry gap \
+                         (status {:?}) — the O1 plan never fabricates its address",
+                        row.exd_status
+                    )));
+                }
+                boot.push(InjectWrite::Plain {
+                    frame: None,
+                    addr: format!("CS:{:08X}", cells[0]),
+                    bytes: (*value as u32)
+                        .to_le_bytes()
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect(),
+                });
+            }
+            Step::Keystore { .. }
+            | Step::Order { .. }
+            | Step::Pad { .. }
+            | Step::Command { .. } => {
+                return Err(die(
+                    "walk-phase injection steps need the per-frame walk driver \
+                     (scripted menu walk = a future unit; the interactive S0 \
+                     session walks manually)"
+                        .into(),
+                ))
+            }
+            Step::Advance { .. } | Step::Capture | Step::UntilAnchor { .. } => {}
+        }
+    }
+
+    // Mission phase: anchor-relative boundary numbering = capture frame
+    // numbers (anchor frame = 1).
+    let mut out: Vec<InjectWrite> = Vec::new();
+    let mut boundary: u64 = 1;
+    let frames_total = scen.frames + 1;
+    for step in mission {
+        let writes = match step {
+            Step::Advance { frames } => {
+                boundary += frames;
+                continue;
+            }
+            Step::Capture | Step::UntilAnchor { .. } => continue,
+            Step::Boot { key, .. } => {
+                return Err(die(format!(
+                    "boot step {key} is walk-phase only (before until-anchor; with \
+                     no until-anchor the whole schedule is mission phase)"
+                )))
+            }
+            Step::Keystore { entries } => {
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == "inj-key-state")
+                    .ok_or_else(|| die("registry row inj-key-state missing".into()))?;
+                let base = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+                    die("keystore step: inj-key-state EXD alias is a registry gap".into())
+                })?;
+                entries
+                    .iter()
+                    .map(|(scan, val)| InjectWrite::Plain {
+                        frame: Some(boundary),
+                        addr: format!("CS:{:08X}", base + *scan as u64),
+                        bytes: format!("{val:02x}"),
+                    })
+                    .collect::<Vec<_>>()
+            }
+            Step::Order { x, y, z } => {
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == "order-target")
+                    .ok_or_else(|| die("registry row order-target missing".into()))?;
+                let cells = exd_cells(&row.exd_addr);
+                if cells.len() != 3 {
+                    return Err(die(
+                        "order step: order-target EXD alias is a registry gap (needs \
+                         all three xyz cells)"
+                            .into(),
+                    ));
+                }
+                [*x, *y, *z]
+                    .into_iter()
+                    .zip(cells)
+                    .map(|(v, cell)| InjectWrite::Plain {
+                        frame: Some(boundary),
+                        addr: format!("CS:{cell:08X}"),
+                        bytes: (v as u32)
+                            .to_le_bytes()
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect(),
+                    })
+                    .collect::<Vec<_>>()
+            }
+            Step::Pad { .. } => {
+                // the write target is the order-target triple with the
+                // tile READ from the pad bank at runtime — needs the
+                // capgen runtime pad op together with the alias.
+                return Err(die(
+                    "pad step: order-target EXD alias is a registry gap and the \
+                     runtime pad-slot read op (capgen `pad` op) lands together \
+                     with that alias unit"
+                        .into(),
+                ));
+            }
+            Step::Command { bytes } => {
+                let ring = reg
+                    .iter()
+                    .find(|r| r.id == "inj-command-ring")
+                    .ok_or_else(|| die("registry row inj-command-ring missing".into()))?;
+                let count = reg
+                    .iter()
+                    .find(|r| r.id == "inj-command-count")
+                    .ok_or_else(|| die("registry row inj-command-count missing".into()))?;
+                let base = exd_cells(&ring.exd_addr).first().copied().ok_or_else(|| {
+                    die("command step: inj-command-ring EXD alias is a registry gap".into())
+                })?;
+                let cell = exd_cells(&count.exd_addr).first().copied().ok_or_else(|| {
+                    die("command step: inj-command-count EXD alias is a registry gap".into())
+                })?;
+                vec![InjectWrite::Command {
+                    frame: boundary,
+                    base: format!("CS:{base:08X}"),
+                    count_cell: format!("CS:{cell:08X}"),
+                    bytes: bytes.iter().map(|b| format!("{b:02x}")).collect(),
+                }]
+            }
+        };
+        // every step row must be aliasable (anti-ghost gate)
+        for row_id in step_rows(step) {
+            let row = reg
+                .iter()
+                .find(|r| r.id == *row_id)
+                .ok_or_else(|| die(format!("registry row {row_id:?} missing")))?;
+            if exd_cells(&row.exd_addr).is_empty() {
+                return Err(die(format!(
+                    "injection step on seam {row_id} ({}): EXD alias is a registry \
+                     gap (status {:?}) — anchor it before this scenario can compile \
+                     for O1; the engine side (W6) consumes the step directly",
+                    step_kind(step),
+                    row.exd_status
+                )));
+            }
+        }
+        if boundary > frames_total {
+            return Err(die(format!(
+                "injection step at boundary {boundary} is past the capture window \
+                 (frames={} -> {} records)",
+                scen.frames, frames_total
+            )));
+        }
+        out.extend(writes);
+        boundary += 1;
+    }
+    Ok((boot, out))
+}
+
+fn step_kind(step: &Step) -> &'static str {
+    match step {
+        Step::Keystore { .. } => "keystore",
+        Step::Order { .. } => "order",
+        Step::Pad { .. } => "pad",
+        Step::Command { .. } => "command",
+        Step::Boot { .. } => "boot",
+        Step::Advance { .. } => "advance",
+        Step::Capture => "capture",
+        Step::UntilAnchor { .. } => "until-anchor",
+    }
+}
+
+fn inject_json(w: &InjectWrite) -> String {
+    match w {
+        InjectWrite::Plain { frame, addr, bytes } => match frame {
+            Some(f) => format!(
+                "    {{ \"frame\": {f}, \"addr\": \"{}\", \"bytes\": \"{bytes}\" }}",
+                jstr(addr).trim_matches('"')
+            ),
+            None => format!(
+                "    {{ \"addr\": \"{}\", \"bytes\": \"{bytes}\" }}",
+                jstr(addr).trim_matches('"')
+            ),
+        },
+        InjectWrite::Command {
+            frame,
+            base,
+            count_cell,
+            bytes,
+        } => format!(
+            "    {{ \"frame\": {frame}, \"op\": \"command\", \"base\": \"{}\", \
+             \"stride\": 128, \"count_cell\": \"{}\", \"bytes\": \"{bytes}\" }}",
+            jstr(base).trim_matches('"'),
+            jstr(count_cell).trim_matches('"')
+        ),
+    }
+}
 
 /// Every `$name` referenced by a len expression.
 fn expr_symbols(expr: &str) -> Vec<String> {
@@ -523,6 +774,8 @@ fn expr_symbols(expr: &str) -> Vec<String> {
     out
 }
 
+// ----------------------------------------------------------------- emit
+
 fn jstr(s: &str) -> String {
     // Zero-dep emitter: our strings are ASCII without quotes/backslashes
     // (asserted — anything else needs a real escaper, not silent pass-through).
@@ -538,6 +791,7 @@ struct Emitted {
     deferred: Vec<String>,
     anchor_count: usize,
     frame_count: usize,
+    inject_count: usize,
 }
 
 fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, PlanError> {
@@ -551,6 +805,43 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
             )));
         }
     }
+
+    // W5 step compilation (DESIGN §5): boot writes + frame-boundary
+    // inject rows, gated on registry aliases (gaps are named, never
+    // fabricated). Emitted keys exist only when the scenario carries
+    // steps (S0/S1 artifacts stay byte-identical).
+    let (boot_writes, inject_rows) = compile_steps(scen, reg)?;
+    let step_json = if boot_writes.is_empty() && inject_rows.is_empty() {
+        String::new()
+    } else {
+        let mut s = String::new();
+        if !boot_writes.is_empty() {
+            s.push_str("  \"boot_writes\": [\n");
+            for (i, w) in boot_writes.iter().enumerate() {
+                s.push_str(&inject_json(w));
+                s.push_str(if i + 1 < boot_writes.len() {
+                    ",\n"
+                } else {
+                    "\n"
+                });
+            }
+            s.push_str("  ],\n");
+        }
+        if !inject_rows.is_empty() {
+            s.push_str("  \"inject\": [\n");
+            for (i, w) in inject_rows.iter().enumerate() {
+                s.push_str(&inject_json(w));
+                s.push_str(if i + 1 < inject_rows.len() {
+                    ",\n"
+                } else {
+                    "\n"
+                });
+            }
+            s.push_str("  ],\n");
+        }
+        s
+    };
+    let inject_count = inject_rows.len();
 
     // The two registry anchors of the live flow (anti-ghost: derived, not typed).
     let frame_counter = reg
@@ -751,6 +1042,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         j.push_str(if i + 1 < per_frame.len() { ",\n" } else { "\n" });
     }
     j.push_str("  ],\n");
+    j.push_str(&step_json);
     j.push_str("  \"_deferred\": [\n");
     for (i, d) in deferred.iter().enumerate() {
         j.push_str(&format!(
@@ -766,6 +1058,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         deferred,
         anchor_count: anchor.len(),
         frame_count: per_frame.len(),
+        inject_count,
     })
 }
 
@@ -820,12 +1113,13 @@ fn main() -> ExitCode {
         }
     };
     eprintln!(
-        "dbx-plan: scenario {} -> {} anchor rows + {} per-frame rows, {} deferred; \
+        "dbx-plan: scenario {} -> {} anchor rows + {} per-frame rows, {} deferred, {} inject rows; \
          frames={} (anchor + {} post-anchor records for the stitcher)",
         scen.id,
         emitted.anchor_count,
         emitted.frame_count,
         emitted.deferred.len(),
+        emitted.inject_count,
         scen.frames + 1,
         scen.frames
     );
@@ -986,6 +1280,101 @@ mod tests {
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
         assert!(emit_plan(&scen, &registry()).is_err());
+    }
+
+    #[test]
+    fn injection_steps_gate_on_registry_gaps() {
+        // The REAL registry: every §5 seam row is an explicit EXD gap —
+        // each step kind must fail loudly, naming the seam.
+        let reg = registry();
+        for src in [
+            "scenario = X\ntiers = T0\nframes = 4\nboot difficulty=1\n",
+            "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\nkeystore 0x1f=1\n",
+            "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\norder 1 2 3\n",
+            "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\npad 3\n",
+            "scenario = X\ntiers = T0\nframes = 4\nuntil-anchor m\ncommand 01 02\n",
+            // walk-phase injection (the scripted menu walk) is future work
+            "scenario = X\ntiers = T0\nframes = 4\nkeystore 0x1f=1\n",
+        ] {
+            let scen = Scenario::parse(src).unwrap();
+            let err = emit_plan(&scen, &reg)
+                .err()
+                .map(|e| e.to_string())
+                .expect("gap-gated step must not compile");
+            assert!(
+                err.contains("gap") || err.contains("walk"),
+                "error must name the gate: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn injection_steps_compile_with_aliases() {
+        // A FABRICATED registry (aliases filled): proves the compiler
+        // emission — frame accounting, byte layout, command op shape.
+        // These addresses NEVER enter the committed plans (the real
+        // registry keeps them as gaps until RE pins them).
+        let fake = fake_registry_with_aliases();
+        let src = "scenario = X\ntiers = T0\nframes = 4\n\
+                   until-anchor mission-start\n\
+                   step 2\n\
+                   keystore 0x1f=1, 0x2a=0\n\
+                   order 29 18 0\n\
+                   command 01 02 3f\n";
+        let scen = Scenario::parse(src).unwrap();
+        let emitted = emit_plan(&scen, &fake).unwrap();
+        // boundaries: anchor=1, step 2 -> 3; keystore @3 (base 0x10dc44
+        // + scan 0x1f / 0x2a), order @4, command @5 (frames=4 -> the
+        // 5th record is the window edge)
+        assert!(emitted
+            .json
+            .contains("\"frame\": 3, \"addr\": \"CS:0010DC63\", \"bytes\": \"01\""));
+        assert!(emitted
+            .json
+            .contains("\"frame\": 3, \"addr\": \"CS:0010DC6E\", \"bytes\": \"00\""));
+        assert!(emitted
+            .json
+            .contains("\"frame\": 4, \"addr\": \"CS:0010D484\", \"bytes\": \"1d000000\""));
+        assert!(emitted
+            .json
+            .contains("\"frame\": 4, \"addr\": \"CS:0010D488\", \"bytes\": \"12000000\""));
+        assert!(emitted.json.contains(
+            "\"frame\": 5, \"op\": \"command\", \"base\": \"CS:0010D4A0\", \
+             \"stride\": 128, \"count_cell\": \"CS:0010CBE0\", \"bytes\": \"01023f\""
+        ));
+        assert_eq!(emitted.inject_count, 6);
+    }
+
+    #[test]
+    fn injection_step_past_window_refused() {
+        let fake = fake_registry_with_aliases();
+        let src = "scenario = X\ntiers = T0\nframes = 1\n\
+                   until-anchor mission-start\n\
+                   step 3\n\
+                   command 01\n";
+        let scen = Scenario::parse(src).unwrap();
+        assert!(emit_plan(&scen, &fake)
+            .err()
+            .map(|e| e.to_string())
+            .is_some_and(|e| e.contains("past the capture window")));
+    }
+
+    /// The committed registry with the §5 seam aliases FABRICATED in
+    /// (0x4edc44 + 0x1000000-style shifted cells so nothing could ever
+    /// collide with real EXD addresses). Compiler tests only.
+    fn fake_registry_with_aliases() -> Vec<diffharness::Watch> {
+        let mut reg = registry();
+        for row in reg.iter_mut() {
+            match row.id.as_str() {
+                "inj-key-state" => row.exd_addr = "0x10dc44".into(),
+                "order-target" => row.exd_addr = "0x10d484 / 0x10d488 / 0x10d48c".into(),
+                "inj-command-ring" => row.exd_addr = "0x10d4a0 (stride 0x80)".into(),
+                "inj-command-count" => row.exd_addr = "0x10cbe0".into(),
+                "difficulty" => row.exd_addr = "0x10cbf8".into(),
+                _ => {}
+            }
+        }
+        reg
     }
 
     fn count_rows(json: &str, key: &str) -> usize {

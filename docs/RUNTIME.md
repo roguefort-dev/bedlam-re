@@ -403,6 +403,32 @@ parity_harness -p bedlam-game -- --out report.json; D28 anchors (reproduced
 byte-identically twice this unit): scene chain 0xcae25cd08d7cbc08, sim
 0x72979d5d9dedc832, frame 0x87263f149564ad25, audio 0xc862e45d2e95ad29.
 
+## W5 injector probe (D82, 2026-08-22 — `dbgprobe inject`, unattended-safe, no game)
+
+Proves the DESIGN §5 write machinery on the live channel, headless:
+- `SMV <linear> <byte tokens>` is the write primitive (D80-verified;
+  ack "DEBUG: Memory changed (N bytes)"). capgen converts plan addr
+  forms: `CS:off` → linear == off (flat identity, boot-guard pinned,
+  bounded ≤ 0x12583e); numeric `seg:off` → seg<<4+off (probe form).
+  Every token is a 2-hex-digit BYTE (never a register name).
+- Plan v2 keys: `boot_writes` (SMV at the arm stop, after resolve,
+  before frame 1) and `inject` rows keyed by capture frame, applied at
+  the frame stop BEFORE the watch dumps → the transcript record gets
+  `frame N 1` (injection_applied in the W3 dump).
+- The `command` op = the 0x4dd4a0-ring append shape: read the u32
+  count through the plan's own SEG:OFF form (MEMDUMPBIN resolves
+  register names/selectors itself), SMV the payload zero-extended to
+  the stride at base+count·stride, SMV count+1 LE.
+- Gate: tools/runtime/dbgprobe-inject-plan.json — boot write at
+  0000:0500 (beefcafe, classic scratch), marker re-writes frames 1-2,
+  command append frame 3 (count 0000:0510, ring 0x520, stride 0x10);
+  the gate script asserts the readbacks + the injected flags. GREEN
+  2026-08-22; `dbgprobe gate` + `flow` regression-green after.
+- The O1 SEAM GATES: keystore/order-target/command-ring/difficulty
+  EXD aliases are registry gaps — dbx-plan refuses scenarios carrying
+  those steps (named seams; RE-EXD-MAP W5 note: the EXD input twin is
+  NOT FUN_0002ec12, that is only the P-latch spin).
+
 ## Wine prefix for EXW (golden pipeline comparator)
 
 - wine: system wine 11.15 (/usr/bin/wine, CachyOS). NOTE: wow64 mode -
