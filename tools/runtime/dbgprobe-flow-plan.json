@@ -1,0 +1,25 @@
+{
+  "_comment": "DH-G0 live-FLOW probe (D81). Exercises the capgen v2 machinery headless with NO game (probe conf = empty autoexec): boot trap (BPLM on the BDA tick cell 0x46C, armed at the parked -break-start halt), flat_guard OFF (a real-mode probe stop can never show a base-0 4GB CS; the guard itself is live-session-only), arm phase (BPDEL * + BPINT 8 as the frame-hit surrogate), runtime cell resolution (u16 COM1 base @0040:0000 = 0x3F8) feeding both an addr expression and a len expression, and the anchor-vs-per-frame watch split. These ids are deliberately NOT registry ids — a probe transcript is never stitched; it exists to prove the live capture loop mechanics.",
+  "logfile": "dbgprobe.log",
+  "time_limit": 240,
+  "boot_timeout": 90,
+  "flat_guard": false,
+  "frames": 3,
+  "boot_commands": [
+    { "cmd": "BPLM 46C", "expect": "Set linear memory breakpoint at 0000046C" }
+  ],
+  "arm_commands": [
+    { "cmd": "BPDEL *", "expect": "Breakpoints deleted" },
+    { "cmd": "BPINT 8", "expect": "Set interrupt breakpoint at INT 08" }
+  ],
+  "resolve": [
+    { "name": "com1", "addr": "0040:0000", "len": 2 }
+  ],
+  "anchor_watches": [
+    { "id": "probe-flow-expr-len", "addr": "0000:0000", "len": "$com1-1000" },
+    { "id": "probe-flow-expr-addr", "addr": "0040:$com1-1016", "len": 16 }
+  ],
+  "watches": [
+    { "id": "probe-flow-bios", "addr": "F000:0000", "len": 16 }
+  ]
+}

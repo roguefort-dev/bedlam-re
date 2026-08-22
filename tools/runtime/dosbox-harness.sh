@@ -94,11 +94,24 @@ diff_stage() {
   mkdir -p "$OUT/captures" "$OUT/saves" "$DIFF_OUT/$SID"
   rsync -a --delete "$EXD_CORPUS"/ "$EXD_SCRATCH"/
   cp "$CONF" "$DIFF_OUT/$SID/run.conf"
+  # D81 CHANNEL FLIP (staged copy only; the canon conf is untouched):
+  # debuggerrun=watch auto-RUNWATCHes at debugger entry and the machine
+  # free-runs past the parked -break-start halt — queued PTY commands
+  # never execute (RUNTIME.md "S0 live channel mechanics" #4). capgen
+  # needs mode "debugger" (sit at the prompt until the boot trap).
+  sed -i 's/^debuggerrun = .*/debuggerrun = debugger  # D81 channel flip (staged copy; watch mode would free-run)/' \
+    "$DIFF_OUT/$SID/run.conf"
+  grep -q "^debuggerrun = debugger" "$DIFF_OUT/$SID/run.conf" || {
+    echo "diff stage: FATAL - could not flip debuggerrun in the staged conf (canon conf changed?)" >&2
+    exit 1
+  }
   printf "\n[autoexec]\nmount c \"%s\"\nmount d \"%s\"\nc:\n%s\n" \
     "$EXD_SCRATCH" "$DIFF_OUT/$SID" "$LAUNCH" >> "$DIFF_OUT/$SID/run.conf"
   cp "$1" "$DIFF_OUT/$SID/scenario.scen"
   echo "staged scenario $SID -> $DIFF_OUT/$SID (conf + EXD scratch corpus)"
   echo "capture channel: D80 self-built debug DOSBox-X (RUNTIME.md) via \`diff capture\` (interactive-gated)"
+  test -f "$DIFF_OUT/$SID/capture-plan.json" || \
+    echo "plan: generate with \`cargo run -q -p diffharness --bin dbx-plan -- $1 --out $DIFF_OUT/$SID/capture-plan.json\`"
 }
 diff_run() {
   test -f "$1" || { echo "missing scenario $1" >&2; exit 1; }
@@ -144,7 +157,54 @@ Build the D80 instrument first (docs/RUNTIME.md "DH-G0 channel re-pin"):
 MSG
     exit 1
   }
-  FRAMES="${1:-3}"
+  MODE="${1:-gate}"
+  FRAMES="${2:-3}"
+  if [ "$MODE" = "flow" ]; then
+    # D81 live-FLOW probe (still NO game: probe conf, empty autoexec):
+    # boot trap (BPLM) -> arm (BPDEL * + BPINT 8) -> runtime resolve ->
+    # anchor/per-frame split -> per-frame RUNWATCH loop. This is the
+    # exact v2 machinery `diff capture` runs against the game.
+    PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbgflow"
+    mkdir -p "$PROBE_OUT"
+    echo "live-flow probe: v2 capgen machinery, no game launch"
+    python3 "$CAPGEN" \
+      --dbx "$DBG_BIN" \
+      --conf "$PROBE_CONF" \
+      --plan "$REPO_ROOT/tools/runtime/dbgprobe-flow-plan.json" \
+      --workdir "$PROBE_OUT" \
+      --out "$PROBE_OUT/capture.dbxcap"
+    python3 - "$PROBE_OUT/capture.dbxcap" <<'PYCHK'
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+assert lines[0] == "DBXCAP v1", lines[0]
+frames = {}
+cur = None
+for ln in lines:
+    p = ln.split()
+    if not p:
+        continue
+    if p[0] == "frame":
+        cur = int(p[1]); frames[cur] = []
+    elif p[0] == "watch":
+        frames[cur].append((p[1], p[2] if len(p) > 2 else ""))
+assert sorted(frames) == [1, 2, 3], f"frame keys {sorted(frames)}"
+assert len(frames[1]) == 3, f"anchor frame rows {len(frames[1])}"
+for f in (2, 3):
+    assert len(frames[f]) == 1, f"frame {f} rows {len(frames[f])}"
+ids = {w[0] for fl in frames.values() for w in fl}
+assert ids == {"probe-flow-expr-len", "probe-flow-expr-addr", "probe-flow-bios"}, ids
+row = dict(frames[1])
+# $com1 = 0x3F8: expr-len = 1016-1000 = 16 bytes of IVT; expr-addr
+# offset = 1016-1016 = 0 -> BDA base (16 bytes).
+assert len(row["probe-flow-expr-len"]) == 32, "expr len did not evaluate to 16 bytes"
+assert len(row["probe-flow-expr-addr"]) == 32, "expr addr row is not 16 bytes"
+assert len(row["probe-flow-bios"]) == 32
+print("flow probe: GREEN (boot trap + arm + resolve + expr addr/len + anchor split)")
+PYCHK
+    echo "flow transcript: $PROBE_OUT/capture.dbxcap"
+    echo "pty log:         $PROBE_OUT/pty.log"
+    return
+  fi
   PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbgprobe2"
   mkdir -p "$PROBE_OUT"
   echo "channel probe: self-built debug binary + PTY (D80); no game launch"
@@ -161,6 +221,12 @@ MSG
 
 # D80 live capture: capgen over the staged diff conf (game LAUNCHES).
 # Same interactive gate as `diff run`.
+# Usage: diff capture <scenario.scen> [capture-plan.json]
+#   plan defaults to the staged <DIFF_OUT>/<id>/capture-plan.json
+#   (generate: dbx-plan <scenario.scen> --out <path>). Plan v2 keys
+#   (boot/arm/resolve/anchor) drive the D81 live flow; frames and
+#   time_limit come from the plan (the operator walks the title menu,
+#   so give it minutes, not seconds).
 diff_capture() {
   test -f "$1" || { echo "missing scenario $1" >&2; exit 1; }
   test -x "$DBG_BIN" || { echo "missing D80 instrument build $DBG_BIN (see \`$0 dbgprobe\` help)" >&2; exit 1; }
@@ -175,24 +241,26 @@ MSG
   fi
   SID=$(scenario_id "$1")
   # Stage first (idempotent): scratch corpus + conf live under
-  # runtime/harness-out/diff/<id>. The capture plan (frame-tail BP +
-  # resolved watch extents) is the DH-G1/W5 unit's deliverable; for now
-  # a capture plan must be supplied explicitly.
-  test -f "$DIFF_OUT/$SID/capture-plan.json" || {
+  # runtime/harness-out/diff/<id>.
+  test -f "$DIFF_OUT/$SID/run.conf" || diff_stage "$1"
+  PLAN="${2:-$DIFF_OUT/$SID/capture-plan.json}"
+  test -f "$PLAN" || {
     cat >&2 <<MSG
-diff capture: missing $DIFF_OUT/$SID/capture-plan.json
-The capture plan (pre_commands arming the frame-tail BP + resolved
-per-watch addr/len from the scenario tiers) is the DH-G1 live unit's
-deliverable; it is NOT auto-derived yet.
+diff capture: missing plan $PLAN
+Generate it first:
+  cargo run -q -p diffharness --bin dbx-plan -- $1 --out $PLAN
+(dbx-plan compiles the scenario tiers + the watch registry into the D81
+capture plan; the runtime cell reads resolve at capture time.)
 MSG
     exit 2
   }
   python3 "$CAPGEN" \
     --dbx "$DBG_BIN" \
     --conf "$DIFF_OUT/$SID/run.conf" \
-    --plan "$DIFF_OUT/$SID/capture-plan.json" \
+    --plan "$PLAN" \
     --workdir "$DIFF_OUT/$SID" \
     --out "$DIFF_OUT/$SID/capture.dbxcap"
+  echo "stitch it: $0 diff stitch $1 (frames+1 records must match the scenario)"
 }
 case "$1" in
   prepare)
@@ -229,10 +297,10 @@ case "$1" in
     esac
     ;;
   dbgprobe)
-    dbgprobe "$2"
+    dbgprobe "$2" "$3"
     ;;
   *)
-    echo "usage: $0 {prepare|smoke|shell|game|dbgprobe|diff stage|diff run|diff capture|diff stitch}" >&2
+    echo "usage: $0 {prepare|smoke|shell|game|dbgprobe [gate|flow] [frames]|diff stage|diff run|diff capture|diff stitch}" >&2
     exit 2
     ;;
 esac

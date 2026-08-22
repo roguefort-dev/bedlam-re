@@ -29,19 +29,51 @@ Capture loop (one guest frame per iteration):
         rename to dumps/<frame>.<n>.bin, validate length
     -> next frame
 
-The watch plan is a resolved JSON list ({watches:[{id,addr,len}]}, plus
-optional pre_commands [{cmd,expect}]); extent EXPRESSIONS in watches.toml
-(count*0xA8, w*h*2, ...) need runtime counts and are compiled by the
-caller — capgen only moves bytes. `--probe` mode pins the plumbing
-headless WITHOUT launching the game: empty-autoexec conf, BPINT 8 (the
-18.2 Hz timer) as the hit surrogate, real-mode addresses. The live game
-capture is interactive-gated in dosbox-harness.sh (`diff capture`,
-FORCE_DIFF_RUN=1).
+The watch plan is a resolved JSON list; two forms:
 
-Stdlib only (pty, select, json) — matches the tools/ charter.
+LEGACY v1: {watches:[{id,addr,len}]} (+ optional pre_commands
+[{cmd,expect}] run at the parked -break-start halt). Frame 1 dumps at
+that halt; frames 2+ RUNWATCH. `--probe` mode pins the plumbing
+headless WITHOUT launching the game (BPINT 8 surrogate) — the dbgprobe
+gate uses this.
+
+PLAN v2 (live, D81 — RUNTIME.md "S0 live channel mechanics"): the game
+runs from the staged conf's autoexec. Keys:
+  boot_commands [{cmd,expect}]  armed at the parked pre-boot halt (the
+      BPLM boot trap; BP locations resolve EAGERLY at arm time so a
+      game BP armed here would mis-resolve — BPLM is lazy/linear,
+      hence the trap).
+  flat_guard (default true)     after each boot-trap stop, SELINFO CS
+      is parsed from the logfile; the stop is armable iff base==0 and
+      limit>=0x12583e (the game flat CS). Non-flat stops (LeLoader
+      stub, real mode) retry: BPDEL * + re-arm boot_commands + RUNWATCH.
+  boot_retries (default 24), boot_timeout (default hit_timeout)
+  arm_commands [{cmd,expect}]   run at the accepted stop (BPDEL * +
+      BP CS:<tail> — GetHexValue resolves the CS register name in the
+      default MEMDUMPBIN/BP parse path, so no numeric selector is ever
+      needed; the BP ack echoes it, captured into the transcript
+      header as the selector pin).
+  resolve [{name,addr,len}]     little-endian cell reads at the arm
+      stop (loader statics: map w/h, volume pointer cells); values
+      become $name symbols.
+  anchor_watches / watches      frame 1 dumps anchor_watches+watches
+      (TS statics ride the anchor frame), frames 2+ dump watches.
+      addr "SEG:<expr>" offsets and len may be arithmetic over $names
+      (e.g. "CS:$tot_ptr", "4+16*$map_w*$map_h").
+  frames / time_limit           plan-level defaults (CLI overrides).
+  env {KEY: val}                "" removes capgen's default override —
+      live plans unset SDL_VIDEODRIVER so the desktop session provides
+      the window+keyboard the operator needs to walk the title menu.
+Extent EXPRESSIONS in watches.toml (count*0xA8, w*h*2, ...) are compiled
+by the caller into these resolve+expr forms — capgen only moves bytes.
+The live game capture is interactive-gated in dosbox-harness.sh
+(`diff capture`, FORCE_DIFF_RUN=1).
+
+Stdlib only (pty, select, json, ast) — matches the tools/ charter.
 """
 
 import argparse
+import ast
 import json
 import os
 import pty
@@ -227,6 +259,18 @@ class LogTail:
         except FileNotFoundError:
             return 0
 
+    def last_match(self, pattern):
+        """Last regex match in the whole logfile (SELINFO parse path) or
+        None. Full re-read each call: the log is small and this is used
+        once per boot-trap stop, not per frame."""
+        rx = re.compile(pattern)
+        try:
+            with open(self.path, "rb") as f:
+                matches = rx.findall(f.read())
+        except FileNotFoundError:
+            return None
+        return matches[-1] if matches else None
+
 
 # ---------------------------------------------------------------- capture
 
@@ -265,12 +309,178 @@ def dump_watch(sess, dblog, workdir, dest, addr, length):
     return data
 
 
+# ---------------------------------------------------------------- plan v2
+
+# The live plan's address form floor: both LE objects (0x10000-0x72800,
+# 0x80000-0x12583e) must be readable through the flat CS (RUNTIME.md
+# "S0 live channel mechanics" #1/#3).
+MIN_FLAT_LIMIT = 0x12583E
+
+V2_KEYS = ("boot_commands", "arm_commands", "resolve", "anchor_watches")
+
+
+def resolve_expr(expr, symbols):
+    """Evaluate a plan addr/len expression: int literals (0x.. ok), the
+    four integer ops, parens, and $name refs into the resolve table.
+    ast-whitelisted (never eval())."""
+    if isinstance(expr, int):
+        return expr
+    s = str(expr)
+
+    def sub(m):
+        name = m.group(1)
+        if name not in symbols:
+            raise KeyError(f"plan expression references unknown $${name}")
+        return str(symbols[name])
+
+    s = re.sub(r"\$([A-Za-z_][A-Za-z0-9_]*)", sub, s)
+    try:
+        tree = ast.parse(s, mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"bad plan expression {expr!r}: {e}") from None
+
+    def ev(node):
+        if isinstance(node, ast.Expression):
+            return ev(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, bool) or not isinstance(node.value, int):
+                raise ValueError(f"non-int constant in {expr!r}")
+            return node.value
+        if isinstance(node, ast.BinOp):
+            a, b = ev(node.left), ev(node.right)
+            if isinstance(node.op, ast.Add):
+                return a + b
+            if isinstance(node.op, ast.Sub):
+                return a - b
+            if isinstance(node.op, ast.Mult):
+                return a * b
+            if isinstance(node.op, ast.FloorDiv):
+                return a // b
+        if isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.UAdd):
+                return +ev(node.operand)
+            if isinstance(node.op, ast.USub):
+                return -ev(node.operand)
+        raise ValueError(f"unsupported node in plan expression {expr!r}")
+
+    return ev(tree)
+
+
+_HEX_LIT = re.compile(r"[0-9A-Fa-f]*\Z")
+
+
+def watch_target(w, symbols):
+    """One plan watch row -> (addr "SEG:HHHHHHHH", length int). Literal
+    hex offsets pass through untouched (legacy form); anything else is
+    an expression over $symbols (v2 form)."""
+    seg, off = w["addr"].split(":", 1)
+    if not _HEX_LIT.match(off):
+        off_val = resolve_expr(off, symbols)
+        if not 0 <= off_val <= 0xFFFFFFFF:
+            raise ValueError(f"watch offset out of range: {w['addr']!r}")
+        off = f"{off_val:08X}"
+    length = resolve_expr(w["len"], symbols)
+    if not isinstance(length, int) or length <= 0:
+        raise ValueError(f"watch length must be positive: {w.get('len')!r}")
+    if length > 0x100000:
+        raise ValueError(f"watch length too large ({length:#x}): {w['addr']!r}")
+    return f"{seg}:{off}", length
+
+
+def selinfo_cs(sess, dblog):
+    """SELINFO CS through the logfile; returns (base, limit) ints-or-None."""
+    send_cmd(sess, "SELINFO CS")
+    dblog.expect(rb"SelectorInfo CS:", timeout=15)
+    base = limit = None
+    m = dblog.last_match(rb"CS: b:([0-9A-Fa-f]{8})")
+    if m:
+        base = int(m, 16)
+    m = dblog.last_match(rb"l:([0-9A-Fa-f]{8})")
+    if m:
+        limit = int(m, 16)
+    return base, limit
+
+
+def run_boot_trap(sess, dblog, plan, args):
+    """v2: RUNWATCH into the first post-boot stop and keep retrying until
+    the stop is in a flat (base-0, full-image) CS context. Returns the
+    (base, limit) of the accepted stop."""
+    flat_guard = plan.get("flat_guard", True)
+    boot_timeout = int(plan.get("boot_timeout", args.hit_timeout))
+    boot_retries = int(plan.get("boot_retries", 24))
+
+    def arm_boot():
+        for pre in plan.get("boot_commands", []):
+            send_cmd(sess, pre["cmd"])
+            dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
+
+    arm_boot()
+    base = limit = None
+    for attempt in range(1, boot_retries + 1):
+        send_cmd(sess, "RUNWATCH")
+        if not sess.wait_hit(timeout=boot_timeout):
+            raise RuntimeError(
+                f"capgen: boot trap never fired (attempt {attempt}/{boot_retries})"
+            )
+        if not flat_guard:
+            return None, None
+        base, limit = selinfo_cs(sess, dblog)
+        print(
+            f"capgen: boot stop {attempt}/{boot_retries}: CS base="
+            f"{base if base is None else hex(base)} limit="
+            f"{limit if limit is None else hex(limit)}",
+            file=sys.stderr,
+        )
+        if base == 0 and limit is not None and limit >= MIN_FLAT_LIMIT:
+            return base, limit
+        # Non-flat stop (LeLoader stub / real mode): drop every trap,
+        # re-arm the boot trap, run again.
+        send_cmd(sess, "BPDEL *")
+        dblog.expect(rb"Breakpoints deleted", timeout=10)
+        arm_boot()
+    raise RuntimeError(
+        f"capgen: no flat-CS stop after {boot_retries} boot traps "
+        f"(last base={base} limit={limit})"
+    )
+
+
+def run_arm(sess, dblog, plan):
+    """v2: run arm_commands at the accepted stop; return the numeric flat
+    selector echoed by the BP ack (the per-run selector pin)."""
+    for pre in plan.get("arm_commands", []):
+        send_cmd(sess, pre["cmd"])
+        dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
+    m = dblog.last_match(rb"Set breakpoint at ([0-9A-Fa-f]{4}):")
+    return m.decode() if m else None
+
+
+def run_resolve(sess, dblog, plan, args, dumps):
+    """v2: read the plan's loader-static cells at the arm stop."""
+    symbols = {}
+    for r in plan.get("resolve", []):
+        dest = os.path.join(dumps, f"resolve.{r['name']}.bin")
+        data = dump_watch(
+            sess, dblog, args.workdir, dest, r["addr"], int(r.get("len", 4))
+        )
+        symbols[r["name"]] = int.from_bytes(data, "little")
+        print(f"capgen: resolved {r['name']} = {symbols[r['name']]:#x}", file=sys.stderr)
+    return symbols
+
+
 def run_capture(args):
     with open(args.plan) as f:
         plan = json.load(f)
-    watches = plan["watches"]
-    if not watches:
+    v2 = any(k in plan for k in V2_KEYS)
+    watches = plan.get("watches", [])
+    anchor_watches = plan.get("anchor_watches", [])
+    if not v2 and not watches:
         sys.exit("capgen: empty watch plan")
+    if v2 and not watches and not anchor_watches:
+        sys.exit("capgen: empty v2 watch plan")
+    frames_total = args.frames if args.frames is not None else int(plan.get("frames", 3))
+    time_limit = args.time_limit if args.time_limit is not None else int(
+        plan.get("time_limit", 180)
+    )
     os.makedirs(args.workdir, exist_ok=True)
     dumps = os.path.join(args.workdir, "dumps")
     shutil.rmtree(dumps, ignore_errors=True)
@@ -278,8 +488,14 @@ def run_capture(args):
 
     # the [log] logfile is process-CWD-relative: it lands in workdir.
     # (probes use dbgprobe.log; game confs use dosbox-harness.log — take
-    # the plan's word if it names one, else auto-detect after start)
+    # the plan's word if it names one, else auto-detect after start.
+    # A plan-named file is resolved against the WORKDIR — capgen's own
+    # CWD is wherever the harness was invoked from, NOT the workdir.)
     logfile = plan.get("logfile")
+    if logfile:
+        if not os.path.isabs(logfile):
+            logfile = os.path.join(args.workdir, logfile)
+    logfile_abs = logfile
 
     # The [log] logfile APPENDS across runs (pinned empirically: stale
     # acks from a previous run in the same workdir cause instant-false
@@ -296,9 +512,17 @@ def run_capture(args):
             "SDL_AUDIODRIVER": "dummy",
         }
     )
+    # plan env: a value REPLACES capgen's default override; "" REMOVES it
+    # (live plans need the real display+keyboard for the menu walk).
+    for key, val in (plan.get("env") or {}).items():
+        if val:
+            env[key] = val
+        else:
+            env.pop(key, None)
+
     argv = [args.dbx, "-conf", os.path.abspath(args.conf), "-break-start"]
-    if args.time_limit:
-        argv += ["-time-limit", str(args.time_limit)]
+    if time_limit:
+        argv += ["-time-limit", str(time_limit)]
     sess = PtySession(argv, args.workdir, env, os.path.join(args.workdir, "pty.log"))
 
     # logfile: create the tail before launch output lands; detect the name
@@ -315,12 +539,20 @@ def run_capture(args):
                 f"(found {cands}); set 'logfile' in the plan JSON"
             )
         logfile = os.path.join(args.workdir, cands[0])
+    assert logfile_abs is None or logfile_abs == logfile
     dblog = LogTail(logfile)
 
+    selector_pin = None
+    boot_facts = (None, None)
+    symbols = {}
     frames = []
     try:
         # Liveness: the one-time help banner goes through DEBUG_ShowMsg.
-        dblog.wait_present(rb"TYPE HELP", timeout=90)
+        if not dblog.wait_present(rb"TYPE HELP", timeout=90):
+            raise RuntimeError(
+                f"capgen: no debugger banner in the logfile {logfile} — "
+                "is the debugger up (PTY gate) and is [log] logfile= set?"
+            )
 
         if args.probe:
             # Plumbing probe (NO game): the 18.2 Hz timer interrupt is the
@@ -332,18 +564,37 @@ def run_capture(args):
             send_cmd(sess, pre["cmd"])
             dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
 
-        for frame in range(1, args.frames + 1):
-            if frame > 1:
+        if v2:
+            # The machine is parked pre-boot at -break-start: run into the
+            # boot trap, accept only a flat-CS stop, arm the real frame-tail
+            # BP there, read the resolve cells — all before frame 1.
+            if args.probe:
+                sys.exit("capgen: --probe is the legacy path; a v2 plan (boot/arm/resolve/anchor keys) must not combine with it")
+            boot_facts = run_boot_trap(sess, dblog, plan, args)
+            selector_pin = run_arm(sess, dblog, plan)
+            symbols = run_resolve(sess, dblog, plan, args, dumps)
+            print(f"capgen: selector pin CS={selector_pin}", file=sys.stderr)
+
+        def dump_rows(frame, rows_def):
+            rows = []
+            for n, w in enumerate(rows_def):
+                addr, length = watch_target(w, symbols)
+                dest = os.path.join(dumps, f"f{frame:06d}.w{n:03d}.bin")
+                data = dump_watch(sess, dblog, args.workdir, dest, addr, length)
+                rows.append((w["id"], data))
+            return rows
+
+        for frame in range(1, frames_total + 1):
+            # v1 keeps frame 1 at the parked pre-boot halt (the probe
+            # shape); v2 RUNWATCHes into every frame incl. 1 — the first
+            # hit is the armed frame-tail BP (mission frame 2's tail).
+            if v2 or frame > 1:
                 send_cmd(sess, "RUNWATCH")
                 if not sess.wait_hit(timeout=args.hit_timeout):
                     # No burst seen; proceed anyway — the next ack check
                     # fails loudly if the machine never stopped.
                     print(f"capgen: frame {frame}: no hit burst seen; relying on ack", file=sys.stderr)
-            rows = []
-            for n, w in enumerate(watches):
-                dest = os.path.join(dumps, f"f{frame:06d}.w{n:03d}.bin")
-                data = dump_watch(sess, dblog, args.workdir, dest, w["addr"], int(w["len"]))
-                rows.append((w["id"], data))
+            rows = dump_rows(frame, anchor_watches + watches if frame == 1 else watches)
             frames.append((frame, rows))
 
         if args.probe:
@@ -360,12 +611,21 @@ def run_capture(args):
     with open(args.out, "w") as f:
         f.write("DBXCAP v1\n")
         f.write(f"# capgen {'probe' if args.probe else 'capture'} ")
-        f.write(f"frames={args.frames} dbx={os.path.basename(args.dbx)}\n")
+        f.write(f"frames={frames_total} dbx={os.path.basename(args.dbx)}\n")
+        if v2:
+            base, limit = boot_facts
+            f.write(
+                f"# selector-pin CS={selector_pin} base="
+                f"{hex(base) if base is not None else 'n/a'} limit="
+                f"{hex(limit) if limit is not None else 'n/a'}\n"
+            )
+            for name, val in symbols.items():
+                f.write(f"# resolved {name}={val:#x}\n")
         for frame, rows in frames:
             f.write(f"frame {frame}\n")
             for wid, data in rows:
                 f.write(f"watch {wid} {data.hex()}\n")
-    print(f"capgen: wrote {args.out} ({args.frames} frames, {len(watches)} watches/frame)")
+    print(f"capgen: wrote {args.out} ({frames_total} frames, {len(watches) + len(anchor_watches)} watches/frame-1, {len(watches)}/frame-n)")
 
 
 def main():
@@ -375,8 +635,10 @@ def main():
     ap.add_argument("--plan", required=True, help="watch plan JSON {watches:[{id,addr,len}]}")
     ap.add_argument("--workdir", required=True, help="CWD for the binary (MEMDUMP.BIN + logfile land here)")
     ap.add_argument("--out", required=True, help="DBXCAP transcript path")
-    ap.add_argument("--frames", type=int, default=3)
-    ap.add_argument("--time-limit", type=int, default=180, help="-time-limit safety net")
+    ap.add_argument("--frames", type=int, default=None,
+                    help="frame records to capture (default: plan 'frames', else 3)")
+    ap.add_argument("--time-limit", type=int, default=None,
+                    help="-time-limit safety net (default: plan 'time_limit', else 180)")
     ap.add_argument("--hit-timeout", type=int, default=120, help="per-frame breakpoint-hit wait")
     ap.add_argument(
         "--probe",
