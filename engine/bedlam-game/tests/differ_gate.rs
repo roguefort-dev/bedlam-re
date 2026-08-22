@@ -10,8 +10,10 @@
 //!
 //! 1. CROSS-CHANNEL (E vs fabricated O1): verdict PASS-WITH-NOTES
 //!    with exactly the expected coverage findings (blink-cursor +
-//!    move-target-words rows are E-only; the 3 record-external robot
-//!    target fields per robot) + the one T2 frame-counter note (the
+//!    move-target-words rows are E-only — the move-target span is
+//!    spliced into the O1 robot-bank row, so its E row has no raw
+//!    counterpart — and ZERO robot field gaps: the D90 splice sources
+//!    the target trio) + the one T2 frame-counter note (the
 //!    O1 counter carries menu frames — never matches E by construction).
 //!    No engine-bug/structural findings: the mapped-field contract
 //!    holds on the real corpus.
@@ -115,8 +117,11 @@ fn inv_frame(
     for w in &e.watches {
         let id = w.id.as_str();
         let bytes: Vec<u8> = match id {
-            // E-only rows: the O1 plan cannot carry them.
-            "blink-cursor" | "move-target-words" => continue,
+            // E-only rows: the O1 plan cannot carry them (blink-cursor
+            // is a registry gap; move-target-words is CONSUMED into the
+            // robot-bank splice on the O1 side, so the E row stays
+            // E-only at the row level).
+            "blink-cursor" => continue,
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -126,6 +131,27 @@ fn inv_frame(
                 (v + menu_frames).to_le_bytes().to_vec()
             }
             "robot-bank" => inv_robot_bank(&w.bytes),
+            "move-target-words" => {
+                // canonical u32 count + n*9 records -> the 0x60 EXD
+                // span: x[i]/y[i] u32 by ABSOLUTE id, -1 = none, the
+                // tail slots stay at the spawn -1 fill.
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 9);
+                let mut span = vec![0xFFu8; 0x60];
+                for i in 0..n.min(12) {
+                    let rec = &w.bytes[4 + i * 9..];
+                    if rec[0] != 0 {
+                        let (px, py) = (4 * i, 0x30 + 4 * i);
+                        span[px..px + 4].copy_from_slice(
+                            &i32::from_le_bytes(rec[1..5].try_into().unwrap()).to_le_bytes(),
+                        );
+                        span[py..py + 4].copy_from_slice(
+                            &i32::from_le_bytes(rec[5..9].try_into().unwrap()).to_le_bytes(),
+                        );
+                    }
+                }
+                span
+            }
             "beacon-family" => {
                 // canonical u32 x5 -> the five u16 cells.
                 w.bytes
@@ -186,11 +212,13 @@ fn s0_s1_cross_and_double_run() {
 
     // S0 = T0+TS only (no T1 rows -> no coverage asymmetry); S1 adds
     // the T1 slice: blink-cursor + move-target-words rows are E-only
-    // and the robot field gaps are 3 per robot (the record-external
-    // target trio; 34 canonical leaves - 31 mapped, RE-EXD-MAP §8).
+    // (the latter because the O1 side consumes its span into the
+    // robot-bank splice) and the robot field gaps are ZERO — the D90
+    // splice sources the record-external target trio (34 canonical
+    // leaves, all 34 shared, RE-EXD-MAP §8).
     for (id, frames_total, pinned_chain, expect_coverage) in [
         ("S0", 3u64, "8901789a88cf61fe", 0u64),
-        ("S1", 401u64, "1c4e7b4c9d9b0947", 2 + 3),
+        ("S1", 401u64, "1c4e7b4c9d9b0947", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -232,9 +260,9 @@ fn s0_s1_cross_and_double_run() {
         );
         assert_eq!(res.count(Class::EngineBug), 0, "{id}");
         assert_eq!(res.count(Class::Structural), 0, "{id}");
-        // blink-cursor + move-target-words rows are E-only (S1); the
-        // robot field gaps are the target trio per robot per frame
-        // (S1: 1 robot).
+        // blink-cursor + move-target-words rows are E-only (S1): the
+        // splice sources every robot leaf, so exactly the 2 row-level
+        // findings remain — no field-level gaps.
         assert_eq!(res.count(Class::Coverage), expect_coverage, "{id}");
         if expect_coverage > 0 {
             assert!(res
