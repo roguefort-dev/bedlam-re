@@ -1,0 +1,8 @@
+{
+  "_comment": "DH-G0 channel probe plan (D80). Plumbing-only watch rows for the headless PTY probe of the self-built debug DOSBox-X: real-mode addresses readable at the BPINT-8 surrogate halt, deterministic extents, NO game launch. These ids are deliberately NOT registry ids — a probe transcript is never stitched (dbx-stitch would reject them); it exists to convert the source-pinned channel facts in docs/RUNTIME.md to behaviorally [verified].",
+  "watches": [
+    { "id": "probe-ivt-0", "addr": "0000:0000", "len": 16 },
+    { "id": "probe-bios-f000", "addr": "F000:0000", "len": 16 },
+    { "id": "probe-bda-0040", "addr": "0040:0000", "len": 16 }
+  ]
+}
