@@ -27,8 +27,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// The tiers this compiler can resolve today (the S0 shape).
-const SUPPORTED_TIERS: [&str; 2] = ["T0", "TS"];
+/// The tiers this compiler can resolve today (the S0/S1 shape).
+const SUPPORTED_TIERS: [&str; 3] = ["T0", "T1", "TS"];
 
 // ------------------------------------------------------------- resolution
 
@@ -46,6 +46,9 @@ enum Form {
     },
     /// Address read through a pointer cell at capture time.
     PtrCell { cell: u64, len_expr: String },
+    /// Fixed base address + a length EXPRESSION over resolve symbols
+    /// (the count-driven T1 bank form: base + count-cell resolve row).
+    CountExpr { addr: u64, len_expr: String },
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +116,66 @@ fn parse_extent(extent: &str) -> Option<u64> {
     None
 }
 
+/// The count-cell resolve symbol a count-driven bank row feeds.
+fn count_symbol(id: &str) -> &'static str {
+    match id {
+        "robot-bank" => "robot_count",
+        "trt-array" => "trt_count",
+        "object-instances" => "obj_count",
+        other => unreachable!("no count symbol for {other:?} (guard in resolve_row)"),
+    }
+}
+
+/// Parse a "count*<stride>" / "<n>*<stride>" extent into its stride
+/// token (hex or decimal), e.g. "count*0xA8" -> "0xA8",
+/// "2000*0x14" -> "0x14".
+fn extent_stride(extent: &str, id: &str) -> Result<String, PlanError> {
+    let Some((count, stride)) = extent.trim().split_once('*') else {
+        return Err(die(format!(
+            "row {id} extent {:?} is not count*stride: update dbx-plan",
+            extent
+        )));
+    };
+    let stride = stride.trim();
+    if parse_int_prefix(stride).is_none() {
+        return Err(die(format!(
+            "row {id} extent stride {stride:?} does not parse as an integer"
+        )));
+    }
+    let _ = count; // "count" (symbolic) or a numeric cap — the live cell decides
+    Ok(stride.to_string())
+}
+
+/// The map-w/h grid form: extent must mention w*h (symbolic); the
+/// per-tile size is asserted against `expect` (the registry layout).
+fn grid(id: &str, addr: u64, extent: &str, per_tile: &str) -> Result<Option<RowPlan>, PlanError> {
+    let e = extent.trim();
+    // per-tile size 1 is written "w*h" in the registry (no *1 tail)
+    let want = if per_tile == "1" {
+        "w*h".to_string()
+    } else {
+        format!("w*h*{per_tile}")
+    };
+    let head = e.split_whitespace().next().unwrap_or("");
+    if head != want {
+        return Err(die(format!(
+            "row {id} extent {:?} no longer starts with {want:?}: update dbx-plan",
+            extent
+        )));
+    }
+    Ok(Some(RowPlan {
+        id: id.to_string(),
+        form: Form::CountExpr {
+            addr,
+            len_expr: if per_tile == "1" {
+                "$map_w*$map_h".into()
+            } else {
+                format!("$map_w*$map_h*{per_tile}")
+            },
+        },
+    }))
+}
+
 /// The per-row resolution table: form + the registry facts to ASSERT
 /// (anti-ghost — a changed row fails the build, it never silently
 /// re-emits). Deferred rows list the missing pin explicitly.
@@ -144,6 +207,139 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             ))
         })?;
         return plan(Form::Fixed { addr, len: 4 });
+    }
+
+    // --- T1: the P4 slice (robot/order/terrain banks). Gap rows are
+    // skipped like T0 gaps; bank rows are count-driven (resolve rows
+    // feed $symbols); grid rows derive their extent from map w/h.
+    if row.tier == "T1" {
+        if row.exd_addr.is_empty() {
+            return Ok(None); // explicit gap (blink-cursor/order-target/latch)
+        }
+        let cells = exd_cells(&row.exd_addr);
+        let first = cells.first().copied().ok_or_else(|| {
+            die(format!(
+                "T1 row {id} has no parsable exd_addr: {:?}",
+                row.exd_addr
+            ))
+        })?;
+        return match id {
+            // count-driven banks: extent "count*<stride>" + a count cell
+            // named in exd_addr. [derived-pinned] the count cell is the
+            // SECOND exd cell of the row (RE-EXD-MAP sec 5 bank rows).
+            "robot-bank" | "trt-array" => {
+                if cells.len() != 2 {
+                    return Err(die(format!(
+                        "row {id} exd_addr {:?} no longer carries base + count cell",
+                        row.exd_addr
+                    )));
+                }
+                let stride = extent_stride(&row.extent, id)?;
+                let sym = count_symbol(id);
+                plan(Form::CountExpr {
+                    addr: cells[0],
+                    len_expr: format!("${sym}*{stride}"),
+                })
+            }
+            // partial alias: EXD covers the selected-idx cell only
+            // (registry note; RE-EXD-MAP sec 5) — dump the 4 verified
+            // bytes, never a fabricated 12-byte triple.
+            "selection-triple" => plan(Form::Fixed {
+                addr: first,
+                len: 4,
+            }),
+            "per-player-selected" => {
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row {id} extent {:?} stopped parsing as fixed: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                plan(Form::Fixed { addr: first, len })
+            }
+            "beacon-family" => {
+                if cells.len() != 5 {
+                    return Err(die(format!(
+                        "beacon-family exd_addr {:?} no longer has exactly 5 cells",
+                        row.exd_addr
+                    )));
+                }
+                let (lo, hi) = (
+                    cells.iter().copied().min().expect("5 cells"),
+                    cells.iter().copied().max().expect("5 cells"),
+                );
+                // [derived-pinned] five u16-spaced cells = a 10-byte span
+                // (the registry layout gloss "u32 flag, u32 timer, 3 x
+                // tile" notwithstanding, the EXW/EXD cell lists are
+                // 2-byte spaced — RE-EXD-MAP sec 5 row).
+                if hi - lo != 4 * 2 {
+                    return Err(die(format!(
+                        "beacon-family cells are no longer u16-spaced: {lo:#x}..{hi:#x}"
+                    )));
+                }
+                plan(Form::Span {
+                    base: lo,
+                    len: 4 * 2 + 2,
+                    cells,
+                })
+            }
+            "spread-claims" => {
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row {id} extent {:?} stopped parsing as fixed: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                plan(Form::Fixed { addr: first, len })
+            }
+            // map-w/h-driven grids: extent "w*h*K" -> $map_w*$map_h*K
+            "tile-word-grid" | "platform-strength" => grid(id, first, &row.extent, "2"),
+            "typedb-mirror-rows" => grid(id, first, &row.extent, "0x1E"),
+            "typedb-fade-byte" | "armor-pad-reads" => grid(id, first, &row.extent, "1"),
+            "variant-flag-bytes" => {
+                if cells.len() != 2 || cells[1] - cells[0] != 1 {
+                    return Err(die(format!(
+                        "variant-flag-bytes exd_addr {:?} no longer has 2 adjacent cells",
+                        row.exd_addr
+                    )));
+                }
+                let lo = cells[0];
+                // two adjacent per-tile byte planes -> one span
+                plan(Form::CountExpr {
+                    addr: lo,
+                    len_expr: "(2*$map_w*$map_h)+1".into(),
+                })
+            }
+            "object-instances" => {
+                if !row.indirect || cells.len() != 2 {
+                    return Err(die(format!(
+                        "object-instances lost its pointer+count cell pair \
+                         (indirect {}, exd_addr {:?})",
+                        row.indirect, row.exd_addr
+                    )));
+                }
+                let stride = extent_stride(&row.extent, id)?;
+                plan(Form::PtrCell {
+                    cell: cells[0],
+                    len_expr: format!("$obj_count*{stride}"),
+                })
+            }
+            "move-target-words" => {
+                // extent "per-robot u16 arrays": the per-robot bound is
+                // not pinned as an extent formula — deferred explicitly.
+                if row.extent != "per-robot u16 arrays" {
+                    return Err(die(format!(
+                        "row {id} extent {:?} changed from the symbolic form: \
+                         resolve it in dbx-plan if now pinned",
+                        row.extent
+                    )));
+                }
+                Ok(None)
+            }
+            other => Err(die(format!(
+                "T1 registry row {other:?} has no dbx-plan resolution form"
+            ))),
+        };
     }
 
     // --- TS fixed-extent rows.
@@ -312,6 +508,21 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
 
 // ----------------------------------------------------------------- emit
 
+/// Every `$name` referenced by a len expression.
+fn expr_symbols(expr: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for name in expr.split('$').skip(1) {
+        let end = name
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(name.len());
+        let sym = name[..end].to_string();
+        if !sym.is_empty() && !out.contains(&sym) {
+            out.push(sym);
+        }
+    }
+    out
+}
+
 fn jstr(s: &str) -> String {
     // Zero-dep emitter: our strings are ASCII without quotes/backslashes
     // (asserted — anything else needs a real escaper, not silent pass-through).
@@ -334,8 +545,8 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     for t in &scen.tiers {
         if !SUPPORTED_TIERS.contains(&t.as_str()) {
             return Err(die(format!(
-                "scenario {} tier {t:?} is not compilable yet: T1+ extents need \
-                 the W5 count-cell resolver (dbx-plan supports {:?})",
+                "scenario {} tier {t:?} is not compilable yet: T2+ watches have \
+                 no EXD aliases yet (dbx-plan supports {:?})",
                 scen.id, SUPPORTED_TIERS
             )));
         }
@@ -409,6 +620,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                 "static-tot-volume" => "tot_ptr",
                 "static-dat-volume" => "dat_ptr",
                 "static-claim-bank" => "claim_ptr",
+                "object-instances" => "obj_ptr",
                 other => {
                     return Err(die(format!(
                         "PtrCell row {other:?} has no resolve symbol in dbx-plan"
@@ -417,6 +629,49 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
             };
             resolve.push((name.into(), cell));
         }
+    }
+    // Every $symbol referenced by any len expression (CountExpr bank
+    // rows AND PtrCell lens) must carry a resolve row: count cells come
+    // from the bank row's own exd_addr (second cell), map w/h from
+    // static-map-wh.
+    let mut lens: Vec<&str> = Vec::new();
+    for p in &anchor {
+        match &p.form {
+            Form::CountExpr { len_expr, .. } | Form::PtrCell { len_expr, .. } => {
+                lens.push(len_expr)
+            }
+            Form::Fixed { .. } | Form::Span { .. } => {}
+        }
+    }
+    for name in lens.iter().flat_map(|e| expr_symbols(e)) {
+        if resolve.iter().any(|(n, _)| n == &name) {
+            continue;
+        }
+        let cell = match name.as_str() {
+            "robot_count" | "trt_count" | "obj_count" => {
+                let row_id = match name.as_str() {
+                    "robot_count" => "robot-bank",
+                    "trt_count" => "trt-array",
+                    _ => "object-instances",
+                };
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == row_id)
+                    .ok_or_else(|| die(format!("symbol ${name} has no source registry row")))?;
+                exd_cells(&row.exd_addr).get(1).copied().ok_or_else(|| {
+                    die(format!(
+                        "row {} exd_addr {:?} lost its count cell",
+                        row.id, row.exd_addr
+                    ))
+                })?
+            }
+            other => {
+                return Err(die(format!(
+                    "len expression references unknown symbol ${other}"
+                )))
+            }
+        };
+        resolve.push((name, cell));
     }
 
     let watch_json = |p: &RowPlan| -> String {
@@ -434,6 +689,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                     "static-tot-volume" => "tot_ptr",
                     "static-dat-volume" => "dat_ptr",
                     "static-claim-bank" => "claim_ptr",
+                    "object-instances" => "obj_ptr",
                     _ => unreachable!("checked above"),
                 };
                 format!(
@@ -442,6 +698,11 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                     jstr(len_expr)
                 )
             }
+            Form::CountExpr { addr, len_expr } => format!(
+                "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {} }}",
+                jstr(&p.id),
+                jstr(len_expr)
+            ),
         }
     };
 
@@ -592,6 +853,10 @@ mod tests {
         Scenario::parse(include_str!("../../scenarios/S0.scen")).unwrap()
     }
 
+    fn s1() -> Scenario {
+        Scenario::parse(include_str!("../../scenarios/S1.scen")).unwrap()
+    }
+
     #[test]
     fn extent_forms_parse() {
         assert_eq!(parse_extent("4"), Some(4));
@@ -664,8 +929,61 @@ mod tests {
     }
 
     #[test]
-    fn t1_scenario_refused() {
-        let src = include_str!("../../scenarios/S1.scen");
+    fn s1_plan_resolves_t1_rows() {
+        let scen = Scenario::parse(include_str!("../../scenarios/S1.scen")).unwrap();
+        let reg = registry();
+        let emitted = emit_plan(&scen, &reg).unwrap();
+        // T1: 17 rows - 3 gaps (blink-cursor/order-target/no-extract-
+        // latch) - 1 deferred (move-target-words) = 13 resolved.
+        // T0: 9 per-frame + TS: 9 anchor-only, same as S0.
+        let anchor_count = count_rows(&emitted.json, "anchor_watches");
+        let frame_count = count_rows(&emitted.json, "watches");
+        assert_eq!(frame_count, 9 + 13, "T0 minus 2 gaps + T1 resolved");
+        assert_eq!(anchor_count, 18 + 13, "T0 + TS + T1 rows");
+        assert_eq!(
+            emitted.deferred.len(),
+            12,
+            "8 S0 deferrals + T1: 3 gaps + move-target-words"
+        );
+        // count-cell resolve rows exist with the registry-derived cells
+        assert!(emitted
+            .json
+            .contains("\"name\": \"robot_count\", \"addr\": \"CS:0011958C\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"trt_count\", \"addr\": \"CS:0011949C\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"obj_ptr\", \"addr\": \"CS:00119584\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"obj_count\", \"addr\": \"CS:00119554\""));
+        // count-driven extents compiled to expressions
+        assert!(emitted.json.contains("\"len\": \"$robot_count*0xA8\""));
+        assert!(emitted.json.contains("\"len\": \"$trt_count*0x20\""));
+        assert!(emitted.json.contains("\"len\": \"$obj_count*0x14\""));
+        assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*2\""));
+        assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*0x1E\""));
+        assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
+        // gaps never emit
+        for id in row_ids(&emitted.json) {
+            assert!(
+                id != "blink-cursor" && id != "order-target" && id != "no-extract-latch",
+                "gap row {id:?} must never be emitted"
+            );
+        }
+    }
+
+    #[test]
+    fn s1_plan_matches_committed_artifact() {
+        let emitted = emit_plan(&s1(), &registry()).unwrap();
+        let committed = include_str!("../../capture-plans/S1.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S1.json is stale: regenerate with dbx-plan scenarios/S1.scen --out capture-plans/S1.json");
+    }
+
+    #[test]
+    fn t2_scenario_refused() {
+        let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
         assert!(emit_plan(&scen, &registry()).is_err());
     }
