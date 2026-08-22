@@ -1,0 +1,30 @@
+{
+  "_comment": "W5 PAD probe, NEGATIVE leg (D86). Same machinery as dbgprobe-pad-plan.json but the op targets slot 3 - an INACTIVE record (active word 0; the 7j.16 loader marks parsed slots active=1 and stops at x==0xFFFF). capgen MUST fail loud ('not a loaded pad', naming slot 3) and exit non-zero; no capture transcript is written. The dbgprobe pad mode asserts exactly that.",
+  "logfile": "dbgprobe.log",
+  "time_limit": 240,
+  "boot_timeout": 90,
+  "flat_guard": false,
+  "frames": 1,
+  "boot_commands": [
+    { "cmd": "BPLM 46C", "expect": "Set linear memory breakpoint at 0000046C" }
+  ],
+  "arm_commands": [
+    { "cmd": "BPDEL *", "expect": "Breakpoints deleted" },
+    { "cmd": "BPINT 8", "expect": "Set interrupt breakpoint at INT 08" }
+  ],
+  "resolve": [],
+  "boot_writes": [
+    { "addr": "0000:0610", "bytes": "010005003d000000" },
+    { "addr": "0000:0618", "bytes": "0000090009000100" }
+  ],
+  "inject": [
+    { "frame": 1, "op": "pad", "bank": "0000:0600", "slot": 3,
+      "target": ["0000:0620", "0000:0624", "0000:0628"] }
+  ],
+  "anchor_watches": [
+    { "id": "probe-pad-rec3", "addr": "0000:0618", "len": 8 }
+  ],
+  "watches": [
+    { "id": "probe-pad-target", "addr": "0000:0620", "len": 12 }
+  ]
+}

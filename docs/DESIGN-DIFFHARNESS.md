@@ -283,6 +283,21 @@ step per frame, applied as raw guest-memory writes:
 4. **PAD step-on** — an ORDER whose target is a .PAD slot tile (extraction
    arming per §7j.20: FUN_00433980 reads the pad, arms the beacon) — the
    sanctioned extraction trigger, not a click.
+   **OP FORM (W5-pad, D86):** the target tile is READ FROM THE PAD BANK AT
+   CAPTURE TIME, never baked from the .PAD file at compile time — the
+   staged mission decides which slots exist. Runtime record layout
+   (FORMATS §10 / RE-EXW-SIM §7j.16, both [verified]): 999 slots × 8 B
+   at EXW 0x4e44f8 / EXD 0xf63c, `{u16 active@+0, u16 x@+2, u16 y@+4,
+   u16 z@+6}`; the loader marks every parsed slot active=1 and stops at
+   x==0xFFFF. The op: read slot `bank+slot·8`, VALIDATE (active==1 AND
+   x!=0xFFFF — fail loud naming the slot, so a scenario targeting a
+   slot the staged mission never loaded is a capture error, never a
+   silent garbage order), then write {x,y,z} as three i32-LE words to
+   the order-target triple (tile coords — the shared-grammar contract;
+   the E side's order seam compares robot TILE positions, and the
+   beacon armer itself takes `pos>>13` tiles). The robot's arrival on
+   the tile is what arms extraction (FUN_00433980 → FUN_004247b5) —
+   the op writes only the order, the game does the rest.
 5. **BOOT setup** — difficulty 0x46cbf8 / mission-selection state written at
    scenario start (pre-mission), where a scenario needs non-default settings.
 
@@ -426,6 +441,18 @@ draw-relevant record semantics without pixel diffing.
 first) — the harness is what makes that decode mechanical (watch the armed
 records instead of guessing the case).
 
+**Extraction-pad census (S6 authoring data; §7j.20 item 2
+[verified-mechanical-parse], the exact per-zone table stays the deferred
+decode):** the .PAD slots whose pad scripts call the beacon armer, per
+zone value — zone 1 {8, 0x10, 0x12, 0x18}, zone 2 {4, 5, 7, 0xE, 0x11},
+zone 3 {0, 1, 6, 0xF, 0x15}, zone 4 {0, 2, 0x10, 0x15, 0x16}, zone 5
+{8, 9 ×2, 0x3D}, plus the shared pad-switch tail (slot 6) for the zones
+that reach it. S6's default ZONEA target = zone 1's set. The `pad <slot>`
+step addresses slots by bank INDEX (slot i = runtime record i at
+0x4e44f8/0xf63c; file record order is preserved by the loader), so this
+table is the scenario author's slot picker — the op's runtime validation
+(active==1, x!=0xFFFF) still guards against a wrong zone/slot pairing.
+
 ## 8. Open hypotheses ledger (what this doc does with each)
 
 | hypothesis | source | disposition |
@@ -526,6 +553,19 @@ differ come before any new scenario depth.
    indices calibrate at the first live session via `walk_watches`
    transcript comments. The PAD step keeps its own unit (the capgen
    runtime pad-slot read op still pending, deliberately out of scope).
+   **W5-pad ADDENDUM 2026-08-22 (D86):** the PAD step LANDED +
+   headless-verified (`dbgprobe pad`, no game). The capgen
+   `{op:"pad"}` inject form reads the 8-B slot record from the pad
+   bank at the capture-frame stop (MEMDUMPBIN through the bank's own
+   SEG form), validates the loader marks (active==1, x!=0xFFFF —
+   fail loud), then writes {x,y,z} as i32-LE to the order-target
+   triple (§5.4 OP FORM). dbx-plan un-gates `Step::Pad`: the op
+   row's bank comes from the `static-pad-slots` registry row (a READ
+   anchor — its own explicit gap error, distinct from the write-seam
+   rule) and the target cells from `order-target`; slot bound 0..998
+   re-checked. The extraction-pad census (§7) is the S6 slot picker.
+   The E side still rejects pad steps naming the S6 engine seam
+   (extraction arming) — W12 pairs it.
 6. **W6 — engine dump emitter.** parity_harness gains `--canonical`:
    per-tick canonical records in the W3 schema (MissionSim/MissionScene
    field maps for T0/T1 first).

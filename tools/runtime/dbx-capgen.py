@@ -76,7 +76,7 @@ runs from the staged conf's autoexec. Keys:
       "# walk stop N <id> <hex>" comments (the parser skips them) so
       a calibration run maps menu transitions to stop indices.
   inject [{frame,addr,bytes} or {frame,op:"command",base,stride,
-      count_cell,bytes}]
+      count_cell,bytes} or {frame,op:"pad",bank,slot,target}]
       W5 frame-boundary writes (DESIGN §5): applied at that capture
       frame's stop BEFORE the watch dumps; the transcript record gets
       the injected flag (frame N 1). addr/base/count_cell use the
@@ -84,6 +84,12 @@ runs from the staged conf's autoexec. Keys:
       are real-mode seg<<4 for probes). The command op appends one
       record to a count-cell ring: reads count u32, writes the payload
       zero-extended to the stride at base+count*stride, bumps count.
+      The pad op (DESIGN §5.4, D86) writes an ORDER to a .PAD slot's
+      tile: reads the 8-B slot record {u16 active@+0, x@+2, y@+4,
+      z@+6} from bank+slot*8 (999 slots, loader marks active=1,
+      x==0xFFFF terminates), fails loud unless active==1 and
+      x!=0xFFFF, then writes {x,y,z} as three i32-LE words to the
+      target triple (the order-target seam).
   anchor_watches / watches      frame 1 dumps anchor_watches+watches
       (TS statics ride the anchor frame), frames 2+ dump watches.
       addr "SEG:<expr>" offsets and len may be arithmetic over $names
@@ -382,7 +388,14 @@ def apply_inject(sess, dblog, args, dumps, row, symbols):
                                                 write the record at
                                                 base+count*stride
                                                 (zero-extended), bump
-                                                the count cell."""
+                                                the count cell.
+      {frame, op:pad, bank, slot, target}      .PAD step-on order
+                                                (DESIGN §5.4): read the
+                                                8-B slot record at
+                                                bank+slot*8, validate
+                                                the loader marks, write
+                                                {x,y,z} i32-LE x3 to
+                                                the target triple."""
     data = bytes.fromhex(row.get("bytes", ""))
     if row.get("op") == "command":
         stride = int(row["stride"], 0) if isinstance(row["stride"], str) else int(row["stride"])
@@ -404,6 +417,49 @@ def apply_inject(sess, dblog, args, dumps, row, symbols):
         print(
             f"capgen: inject command #{count} -> {base_l + count * stride:#x} "
             f"({len(data)} B payload), count {count} -> {count + 1}",
+            file=sys.stderr,
+        )
+        return
+    if row.get("op") == "pad":
+        slot = int(row["slot"], 0) if isinstance(row["slot"], str) else int(row["slot"])
+        if not 0 <= slot <= 998:
+            raise ValueError(f"pad op slot {slot} out of range 0..998 (999 .PAD slots)")
+        target = row.get("target")
+        if not isinstance(target, list) or len(target) != 3:
+            raise ValueError("pad op needs target = [x, y, z] (3 SEG:EXPR addrs)")
+        # The READ goes through the bank's own SEG form with the slot
+        # offset pre-evaluated (MEMDUMPBIN off is a hex literal; the
+        # plan grammar's expressions are capgen's to resolve).
+        seg, off = row["bank"].split(":", 1)
+        off_val = resolve_expr(off, symbols) if not _HEX_LIT.match(off) else int(off, 16)
+        off_val += slot * 8
+        if off_val + 8 > 0x1F38:
+            raise ValueError(
+                f"pad op record at bank+{off_val:#x} exceeds the 999*8 pad bank"
+            )
+        dest = os.path.join(dumps, "inject.pad.bin")
+        rec = dump_watch(sess, dblog, args.workdir, dest, f"{seg}:{off_val:X}", 8)
+        active, px, py, pz = (
+            int.from_bytes(rec[i : i + 2], "little") for i in (0, 2, 4, 6)
+        )
+        # FAIL LOUD (D86): active==1 is the 7j.16 loader's parsed-slot
+        # mark; x==0xFFFF is the file terminator. A slot the staged
+        # mission never loaded must never emit a garbage order.
+        if active != 1 or px == 0xFFFF:
+            raise ValueError(
+                f"pad op slot {slot}: record not a loaded pad "
+                f"(active={active:#x}, x={px:#x}, y={py:#x}, z={pz:#x}) — "
+                f"the loader marks parsed slots active=1 and stops at "
+                f"x==0xFFFF; pick a slot the staged mission has "
+                f"(the extraction-pad census, DESIGN §7)"
+            )
+        for cell, v in zip(target, (px, py, pz)):
+            smv_bytes(
+                sess, dblog, addr_to_linear(cell, symbols), int(v).to_bytes(4, "little")
+            )
+        print(
+            f"capgen: inject pad slot {slot} ({px},{py},{pz}) -> order-target "
+            f"triple {target}",
             file=sys.stderr,
         )
         return

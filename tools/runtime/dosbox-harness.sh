@@ -51,7 +51,8 @@
 #            RUNTIME.md to behaviorally [verified].
 #            MODES: gate (default) | inject (W5 SMV/frame injection) |
 #            flow (v2 live machinery) | walk (D84 scripted-menu-walk
-#            driver machinery).
+#            driver machinery) | pad (D86 .PAD slot op, incl. the
+#            fail-loud negative leg).
 #
 # The conf pins cycles/machine/core/mixer (D29); -set overrides are for
 # throwaway experiments only, never golden runs.
@@ -327,6 +328,84 @@ for no, (_, rows) in frames.items():
 print("walk probe: GREEN (walk loop + stop indexing + calibration notes + arm-at-walk-end + resolve_at=anchor)")
 PYCHK
     echo "walk transcript: $PROBE_OUT/capture.dbxcap"
+    echo "pty log:        $PROBE_OUT/pty.log"
+    return
+  fi
+  if [ "$MODE" = "pad" ]; then
+    # W5 PAD probe (still NO game: probe conf, empty autoexec): the
+    # DESIGN §5.4 pad op = a runtime pad-slot READ + validated
+    # order-target WRITE. boot_writes seed a fake pad bank (slot 2 =
+    # the real ZONEA/MISSION1.PAD record 0 with active=1; slot 3 =
+    # inactive); the frame-1 pad op reads slot 2 through the bank's
+    # own SEG form, validates the loader marks, and writes {x,y,z}
+    # i32-LE x3 to the fake order triple. Proves: the record read,
+    # the fail-loud validation contract (negative leg: slot 3 must
+    # abort the capture naming the slot), and the injected flag.
+    PROBE_OUT="$REPO_ROOT/runtime/harness-out/dbgpad"
+    mkdir -p "$PROBE_OUT"
+    echo "pad probe: W5 pad op (runtime pad-slot read + order write), no game launch"
+    python3 "$CAPGEN" \
+      --dbx "$DBG_BIN" \
+      --conf "$PROBE_CONF" \
+      --plan "$REPO_ROOT/tools/runtime/dbgprobe-pad-plan.json" \
+      --workdir "$PROBE_OUT" \
+      --out "$PROBE_OUT/capture.dbxcap"
+    python3 - "$PROBE_OUT/capture.dbxcap" <<'PYCHK'
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+assert lines[0] == "DBXCAP v1", lines[0]
+frames = {}
+cur = None
+for ln in lines:
+    p = ln.split()
+    if not p:
+        continue
+    if p[0] == "frame":
+        cur = int(p[1])
+        frames[cur] = (len(p) > 2 and p[2] == "1", {})
+    elif p[0] == "watch":
+        ok, rows = frames[cur]
+        rows[p[1]] = p[2] if len(p) > 2 else ""
+assert sorted(frames) == [1], f"frame keys {sorted(frames)}"
+inj, f1 = frames[1]
+assert inj, "frame 1 missing the injected flag"
+# the seeded record reads back intact (the op's own read source)
+assert f1["probe-pad-rec2"] == "010005003d000000", f1
+# the order-target triple = {x=5, y=61, z=0} as i32-LE x3
+assert f1["probe-pad-target"] == "05000000" + "3d000000" + "00000000", f1
+print("pad probe: GREEN (slot record read + loader-mark validation + i32-LE triple write + injected flag)")
+PYCHK
+    NEG_OUT="$REPO_ROOT/runtime/harness-out/dbgpadneg"
+    NEG_LOG="$REPO_ROOT/runtime/harness-out/dbgpadneg.run.log"
+    mkdir -p "$NEG_OUT"
+    rm -f "$NEG_OUT/capture.dbxcap"
+    set +e
+    python3 "$CAPGEN" \
+      --dbx "$DBG_BIN" \
+      --conf "$PROBE_CONF" \
+      --plan "$REPO_ROOT/tools/runtime/dbgprobe-pad-neg-plan.json" \
+      --workdir "$NEG_OUT" \
+      --out "$NEG_OUT/capture.dbxcap" >"$NEG_LOG" 2>&1
+    NEG_RC=$?
+    set -e
+    if [ "$NEG_RC" -eq 0 ]; then
+      echo "pad probe: FATAL - the inactive-slot op succeeded (validation missing?)" >&2
+      exit 1
+    fi
+    # NB: the log lives OUTSIDE the capgen workdir — capgen purges
+    # stale *.log files from its workdir at startup (D80 stale-ack
+    # guard) and would delete it mid-run.
+    grep -q "pad op slot 3: record not a loaded pad" "$NEG_LOG" || {
+      echo "pad probe: FATAL - the negative run failed for the wrong reason:" >&2
+      tail -5 "$NEG_LOG" >&2
+      exit 1
+    }
+    test ! -f "$NEG_OUT/capture.dbxcap" || {
+      echo "pad probe: FATAL - a failed capture must not write a transcript" >&2
+      exit 1
+    }
+    echo "pad probe: GREEN (negative leg: inactive slot fails loud, no transcript)"
+    echo "pad transcript: $PROBE_OUT/capture.dbxcap"
     echo "pty log:        $PROBE_OUT/pty.log"
     return
   fi

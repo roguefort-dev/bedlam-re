@@ -510,6 +510,37 @@ arm-at-walk-end + resolve_at=anchor feeding expr lens; probe conf, no
 game, BDA tick cell 0x46C as the surrogate counter); `dbgprobe
 gate/flow/inject` regression-GREEN after the capgen restructure.
 
+## W5 pad op (D86, 2026-08-22 — `dbgprobe pad`, unattended-safe, no game)
+
+The DESIGN §5.4 PAD step's runtime read op (the capgen `{op:"pad"}`
+inject form). Row shape:
+`{frame, op:"pad", bank:"SEG:EXPR", slot:N, target:["SEG:EXPR" ×3]}`.
+
+- The READ goes through the bank row's own SEG form + `slot·8`
+  (MEMDUMPBIN, offset pre-evaluated by capgen — hex off in the command);
+  SMV writes use the linear conversion as for every inject row.
+- Record = 8 B `{u16 active@+0, x@+2, y@+4, z@+6}` (FORMATS §10 /
+  7j.16 loader: active word set 1 per parsed record, x==0xFFFF ends).
+  VALIDATION FAILS LOUD: active != 1 or x == 0xFFFF → capture error
+  naming the slot + words (a scenario targeting a slot the staged
+  mission never loaded must never emit a garbage order).
+- The WRITE: {x,y,z} as three i32-LE words to the order-target cells
+  (EXD 0x10e0a4/0xa8/0xac; tile coords — the shared-grammar contract).
+  The game does the rest: a robot arriving on the tile arms extraction
+  (FUN_00433980 → FUN_004247b5, §7j.20).
+- Real O1 addresses are ALWAYS registry-derived (dbx-plan: bank from
+  `static-pad-slots` — a READ anchor with its own gap error; target
+  cells from `order-target`; probe plans deliberately use fabricated
+  low memory and are never stitched).
+- The extraction-pad census (which slot is the zone's extraction pad)
+  is committed in DESIGN §7 (S6 authoring data; §7j.20 item 2).
+- Gate: tools/runtime/dbgprobe-pad-plan.json seeds a fake pad bank at
+  0000:0600 (slot 2 = the real ZONEA/MISSION1.PAD record 0
+  (5,61,0) with active=1; slot 3 = inactive), one pad op at frame 1
+  writes the triple at 0000:0620, watches assert the readback + the
+  injected flag; the NEGATIVE plan (slot 3) asserts the fail-loud
+  validation (capgen exits non-zero naming the slot).
+
 ## Wine prefix for EXW (golden pipeline comparator)
 
 - wine: system wine 11.15 (/usr/bin/wine, CachyOS). NOTE: wow64 mode -

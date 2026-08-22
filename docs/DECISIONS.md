@@ -2935,3 +2935,49 @@ with three recorded deltas from the design-first text:
    dims).
 
 Nudge-Worker: 36f752cd-4fdc-4d2e-9926-3c672ff37ecf
+
+## D86 — 2026-08-22: the capgen pad op lands (W5-pad): runtime pad-slot
+read + order-target write, Step::Pad un-gated
+
+Worker 85dedea3 claim 2 (queue item 2). Design first (DESIGN §5.4 OP
+FORM + §7 census + RUNTIME "W5 pad op"), implementation follows.
+
+1. THE OP (capgen `{op:"pad"}` inject form): the PAD step's target
+   tile is READ from the pad bank AT CAPTURE TIME (bank+slot·8, 8-B
+   record via MEMDUMPBIN through the bank's own SEG form), never baked
+   from the .PAD file at compile time — the staged mission decides
+   which slots exist. Validation FAILS LOUD: active u16@+0 == 1 (the
+   7j.16 loader's parsed-slot mark) AND x u16@+2 != 0xFFFF (the file
+   terminator); a scenario targeting a slot the mission never loaded
+   is a capture error naming the slot, never a silent garbage order.
+   The write: {x,y,z} → three i32-LE words to the order-target triple
+   (EXD 0x10e0a4/a8/ac). Tile coords are the shared-grammar contract
+   (the E order seam compares robot tiles; the beacon armer takes
+   pos>>13). The op writes only the ORDER — the robot's arrival arms
+   extraction in-game (FUN_00433980 → FUN_004247b5).
+2. DBX-PLAN UN-GATE: `pad <slot>` compiles to the op row; the bank
+   address comes from the `static-pad-slots` registry row and the
+   three targets from `order-target` — every address registry-derived
+   (anti-ghost). The bank is a READ anchor: its gap error is distinct
+   from the step_rows WRITE-seam rule (which keeps covering
+   order-target). Slot bound 0..998 re-checked (runner already pins
+   it; the op double-checks).
+3. THE CENSUS AS DATA: the §7j.20 item 2 ~25 extraction-pad (zone,
+   slot) pairs are committed in DESIGN §7 as the S6 slot picker
+   (zone 1 {8,0x10,0x12,0x18} … + the shared slot-6 tail); the op's
+   runtime validation guards a wrong zone/slot pairing.
+4. VERIFICATION: `dbgprobe pad` headless GREEN (probe conf, NO game:
+   a seeded fake pad bank at 0000:0600 — slot 2 carries the real
+   ZONEA/MISSION1.PAD record 0 (5,61,0) with active=1 — the op writes
+   05000000 3D000000 00000000 to the triple at 0000:0620, frame 1
+   carries the injected flag; the NEGATIVE plan targets slot 3
+   (active=0) and capgen must exit non-zero naming the slot).
+   dbgprobe gate/flow/inject/walk regression-GREEN; dbx-plan step
+   tests cover the un-gated compile + both registry gap errors;
+   capture-plans byte-pinned tests unchanged (S0/S1/S0W carry no pad
+   steps). Workspace test/fmt/clippy green; manifest clean.
+5. SCOPE NOTES: the E side still rejects pad steps naming the S6
+   engine seam (extraction arming — W12 pairs it); S6 itself (the
+   scenario + live capture) is a later unit that pulls this op.
+
+Nudge-Worker: 85dedea3-2ef6-47c7-a088-03a058aba96f
