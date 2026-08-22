@@ -2,9 +2,13 @@
 """Print space-separated spawnable Now-item numbers for the nudge controller.
 
 An item is spawnable when it is not claimed and carries no INTERACTIVE,
-MANUAL, or BLOCKED tag. Tagged and untagged items are both eligible; untagged
-items produce a stderr warning so malformed queue lines are visible instead of
-silently unschedulable.
+MANUAL, or BLOCKED tag. A BLOCKED-prefixed tag ([BLOCKED-operator-desktop]
+and friends) skips exactly like [BLOCKED]: workers naturally suffix the
+blocker, and an exact-match-only check respawned the unprogressable item
+forever while real work starved behind it (watchdog repair 2026-08-22).
+Tagged and untagged items are both eligible; untagged items produce a
+stderr warning so malformed queue lines are visible instead of silently
+unschedulable.
 """
 import re
 import sys
@@ -22,7 +26,7 @@ spawnable = []
 for match in re.finditer(r"(?m)^\s*(\d+)\.\s+(.*\S)\s*$", now):
     item, rest = match.groups()
     tags = {tag.strip().upper() for tag in re.findall(r"\[([^]]+)\]", rest)}
-    if tags & {"INTERACTIVE", "MANUAL", "BLOCKED"}:
+    if any(tag.startswith("BLOCKED") for tag in tags) or tags & {"INTERACTIVE", "MANUAL"}:
         continue
     if not tags:
         print(f"warning: queue item {item} has no [tag]; scheduling it anyway", file=sys.stderr)

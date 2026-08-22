@@ -271,6 +271,31 @@ grep -q "failed \[transport rc=1 progress=0\] task=$fivexx_hash; provider-side, 
 [ ! -e "$PLAN/.state/taskcooldown/$fivexx_hash" ]
 [ ! -e "$PLAN/.state/claims/14-owner.claim" ]
 
+# A suffixed block tag ([BLOCKED-operator-desktop], the 2026-08-22
+# watchdog-repair incident) excuses a clean rc=0 no-commit run exactly
+# like [BLOCKED]: before the fix the legitimate operator-gated block was
+# mislabeled no-progress, charged a false taskfails strike, and - with
+# cooldowns disabled - respawn-looped while real work starved behind it.
+cat > "$TMP/mock-suffixed-block" <<EOF
+#!/usr/bin/env bash
+echo "15. [P4] [BLOCKED-operator-desktop] mock blocked - operator desktop gated" > "$PLAN/.state/NEXT.md"
+exit 0
+EOF
+chmod +x "$TMP/mock-suffixed-block"
+echo "15. [P4] suffixed-block mock item" >> "$PLAN/.state/NEXT.md"
+sfx_hash=$(sed -n "s/^[[:space:]]*15\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
+echo reserved > "$PLAN/.state/claims/15-824.claim"
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-suffixed-block" "$AGENT" 15 824
+sfx_rc=$?
+set -e
+[ "$sfx_rc" -eq 0 ]
+grep -q "item 15 ended cleanly (rc=0 progress=0)" "$PLAN/.state/nudge.log"
+! grep -q "agent item 15 failed \[" "$PLAN/.state/nudge.log"
+[ ! -e "$PLAN/.state/taskfails/$sfx_hash" ]
+[ ! -e "$PLAN/.state/taskcooldown/$sfx_hash" ]
+[ ! -e "$PLAN/.state/claims/15-owner.claim" ]
+
 # A substantive commit is credited only with this wrappers exact trailer.
 cat > "$TMP/mock-own-progress" <<EOF
 #!/usr/bin/env bash

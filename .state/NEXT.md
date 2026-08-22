@@ -1,12 +1,26 @@
 # NEXT - task queue (top first; rewrite this file at end of every run)
 
 ## Now
-1. [P4.2/DH-G0-live] S0 LIVE SESSION — INTERACTIVE-ONLY REMAINDER
-   (operator/desktop; ALL machinery landed + headless-verified by the
-   fa49e9cf unattended prep, commits f659db5 + d5550a3 + ee2f0d4, D81 —
-   follow docs/RUNTIME.md "S0 LIVE SESSION CHECKLIST" step by step):
-   (a) `dbgprobe gate` + `dbgprobe flow` regression, `diff stage
-   S0.scen` + copy/regenerate the plan; (b) FORCE_DIFF_RUN=1
+1. [BLOCKED] [P4.2/DH-G0-live] S0 LIVE SESSION —
+   INTERACTIVE-ONLY REMAINDER (operator/desktop; ALL machinery landed +
+   headless-verified by the fa49e9cf unattended prep, commits f659db5 +
+   d5550a3 + ee2f0d4, D81 — follow docs/RUNTIME.md "S0 LIVE SESSION
+   CHECKLIST" step by step).
+   BLOCK REASON (recorded once 2026-08-22 by unattended worker
+   e63e5ff4, claim 1): steps (b)-(e) are operator-desktop-gated —
+   FORCE_DIFF_RUN=1 `diff capture` opens the live game window where a
+   human must walk the title menu to ZONEA/MISSION1 (twice, fresh
+   boots) and the cycles calibration needs ears on live audio
+   dropouts; docs/RUNTIME.md "Explicitly NOT done here" item 2 bars
+   unattended runs from launching desktop game sessions (the
+   refused-unattended gate exists for exactly this). Unattended-safe
+   step (a) was RE-VERIFIED GREEN by that worker this run: dbgprobe
+   gate + dbgprobe flow both pass, staged
+   runtime/harness-out/diff/S0/capture-plan.json is byte-identical to
+   the committed capture-plans/S0.json, staged corpus + run.conf
+   intact, MANIFEST.sha256 clean before AND after. The operator
+   session is TURNKEY — start at checklist step 1, no prep left.
+   OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
    `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
    the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
    retry) → BP CS:0005A6EB arm (the ack echoes the selector = the

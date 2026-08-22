@@ -157,7 +157,14 @@ elif grep -aq "Maximum steps for this agent" "$LOG"; then
   kind=step-cap
 elif [ "$rc" -ne 0 ]; then
   kind=client-error
-elif [ "$progress" -eq 0 ] && ! grep -qE "^[[:space:]]*$item\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED\]" "$STATE/NEXT.md" 2>/dev/null; then
+# A block tag may carry a suffix ([BLOCKED-operator-desktop], the
+# 2026-08-22 watchdog repair: worker e63e5ff4 correctly parked the
+# operator-gated S0 live session but the bare-\[BLOCKED\] matcher
+# mislabeled the legitimate no-commit block as no-progress, charging a
+# false taskfails strike and - with cooldowns disabled - immediately
+# respawning the unprogressable item in a loop while W5 starved behind
+# it). Any BLOCKED-prefixed tag excuses the run.
+elif [ "$progress" -eq 0 ] && ! grep -qE "^[[:space:]]*$item\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED[^]]*\]" "$STATE/NEXT.md" 2>/dev/null; then
   kind=no-progress
 fi
 
