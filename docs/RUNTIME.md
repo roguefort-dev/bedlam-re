@@ -429,6 +429,75 @@ Proves the DESIGN §5 write machinery on the live channel, headless:
   those steps (named seams; RE-EXD-MAP W5 note: the EXD input twin is
   NOT FUN_0002ec12, that is only the P-latch spin).
 
+## W5 walk driver (D84 design, 2026-08-22 — the scripted menu walk; `dbgprobe walk`)
+
+Replaces the human title-menu walk between boot and mission start so S0/S1
+captures become unattended-reproducible (byte-identical chains — the
+frame-counter/RNG menu churn becomes script-determined).
+
+STOP MODEL [derived from pinned facts — RE-EXD-MAP §5c + RUNTIME "S0 live
+channel mechanics" #2/#5]:
+- Walk stops = BPLM hits on the frame-counter cell 0x1195f0 (the SAME trap
+  that serves as the v2 boot trap — it stays armed). One stop per
+  counter-writing screen frame; stop 0 = the accepted boot-trap stop
+  (first post-boot flat-CS counter write = an early pre-mission screen).
+- A write applied at stop i (SMV between the INC and the next screen
+  loop's input read) becomes screen frame i+1's input — the same
+  boundary semantics as mission inject rows (§ "W5 injector probe").
+- Keystore re-arm is mandatory per input: the AnyKeyWait twin
+  FUN_00030792 CONSUMES the byte on read (scans 1..0xFE, skips both
+  shifts 0x2a/0x36, clears the matched cell), while polling menus leave
+  bytes set. A press = write 1 at stop i; menus that poll without
+  consuming need an explicit 0 (release) at a later stop. Cells (EXD):
+  keystore base 0x894d4, ESC +0x01, ENTER +0x1c, arrows via the OR-0x80
+  ISR remap → +0xc8/+0xcb/+0xcd/+0xd0 (up/left/right/down).
+- Anchor detection: BP CS:0005A6EB (the registry s0-trigger) is armed
+  only AT THE LAST WALK STOP (arm_commands = BPDEL * — drops the BPLM —
+  + BP). The machine then free-runs through the mission load; the first
+  anchor hit = mission start = capture frame 1. No stop-type ambiguity
+  exists during the walk (only the BPLM is armed).
+
+PLAN v3 KEYS (capgen; v2 keys unchanged, all optional):
+- `walk`: list of `{"stop": N, "addr": "CS:...", "bytes": "hex"}` plain
+  writes (the InjectWrite::Plain form; command-op rows are mission-phase
+  only — a menu walk needs no ring appends). Walk stops run 1..max(N).
+- `walk_watches`: optional calibration rows `[{id,addr,len}]` dumped at
+  EVERY walk stop; values ride the transcript as `# walk stop N <id>
+  <hex>` comment lines (parser skips them) so a calibration run maps
+  menu transitions to stop indices mechanically.
+- `resolve_at`: "arm" (default, legacy) or "anchor". dbx-plan emits
+  "anchor" for ALL generated plans: the loader statics (map w/h
+  0x1074b8/0x10748c, TOT/DAT/claim pointer cells) are MISSION-load
+  values — read at the legacy arm stop (stop 0, pre-mission) they carry
+  pre-mission bytes, so len exprs like 4+16·w·h would evaluate from
+  garbage. Anchor-stop resolve reads them at mission start where they
+  are valid. This also fixes the walk-less S0/S1 flow (D81 latent gap).
+- boot_writes move to right after the boot-trap accept (identical stop
+  for walk-less plans — no behavior change; pre-walk for walk plans).
+
+FLOW (walk plan): boot trap accept → boot_writes → walk stops (per-stop
+  writes + optional calibration dumps) → arm at the last walk stop →
+  RUNWATCH → anchor hit (frame 1) → resolve → inject(frame 1) → dumps →
+  frames 2+ as today.
+
+KNOWN LIMITS (documented, not blockers):
+- Screens that never write the frame counter (if any — e.g. SMK
+  playback, unrecorded) are TRANSPARENT: no stops fire during them;
+  a write scheduled "during" one lands at the next counter-writing
+  frame. The 14-INC census covers the screen loops; whether the intro
+  video player INCs is a live-calibration fact.
+- A schedule that overruns into the mission (bug) leaves the BPLM
+  stopping on mission frames and the anchor then lands mid-mission —
+  detectable via the frame-counter/mission watch values, never silent.
+- SMV input sent while the machine runs queues until the next stop
+  (same proceed-anyway + ack-reliance as the frame loop).
+
+S0W calibration: the committed S0W.scen walk schedule is a STRUCTURAL
+DRAFT (stop counts are placeholders) — the first live session calibrates
+the indices via `walk_watches` output; the schedule itself is then just
+data (no code change). Headless verification = `dbgprobe walk` (probe
+conf, no game; BDA tick cell 0x46C as the surrogate counter).
+
 ## Wine prefix for EXW (golden pipeline comparator)
 
 - wine: system wine 11.15 (/usr/bin/wine, CachyOS). NOTE: wow64 mode -
