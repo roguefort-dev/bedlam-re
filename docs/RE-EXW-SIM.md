@@ -4639,6 +4639,10 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | click order dispatcher | FUN_00410644 (MissionShell @0x448021; gates mouse≠−1/[0x4ede14]≠0/[0x4edba0]==0/mx<0x1E0): picked → type cell [0x46cc00] (NEW pin); bit13 TRT: rec(id−1) via −0xC-bias base 0x4cccec, coords ×0x20+0x10 → ORDER TARGET 0x4dd484/88/8c; bit12 robot: corner +0/+4 + z +0x10; else critter: corner + FUN_004128ec(id−1)>>8+0x15; ground: camera+view-mouse z0; tail [0x4ddb20]\|=2 order latch (NEW pin) + [0x4ede00]:=−1 consume | §7j.31 |
 | terrain anim sequence | u32[16] @0x456ca8 = STATIC DGROUP const {0,1,2,3,4,5,6,7,7,6,5,4,3,2,1,0} — a 16-phase ping-pong over the 8 PALTRAN ramp slots (0x4dd444; slot 0 = NULL = plain blit); NO runtime producer (2 readers only: 0x40691a seen-level draw + 0x406a2c chase column, both `seq[frame&0xf]` → ramp → FUN_00401471/0040167a); the STATIC branch = the +0x18 scorch byte as the ramp index (scorch n → ramp n — the PALTRAN ramps double as scorch darkening); branch pick = the +0x1b/+0x1c anim window (nonzero in ZONEG only, §7j.32) | §7j.35 |
 | water flag | [0x4edbd4] ≡ 1 in every mission: sole persistent writer = FUN_004252c0 @0x4252d8 (campaign-boot defaults, := 1, called 0x41c129 in FUN_0041c050); scoped save/restore bracket 0x41c649/0x41c65a around the SELECTOR screen FUN_0043e7d4 (GAMEGFX\SELECTOR.BIN/.PAL; esi = the mission-index reg = 1 on both paths); NO config/options/save/MP writer — "water off" render paths (remap-XLAT 0x4014d3/0x401566; the 0x12d/0x12e/0x12f plain-copy gates 0x4017a3/0x4020b5/0x40229d; chase pick 0x4069c7) are dead code in shipped play; water tables set-indexed 1..7: sprite family 0x454aac {0x15F,0x4B3,0x5B8,0x15F,0x141,0xFB,0x4B3} +0x1E, stamped-word base 0x454ae4 {0xBD,0x3BD,0x5E8,0xBD,0xEC,0xC3,0x3BD} +0xE; corpus: water sprites stage ONLY in ZONEB/M1(12)/M6(78), ZONEC/M4(33), ZONED/M1(1), ZONEF/M7(4824); ZONEA/M1 ZERO (but 44 0x7d2 hazard cells → the load stamper pre-stages the 0x460dfa grid in the gates) | §7j.35 |
+| pad-tile probe | FUN_00422e5e(x Q5, y Q5, z word): tile = arg>>5 (sar), LEVEL = z>>5; RAW DAT-volume byte (FUN_0041eb4c, NOT the 0xFF→1 remap) ≠ 0xFF → −1; else FIRST 999×8-B .PAD slot @0x4e44f8 with active≠0 ∧ x/y/LEVEL match (dword>>16 reads of the +2/+4/+6 words); repeat-of-last-slot → latch 0x4eb9fc := −2 + counter 0x4eb9f4++ (still returns the slot); the LEVEL-vs-file-level fact: MRK word-3 L spawns z = L·0x20−1 = LEVEL L−1 | §7j.40 |
+| MissionShell beacon block | 0x448291..0x448381: (sprite draw head, every-8th-frame gate); window decrement when nonzero; GATE dword@0x4e6610 ≠ 0 (dropship in flight) skips ALL; window == 0 → FUN_0041faf0; else ALL robots state-3-or-dead (w@+0xC / d@+0x7E scan, bound DAT_0046ccbc) → FUN_0041faf0 + window := 0; a beacon expiring mid-flight stays ARMED at window 0 | §7j.40 |
+| dropship deployer | FUN_0041faf0 [unconditional, full body]: dropship@0x4e6610 := {active 1, phase 1, x = beacon_x·0x20, y = beacon_y·0x20, alt 0x200, group 0, dwell 0}; word@0x4eabb0 := 0 + word@0x4eabb2 := 0 (the flag/window pair ONLY — the tile words 0x4eabb4/6 SURVIVE; the claims 0x4eabba are never cleared anywhere); sole caller the beacon block above (2 sites 0x44832f/0x448375) | §7j.27, §7j.40 |
+| extraction sweep | FUN_0041fbb1 machine-2 phase-1 landing tail: every robot alive ∧ state ∈ {3,4} → state := 5, timer@0x90 := 0x28 (outside the 31-leaf pin — E-gap), stop_dist@+0x74 := 10000000, [0x4dc680]++ (extracted), SFX 0x4edfe0 (presentation); phase-2 dwell 10 → phase 3; phase-3 alt > 0x200 → active := 0 ∧ [0x4dc67c] := 1 (complete); phase-2 jitter alt := (RandA()&7)==0 = a SHARED-STREAM draw | §7j.19, §7j.27, §7j.40 |
 
 ## 7j.31. The HOT-RECT CLICK-TARGET RECORD — one 0x20-stride array; writer census + both reader families (2026-08-22, worker aa62f5ed claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run)
 
@@ -6033,6 +6037,137 @@ off the raw asm this run)
    canonical chain re-pins ONCE at this landing (the D103
    note: no O1 S3 capture exists yet — the dbx-plan T2-tier
    unit precedes any live S3).
+
+## 7j.40. THE S6 EXTRACTION TRIGGER CHAIN — the MissionShell beacon
+block + FUN_0041faf0 + the FUN_00422e5e pad probe, instruction-exact
+(2026-08-22, worker 8d32d85d claim 2, W12-S6 prep; objdump-only from
+ghidra-project/exw-text-objdump.txt + a read-only corpus probe of
+ZONEA/MISSION1.PAD — no Ghidra run, no corpus write)
+
+Purpose: the E-side S6 extraction producer needs the beacon-expiry
+deploy semantics, the pad-tile probe's exact match keys, and the
+dropship spawner's field map at transcription fidelity. Everything
+below is [verified] against the objdump unless tagged.
+
+1. **FUN_00422e5e = the PAD-TILE PROBE, full body** [verified
+   0x422e5e..0x422f08]: args (EAX x Q5, EDX y Q5, EBX z word);
+   `tile_x = x>>5`, `tile_y = y>>5`, `LEVEL = z>>5` (all sar 5);
+   reads the RAW DAT-volume byte via FUN_0041eb4c — `and eax,0xff;
+   cmp eax,0xff` — i.e. the RAW plane byte (NOT dat_type's 0xFF→1
+   remap); ≠ 0xFF → return −1. Then the slot scan: 999 records,
+   8-B stride @0x4e44f8, FIRST match wins — a record matches iff
+   its active u16@+0 ≠ 0 ∧ dword@+0>>16 == tile_x (the +2 x word)
+   ∧ dword@+2>>16 == tile_y (the +4 y word) ∧ dword@+4>>16 ==
+   LEVEL (the +6 z word). On the FIRST matching slot edx: if
+   edx ≠ [0x4eb9fc] (the revisit latch) → return edx; else
+   (repeat of the last-returned slot) [0x4eb9fc] := −2,
+   [0x4eb9f4]++ (the counter), still return edx.
+   **KEY Z-LEVEL FACT**: the .PAD record's z word (the file's
+   level) must equal the robot's `z>>5` — a marker-staged robot
+   at MRK word-3 level L spawns at z = L·0x20−1, i.e. LEVEL
+   L−1 (the −1 puts the center in the level BELOW the marker
+   word until the floor settles). A GROUND pad (file level 0)
+   therefore matches robots standing on the ground deck
+   (z 0..0x1F), and a level-1 pad (e.g. ZONEA/M1 slot 8
+   (2,14,1)) only matches a robot whose floor reached 0x20+.
+   [Corpus probe, ZONEA/MISSION1.PAD: 999 6-B records, 114
+   live (slot 0 = (5,61,0) … slot 113 = (18,24,4)), terminator
+   0xFFFF at slot 114; zone-1 extraction set {8,0x10,0x12,0x18}
+   = tiles (2,14,1) / (17,25,4) / (19,70,0) / (17,63,0).]
+   The E model may skip the revisit latch: after a trigger the
+   beacon arms (the armer's one-at-a-time gate) and the robot
+   halts state 3, so a repeat probe of the same slot is inert
+   on the S6 path [derived].
+2. **The dispatcher call gate** [verified 0x40bd43..0x40bd58]: in
+   FUN_0040b9f6's per-robot walk the pad dispatcher FUN_00433980
+   runs BEFORE the state-{1,4} move math, gated ONLY by the
+   move-target word `cmp [0x46cc30+…],0xffffffff` (a robot with
+   a target); the walk itself then re-checks state ∈ {1,4}
+   (0x40bd6a..0x40bd72) — so the ARMER's state-3 halt takes
+   effect the same sub-tick, before that robot's move. E models
+   the dual gate as `state ∈ {1,4} ∧ target.is_some()`, probe
+   before the order-consumption/move of the same iteration
+   (EXW runs the dispatcher after the armor pass, before the
+   walk — E inserts it between the phase-1 armor block and the
+   order-consumption block).
+3. **The MissionShell beacon block** [verified 0x448291..0x448381,
+   instruction-exact]:
+   ```
+   ; 0x448291..0x448301: the beacon sprite draw (presentation,
+   ;   gated test byte@0x4eabb2,0x7 — every 8th frame)
+   si = word@0x4eabb2
+   if si != 0: word@0x4eabb2 = si−1          ; the window tick
+   if dword@0x4e6610 (dropship active) != 0: SKIP ALL  ; 0x448323
+   if word@0x4eabb2 == 0:
+       FUN_0041faf0()                        ; deploy — 0x44832f
+   else:
+       count robots with state==3 (w@+0xC) OR alive==0 (d@+0x7E)
+       if count == DAT_0046ccbc:             ; ALL halted-or-dead
+           FUN_0041faf0()                    ; deploy — 0x448375
+           word@0x4eabb2 = 0                 ; (xor edx,ecx = 0)
+   ```
+   So EVERY beacon expiry (window 0 OR all-state-3/dead) deploys
+   the dropship, gated only on no dropship already in flight; a
+   beacon expiring while the craft is active stays ARMED at
+   window 0 (the block is skipped) and deploys the frame after
+   the craft goes inactive [derived from the gate order]. The
+   decrement precedes the gate, exactly as E's tail block already
+   models.
+4. **FUN_0041faf0 = the DROPSHIP DEPLOYER, full body** [verified
+   0x41faf0..0x41fb4a]: unconditional —
+   `dropship := {active 1, phase 1, x = beacon_tile_x·0x20,
+   y = beacon_tile_y·0x20, alt 0x200, group 0, dwell 0}`;
+   `word@0x4eabb0 := 0` (beacon flag), `word@0x4eabb2 := 0`
+   (window). **The beacon TILE words 0x4eabb4/6 SURVIVE the
+   deploy** (only the flag/window pair is cleared) and the
+   spread-claim array 0x4eabba is NEVER cleared anywhere
+   (§7j.20/3) — post-deploy O1 beacon-family rows read
+   {0, 0, tile_x, tile_y, tile_z} + the surviving claims.
+5. **THE PRODUCER-TAG SEAM DECISION** [derived, design]: EXW arms
+   0x4eabb0 through EXACTLY ONE caller — the pad-script armer
+   FUN_004247b5 (sole caller FUN_00433980, §7j.20/1); a plain
+   click never arms the beacon (the click path writes the
+   COMMAND-ring move-target words, §7j.37/1 bit0). E's `order`
+   scenario step (arm_at_robot at the clicked tile) is therefore
+   the DOCUMENTED click-seam approximation (DESIGN §6a), and its
+   expiry behavior stays the pre-S6 clear (the S0..S5C chains are
+   byte-pinned). The S6 pad path is the faithful producer: the
+   pad-armed beacon's expiry deploys + persists the tile/claim
+   words exactly as items 3/4 pin. The asymmetry is deliberate
+   and disappears when a live session re-anchors the click seam.
+6. **The animator phase map (machine 2)** [§7j.27/3 re-read,
+   confirmed]: phase 1 `{group := (group+1)&1; alt := alt−0x20 if
+   alt ≥ 0x101 else (alt>>2)·3; alt < 1 → alt := 0, phase := 2,
+   dwell := 10, EXTRACTION SWEEP}`; the sweep [§7j.19/1] = every
+   robot alive ∧ state ∈ {3,4} → state := 5, timer@+0x90 := 0x28
+   (the +0x90 word is OUTSIDE the 31-leaf canonical pin — an
+   E-gap row-wise, robot state/stop_dist carry the observation),
+   stop_dist (+0x74) := 10000000, [0x4dc680]++ (extracted
+   counter), SFX (presentation). Phase 2 `{alt := (RandA()&7)==0
+   (0/1 jitter — a SHARED-STREAM draw), group ^= 1, dwell−− == 0
+   → phase 3}`; phase 3 `{alt += (alt>>2)+1; x −= group·4;
+   group := group<5 ? group+1 : 4; alt > 0x200 → active := 0 ∧
+   [0x4dc67c] := 1 (extraction complete)}`. Timing from deploy:
+   land ≈ 25 frames (8×−0x20 then ×0.75 shrink), dwell 10,
+   depart ≈ 24 frames from alt 0.
+7. **The extraction-arm cells stay the objective family's**
+   [§7j.32/5 re-read]: 0x46cd00/0x46ccfc/0x46ccc4 are written by
+   the objective resolver (all-6-done / zone-7 at-zero) — NOT by
+   the beacon/dropship chain. On ZONEA/M1 the script-objective
+   staging (tables 0x4557f8/0x456810) is head-decoded only, so
+   E's cells read 0 and any live O1 divergence there is the
+   recorded script-objective E-gap, never a fabricated row. The
+   destroy-notify zone-7 at-zero tail (the three cells + SFX)
+   lands engine-side with this unit (the destroy.rs "S6-seam
+   E-gap" note closes); [0x4eba0c]/[0x4eba10] (rescue
+   progress/timer) stay unmodeled — the POI-rescue family is
+   out of S6's path entirely.
+8. **Corpus-path verdict**: S6 is the first scenario whose
+   canonical rows carry the real producer chain — beacon (T1,
+   existing rows + the surviving-words latch), dropship-frame
+   (T3, E-only row), the swept robot states (T1 robot-bank).
+   S0..S5C stay byte-identical (the pad path is the only deploy
+   route; nothing pads in them).
 
 ## 9. Open items (next slices)
 
