@@ -4608,6 +4608,144 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | dither blit | FUN_00401ae6(y,h,x,w,src_off,mode): mode 0 = rep-movsb full copy (dead/unoccupied boxes), mode ≠ 0 = nonzero-only overlay (hit flash); reseed `RandB()&0x1ff` when src_off+96 ≥ 0x800; seed `(RandB()&0x7fff)/15` clamp ≤ 0x7f5 | §7i |
 | SFX bank→name map (COMPLETE) | 202 durable assignments, zero unnamed durable cells: mission set 0x4edf60..0x4edfbc+ELEV/BEEP/TEXTBOX = 27 registers by FUN_0043a1d3 (MIDIGUN dup at 0x4edf70 quirk), screen sets MENU1/2+BEEP1/4/5/7+TEXTBOX1+DOOROPEN/DOORCLSE (0x4edfc0..0x4edfec, cells reused per screen; 0x4ee00c/0x4ee010 = the debrief MENU1/2 alias), mission-extra 0x4edfe0..0x4ee008 (BEAMIN/THROW/BIOFIRE/PEXPLODE/CACODETH/SQUAWK/GRUNT1..3), speech 0x4ee014+8i 53 records {A,B} (95 files, 11 empty +4 slots, pair slot-order flip at SPCH16); GFX 0x46af2c..0x46af54 + 0x4eddXX/0x4edeXX/0x46cbXX families + G-variant picks (language index 0x4eba1c==1, edition gate [0x4edd8c]>4 → GRILLA family); palettes SHARE role cells (0x4edbf8 current-screen PAL ×6 names, 0x4edbfc TXPAL1..3, 0x4edc00 DARKPAL family); full dump ghidra-project/exw-banknames.txt | §7j.30 |
 | SFX register/play family | FUN_0043a36e = 1-voice register, FUN_0043a39c = 4-voice register (clone pair; stage via scratch cell 0x46af0c → arena 0x2b11 → 0x44c64c returns the VOICE-BASE handle — SFX cells hold handles, not pointers); FUN_0043a48e = play/steal (x,y=−1,−1 → vol 0x7f/pan 0x8000; else FUN_0043a3e0 pan / FUN_0043a447 vol vs listener 0x4edde4/0x4edde8; 4-voice probe 0x44c5ac, steal by priority [0x4ee1c2+2v]>>16 + age [0x4ee2e2+2v], start 0x44c904); speech bypasses it (indexed slot pick + 0x44c8c4 direct, vol 0x7f00) | §7j.30 |
+| hot-rect click-target array | ONE array base 0x4787bc (record 0; the dispatcher's 1-based view 0x47879c = base−0x20), stride 0x20, 8 dwords {+0 world X, +4 world Y, +8 hit-box X origin, +0xC Y origin, +0x10 z, +0x14 w, +0x18 h, +0x1C type}, count [0x46ccd8] cap 0x77 (extent ..0x47969c), per-frame reset @0x403a9a; writers = 7 sites ALL in FUN_00403938: w1 0x403c87 robots MP-only ([0x4edb88]==2 ∧ ≠local player) type (idx+1)\|0x1000 w/h 0x40 z=rec+8+0x21 corner tile+0xB; w2-w7 0x4056f1/0x4058b8/0x405c4d/0x405f7b/0x406142/0x4062c6 critter .NME paths (state ∉{6,7,0xB}; w7 {6,7}) type idx+1, z ∈ {[crit+0x3E] raw/+0x20/+0x10/>>8}, w ∈ {0x3C,0x40} h 0x40 | §7j.31 |
+| click picker | FUN_00419943 (only caller = dispatcher 0x41068e): scans hot rects i<[0x46ccd8], box = origin+(w/2,h/2) ± (w/2,h/2); priority = octile FUN_0041ebf8 max(\|dx\|,\|dy\|)+min/2, early-out <4; returns i+1; ground fallback = iso (mx−0xF0)·[0x4ede54]/0x1E0 + camera + TRT active-scan (x/y/z @+0x14/18/1C ×0x20, windows −0x10..+0x30) → 0x2000\|(idx+1) else 0 | §7j.31 |
+| click order dispatcher | FUN_00410644 (MissionShell @0x448021; gates mouse≠−1/[0x4ede14]≠0/[0x4edba0]==0/mx<0x1E0): picked → type cell [0x46cc00] (NEW pin); bit13 TRT: rec(id−1) via −0xC-bias base 0x4cccec, coords ×0x20+0x10 → ORDER TARGET 0x4dd484/88/8c; bit12 robot: corner +0/+4 + z +0x10; else critter: corner + FUN_004128ec(id−1)>>8+0x15; ground: camera+view-mouse z0; tail [0x4ddb20]\|=2 order latch (NEW pin) + [0x4ede00]:=−1 consume | §7j.31 |
+
+## 7j.31. The HOT-RECT CLICK-TARGET RECORD — one 0x20-stride array; writer census + both reader families (2026-08-22, worker aa62f5ed claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run)
+
+Closes the queue's standing "0x4787c4/0x47879c hot-rect record" item
+(backlog + item 2). Supersedes/extends the §7j.16-era skeleton rows
+("map-click pick" / "click order target") with the full grammar,
+writer census, and type-word semantics. HYPOTHESIS CONFIRMED: ONE
+0x20-stride record with
+both reader views — with one refinement: +8/+0xC is the hit-box
+ORIGIN (the picker adds w/2,h/2 to get the box center), not a
+"center". Full traffic census: exactly 7 writer sites (all in the
+renderer FUN_00403938), 1 picker, 1 order dispatcher; nothing else
+in .text touches the array.
+
+### The record grammar [verified]
+- Array base 0x4787bc (record 0), stride 0x20, 8 dwords/record;
+  count cell [0x46ccd8] (u32); cap 0x77 (119) records → extent
+  0x4787bc..0x47969c. The queue's "0x47879c" = base − 0x20 — the
+  DISPATCHER's 1-based view (it reads record id−1 via
+  [id·0x20 + 0x47879c-family]); the picker/writers use the
+  0-based 0x4787c4-family bases. Both are the SAME array.
+- Reset per frame: FUN_00403938 prologue @0x403a98-0x403a9a zeroes
+  [0x46ccd8] (single reset; per-frame rebuilt renderer scratch).
+- Fields (rel. record base):
+  - +0x00 world/corner X (robot writer: tile x + 0xB; critter
+    writers: tile x = [crit+0x0C]>>8, one path stores raw Q8)
+  - +0x04 world/corner Y (analogous)
+  - +0x08 screen hit-box ORIGIN X
+  - +0x0C screen hit-box ORIGIN Y
+  - +0x10 Z (click-priority z)
+  - +0x14 W (box width)
+  - +0x18 H (box height)
+  - +0x1C TYPE word: bits 0..11 = 1-based bank id;
+    bit 12 (0x1000) = robot class; bit 13 (0x2000) NEVER stored in
+    a record (it exists only as the picker's TRT-scan return value)
+
+### Type word values [verified]
+- 0 = ground (no record; dispatcher's ground branch)
+- n plain (1-based .NME critter idx) = critter
+- n|0x1000 = robot (0x4c69e4/0xA8 bank)
+- 0x2000|n = TRT terrain-structure id (picker ground-scan return
+  only; resolved by the dispatcher through the TRT bank)
+
+### The writer census — 7 sites, ALL in FUN_00403938 [verified]
+- w1 @0x403c87-0x403cf1 (the queue's 0x403c93): ROBOTS, gated
+  [0x4edb88]==2 (network sessions only; D89: SP sets 0) AND robot ≠
+  the local player's ([0x46cbd4]+[0x46cbdc] ≠ loop idx). Walks
+  0x4c69e4/0xA8/[0x46ccbc] via the sprite-draw loop (visible
+  robots only: screen bounds 0..0x23F ∧ [rec+0x4c6a60]≠0). Writes
+  corner = tile x/y +0xB ([rec+0]/[+4] >>8), origin = the draw's
+  screen coords, z = [rec+8]+0x21, w = h = 0x40,
+  type = (idx+1)|0x1000. ⇒ SP writes NO robot rects — SP
+  click-orders are ground/critter/TRT only.
+- w2 @0x4056f1-0x405767: critter draw path — corner [esp+0xf4]/
+  [esp+0x4], origin [esp+0x194]/edi−0x48, z = [crit+0x3E]+0x20,
+  w = 0x3C (!), h = 0x40, type = idx+1.
+- w3 @0x4058b8 + shared tail 0x4058f2-0x405926: z = [crit+0x3E]
+  raw, w = h = 0x40, type = idx+1 (tail: corner Y +4 @0x4058f2,
+  z +0x10 @0x4058fe, h +0x18 @0x40590b, type @0x405918,
+  count++/cap @0x40591e).
+- w4 @0x405c4d: z = [crit+0x3E]+0x10 → tail; w = h = 0x40.
+  (Corner [esp+0xf0]/[esp+0x120]; the 0x405961 prologue stores
+  [crit+0x0C] RAW Q8 — no >>8.)
+- w5 @0x405f7b-0x405ff0: z = [crit+0x3E]+0x10, w = h = 0x40;
+  corners [esp+0xec]/[esp+0x11c] (the 0x405c9b prologue:
+  [crit+0x0C]/[crit+0x10] >>8 — tile units).
+- w6 @0x406142-0x40618b: z = [crit+0x3E]>>8 (the ONLY scaled
+  writer — Q8→tile), w = h = 0x40 → tail.
+- w7 @0x4062c6-0x4062f3: the POI draw path (0x406190 prologue —
+  [crit+0x0C]/[crit+0x10]>>8 corners, [rec+0x4d0008]:=1 visible
+  stamp, 0x4eddac bank); state filter {6,7} only (dormant 0xB
+  still gets a rect); z = [crit+0x3E] raw via tail, w = h = 0x40.
+- All critter writers: walk the .NME bank 0x4cff98/0x7E/
+  [0x46cc2c] (§7j.17/§7j.18), state word [crit+0x0A] ∉ {6,7,0xB}
+  (except w7: {6,7} only), dispatched per-kind by the jump table
+  @0x40391c (kind word [crit+0x00], 1..6) — path→site attribution
+  beyond the above not traced (bounded unit).
+
+### Reader family 1 — the PICKER FUN_00419943 [verified]
+- Called only by the dispatcher @0x41068e. Prologue pre-transforms
+  the mouse (0x419951-0x41998c): view-space mx/my from
+  [0x4ede00]/[0x4ede04] +0x40 iso terms.
+- Hot-rect loop i = 0..[0x46ccd8]−1 (reads record i):
+  w = [+0x14], h = [+0x18], cx = [+0x08]+w/2, cy = [+0x0C]+h/2;
+  HIT iff |mx−cx| < w/2 ∧ |my−cy| < h/2. Priority =
+  FUN_0041ebf8(mx−cx, my−cy) = OCTILE distance
+  max(|dx|,|dy|)+min(|dx|,|dy|)/2; keeps the min; early-out <4.
+  Returns i+1 (= the record's stored type id).
+- Ground fallback (no hit): iso back-transform
+  (mx−0xF0)·[0x4ede54]/0x1E0 EXACT (the D83 EXD pick-twin
+  FUN_0002a271 form) + camera [0x4edde4]/[0x4edde8] → world point;
+  then scans ACTIVE TRT recs (active dword @0x4cccf8+i·0x20 ≠ 0,
+  count [0x46ccd4]): box windows X ∈ (x·32−z·32−0x10, +0x40),
+  Y ∈ (y·32−z·32−0x10, +0x40) using TRT x/y/z @+0x14/+0x18/+0x1C
+  (§7j.14 pins); hit → returns 0x2000|(idx+1); else 0.
+
+### Reader family 2 — the ORDER DISPATCHER FUN_00410644 [verified]
+- Called by MissionShell @0x448021. Gates: [0x4ede00]/[0x4ede04]
+  ≠ −1 (fresh mouse), [0x4ede14] ≠ 0, [0x4edba0] == 0, mx < 0x1E0
+  (left of the sidebar).
+- Calls the picker; re-transforms the mouse to view space
+  ((mx−0xF0)·[0x4ede54]/0x1E0; y via [0x4edd54]·15·32/[0x4ede54] +
+  (my−0xF0)·[0x4ede54]/0x1E0 + 0x15).
+- picked == 0 → GROUND order: ORDER TARGET 0x4dd484/88 =
+  camera + transformed mouse, z 0x4dd48c = 0, type cell
+  [0x46cc00] := 0.
+- picked & 0x2000 (bit 13; picker TRT-scan only): id &= 0x1FFF;
+  reads TRT rec(id−1) through the −0xC-bias base 0x4cccec
+  (= fields +0x14/+0x18/+0x1C of rec(id−1); the §7j.28 ledger
+  gloss "critter 0x4cccec/0x20" is hereby corrected — the bank is
+  TRT, "0x2000" is the target-descriptor class name); x/y/z each
+  ×0x20 +0x10 (box CENTER: the picker tested −0x10 corners) →
+  0x4dd484/88/8c; [0x46cc00] := the raw flagged id.
+- else: type = [id·0x20+0x4787b8] → [0x46cc00]; bit-12 test
+  (byte 0x46cc01 & 0x10):
+  - ROBOT: corner [+0]/[+4] → 0x4dd484/88; z [+0x10] → 0x4dd48c
+    (0x41077d-0x410795).
+  - else CRITTER: corner [+0]/[+4] → 0x4dd484/88; z =
+    FUN_004128ec(type−1) >>8 +0x15 → 0x4dd48c.
+- Tail: [0x4ddb20] |= 2 (order-pending latch bit — NEW pin; the
+  EXW cell of the D83 EXD order-active family) and
+  [0x4ede00] := −1 (consume the click).
+
+### Implications for the P4.2 seams [hypothesis, seam-relevant]
+- SP click-orders can never be robot-targeted (w1 is network-only)
+  — the E engine's click seam must not fabricate robot-targeted
+  orders in SP scenarios (S2's ground-order seam is correct).
+- Order-target units are per-class: robot/critter = tile ints
+  (+0xB robot corner bias, +0x15 critter z bias, +0x21/+0x20/
+  +0x10 z biases per writer); TRT = field·32+16. The E-side order
+  seam must reproduce the per-class formulas exactly against the
+  D82 ORDER-TARGET cells 0x4dd484/88/8c.
+- New watch candidates: [0x46ccd8] count + the type cell
+  [0x46cc00] + latch bit [0x4ddb20]&2 (TI/T4 family; not yet in
+  watches.toml — additive when the harness needs click parity).
 
 ## 9. Open items (next slices)
 

@@ -3358,3 +3358,45 @@ Nudge-Worker: 0a08a5e1-c1ab-431b-880b-094e6ba40017
    unimplemented (presentation stays out of the hashed core).
 
 Nudge-Worker: 7972b334-1999-4c48-82c5-ae0582b17a0d
+
+## D95 — 2026-08-22: P4/RE — the hot-rect click-target record CLOSED: one 0x20-stride array, 7 writer sites in FUN_00403938, octile picker + class dispatcher; SP click-orders are never robot-targeted (worker aa62f5ed claim 2)
+
+1. THE HYPOTHESIS IS CONFIRMED with one refinement: the
+   0x4787c4/0x47879c family is ONE 0x20-stride record array —
+   base 0x4787bc (record 0), count [0x46ccd8], cap 0x77, extent
+   ..0x47969c, per-frame reset @0x403a9a inside the renderer
+   FUN_00403938. 0x47879c = base−0x20 = the ORDER DISPATCHER's
+   (FUN_00410644, MissionShell @0x448021) 1-based view; the
+   picker (FUN_00419943) and all writers use 0-based
+   0x4787c4-family bases. Fields: +0/+4 world corner, +8/+0xC
+   hit-box ORIGIN (refinement: NOT "center" — the picker adds
+   w/2,h/2), +0x10 z, +0x14 w, +0x18 h, +0x1C type. Grammar +
+   full traffic census (7 writers, 1 picker, 1 dispatcher,
+   nothing else) in RE-EXW-SIM §7j.31 + 3 ledger rows.
+2. TYPE WORD: bits 0..11 = 1-based bank id; 0x1000 = robot
+   (w1 @0x403c87, gated [0x4edb88]==2 ∧ robot ≠ local player —
+   MP-only, so SP writes NO robot rects); plain id = critter
+   (w2-w7, the .NME bank draw paths); 0x2000|id = TRT structure
+   — NEVER a stored record value, only the picker's ground-scan
+   RETURN (or ah,0x20 @0x419af0 after the −0x10/+0x40 world-box
+   test over active TRT recs), resolved by the dispatcher via
+   the TRT −0xC-bias base 0x4cccec (fields +0x14/+0x18/+0x1C of
+   rec(id−1), ×0x20+0x10). The 7j.28 ledger gloss "critter
+   0x4cccec/0x20" is CORRECTED: the bank is TRT ("0x2000" is
+   the projectile target-descriptor class name). Picker priority
+   = FUN_0041ebf8 OCTILE distance max(|dx|,|dy|)+min/2,
+   early-out <4.
+3. SEAM CONSEQUENCES (the P4.2 payoff): (a) SP click-orders can
+   never be robot-targeted — the E click seam must not fabricate
+   them (S2's ground-order seam validated); (b) order-target
+   units are per-class (robot/critter tile ints with +0xB/+0x15/
+   +0x21/+0x20/+0x10 biases; TRT field·32+16) — the E order seam
+   reproduces the formulas against the D82 cells 0x4dd484/88/8c;
+   (c) NEW pins for the watch set when click parity is needed:
+   type cell [0x46cc00], order latch [0x4ddb20]&2 (EXW cell of
+   the D83 EXD order-active family), count [0x46ccd8].
+   Docs-only; no engine change; objdump-only (no Ghidra run).
+   Next queued: the operator S0 live session remains item 1
+   (interactive); this closes the hot-rect unit.
+
+Nudge-Worker: aa62f5ed-46c8-4b65-98f4-7b0bbc54929e
