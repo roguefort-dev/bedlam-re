@@ -1141,6 +1141,28 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
         "typedb-mirror-rows" => mirror_canonical(no, b),
         "debris-stager" => debris_canonical(no, b),
         "splash-records" => splash_canonical(no, b),
+        // The extraction dropship row (W12-S6): E-only (no EXD alias;
+        // the watch's exd_status is unmapped). Canonical = the 0x1C
+        // craft record {active, phase, x, y, alt, group, dwell}
+        // exactly as the emitter lays it out (§7j.40/6).
+        "dropship-frame" => {
+            need(
+                id,
+                no,
+                b,
+                "craft {active,phase,x,y,alt,group,dwell} i32*7",
+                28,
+            )?;
+            Ok(row(vec![
+                int("active", u32le(b) as i128),
+                int("phase", i32le(&b[4..]) as i128),
+                int("x", i32le(&b[8..]) as i128),
+                int("y", i32le(&b[12..]) as i128),
+                int("alt", i32le(&b[16..]) as i128),
+                int("group", i32le(&b[20..]) as i128),
+                int("dwell", i32le(&b[24..]) as i128),
+            ]))
+        }
         "tile-word-grid" | "platform-strength" => {
             // Both channels dump the same w·h·2 span — one shared
             // field walk (a length mismatch is a STRUCTURAL

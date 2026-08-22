@@ -126,6 +126,11 @@ fn inv_frame(
             // E-only row as a coverage finding, never fabricated).
             "blink-cursor" => continue,
             "debris-stager" | "splash-records" => continue,
+            // The W12-S6 dropship row: no EXD alias (exd_status
+            // unmapped) — the stitcher's O1-address rule excludes
+            // it, the differ reports the E-only row as a coverage
+            // finding, never fabricated.
+            "dropship-frame" => continue,
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -346,6 +351,14 @@ fn s0_s1_cross_and_double_run() {
         // detonate rides the SAME aliased T1 rows (the compact-tile
         // filter + the destroy normalizers) — zero field gaps.
         ("S5C", 55u64, "e0999fcb3455d3ef", 2u64),
+        // W12-S6 (§7j.40, D112): the pad step-on extraction run —
+        // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
+        // alias), so exactly the 2 S1-class findings + 1 more. The
+        // beacon-family row's post-deploy latch {0,0,19,70,31} and
+        // the surviving claims fabricate through the u16-cell map
+        // and parse back exactly; the swept robot's state-5/stop-1e6
+        // words ride the aliased robot bank — zero field gaps.
+        ("S6", 75u64, "c96f0735df1059ea", 2u64 + 1),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

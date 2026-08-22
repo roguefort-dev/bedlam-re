@@ -2120,6 +2120,48 @@ mod tests {
     }
 
     #[test]
+    fn s6_plan_matches_committed_artifact() {
+        // W12-S6 (§7j.40, D112): the pad op (D86) at frame 1 — the
+        // bank read from the static-pad-slots registry row, the
+        // triple written to the order-target cells, slot 18 = the
+        // census ground pad (19,70,0) — + the two COMMAND bit0
+        // SELECT records at frames 2/9 (the walk legs; raw Q5 target
+        // words 0x0260/0x0920 and 0x0260/0x0860). No staging seam
+        // rows: the run banks the MRK squad only (no markers) and
+        // the zone cell is the live game's own staging on O1 (an
+        // equivalence, never fabricated).
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S6.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S6.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S6.json is stale: regenerate with dbx-plan scenarios/S6.scen --out capture-plans/S6.json");
+        // The three injects, in frame order: the pad op (frame 1 —
+        // the bank read anchor + slot 18 + the order-target triple)
+        // then the two command records (frames 2/9, the ring append
+        // at CS:0009255C, the leg targets 0x0260/0x0920 and
+        // 0x0260/0x0860 in the record payload). No row ever touches
+        // the robot bank/count.
+        assert_eq!(emitted.inject_count, 3);
+        assert!(
+            committed.contains("\"op\": \"pad\"")
+                && committed.contains("\"bank\": \"CS:0000F63C\"")
+                && committed.contains("\"slot\": 18"),
+            "the pad op row"
+        );
+        assert!(committed.contains("60022009000000"), "leg-1 record bytes");
+        assert!(committed.contains("60026008000000"), "leg-2 record bytes");
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert_eq!(addr, "CS:0009255C", "the command ring append");
+            assert!(
+                !addr.to_uppercase().ends_with("F6D34") && !addr.to_uppercase().ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+    }
+
+    #[test]
     fn injection_steps_gate_on_registry_gaps() {
         // The committed registry with the §5 seam aliases CLEARED (the
         // pre-W5-followup state): each step kind must fail loudly,
