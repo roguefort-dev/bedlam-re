@@ -346,6 +346,32 @@ event-timing table, and the dump-chain digests for both sides. A regression
 is any class-count change other than `accepted-T3` noise (statistical bands
 pinned per scenario at first green).
 
+**LANDED 2026-08-22 (W7, D87)** — `tools/diffharness/src/differ.rs` +
+the `dbx-diff` CLI implement §6 as refined below; RE-EXD-MAP §8 is the
+O1 field-map contract.
+
+- **Normalizer**: E parses the §6a canonical grammar; O1 converts raw
+  guest bytes per the RE-EXD-MAP §8 map (only individually pinned EXD
+  robot offsets; scalars/beacon-widen/span/map-wh identity forms; the
+  typedb len-0 ≡ all-zero-grid equivalence); O2 uses the RE-EXW-SIM
+  §3/§7f/§7g EXW table (the seed-#1 EXW-front conflict is OPEN — W11
+  arbitrates); rows/fields a channel cannot source are simply ABSENT
+  from its normalized output (coverage, never fabrication).
+- **Modes**: `double-run` (O1 vs O1 — the DH-G1 verdict instrument:
+  identical modulo the frame-counter T2 + rng T3 classes) and
+  `cross-channel` (per-field classes + O2 arbitration: O2 sides with
+  O1 → `engine-bug`; O2 sides with E → `original-divergence`; no O2 →
+  provisional `engine-bug`). T3 rows never bit-compare — the DRAW-COUNT
+  (state-change census) is the statistical gate.
+- **Class policy refinement**: a `coverage` bucket beside `structural`
+  — row/field coverage asymmetry (the E-gap list, the §8 normalizer
+  gaps) is metered + reported, never silent, but NOTES the verdict
+  (it moves only when coverage deliberately moves); structural VALUE
+  mismatches (record counts, statics bytes, injection schedule,
+  draw counts) fail it. A constant anchor shift ≤8 is applied and
+  reported as a T1-timing note. Verdicts PASS / PASS-WITH-NOTES /
+  FAIL; exit code non-zero only on FAIL.
+
 ### 6a. Canonical record grammar (W6 — the E-side field map, D85)
 
 The canonical record is the CONTRACT both sides serialize into the W3
@@ -582,7 +608,13 @@ differ come before any new scenario depth.
    mission_corpus_gate pattern; dumps stay runtime-only, chain digests
    pinned in the test).
 7. **W7 — differ.** Normalizer + the §6 comparison modes + report writer +
-   fingerprint manifest output.
+   fingerprint manifest output. **DONE 2026-08-22 (D87)** — see the
+   LANDED note in §6; the normalizer contract is RE-EXD-MAP §8, the
+   O1/O2/E field maps live in `tools/diffharness/src/differ.rs`, the
+   CLI is `dbx-diff` (RUNTIME.md "W7 the differ"). The move-target
+   u16-word semantics stay deferred with the O1 plan row (extent
+   unpinned); the pad op is modeled through the order-target rows it
+   writes (D86).
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).
    NOTE (W6 addendum, D85 completion): the E runner stages the
    host-default marker set — no network-marker override — so ZONEA is

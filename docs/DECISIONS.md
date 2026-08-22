@@ -2981,3 +2981,58 @@ FORM + §7 census + RUNTIME "W5 pad op"), implementation follows.
    scenario + live capture) is a later unit that pulls this op.
 
 Nudge-Worker: 85dedea3-2ef6-47c7-a088-03a058aba96f
+
+## D87 — 2026-08-22: the W7 differ lands — normalizer + comparison modes + report/fingerprint manifest
+
+1. RE BASIS: RE-EXD-MAP §8 (this unit) — the EXD robot-record field
+   map provenance-tagged (x@+0/y@+4/z@+8/state@+0x0C/drop@+0x2C/
+   stop@+0x74/hp@+0x78/alive@+0x7C; z@+0x08 pinned NEW via the
+   per-player anchor writer's `d@(0xf6d3c+i)+0x20` read) + the
+   coverage-gap census (the 26 unmapped canonical record fields are
+   COVERAGE findings, never zero-filled-and-compared) + the seed-#1
+   EXW-front discrepancy recorded OPEN (the O2 normalizer uses the
+   RE-EXW-SIM §3 evidence table; W11's first live EXW capture
+   arbitrates).
+2. THE DIFFER (tools/diffharness/src/differ.rs + bin/dbx-diff):
+   channel normalizers (E parses the §6a canonical grammar; O1
+   converts raw guest bytes per the §8 map; O2 uses the EXW table
+   where its row forms match); MODES — DoubleRun (O1 vs O1: the
+   DH-G1 verdict instrument — identical modulo the frame-counter T2
+   + rng T3 classes) and CrossChannel (per-field classes per DESIGN
+   §6 with O2 ARBITRATION: O2 agrees with O1 → engine-bug (E the
+   outlier), O2 agrees with E → original-divergence (engine keeps
+   EXW, log to DIVERGENCES.md), no O2 → provisional engine-bug).
+   T3 rows never bit-compare; the DRAW-COUNT check (state-change
+   counts per side) is the statistical gate. Alignment = the record
+   frame_no (NOT the frame-counter watch — the O1 counter never
+   resets, menu frames included); a constant shift ≤8 is applied and
+   reported as a T1-timing note (T2 budget), worse misalignment is
+   structural.
+3. CLASS POLICY (refines §6): a `coverage` bucket distinct from
+   `structural` — row/field coverage asymmetry (the §6a E-gap list,
+   the §8 normalizer gaps) is metered + reported, NEVER SILENT, but
+   notes rather than fails the verdict (it changes only when coverage
+   deliberately changes); structural VALUE mismatches (counts,
+   statics bytes, injection schedule, draw counts) FAIL. T2 diffs
+   within the quantum are counted suppressed; beyond it report-only.
+   Verdicts: PASS / PASS-WITH-NOTES / FAIL. Report: meter,
+   first-divergence {frame,row,field,both values,class}, event-timing
+   table (mechanical change-frame census per row), both chains;
+   manifest_json = the git-carried fingerprint (dumps stay runtime/).
+4. VERIFIED: tests/differ.rs 15 gates (hand-built EXD fixtures — an
+   independent transcription of §8; the W6 canonical literal re-used
+   as the shared-field contract; modes, arbitration both ways,
+   coverage 26-gap math, shift, determinism); corpus-gated
+   differ_gate.rs — S0/S1 run_canonical dumps (pinned chains
+   8901789a88cf61fe / 1c4e7b4c9d9b0947 re-asserted) × the INVERSE
+   normalizer fabrication → cross PASS-WITH-NOTES with exactly
+   2+26 coverage findings on S1 + the one T2 counter note + zero
+   engine-bug/structural; double-run PASS modulo counter/RNG and
+   FAIL on a money perturbation. CLI smoke-tested on the real S0 E
+   dump. Workspace test/fmt/clippy green; manifest clean.
+5. FOLLOW-UPS: the EXD robot back-half offsets (a bounded probe pins
+   the remaining 26 fields when a live S1 needs them); the O2
+   static-map-wh + EXW-front pins (W11); the S1 live session consumes
+   dbx-diff for its DH-G1 verdict step.
+
+Nudge-Worker: c594df62-4614-47f6-b32d-f96b7a04db19

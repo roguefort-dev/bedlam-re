@@ -392,13 +392,22 @@ bytes; no game, unattended-safe — safe to re-run any time).
    selector pin, w/h, the three volume pointers.
 3. CAPTURE RUN B: repeat 1–2 (fresh boot, walk the menu again).
 4. DH-G1 VERDICT (the queue's (d), expectation per fact #5 above):
-   `cmp S0.A.bdld S0.B.bdld` — divergent bytes must fall ONLY inside the
-   frame-counter / rng-state-a / rng-state-b blob ranges (T2/T3 cells,
-   menu-timing dependent). Identical modulo those cells = GREEN; record
-   which cells moved. ANY other byte diff is a channel finding: record
-   and stop (do not hand-tune). Byte-identical chains INCLUDING those
-   cells need the W5 scripted walk — that is DH-G1's headless-S1 form,
-   not this session's goal.
+   the W7 differ is the instrument (D87) —
+     cargo run -q -p diffharness --bin dbx-diff -- \
+       runtime/harness-out/diff/S0/S0.A.bdld runtime/harness-out/diff/S0/S0.B.bdld \
+       --report runtime/harness-out/diff/S0/S0.G1.txt \
+       --manifest runtime/harness-out/diff/S0/S0.G1.json
+   (two O1 dumps auto-select double-run mode). GREEN = verdict PASS:
+   the frame-counter diffs land in the suppressed/T2 budget and the
+   rng rows are T3 (never bit-compared); the report lists any cell
+   that moved beyond it. ANY other row diff = an engine/channel
+   finding (the report names frame/row/field/both values): record
+   and stop (do not hand-tune). `cmp S0.A.bdld S0.B.bdld` remains the
+   raw cross-check — divergent bytes must fall ONLY inside the
+   frame-counter / rng-state-a / rng-state-b blob ranges (T2/T3
+   cells, menu-timing dependent). Byte-identical chains INCLUDING
+   those cells need the W5 scripted walk — that is DH-G1's
+   headless-S1 form, not this session's goal.
 5. CYCLES CALIBRATION (queue's (e)): one more capture session with
    audio live (edit the staged plan: "env": {"SDL_VIDEODRIVER": "",
    "SDL_AUDIODRIVER": ""}) and LISTEN for audio dropouts during the
@@ -540,6 +549,38 @@ inject form). Row shape:
   writes the triple at 0000:0620, watches assert the readback + the
   injected flag; the NEGATIVE plan (slot 3) asserts the fail-loud
   validation (capgen exits non-zero naming the slot).
+
+## W7 the differ (D87, 2026-08-22 — `dbx-diff`; DESIGN §6 + RE-EXD-MAP §8)
+
+`cargo run -q -p diffharness --bin dbx-diff -- <a.bdl> <b.bdl>
+[--tiebreak <o2.bdl>] [--mode double-run|cross] [--t2-quantum N]
+[--report out.txt] [--manifest out.json]`
+
+- Both dumps are integrity-verified (decode) before any compare; a
+  scenario mismatch between them is a hard error.
+- MODE auto: two O1 dumps → `double-run` (the DH-G1 verdict — every
+  row byte-exact except the budgeted classes: frame-counter T2,
+  rng-state-a/b T3-never-bit-compared, both sides' DRAW COUNTS must
+  still match); otherwise → `cross-channel` (E vs O1: per-field
+  classes + coverage findings + O2 arbitration when --tiebreak is
+  given: O2 siding with O1 → engine-bug; siding with E →
+  original-divergence (a NOTE — engine keeps EXW; log DIVERGENCES.md);
+  none → provisional engine-bug).
+- NORMALIZATION (never raw cross-implementation bytes): E parses the
+  §6a canonical grammar; O1 converts per the RE-EXD-MAP §8 map
+  (robot: only the 8 pinned EXD offsets; every other field is a
+  `coverage` finding — metered + reported, never silent, never
+  fabricated); O2 uses the RE-EXW-SIM §3 table (seed-#1 EXW-front
+  conflict OPEN until W11).
+- VERDICTS: PASS / PASS-WITH-NOTES (only budgeted findings) / FAIL
+  (any structural value mismatch, engine-bug, or watch-artifact);
+  exit code non-zero on FAIL only. The manifest JSON is the
+  git-carried fingerprint (meter + chains + dump sha256s + first
+  divergence); dump blobs stay runtime/-only.
+- Verified corpus-gated: S0/S1 canonical E dumps × the inverse
+  normalizer (tests/differ_gate.rs) — cross PASS-WITH-NOTES with
+  exactly the expected coverage set; double-run PASS modulo
+  counter/RNG; FAIL on any other byte diff.
 
 ## Wine prefix for EXW (golden pipeline comparator)
 
