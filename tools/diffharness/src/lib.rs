@@ -19,6 +19,7 @@
 //! `key = true|false` pairs. Anything else is a hard error — the registry is
 //! data with a schema, not free-form prose.
 
+pub mod differ;
 pub mod dump;
 pub mod hash;
 pub mod runner;
