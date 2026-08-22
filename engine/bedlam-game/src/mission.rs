@@ -991,6 +991,17 @@ impl MissionScene {
             self.map_lockout -= 1;
         }
         self.sim.advance_frame();
+        // The destroy-score fold [§7j.13/3 + D104]: the destroy tail
+        // accumulates the award in the sim's pending cell; the shell
+        // folds it into the campaign score (the [0x4dd40c] delta the
+        // score strip reads) and the strip-redraw arm rides with it
+        // (presentation — the strip countdown has its own producers).
+        // Zero without staged destructibles — the S0..S3 no-inject
+        // invariant (the resolvers pass through on empty banks).
+        let (award, _strip) = self.sim.take_destroy_score();
+        if award != 0 {
+            self.score += award;
+        }
         // FUN_00408dcc — the territory ring stamp runs inside
         // robots() for the moving-family machines [7e.3]; the
         // engine's mover state word is the analog [design: the EXW

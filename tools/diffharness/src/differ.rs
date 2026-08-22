@@ -464,6 +464,379 @@ fn bank_row_canonical<'a>(
     Ok(&b[4..])
 }
 
+// ---------------------------------------------------------------------
+// The destroy-family rows (W12-S4 — DESIGN §7 S4 row; the registry
+// T1 destroy rows + the T3 debris/splash rows, both EXD-verified or
+// documented E-only)
+// ---------------------------------------------------------------------
+
+/// Object-instance slot cap: the .POS 2000×0x10 array (loader cap
+/// CMP 0x7d0; the guest count cell is bounded by the same walk).
+const OBJECT_SLOTS: usize = 2000;
+/// TRT structure cap: 250×0x20 (loader clear ECX=0x1f40).
+const TRT_SLOTS: usize = 250;
+/// Debris ring: 128×0x30 at 0x476fbc.
+const DEBRIS_SLOTS_W12: usize = 128;
+/// Splash bank: 250×0xA at 0x4e9778.
+const SPLASH_SLOTS: usize = 250;
+
+/// The object-instance record fields. CANONICAL form: `{slot u16,
+/// x, y, z, id, flags u8, hp}` (23 B; the E blob, §6a). The guest
+/// 0x14-stride record is the O1 raw form — its id DWORD carries
+/// the same {type-low-byte, 0x40-flag-bit-8} shape, and dead
+/// (id==-1) records never ride (the count cell bounds the live
+/// run on the guest; E emits only live records keyed by slot).
+fn object_instances_fields(out: &mut Vec<(String, FieldVal)>, rec: &[u8]) {
+    let rd32 = |p: usize| i32le(&rec[p..p + 4]) as i128;
+    let slot = u16le(rec) as i128;
+    out.push((format!("obj[{slot}].slot"), FieldVal::Int(slot)));
+    out.push((format!("obj[{slot}].x"), FieldVal::Int(rd32(2))));
+    out.push((format!("obj[{slot}].y"), FieldVal::Int(rd32(6))));
+    out.push((format!("obj[{slot}].z"), FieldVal::Int(rd32(10))));
+    out.push((format!("obj[{slot}].id"), FieldVal::Int(rec[14] as i128)));
+    out.push((
+        format!("obj[{slot}].destroyed"),
+        FieldVal::Int(i128::from(rec[18] & 0x40 != 0)),
+    ));
+    out.push((format!("obj[{slot}].hp"), FieldVal::Int(rd32(19))));
+}
+
+/// E canonical object-instances: u32 count + 23-B records.
+fn object_instances_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "object-instances";
+    if b.len() < 4 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "u32 count + 23*B records".into(),
+        });
+    }
+    let n = u32le(b) as usize;
+    if n > OBJECT_SLOTS || b.len() != 4 + n * 23 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("count <= {OBJECT_SLOTS} + n*23 records"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + n * 7);
+    fields.push(("count".to_string(), FieldVal::Int(n as i128)));
+    for i in 0..n {
+        object_instances_fields(&mut fields, &b[4 + i * 23..]);
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// O1 raw object-instances: the guest 2000×0x14 bank with the
+/// count cell FIRST (EXD *(0x119584) pointer + count 0x119554).
+/// The count cell is capture plumbing — it bounds the walk, never
+/// compared (the live records are the state; the trailing dead
+/// id==-1 records stay out).
+fn object_instances_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "object-instances";
+    if b.len() < 4 || !(b.len() - 4).is_multiple_of(0x14) {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "u32 count + n*0x14 records (the guest bank)".into(),
+        });
+    }
+    let count = u32le(b) as usize;
+    let total = (b.len() - 4) / 0x14;
+    if count > OBJECT_SLOTS || total > OBJECT_SLOTS || count > total {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("count <= {OBJECT_SLOTS} records"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + count * 7);
+    let mut live = 0usize;
+    for i in 0..count {
+        let rec = &b[4 + i * 0x14..4 + (i + 1) * 0x14];
+        if i32le(&rec[0xC..0x10]) == -1 {
+            continue; // dead slot — never live state
+        }
+        live += 1;
+        // The guest record: {x, y, z, id dword, hp} — rebuild the
+        // canonical 23-B shape keyed by the SLOT INDEX.
+        let mut canon = [0u8; 23];
+        canon[0..2].copy_from_slice(&(i as u16).to_le_bytes());
+        canon[2..14].copy_from_slice(&rec[0..12]);
+        canon[14..18].copy_from_slice(&rec[0xC..0x10]);
+        canon[18] = rec[0xD] & 0x40;
+        canon[19..23].copy_from_slice(&rec[0x10..0x14]);
+        object_instances_fields(&mut fields, &canon);
+    }
+    fields.insert(0, ("count".to_string(), FieldVal::Int(live as i128)));
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The TRT fields {active, hp, x, y, z} i32 ×5 — both channels the
+/// same record grammar (the resolver read-set, §7j.14; the scratch
+/// +0x04/+0x08 loader words are the turret-AI E-gap, out of the
+/// row). E: u32 count + 20-B records; O1: the 0x20-stride guest
+/// records at stride offsets {+0, +0x10, +0x14, +0x18, +0x1C}.
+fn trt_fields(out: &mut Vec<(String, FieldVal)>, i: usize, v: [i128; 5]) {
+    for (k, name) in ["active", "hp", "x", "y", "z"].iter().enumerate() {
+        out.push((format!("trt[{i}].{name}"), FieldVal::Int(v[k])));
+    }
+}
+
+fn trt_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "trt-array";
+    if b.len() < 4 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "u32 count + 20*B records".into(),
+        });
+    }
+    let n = u32le(b) as usize;
+    if n > TRT_SLOTS || b.len() != 4 + n * 20 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("count <= {TRT_SLOTS} + n*20 records"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + n * 5);
+    fields.push(("count".to_string(), FieldVal::Int(n as i128)));
+    for i in 0..n {
+        let rec = &b[4 + i * 20..];
+        trt_fields(
+            &mut fields,
+            i,
+            [
+                i32le(rec) as i128,
+                i32le(&rec[4..]) as i128,
+                i32le(&rec[8..]) as i128,
+                i32le(&rec[12..]) as i128,
+                i32le(&rec[16..]) as i128,
+            ],
+        );
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+fn trt_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "trt-array";
+    if b.len() < 4 || !(b.len() - 4).is_multiple_of(0x20) {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "u32 count + n*0x20 records (the guest bank)".into(),
+        });
+    }
+    let n = u32le(b) as usize;
+    let total = (b.len() - 4) / 0x20;
+    if n > TRT_SLOTS || total > TRT_SLOTS || n > total {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("count <= {TRT_SLOTS} records"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + n * 5);
+    fields.push(("count".to_string(), FieldVal::Int(n as i128)));
+    for i in 0..n {
+        let rec = &b[4 + i * 0x20..];
+        trt_fields(
+            &mut fields,
+            i,
+            [
+                i32le(rec) as i128,
+                i32le(&rec[0x10..]) as i128,
+                i32le(&rec[0x14..]) as i128,
+                i32le(&rec[0x18..]) as i128,
+                i32le(&rec[0x1C..]) as i128,
+            ],
+        );
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The bare u16 grid field walk (tile-word-grid /
+/// platform-strength): both channels dump the same w·h·2 span.
+fn grid_fields(id: &str, out: &mut Vec<(String, FieldVal)>, b: &[u8]) {
+    for (t, w) in b.chunks_exact(2).enumerate() {
+        out.push((format!("tile[{t}]"), FieldVal::Int(u16le(w) as i128)));
+    }
+    let _ = id;
+}
+
+/// The typedb-mirror-rows walk. CANONICAL: u32 changed-count +
+/// {tile u16, 8×(word u16, seen u8)} 26-B records (compact-active).
+/// RAW (O1): the full 0x1E-stride w·h rows — the SAME nonzero-tile
+/// filter canonicalizes it (identical content ⇒ identical rows;
+/// the filter is the D104 last-nonzero-prefix contract applied at
+/// tile granularity: a tile is active iff any of its 8 z-words or
+/// seen bytes is nonzero). The two layouts differ (compact words
+/// at 2+3z/seen at 4+3z; raw words at 2z/seen at 0x10+z), so the
+/// field walk takes the extracted per-z pairs, never a slice.
+fn mirror_fields(out: &mut Vec<(String, FieldVal)>, tile: usize, zw: [u16; 8], zs: [u8; 8]) {
+    out.push((format!("tile[{tile}].tile"), FieldVal::Int(tile as i128)));
+    for z in 0..8 {
+        out.push((
+            format!("tile[{tile}].z{z}.word"),
+            FieldVal::Int(i128::from(zw[z])),
+        ));
+        out.push((
+            format!("tile[{tile}].z{z}.seen"),
+            FieldVal::Int(i128::from(zs[z])),
+        ));
+    }
+}
+
+/// Extract the per-z (word, seen) pairs from one RAW 0x1E-stride
+/// row (words +0x00..+0x0F, seen +0x10..+0x17).
+fn mirror_row_pairs(row: &[u8]) -> ([u16; 8], [u8; 8]) {
+    let mut zw = [0u16; 8];
+    let mut zs = [0u8; 8];
+    for z in 0..8 {
+        zw[z] = u16le(&row[2 * z..]);
+        zs[z] = row[0x10 + z];
+    }
+    (zw, zs)
+}
+
+fn mirror_row_active(row: &[u8]) -> bool {
+    let (zw, zs) = mirror_row_pairs(row);
+    (0..8).any(|z| zw[z] != 0 || zs[z] != 0)
+}
+
+fn mirror_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "typedb-mirror-rows";
+    if b.len() < 4 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "u32 count + n*26 records".into(),
+        });
+    }
+    let n = u32le(b) as usize;
+    if b.len() != 4 + n * 26 {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("4 + {n}*26 (the compact-active form)"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + n * 17);
+    fields.push(("count".to_string(), FieldVal::Int(n as i128)));
+    for i in 0..n {
+        let rec = &b[4 + i * 26..];
+        let tile = u16le(rec) as usize;
+        // The compact tail: 8×(word u16 @ 2+3z, seen u8 @ 4+3z).
+        let mut zw = [0u16; 8];
+        let mut zs = [0u8; 8];
+        for z in 0..8 {
+            zw[z] = u16le(&rec[2 + 3 * z..]);
+            zs[z] = rec[4 + 3 * z];
+        }
+        mirror_fields(&mut fields, tile, zw, zs);
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+fn mirror_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "typedb-mirror-rows";
+    if !b.len().is_multiple_of(0x1E) {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "w*h*0x1E rows (the full guest grid)".into(),
+        });
+    }
+    let tiles = b.len() / 0x1E;
+    let mut fields = Vec::new();
+    let mut active = 0usize;
+    for t in 0..tiles {
+        let row = &b[t * 0x1E..(t + 1) * 0x1E];
+        if mirror_row_active(row) {
+            active += 1;
+            let (zw, zs) = mirror_row_pairs(row);
+            mirror_fields(&mut fields, t, zw, zs);
+        }
+    }
+    fields.insert(0, ("count".to_string(), FieldVal::Int(active as i128)));
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The debris-ring row: E-only (no EXD alias yet — the registry
+/// documents the gap). Canonical: u32 128 + 42-B records; the raw
+/// passthrough keeps the O2/unknown form comparable byte-exact.
+fn debris_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "debris-stager";
+    let recs = bank_row_canonical(id, frame_no, b, DEBRIS_SLOTS_W12, 42)?;
+    let mut fields = Vec::with_capacity(1 + DEBRIS_SLOTS_W12 * 4);
+    fields.push(("count".to_string(), FieldVal::Int(DEBRIS_SLOTS_W12 as i128)));
+    for i in 0..DEBRIS_SLOTS_W12 {
+        let rec = &recs[i * 42..];
+        let rd32 = |p: usize| i32le(&rec[p..p + 4]) as i128;
+        fields.push((format!("d[{i}].active"), FieldVal::Int(rec[0] as i128)));
+        fields.push((format!("d[{i}].kind"), FieldVal::Int(rd32(25))));
+        fields.push((format!("d[{i}].delay"), FieldVal::Int(rd32(33))));
+        fields.push((format!("d[{i}].seq"), FieldVal::Int(rd32(21))));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The splash-bank row: E-only (no EXD alias yet). Canonical: u32
+/// 250 + 10-B records {x, y, z, delay, age} — the guest 0xA stride
+/// exactly.
+fn splash_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "splash-records";
+    let recs = bank_row_canonical(id, frame_no, b, SPLASH_SLOTS, 10)?;
+    let mut fields = Vec::with_capacity(1 + SPLASH_SLOTS * 5);
+    fields.push(("count".to_string(), FieldVal::Int(SPLASH_SLOTS as i128)));
+    for i in 0..SPLASH_SLOTS {
+        let rec = &recs[i * 10..];
+        let rd16 = |p: usize| u16le(&rec[p..]) as i128;
+        fields.push((format!("s[{i}].x"), FieldVal::Int(rd16(0))));
+        fields.push((format!("s[{i}].y"), FieldVal::Int(rd16(2))));
+        fields.push((format!("s[{i}].z"), FieldVal::Int(rd16(4))));
+        fields.push((format!("s[{i}].delay"), FieldVal::Int(rd16(6))));
+        fields.push((format!("s[{i}].age"), FieldVal::Int(rd16(8))));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
 fn robot_row_from_map(
     id: &str,
     frame_no: u64,
@@ -756,6 +1129,28 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
         "projectile-bank" => {
             projectile_bank_row(no, bank_row_canonical(id, no, b, PROJ_SLOTS, 0x22)?)
         }
+        // The destroy-family rows (W12-S4).
+        "object-instances" => object_instances_canonical(no, b),
+        "trt-array" => trt_canonical(no, b),
+        "typedb-mirror-rows" => mirror_canonical(no, b),
+        "debris-stager" => debris_canonical(no, b),
+        "splash-records" => splash_canonical(no, b),
+        "tile-word-grid" | "platform-strength" => {
+            // Both channels dump the same w·h·2 span — one shared
+            // field walk (a length mismatch is a STRUCTURAL
+            // finding, fail loud here so the report names it).
+            if !b.len().is_multiple_of(2) {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: "w*h*2 (the tile-major u16 span)".into(),
+                });
+            }
+            let mut fields = Vec::with_capacity(b.len() / 2);
+            grid_fields(id, &mut fields, b);
+            Ok(row(fields))
+        }
         "move-target-words" => {
             if b.len() < 4 {
                 return Err(NormalizeError::BadLength {
@@ -893,6 +1288,14 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         // same field walk.
         "weapon-anim-bank" => weapon_bank_row(no, b),
         "projectile-bank" => projectile_bank_row(no, b),
+        // The destroy-family rows (W12-S4): the O1 raw forms are the
+        // guest banks (EXD 0xfe37c / 0xf93cc grids, *(0x119584)
+        // object bank + count 0x119554, the 0x95264 TRT bank +
+        // count 0x11949c, the 0xac1e4 0x1E-stride mirror rows).
+        "object-instances" => object_instances_o1(no, b),
+        "trt-array" => trt_o1(no, b),
+        "typedb-mirror-rows" => mirror_o1(no, b),
+        "tile-word-grid" | "platform-strength" => normalize_engine_row(id, no, b),
         "order-target" => {
             need(id, no, b, "3 contiguous i32 cells", 12)?;
             Ok(row(vec![
@@ -1072,6 +1475,13 @@ fn field_class(row: &str, field: &str, tier: &str) -> Class {
         ("rng-state-a", _) | ("rng-state-b", _) => Class::AcceptedT3,
         ("robot-bank", "count") | ("move-target-words", "count") => Class::Structural,
         ("weapon-anim-bank", "count") | ("projectile-bank", "count") => Class::Structural,
+        // The destroy-family counts (W12-S4): structural like the
+        // other count words.
+        ("object-instances", "count")
+        | ("trt-array", "count")
+        | ("typedb-mirror-rows", "count")
+        | ("debris-stager", "count")
+        | ("splash-records", "count") => Class::Structural,
         ("robot-bank", f) if is_t2_position(f) => Class::T2Reported,
         ("move-target-words", f) if f.ends_with(".tx") || f.ends_with(".ty") => Class::T2Reported,
         // TS statics: byte-exact structural comparison.

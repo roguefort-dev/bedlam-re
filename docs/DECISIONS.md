@@ -3920,3 +3920,69 @@ Nudge-Worker: 16ebe0c4-74ee-48e1-bf36-73e981ed114f
    proximity checks — the audit unit).
 
 Nudge-Worker: 3e93a4b1-0132-4e70-a159-e60f176207a5
+
+## D105 — 2026-08-22: P4.2/W12-S4 — the S4.scen + canonical-chain unit COMPLETE: the destroy-family dump rows live end-to-end on T1/T3 (grammar v1.4 `destroy = 1` staging key, canonical blob forms, differ normalizers BOTH channels, differ_gate S4 row), chain pinned 2ddd15ea50c8a14d; the MissionShell gains the destroy-score fold (zero without staged destructibles — the no-inject invariant: S0/S1/S2/S3 chains re-asserted BYTE-IDENTICAL) (engine+tests built by a predecessor session and left uncommitted by session death — ADOPTED + FIXED + VALIDATED + COMPLETED by continuation worker 65f39dff claim 2)
+
+1. GRAMMAR v1.4 `destroy = 1` (runner): strictly `1`, once per
+   scenario, fail-loud on anything else (a typo'd value must never
+   silently skip the staging AND its dump rows). Stages the mission's
+   OWN .BDG/.POS/.TRT through the EXISTING `stage_destroy_family`
+   host seam and gates the destroy rows (S0..S3 bytes untouched).
+   This key is an EQUIVALENCE seam, not a fabrication seam: the
+   original loads the same three files natively at mission load
+   (FUN_0041a4f8 + FUN_004170a6), so the staged CONTENT is identical
+   on both channels — dbx-plan records it in `_e_staging` with the
+   equivalence note + the recorded pre-S5 divergence (E stages the
+   TOT-mirror/seen banks EMPTY; the init_tiles TOT fill is the S5
+   pairing per §7h.4/D99).
+2. S4.scen (ZONEA/MISSION1, 49 records): the TRAP leg (a marker
+   robot on the tile-0x62 cell — resolver-100 no-score destroy at
+   the anchor, 5× k12 + sel-9 k20 + the 3×3 splash ring + the
+   restore into the empty-staged mirror), the ARTILLERY leg (a
+   marker gunner firing 9/0xA/0xB at its own tile — ring 0
+   script-blasts the .TRT turret with the rubble stamp, rings
+   4..6 cascade the chainable cluster through recursive
+   1000-damage detonations, the blast box damages the gunner —
+   the faithful §7j.23 robot lane), and the SURVIVOR leg (two
+   grenade volleys on a multi-hp structure — pure monotone
+   subtract, never destroyed). Bullets/shell/homing stay the
+   documented producer E-gaps (differ coverage, never silence).
+3. CANONICAL FORMS (the §6a destroy rows, OUT of state_hash per
+   the W6 split): object-instances = u32 count + 23-B
+   {slot,x,y,z,id,flags,hp} keyed by .POS slot (the guest id==-1
+   dead slots never ride; the guest COUNT cell is capture
+   plumbing, never compared); trt-array = u32 count + 20-B
+   {active,hp,x,y,z}; tile-word-grid + platform-strength = the
+   SHARED bare w·h·2 span (both channels identical — a length
+   mismatch is a structural finding); typedb-mirror-rows =
+   COMPACT-ACTIVE {tile u16, 8×(word u16, seen u8)} with the
+   nonzero-tile filter applied on BOTH channels (the O1 full
+   0x1E-stride grid canonicalizes through the same filter); the
+   T3 pair debris-stager (42-B FULL bank) + splash-records
+   (10-B FULL bank) is E-ONLY until their EXD aliases land —
+   row-level coverage findings, never fabricated bytes.
+4. DIFFER: the O1 normalizers (the guest object 0x14-stride
+   count-bounded walk skipping dead slots, the TRT 0x20-stride
+   stride-offset map {+0,+0x10,+0x14,+0x18,+0x1C}, the mirror
+   tile filter) + the destroy count words classed Structural.
+   differ_gate S4 = cross PASS-WITH-NOTES (exactly the 4 E-only
+   rows, zero field gaps, the single T2 counter note).
+   CONTINUATION FIXES to the predecessor WIP (all caught by the
+   gates, none reached a commit): the trt inverse-fabricator
+   0x10..0x24 slice overrun, the O1 count-cell stride guards
+   ((len−4)%stride, not len%stride), and the mirror canonical
+   parser misreading the compact 26-B tail with the raw 0x1E
+   layout (words at 2+3z/seen at 4+3z) — the field walk now
+   takes extracted per-z pairs so the two layouts cannot cross.
+5. THE SCORE FOLD (mission.rs): the destroy tail's award folds
+   into the campaign score cell in the MissionShell advance
+   (take_destroy_score — zero without staged destructibles,
+   the S0..S3 no-inject invariant re-asserted
+   8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
+   e29f76f5585401e1).
+6. NEXT-GATE NOTES: a live S4 capture needs the dbx-plan T3-tier
+   unit first (the S3 T2-tier precedent — SUPPORTED_TIERS is
+   still T0/T1/TS); the mirror-rows O1 walk relies on the
+   recorded empty-staging divergence until S5 lands init_tiles.
+
+Nudge-Worker: 65f39dff-5b6e-4da0-b7f8-d85cb435ce96

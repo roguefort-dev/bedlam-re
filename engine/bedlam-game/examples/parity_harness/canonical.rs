@@ -58,6 +58,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use bedlam_core::destroy::{
+    DebrisRecord, ObjectInstance, ObjectTypeTable, SplashRecord, TerrainStructure,
+};
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::Robot;
 use bedlam_core::sim::SimConfig;
@@ -114,6 +117,35 @@ pub struct TickState<'a> {
     /// split: watched bank rows are their own dump blobs).
     pub weapon_bank: &'a [WeaponRecord],
     pub enemy_bank: &'a [EnemyProjectile],
+    /// The destroy-family watch surfaces (W12-S4), gated on the
+    /// scenario's `destroy = 1` staging key — `None` on S0..S3
+    /// (their pinned bytes carry no destroy rows). NEVER in
+    /// `state_hash` (the W6 split).
+    pub destroy: Option<DestroyView<'a>>,
+}
+
+/// The per-frame destroy-family surfaces (W12-S4, DESIGN §7 S4 row
+/// and the registry's T1/T3 destroy rows). All blobs are their own
+/// dump rows; the forms are pinned in DESIGN §6a and mirrored by
+/// the W7 differ normalizers (engine form / O1 guest form).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DestroyView<'a> {
+    /// The staged + live object instances (.POS order).
+    pub objects: &'a [ObjectInstance],
+    /// The .TRT terrain structures (turrets).
+    pub structures: &'a [TerrainStructure],
+    /// The object-presence grid words (tile-major).
+    pub tile_grid: &'a [u16],
+    /// The platform-strength words (tile-major).
+    pub platform: &'a [u16],
+    /// The TOT-mirror plane words (tile-major, 8 per tile).
+    pub mirror_words: &'a [u16],
+    /// The TOT-mirror seen bytes (tile-major, 8 per tile).
+    pub mirror_seen: &'a [u8],
+    /// The 128-slot debris ring (full bank — slot identity watched).
+    pub debris: &'a [DebrisRecord],
+    /// The 250-slot splash bank (full bank).
+    pub splashes: &'a [SplashRecord],
 }
 
 fn u32b(v: u32) -> Vec<u8> {
@@ -168,6 +200,137 @@ fn enemy_bank_blob(bank: &[EnemyProjectile]) -> Vec<u8> {
         b.extend_from_slice(&r.vy.to_le_bytes());
         b.extend_from_slice(&r.vz.to_le_bytes());
         b.extend_from_slice(&[0u8; 8]); // +0x1A/+0x1E tail (E-gap, zero)
+    }
+    b
+}
+
+/// Encode the object-instance row (W12-S4): u32 live count + per
+/// live record `{slot u16, x i32, y i32, z i32, id u32, flags u8,
+/// hp i32}` — the id dword carries the guest shape (low byte = the
+/// type-table row, +0x08 bit = the destroyed 0x40 flag byte). The
+/// O1 normalizer walks the guest 0x14-stride bank (count cell
+/// bounded, dead id==-1 records skipped) into the same fields keyed
+/// by slot — the guest count cell itself is capture plumbing, not
+/// canonical state (never compared).
+fn objects_blob(objects: &[ObjectInstance]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + objects.len() * 23);
+    b.extend_from_slice(&(objects.len() as u32).to_le_bytes());
+    for o in objects {
+        b.extend_from_slice(&o.slot.to_le_bytes());
+        b.extend_from_slice(&o.x.to_le_bytes());
+        b.extend_from_slice(&o.y.to_le_bytes());
+        b.extend_from_slice(&o.z.to_le_bytes());
+        b.extend_from_slice(&(o.id as u32 & 0xFF).to_le_bytes());
+        b.push(if o.destroyed { 0x40 } else { 0 });
+        b.extend_from_slice(&o.hp.to_le_bytes());
+    }
+    b
+}
+
+/// Encode the TRT structure row (W12-S4): u32 count + per record
+/// `{active i32, hp i32, x i32, y i32, z i32}` — the resolver
+/// read-set of FUN_0041bc1c (§7j.14). The loader's scratch words
+/// (+0x04/+0x08/+0x0C of the 0x20 stride) are the turret-AI
+/// E-gap, out of the row.
+fn structures_blob(structures: &[TerrainStructure]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + structures.len() * 20);
+    b.extend_from_slice(&(structures.len() as u32).to_le_bytes());
+    for s in structures {
+        b.extend_from_slice(&i32::from(s.active).to_le_bytes());
+        b.extend_from_slice(&s.hp.to_le_bytes());
+        b.extend_from_slice(&s.x.to_le_bytes());
+        b.extend_from_slice(&s.y.to_le_bytes());
+        b.extend_from_slice(&s.z.to_le_bytes());
+    }
+    b
+}
+
+/// Encode the TOT-mirror row (W12-S4): u32 count + per CHANGED
+/// tile `{tile u16, 8×(word u16, seen u8)}` (26 B) — compact-active
+/// form: only tiles with any nonzero word/seen ride (E's banks
+/// stage EMPTY until the destroy RESTORE writes; the full w·h·0x1E
+/// grid is the O1 raw span, its normalizer applies the same
+/// nonzero-tile filter — identical content canonicalizes
+/// identically). The +0x18..+0x1D record tail (scorch/variant/
+/// flag/heights) is the fade/variant rows' surface — excluded.
+fn mirror_blob(words: &[u16], seen: &[u8]) -> Vec<u8> {
+    let tiles = words.len() / 8;
+    let mut changed: Vec<usize> = Vec::new();
+    for t in 0..tiles {
+        let mut nz = false;
+        for z in 0..8 {
+            if words[t * 8 + z] != 0 || seen[t * 8 + z] != 0 {
+                nz = true;
+                break;
+            }
+        }
+        if nz {
+            changed.push(t);
+        }
+    }
+    let mut b = Vec::with_capacity(4 + changed.len() * 26);
+    b.extend_from_slice(&(changed.len() as u32).to_le_bytes());
+    for &t in &changed {
+        b.extend_from_slice(&(t as u16).to_le_bytes());
+        for z in 0..8 {
+            b.extend_from_slice(&words[t * 8 + z].to_le_bytes());
+            b.push(seen[t * 8 + z]);
+        }
+    }
+    b
+}
+
+/// Encode the debris-ring row (W12-S4): u32 128 + the FULL bank —
+/// `{active u8, x, y, z, init_a, init_b, seq, kind, phys, delay,
+/// param i32×10, table u8}` (42 B, the E-modeled field set of the
+/// 0x30 stride; the unmapped words are out of the row). FULL BANK
+/// like the T2 rows: slot identity (first-free/LRU allocation) is
+/// the watched state. NO EXD alias yet — the row is E-only until
+/// the alias lands (a documented coverage gap, never fabricated).
+fn debris_blob(debris: &[DebrisRecord]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + debris.len() * 42);
+    b.extend_from_slice(&(debris.len() as u32).to_le_bytes());
+    for d in debris {
+        b.push(u8::from(d.active));
+        b.extend_from_slice(&d.x.to_le_bytes());
+        b.extend_from_slice(&d.y.to_le_bytes());
+        b.extend_from_slice(&d.z.to_le_bytes());
+        b.extend_from_slice(&d.init_a.to_le_bytes());
+        b.extend_from_slice(&d.init_b.to_le_bytes());
+        b.extend_from_slice(&d.seq.to_le_bytes());
+        b.extend_from_slice(&d.kind.to_le_bytes());
+        b.extend_from_slice(&d.phys.to_le_bytes());
+        b.extend_from_slice(&d.delay.to_le_bytes());
+        b.extend_from_slice(&d.param.to_le_bytes());
+        b.push(d.table);
+    }
+    b
+}
+
+/// Encode the splash-bank row (W12-S4): u32 250 + the FULL bank of
+/// `{x i16, y i16, z i16, delay u16, age u16}` — the guest 0xA
+/// stride exactly. NO EXD alias yet (E-only row, documented gap).
+fn splash_blob(splashes: &[SplashRecord]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + splashes.len() * 10);
+    b.extend_from_slice(&(splashes.len() as u32).to_le_bytes());
+    for s in splashes {
+        b.extend_from_slice(&s.x.to_le_bytes());
+        b.extend_from_slice(&s.y.to_le_bytes());
+        b.extend_from_slice(&s.z.to_le_bytes());
+        b.extend_from_slice(&s.delay.to_le_bytes());
+        b.extend_from_slice(&s.age.to_le_bytes());
+    }
+    b
+}
+
+/// The bare u16 grid span (tile-word-grid / platform-strength):
+/// both channels dump the same w·h·2 span — one shared field walk
+/// in the differ (a live O1 grid whose extent differs is a
+/// structural finding, fail loud).
+fn grid_blob(grid: &[u16]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(grid.len() * 2);
+    for g in grid {
+        b.extend_from_slice(&g.to_le_bytes());
     }
     b
 }
@@ -318,6 +481,27 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
     if want("T2") {
         f.push_watch("weapon-anim-bank", weapon_bank_blob(st.weapon_bank));
         f.push_watch("projectile-bank", enemy_bank_blob(st.enemy_bank));
+    }
+    // The destroy-family rows (W12-S4): gated on the scenario's
+    // `destroy = 1` staging key — S0..S3 carry no destroy rows and
+    // their pinned bytes stay untouched. The T1 rows ride the T1
+    // tier, the debris/splash T3 rows the T3 tier (DESIGN §7 S4
+    // row tiers T0/T1/T3).
+    if let Some(d) = &st.destroy {
+        if want("T1") {
+            f.push_watch("object-instances", objects_blob(d.objects));
+            f.push_watch("trt-array", structures_blob(d.structures));
+            f.push_watch("tile-word-grid", grid_blob(d.tile_grid));
+            f.push_watch("platform-strength", grid_blob(d.platform));
+            f.push_watch(
+                "typedb-mirror-rows",
+                mirror_blob(d.mirror_words, d.mirror_seen),
+            );
+        }
+        if want("T3") {
+            f.push_watch("debris-stager", debris_blob(d.debris));
+            f.push_watch("splash-records", splash_blob(d.splashes));
+        }
     }
     if anchor && want("TS") {
         let (w, h) = st.map_wh.unwrap_or((0, 0));
@@ -518,6 +702,60 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         scene.sim_mut().set_difficulty(difficulty);
     }
 
+    // The destroy-family staging (W12-S4, grammar v1.4 `destroy = 1`):
+    // the mission's OWN .BDG/.POS/.TRT staged through the engine host
+    // seam (`stage_destroy_family`, the D51 pattern). The ORIGINAL
+    // loads all three natively at mission load (FUN_0041a4f8 +
+    // FUN_004170a6, §7j.25/4) — E's `load_mission` does not fetch
+    // them, so this key stages CONTENT identical to what O1 loads:
+    // no O1 write, an equivalence seam recorded in the plan. Fail
+    // loud on any malformed file — never guess. The key also gates
+    // the destroy dump rows (S0..S3 bytes unchanged).
+    if scen.destroy {
+        let (zone_idx, mission_no) = host.mission_slot();
+        let zone_dir = format!("ZONE{}", (b'A' + zone_idx as u8) as char);
+        let per_mission = format!("{zone_dir}/MISSION{mission_no}");
+        let bdg_bytes = source
+            .load(&format!("{per_mission}.BDG"))
+            .map_err(|e| CanonicalError(format!("destroy staging: {e}")))?;
+        let pos_bytes = source
+            .load(&format!("{per_mission}.POS"))
+            .map_err(|e| CanonicalError(format!("destroy staging: {e}")))?;
+        let trt_bytes = source
+            .load(&format!("{per_mission}.TRT"))
+            .map_err(|e| CanonicalError(format!("destroy staging: {e}")))?;
+        let table = ObjectTypeTable::from_bdg_bytes(&bdg_bytes).ok_or_else(|| {
+            CanonicalError(format!(
+                "{per_mission}.BDG desynced (the FORMATS §16 grammar)"
+            ))
+        })?;
+        if pos_bytes.len() != 16 * bedlam_core::destroy::OBJECT_INSTANCE_SLOTS {
+            return Err(CanonicalError(format!(
+                "{per_mission}.POS is {} B (want 16*2000, FORMATS §12)",
+                pos_bytes.len()
+            )));
+        }
+        let linear = u32::from(host.fsm().episode().linear());
+        if bedlam_core::destroy::parse_trt(&trt_bytes, linear).is_none() {
+            return Err(CanonicalError(format!(
+                "{per_mission}.TRT desynced (the FORMATS §14 grammar)"
+            )));
+        }
+        // [0x4edd8c] = zone_index + 1 (D99); the mirror banks stage
+        // EMPTY (the init_tiles TOT fill is the S5 pairing) — the
+        // restore writes land on the empty banks, faithfully.
+        let zone_set = u32::try_from(zone_idx + 1).unwrap_or(1);
+        let scene = host.mission_mut().expect("mission staged");
+        if !scene
+            .sim_mut()
+            .stage_destroy_family(&table, &pos_bytes, &trt_bytes, zone_set, linear)
+        {
+            return Err(CanonicalError(
+                "destroy staging rejected (terrain not sized / POS length)".into(),
+            ));
+        }
+    }
+
     // The LOADOUT staging seam (W12-S3, grammar v1.3): expand the
     // per-robot entries into the 7-slot arrays through the engine
     // host seam (`stage_robot_weapons`, the D51 pattern — the
@@ -587,7 +825,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         .map(|m| m.view_size())
         .map(|(w, h)| (w as u32, h as u32));
     let mut frames = vec![emit_frame(
-        &tick_state(&host, &session, (0, 0, 0), 0, map_wh),
+        &tick_state(&host, &session, (0, 0, 0), 0, map_wh, scen.destroy),
         &scen.tiers,
         false,
         true,
@@ -608,7 +846,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                     check_cadence(executed)?;
                     let no = frame_counter_now(&host);
                     frames.push(emit_frame(
-                        &tick_state(&host, &session, seam_target, no, None),
+                        &tick_state(&host, &session, seam_target, no, None, scen.destroy),
                         &scen.tiers,
                         false,
                         false,
@@ -632,7 +870,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None),
+                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
                     &scen.tiers,
                     true,
                     false,
@@ -659,7 +897,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None),
+                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
                     &scen.tiers,
                     true,
                     false,
@@ -695,7 +933,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 check_cadence(executed)?;
                 let no = frame_counter_now(&host);
                 frames.push(emit_frame(
-                    &tick_state(&host, &session, seam_target, no, None),
+                    &tick_state(&host, &session, seam_target, no, None, scen.destroy),
                     &scen.tiers,
                     true,
                     false,
@@ -721,7 +959,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         check_cadence(executed)?;
         let no = frame_counter_now(&host);
         frames.push(emit_frame(
-            &tick_state(&host, &session, seam_target, no, None),
+            &tick_state(&host, &session, seam_target, no, None, scen.destroy),
             &scen.tiers,
             false,
             false,
@@ -758,12 +996,16 @@ fn frame_counter_now(host: &GameHost) -> u64 {
 }
 
 /// The per-frame emitter view of the live scene (§6a sources).
+/// `destroy` gates the destroy-family surfaces (the scenario's
+/// staging key — the rows ride only destroy scenarios).
+#[allow(clippy::too_many_arguments)]
 fn tick_state<'a>(
     host: &'a GameHost,
     session: &Session,
     seam_target: (i32, i32, i32),
     frame_no: u64,
     map_wh: Option<(u32, u32)>,
+    destroy: bool,
 ) -> TickState<'a> {
     let scene = host.mission().expect("mission staged");
     let sim = scene.sim();
@@ -787,6 +1029,16 @@ fn tick_state<'a>(
         map_wh,
         weapon_bank: sim.weapon_bank(),
         enemy_bank: sim.enemy_bank(),
+        destroy: destroy.then(|| DestroyView {
+            objects: sim.objects(),
+            structures: sim.structures(),
+            tile_grid: sim.object_grid(),
+            platform: sim.platform_bank(),
+            mirror_words: sim.mirror_words(),
+            mirror_seen: sim.mirror_seen_bank(),
+            debris: sim.debris_bank(),
+            splashes: sim.splash_bank(),
+        }),
     }
 }
 

@@ -1,0 +1,72 @@
+# S4 — destroy family (DESIGN-DIFFHARNESS.md §7 S4 row + §10-W12;
+# pairs the W12-S4-prep destroy producer, D104, with its scenario +
+# dumps). The `destroy = 1` key (grammar v1.4) stages the mission's
+# own .BDG/.POS/.TRT through the engine host seam — the ORIGINAL
+# loads all three natively at mission load (FUN_0041a4f8 +
+# FUN_004170a6), so the staged CONTENT is identical on both
+# channels (an equivalence seam, recorded in the plan; the
+# TOT-mirror/seen banks stage EMPTY on E — the init_tiles TOT fill
+# is the S5 pairing, the recorded divergence of the
+# typedb-mirror-rows/tile-word-grid hazard words until then).
+#
+# Legs over the ZONEA/MISSION1 staged destructibles (211 live
+# instances, .POS slots 0..210; artillery bursts land at the
+# FIRING robot's tile — the burst pair lists, §7j.38/5 — so each
+# artillery leg stages its gunner ON the target):
+#
+# TRAP (anchor frame): the `markers` key stages robot 1 ON the
+# tile-0x62 trap cell (14,16) — DAT volume 0x62 at z-level 0 under
+# a live footprint word (the .POS slot-78 id-21 object, hp 0). The
+# robots() phase-1 armor pass runs the trap lane at the FIRST
+# active tick: resolver 100 (no score) → destroy → the slot-78
+# sel-9 tail (k20 + 3x3 splash ring) + the five k12 trap debris.
+#
+# ARTILLERY BURST PAIRS ON FOOTPRINTS + TURRET + CHAIN CASCADE
+# (frames 33..39): robot 2 = a marker staged at (10,34), one tile
+# S of the .TRT turret (10,33,1) hp 250. Its frame-1 volley fires
+# artillery 9/0xA/0xB (burst durations 2/4/7): the tick-0x20 burst
+# walks the seven pair rings around (10,34) — ring 0 (the full 3x3
+# incl. the center) script-blasts the TURRET at frame 33 (rubble
+# stamp 0x20 + seen + DAT-zero + k15 + splash); ring 4 reaches
+# (14,29) at frame 37 → the CHAIN WALKS cascade the whole
+# chainable cluster — (14,29) id63 → W (13,29) id76 → S-row
+# (12,30)/(13,30) id61 pair → N-row (12,29) id76 + (11,29) id63 —
+# recursive 1000-damage detonations through frame 37; ring 6
+# reaches (16,40) id31 at frame 39. Every pair draws the k6 1-in-8
+# gate + the 50% k11 gate. The blast box also kills robot 2 itself
+# (the §7j.23 robot lane at 312/pair — firing the barrage at its
+# own feet; the death stages the k5 death-debris family).
+#
+# SURVIVOR (frames ~14/~22): robot 0 (the MRK robot at (21,73))
+# fires two bouncy-grenade volleys (4x type 0x1A, 75 each, ammo 8)
+# whose arc-limited fall zone covers the slot-75 id-123 structure
+# footprint (16..18, 74) hp 900: PURE multi-hit subtract — no
+# destroy, no restore, no score, asserted exact at the tail.
+#
+# The destroy rows ride the T1 tier (object-instances / trt-array /
+# tile-word-grid / platform-strength / typedb-mirror-rows) + the
+# T3 tier (debris-stager / splash-records — E-only until their EXD
+# aliases land). The score fold lands the turret/cascade awards in
+# the T0 score row (the trap passes no score flag; the survivor
+# awards nothing).
+scenario = "S4"
+tiers = T0,T1,T3,TS
+anchor = mission-start
+frames = 48
+markers = 14,16,1; 10,34,1
+destroy = 1
+loadout = 1,0x01,0x1B:8; 2,0x07,9:1,0xA:1,0xB:1
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# frame 1: robot 2's artillery barrage (the aim triple = the
+# turret tile (10,33); the burst lands at the gunner regardless)
+command 01 02 00 00 00 02 00 40 01 20 04 00 00 00
+# frame 2: robot 1 (the trap marker, standing on the elevated
+# 0x62 block — z 0x40, the longer arc) volley 1 toward the slot-2
+# survivor footprint (21..22, 18..20); the arc-fall aim at (24,19)
+# rides the same bearing past the target
+command 01 01 00 00 00 02 00 00 03 60 02 00 00 00
+step 7
+# frame 10: robot 1 volley 2 (cooldown 8 spent)
+command 01 01 00 00 00 02 00 00 03 60 02 00 00 00
+step 37

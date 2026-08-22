@@ -249,6 +249,12 @@ pub struct ObjectInstance {
     pub id: i32,
     pub destroyed: bool,
     pub hp: i32,
+    /// The .POS record slot (the 2000-entry array index — the
+    /// guest idiom this record lives at; the object-grid words
+    /// reference slot+1). E's `objects` Vec holds only live
+    /// records in slot order, so the slot is carried per record
+    /// for the canonical dump row (W12-S4).
+    pub slot: u16,
 }
 
 /// One terrain-structure record (the 0x20-stride 0x4cccf8 array,
@@ -709,6 +715,7 @@ impl MissionSim {
                     id,
                     destroyed: false,
                     hp: 0,
+                    slot: slot as u16,
                 });
             }
         } else {
@@ -797,6 +804,32 @@ impl MissionSim {
     /// The staged object instances in record order.
     pub fn objects(&self) -> &[ObjectInstance] {
         &self.objects
+    }
+
+    /// The object-presence grid words, tile-major (row y then x) —
+    /// the 0x460dfa/EXD 0xfe37c bank view (W12-S4 dump row).
+    pub fn object_grid(&self) -> &[u16] {
+        &self.object_grid
+    }
+
+    /// The platform-strength words, tile-major — the
+    /// 0x465daa/EXD 0xf93cc bank view (W12-S4 dump row).
+    pub fn platform_bank(&self) -> &[u16] {
+        &self.platform_strength
+    }
+
+    /// The TOT-mirror plane words, tile-major 8 per tile (the
+    /// 0x1E-record +2·z span; the restore/z-structure writes land
+    /// here — the W12-S4 dump row substrate).
+    pub fn mirror_words(&self) -> &[u16] {
+        &self.mirror_words
+    }
+
+    /// The TOT-mirror seen bytes, tile-major 8 per tile (the
+    /// 0x1E-record +0x10+z span) — the whole-bank view beside the
+    /// per-tile [`MissionSim::mirror_seen`].
+    pub fn mirror_seen_bank(&self) -> &[u8] {
+        &self.mirror_seen
     }
 
     /// The object-presence grid word at a tile (0x460dfa).

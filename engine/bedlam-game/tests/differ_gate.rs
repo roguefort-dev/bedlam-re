@@ -120,8 +120,12 @@ fn inv_frame(
             // E-only rows: the O1 plan cannot carry them (blink-cursor
             // is a registry gap; move-target-words is CONSUMED into the
             // robot-bank splice on the O1 side, so the E row stays
-            // E-only at the row level).
+            // E-only at the row level; the W12-S4 debris/splash T3
+            // rows have no EXD alias pinned yet — the stitcher's
+            // O1-address rule excludes them, the differ reports the
+            // E-only row as a coverage finding, never fabricated).
             "blink-cursor" => continue,
+            "debris-stager" | "splash-records" => continue,
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -180,6 +184,74 @@ fn inv_frame(
                 } else {
                     w.bytes[4..].to_vec()
                 }
+            }
+            // The destroy-family rows (W12-S4): E canonical -> the
+            // O1 guest raw forms.
+            "object-instances" => {
+                // canonical {slot,x,y,z,id,flags,hp} 23-B -> the
+                // 0x14-stride guest records up to the LIVE count
+                // (dead id==-1 tail fills to 2000; the count cell
+                // bounds the guest walk).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 23);
+                let mut bank = vec![0u8; 4 + 2000 * 0x14];
+                for slot in 0..2000u32 {
+                    bank[4 + slot as usize * 0x14 + 0xC..4 + slot as usize * 0x14 + 0x10]
+                        .copy_from_slice(&(-1i32).to_le_bytes());
+                }
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 23..];
+                    let slot = u16::from_le_bytes(rec[0..2].try_into().unwrap()) as usize;
+                    let id = i32::from_le_bytes(rec[14..18].try_into().unwrap()) & 0xFF
+                        | i32::from(rec[18] & 0x40 != 0) << 14;
+                    let g = &mut bank[4 + slot * 0x14..];
+                    g[0..4].copy_from_slice(&rec[2..6]);
+                    g[4..8].copy_from_slice(&rec[6..10]);
+                    g[8..12].copy_from_slice(&rec[10..14]);
+                    g[0xC..0x10].copy_from_slice(&id.to_le_bytes());
+                    g[0x10..0x14].copy_from_slice(&rec[19..23]);
+                }
+                bank[0..4].copy_from_slice(&(n as u32).to_le_bytes());
+                bank
+            }
+            "trt-array" => {
+                // canonical {active,hp,x,y,z} 20-B -> the 0x20-stride
+                // guest records (hp@+0x10, x@+0x14, y@+0x18, z@+0x1C).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 20);
+                let mut bank = vec![0u8; 4 + n * 0x20];
+                bank[0..4].copy_from_slice(&(n as u32).to_le_bytes());
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 20..];
+                    let g = &mut bank[4 + i * 0x20..];
+                    g[0..4].copy_from_slice(&rec[0..4]);
+                    g[0x10..0x20].copy_from_slice(&rec[4..20]);
+                }
+                bank
+            }
+            "typedb-mirror-rows" => {
+                // compact-active {tile, 8x(word,seen)} -> the full
+                // 0x1E-stride w*h guest rows (the changed tiles
+                // placed, all others zero).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 26);
+                let (mw, mh) = map_wh.expect("anchor statics precede grid rows");
+                let mut grid = vec![0u8; (mw * mh) as usize * 0x1E];
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 26..];
+                    let tile = u16::from_le_bytes(rec[0..2].try_into().unwrap()) as usize;
+                    for z in 0..8 {
+                        let wv = u16::from_le_bytes(rec[2 + z * 3..4 + z * 3].try_into().unwrap());
+                        grid[tile * 0x1E + 2 * z..tile * 0x1E + 2 * z + 2]
+                            .copy_from_slice(&wv.to_le_bytes());
+                        grid[tile * 0x1E + 0x10 + z] = rec[4 + z * 3];
+                    }
+                }
+                grid
+            }
+            "tile-word-grid" | "platform-strength" => {
+                // Both channels carry the same span — identity.
+                w.bytes.clone()
             }
             "static-map-wh" => {
                 let wv = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
@@ -242,6 +314,13 @@ fn s0_s1_cross_and_double_run() {
         // the artillery burst-pair application draws the shared
         // stream (was 49193732e6dbc546).
         ("S3", 133u64, "e29f76f5585401e1", 2u64),
+        // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
+        // the guest banks and parse back through the destroy
+        // normalizers — the T1 destroy rows join the exact-exact
+        // set, the debris/splash T3 rows are E-only (no EXD alias
+        // yet — 2 more row-level coverage findings, documented
+        // never fabricated).
+        ("S4", 49u64, "2ddd15ea50c8a14d", 2u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -296,6 +375,41 @@ fn s0_s1_cross_and_double_run() {
                 .findings
                 .iter()
                 .any(|f| f.row == "move-target-words" && f.class == Class::Coverage));
+        }
+        if id == "S4" {
+            // The debris/splash rows have no EXD alias yet — exactly
+            // the 2 extra row-level findings (E-only rows, never
+            // fabricated O1 bytes).
+            assert!(res
+                .findings
+                .iter()
+                .any(|f| f.row == "debris-stager" && f.class == Class::Coverage));
+            assert!(res
+                .findings
+                .iter()
+                .any(|f| f.row == "splash-records" && f.class == Class::Coverage));
+            // The aliased destroy rows compare exact-exact: ZERO
+            // field-level findings on them.
+            for r in [
+                "object-instances",
+                "trt-array",
+                "tile-word-grid",
+                "platform-strength",
+                "typedb-mirror-rows",
+            ] {
+                assert!(
+                    res.findings
+                        .iter()
+                        .all(|f| f.row != r || f.class == Class::Coverage),
+                    "{id}: row {r} must be gap-or-clean, got {}",
+                    res.findings
+                        .iter()
+                        .filter(|f| f.row == r)
+                        .map(|f| format!("{:?}", f.class))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+            }
         }
         // The never-resetting O1 counter is the single T2 note.
         assert_eq!(res.count(Class::T2Reported), 1, "{id}");

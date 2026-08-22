@@ -1231,9 +1231,14 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // the same discipline — the O1 side arms robots by playing the
     // session (the original fills the slots from the session table
     // at spawn), so the weapon-slot/ammo diff is the recorded seam.
-    // Byte-identity: loadout-less scenarios emit the same bytes as
-    // before (the pinned capture-plans).
-    if !scen.markers.is_empty() || !scen.loadout.is_empty() {
+    // D105 (grammar v1.4): the destroy key is an EQUIVALENCE seam —
+    // the original loads the mission's .BDG/.POS/.TRT natively at
+    // mission load, so the staged content is identical on both
+    // channels (no O1 write); the mirror banks stage EMPTY on E
+    // until the S5 init_tiles pairing. Byte-identity: loadout-less
+    // scenarios emit the same bytes as before (the pinned
+    // capture-plans).
+    if !scen.markers.is_empty() || !scen.loadout.is_empty() || scen.destroy {
         j.push_str("  \"_e_staging\": {\n");
         if !scen.markers.is_empty() {
             j.push_str("    \"markers\": [\n");
@@ -1281,6 +1286,18 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                  O1 capture arms its robots by playing the session (the original fills the \
                  slots from the session table at spawn); the weapon-slot/ammo diff vs E is \
                  this scenario seam, not a finding\"\n",
+            );
+        }
+        if scen.destroy {
+            j.push_str(
+                "    \"destroy\": true,\n    \"destroy_note\": \"E-side EQUIVALENCE seam \
+                 (D105, grammar v1.4): the mission's own .BDG type table + .POS instances \
+                 + .TRT structures staged through the stage_destroy_family host seam on E. \
+                 The ORIGINAL loads all three files natively at mission load \
+                 (FUN_0041a4f8 + FUN_004170a6), so the staged CONTENT is identical on both \
+                 channels — no O1 write, no seam diff; the destroy-row bytes compare \
+                 directly. The TOT-mirror/seen banks stage EMPTY on E (the init_tiles TOT \
+                 fill is the S5 pairing — the recorded mirror-rows divergence until then)\"\n",
             );
         }
         j.push_str("  },\n");
@@ -1659,6 +1676,42 @@ mod tests {
                 !addr.ends_with("F6D34") && !addr.ends_with("11958C"),
                 "ghost staging write to the robot bank/count: {addr}"
             );
+        }
+    }
+
+    #[test]
+    fn destroy_seam_is_recorded_never_fabricated() {
+        // D105 (grammar v1.4): a destroy-bearing scenario records the
+        // EQUIVALENCE seam in _e_staging — E stages the mission's own
+        // .BDG/.POS/.TRT through stage_destroy_family, the ORIGINAL
+        // loads the same files natively, so no O1 write exists to
+        // fabricate. The destroy rows' EXD cells must carry no inject
+        // row. (Tiers T0/T1/TS keep the plan compilable; a real S4
+        // plan needs the T3 tier unit first, like S3's T2.)
+        let src = "scenario = DX\ntiers = T0,T1,TS\nframes = 4\nmarkers = 18,73,1\n\
+                   destroy = 1\n";
+        let scen = Scenario::parse(src).unwrap();
+        assert!(scen.destroy, "the v1.4 staging key parses");
+        let emitted = emit_plan(&scen, &registry()).unwrap();
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("\"destroy\": true"));
+        assert!(emitted.json.contains("E-side EQUIVALENCE seam"));
+        assert!(emitted
+            .json
+            .contains("(D105, grammar v1.4): the mission's own .BDG type table"));
+        // Never fabricated: no inject row touches the destroy-family
+        // EXD cells — the object bank/count (0x119584/0x119554), the
+        // TRT bank/count (0x95264/0x11949c), the mirror rows
+        // (0xac1e4), the grids (0xfe37c, 0xf93cc).
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            for cell in [
+                "119584", "119554", "95264", "11949C", "AC1E4", "FE37C", "F93CC",
+            ] {
+                assert!(
+                    !addr.to_uppercase().ends_with(cell),
+                    "ghost staging write to the destroy bank cell {cell}: {addr}"
+                );
+            }
         }
     }
 

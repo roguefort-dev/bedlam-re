@@ -450,7 +450,7 @@ identical state, by construction.
 | S1 | mission-start passive | no injection; record ~400 frames | T0/T1/T3 | **pod-descent stagger** (watch pod timer w@+0x2C ≡ 0x4c6a10 vs the `1+k·(2000−m·1000/27)` formula, pod ring phase→release, descent ≈41 frames, pod phase 2 = one tick, release = state 6 — §7j.20/§7j.27); **blink-cursor-from-spawn** (does 0x4dc5d0 go nonzero with no click, from which frame); **debris 2k start-delay** (which 0x476fbc +0x24 values actually get staged on the corpus path — is any ≈0x7D0?) |
 | S2 | order→walk (the P4 slice) — **LANDED 2026-08-22 (D91)** | ORDER steps moving one squad member across ZONEA/MISSION1 (mirrors engine/bedlam-core/tests/mission_corpus_gate.rs; the walk needs a second robot — the `markers` staging key below, D91) | T0/T1 | slice field parity (positions, arrival snap, spread claims, move-target words); the engine's biggest existing seam |
 | S3 | weapon fire family | COMMAND records: one per weapon class (bullet 2..4, shell 5, artillery 9..0xB, ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F}, rocket 0x24, homing 0x29) at fixed targets | T0/T1/T2 + T4 | fire cadences, damage application (FUN_00419aff table), bank record lifecycle; the corpus-off weapon producers; T4 SFX events seed the SFX-family walk |
-| S4 | destroy family | S3 fire onto destructibles (tile 0x62 traps, platform 0x7d4, chainable objects) | T0/T1/T3 + T4 | destroy resolver → terrain restore → 5-effect loop → chain walks end-to-end (§7j.25); **five-ring overlap read** (0x4796d4 bytes around overlapping corpse rings — statically mooted by §7j.10's ≤7-frame fade; the harness read is the confirming observation); debris producer kinds/delays (stager widening input) |
+| S4 | destroy family — **LANDED 2026-08-22 (D105)** | S3 fire onto destructibles (tile 0x62 traps, platform 0x7d4, chainable objects) | T0/T1/T3 + T4 | destroy resolver → terrain restore → 5-effect loop → chain walks end-to-end (§7j.25); **five-ring overlap read** (0x4796d4 bytes around overlapping corpse rings — statically mooted by §7j.10's ≤7-frame fade; the harness read is the confirming observation); debris producer kinds/delays (stager widening input) |
 | S5 | pickups & pads | walk over pickup tiles + armor-pad rings — **NOTE 7h.4/D99: ZONEA stages ZERO pickup cells (set 1); the pickup leg MUST run on ZONEB (set 2, 601 cells — e.g. M1's 152) or ZONEF (set 6, 149)**, i.e. S5 needs the zone/mission menu-walk staging (the W5 walk-zone/mission calibration) AND the E-side pickup producer first (TOT words beside the DAT planes in Terrain + set = zone+1 + the probe-latch/clear→move→test consume + apply_pickup dispatch — RE-EXW-SIM §7h.4); the pads leg can stay ZONEA. **NOTE 7j.35/D100 (water): ZONEA/M1 stages ZERO water words too — the water family (sprite-range remaps FUN_0040167a/TXPAL1, the ping-pong anim const 0x456ca8, the [0x4edbd4] flag ≡ 1 with no gameplay writer) is corpus-dead for S0-S2; a water leg would share the S5 zone-walk staging and must run ZONEB/M1 (12 cells), ZONEB/M6 (78), ZONEC/M4 (33) or ZONEF/M7 (4824) + the E-side per-tile remap selection (§7j.35 item 5); until then E may hard-code water-ON in the 0x12d/0x12e/0x12f flush** | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (the 7h.3 producer is now DECODED §7h.4 — S5 is its observation instrument; watch surface: the consumed cell's mirror word + seen + DAT byte, the case-4 score/money pair) |
 | S6 | extraction | ORDER onto the extraction .PAD (step-on) | T0/T1/T3 | **arm-extraction via scripted .PAD step-on** (beacon family, exit ring phases, dropship deploy, objective counters — §7j.19/§7j.20/§7j.27) |
 | S7 | platform dynamics | repeated fire on platforms (build/spread/creep/destroy) | T0/T1/T3 | platform family field parity (§7j.12) |
@@ -512,6 +512,26 @@ slot per INLINE-spawn class — artillery 9/0xA/0xB, prox mines 0x10
 (→2× type 0xF), pressure mines 0x14 (→2× 0x13), bouncy grenades 0x1B
 (→4× 0x1A), sticky 0x1D (→4× 0x1F) — and robot 1 (the `markers`
 walker) with the rocket 0x20 (→1× 0x24).
+
+**Scenario staging key `destroy` (D105, grammar v1.4):** the
+destroy-family scenarios need the mission's destructibles staged, and
+E's `load_mission` does not fetch them (the original loads the
+mission's own .BDG type table + .POS instance list + .TRT structures
+natively at mission load — FUN_0041a4f8 + FUN_004170a6, §7j.25/4).
+`destroy = 1` (strictly `1`, once per scenario — a typo'd value fails
+loud at the grammar, never silently skipping the staging AND its dump
+rows) stages all three through the EXISTING `stage_destroy_family`
+host seam and gates the destroy-family dump rows (they ride only
+destroy scenarios — S0..S3 pinned bytes untouched). Unlike
+`markers`/`loadout` this is an **EQUIVALENCE seam**: the staged
+CONTENT is byte-identical to what O1 loads (no O1 write exists to
+fabricate — dbx-plan records the key in `_e_staging` with the
+equivalence note), so the destroy rows compare directly on a live
+capture. The one recorded divergence: E's TOT-mirror/seen banks stage
+EMPTY (the `init_tiles` TOT fill is the S5 pairing — §7h.4/D99), so a
+live O1 mirror-rows diff before S5 is the staging seam, never a
+finding. S4's staging: ZONEA/MISSION1's own files (211 live
+instances, 3 turrets).
 
 ## 8. Open hypotheses ledger (what this doc does with each)
 
@@ -793,6 +813,45 @@ differ come before any new scenario depth.
     S3 capture exists yet, D103's dbx-plan T2-tier unit precedes
     it). S4.scen (S3 volleys onto staged destructibles) is the next
     unit.
+    **S4 LANDED 2026-08-22 (D105):** grammar v1.4 adds the `destroy`
+    staging key (§7 note above — an EQUIVALENCE seam: the original
+    loads the same .BDG/.POS/.TRT natively, so no O1 write exists to
+    fabricate; dbx-plan records the key in `_e_staging`, and the
+    recorded pre-S5 divergence is E's EMPTY-staged mirror banks).
+    S4.scen on ZONEA/MISSION1 (49 records, chain pinned
+    2ddd15ea50c8a14d, byte-identical double run) covers the S4 row
+    legs: the TRAP (a marker robot standing on the tile-0x62 cell —
+    resolver-100 no-score destroy at the anchor frame, 5× k12 trap
+    debris + the sel-9 k20 + the 3×3 splash ring + the restore into
+    the empty-staged mirror bank), the ARTILLERY burst pairs landing
+    on footprints (a marker gunner firing 9/0xA/0xB at its own tile
+    — ring 0 script-blasts the .TRT turret at frame 32 with the
+    rubble stamp, the rings reach the chainable cluster at 35..38
+    cascading recursive 1000-damage detonations, the blast box also
+    damages the gunner itself — the faithful §7j.23 robot lane), and
+    the SURVIVOR (two bouncy-grenade volleys on a 900/1800-hp
+    structure — pure multi-hit subtract, monotone, never destroyed,
+    no score). The canonical destroy rows ride T1/T3 as their own
+    blobs (object-instances 23-B records keyed by .POS slot,
+    trt-array 20-B, the shared-span tile-word-grid +
+    platform-strength, typedb-mirror-rows COMPACT-ACTIVE {tile,
+    8×(word, seen)} with the same nonzero-tile filter canonicalizing
+    the O1 full 0x1E-stride span; debris-stager 42-B FULL bank +
+    splash-records 10-B FULL bank — the T3 pair has NO EXD alias
+    yet: E-only rows, differ coverage findings, never fabricated).
+    The differ normalizes both channels through the same field
+    walks (the guest object 0x14-stride count-bounded walk skipping
+    dead id==-1 slots, the TRT 0x20-stride stride-offset map, the
+    mirror tile filter); differ_gate S4 = cross PASS-WITH-NOTES
+    (exactly the 4 E-only rows — blink-cursor, move-target-words,
+    debris, splash — zero field gaps, zero T2 diffs beyond the
+    single counter note). The score fold landed in the MissionShell
+    (the destroy award folds into the campaign score cell — zero
+    without staged destructibles, the no-inject invariant):
+    S0/S1/S2/S3 chains re-asserted BYTE-IDENTICAL
+    (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4 /
+    e29f76f5585401e1). A live S4 capture needs the dbx-plan T3-tier
+    unit first (the S3 T2-tier precedent).
 
 ## 11. Risks
 

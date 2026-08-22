@@ -142,6 +142,7 @@ fn synthetic_grammar_pins_the_6a_bytes() {
         map_wh: Some((300, 150)),
         weapon_bank: &[],
         enemy_bank: &[],
+        destroy: None,
     };
     let tiers: Vec<String> = ["T0", "T1", "TS"].iter().map(|s| s.to_string()).collect();
     let frame = emit_frame(&st, &tiers, true, true);
@@ -337,6 +338,7 @@ fn synthetic_frames() -> Vec<diffharness::dump::FrameRecord> {
             map_wh: (i == 0).then_some((4, 4)),
             weapon_bank: sim.weapon_bank(),
             enemy_bank: sim.enemy_bank(),
+            destroy: None,
         };
         frames.push(emit_frame(&st, &tiers, false, i == 0));
     }
@@ -935,4 +937,318 @@ fn canonical_seam_gates() {
         &0u32.to_le_bytes()[..],
         "single-robot window-0 order clears on the arming pump's tick"
     );
+}
+
+// ---------------------------------------------------------------------
+// S4 — the destroy family (W12-S4, DESIGN §7 S4 row)
+// ---------------------------------------------------------------------
+
+/// One live object instance from the canonical object-instances
+/// blob (23-B records after the u32 count — the §6a destroy rows).
+struct ObjView {
+    slot: u16,
+    x: i32,
+    y: i32,
+    id: i32,
+    destroyed: bool,
+    hp: i32,
+}
+
+fn objects_of(bank: &[u8]) -> Vec<ObjView> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 23, "object-instances row shape");
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let rec = &bank[4 + i * 23..4 + (i + 1) * 23];
+        out.push(ObjView {
+            slot: u16::from_le_bytes(rec[0..2].try_into().unwrap()),
+            x: i32::from_le_bytes(rec[2..6].try_into().unwrap()),
+            y: i32::from_le_bytes(rec[6..10].try_into().unwrap()),
+            id: i32::from_le_bytes(rec[14..18].try_into().unwrap()),
+            destroyed: rec[18] & 0x40 != 0,
+            hp: i32::from_le_bytes(rec[19..23].try_into().unwrap()),
+        });
+    }
+    out
+}
+
+/// The trt-array row: u32 count + {active, hp, x, y, z} i32 records.
+fn trt_of(bank: &[u8]) -> Vec<(i32, i32, i32, i32, i32)> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 20, "trt-array row shape");
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let rec = &bank[4 + i * 20..4 + (i + 1) * 20];
+        let rd = |p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+        out.push((rd(0), rd(4), rd(8), rd(12), rd(16)));
+    }
+    out
+}
+
+/// Active debris records as (slot, kind, delay, seq) — the 42-B
+/// §6a records after the u32 count (active u8 @0, x/y/z i32 @1/5/9,
+/// init_a @13, init_b @17, seq @21, kind @25, phys @29, delay @33,
+/// param @37, table u8 @41).
+fn debris_of(bank: &[u8]) -> Vec<(usize, i32, i32, i32)> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 42, "debris-stager row shape");
+    let mut out = Vec::new();
+    for i in 0..n {
+        let rec = &bank[4 + i * 42..4 + (i + 1) * 42];
+        if rec[0] == 0 {
+            continue;
+        }
+        let rd = |p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+        out.push((i, rd(25), rd(33), rd(21)));
+    }
+    out
+}
+
+/// Active splash records (age ≠ 0) as (x, y, z, delay).
+fn splashes_of(bank: &[u8]) -> Vec<(i16, i16, i16, u16)> {
+    let n = u32::from_le_bytes(bank[0..4].try_into().unwrap()) as usize;
+    assert_eq!(bank.len(), 4 + n * 10, "splash-records row shape");
+    let mut out = Vec::new();
+    for i in 0..n {
+        let rec = &bank[4 + i * 10..4 + (i + 1) * 10];
+        let age = u16::from_le_bytes(rec[8..10].try_into().unwrap());
+        if age == 0 {
+            continue;
+        }
+        out.push((
+            i16::from_le_bytes(rec[0..2].try_into().unwrap()),
+            i16::from_le_bytes(rec[2..4].try_into().unwrap()),
+            i16::from_le_bytes(rec[4..6].try_into().unwrap()),
+            u16::from_le_bytes(rec[6..8].try_into().unwrap()),
+        ));
+    }
+    out
+}
+
+#[test]
+fn corpus_s4_destroy_family() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S4 (DESIGN §7 S4 row + §10-W12; the W12-S4 unit): the
+    // `destroy = 1` staging key (grammar v1.4) stages the mission's
+    // own .BDG/.POS/.TRT (211 live instances, 3 turrets), the
+    // `markers` key stages the trap gunner + the artillery gunner,
+    // and the loadout arms the grenade + artillery legs. 49
+    // records (anchor + 48), pinned chain.
+    let s4 = fs::read_to_string(scen_path("S4")).expect("S4.scen committed");
+    let run = run_canonical(&s4, &root).expect("S4 canonical run");
+    assert_eq!(run.manifest.frame_count, 49);
+    assert_eq!(
+        run.manifest.chain_digest, "2ddd15ea50c8a14d",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s4, &root).expect("S4 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S4 dump verifies");
+
+    // --- the row shapes: fixed-extent grids, full banks ---------------
+    for f in &dump.frames {
+        let objs = f.watch("object-instances").expect("T1 object row");
+        assert_eq!(
+            objs.len(),
+            4 + 211 * 23,
+            "211 live ZONEA/M1 instances every frame"
+        );
+        assert_eq!(
+            f.watch("tile-word-grid").unwrap().len(),
+            25 * 75 * 2,
+            "the 25x75 grid span"
+        );
+        assert_eq!(f.watch("platform-strength").unwrap().len(), 25 * 75 * 2);
+        assert!(f
+            .watch("platform-strength")
+            .unwrap()
+            .iter()
+            .all(|&b| b == 0));
+        assert_eq!(f.watch("trt-array").unwrap().len(), 4 + 3 * 20);
+        assert_eq!(f.watch("debris-stager").unwrap().len(), 4 + 128 * 42);
+        assert_eq!(f.watch("splash-records").unwrap().len(), 4 + 250 * 10);
+        // No T2 tier rides S4 (the weapon banks are S3's surface).
+        assert!(f.watch("weapon-anim-bank").is_none());
+    }
+
+    // --- the anchor frame: the TRAP leg -------------------------------
+    // The staged marker robot 1 stands ON the tile-0x62 trap cell
+    // (14,16): the phase-1 armor pass runs the trap lane at the
+    // FIRST active tick — resolver 100 (NO score flag) destroys the
+    // hp-0 id-21 object (.POS slot 78), staging the five k12 trap
+    // debris + the sel-9 k20 + the 3x3 splash ring, and the destroy
+    // tail's RESTORE writes the id-21 under-TOT word into the
+    // (empty-staged) mirror bank.
+    let f0 = &dump.frames[0];
+    let objs0 = objects_of(f0.watch("object-instances").unwrap());
+    assert_eq!(objs0.len(), 211);
+    let trap = &objs0[78];
+    assert_eq!((trap.x, trap.y, trap.id), (14, 16, 21));
+    assert!(trap.destroyed, "the trap fires at the anchor frame");
+    assert_eq!(trap.hp, 0);
+    assert_eq!(
+        u32::from_le_bytes(f0.watch("score").unwrap()[..4].try_into().unwrap()),
+        0,
+        "the trap resolver passes NO score flag"
+    );
+    let d0 = debris_of(f0.watch("debris-stager").unwrap());
+    assert_eq!(d0.len(), 6, "5x k12 + the k20");
+    assert_eq!(d0.iter().filter(|&(_, k, ..)| *k == 12).count(), 5);
+    assert_eq!(d0.iter().filter(|&(_, k, ..)| *k == 20).count(), 1);
+    // The 3x3 splash ring: all nine (x,y) around (12..14, 14..16).
+    let sp0 = splashes_of(f0.watch("splash-records").unwrap());
+    assert_eq!(sp0.len(), 9);
+    let mut tiles: Vec<(i16, i16)> = sp0.iter().map(|&(x, y, ..)| (x, y)).collect();
+    tiles.sort_unstable();
+    let expect: Vec<(i16, i16)> = {
+        let mut v = Vec::new();
+        for y in 14..17i16 {
+            for x in 12..15i16 {
+                v.push((x, y));
+            }
+        }
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(tiles, expect, "the sel-9 3x3 ring at (12..15, 14..17)");
+    // The restore: the mirror row at tile 414 = (14,16) carries the
+    // id-21 under-TOT word 0x316 at z0 (seen 0 — the under-DAT
+    // volume is nonzero at that cell).
+    let m0 = f0.watch("typedb-mirror-rows").unwrap();
+    assert_eq!(u32::from_le_bytes(m0[0..4].try_into().unwrap()), 1);
+    assert_eq!(u16::from_le_bytes(m0[4..6].try_into().unwrap()), 414);
+    assert_eq!(u16::from_le_bytes(m0[6..8].try_into().unwrap()), 0x316);
+
+    // --- frames 15..26: the SURVIVOR leg (pure multi-hit subtract) ----
+    // Robot 1's two grenade volleys land 5 hits of 75 on the slot-2
+    // id-18 structure (hp 1800): 1800 -> 1425, monotone, NEVER
+    // destroyed, no restore on its tiles, no score, and its grid
+    // word (3) stays stamped.
+    let mut last = 1800;
+    for f in dump.frames.iter().take(27) {
+        let hp = objects_of(f.watch("object-instances").unwrap())
+            .into_iter()
+            .find(|o| o.slot == 2)
+            .unwrap()
+            .hp;
+        assert!(hp <= last && hp > 0, "monotone subtract, never destroyed");
+        assert_eq!(hp % 75, 0, "every hit is exactly the 0x1A damage 75");
+        last = hp;
+    }
+    assert_eq!(last, 1425, "1800 - 5*75");
+    let objs48 = objects_of(dump.frames[48].watch("object-instances").unwrap());
+    let surv = objs48.iter().find(|o| o.slot == 2).unwrap();
+    assert!(!surv.destroyed);
+    let g48 = dump.frames[48].watch("tile-word-grid").unwrap();
+    assert_eq!(
+        u16::from_le_bytes(
+            g48[(18 * 25 + 21) * 2..(18 * 25 + 21) * 2 + 2]
+                .try_into()
+                .unwrap()
+        ),
+        3,
+        "the survivor's footprint word stays stamped (idx 2 + 1)"
+    );
+
+    // --- frame 32: the ARTILLERY ring-0 TURRET destroy ----------------
+    // Robot 2's barrage bursts at its own tile (10,34): pair-ring 0
+    // (the full 3x3 incl. the center) script-blasts the .TRT turret
+    // (10,33) at 5000: active 0, hp -4750, the RUBBLE stamp (zone-1
+    // word 0x20 + seen 1) in the mirror row. The blast box also
+    // spends 12 x 312 of robot 2's own hp (5000 -> 1256) — the
+    // faithful self-damage of a point-blank barrage.
+    let f32 = &dump.frames[32];
+    let trt32 = trt_of(f32.watch("trt-array").unwrap());
+    assert_eq!(trt32[2], (0, -4750, 10, 33, 1), "the turret dies at ring 0");
+    assert_eq!(trt32[0], (1, 250, 14, 15, 1), "the other turrets hold");
+    let m32 = f32.watch("typedb-mirror-rows").unwrap();
+    let m32_tiles: Vec<u16> = (0..u32::from_le_bytes(m32[0..4].try_into().unwrap()) as usize)
+        .map(|i| u16::from_le_bytes(m32[4 + i * 26..6 + i * 26].try_into().unwrap()))
+        .collect();
+    assert!(m32_tiles.contains(&835), "the rubble tile (10,33)");
+    let rubble = &m32[4 + m32_tiles.iter().position(|&t| t == 835).unwrap() * 26..];
+    assert_eq!(
+        u16::from_le_bytes(rubble[2 + 3..4 + 3].try_into().unwrap()),
+        0x20,
+        "the zone-1 rubble word at z1"
+    );
+    assert_eq!(rubble[4 + 3], 1, "seen := 1");
+    let rb32 = robots_of(f32.watch("robot-bank").unwrap());
+    assert_eq!(rb32[2].i32(56), 1256, "robot 2 takes 12 blast hits");
+
+    // --- frames 35..38: the CHAIN-WALK cascade ------------------------
+    // Pair-ring 4 script-blasts (14,29) at frame 35: the perimeter
+    // walks cascade the whole chainable cluster in ONE frame —
+    // (14,29) both slots + (13,29) + the (12,30)/(13,30) id-61 pair
+    // + (12,29) + (11,29) — then the ring-6 frame destroys (16,40)
+    // and (9,27) at 38. Tail: 12 destroyed, score 605, both banks
+    // SATURATED (the 128-slot debris LRU + the 250-slot splash
+    // max-age eviction both exercised).
+    let f35 = &dump.frames[35];
+    let objs35 = objects_of(f35.watch("object-instances").unwrap());
+    let destroyed35: Vec<u16> = objs35
+        .iter()
+        .filter(|o| o.destroyed)
+        .map(|o| o.slot)
+        .collect();
+    assert_eq!(
+        destroyed35,
+        vec![78, 97, 98, 100, 101, 102, 103, 207],
+        "the trap + the seven-object same-frame cascade"
+    );
+    let objs_t = objects_of(dump.frames[48].watch("object-instances").unwrap());
+    let destroyed_t: Vec<u16> = objs_t
+        .iter()
+        .filter(|o| o.destroyed)
+        .map(|o| o.slot)
+        .collect();
+    assert_eq!(
+        destroyed_t,
+        vec![78, 97, 98, 99, 100, 101, 102, 103, 106, 171, 172, 207],
+        "12 destroyed at the tail (the trap + the cascade + rings 5/6)"
+    );
+    assert_eq!(
+        u32::from_le_bytes(
+            dump.frames[48].watch("score").unwrap()[..4]
+                .try_into()
+                .unwrap()
+        ),
+        605,
+        "the destroy awards folded into the campaign score"
+    );
+    assert_eq!(
+        debris_of(dump.frames[48].watch("debris-stager").unwrap()).len(),
+        128
+    );
+    assert_eq!(
+        splashes_of(dump.frames[48].watch("splash-records").unwrap()).len(),
+        250
+    );
+    // The restores accumulated in the mirror row (17 changed tiles:
+    // the trap + the rubble + the cascade footprints).
+    assert_eq!(
+        u32::from_le_bytes(
+            dump.frames[48].watch("typedb-mirror-rows").unwrap()[0..4]
+                .try_into()
+                .unwrap()
+        ),
+        17
+    );
+
+    // --- the staging seam gates ---------------------------------------
+    // A destroy key with a wrong value fails loud at the grammar
+    // (the runner test pins it); the canonical layer fails loud on
+    // a malformed corpus file — pinned by the destroy_gate parser
+    // rows. Here: the destroy-less S0 shape carries NO destroy rows
+    // (the S0/S1/S2/S3 pinned chains in this file are the
+    // no-inject invariant; S3 stays e29f76f5585401e1).
+    let s0 = fs::read_to_string(scen_path("S0")).unwrap();
+    let run0 = run_canonical(&s0, &root).unwrap();
+    let dump0 = decode_dump(&run0.bytes).unwrap();
+    assert!(dump0.frames[0].watch("object-instances").is_none());
+    assert_eq!(run0.manifest.chain_digest, "8901789a88cf61fe");
 }

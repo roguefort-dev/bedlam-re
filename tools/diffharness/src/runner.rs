@@ -104,6 +104,18 @@ pub struct Scenario {
     /// which no engine path reaches; like `markers` this is an E-side
     /// staging seam, recorded never fabricated).
     pub loadout: Vec<LoadoutRobot>,
+    /// The destroy-family staging key (grammar v1.4 `destroy = 1`,
+    /// W12-S4): stage the mission's own .BDG type table + .POS
+    /// instances + .TRT structures through the engine's
+    /// `stage_destroy_family` host seam. The ORIGINAL loads all
+    /// three files natively at mission load (FUN_0041a4f8 +
+    /// FUN_004170a6, §7j.25/4) — this key exists because E's
+    /// `load_mission` does not fetch them; the staged CONTENT is
+    /// byte-identical to what O1 loads (no O1 write, no seam diff),
+    /// so consumers record the key as an E-side equivalence seam.
+    /// The key also gates the destroy-family dump rows (they ride
+    /// only destroy-staging scenarios — S0..S3 bytes unchanged).
+    pub destroy: bool,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
@@ -204,6 +216,7 @@ impl Scenario {
         let mut launch: Option<String> = None;
         let mut markers: Vec<(i32, i32, i32)> = Vec::new();
         let mut loadout: Vec<LoadoutRobot> = Vec::new();
+        let mut destroy = false;
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -559,6 +572,29 @@ impl Scenario {
                                 return Err(scen_err(line_no, line, "loadout must not be empty"));
                             }
                         }
+                        "destroy" => {
+                            // W12-S4 (grammar v1.4): the boolean
+                            // destroy-family staging key — `destroy = 1`
+                            // stages the mission's own .BDG/.POS/.TRT
+                            // through the engine host seam. Strictly `1`
+                            // (a typo'd value must fail loud, not
+                            // silently skip the staging + its dump rows).
+                            if value.trim() != "1" {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "destroy key is boolean staging: use `destroy = 1`",
+                                ));
+                            }
+                            if destroy {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "destroy staged twice (one key per scenario)",
+                                ));
+                            }
+                            destroy = true;
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -604,6 +640,7 @@ impl Scenario {
             launch,
             markers,
             loadout,
+            destroy,
             steps,
         })
     }
@@ -1073,6 +1110,25 @@ mod tests {
         assert!(Scenario::parse(&format!("{base}loadout = 0,0x01,9:2; 0,0x01,5:1\n")).is_err());
         assert!(Scenario::parse(&format!("{base}loadout = 12,0x01,9:2\n")).is_err());
         assert!(Scenario::parse(&format!("{base}loadout = \n")).is_err());
+    }
+
+    #[test]
+    fn destroy_key_parses_and_gates() {
+        // W12-S4 (grammar v1.4): the boolean destroy-family staging
+        // key — default off (S0..S3 bytes unchanged), strictly `1`,
+        // once per scenario.
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        assert!(!Scenario::parse(base).unwrap().destroy);
+        assert!(
+            Scenario::parse(&format!("{base}destroy = 1\n"))
+                .unwrap()
+                .destroy
+        );
+        // A typo'd value must fail loud (silently skipping the
+        // staging would desync the dump rows from the scenario).
+        assert!(Scenario::parse(&format!("{base}destroy = 0\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}destroy = true\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}destroy = 1\ndestroy = 1\n")).is_err());
     }
 
     #[test]
