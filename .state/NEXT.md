@@ -78,16 +78,19 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. [P4/RE] THE SFX BANK-NAME WALK unit (unattended, bounded RE):
-   7j.25 pinned the destroy-thud pair 0x4edfb8/0x4edfbc =
-   DEADMAN1/DEADMAN2.RAW via loader strings 0x43a29b..0x43a368 — walk
-   the FUN_0043a48e bank-name block 0x45884e.. fully (string-table
-   read + the bank-pointer cells 0x4edfXX/0x46afXX census) and land
-   the complete bank→name map (RE-EXW-SIM sec 9 item 5's data
-   prerequisite; pure decode, no engine change). NOTE: the former
-   queue-mate ".MOFO loader" unit was RETIRED by D93/§7j.29
-   (string-tail misparse — no .MOFO loader or file exists; the
-   loader-tag family is CLOSED at .NME/.TRT/.POS/.BDG).
+2. [P4/RE] THE HOT-RECT RECORD unit (unattended, bounded RE): the
+   0x4787c4/0x47879c click-target record family — renderer
+   FUN_00403938 writes it @0x403c93 (count [0x46ccd8]); picker
+   reads center@+8/+0xC + w@+0x14, order dispatcher reads
+   corner@+0/+4 + z@+0x10 + type@+0x1C — [hypothesis] ONE
+   0x20-stride record with both views. Walk the writer + both
+   reader families in ghidra-project/exw-text-objdump.txt, pin the
+   record grammar + the type word values, land RE-EXW-SIM §7j.31 +
+   ledger rows (pure decode, no engine change; anchors the
+   click-target rect semantics for the P4.2 order/click seams).
+   NOTE 7j.30 (2026-08-22): the SFX bank-name prerequisite for the
+   mission-SFX tier is DELIVERED — any SFX cell now has its file
+   name (RE-EXW-SIM §7j.30 map + ghidra-project/exw-banknames.txt).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -146,8 +149,9 @@
   CONFIG.BDL writer family (FUN_0042540c) for name persistence,
   OPTIONS.MRS staging on Title (music track_name wiring), and the
   FUN_00448ef1 multiplayer lobby if ever needed.
-- Mission SFX tier (RE-EXW-SIM sec 9 open item 5; MENU1/MENU2-style
-  mixer instruments exist) + the order SFX 0x2A armer click + the
+- Mission SFX tier (MENU1/MENU2-style mixer instruments; the
+  bank→name DATA PREREQUISITE DELIVERED 2026-08-22 by §7j.30/D94 —
+  202 durable assignments, zero unnamed cells) + the order SFX 0x2A armer click + the
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
   entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
   debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4).
@@ -155,9 +159,9 @@
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
   NOTE 7j.20: the beacon armer's SFX is FUN_004239ef(0x2a,3).
-  NOTE 7j.25: the destroy-thud pair 0x4edfb8/0x4edfbc =
-  DEADMAN1/DEADMAN2.RAW (loader 0x43a29b..0x43a368 strings —
-  a full bank-name walk is a bounded SFX-unit add-on).
+  NOTE 7j.25/7j.30 CLOSED: the destroy-thud pair 0x4edfb8/
+  0x4edfbc = DEADMAN1/DEADMAN2.RAW and the FULL bank-name walk
+  landed as §7j.30 (commit a0f291c, D94).
 - The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
   mirror rows + the probe-latch walk + the DAT z-plane consume +
   the 0x454a90 floor-word swap) — unblocks the apply_pickup
@@ -222,6 +226,31 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE SFX BANK-NAME WALK unit COMPLETE (worker
+  7972b334 claim 2, commit a0f291c, D94, docs-only; objdump-only
+  from exw-text-objdump.txt + DGROUP re-read from the binary, no
+  Ghidra run; adopted + validated the interrupted 09:55 WIP dump
+  exw-banknames.txt with an independent extractor — 17 widened-
+  window rows verified, 1 artifact row rejected). DELIVERABLE: the
+  COMPLETE bank→name map — 202 durable assignments, ZERO unnamed
+  durable cells (RE-EXW-SIM §7j.30 + 2 ledger rows): mission set
+  FUN_0043a1d3 = 27 registers incl. the MIDIGUN-duplicate quirk at
+  0x4edf70; screen sets share cells (MENU1/2 + BEEP1/4/5/7 +
+  TEXTBOX1 + DOOROPEN/CLSE); mission-extra BEAMIN/THROW/BIOFIRE/
+  PEXPLODE/CACODETH/SQUAWK/GRUNT1..3; speech = 53 8-B {A,B}
+  records at 0x4ee014 (95 files, pair slot-order FLIP at SPCH16,
+  11 empty +4 slots, playback bypasses the steal path via
+  0x44c8c4); GFX families + language G-variant gates (index
+  0x4eba1c==1, edition [0x4edd8c]>4 → GRILLA) + per-ROLE palette
+  cells (0x4edbf8 ×6 names). SFX CELLS HOLD VOICE-BASE HANDLES:
+  FUN_0043a36e/39c = 1-/4-voice registers (staging cell 0x46af0c),
+  FUN_0043a48e = the play/steal function (listener 0x4edde4/8,
+  priority/age arrays 0x4ee1c2/0x4ee2e2, default vol 0x7f/pan
+  0x8000 at −1,−1). All prior bank pins re-confirmed cell-exact.
+  The unnamed 0x46afXX cells characterized (0x46af4c = the DAT
+  volume pointer; 0x46af58 = 0x2710-B arena; 0x46af0c = the load
+  staging cell; 0x46af5c = struct base). Manifest clean both
+  sides. Queued: the hot-rect record unit (item 2).
 - 2026-08-22: P4/FORMATS THE .MOFO LOADER unit COMPLETE as a
   NEGATIVE RESULT (worker 0a08a5e1 claim 2, commit 03e8c3b, D93,
   docs-only; objdump-only from the existing exw-text-objdump.txt, no

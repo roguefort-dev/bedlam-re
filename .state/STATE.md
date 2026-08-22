@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE SFX BANK-NAME WALK unit COMPLETE,
+    worker 7972b334 claim 2, commit a0f291c, D94, docs-only): the
+    bank→name map is COMPLETE — 202 durable assignments, ZERO
+    unnamed durable cells across 0x4edfXX/0x46afXX (RE-EXW-SIM
+    §7j.30 + 2 ledger rows; raw dump ghidra-project/
+    exw-banknames.txt). Key structural facts: SFX cells hold
+    VOICE-BASE handles (FUN_0043a36e/FUN_0043a39c = 1-/4-voice
+    registers staging through scratch cell 0x46af0c), FUN_0043a48e
+    = the play/steal function (position→pan/vol vs listener
+    0x4edde4/0x4edde8, steal by the 0x4ee1c2/0x4ee2e2 voice
+    arrays), speech = a 53-record {A,B} bank at 0x4ee014 (95
+    files; pair slot-order FLIPS at SPCH16; playback bypasses
+    FUN_0043a48e), language G-variants share cells (gate 0x4eba1c
+    + edition [0x4edd8c]>4 → GRILLA family), palette cells are
+    per-ROLE shared slots (0x4edbf8 = current-screen PAL ×6
+    names), MIDIGUN registered twice (0x4edf70 consumer-less).
+    All prior bank pins re-confirmed cell-exact; corrections none.
+    The sec-9 mission-SFX tier's DATA prerequisite is met; the
+    tier itself stays unimplemented. NEXT: the hot-rect record
+    unit (queue item 2) — then the operator-adjacent W10/W11/W12
+    tail.
+
   - OPEN 2026-08-22 (P4/FORMATS THE .MOFO LOADER unit COMPLETE as a
     NEGATIVE RESULT, worker 0a08a5e1 claim 2, commit 03e8c3b, D93,
     docs-only): the suspected fifth mission extension .MOFO NEVER
