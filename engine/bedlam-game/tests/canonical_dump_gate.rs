@@ -1843,3 +1843,197 @@ fn corpus_s6_pad_extraction() {
     );
     assert_eq!(craft(74), craft(69), "the frozen record to the tail");
 }
+
+// ---------------------------------------------------------------------
+// S7 — the platform-dynamics lifecycle (W12-S7, §7j.41/D113)
+// ---------------------------------------------------------------------
+
+#[test]
+fn corpus_s7_platform_dynamics() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S7 (DESIGN §7 S7 row + §10-W12; §7j.41 the decode, D113): the
+    // full platform lifecycle in one run — the TRIGGER build (the
+    // zone-1 code-5 instance at .POS slot 74, destroyed by the
+    // frame-1 artillery burst at f32), the WEAKEN ring gates
+    // (300→150 the spread, →75 the site latch), the DESTROY (the
+    // spent tiles' k7 debris), and the CREEP (the armed epilogue
+    // tick growing a 25-tile 199 bridge from f449). 1361 records
+    // (anchor + 1360), pinned chain.
+    let s7 = fs::read_to_string(scen_path("S7")).expect("S7.scen committed");
+    let run = run_canonical(&s7, &root).expect("S7 canonical run");
+    assert_eq!(run.manifest.frame_count, 1361);
+    assert_eq!(
+        run.manifest.chain_digest, "b41db389f3ad8947",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s7, &root).expect("S7 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S7 dump verifies");
+
+    // The platform-strength + tile-word-grid views (tile-major 25
+    // wide): the field snapshot helper.
+    let field = |f: usize| -> Vec<(i32, i32, i32)> {
+        let bank = dump.frames[f].watch("platform-strength").unwrap();
+        let mut out = Vec::new();
+        for t in 0..(bank.len() / 2) {
+            let s = u16::from_le_bytes([bank[2 * t], bank[2 * t + 1]]);
+            if s != 0 {
+                out.push(((t % 25) as i32, (t / 25) as i32, s as i32));
+            }
+        }
+        out
+    };
+    let grid7d4 = |f: usize, x: i32, y: i32| {
+        let grid = dump.frames[f].watch("tile-word-grid").unwrap();
+        u16::from_le_bytes([
+            grid[2 * (y * 25 + x) as usize],
+            grid[2 * (y * 25 + x) as usize + 1],
+        ])
+    };
+    // The typedb-mirror view: the water z-word + seen at (tile, z).
+    let mirror = |f: usize, x: i32, y: i32, z: usize| -> (u16, u8) {
+        let words = dump.frames[f].watch("typedb-mirror-rows").unwrap();
+        // COMPACT-ACTIVE: u32 count + {tile u16, 8×word u16, 8×seen
+        // u8} runs (26 B each).
+        let n = u32::from_le_bytes(words[0..4].try_into().unwrap()) as usize;
+        for i in 0..n {
+            let off = 4 + i * 26;
+            if off + 26 > words.len() {
+                break;
+            }
+            let tile = u16::from_le_bytes([words[off], words[off + 1]]) as i32;
+            if tile == y * 25 + x {
+                // INTERLEAVED per z: {word u16, seen u8} (3 B).
+                let w = u16::from_le_bytes([words[off + 2 + 3 * z], words[off + 2 + 3 * z + 1]]);
+                let sn = words[off + 2 + 3 * z + 2];
+                return (w, sn);
+            }
+        }
+        (0, 0)
+    };
+    let k7_count = |f: usize| -> usize {
+        let d = dump.frames[f].watch("debris-stager").unwrap();
+        // u32 count + 42-B records; kind @ +25 (i32 after
+        // active/x/y/z/init_a/init_b/seq).
+        let n = u32::from_le_bytes(d[0..4].try_into().unwrap()) as usize;
+        let mut k7 = 0;
+        for i in 0..n {
+            let o = 4 + i * 42;
+            if o + 42 > d.len() {
+                break;
+            }
+            if d[o] == 1 && i32::from_le_bytes(d[o + 25..o + 29].try_into().unwrap()) == 7 {
+                k7 += 1;
+            }
+        }
+        k7
+    };
+
+    // THE BUILD at f32: the trigger ring around (3,57) — five tiles
+    // build, the gunner's quadrant blocks three, and the burst's
+    // ring-0 pair 7 destroys the fresh (4,56) the same frame.
+    assert_eq!(
+        field(31),
+        vec![],
+        "no platforms before the burst (the trigger object stands)"
+    );
+    assert_eq!(
+        field(32),
+        vec![(2, 56, 300), (3, 56, 300), (2, 57, 300), (2, 58, 300)],
+        "BUILD: the strength-300 trigger ring minus the pair-7 tile"
+    );
+    assert_eq!(grid7d4(32, 2, 56), 0x7d4, "the platform grid word");
+    // The water z-structure: word 0x25D (the zone-1 stamped base)
+    // at z2, seen 0 (volume 2 — the FUN_0042394a semantics).
+    assert_eq!(mirror(32, 2, 56, 2), (0x25D, 0));
+    assert_eq!(
+        mirror(32, 2, 56, 1),
+        (226, 0),
+        "the plateau word below (volume 1 → seen 0)"
+    );
+    // The pair-7 destroy: 5× k7 debris staged.
+    assert_eq!(k7_count(32), 5, "the (4,56) fresh platform's k7 debris");
+
+    // THE WEAKEN + SPREAD at f33: two 75-hits per tile take the
+    // 300s to 150 — the §7j.41/3 ring gate (old ≥ 200 ∧ new < 200)
+    // fires and the 150-rings build the north row + rebuild (4,56).
+    assert_eq!(
+        field(33),
+        vec![
+            (2, 55, 150),
+            (3, 55, 150),
+            (4, 55, 150),
+            (2, 56, 150),
+            (3, 56, 150),
+            (4, 56, 150),
+            (2, 57, 150),
+            (2, 58, 300),
+        ],
+        "WEAKEN to 150 + the SPREAD rings (the north row + the (4,56) rebuild)"
+    );
+    // f34: the second gate (old ≥ 100 ∧ new < 100) — the 75s + the
+    // creep-site latch.
+    assert_eq!(
+        field(34)
+            .iter()
+            .map(|&(x, y, s)| (x, y, s))
+            .collect::<Vec<_>>(),
+        vec![
+            (2, 55, 150),
+            (3, 55, 150),
+            (4, 55, 150),
+            (2, 56, 75),
+            (3, 56, 75),
+            (4, 56, 150),
+            (2, 57, 75),
+            (2, 58, 300),
+        ],
+        "the second weaken: 75 (the site latches)"
+    );
+    // THE DESTROY at f35: the 75-tiles die (75 − 75 ≤ 0), 5× k7
+    // each — 15 more debris records beside the f32 five.
+    assert_eq!(
+        field(35),
+        vec![
+            (2, 55, 150),
+            (3, 55, 150),
+            (4, 55, 150),
+            (4, 56, 150),
+            (2, 58, 300)
+        ],
+        "DESTROY: the spent tiles clear (both banks + the water word)"
+    );
+    assert_eq!(k7_count(35), 20, "5 + 3×5 k7 debris records");
+    assert_eq!(
+        grid7d4(35, 2, 56),
+        0,
+        "the destroyed tile's grid word clears"
+    );
+    assert_eq!(mirror(35, 2, 56, 2), (0, 0), "the water z-word clears");
+
+    // THE CREEP: the armed epilogue tick's first tip ring lands at
+    // f449 — (2,57) at 199 — and the bridge grows through the tail.
+    assert_eq!(field(448).iter().filter(|c| c.2 == 199).count(), 0);
+    let f449 = field(449);
+    assert_eq!(
+        f449.iter().find(|c| c.2 == 199),
+        Some(&(2, 57, 199)),
+        "the first creep build"
+    );
+    // The growth: 5 tiles by f474, and the saturated tail (the last
+    // change f1240): 22 creep tiles across (3..9, 53..57).
+    assert_eq!(field(474).iter().filter(|c| c.2 == 199).count(), 5);
+    let tail = field(1360);
+    let n199 = tail.iter().filter(|c| c.2 == 199).count();
+    assert_eq!(n199, 22, "the saturated 199 bridge");
+    assert_eq!(tail.len(), 27, "22 creep + the 5 survivors");
+    assert_eq!(field(1360), field(1240), "static past the last growth");
+    // The creep tiles carry the water z-word too (the 199 build is
+    // the same FUN_004228ce write half).
+    assert_eq!(grid7d4(1360, 2, 57), 0x7d4);
+    assert_eq!(mirror(1360, 2, 57, 2), (0x25D, 0));
+}

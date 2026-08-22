@@ -1,0 +1,87 @@
+# S7 — platform dynamics: the build/spread/creep/destroy lifecycle
+# (DESIGN-DIFFHARNESS.md §7 S7 row + §10-W12; RE-EXW-SIM §7j.41 the
+# platform-dynamics decode, D113). ONE RUN, ZONEA/MISSION1, all four
+# observables of the §7j.12 platform family.
+#
+# THE TRIGGER SITE: the zone-1 bridge code is 5 (§7j.41/1) and
+# ZONEA/MISSION1 banks exactly ONE type-5 instance — .POS slot 74 @
+# (3,57,2), type row 5 = W1 H1 D2 hp 75. The marker stages the
+# GUNNER on that tile; one artillery 9 record (frame 1, the burst at
+# tick 0x20 = frame 32) destroys it through the object resolver —
+# the destroy tail calls FUN_00422600, the id matches the zone code,
+# and the strength-300 ring builds at the dying instance's OWN
+# (x,y,z). The gunner's marker robot blocks its own E/S/SE quadrant
+# ((3,58),(4,57),(4,58)) → FIVE platforms build; the same burst's
+# ring-0 pair 7 then destroys the fresh (4,56) platform (the k7
+# destroy debris) — the FIRST destroy observable, same frame.
+#
+# THE WEAKEN/SPREAD INSTRUMENT: bouncy-grenade volleys (0x1B → 4×
+# type 0x1A, 75 damage per detonation quadrant) thrown BEFORE the
+# build (f18/f22/f26/f30): the grenades bounce to rest around the
+# site and detonate f32-35, ON the fresh platforms. Two quadrant
+# hits take a 300 tile to 150 — the §7j.41/3 ring gate (old ≥ 200 ∧
+# new < 200) fires and the ring builds the north row (2,55),(3,55),
+# (4,55) + rebuilds (4,56) at 150: THE SPREAD. Two more hits reach
+# 75 (the second ring gate, old ≥ 100 ∧ new < 100 — the creep site
+# latches), and the next hit destroys the spent tiles (75 − 75 ≤ 0:
+# the k7 debris ×5 per platform). Post-build volleys are caged (the
+# gunner's dribble bounces off the platform field's volume-2 wall),
+# so the fire window closes at f30 — the rest of the run is the
+# creep.
+#
+# THE CREEP: `platforms = 1` arms the epilogue tick (FUN_00422a9c)
+# from frame 0 — the ORIGINAL runs it every frame (its 1/32 gate
+# draws one RandA per frame; the E-gap on unarmed paths is D113).
+# After the f34 site latch, the lucky frames extend the bridge: the
+# first 199-strength tile lands at f387, and by f1308 the creep has
+# grown a 25-tile 199 bridge across the plateau (3..9, 53..57).
+#
+#   f1:   the artillery command (the gunner's slot 0)
+#   f18/f22/f26/f30: the four grenade volleys (the auto-rearmed
+#         slot 1), aimed (2,54)/(3,54) so the overshoot rests
+#         straddling the platform field's north edge
+#   f32:  BUILD — the trigger ring: (2,56),(3,56),(2,57),(2,58) at
+#         300 survive the burst (the (4,56) fresh tile dies to
+#         pair 7 — 5× k7 debris)
+#   f33:  WEAKEN + SPREAD — (2,56),(3,56),(2,57) → 150 (two 75
+#         hits each; the ring gate fires) → the 150-rings build
+#         (2,55),(3,55),(4,55),(4,56); (2,58) untouched at 300
+#   f34:  the 150s → 75 (the second gate; the site latches)
+#   f35:  DESTROY — (2,56),(3,56),(2,57) die (75 − 75 ≤ 0), 5× k7
+#         debris each; the field = the north row + (4,56) + (2,58)
+#   f387: the FIRST CREEP BUILD — (2,57) at 199
+#   f412..f1308: the bridge grows — 25 tiles at 199 across
+#         (3..9, 53..57); the run ends at f1360 (the growth
+#         saturated: the last change f1308)
+#
+# TIERS: T0/T1/T3/TS — the platform-strength + tile-word-grid rows
+# carry the whole family (both banks are T1 destroy-staging rows),
+# the typedb-mirror rows carry the water z-words/seen, and the
+# debris-stager row (T3) carries the k7 destroy debris.
+scenario = "S7"
+tiers = T0,T1,T3,TS
+anchor = mission-start
+frames = 1360
+destroy = 1
+pickup = 1
+platforms = 1
+markers = 3,57,2
+loadout = 1,0x01,9:1,0x1B:16
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# f1: the gunner (robot 1, ON the trigger object's tile) fires the
+# artillery — the burst lands f32/f33
+command 01 01 00 00 00 02 00 00 00 00 00 00 00 00
+step 17
+# f18: grenade volley 1 toward (2,54)
+command 01 01 00 00 00 02 00 40 00 C0 06 02 00 00
+step 4
+# f22: volley 2 toward (3,54)
+command 01 01 00 00 00 02 00 60 00 C0 06 02 00 00
+step 4
+# f26: volley 3 toward (2,54)
+command 01 01 00 00 00 02 00 40 00 C0 06 02 00 00
+step 4
+# f30: volley 4 toward (3,54)
+command 01 01 00 00 00 02 00 60 00 C0 06 02 00 00
+step 1330
