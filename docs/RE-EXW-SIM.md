@@ -2293,8 +2293,10 @@ All facts below [verified] against those dumps unless tagged.
    mission-file section loader** [verified]; sole caller
    FUN_00416458 at 0x416487 — the mission-load dispatcher
    (clears 0x4cff98/0xac44 B + 0x4dabdc/0xf00 B, calls the TRT
-   loader, then opens ".NME"; section strings .MOFO/.NME/.TRT/
-   .POS/.BDG at 0x457a4c..0x457a65). FUN_004170a6 itself:
+   loader, then opens ".NME"; extension tags .NME/.TRT/.POS/.BDG
+   @0x457a57..0x457a6d — §7j.29 erratum: the earlier ".MOFO" in
+   this list was the dead tail of the fatal string 0x457a3c, not
+   a tag). FUN_004170a6 itself:
    (a) clears 8000 B at 0x4cccf8 via FUN_00402965 (ECX=0x1f40)
    = the FULL 250-record bank (capacity pin; 0x4cccf8 is .bss,
    no file backing); (b) FUN_0041dbbed(0x4dca0c, ".TRT") stages
@@ -4226,6 +4228,99 @@ below). Part 1 = the 400×0x36 dispatch family.
     REAPER/SMOKE blit sequences directly.
 
 
+## 7j.29. The ".MOFO loader" RETIRED — string-tail misparse; FUN_00415490 = the mode-9 SEEK acquisition dispatcher (2026-08-22, worker 0a08a5e1 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run)
+
+**Headline: there is NO .MOFO loader and NO .MOFO file format.**
+The queue premise traced to a misparse of DGROUP 0x457a3c..0x457a6d
+(bytes re-read from BEDLAM.EXW @file-off 0x5603c):
+
+```
+0x457a3c  "Buggered direction in MOFO\0"   (the ONLY string here)
+0x457a57  ".NME\0"   0x457a5c ".TRT\0"   0x457a61  4x00 pad
+0x457a64  ".POS\0"   0x457a69 ".BDG\0"
+```
+
+0x457a4c = "MOFO\0" is the dead TAIL of the fatal-message string,
+not a 5th sibling tag. Evidence [verified]:
+- ZERO code references to 0x457a4c across .text (objdump immediate
+  scan of the full 0x401000..0x460000 dump; the earlier Ghidra XREF
+  probe block exw-critterpoi-xrefs.txt also returned empty for every
+  offset probed in this string block).
+- The byte sequence ".MOFO" exists in NEITHER BEDLAM.EXW NOR
+  BEDLAM.EXD; no *.MOFO file exists anywhere in game-data (corpus
+  walked read-only; MANIFEST.sha256 verified clean before/after).
+- The four real tags carry EXACTLY ONE reference each, at the four
+  already-closed loaders: .NME@0x457a57 → 0x41648c (FUN_00416458,
+  §7j.18), .TRT@0x457a5c → 0x4170c3 (FUN_004170a6, §7j.15),
+  .POS@0x457a64 → 0x41a55d and .BDG@0x457a69 → 0x41a5d6 (both
+  FUN_0041a4f8, §7j.25). The extension-tag family at this
+  dispatcher is CLOSED at four members; the 7j.15 gloss "section
+  strings .MOFO/.NME/.TRT/.POS/.BDG at 0x457a4c..0x457a65" is
+  corrected to ".NME/.TRT/.POS/.BDG @0x457a57..0x457a6d".
+- EXD twin: "Buggered direction in MOFO" @file-off 0x9d86c — the
+  message ships in both binaries.
+
+**The string's sole consumer decoded — FUN_00415490(idx) = the
+mode-9 SEEK per-step target-acquisition dispatcher** [verified]:
+
+- Prologue @0x415496: ecx = idx·0x7E (critter bank 0x4cff98 frame);
+  eax = dword@+0x10; `cmp eax,3; ja 0x4156fe` (the FATAL);
+  `jmp [eax·4+0x415480]` — table bytes re-read from the binary:
+  {0x4154b6, 0x415549, 0x4155da, 0x41566b}, all landing on code.
+- **+0x10 is DUAL-PURPOSE**: (a) the 8-bit wander HEADING (0..255)
+  in the steer paths — 0x413495..0x4134bf: read, angle-clamp add
+  (FUN_00412a19, §7j.17), `&0xFF`, stored back, then sin/cos
+  FUN_0041eb65/FUN_0041eb77 `>>6` deltas add to +0x36/+0x3A; heading
+  steers ±0x40 (0x413ec8..0x413efb); anim word w@+0x56 :=
+  (heading&0x3F)+0x20 @0x414330; and (b) the 2-bit SEEK DIRECTION
+  0..3 in mode 9 — the mode-9 entry writes it together with mode
+  w@+0xC := 9: the 0xB-dormant wake path 0x4143b9..0x414421 sets
+  `RandA()&3` @0x4143d5 (plus timer w@+0x6 := 0xC8, pause w@+0x2
+  := 6, SFX [0x4edfe0] via the FUN_0043a48e family), the mode-2
+  sub-state-4 retreat sets 9 @0x414534, and the re-picker writes
+  either `eax&3` @0x414310 or FUN_004181bd's return @0x414320 into
+  +0x10 (identity of FUN_004181bd otherwise open).
+- The mode-9 walk loop dispatches the SAME dword through a SECOND
+  4-way table @0x412ef8 = {0x414346, 0x41443b, 0x41446f, 0x4144a3}
+  (`cmp 3 / ja skip` @0x4144e1 — non-fatal there): each body calls
+  its axis stepper FUN_00417f2c (y−1) / FUN_00417fe8 (x+1) /
+  FUN_004180c0 (y+1) / FUN_0041813d (x−1); step OK → move the
+  critter one unit (dec/inc of +0x3A/+0x36) and CALL FUN_00415490;
+  step blocked → anim w@+0x56 := 0, skip.
+- **FUN_00415490's four cases** = directional forward-acquisition
+  probes over the robot bank (base 0x4c69e4, stride 0xA8, active
+  d@+0x7C, count [0x46ccbc] — the §7j.28 row's bank): the walk axis
+  carries the one-sided tight window (−4..+0xF = target up to 0xF
+  AHEAD), the crossing axis |Δ|<0x18, z |Δ|<0x18 raw. Case↔direction
+  coherence (all four verified against their stepper):
+  dir 0 (y−1): critter_y − robot_y>>8 ∈ (−4,0xF];
+  dir 1 (x+1): robot_x>>8 − critter_x ∈ (−4,0xF];
+  dir 2 (y+1): robot_y>>8 − critter_y ∈ (−4,0xF];
+  dir 3 (x−1): critter_x − robot_x>>8 ∈ (−4,0xF] — with the
+  crossing box reading robot y RAW (not >>8) — faithful quirk,
+  unique to case 3 [hypothesis: oversight; scale left open].
+  On hit: target-robot idx w@+0x7A := i, mode w@+0xC := 2
+  (RANGE-ATTACK — §7j.17's mode-2 semantics), anim w@+0x56 := 0.
+- **The FATAL path** (dword >3 = corrupted seek direction):
+  0x4156fe `call 0x420100` (fade cancel, DESIGN-RENDER §6 / cancel
+  semantics per DECISIONS D13) → `mov eax,0x457a3c; call 0x44d2ac`
+  (console print: 0x44ffec lookup + buffered-putc 0x44f34b family,
+  RE-EXW-TICK) → `mov eax,1; call 0x44d2da` = the documented FATAL
+  EXIT (RE-EXW-GAMETHREAD 0x43d478 idiom: fn-pointer teardown then
+  CRT exit, no return path) → jmp the walker's common tail
+  0x4180b9. "Buggered direction in MOFO" is thus an internal
+  assertion message; MOFO = the developers' codename for the
+  critter subsystem.
+- Sole caller: 0x414368 (inside FUN_00412f34's mode-9 walk). The
+  §7j.17 ledger gloss "dominant-axis steppers ... each →
+  FUN_00415490" is refined: the steppers are called BY the walk
+  loop, and FUN_00415490 fires after each successful step.
+
+Corpus-path verdict: docs-only — no engine change (mode 9 exists
+only for .NME-seeded seekers; no corpus gate reaches a corrupted
+direction, and the fatal is a crash path by construction).
+
+
 ## 8. Constants ledger (all [verified] unless tagged)
 
 
@@ -4302,6 +4397,8 @@ below). Part 1 = the 400×0x36 dispatch family.
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
 | critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
+| critter seek-acquisition dispatcher | FUN_00415490(idx): dword@+0x10 (dual-purpose: wander heading 0..255 / mode-9 seek direction 0..3) `cmp 3; ja FATAL` → table 0x415480; 4 directional forward-acquisition probes vs the robot bank 0x4c69e4/0xA8 (tight −4..+0xF ahead on the walk axis, |Δ|<0x18 crossing + z; case 3 reads robot y RAW — quirk); hit → target w@+0x7A, mode w@+0xC := 2, anim w@+0x56 := 0; >3 → "Buggered direction in MOFO" 0x457a3c fatal (fade-cancel 0x420100 + print 0x44d2ac + FATAL EXIT 0x44d2da); the mode-9 walk dispatches the same dword via table 0x412ef8 → steppers 0x417f2c/0x417fe8/0x4180c0/0x41813d (y−1/x+1/y+1/x−1), step-OK → move one unit + call FUN_00415490 | §7j.29 |
+| mission extension tags | DGROUP 0x457a57 ".NME" / 0x457a5c ".TRT" / 0x457a64 ".POS" / 0x457a69 ".BDG" — exactly one reference each (0x41648c/0x4170c3/0x41a55d/0x41a5d6 = the four CLOSED loaders §7j.18/§7j.15/§7j.25); 0x457a4c "MOFO\0" = dead tail of the fatal string 0x457a3c, ZERO refs, no ".MOFO" bytes in EXW or EXD, no *.MOFO corpus file — the ".MOFO loader" RETIRED | §7j.29 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
 | POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
 | exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, img-group d@+0x14 (7j.27: the animator's per-tick DROPSHIP.BIN frame selector), dwell d@+0x18 — RESET TO 0 BY FUN_00412a98 @0x412b60 on each POI rescue (multi-POI elevators), cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19; boot reset MissionShell 0x447a8d | §7j.17/§7j.18/§7j.19/§7j.27 |

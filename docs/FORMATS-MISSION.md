@@ -31,6 +31,22 @@ Recurring engine constants seen across formats: **128** (CGR sprite count),
 **8192** (LNK/CTG/LNG table length), **2000** (POS slots), **999** (PAD slots),
 **12** (MRK slots).
 
+### 0.1 The retired ".MOFO" tag (2026-08-22, VERIFIED absent)
+
+A suspected fifth mission extension `.MOFO` (from a DGROUP string at
+0x457a4c adjacent to the loader tags) **does not exist**:
+- `0x457a4c` = `"MOFO\0"`, the dead tail of the fatal-message string
+  `"Buggered direction in MOFO"` @0x457a3c — zero code references;
+  the message's sole consumer is FUN_00415490, the mode-9 critter
+  seek-acquisition dispatcher (RE-EXW-SIM §7j.29).
+- The loader-tag family in that block is exactly `.NME` @0x457a57 /
+  `.TRT` @0x457a5c / `.POS` @0x457a64 / `.BDG` @0x457a69 — one
+  reference each, all four loaders CLOSED (RE §7j.18/§7j.15/§7j.25).
+- The byte sequence `.MOFO` appears in neither BEDLAM.EXW nor
+  BEDLAM.EXD, and no `*.MOFO` file exists anywhere in the corpus.
+The mission extension set therefore stands at the 17 shipped
+extensions of §0 with no unresolved member at that dispatcher.
+
 ---
 
 ## 1. MAP — tile map, 8 planes of u16
