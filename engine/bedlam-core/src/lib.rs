@@ -44,6 +44,7 @@ pub mod replay;
 pub mod rng;
 pub mod sim;
 pub mod time;
+pub mod weapon;
 
 /// Version of the replay/snapshot serialization formats written by this
 /// crate. Bumped on any breaking layout change; readers reject other

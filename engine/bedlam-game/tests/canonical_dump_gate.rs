@@ -19,8 +19,11 @@
 //!    3/401 records, pinned chain digests, byte-identical double
 //!    runs — plus the scenario-step seam gates: boot difficulty
 //!    consumed (money seed via menu::start_score), walk-phase
-//!    non-boot steps rejected naming the P2e seam, command/pad
-//!    rejected naming their engine seams, P-pause banned mid-scenario,
+//!    non-boot steps rejected naming the P2e seam, command payloads
+//!    CONSUMED by the W12-S3-prep fire seam (a ≥14 B record stages
+//!    into the sim ring; short payloads fail loud; with no staged
+//!    weapon slots nothing fires — the no-inject invariant), pad
+//!    rejected naming the S6 seam, P-pause banned mid-scenario,
 //!    and the order seam arming at the tile-exact robot.
 //! 4. CORPUS-GATED S2 (the W8-s2 order→walk slice, D91): the
 //!    `markers` staging key banks the mission_corpus_gate walker at
@@ -45,6 +48,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use bedlam_core::mission::{AngleTable, MissionSim, Order, Robot, Terrain, ORDER_WINDOW};
+use bedlam_core::weapon::WeaponSlot;
 use canonical::{emit_frame, run_canonical, TickState};
 use diffharness::dump::{canonicalize_frame, decode_dump, frame_digest, Channel, DumpHeader};
 use diffharness::hash::sha256;
@@ -101,6 +105,8 @@ fn fixture_robot() -> Robot {
         armor_pool: 2000,
         kind: 0,
         death_flag: 0,
+        weapons: [WeaponSlot::default(); 7],
+        weapon_mask: 0,
     }
 }
 
@@ -653,12 +659,26 @@ fn canonical_seam_gates() {
         Some(&2u32.to_le_bytes()[..])
     );
 
-    // COMMAND names the missing engine fire seam (S3 pairs it, W12).
-    let cmd = "scenario = \"SC\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\ncommand 01\n";
-    let err = run_canonical(cmd, &root).unwrap_err();
+    // COMMAND is CONSUMED by the W12-S3-prep fire seam (§7j.37): a
+    // well-formed 14-B record (marker 01, id 0, flags 2 = the ORDER
+    // arm, target words 0) stages into the sim's ring — with NO
+    // staged weapon slots nothing fires (the no-inject invariant)
+    // and the run completes.
+    let cmd =
+        "scenario = \"SC\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\ncommand 01 00 00 00 00 02 00 00 00 00 00 00 00 00\n";
+    let stitched = run_canonical(cmd, &root);
     assert!(
-        err.to_string().contains("fire"),
-        "command rejection names the fire seam: {err}"
+        stitched.is_ok(),
+        "command record consumed: {:?}",
+        stitched.err()
+    );
+    // A short payload fails loud naming the record grammar.
+    let short =
+        "scenario = \"SH\"\ntiers = T0\nframes = 1\nuntil-anchor mission-start\ncommand 01\n";
+    let err = run_canonical(short, &root).unwrap_err();
+    assert!(
+        err.to_string().contains("14 B"),
+        "short command payload names the record grammar: {err}"
     );
 
     // PAD names the missing extraction-arming seam (S6, W12).

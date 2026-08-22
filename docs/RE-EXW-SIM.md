@@ -4589,7 +4589,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | terrain damage resolver | FUN_0041bc1c(x Q13, y Q13, damage): match rec by tile → hp−=damage; hp≤0 → active=0 + floor word [0x454a04+4·zone] → TOT @0x4796bc+30·tile+2z, seen @0x4796cc, DAT volume=0, debris K0xF, splash at first free level | §7j.14 |
 | terrain-height probe | FUN_0041eaa1(x Q5, y Q5, z): DAT volume byte 0 → miss; else height = [0x4edd60] bank ptr (h−1)·4+2, +6 header, byte[(y&31)·32+(x&31)]; hit iff z ≤ (z>>5)·0x20 + height | §7j.14 |
 | weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i (400 slots, free-slot FUN_00412848), kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14/§7j.17 |
-| weapon-anim tick (400×0x36 bank) | FUN_00410823(phase 0..3), 4×/frame from MissionShell: bullets 2..4 = 2 tested sub-steps + 1 committed (rollback −v; actor/terrain hits re-add + disburser K2 + impact pair via FUN_00419aff(type); records FREE ONLY at tick>99 — impacts do not kill them); shell 5 = 1 move, free on bounds/tick>100/z-OOB, critter-lane hit (odd phases) stores (x,y)+K3 debris at z>>8−10, MP-lane hit → disburser, floor hit → impact pair 75 + disburser + FREE; artillery 9..0xB phase-0-only, tick++, fall 0x200/tick to FUN_0041e411 settle (floor<<8), tick==0x18 ∧ player-kind → FUN_004245c9, burst window tick−0x20 < dword[0x456c78+4·TYPE] (durations 2/4/7 BY TYPE) walking the pair lists PTR[0x456bf0+4·(tick−0x20)] (sentinel 500, FUN_004244a1 5000-damage blasts + 50% K0xB), past the window → disburser + free; ballistic family gravity arc −0x100/tick with the per-type bounce/roll semantics (7j.22 item 6); rocket 0x24 class-countdown launch delay → straight flight, floor → 400 impact, ttl>0x64/bounds → free; homing 0x29 launch delay → z-ease ±0x200 clamp [0,0xFF00] + ground-lift ≥(z>>8)−4, heading := (heading + angle-diff·4)&0xFF over the target Q13 delta, vel = 2·(sin[heading]>>4, sin[heading−0x40]>>4), forward probe FUN_0041e56d, avoidance ±4-sector LEFT-first (left-OOB also climbs z+=0x600), dead-target gates → disburser+fizzle, floor → 250 impact, ttl>0xC8/bounds → free | §7j.22, §7j.37 |
+| weapon-anim tick (400×0x36 bank) | FUN_00410823(phase 0..3), 4×/frame from MissionShell: bullets 2..4 = 2 tested sub-steps, net TWO committed steps per call (3 moves − 1 rollback; tick += 6 — corrects the 7j.22 "1 committed" gloss; actor/terrain hits re-add + disburser K2 + impact pair via FUN_00419aff(type); records FREE ONLY at tick>99 — impacts do not kill them); shell 5 = 1 move, free on bounds/tick>100/z-OOB, critter-lane hit (odd phases) stores (x,y)+K3 debris at z>>8−10, MP-lane hit → disburser, floor hit → impact pair 75 + disburser + FREE; artillery 9..0xB phase-0-only, tick++, fall 0x200/tick to FUN_0041e411 settle (floor<<8), tick==0x18 ∧ player-kind → FUN_004245c9, burst window tick−0x20 < dword[0x456c78+4·TYPE] (durations 2/4/7 BY TYPE) walking the pair lists PTR[0x456bf0+4·(tick−0x20)] (sentinel 500, FUN_004244a1 5000-damage blasts + 50% K0xB), past the window → disburser + free; ballistic family gravity arc −0x100/tick with the per-type bounce/roll semantics (7j.22 item 6); rocket 0x24 class-countdown launch delay → straight flight, floor → 400 impact, ttl>0x64/bounds → free; homing 0x29 launch delay → z-ease ±0x200 clamp [0,0xFF00] + ground-lift ≥(z>>8)−4, heading := (heading + angle-diff·4)&0xFF over the target Q13 delta, vel = 2·(sin[heading]>>4, sin[heading−0x40]>>4), forward probe FUN_0041e56d, avoidance ±4-sector LEFT-first (left-OOB also climbs z+=0x600), dead-target gates → disburser+fizzle, floor → 250 impact, ttl>0xC8/bounds → free | §7j.22, §7j.37 |
 | byte-angle sine table | SINTABLE.BIN (512 B = 256 i16): word[a] = round(sin(a·π/128)·32767) [corpus-verified]; FUN_0041eb65 "cos" = movsx word[base+(a&0xFF)·2], FUN_0041eb77 "sin" = the same at (a−0x40)&0xFF; the 64-word sector-scan threshold table (FUN_0041eb7d, base+4) = words[2..66] of the same array — one dual-use file table at [0x46cbd0] | §7j.37 |
 | projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4; coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20) | §7j.14 |
 | splash gates/eviction | FUN_0041bd78: first z ≥ min(z,7) with DAT 0 ∧ seen 0; FUN_00424355 gates: DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58+tile]=0; full ring → evict max-age + FUN_0042394a flush | §7j.14 |
@@ -5648,18 +5648,23 @@ contradicted; three rows are rewritten/added.
    two phase offsets.) E stages the full 256-word array; the
    lookups are pure reads.
 3. **BULLETS (types 2..4) — the exact sub-step loop** [verified
-   decompile]: per call, up to 2 sub-steps; each: `x+=vx, tick+=2,
-   y+=vy, z+=vz`, then (sub-step ≤ 2) test bounds/`z>>13>7`/tick>99
-   → free; the CRITTER lane → actor-hit; the MP robot lane →
-   actor-hit; floor test `get_z_pos(x>>8,y>>8,z>>8) > z>>8` →
-   terrain-hit. NO hit after 2 sub-steps → done-this-call. After
-   the loop the position is ROLLED BACK one step (`pos −= v`);
+   decompile]: per call, up to 2 sub-steps are TESTED; the loop
+   structure is move-first/test-after, and the THIRD iteration also
+   moves (then sets the done flag) — so a no-hit call performs 3
+   moves − 1 rollback = **TWO net committed steps** and tick += 6
+   (this CORRECTS 7j.22 item 3's "2 cells tested, 1 committed" —
+   the cells-tested count is right, the net move is 2). Each
+   sub-step: `x+=vx, tick+=2, y+=vy, z+=vz`, then (sub-step ≤ 2)
+   test bounds/`z>>13>7`/tick>99 → free; the CRITTER lane →
+   actor-hit; the MP robot lane → actor-hit; floor test
+   `get_z_pos(x>>8,y>>8,z>>8) > z>>8` → terrain-hit. After the loop
+   the position is ROLLED BACK one step (`pos −= v`);
    actor-hit re-adds the step and runs the disburser (K2);
    terrain-hit re-adds, applies the impact pair
    (FUN_00419aff(type) via FUN_0041a894 + FUN_0041bc1c) and the
    disburser — **and the record does NOT free on impact**: bullets
-   expire ONLY at tick>99 (≈50 calls) [refines 7j.22 item 3's
-   "expire → type := 0" — that free is the ttl path alone].
+   expire ONLY at tick>99 [refines 7j.22 item 3's "expire → type :=
+   0" — that free is the ttl path alone].
 4. **SHELL (type 5)** [verified]: one move per call; bounds/tick>
    100/z OOB → free; on ODD phases the critter lane runs — a HIT
    stores (x,y) and emits the K3 debris at z>>8−10

@@ -33,6 +33,9 @@
 
 use crate::hash::{Fnv1a64, StateHash};
 use crate::rng::Pcg32;
+use crate::weapon::{
+    CommandRecord, EnemyProjectile, WeaponRecord, WeaponSlot, ENEMY_BANK_SLOTS, WEAPON_BANK_SLOTS,
+};
 
 /// Q13 units per tile (world position quantum) [0x2000, verified].
 pub const Q13_PER_TILE: i32 = 0x2000;
@@ -97,18 +100,27 @@ pub fn dist_octagonal(dx: i32, dy: i32) -> i32 {
 }
 
 /// The 64-entry angle threshold table [FUN_0041eb7d reads the 64 words
-/// behind runtime pointer 0x46cbd0+4]. Data provenance [inferred]: the
-/// words are SINTABLE.BIN words[2..66] — an ascending 0x0647..0x7FFF
-/// quarter-sine whose scale fits the caller's ratio
-/// `|dx|·0x80/(dist>>8)` (peak 0x8000) exactly; the pointer-init site
-/// is not yet decoded (RE-EXW-SIM.md sec 9). Injected by the host so
-/// the hermetic crate never embeds asset bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AngleTable([u16; 64]);
+/// behind runtime pointer 0x46cbd0+4]. Data provenance [verified
+/// §7j.37/2]: the words are SINTABLE.BIN words[2..66] — the 64-entry
+/// ascending quarter-sine thresholds (peak 0x7FFF) of the file's
+/// full 256-word sine ramp. Injected by the host so the hermetic
+/// crate never embeds asset bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// The 64-entry octile→sector threshold table (SINTABLE.BIN words
+/// 2..66) + the optional full 256-word sine array (the §7j.37/2
+/// dual-use file table).
+pub struct AngleTable {
+    thresholds: [u16; 64],
+    sine: Option<Box<[u16; 256]>>,
+}
 
 impl AngleTable {
     /// Build from the 256-word (512-byte) SINTABLE.BIN word array,
-    /// taking words[2..66]. Returns `None` on a short table.
+    /// taking words[2..66] as thresholds. Returns `None` on a short
+    /// table. Also retains the FULL 256-word array — it is the
+    /// byte-angle sine table (word[a] = round(sin(a·π/128)·32767),
+    /// corpus-verified §7j.37/2): the "cos"/"sin" lookups of
+    /// FUN_0041eb65/77 are pure word reads at a / (a−0x40).
     pub fn from_sintable_words(words: &[i16]) -> Option<Self> {
         if words.len() < 66 {
             return None;
@@ -117,17 +129,35 @@ impl AngleTable {
         for (i, w) in words.iter().skip(2).take(64).enumerate() {
             t[i] = *w as u16;
         }
-        Some(AngleTable(t))
+        let mut sine = [0u16; 256];
+        for (i, w) in words.iter().take(256).enumerate() {
+            sine[i] = *w as u16;
+        }
+        Some(AngleTable {
+            thresholds: t,
+            sine: Some(Box::new(sine)),
+        })
     }
 
-    /// Build from 64 raw thresholds.
+    /// Build from 64 raw thresholds (test constructor — no sine
+    /// table: the homing velocity lookups are unavailable and the
+    /// missile keeps its staged velocity).
     pub fn from_thresholds(words: &[u16]) -> Option<Self> {
         if words.len() < 64 {
             return None;
         }
         let mut t = [0u16; 64];
         t.copy_from_slice(&words[..64]);
-        Some(AngleTable(t))
+        Some(AngleTable {
+            thresholds: t,
+            sine: None,
+        })
+    }
+
+    /// The byte-angle "cos" lookup FUN_0041eb65 [verified §7j.37/2]:
+    /// sine-word[a & 0xFF]. `None` when built from thresholds only.
+    pub fn sine_word(&self, index: u16) -> Option<u16> {
+        self.sine.as_ref().map(|s| s[(index & 0xFF) as usize])
     }
 
     /// 256-direction angle byte for a Q13 delta [FUN_0041eb7d +
@@ -144,7 +174,7 @@ impl AngleTable {
         // First sector whose threshold EXCEEDS the ratio; 0x3F default
         // [verified scan: stop at the first table[i] > ratio].
         let mut sector: u32 = 0x3F;
-        for (i, t) in self.0.iter().enumerate() {
+        for (i, t) in self.thresholds.iter().enumerate() {
             if ratio < u32::from(*t) {
                 sector = i as u32;
                 break;
@@ -467,6 +497,15 @@ pub struct Robot {
     /// Death flag (+0x9C): set 1 by the SP death subset (7g.6);
     /// readers not yet census'd.
     pub death_flag: u16,
+    /// The 7 weapon slots (+0x36.., 8-byte groups {id@+0, ammo@+2,
+    /// cooldown@+6}) — the COMMAND consumer's fire surface
+    /// [§7j.37/1]. Zeroed at spawn (the fresh-campaign empty
+    /// loadout); the host stages them through
+    /// [`MissionSim::stage_robot_weapons`].
+    pub weapons: [WeaponSlot; 7],
+    /// Weapon enable mask (+0x6E, the order-bits word): bit k = slot
+    /// k armed. The fire gate's first term.
+    pub weapon_mask: u16,
 }
 
 impl Robot {
@@ -615,9 +654,9 @@ pub fn pickup_case(tile_word: i32, set: usize) -> Option<u8> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct MissionSim {
     pub terrain: Terrain,
-    robots: Vec<Robot>,
+    pub(crate) robots: Vec<Robot>,
     order: Option<Order>,
-    angles: AngleTable,
+    pub(crate) angles: AngleTable,
     rng: Pcg32,
     frame: u64,
     /// Per-tile armor-pad bytes — the +0x18 byte of the per-tile
@@ -633,6 +672,25 @@ pub struct MissionSim {
     /// The player TYPE word ([0x4edb90]): 0 in all SP games
     /// (GameMain 0x41c34c) — gates the alarm trip + case-4 pickup.
     player_type: u16,
+    /// The COMMAND ring (the W5 injection seam's E-side home):
+    /// staged payloads, drained once per frame by the consumer
+    /// [§7j.37/1]. NOT hashed (empty on every corpus path).
+    pub(crate) commands: Vec<CommandRecord>,
+    /// The 400×0x36 weapon-anim bank at 0x4c71f4 [§7j.37]. Slot
+    /// order = the original record order; kind 0 = free. NOT part of
+    /// `state_hash` (the S3 T2 watch surface is its own dump row).
+    pub(crate) weapon_bank: Vec<WeaponRecord>,
+    /// The 50×0x22 projectile bank at 0x4cc654 [7j.13/5].
+    pub(crate) enemy_bank: Vec<EnemyProjectile>,
+    /// The ORDER-target triple 0x4dd484/88/8c (bit1 records write
+    /// it; the weapon dispatch aims at it).
+    pub(crate) order_target: (i32, i32, i32),
+    /// The order-active flag 0x4dc6bc.
+    pub(crate) order_flag: bool,
+    /// The DIFFICULTY dword 0x46cbf8 (0..2) — the only selector of
+    /// the difficulty-scaled damage rows [§7j.15/2]. Staged by the
+    /// host; 0 = the modeled default.
+    pub(crate) difficulty: u32,
 }
 
 impl MissionSim {
@@ -646,8 +704,21 @@ impl MissionSim {
             frame: 0,
             armor_pads: Vec::new(),
             player_type: 0,
+            commands: Vec::new(),
+            weapon_bank: vec![WeaponRecord::default(); WEAPON_BANK_SLOTS],
+            enemy_bank: vec![EnemyProjectile::default(); ENEMY_BANK_SLOTS],
+            order_target: (0, 0, 0),
+            order_flag: false,
+            difficulty: 0,
             terrain,
         }
+    }
+
+    /// Stage the DIFFICULTY dword (0x46cbf8, 0..2) — the
+    /// difficulty-scaled damage selector. The host seeds it from the
+    /// scenario's boot difficulty.
+    pub fn set_difficulty(&mut self, difficulty: u32) {
+        self.difficulty = difficulty;
     }
 
     /// Robots in record order.
@@ -948,6 +1019,8 @@ impl MissionSim {
             armor_pool: 0,
             kind: 0,
             death_flag: 0,
+            weapons: [WeaponSlot::default(); 7],
+            weapon_mask: 0,
         };
         let idx = self.robots.len();
         self.robots.push(robot);
@@ -1015,8 +1088,23 @@ impl MissionSim {
     /// sidebar draw for the SLOT robots; every corpus robot is a
     /// slot robot (single squad, base 0).
     pub fn advance_frame(&mut self) {
+        // The COMMAND-record consumer (FUN_00409138) runs after the
+        // input/click chain and BEFORE the six robot phases
+        // [MissionShell §1, verified]. With no staged records it
+        // reduces to the recharge pass over zeroed slots — the
+        // pre-S3 behavior is unchanged (the S0/S1/S2 chains pin it).
+        self.consume_commands();
         for phase in 0..PHASES_PER_FRAME {
             self.robots_phase(phase as i32);
+        }
+        // The enemy pass [MissionShell §1]: 4× per frame — the
+        // weapon-anim tick (FUN_00410823, phase arg i) + the 50×0x22
+        // projectile tick (FUN_00412010). FUN_004197d4 (the odd-pass
+        // robot-hit expiry walker) is an E-gap until the enemy-fire
+        // producers land — nothing stages the 0x22 bank today.
+        for i in 0..4 {
+            self.weapon_tick(i);
+            self.enemy_tick();
         }
         // The mission-epilogue +0x18 fade [7j.10, verified
         // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue

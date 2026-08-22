@@ -30,9 +30,14 @@
 //! maps through the pinned EMPTY scan map (no engine keyboard
 //! consumer yet; P 0x19 rejected per the §2 pause rule); `order x y
 //! z` is the click-order seam (target recorded + `arm_order_at_robot`
-//! at the tile-exact alive robot); `command`/`pad` are rejected
-//! naming the missing engine seams; `boot difficulty=d` seeds the
-//! campaign money via the engine's own `menu::start_score` formula.
+//! at the tile-exact alive robot); `command <hex bytes>` is the
+//! CONSUMED fire seam (W12-S3-prep, §7j.37): the payload stages as
+//! the next COMMAND record in the sim ring and the pumped frame's
+//! MissionShell pass consumes it (FUN_00409138 — a ≥14 B payload
+//! fails loud); `pad` is still rejected naming the S6 extraction
+//! seam; `boot difficulty=d` seeds the campaign money via the
+//! engine's own `menu::start_score` formula + the sim's difficulty
+//! dword (the scaled damage rows).
 //! The `markers` header key (D91) stages extra squad robots through
 //! the existing `load_mission(staged_markers)` seam after the MRK
 //! robots — the walk seam (the click-order moves only the OTHER
@@ -432,9 +437,11 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     )?;
     if difficulty != 0 {
         let money = bedlam_game::menu::start_score(difficulty as u8);
-        host.mission_mut()
-            .expect("mission staged")
-            .set_campaign(0, money);
+        let scene = host.mission_mut().expect("mission staged");
+        scene.set_campaign(0, money);
+        // The difficulty dword 0x46cbf8 seeds the sim's
+        // difficulty-scaled damage rows (§7j.15/2).
+        scene.sim_mut().set_difficulty(difficulty);
     }
 
     // Session scalars from the episode (fresh host: ZONEA/MISSION1).
@@ -557,11 +564,32 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                     false,
                 ));
             }
-            Step::Command { .. } => {
-                return Err(CanonicalError(
-                    "command steps need the engine fire family (S3 pairs it per \
-                     DESIGN §10-W12); no E-side seam yet"
-                        .into(),
+            Step::Command { ref bytes } => {
+                if frames.len() >= total as usize {
+                    break;
+                }
+                // The W5 seam consumed (W12-S3-prep, §10-W12): the
+                // payload bytes are the COMMAND record the O1 capgen
+                // appends at the ring; E stages them into the sim's
+                // ring and the next frame's MissionShell pass
+                // consumes them (FUN_00409138 — the fire family of
+                // DESIGN §7's S3 row).
+                let scene = host
+                    .mission_mut()
+                    .ok_or_else(|| CanonicalError("mission not staged".into()))?;
+                if !scene.sim_mut().stage_command(bytes) {
+                    return Err(CanonicalError(format!(
+                        "command payload too short (<14 B record): {bytes:02x?}"
+                    )));
+                }
+                let executed = host.pump_frame(DT_SUBTICKS, &null);
+                check_cadence(executed)?;
+                let no = frame_counter_now(&host);
+                frames.push(emit_frame(
+                    &tick_state(&host, &session, seam_target, no, None),
+                    &scen.tiers,
+                    true,
+                    false,
                 ));
             }
             Step::Pad { .. } => {
