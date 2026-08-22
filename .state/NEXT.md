@@ -110,18 +110,24 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4.2/W12-S6] THE EXTRACTION SCENARIO unit (medium; DESIGN §7 S6
-   row + §10-W12): arm extraction via the scripted .PAD step-on —
-   the E side still REJECTS pad steps naming the S6 seam (D86), so
-   this unit first lands the engine-side extraction arming (the
-   beacon family 0x119628-30, the exit ring phases §7j.19/§7j.27,
-   the objective counters §7j.20, the extraction-arm cells
-   0x46cd00/0x46ccfc/0x46ccc4 per §7j.32), then S6.scen (ZONEA,
-   `pad 8` = the D86 census slot-0 record (5,61,0)) + the canonical
-   gate rows + dbx-plan compile (the pad op already compiles on
-   O1). Re-read the D86/D89 notes first: the pad op writes ONLY the
-   order triple — the robot's arrival arms extraction in-game.
-   Chain pin + S0..S5C byte-identical re-assert + differ_gate row.
+2. [P4.2/W12-S7-prep] THE E-SIDE PLATFORM-DYNAMICS PRODUCER unit
+   (medium; DESIGN §7 S7 row + §10-W12): the §7j.12 platform
+   family is decoded but NOT engine-modeled beyond the S4 destroy
+   entry (the platform 0x7d4 resolver). Land the producers
+   engine-side first — the damage body FUN_00422693 (weapon ray
+   0x41a8ff → strength −damage, the <0 destroy tail incl. the
+   water z-word clear + both banks + 5× k7 debris), the SPREAD
+   ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word +
+   planeA 0 + planeB 1 + no robot; writes water z-word + 0x7d4 +
+   strength + scorch+4), the CREEP tick FUN_00422a9c (1/32 chance,
+   ray over water, tip→FUN_00422832(…,199)), and the build path
+   (strength 300 via trigger) — then S7.scen (repeated fire on
+   platforms: build/spread/creep/destroy observable in one run,
+   ZONEA if the corpus has platforms, else the first zone that
+   does) + the canonical gate rows + dbx-plan compile. Chain pin +
+   S0..S6 byte-identical re-assert + differ_gate row. RE-READ
+   §7j.12 amendment + the platform/strength ledger rows first; the
+   platform-strength row is already in the watch set.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -259,6 +265,35 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4.2/W12-S6 THE EXTRACTION SCENARIO unit COMPLETE
+   (worker 4d92bb13 claim 2, commits bcf5396 (scenario+harness+gate)
+   + 0545e2e (differ+plan) + the docs commit, D112; the §7j.40 RE
+   decode 631bd28 + the engine extraction family edafd02 landed by
+   predecessor 8d32d85d whose interrupted harness WIP was ADOPTED +
+   completed this run). S6.scen (T0/T1/T3/TS, 75 records, chain
+   c96f0735df1059ea, double-run byte-identical): the walk is
+   COMMAND-driven (bit0 SELECT = state 1 + move-target, NO pending
+   order — a click never arms the beacon and E's `order` blocks the
+   pad trigger, §7j.40/5); `pad 18` = slot 0x12 = (19,70,0), the
+   census GROUND pad (the queue's `pad 8`/(5,61,0) gloss predates
+   the verified census — slot 8 is LEVEL 1, unreachable for a
+   ground robot; deviation recorded in D112); two legs cross the
+   pad mid-walk → sub-tick probe → state-3 halt + same-frame deploy
+   (single-robot window 0) → descent f14..34 → sweep f35 (state
+   3→5, stop 1e6) → RandA-jittered dwell f36..44 → departure drift
+   → complete f69. THE .PAD TERMINATOR BUG fixed (the dead `x ==
+   -1` break on a `u16 as i32` read — the slot bank carried the
+   0xFFFF fill past the live run; the D86 missing-slot rejection
+   now fires; ZONEA/M1 = exactly 114 live slots). corpus_s6 gate
+   pins the full timeline; the dropship-frame differ normalizer (7
+   i32 leaves, E-only — a coverage finding, never fabricated);
+   differ_gate S6 row (cross PASS-WITH-NOTES, 2 S1-class + the
+   dropship row, zero field gaps); capture-plans/S6.json compiled +
+   byte-pinned (3 injects: the pad op + two command records; NO
+   staging seams). S0..S5C chains re-asserted BYTE-IDENTICAL;
+   workspace 54 suites green, fmt+clippy clean, manifest clean both
+   sides, PUSHED. Queued: W12-S7-prep the platform-dynamics
+   producer unit (item 2).
 - 2026-08-22: QUEUE HYGIENE unit #2 (worker e444e1cd claim 2,
    D111): the claimed queue item 2 (the MISSIONVIEW §8
    water-flag/anim remainder) was found ALREADY CLOSED at HEAD —

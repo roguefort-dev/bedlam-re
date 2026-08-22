@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4.2/W12-S6 COMPLETE (worker 4d92bb13 claim 2,
+    commits bcf5396 + 0545e2e, D112; the §7j.40 decode 631bd28 +
+    the engine extraction family edafd02 by predecessor 8d32d85d —
+    its interrupted harness WIP adopted + completed): S6.scen =
+    the .PAD step-on extraction run — COMMAND-driven walk (bit0
+    SELECT: state 1 + target, no pending order; a click never arms
+    the beacon), pad slot 0x12 = (19,70,0) the census GROUND pad
+    (the queue's pad-8 gloss was stale — slot 8 is LEVEL 1;
+    deviation in D112), two legs cross the pad mid-walk, the
+    sub-tick probe arms the beacon + halts the walker, the
+    same-frame window-0 deploy → descent → sweep (state 3→5) →
+    jittered dwell → departure → complete f69. 75 records, chain
+    c96f0735df1059ea + double-run byte-identical; the .PAD
+    terminator bug fixed (dead `x == -1` on a u16 read — 114 live
+    slots now, the D86 rejection bites); corpus_s6 + differ_gate
+    S6 row (2 S1-class + the E-only dropship row, zero gaps) +
+    capture-plans/S6.json byte-pinned (3 injects). S0..S5C chains
+    re-asserted byte-identical; 54 suites green, fmt+clippy clean,
+    manifest clean, PUSHED. Queue: 1 = [BLOCKED] S0 live session
+    (operator), 2 = W12-S7-prep the platform-dynamics producer
+    unit. NEXT: W12-S7-prep (item 2).
+
   - 2026-08-22 QUEUE HYGIENE #2 (worker e444e1cd claim 2, commit
     6b6274f, D111): the claimed queue item 2 (the MISSIONVIEW §8
     water-flag/anim remainder) was found ALREADY CLOSED at HEAD —
