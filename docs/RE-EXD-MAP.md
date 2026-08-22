@@ -178,7 +178,7 @@ to docs/DIVERGENCES.md as a seed.
 | blink-cursor selector | 0x4dc5d0 | TODO (gap) | 7j.7 producer twin not located this unit; anchor via the effect-row family when W2 needs it | |
 | per-player selected anchor | 0x4c71c4 | **0x971a4** | spawn-tail seed loop `do {[0x971a4+i]=x>>8; [0x971a8+i]=y>>8; [0x971ac+i]=z} ×4 (0x30/0xC)` — EXW 4×0xC {x>>8,y>>8,z} EXACT | [verified] |
 | order target xyz | 0x4dd484/88/8c | **0x10e0a4/0x10e0a8/0x10e0ac** | consumer twin FUN_00019ee9 bit1-ORDER branch writes all three @0x1a0af/0x1a0bc/0x1a0d8 (words@+7/+9/+0xB of the record, EXW EXACT) + the click-order twin FUN_00021112 writes the triple from the pick (FUN_0002a271, EXW FUN_00419943): ground branch iso combine, rect branch reads rec@0x9df30-base, the `&0x2000` structure flag EXACT; loop position = EXW MissionShell trio EXACT (FUN_00021112 → FUN_0005b066(1) builder → FUN_00019ee9 consumer = EXW FUN_00410644 → FUN_00449c94 → FUN_00409138) | [verified] |
-| per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs). EXTENT PINNED (W7-followup): per-robot u32 ×2 indexed by ABSOLUTE robot id over the CAP cell 0x11950c (tick loop `+= 4` per record; 0x11950c := 0x11958c SP / 0x119588 MP, ≤ 12); the fixed 0x60-B span at 0xf75ec covers x[12]+y[12] deterministically — the dbx-plan row can now be filled | [verified] |
+| per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs). EXTENT PINNED (W7-followup): per-robot u32 ×2 indexed by ABSOLUTE robot id over the CAP cell 0x11950c (tick loop `+= 4` per record; 0x11950c := 0x11958c SP / 0x119588 MP, ≤ 12); the fixed 0x60-B span at 0xf75ec covers x[12]+y[12] deterministically — FILLED (W7-followup2, D90): the dbx-plan row emits the 0x60 span and the differ splices the trio into the robot-bank fields | [verified] |
 | extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | **0x119628/0x11962a/0x11962c/0x11962e/0x119630** | armer FUN_0003570e full decode (guard/timer 0x197/tile trio) + mission-loop countdown `(short)DAT_0011962a −−` with the digit draws and the all-state-3 → FUN_00030899 completion sweep | [verified] |
 | spread claims | 0x4eabba | **0x119632** | picker FUN_0003581b full decode: first-free u16 scan `[0x119632+i]`, bound = cap cell 0x11950c, marks 1, the 12-offset switch around beacon x/y — EXW FUN_004248c8 EXACT | [verified] |
 | no-extract latch | 0x46aed4 | TODO (gap) | animator twin not decoded this unit (FUN_0001f8c1 turned out to be the debrief/payout fn); anchor via the pod-ring animator when W2 needs it | |
@@ -382,18 +382,20 @@ tools/ghidra-scripts/EXDRobotBackhalf{,2}.java, `-process BEDLAM.EXD
 **Coverage gaps AFTER this unit (canonical fields with NO pinned EXD
 offset — the normalizer leaves them OUT of coverage, they are reported
 as STRUCTURAL coverage findings, never zero-filled-then-compared, never
-guessed):** target_present/target_x/target_y ONLY — 3 of the 34
-canonical leaf fields. Their SOURCE is pinned (§5 move-target arrays
-0xf75ec/0xf761c: per-robot u32 x/y Q5 by ABSOLUTE robot index, −1 =
-none, writers = spawn-init −1 fill + order consumer + the beacon
-auto-order `:= tile<<5`, and the tick's arrive-clear; indexing loop
-`local_48 += 4` bounded by the CAP cell 0x11950c — the extent formula
-is therefore `2 × cap × 4 B ≤ 0x60`, and the fixed 0x60-B span at
-0xf75ec covers x[12]+y[12] exactly since 0xf761c−0xf75ec = 0x30), but
-the O1 PLAN row is still deferred (dbx-plan must emit the row; the O1
-normalizer then parses the span). Named follow-up: fill the
-move-target-words plan row + splice target_present/tx/ty into the O1
-robot-bank fields (coverage 3 → 0 per robot).
+guessed):** NONE — target_present/target_x/target_y were the last 3 of
+the 34 canonical leaf fields, and they are RECORD-EXTERNAL but now
+SOURCED (W7-followup2, D90): the O1/O2 plan dumps the §5 move-target
+span as one fixed 0x60-B row at 0xf75ec, and the differ SPLICES the
+per-robot trio into the robot-bank row (x[i] u32 @+4i, y[i] u32
+@+0x30+4i, present = x ≠ −1, robots bounded by the same frame's
+robot-bank count; absent canonicalizes to present 0 + tx/ty 0, matching
+the E §6a row; the E row itself stays an E-only row — the O1 side
+carries no standalone move-target row after the splice). UNIT CHECK
+(Q5): both sides are Q5 — the EXD writers are `tile<<5` (spawn −1
+fill, order consumer, beacon auto-order, arrive-clear; indexing loop
+`+= 4` per record bounded by the CAP cell 0x11950c ≤ 12) and the
+engine's `Robot::target` is `dest_tile·Q5_PER_TILE(0x20)` (bedlam-core
+mission.rs order consumption) — raw i32 comparison, no shift.
 
 Non-canonical record cells decoded in passing (context rows, no
 canonical field — the engine does not model them): +0x14 viewport

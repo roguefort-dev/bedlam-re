@@ -395,7 +395,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 | blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector) |
 | per-player-selected | 4 × {x i32, y i32, z i32} (player 0 = selected robot pos>>8 Q5 + z; 1..3 zero) | sim + sidebar |
 | order-target | i32 ×3 | the ORDER-seam write (last injected target; the 0x4dd484 cells persist, so does the E session value) |
-| move-target-words | u32 count + per-robot {present u8, tx i32, ty i32} (Q5; the EXW u16-word semantics pin at W7) | `Robot::target` |
+| move-target-words | u32 count + per-robot {present u8, tx i32, ty i32} (Q5, same units both sides — EXD writers are `tile<<5`, D90; the O1/O2 side dumps the 0x60-B EXD span and the differ SPLICES the trio into the robot-bank row, so this row stays E-only in cross-channel reports) | `Robot::target` |
 | beacon-family | flag u32, timer u32, tile i32×3 | `MissionSim::order()` (window = timer 0x197) |
 | spread-claims | u16 ×12 | `Order::claims` |
 | typedb-fade-byte, armor-pad-reads | u32 len + len bytes (the engine bank is lazily materialized; len 0 ≡ all-zero w·h — the ZONEA corpus until a death) | `armor_pads()` (the +0x18 byte family, 7g.3/7j.9) |
@@ -612,9 +612,11 @@ differ come before any new scenario depth.
    LANDED note in §6; the normalizer contract is RE-EXD-MAP §8, the
    O1/O2/E field maps live in `tools/diffharness/src/differ.rs`, the
    CLI is `dbx-diff` (RUNTIME.md "W7 the differ"). The move-target
-   u16-word semantics stay deferred with the O1 plan row (extent
-   unpinned); the pad op is modeled through the order-target rows it
-   writes (D86).
+   u16-word deferral is CLOSED by W7-followup2 (D90): the arrays are
+   u32 ×2 (per-robot x/y by absolute id, −1 = none, Q5 `tile<<5`),
+   the O1 plan row emits the fixed 0x60-B EXD span, and the differ
+   splices the target trio into the robot-bank row; the pad op is
+   modeled through the order-target rows it writes (D86).
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).
    NOTE (W6 addendum, D85 completion): the E runner stages the
    host-default marker set — no network-marker override — so ZONEA is
