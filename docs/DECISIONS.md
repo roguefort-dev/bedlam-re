@@ -2905,3 +2905,33 @@ construction). Decisions:
    chain digests in the test.
 
 Nudge-Worker: 1f758667-a545-4efc-b1ca-975af330fcb1
+
+COMPLETION ADDENDUM (2026-08-22, worker 36f752cd, claim 2, commit
+54d781a): the implementation + verification landed as promised above,
+with three recorded deltas from the design-first text:
+
+1. WALK-PHASE CORRECTION: D85 item 3 said "walk phase must be empty" —
+   that made the grammar's walk-phase-only BOOT steps (the difficulty
+   seed) unreachable dead code. The landed rule: walk may carry ONLY
+   `boot` steps; any other walk step still names the P2e InputFrame
+   seam. DESIGN §6a amended to match. Verified by the seam-gate test
+   (boot difficulty=2 → money 3000 via menu::start_score + the
+   `difficulty=2` header pin).
+2. E-STAGING NOTE: `run_canonical` stages the host-default marker set
+   (no network-marker override — the mission_scene_gate staged (18,73,1)
+   stand-in is NOT auto-staged), so ZONEA/MISSION1 is a SINGLE-robot
+   squad on the E channel: the order armer's window-0 single-robot
+   special case clears the order on the arming pump's own window tick
+   (the ledger behavior). The order seam is proven instead by robot
+   state-3 + the tile-origin snap in the robot bank; the SURVIVING
+   order (window 0x197→0x196) is the synthetic two-robot fixture.
+   W8's first full O1↔E diff must pin whether the original SP fills
+   the 0x46cbe0 override (robot-count parity).
+3. PINS: fixture frame digest b359f7d282db7cb8; synthetic-sim chain
+   ea0bc53dc95ff0b2; S0 chain 8901789a88cf61fe (3 records); S1 chain
+   1c4e7b4c9d9b0947 (401 records); both corpus runs byte-identical on
+   double runs. static-map-wh E source = the TOT-header map size
+   (25×75, w·h=1875 — the 30004/15004 cross-check is FILE bytes, not
+   dims).
+
+Nudge-Worker: 36f752cd-4fdc-4d2e-9926-3c672ff37ecf

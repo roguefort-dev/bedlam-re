@@ -50,26 +50,13 @@
    (cgr/bin/min/lnk/order-table/yline — extent formulas unpinned) are
    consciously OUT of the first golden; adding them later is additive
    (re-baseline chains deliberately). Manifest checks bracket
-   corpus-touching steps.
-2. [P4.2/W6] THE ENGINE DUMP EMITTER (unattended; DESIGN §10-W6, the E
-   side of the differ): parity_harness gains `--canonical` — per-tick
-   canonical records in the W3 dump schema (tools/diffharness dump.rs,
-   channel E), consumed by the future differ (W7). Scope: T0/T1 field
-   maps first (frame counter, RNG A/B, score/money, difficulty, zone/
-   mission/mode, linear-m — then the robot bank 0xA8-stride fields,
-   selection/anchor, order-target, beacon family, tile-grid derived
-   forms) mapping MissionSim/MissionScene state per tick into the
-   registry-ordered watch blobs; one dump per tick at the same dump
-   point the O1 channel uses (the present tail), chain via the D28
-   FNV construction (dump.rs already mirrors it). The v1.1 grammar
-   steps are the shared seam (D82): the emitter consumes the SAME
-   scenario step list (keystore→InputFrame, order→the click-order
-   seam, command→the fire seam) so one script drives both sides.
-   Deliverable: engine-side dumps + a comparison fixture vs a
-   synthetic reference; corpus-gated tests follow the
-   mission_corpus_gate pattern. Verify: cargo workspace green; no
-   Ghidra, no emulator needed.
-3. [P4.2/W5-pad] THE CAPGEN PAD OP (small, unattended; D84 item 4):
+   corpus-touching steps. NOTE (D85 completion): the E-side S0/S1
+   counterparts now exist — `parity_harness --canonical --scenario
+   tools/diffharness/scenarios/{S0,S1}.scen --out ...` — chains pinned
+   in tests/canonical_dump_gate.rs (8901789a88cf61fe / 1c4e7b4c9d9b0947);
+   the live session's O1 chains compare against THOSE (modulo the
+   T2/T3 statistical classes) once W7's normalizer lands.
+2. [P4.2/W5-pad] THE CAPGEN PAD OP (small, unattended; D84 item 4):
    the runtime pad-slot read op for the PAD step (§5.4 — read the
    .PAD slot's tile from the pad bank at capture time, then write the
    order-target triple to it): needs the §7j.20 pad census semantics
@@ -77,14 +64,26 @@
    — FORMATS/RE-EXD-MAP rows) + a capgen `{op:"pad"}` inject form +
    un-gating Step::Pad in dbx-plan. S6 (extraction) pulls this; land
    it before W8 wiring.
+3. [P4.2/W7] THE DIFFER (unattended; DESIGN §6 + §6a): the W7
+   normalizer + comparison modes + report writer + fingerprint
+   manifest. Input contract now EXISTS on both sides: O1 raw guest
+   bytes (dbx-stitch path) + E canonical dumps (channel E, commit
+   54d781a) — the normalizer converts O1 bytes into the §6a grammar
+   per registry row layout (robot-bank = the state_hash field order,
+   u32 count + 90-byte records; selection-triple 4-B alias; beacon
+   flag/timer/tile; the E-gap list = STRUCTURAL findings, never
+   silent). Comparison modes per DESIGN §6 (byte-identical,
+   T2/T3-statistical class masks for the RNG/frame-counter rows,
+   original-divergence → O2 arbitration); report writer + the
+   fingerprint manifest. Verify: workspace green; corpus-gated tests
+   vs the pinned E dumps in tests/canonical_dump_gate.rs (synthetic
+   reference = the synthetic_frames() fixture + the pinned chains).
 
 ## Backlog (not yet started)
-- [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
-  canonical records in the W3 schema, T0/T1 field maps first) — the E
-  side of the differ; consumes the v1.1 grammar steps directly
-  (shared seam, D82).
-- [P4.2/W7] THE DIFFER: normalizer + DESIGN §6 comparison modes +
-  report writer + fingerprint manifest.
+- [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
+  the E side (projectile/critter banks, effects/debris rings) as
+  their producer families land in-engine (S3+ pairing per §10-W12);
+  the O2/Wine tiebreak channel (W11); O3 8street comparator (W10).
 - CLOSED by 7j.27: the DROPSHIP ring producers (writer census,
    animator map, 7×5 grid correction, latch census, the 0x4c71f4
    pass head). CLOSED by 7j.26: the [0x4ede24]/[0x4ede28] "7×7 screen-address
@@ -213,6 +212,34 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W6 THE ENGINE DUMP EMITTER unit COMPLETE (design
+  83f04b9 by worker 1f758667 claim 2 — interrupted mid-implementation;
+  adopted + completed by worker 36f752cd claim 2, commits 54d781a +
+  docs, D85 + completion addendum). (a) parity_harness --canonical:
+  drives GameHost over the SHARED v1.1 scenario grammar (the D82
+  seam) and stitches channel-E W3 dumps through the SAME
+  runner::stitch + encode_dump path as O1 captures; T0/T1/TS field
+  maps in examples/parity_harness/canonical.rs per DESIGN §6a (every
+  unmapped row an explicit E-gap); 3 read-only accessors added, no
+  engine behavior changed, diffharness a bedlam-game DEV-dep only.
+  (b) WALK-PHASE FIX over the WIP: walk accepts ONLY boot steps (the
+  blanket empty-walk rejection had made the difficulty seed
+  unreachable); DESIGN §6a amended. (c) VERIFICATION
+  (tests/canonical_dump_gate.rs): hand-encoded §6a grammar fixture
+  (98-byte robot-bank record literal, frame digest pinned
+  b359f7d282db7cb8); synthetic MissionSim run (chain
+  ea0bc53dc95ff0b2, double-stitch byte-identical, surviving
+  2-robot order window 0x196); corpus-gated S0/S1 (3/401 records,
+  chains 8901789a88cf61fe / 1c4e7b4c9d9b0947, byte-identical double
+  runs); seam gates (boot difficulty=2 → money 3000, command/pad
+  rejections naming the seams, P 0x19 banned, order arm proven by
+  state-3 + tile snap). FINDINGS: static-map-wh = TOT-header map
+  size 25×75 (30004/15004 are FILE bytes); E stages no
+  network-marker override → ZONEA single-robot squad, armer's
+  window-0 case clears the order on the arming tick (W8 must pin
+  0x46cbe0 override parity). Workspace green (49 suites), fmt+clippy
+  clean, manifest clean. PUSHED 54d781a. Queued: W5-pad (item 2),
+  W7 the differ (item 3).
 - 2026-08-22: P4.2/W5-walk THE SCRIPTED-MENU-WALK DRIVER unit COMPLETE
   (worker 845abdc5 claim 2, commits 59ec9a5 + b67dcaa + 33b2c17, D84).
   (a) DESIGN FIRST (59ec9a5, RUNTIME.md "W5 walk driver"): the stop

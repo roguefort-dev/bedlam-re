@@ -1,5 +1,25 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W6 THE ENGINE DUMP EMITTER unit COMPLETE,
+    design by worker 1f758667 claim 2 / adopted + completed by worker
+    36f752cd claim 2, commit 54d781a, D85 + completion addendum): the
+    E side of the differ EXISTS — `parity_harness --canonical
+    --scenario <S.scen> --out <dump>` drives GameHost over the SHARED
+    v1.1 scenario grammar (D82 seam: same runner::Scenario parser as
+    O1) and stitches channel-E W3 dumps through the same
+    stitch/encode path as O1 captures. T0/T1/TS canonical field maps
+    = DESIGN §6a (the W7 normalizer's contract); every unmapped row an
+    explicit E-gap. Walk phase accepts ONLY boot steps (difficulty
+    seed; the WIP's blanket rejection fixed); command/pad name their
+    missing engine seams; P-pause banned mid-scenario. Verified:
+    hand-encoded grammar fixture + synthetic-sim run + corpus-gated
+    S0/S1 (chains 8901789a88cf61fe / 1c4e7b4c9d9b0947, byte-identical
+    double runs) in tests/canonical_dump_gate.rs. NOTE for W8: E
+    stages no network-marker override (ZONEA = single-robot squad;
+    0x46cbe0 override parity unpinned). NEXT HEADS: W5-pad the capgen
+    pad op (item 2, small) + W7 the differ (item 3 — both sides of
+    its input contract now exist) + the operator S0 live session
+    (item 1, interactive-gated, S0W calibration hook).
   - OPEN 2026-08-22 (P4.2/W5-walk THE SCRIPTED-MENU-WALK DRIVER unit
     COMPLETE, worker 845abdc5 claim 2, commits 59ec9a5 + b67dcaa +
     33b2c17, D84): the human title-menu walk is now scriptable — the

@@ -544,6 +544,11 @@ differ come before any new scenario depth.
 7. **W7 — differ.** Normalizer + the §6 comparison modes + report writer +
    fingerprint manifest output.
 8. **W8 — scenarios S1/S2 wired end-to-end** (first full O1↔E diff; DH-G2).
+   NOTE (W6 addendum, D85 completion): the E runner stages the
+   host-default marker set — no network-marker override — so ZONEA is
+   a single-robot squad on E; W8 must pin whether the original SP
+   fills the 0x46cbe0 override (robot-count parity) before reading
+   robot-count diffs as findings.
 9. **W9 — gates/CI wiring** (DH-G3 + corpus-gated CI job).
 10. **W10 — 8street instrumented comparator (O3).** Rebuild 8street at the
     pinned commit with state-dump hooks emitting the W3 schema (test-only
