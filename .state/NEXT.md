@@ -78,19 +78,25 @@
    arm needs the click path — the bare 0x10e0a4 triple write does
    not move robots; DESIGN §6a's seam-approximation note stands
    until a live session refines it).
-2. [P4/RE] THE HOT-RECT RECORD unit (unattended, bounded RE): the
-   0x4787c4/0x47879c click-target record family — renderer
-   FUN_00403938 writes it @0x403c93 (count [0x46ccd8]); picker
-   reads center@+8/+0xC + w@+0x14, order dispatcher reads
-   corner@+0/+4 + z@+0x10 + type@+0x1C — [hypothesis] ONE
-   0x20-stride record with both views. Walk the writer + both
-   reader families in ghidra-project/exw-text-objdump.txt, pin the
-   record grammar + the type word values, land RE-EXW-SIM §7j.31 +
-   ledger rows (pure decode, no engine change; anchors the
-   click-target rect semantics for the P4.2 order/click seams).
-   NOTE 7j.30 (2026-08-22): the SFX bank-name prerequisite for the
-   mission-SFX tier is DELIVERED — any SFX cell now has its file
-   name (RE-EXW-SIM §7j.30 map + ghidra-project/exw-banknames.txt).
+2. [P4/RE] THE .BDG TEMPLATE-BANK READER unit (unattended, bounded
+   RE): 7j.25 pinned the .BDG grammar (FORMATS §12/§16) + two of
+   the four restore-word feeders (banks @+0x46/+0x4A = TOT-mirror/
+   seen+DAT), but the @+0x3E/+0x42 READERS are still open (which
+   bank feeds which restore word). Walk the .BDG restore/resolver
+   family in ghidra-project/exw-text-objdump.txt (the 7j.25 destroy
+   resolver FUN_00416xxx chain + any [bank+0x3E]/[bank+0x42]
+   traffic), pin the plane↔mirror-word mapping, land RE-EXW-SIM
+   §7j.32 + ledger rows (pure decode, no engine change). NOTE
+   7j.31 (2026-08-22, D95): the hot-rect click-target record is
+   CLOSED — the E click/order seams are anchored (SP orders never
+   robot-targeted; new pins 0x46cc00/0x4ddb20 for the watch set
+   when click parity is needed).
+3. [P4/FORMATS] THE .BLD RECORD WALK unit (unattended, bounded RE):
+   the .BLD names/graphics side (FORMATS §17 — the 201-B/64-B-
+   extension hypothesis still unanchored; the residual item of the
+   D93 .MOFO retirement). Anchor the record grammar against the
+   corpus .BLD files + the loader in ghidra-project/
+   exw-text-objdump.txt; land FORMATS §17 + ledger rows.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -118,11 +124,11 @@
   high-water marks + the record↔pad arm mapping task) + the
   FUN_00424a6f message string table — mechanical, decode per
   zone only when P4.2 needs it.
-- The 0x4787c4/0x47879c hot-rect record (renderer FUN_00403938
-  writes it @0x403c93, count [0x46ccd8]; picker reads
-  center@+8/+0xC + w@+0x14, order dispatcher reads corner@+0/+4 +
-  z@+0x10 + type@+0x1C — [hypothesis] one 0x20-stride record with
-  both views). Anchors the click-target rect semantics.
+- The 0x4787c4/0x47879c hot-rect record — CLOSED 2026-08-22
+  (§7j.31/D95): ONE 0x20-stride array base 0x4787bc, grammar +
+  7-writer census + octile picker + class dispatcher landed; SP
+  click-orders never robot-targeted; new pins 0x46cc00/0x4ddb20
+  (watch-set candidates for click parity, additive when needed).
 - RETIRED 2026-08-22 (D93/§7j.29): the ".MOFO loader" — never
   existed (string-tail misparse). REMAINING from this bullet:
   the .BLD record walk (names/graphics
@@ -226,6 +232,35 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE HOT-RECT RECORD unit COMPLETE (worker
+  aa62f5ed claim 2, commit 5abeaad, D95, docs-only; objdump-only
+  from ghidra-project/exw-text-objdump.txt, no Ghidra run).
+  HYPOTHESIS CONFIRMED (one refinement): the 0x4787c4/0x47879c
+  family is ONE 0x20-stride record array — base 0x4787bc (rec 0),
+  count [0x46ccd8], cap 0x77, per-frame reset @0x403a9a; 0x47879c
+  = base−0x20 = the dispatcher's 1-based view. Grammar: +0/+4
+  world corner, +8/+0xC hit-box ORIGIN (NOT center — the picker
+  adds w/2,h/2), +0x10 z, +0x14 w, +0x18 h, +0x1C type. Full
+  traffic census: 7 writer sites ALL in renderer FUN_00403938 (w1
+  0x403c87 robots gated [0x4edb88]==2 ∧ ≠local-player — MP-ONLY,
+  type (idx+1)|0x1000, z+0x21, corner tile+0xB; w2-w7 critter
+  .NME draw paths, type idx+1 plain, z ∈ {raw,+0x20,+0x10,>>8}, w
+  ∈ {0x3C,0x40}) + picker FUN_00419943 (octile priority
+  FUN_0041ebf8, early-out <4, returns i+1; ground fallback = iso
+  (mx−0xF0)·k/0x1E0 + TRT active-scan → 0x2000|(idx+1)) +
+  dispatcher FUN_00410644 (MissionShell @0x448021; type cell
+  [0x46cc00] NEW pin; bit12 robot corner+z; bit13 TRT via the
+  −0xC-bias base 0x4cccec ×0x20+0x10 — the 7j.28 "critter
+  0x4cccec" gloss CORRECTED to TRT; else critter z =
+  FUN_004128ec>>8+0x15; tail [0x4ddb20]|=2 order latch NEW pin +
+  mouse consume). SEAM CONSEQUENCES: SP click-orders can NEVER be
+  robot-targeted (E seam must not fabricate them — S2's ground
+  seam validated); order-target units are per-class formulas vs
+  the D82 cells 0x4dd484/88/8c. Deliverables: RE-EXW-SIM §7j.31 +
+  3 ledger rows (supersedes the §7j.16 skeleton rows) + D95.
+  registry_anchors green, manifest clean both sides, PUSHED.
+  Queued: the .BDG template-bank reader unit (item 2) + the .BLD
+  record walk (item 3).
 - 2026-08-22: P4/RE THE SFX BANK-NAME WALK unit COMPLETE (worker
   7972b334 claim 2, commit a0f291c, D94, docs-only; objdump-only
   from exw-text-objdump.txt + DGROUP re-read from the binary, no

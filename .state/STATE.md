@@ -1,5 +1,26 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE HOT-RECT RECORD unit COMPLETE,
+    worker aa62f5ed claim 2, commit 5abeaad, D95, docs-only): the
+    0x4787c4/0x47879c click-target family is CLOSED — ONE
+    0x20-stride record array base 0x4787bc, count [0x46ccd8], cap
+    0x77, per-frame reset @0x403a9a (RE-EXW-SIM §7j.31 + 3 ledger
+    rows superseding the §7j.16 skeleton). Grammar: +0/+4 world
+    corner, +8/+0xC hit-box ORIGIN (picker adds w/2,h/2), +0x10
+    z, +0x14 w, +0x18 h, +0x1C type {plain id critter / |0x1000
+    robot / 0x2000|id = picker TRT-scan return only}. Writers: 7
+    sites ALL in renderer FUN_00403938 — w1 robots is MP-ONLY
+    ([0x4edb88]==2 ∧ ≠local player) ⇒ SP click-orders are NEVER
+    robot-targeted (E seam constraint); w2-w7 the critter .NME
+    draw paths. Readers: picker FUN_00419943 (octile
+    FUN_0041ebf8, early-out <4) + dispatcher FUN_00410644
+    (MissionShell @0x448021; NEW pins [0x46cc00] type cell +
+    [0x4ddb20]&2 order latch; the TRT bit-13 branch resolves via
+    the −0xC-bias base 0x4cccec — the 7j.28 "critter" gloss
+    corrected to TRT). NEXT: the .BDG template-bank reader unit
+    (queue item 2), the .BLD walk (item 3) — then the
+    operator-adjacent W10/W11/W12 tail.
+
   - OPEN 2026-08-22 (P4/RE THE SFX BANK-NAME WALK unit COMPLETE,
     worker 7972b334 claim 2, commit a0f291c, D94, docs-only): the
     bank→name map is COMPLETE — 202 durable assignments, ZERO
