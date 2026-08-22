@@ -1,5 +1,54 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W12-S3-prep THE E-SIDE WEAPON-FIRE
+    COMMAND PRODUCER unit COMPLETE, worker 95ab9206 claim 2,
+    commits 5cf5078 + 5f2963a + 642be37, D102, engine+tests):
+    the FIRST W12 producer family is in-engine. (a) RE NOTES
+    FIRST (5cf5078, §7j.37 — dumps-only from the existing local
+    artifacts, one read-only SINTABLE.BIN corpus probe, no new
+    Ghidra run): the consumer dispatch decode-exact (fire gates
+    mask ∧ cooldown==0 ∧ ammo≠0 VERIFIED; artillery 1×
+    type=id pos+0x100 z=(z+0x15)<<8 cooldown 0 + UNCONDITIONAL
+    disarm; mines 2/4/6× 0xF/0x13 4-RandA-draw shape class 4;
+    grenades 4/6× 0x1A/0x1F 3D vz ttl 0x32∓/＋RandA&0xF trail:=0;
+    rocket ttl 0 cooldown 5 arc=angle-pair NO RandA; auto-rearm +
+    loop-exit recharge; the bit0 pointer-bump quirk documented);
+    SINTABLE.BIN = the 256-word byte-angle sine ramp (cos/sin =
+    word lookups at a/a−0x40, thresholds = words[2..66] of the
+    same array); bullets = 2 tested sub-steps, NET TWO committed
+    steps, free ONLY at tick>99 (corrects 7j.22); artillery
+    duration table indexed BY TYPE; homing steering exact (diff·4,
+    2·(sin>>4), LEFT-first avoidance, left-OOB climbs). (b) ENGINE
+    (5f2963a): bedlam-core/weapon.rs — the command ring + the
+    400×0x36 weapon bank + the 50×0x22 projectile bank (NOT in
+    state_hash; the S3 T2 watch surface), the consumer + the
+    per-type ticks (bullets/shell/artillery/ballistic incl. the
+    0x17 3-clone split/rocket/homing) + enemy_tick + the pinned
+    damage table (incl. the d=2 flat override); Robot gains
+    weapons[7]+mask (host-seamed); AngleTable carries the full
+    sine array; advance_frame = the MissionShell order (consumer
+    top, the 4× enemy pass after the 6 phases); canonical.rs
+    Step::Command CONSUMED (≥14 B fail-loud) + difficulty staged.
+    (c) VERIFIED: weapon_fire_gate 28 tests (no-inject inertness
+    incl. zero RandA draws, all flags/gates/bookkeeping, every
+    spawn family's shape, all tick types, the frame pipeline);
+    the corpus S0/S1/S2 chains re-run BYTE-IDENTICAL (the
+    no-inject invariant pinned three ways); workspace 100% green;
+    fmt+clippy clean; registry_anchors green; manifest clean both
+    sides; PUSHED. E-GAPS documented (the AI-family spawn
+    internals, the mortar family, the impact APPLICATION = S4,
+    disbursers, SFX/messages = T4, the 0x22 producers, FUN_004197d4,
+    the trail ring). NEXT: the S3.scen/canonical-chain unit (the
+    loadout-staging scenario key + the weapon/projectile-bank dump
+    rows + the differ normalizers + the chain pin) — queued item 2.
+    (ADOPTED + INDEPENDENTLY RE-VALIDATED 2026-08-22 by continuation
+    worker bae2e091 claim 2 — the 95ab9206 session died after push,
+    before the state bookkeeping: workspace tests 100% green incl.
+    weapon_fire_gate 28/28 + canonical_dump_gate 5/5 (the S0/S1/S2
+    pinned chains re-asserted) + differ_gate + registry_anchors;
+    fmt+clippy clean; manifest clean before AND after; HEAD ==
+    origin/main == 642be37.)
+
   - OPEN 2026-08-22 (P4/RE THE [0x4ede1c] BIN-BANK CONTENT
     CONSUMERS unit COMPLETE, worker d6b238f4 claim 2, commit
     cd304c6, D101, docs-only): the 7j.16 residue is CLOSED.

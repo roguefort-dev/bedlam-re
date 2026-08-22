@@ -109,27 +109,65 @@
        rewritten ledger rows + MISSIONVIEW §1/§4 corrections +
        FORMATS §18. registry_anchors green; manifest clean before
        AND after; PUSHED.
-   2. [P4.2/W12-S3-prep] THE E-SIDE WEAPON-FIRE COMMAND PRODUCER
-       unit (DESIGN §7 S3 row + §10-W12; engine+tests ONLY — the
-       S3.scen/canonical-chain unit is the follow-up): model in
-       bedlam-game MissionSim the COMMAND-record weapon dispatch —
-       consumer EXW 00409138 (EXD twin FUN_00019ee9, D83) over the
-       0x4dd4a0 ring (stride 0x10, the EXISTING W5 injection seam —
-       reuse it, do not add a new one), weapon-slot dispatch
-       w2/3/4→FUN_0041c3fb-family, w6/7/8→FUN_0041bd8f-family,
-       artillery→projectile bank 0x36-stride records — per the
-       7j.22/7j.13/7j.28 EXW decodes (per-type cadences, ballistic
-       arcs, rocket launch-delay, homing target classes); damage
-       application via the FUN_00419aff tables (7j.17/7j.18 — the
-       open 0x69-vs-table question stays open, model the pinned
-       rows only). T2 watch surface: the 0x4c71f4 0x36-stride
-       weapon records + the 0x4cc654 0x22-stride projectile
-       records (lifecycle: spawn/active/free). CONSTRAINTS:
-       canonical_dump_gate S0/S1/S2 chains (8901789a88cf61fe /
-       1c4e7b4c9d9b0947 / 809f4961b7757da4) must stay BYTE-IDENTICAL
-       (no fire fires without COMMAND records — assert the no-inject
-       path is untouched); cargo fmt+clippy green; registry_anchors
-       green; no live capture (unattended-safe).
+   2. DONE 2026-08-22 (worker 95ab9206 claim 2 — session died
+       post-push; ADOPTED + RE-VALIDATED by continuation worker
+       bae2e091 claim 2, commits 5cf5078 + 5f2963a + 642be37,
+       D102, §7j.37): [P4.2/W12-S3-prep] THE E-SIDE WEAPON-FIRE
+       COMMAND PRODUCER unit — COMPLETE (engine+tests, per the
+       §7j.37 dumps-only re-verification). bedlam-core/weapon.rs:
+       the command ring + the consumer (FUN_00409138 modeled
+       subset: flags, the VERIFIED fire gates mask ∧ cooldown==0 ∧
+       ammo≠0, the inline spawn cases field-exact — artillery
+       1×/mines 2·4·6×/grenades 4·6×/rocket 1× — the family
+       ROUTING, auto-rearm, the loop-exit recharge pass) + the
+       400×0x36 weapon bank + the 50×0x22 projectile bank (NOT in
+       state_hash — the S3 T2 watch surface, the W6 split) + the
+       per-type ticks (FUN_00410823: bullets 2 committed steps +
+       free only at tick>99 (corrects 7j.22), shell, artillery
+       burst-window BY TYPE, the ballistic family incl. the 0x17
+       3-clone split, rocket launch-delay, homing 0x29 steering
+       exact) + enemy_tick + the FUN_00419aff damage table (d=2
+       flat override); Robot weapons[7]+mask host-seamed; the W5
+       `command` step CONSUMED (canonical.rs, ≥14 B fail-loud);
+       advance_frame = the MissionShell order. VERIFIED (bae2e091,
+       this run): weapon_fire_gate 28/28, canonical_dump_gate 5/5
+       with the S0/S1/S2 chains BYTE-IDENTICAL (8901789a88cf61fe /
+       1c4e7b4c9d9b0947 / 809f4961b7757da4 — the no-inject
+       invariant), differ_gate, registry_anchors, workspace 100%,
+       fmt+clippy, manifest clean both sides. E-GAPS documented
+       (§7j.37 + the weapon.rs header): the AI-family spawn
+       internals (w2..8/0x18/0x19/0x21..0x28 — routed + bookkept
+       [hypothesis], S3 findings name them), the mortar family,
+       impact APPLICATION (S4 pairs it), disbursers, SFX/messages
+       (T4), the 0x22 producers, FUN_004197d4, the trail ring.
+   2. [P4.2/W12-S3] THE S3.SCEN + CANONICAL-CHAIN unit (DESIGN §7
+       S3 row + §10-W12; pairs the LANDED W12-S3-prep producer
+       (D102, bedlam-core::weapon) with its scenario + dumps;
+       engine+tests, unattended-safe): (a) SCENARIO GRAMMAR: a
+       loadout-staging key beside `markers` (per-robot weapon
+       slots + enable mask staged through the EXISTING
+       stage_robot_weapons host seam — no new injection surface;
+       the W5 `command` step already stages the ring); (b) S3.scen
+       on ZONEA/MISSION1: COMMAND fires at fixed targets covering
+       every modeled class — bullets 2..4, shell 5, artillery
+       9..0xB, ballistic {0xF,0x13,0x17,0x1A,0x1F}, rocket 0x24,
+       homing 0x29 (one per class; 0xE mortar + the AI families
+       are E-gaps — NOT in the first S3 chain), frames budgeted
+       for the cadences + the spawn/active/free lifecycle; (c)
+       CANONICAL: the weapon-bank (400×0x36) + projectile-bank
+       (50×0x22) dump rows — the T2 watch surface as its own dump
+       blob form (compact active-records vs full bank: pick ONE
+       and document; stays out of state_hash, the W6 split)
+       emitted by parity_harness --canonical; (d) DIFFER: the O1
+       normalizers for the two bank rows (registry rows exist:
+       weapon-anim-bank 0x4c71f4 / projectile 0x4cc654 in
+       watches.toml; the EXD aliasing for these T2 rows is THIS
+       unit per the watches.toml T2 note) + the differ_gate S3 row
+       (fabricated-O1 shape like S2's); (e) the S3 chain PIN in
+       canonical_dump_gate (double-run byte-identical).
+       CONSTRAINTS: the S0/S1/S2 chains stay BYTE-IDENTICAL;
+       fmt+clippy green; registry_anchors green; manifest checks
+       bracket any corpus-touching run; no live capture.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -263,6 +301,30 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W12-S3-prep THE E-SIDE WEAPON-FIRE COMMAND
+  PRODUCER unit COMPLETE (worker 95ab9206 claim 2, commits 5cf5078
+  (RE 7j.37) + 5f2963a (engine+tests) + 642be37 (D102 docs); adopted
+  + independently re-validated after the session died post-push by
+  continuation worker bae2e091 claim 2). bedlam-core/weapon.rs: the
+  COMMAND ring + the FUN_00409138 consumer subset (fire gates
+  mask ∧ cooldown==0 ∧ ammo≠0 verified; inline spawns field-exact
+  artillery/mines/grenades/rocket; family routing; auto-rearm;
+  recharge pass), the 400×0x36 weapon + 50×0x22 projectile banks
+  (out of state_hash — the S3 T2 watch surface), the per-type ticks
+  (bullets net-TWO committed steps + free only at tick>99 (corrects
+  7j.22); artillery burst window BY TYPE; ballistic incl. 0x17
+  3-clone split; rocket launch delay; homing 0x29 steering exact),
+  enemy_tick, the FUN_00419aff damage table with the d=2 flat
+  override; Robot weapons[7]+mask host-seamed; W5 `command` step
+  CONSUMED in canonical.rs; advance_frame = the MissionShell order.
+  RE-VALIDATED this run: weapon_fire_gate 28/28, canonical_dump_gate
+  5/5 with S0/S1/S2 chains BYTE-IDENTICAL
+  (8901789a88cf61fe / 1c4e7b4c9d9b0947 / 809f4961b7757da4),
+  differ_gate, registry_anchors, workspace 100%, fmt+clippy clean,
+  manifest clean both sides. E-gaps documented (AI-family spawn
+  internals [hypothesis-routed], mortar, impact application = S4,
+  disbursers, SFX = T4, 0x22 producers, FUN_004197d4, trail ring).
+  Queued: the S3.scen + canonical-chain unit (item 2).
 - 2026-08-22: P4/RE THE [0x4ede1c] BIN-BANK CONTENT CONSUMERS unit
   COMPLETE (worker d6b238f4 claim 2, commit cd304c6, D101,
   docs-only; objdump-only from exw-text-objdump.txt + read-only
