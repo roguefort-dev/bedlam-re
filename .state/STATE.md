@@ -1,5 +1,18 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-22 QUEUE HYGIENE (worker 78203f4f claim 2, D106): the
+    W12-S4 closure (b8925a9, D105) was RE-VERIFIED green at HEAD
+    (differ_gate 7/7, destroy_gate 16/16, canonical_dump_gate
+    full-chain assert incl. S4 2ddd15ea50c8a14d, weapon_fire_gate
+    28/28, registry_anchors 2/2, MANIFEST clean) — no engineering
+    change. The five stale "2. DONE ..." blocks left in NEXT.md's
+    Now section are REMOVED (all were duplicated in the Done log);
+    nudge-free-items.py now skips a first-word DONE marker
+    (+ test-nudge-queue.sh case) so a finished item can never be
+    respawned. Queue renumbered: 1 = [BLOCKED] S0 live session,
+    2 = W12-S5-prep (E-side pickup producer), 3 = dbx-plan-tiers.
+    NEXT: W12-S5-prep (item 2).
+
   - OPEN 2026-08-22 (P4.2/W12-S4 THE S4.SCEN + CANONICAL-CHAIN
     unit COMPLETE, commit b8925a9, D105; engine+tests by a
     predecessor session left uncommitted by session death —
