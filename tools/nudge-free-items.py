@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Print space-separated spawnable Now-item numbers for the nudge controller.
 
-An item is spawnable when it is not claimed and carries no INTERACTIVE,
-MANUAL, or BLOCKED tag. A BLOCKED-prefixed tag ([BLOCKED-operator-desktop]
-and friends) skips exactly like [BLOCKED]: workers naturally suffix the
-blocker, and an exact-match-only check respawned the unprogressable item
-forever while real work starved behind it (watchdog repair 2026-08-22).
+An item is spawnable when it is not claimed, does not start with the DONE
+marker, and carries no INTERACTIVE, MANUAL, or BLOCKED tag. A BLOCKED-prefixed
+tag ([BLOCKED-operator-desktop] and friends) skips exactly like [BLOCKED]:
+workers naturally suffix the blocker, and an exact-match-only check respawned
+the unprogressable item forever while real work starved behind it (watchdog
+repair 2026-08-22). A first-word DONE prefix skips the same way: workers mark
+completed units "N. DONE <date> ..." in place while appending the Done log,
+and a marker-blind scheduler respawned the finished item forever (queue-hygiene
+repair 2026-08-22) — done items belong in the Done log, but a leftover marker
+must never be spawnable.
 Tagged and untagged items are both eligible; untagged items produce a
 stderr warning so malformed queue lines are visible instead of silently
 unschedulable.
@@ -25,6 +30,8 @@ claimed = {
 spawnable = []
 for match in re.finditer(r"(?m)^\s*(\d+)\.\s+(.*\S)\s*$", now):
     item, rest = match.groups()
+    if re.match(r"(?i)DONE\b", rest):
+        continue
     tags = {tag.strip().upper() for tag in re.findall(r"\[([^]]+)\]", rest)}
     if any(tag.startswith("BLOCKED") for tag in tags) or tags & {"INTERACTIVE", "MANUAL"}:
         continue

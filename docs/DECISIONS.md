@@ -3986,3 +3986,7 @@ Nudge-Worker: 3e93a4b1-0132-4e70-a159-e60f176207a5
    recorded empty-staging divergence until S5 lands init_tiles.
 
 Nudge-Worker: 65f39dff-5b6e-4da0-b7f8-d85cb435ce96
+
+## D106 — 2026-08-22: QUEUE HYGIENE — completed Now items move to the Done log at end of run, and the scheduler now mechanically skips a first-word DONE marker (nudge-free-items.py gains the DONE check + a test-nudge-queue.sh case) — a marker-blind scheduler respawned the finished W12-S4 item forever while real work (W12-S5-prep, dbx-plan-tiers) starved behind stale "2. DONE ..." blocks; this unit re-verified item 2 genuinely closed at HEAD (differ_gate 7/7, destroy_gate 16/16, canonical_dump_gate full-chain assert, weapon_fire_gate 28/28, registry_anchors 2/2, manifest clean) and removed the five stale DONE blocks, renumbering W12-S5-prep→2 and dbx-plan-tiers→3 (worker 78203f4f claim 2)
+
+Nudge-Worker: 78203f4f-22e4-4024-bcfa-88f79b85ac6a

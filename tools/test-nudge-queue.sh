@@ -45,4 +45,15 @@ cat > "$TMP/NEXT.md" <<EOF
 EOF
 [ "$("$PARSER" "$TMP/NEXT.md" "$TMP/claims")" = 2 ]
 
+# A first-word DONE marker skips the item: workers mark completed units
+# "N. DONE <date> ..." in place (2026-08-22 queue-hygiene repair) and a
+# marker-blind scheduler respawned the finished item forever.
+cat > "$TMP/NEXT.md" <<EOF
+## Now
+1. DONE 2026-08-22 (worker abc claim 2, commit deadbee): [P4] finished unit
+2. [P4] unattended item
+## Backlog
+EOF
+[ "$("$PARSER" "$TMP/NEXT.md" "$TMP/claims")" = 2 ]
+
 echo "nudge queue tests: PASS"
