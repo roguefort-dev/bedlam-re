@@ -18,8 +18,12 @@
    gate + dbgprobe flow both pass, staged
    runtime/harness-out/diff/S0/capture-plan.json is byte-identical to
    the committed capture-plans/S0.json, staged corpus + run.conf
-   intact, MANIFEST.sha256 clean before AND after. The operator
-   session is TURNKEY — start at checklist step 1, no prep left.
+   intact, MANIFEST.sha256 clean before AND after. NOTE D83
+   (2026-08-22): S0.json was REGENERATED (difficulty row now dumps;
+   19 anchor + 10 per-frame) — re-stage before the session (the
+   fa49e9cf byte-identical check predates this; regenerate +
+   re-diff `diff stage`). The operator session is TURNKEY — start at
+   checklist step 1, no prep left.
    OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
    `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
    the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
@@ -37,21 +41,23 @@
    order-table/yline — extent formulas unpinned) are consciously OUT
    of the first golden; adding them later is additive (re-baseline
    chains deliberately). Manifest checks bracket corpus-touching steps.
-2. [P4.2/W5-followup] THE EXD INPUT-TWIN CENSUS (unattended, RE
-   unit): pin the EXD keystore alias (EXW g_keystore 0x4edc44, 256 B
-   scan-indexed) + the order-target triple + the command-ring/count
-   twins + difficulty, and fill the registry exd_addr gaps so the W5
-   injection steps compile for O1 (D82 machinery is landed + proven;
-   ONLY the aliases are missing). ENTRY POINTS: the any-key scan
-   family twin (EXW FUN_0041f9d1 scans 1..0xFE), the InputReset
-   memset-256 twin (EXW 0x4207b5), the MissionShell consumer-call
-   twin (@EXW 0x448030 → the EXD command ring), the (d+1)%3
-   difficulty site. KNOWN DEAD END: FUN_0002ec12 = only the P-latch
-   spin (ghidra-project/exd-input-probe.txt, EXDInputProbe.java).
-   Fill watches.toml rows (exd_status verified) + RE-EXD-MAP sec 4/5
-   — dbx-plan compiles them automatically. AFTER the keystore alias:
-   the scripted-menu-walk driver (BPLM-on-frame-counter walk stops +
-   mission-start detect) becomes its own unit.
+2. [P4.2/W5-walk] THE SCRIPTED-MENU-WALK DRIVER (unattended; unblocked
+   by D83 — the keystore alias 0x894d4 landed): the BPLM-on-frame-
+   counter walk driver that replaces the human title-menu walk — walk
+   stops (BPLM on the frame-counter cell 0x1195f0 with per-stop
+   keystore/menu inputs) + mission-start detection (the S0 anchor BP
+   CS:0005A6EB fires) so S0/S1 captures become byte-identical-chains
+   reproducible unattended. ENTRY FACTS (all pinned): keystore 0x894d4
+   (+ESC byte 0x894d5, arrows via OR-0x80 → 0x8959c/9f/a1/a4),
+   AnyKeyWait twin FUN_0041f9d1→FUN_00030792 consumes a byte on read
+   (the walk driver must re-arm keys per stop), capgen SMV inject rows
+   + boot_writes already landed (D82), the grammar's walk-phase steps
+   are future work per D82 item 5 — THIS unit lands them (walk-phase
+   keystore steps + a menu-walk scenario S0W with until-anchor =
+   mission-start). The PAD step's runtime pad-slot op (capgen `pad`
+   op) lands here too or stays its own unit — implementer's call per
+   bounded scope. Verify headless (dbgprobe flow patterns, no desktop
+   game session).
 
 ## Backlog (not yet started)
 - [P4.2/W6] ENGINE DUMP EMITTER: parity_harness --canonical (per-tick
@@ -188,6 +194,32 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W5-followup THE EXD INPUT-TWIN CENSUS unit COMPLETE
+  (worker ef11271c claim 2, commits 79362a9 + 110718d, D83). Four
+  Ghidra probe passes (-process BEDLAM.EXD -noanalysis): (a) KEYSTORE
+  0x894d4 — AnyKeyWait twin FUN_00030792 (scan 1..0xFE skip 0x2a/0x36,
+  consume-on-read) + the DOS KeySink = INT-9 hook @0x303f5 (make/break
+  keystore[AL&0x7f]:=1/0 + held-counter 0x107534 + the ARROW-REMAP
+  OR-0x80 twin) + installer/memset FUN_0003064d; ScanToChar twin
+  0x307c1 (shifts 0x894fe/0x8950a, tables 0x8077a/0x8097a). (b)
+  COMMAND RING 0x9255c stride 0x80 + COUNT 0x119588 — builder
+  FUN_0005b066 / consumer FUN_00019ee9 (EXW 00449c94/00409138 twins;
+  record byte@+0 marker/id@+1/spot@+3/flags@+5/xyz@+7/+9/+0xB EXACT;
+  auto-arm 1000000; weapon-slot dispatch w2/3/4→FUN_0001c3fb,
+  w6/7/8→FUN_0001bd8f, artillery→projectile bank 0x980d4×0x36
+  field-exact = T2-ready bonus). (c) ORDER TARGET 0x10e0a4/a8/ac +
+  order-active 0x10e140 — consumer bit1 writes + click-order twin
+  FUN_00021112 (pick twin FUN_0002a271, iso (p−0xF0)·k/0x1E0 EXACT);
+  EXD MissionShell trio position EXACT. (d) DIFFICULTY 0x119558 — the
+  172/236/300 formula + respawn table twin 0x81050 in FUN_00023967;
+  44 refs, writers FUN_0002c6e3. Registry: 6 rows filled (TI aliased
+  where pinned; emptiness rule → T2-T4 only); dbx-plan order-target
+  form + REAL-registry step tests; S0/S1 regenerated (19+10 / 33+24).
+  Scratch-verified: keystore/order/command steps compile end-to-end
+  (incl. remapped arrow CS:0008959F). Divergence seeds 6-7 (attack-
+  break frame-masks vs RandA; EXD staging cells). 49 diffharness
+  tests; workspace test/fmt/clippy green; manifest clean. PUSHED
+  110718d. Queued: item 2 = the scripted-menu-walk driver (unblocked).
 - 2026-08-22: P4.2/W5 THE INJECTOR unit COMPLETE (worker 683a65d6
   claim 2, commits c443207 + fa31828 + 5e882cd + 28ef5e7, D82).
   (a) grammar v1.1: keystore/order/pad/command/boot steps, one frame

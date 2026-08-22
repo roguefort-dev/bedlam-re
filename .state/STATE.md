@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W5-followup EXD INPUT-TWIN CENSUS unit
+    COMPLETE, worker ef11271c claim 2, commits 79362a9 + 110718d,
+    D83): the four §5 seam aliases are PINNED and REGISTERED — EXD
+    keystore 0x894d4 (AnyKeyWait twin FUN_00030792 + INT-9 hook
+    KeySink + installer memset; ScanToChar tables 0x8077a/0x8097a;
+    held-keys counter 0x107534), order target 0x10e0a4/a8/ac +
+    order-active 0x10e140 (click-order twin FUN_00021112 + consumer
+    FUN_00019ee9 bit1; EXD MissionShell trio position EXACT:
+    FUN_00021112 → FUN_0005b066 builder → FUN_00019ee9 consumer),
+    command ring 0x9255c stride 0x80 + count 0x119588 (record layout
+    byte@+0 marker / id@+1 / spot@+3 / flags@+5 / xyz@+7/+9/+0xB
+    EXACT), difficulty 0x119558 (172/236/300 formula + respawn-delay
+    table twin 0x81050 in FUN_00023967; writers FUN_0002c6e3).
+    Registry rows filled (TI rows now aliased where pinned; the
+    emptiness rule narrows to T2-T4), dbx-plan order-target form +
+    REAL-registry step tests, S0/S1 plans regenerated (difficulty +
+    order-target now dumped). KEYSTATE/ORDER/COMMAND steps compile
+    end-to-end for O1 (scratch-verified incl. the remapped arrow
+    byte). Divergence seeds 6-7: EXD attack-break gates =
+    frame-counter+timer masks vs EXW RandA (inverted mapping — a live
+    T2/T3 class); EXD-only staging cells. BONUS T2-ready: projectile
+    bank 0x980d4 ×0x36 field-exact. NEXT HEADS: the scripted-menu-
+    walk driver unit (keystore alias landed) + the operator S0 live
+    session (item 1, interactive-gated).
   - OPEN 2026-08-22 (P4.2/W5 THE INJECTOR unit COMPLETE, worker
     683a65d6 claim 2, commits c443207 + fa31828 + 5e882cd + 28ef5e7,
     D82): the DESIGN §5 injection vocabulary is LANDED end-to-end and
@@ -12,14 +36,11 @@
     (robot 0x11958c / TRT 0x11949c / object 0x119554 resolve rows +
     count·stride extents + map-w/h grid exprs; S1.json committed +
     byte-pinned). `dbgprobe inject` GREEN headless (no game; gate +
-    flow regression-green). THE REMAINING GATES ARE RE FACTS, NOT
-    MACHINERY: the EXD aliases for the §5 seams (keystore,
-    order-target, command ring, difficulty) are registry gaps —
-    scenarios carrying those steps fail compilation naming the seam
-    (the EXD input twin is NOT FUN_0002ec12 = only the P-latch spin;
-    RE-EXD-MAP W5 note). The scripted-menu-walk driver (BPLM-on-
-    frame-counter walk stops + mission-start detect) is the follow-up
-    unit once the keystore alias lands.
+    flow regression-green). [SUPERSEDED by D83: the seam aliases are
+    no longer registry gaps — keystore/order/command/difficulty are
+    pinned and the steps compile.] The scripted-menu-walk driver
+    (BPLM-on-frame-counter walk stops + mission-start detect) is the
+    follow-up unit — now unblocked.
   - OPEN 2026-08-22 (P4.2/DH-G0-live prep, worker fa49e9cf claim 1,
     commits f659db5 + d5550a3 + ee2f0d4, D81): the S0 live-capture
     MACHINERY is landed and headless-verified; only the interactive
