@@ -83,6 +83,18 @@ Two passes, zero-fill helper FUN_00402965 (rep-stos, args in ECX/EDI):
    zero .text traffic. The §8.1 producer hunt for +0x1b/+0x1c is
    CLOSED (the +0x1a "height-bias" producer note stands as the
    door-stamper cross-ref).
+   UPDATE 2026-08-22 (RE-EXW-SIM §7j.34): the tail semantics
+   are now COMPLETE — `+0x19` = the door/scenery TARGET-TAG
+   byte (the animator runs the frame counter until low7 of
+   +0x1A equals it) and `+0x1a` = {bit7 door PHASE, bits0-6
+   running FRAME COUNTER}: the 15-frame sliding-door machine
+   FUN_00423081 (MissionShell epilogue tick @0x44808f) writes
+   DAT-volume door-frame bytes 0x40..0x5E per tick and, on
+   wrap, shifts the tile z-stack (DROP on open-complete /
+   PUSH-UP on close-complete — FUN_004235fb/00423740); the
+   renderer gives mid-anim door tiles a −nibble·0x500 Y-bias
+   (0x406c5c). `+0x1d` zero traffic CONFIRMED (71-site
+   absolute census). §8.1 fully CLOSED below.
 
 ## 3. FUN_00403938 — the per-frame viewport renderer [verified core loop]
 
@@ -485,40 +497,42 @@ terrain pass overwrites everything the present window reads.
 
 1. Producers of type-DB bytes +0x18/+0x1a/+0x1b/+0x1c (static frame,
    height bias, anim window). Zero-filled on ZONEA → no effect on the
-   P4 corpus gate; find the writer (editor? BIN-side fixup?) later.
-   **+0x18 PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7j.8)**:
-   FUN_00422287 is a RUNTIME writer — `byte[0x4796d4 + tile*0x1E]
-   = value` (clamped < 8) with the tile from world>>5; its known
-   callers are the debris-stager scorch rings — SEVEN kinds write
-   the IDENTICAL 3×3 ring per debris (corners 1, edges 2, center
-   4, offsets ±0x20; kind 5 = death debris), plus one external
-   census-only producer (FUN_00424051). CAVEAT RESOLVED 2026-08-21
-   (RE-EXW-SIM §7j.9): the robots() reader (SIM §7g.3) tests the
-   RAW byte != 0 — no mask — so scorch values and armor pads SHARE
-   the byte and a death genuinely arms 3×3 pad tiles around each
-   debris. The engine wires the ring writes on the death path
-   (MissionSim::scorch_write). **+0x18 FULLY CLOSED 2026-08-21
-   (RE-EXW-SIM §7j.10)**: FUN_00424051 (the per-frame epilogue
-   tick) DECAYS every nonzero +0x18 byte by 1 each frame — the
-   byte is a TRANSIENT event ring (fades in ≤7 frames; no
-   permanent producer exists, so shipped maps have no static
-   pads), and the 7j.9 "census-only producer" is that same
-   tick's water-splash scorch tail. **+0x18 SECOND PRODUCER +
-   +0x19/+0x1a PRODUCERS CLOSED 2026-08-21 (RE-EXW-SIM §7j.12,
-   the platform/destructible family)**: (a) FUN_0042223c is an
-   INCREMENT writer — `byte[0x4796d4+0x1E·tile] += v; clamp 7`
-   — fired with v=4 by both the platform-damage entry
-   FUN_00422693 and the platform-spread primitive FUN_004228ce,
-   so platform hits/builds leave transient scorch too;
-   (b) FUN_00422fd1 (mission-load call 0x447ba3) stamps
-   RECTANGLES from the 45×0x10 records at 0x4dcae8
-   {active,x0,y0,w,h,variant,cd,flag}: for records with type
-   word ≥3, `byte[0x4796d5+0x1E·tile] = variant<<4` and
-   `byte[0x4796d6+0x1E·tile] = (type==3 ? 0 : 0x80)`. So the
-   "+0x1a height-bias" byte is a type-3/other flag (0 / 0x80)
-   over the stamped rectangles, +0x19 carries a variant
-   nibble<<4, and only the +0x1b/+0x1c anim-window bytes
-   (0x4796d7/d8) remain open (zero-fill keeps them 0 on ZONEA).
+   P4 corpus gate. **FULLY CLOSED 2026-08-22** (7j.8/7j.9/7j.10/
+   7j.12/7j.32/7j.34 — the §7j.34 unit completed the census and
+   unified the semantics; the complete traffic map, all 71 absolute
+   sites): `+0x18` scorch — writers FUN_00422287 (absolute, clamp<8,
+   the debris scorch rings) + FUN_0042223c (increment, clamp 7,
+   platform damage/build) + the §7j.10 decay tick FUN_00424051
+   (−1/frame; also reads 0x424088/96) + the scorch→damage reader
+   0x40bc60 (FUN_0040b9f6: state-1 robot on scorched ground →
+   FUN_004100b7(robot,0x14) fire damage, else pod countdown −= 10);
+   `+0x19` TARGET-TAG byte — writers FUN_00422fd1 rect stamper at
+   load (variant<<4, STATE@+0 ≥ 3 rects; the 7j.12 "word@+2" field
+   citation corrected by §7j.34) + FUN_004235e4/004235bf (the door
+   stepper's re-stamp); readers 0x406bd6/0x406bf9 (renderer
+   door-strip adjacency incl. the north neighbor), 0x4110cb
+   (FUN_00410823 fire anchor @robot anim word 0x4c720e), 0x418735
+   (FUN_004186fc standing-on-scenery), 0x4237c5/0x4237da (the
+   close-completion S/E-neighbor door test inside FUN_00423740);
+   `+0x1a` {bit7 phase, low7 frame counter} — writers FUN_00422fd1
+   (0/0x80 at load) + the animator FUN_00423081 low7++ (the
+   MissionShell epilogue tick @0x44808f; state≥3 rects auto-cycle
+   with countdown@+0xC/SFX@+0xE, states 1/2 are script-toggled via
+   FUN_004223b8) + FUN_004235e4/004235bf (bit7 on toggle); the
+   animator writes DAT door-frame bytes 0x40+2n (closing, even) /
+   0x5F−2n (opening, odd) at the walk-down level and the finish
+   pairs shift the tile z-stack (FUN_004235fb drop / FUN_00423740
+   push-up); readers 0x422499/0x422529 (the stepper's anim-complete
+   gate low7==+0x19), the animator's own 0x423165+ family, and
+   0x406c3b/0x406c5c (renderer: mid-anim door tiles draw with
+   −nibble·0x500 Y-bias — the door slide);
+   `+0x1b/+0x1c` OBJECT-HEIGHT pair — writers FUN_0044889a ×2 walks
+   (0x448963/75 + 0x448b4f/61) / FUN_00448b80 ×2 clears (0x448c25/2c
+   + 0x448d65/6c); readers the intact-vs-rubble draw pick
+   0x406891/0x4068ec/0x406907; `+0x1d` zero traffic CONFIRMED
+   (padding). The 0x4dcae8 rect grammar is RESOLVED (§7j.34):
+   {+0 state, +2 x0, +4 y0, +6 w, +8 h, +0xA variant, +0xC
+   countdown, +0xE SFX-due} — the 7j.21 w/y/h permutation retired.
 2. `u32[0x4dd444]` remap-table set + `u32[0x456ca8]` 16-entry anim
    sequence: **PARTIALLY CLOSED 2026-08-21 (RE-EXW-SIM §7e)** —
    u32[0x4dd444+4i] are the 8 PALTRAN ramp pointers (loader

@@ -4501,12 +4501,13 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | arrival marker draw | FUN_00403938 tail 0x4065e5..0x4066e3: skip inactive/countdown-0; isometric marker tile; sprite 0x12E (FUN_0040798e, bank [0x46af38]) width clamp(11−countdown, 0, 9) | §7j.21 |
 | memset-0 | FUN_00402965(EAX=0, ECX=len bytes, EDI=dst); 176 callers | §7j.21 |
 | door-rect list boundary | 0x4dcae8..0x4dcdb8 = 45×0x10 door rects (0x2d0); MissionShell clears it @0x447b7b AFTER the stager — ends EXACTLY at the arrival base, no overlap; door consumers use idx 0..0x24 | §7j.21 |
-| door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x,+4 w,+6 y,+8 h,+0xA type}; type-DB door-tile test → FUN_004235e4/FUN_004235bf stamp type<<4; FUN_004245c9 wall redraw; SFX 0x23/0x24 bank 0x4edfb0; 86 callers | §7j.21 |
+| door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant} (§7j.34-corrected; the §7j.21 w/y/h permutation retired); state<3 only; anim-complete tile test low7(+0x1A)==+0x19 → FUN_004235e4 (state 1: +0x1A:=0x80) / FUN_004235bf (state 2: +0x1A:=0), +0x19 := variant<<4; FUN_004245c9 wall redraw; SFX 0x23/0x24 bank ELEV1 0x4edfb0; 86 callers (FUN_00433980 pads) | §7j.21, §7j.34 |
+| door animator tick | FUN_00423081 (sole caller MissionShell epilogue 0x44808f, after the creep tick 0x44808a): walks the 45 rects; state≥3 = AUTO doors (countdown@+0xC −1 per tick; at 0 → animate; on completion XOR bit7, re-target +0x19, countdown 0x14, SFX ELEV2 0x4edfb4 — cycles forever); state 1/2 = SCRIPTED doors (animate to target, stop); per tile with low7(+0x1A)≠+0x19: walk planes down (bit7: 5, else 6) → DAT volume door-frame byte 0x40+2·nibble (bit7, even) / 0x5F−2·nibble (clear, odd) at the 0x4eaac8-table level; low7++ ; nibble wrap → FINISH PAIR: FUN_004236c6+00423740 (close: DAT seen 1/0 + STACK PUSH-UP word[z+1]:=word[z], plane0:=0 if S+E neighbors are door tiles) / FUN_00423650+004235fb (open: DAT 0 + STACK DROP word[z]:=word[z+1], top cleared — the level leaves the stack); [0x4eaae8] = the 9th z-plane offset | §7j.34 |
 | tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
 | platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via trigger / 199 via creep; weaken −damage; <0 → destroy: clear water z-word + both banks + 5× k7 debris); ring spread when ≥100 ∧ (hit <200 ∨ new <100) | §7j.12 |
 | platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; spread ring FUN_00422832/FUN_004228ce (8-tile, needs empty z-word + planeA 0 + planeB 1 + no robot, writes water z-word + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (1/32, ray over water, tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc | §7j.12 |
 | 0x7d2/0x7d3 stamper | FUN_00422f18 (load 0x447b8f): z-word ∈ [0x454a20+4z, +4] → 0x7d2; ∈ [0x454a3c+4z, +4] → 0x7d3; zone bases 0x7d2 {0x20,0x49,0x49,0x34e,0x49,0x77,0x77} / 0x7d3 {0x49,0x77,0x77,0x49,0x4e,0x4e,0x349} | §7j.12 |
-| type-DB tail stamper | FUN_00422fd1 (load 0x447ba3): 45 rec @0x4dcae8 stride 0x10 {active,x0,y0,w,h,variant,cd,flag}; type≥3 → byte 0x4796d5 = variant<<4, byte 0x4796d6 = (type==3?0:0x80) | §7j.12 |
+| type-DB tail stamper | FUN_00422fd1 (load 0x447ba3): 45 rec @0x4dcae8 stride 0x10 {state,x0,y0,w,h,variant,cd,flag}; STATE@+0 ≥ 3 (§7j.34: the 7j.12 "word@+2" qualifier was the wrong field) → byte 0x4796d5 = variant<<4, byte 0x4796d6 = (state==3?0:0x80) | §7j.12, §7j.34 |
 | delayed trigger timers | 32 rec @0x4ea828 stride 0x18 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
@@ -4517,7 +4518,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | effects-bank stager | FUN_0041a225(x,y,z tiles, delay ECX) — FIRST producer of the MISSIONVIEW §5d/§5e "effects loop" bank 0x4cf638: 80 slots × 0x1E (=0x960, the 7j.1 boot-clear bound), free iff word@+0x18==0 (first-fit allocator FUN_0041a4cc, 12-try spawn loop); record {x,y Q13+RandB&0x1F jitter<<8 −0x1000, z<<13+0xF00, vx/vy (RandB&0x3F)<<7−0x1000, vz@+0x14 RandB&0x7FF+0x1770 RISING (high word = sprite group 0..2 → DEBRIS.BIN img group*8+frame&7), active u16@+0x18 = FUN_0041ec59(3) (~8% stillborn), delay u16@+0x1A = ECX arg, frame u16@+0x1C = RandB&7}; callers: destroy-tail cases 1/8; mover FUN_00419f62 (kill off-map/ceiling z>>13>0xB); consumer = the §5e direct draw (7j.26) | §7j.25, §7j.26 |
 | .POS + .BDG loader | FUN_0041a4f8 (mission load 0x447b76): opens ".POS" (str 0x457a64) → 2000×0x10 reads into the 0x46cbf4 object-instance array (id≠−1 scan → count 0x46cbe8) — CONFIRMS FORMATS §12 feeds the destructible array; opens ".BDG" (str 0x457a69) → the 0x4dedf2 type table: NO file header, ≤282 VARIABLE records — control u16 (≠1 → 2 B row), else W/H/D u16, hp i32, chain u16, type i32, 5×8B effect entries, FOUR on-disk template banks 2·W·H·D B each (slot order +0x3E,+0x46,+0x42,+0x4A — §7j.32); +0x12 count = nonzero selectors, computed at load; arena cursor 0x46ad5c; tail seeds instance hp@+0x10 ← type hp@+8 + stamps the claim grid per footprint. Corpus 37/37 EOF-exact, exactly 282 recs/file (7907 active), selectors ONLY 1..9 (§7j.25 item 8) | §7j.25, §7j.32 |
 | .BDG template-bank semantics | 2×2 roles (§7j.32 corpus proof, ZONEA/M1 434/435 cells): CURRENT pair (+0x3E TOT words, +0x42 DAT words) ≡ the SHIPPED .TOT/.DAT at the .POS footprints — editor stamp payload, ZERO runtime readers (triple census: slot addresses, +0x3e/+0x42 displacements, arena walk); UNDER pair (+0x46, +0x4A) = the pre-building terrain, consumed ONLY by the destroy restore (mirror words ← +0x46; seen=(+0x4A word==0), DAT volume=+0x4A low byte); value domains b1/b2 tile words ≤1868, b3 ≤102, b4 ≤512; overlap footprints = last-.POS-slot-wins in the shipped TOT | §7j.32 |
-| TOT-mirror tile record | ONE 0x1E-B record per tile @0x4796bc+0x1E·tile (unifies the scattered tail-byte families, §7j.32): +0x00..+0x0F = the 8 plane words (+2·z); +0x10..+0x17 = the 8 SEEN bytes (restore writes @0x4796cc = base+0x10+z); +0x18 scorch (7j.8/7j.9); +0x19 variant<<4 + 0x1A door byte (7j.12 FUN_00422fd1); +0x1B/+0x1C = the OBJECT-HEIGHT pair (z0, z0+D) — stamped by the objective pass FUN_0044889a (0x448963/0x448975), cleared by FUN_00448b80 on destroy, read by the intact-vs-rubble draw pick (0x406891/0x4068ec); +0x1D zero traffic [open] | §7j.32 |
+| TOT-mirror tile record | ONE 0x1E-B record per tile @0x4796bc+0x1E·tile (unifies the scattered tail-byte families, §7j.32): +0x00..+0x0F = the 8 plane words (+2·z); +0x10..+0x17 = the 8 SEEN bytes (restore writes @0x4796cc = base+0x10+z); +0x18 scorch (7j.8/7j.9; the scorch→damage reader 0x40bc60 §7j.34); +0x19 = the door/scenery TARGET-TAG byte (variant<<4; the animator stops at low7==+0x19; readers 0x406bd6/0x406bf9 renderer adjacency, 0x4110cb fire anchor, 0x418735 standing-on-scenery, 0x4237c5/da neighbor test); +0x1A = {bit7 door PHASE, bits0-6 running FRAME COUNTER} (§7j.34: the 7j.12/7j.32 "door byte bit7" gloss refined — one half of the 15-frame slide machine; renderer Y-bias −nibble·0x500 @0x406c5c); +0x1B/+0x1C = the OBJECT-HEIGHT pair (z0, z0+D) — stamped by the objective pass FUN_0044889a (0x448963/75 + 0x448b4f/61), cleared by FUN_00448b80 (0x448c25/2c + 0x448d65/6c), read by the intact-vs-rubble draw pick (0x406891/0x4068ec); +0x1D ZERO traffic (71-site census §7j.34 — padding, closed) | §7j.32, §7j.34 |
 | objective-building family | FUN_0044889a (zone gate [0x4edd8c]==7): counts type ids 0x44..0x47 into [0x46cce0] + stamps the +0x1B/+0x1C heights; FUN_00448b80(idx) = the destroy-tail "notify" (SP-only): [0x46cce0]−−, heights cleared, at ZERO → FUN_004239ef(0x28,3)+(0x29,3) + 0x46cd00:=3 / 0x46ccfc:=0x20 / 0x46ccc4:=0x32 (extraction-arm lights, 7j.20 cross-ref); edition≠7 = the script-objective path (0x4eaaee/0x4eaaf2/0x4eab0c walk, tables 0x4557f8/0x456810, code 0x1388) head-decoded | §7j.32 |
 | TRT death stamp | FUN_0041bc1c tail (FORMATS §14 resolver): mirror plane word := word@[0x454a04+4·zone] (per-zone rubble table), seen := 1, DAT volume byte := 0, k15 debris FUN_00420608(×0x20 coords, param −1 delay 0) + splash FUN_00424355 at the FUN_0041bd78 water z — the .BDG-tail death shape minus the restore (no under-bank) | §7j.32 |
 | mission family loader | FUN_0041dc5a (after path builder FUN_0044670c = "EDITOR\"+"ZONE"+[0x4edd8c]+0x40+"\MISSION"+n): loads .TOT/.DAT/.CGR/.BIN/.MIN then the language gate `cmp [0x4eba1c],1` → .LNG else .LNK, then .PAD @0x41de44 — the eight tags are ONE 5-B-stride table @0x4587d9..0x4587fc (no ninth entry); buffer/cell pairs 0x4dca0c/[0x4ede20], 0x4dca0c/[0x4edd58], 0x4dca8c/[0x4edd60], 0x4dca8c/[0x4ede1c], 0x4dca8c/[0x4edd9c]; second .TOT/.BIN/.DAT site 0x446623..0x446677 (tags 0x459795/0x45979a/0x45979f) | §7j.33 |
@@ -5010,6 +5011,163 @@ loader needs no BLD path, and no watch/injection surface
 touches it. The FORMATS §17 record grammar is documentation-
 only (tooling for corpus inspection); the .BDG loader path is
 already covered by §7j.25/§7j.32.
+
+## 7j.34. THE MIRROR-RECORD TAIL CENSUS — the DOOR ANIMATOR family decoded; +0x19/+0x1A semantics unified; the 0x4dcae8 rect-grammar conflict resolved; +0x1D confirmed padding (2026-08-22, worker a42c6027 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run, no corpus read)
+
+Ticket: the MISSIONVIEW §8 type-DB tail producers — the
++0x1a/+0x1b/+0x1c bytes of the 0x4796bc mirror rows, the
+§7j.12-vs-§7j.32 door-byte re-verification, and the remaining
+writer/reader anchoring. Method: absolute-address census of
+0x4796d4..0x4796d9 over the full .text objdump (71 sites, every
+access in this family is the absolute `[reg+0x4796dX]` or
+`[idx*2+0x4796dX]` form — no displacement aliases), then bounded
+decodes of the seven container functions. HEADLINE: **+0x19 is
+the door/scenery TARGET-TAG byte and +0x1A is a packed
+{bit7 phase, bits0-6 running frame counter} — the "door byte"
+is one half of a 15-frame sliding-door animation machine
+(FUN_00423081, the MissionShell epilogue tick @0x44808f) that
+writes door-frame DAT volume bytes 0x40..0x5E and SHIFTS the
+tile z-stack when a door finishes opening/closing.**
+
+1. **The 0x4dcae8 45×0x10 rect-list grammar RESOLVED** (the
+   §7j.12-vs-§7j.21 conflict; verified from BOTH consumers'
+   loop/register arithmetic — the row-start table 0x4ea900 is
+   indexed by word@+4+dy, the column is word@+2+dx, the loops
+   run over word@+6 (x-extent w) and word@+8 (y-extent h)):
+   `{+0 state, +2 x0, +4 y0, +6 w, +8 h, +0xA variant/type
+   byte, +0xC countdown, +0xE SFX-due flag}`. §7j.12's map was
+   CORRECT; §7j.21's restatement "{+2 x, +4 w, +6 y, +8 h}" was
+   WRONG (w/y/h permuted) — row 4504 rewritten. The state
+   domain: 0 = inactive/end (all three walkers stop at the
+   first 0); **1/2 = SCRIPTED doors** (toggled by pad scripts);
+   **≥3 = AUTO-CYCLING doors** (timed, animate forever). The
+   §7j.12 "records with word@+2 (type) ≥ 3" qualifier cited the
+   WRONG FIELD — the gate reads **word@+0 (state) ≥ 3**
+   (0x423001 `cmp eax,3; jl skip`, eax = dword[0x4dcae6+i·0x10]
+   >>16 = word@+0; same gate in the animator 0x4230c2).
+2. **FUN_00422fd1 (load call 0x447ba3) re-verified
+   instruction-exact**: state ≥ 3 rects stamp every W×H tile:
+   `+0x19 := byte@rect+0xA << 4` and `+0x1A := 0` (state==3) /
+   `0x80` (state ≥ 4) (writers 0x423061/70/78 — the §7j.12
+   VALUES were right, the fields now anchored). So at mission
+   load an auto door starts with bit7 = its initial phase and
+   +0x19 = its first target frame count.
+3. **FUN_00423081 = the DOOR/SCENERY ANIMATOR TICK** (1342 B,
+   sole caller MissionShell @0x44808f — the epilogue slot right
+   after FUN_0042205c@0x448080, FUN_00422cc2@0x448085,
+   FUN_00422a9c@0x44808a) [verified 0x423081..0x4235bf]:
+   - state ≥ 3 (auto doors): countdown word@+0xC ≠ 0 →
+     decrement, done; at 0, if word@+0xE ≠ 0 → door SFX
+     FUN_0043a48e(bank ELEV1 [0x4edfb0], y0·32, x0·32, 0, 2)
+     once, clear +0xE; then animate the rect tiles.
+   - state 1/2 (scripted doors): animate directly (no
+     countdown/+0xE path).
+   - per tile: SKIP if low7(+0x1A) == +0x19 (target reached —
+     the door is settled); else walk the tile's plane words
+     DOWN from the top for the first nonzero level (bit7 SET
+     starts at plane 5/edx=6, bit7 CLEAR at plane 6/edx=7) and
+     write the DAT volume door-frame byte at that level via
+     [0x4edd58] + row-table + z-plane dwords: **bit7 SET:
+     0x40 + 2·nibble (EVEN series, table [edx·4+0x4eaad0]);
+     bit7 CLEAR: 0x5F − 2·nibble (ODD series, table
+     [edx·4+0x4eaacc])** — the tile graphic slides through the
+     0x40..0x5E door frames (a NEW documented DAT byte domain
+     beside the §7j.32 b3 ≤ 102 census); then
+     low7(+0x1A) += 1 (bit7 preserved, 0x4231aa/0x423330/
+     0x423405/0x42355a).
+   - nibble wrap (test 0xF == 0, every 16 frames) → the FINISH
+     PAIR: bit7-set path FUN_004236c6 + FUN_00423740; bit7-clear
+     path FUN_00423650 + FUN_004235fb.
+   - completion (low7 == +0x19) of a state ≥ 3 door → the
+     AUTO-TOGGLE @0x4231e6: bit7 XOR 0x80, +0x19 :=
+     byte@rect+0xA<<4 (re-target), countdown := 0x14 (20),
+     +0xE := 1, and SFX FUN_0043a48e(bank ELEV2 [0x4edfb4],
+     y0·32, x0·32, 0, 2) once per tick (latch [esp+0x1c]).
+     Auto doors cycle open↔close forever with 20-tick pauses.
+4. **The FINISH pairs = the z-stack moves** [verified]:
+   - **FUN_004235fb = the stack DROP** (an OPEN completes):
+     plane words word[z] := word[z+1] for z=0..6, plane 7 := 0;
+     seen bytes shift likewise, seen[7] := 0 (0x423619..).
+     The door's level LEAVES the tile stack — the tile becomes
+     passable/empty at that level.
+   - **FUN_00423740 = the stack PUSH-UP** (a CLOSE completes):
+     plane words word[z+1] := word[z] for z=0..6 (the stack
+     rises; the bottom slot keeps its old word), seen likewise;
+     then IF the south (y+1) AND east (x+1) neighbor tiles both
+     have +0x19 ≠ 0 → plane word 0 := 0 (0x4237c5/0x4237da are
+     the NEIGHBOR +0x19 reads — the last two undocumented tail
+     sites). At map edges the shift runs unconditionally.
+   - FUN_004236c6 (close DAT stamp): walk planes 7..0 for the
+     first nonzero (residual edx); DAT byte at
+     [row+col+[edx·4+0x4eaad0]] := 1; if edx < 6 also
+     [edx·4+0x4eaad4] (one level up) := 0.
+   - FUN_00423650 (open DAT stamp): same walk; if edx ≠ 0 →
+     DAT byte [edx·4+0x4eaacc] := 0; ALWAYS the extra-plane
+     byte [[0x4eaae8]] := 0 — 0x4eaae8 = dword index 8 of the
+     0x4eaac8 z-plane table, i.e. a NINTH plane offset exists
+     (beyond the 8 stack levels).
+   - The z-plane dword table family is ONE table at 0x4eaac8
+     (indices 0..8+): 0x4eaacc = index 1, 0x4eaad0 = index 2,
+     0x4eaad4 = index 3 — the ±1 entry shifts between the
+     bit7 paths are level+1 arithmetic, not separate tables.
+5. **FUN_004223b8 = the SCRIPTED DOOR stepper** (86 callers,
+   ALL in the 0x433xxx-0x435xxx FUN_00433980 pad-script family;
+   verified 0x4223b8..0x4225cf): args (rect idx, wanted ∈
+   {1,2}); guard state ≠ wanted ∧ state < 3 (scripted doors
+   only); wall-strip redraw FUN_004245c9(x0·0x20+w·0x10,
+   y0·0x20+h·0x10); per rect tile whose low7(+0x1A) == +0x19
+   (the §7j.21 "door-tile words" test = the ANIM-COMPLETE
+   gate, now explained): wanted==1 → FUN_004235e4 (+0x19 :=
+   word@+0xA<<4, +0x1A := 0x80, 0x4224cd) / wanted==2 →
+   FUN_004235bf (+0x1A := 0, 0x422571) — the two byte-helpers
+   (0x4235bf/0x4235e4, verified: same row-table tile math,
+   bl → +0x19, dl ∈ {0, 0x80} → +0x1A, sole callers are these
+   two sites); state word := wanted; SFX FUN_004239ef(0x23,3)
+   + FUN_0043a48e(ELEV1 [0x4edfb0]) once per transition. A
+   scripted door animates to the new target and stops (the
+   auto-toggle is the ≥3 path only).
+6. **The renderer readers (FUN_00403938)** [verified
+   0x406bd6..0x406c6e]: the strip draw reads +0x19 of the tile
+   (0x406bd6) and, when 0 with y>0, of the NORTH neighbor
+   (tile − map_w, 0x406bf9) — door-strip adjacency; then
+   +0x1A (0x406c3b): low7==0 → the plain path (0x4067e4);
+   bit7 clear → 0x4067cf; **bit7 set ∧ counter ≠ 0 (mid-anim)
+   → the tile draws with Y-bias −nibble·0x500** (0x406c5c —
+   the door's on-screen SLIDE). The +0x1B/+0x1C intact-vs-
+   rubble draw pick (0x406891/0x4068ec/0x406907) is §7j.32's,
+   unchanged.
+7. **The other +0x18/+0x19 readers anchored**: (a)
+   FUN_0040b9f6 0x40bc60 — robot state==1 on a scorched tile
+   (+0x18 ≠ 0) → FUN_004100b7(robot, 0x14) (the fire-damage
+   family), else the pod-countdown word@0x4c6a14 −= 10 path
+   (§7j.20): scorch under a standing robot HURTS it — the
+   +0x18 reader that closes scorch→damage; (b) FUN_00410823
+   0x4110cb — the fire controller stores a quantized (<<8)
+   anchor into anim-record word @robot+0x4c720e when standing
+   on a +0x19 tile (the 7j.17 "reposition" note now
+   instruction-anchored); (c) FUN_004186fc 0x418735 — the
+   §7j.17 standing-on-scenery check (+0x19 ≠ 0), unchanged.
+8. **The +0x1B/+0x1C second stamp/clear pairs** [verified]:
+   FUN_0044889a stamps the OBJECT-HEIGHT pair in TWO identical
+   W×H walks (0x448963/75 + 0x448b4f/61 — the second computes
+   +0x1C := z0 + type byte@+6 via `add cl,ch` @0x448b5e);
+   FUN_00448b80 clears it in TWO walks (0x448c25/2c +
+   0x448d65/6c). Same grammar as §7j.32 documented; the row
+   now carries all four sites.
+9. **+0x1D (0x4796d9) = ZERO traffic CONFIRMED**: every
+   access to the tail in the entire .text is an absolute
+   0x4796d4..0x4796d8 form (71 sites census); 0x4796d9 has
+   zero. Padding/unused — the §7j.32 "[open]" tag closes.
+10. **Corpus-path verdict**: doors never animate in the gates
+    (no pad scripts step on door triggers; ZONEA/M1's rect
+    list ships zero state ≥ 1 records — the stamper's
+    45-record walk terminates immediately), so the engine seam
+    stays NONE this unit (never-invent). P4.2 note: a door
+    scenario would need a scripted .PAD step-on through
+    FUN_00433980 (the S2/S6 seam pattern); the watch surface
+    is +0x19/+0x1A (+0x1B/+0x1C per §7j.32) via the 0x4796bc
+    row form, and the DAT volume door-frame bytes 0x40..0x5E
+    are a divergence class of their own.
 
 ## 9. Open items (next slices)
 

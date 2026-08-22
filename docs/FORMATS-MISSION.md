@@ -103,11 +103,15 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
   1..0x1E live). FUN_0044661b re-loads .TOT/.BIN/.DAT on the
   save/EDITOR\ZONE restore path.
 - **Mirror-record grammar + pre-stamped footprints (EXW §7j.32,
-  2026-08-22):** the TOT MIRROR is one **0x1E-B record per tile**
-  @0x4796bc+0x1E·tile: `+2·z` the 8 plane words, `+0x10+z` the 8
-  SEEN bytes, `+0x18` scorch, `+0x19/+0x1A` type-DB variant/door
-  bytes, `+0x1B/+0x1C` the OBJECT-HEIGHT pair (z0, z0+D) stamped/
-  cleared by the objective-building family, `+0x1D` unused. And
+  2026-08-22; tail semantics completed §7j.34):** the TOT MIRROR
+  is one **0x1E-B record per tile** @0x4796bc+0x1E·tile: `+2·z`
+  the 8 plane words, `+0x10+z` the 8 SEEN bytes, `+0x18` scorch,
+  `+0x19` the door/scenery TARGET-TAG byte and `+0x1A` {bit7 door
+  phase, low7 frame counter} — the sliding-door animation machine
+  (FUN_00423081 writes DAT door-frame bytes 0x40..0x5E and shifts
+  the z-stack on completion), `+0x1B/+0x1C` the OBJECT-HEIGHT
+  pair (z0, z0+D) stamped/cleared by the objective-building
+  family, `+0x1D` unused (zero traffic confirmed). And
   the shipped .TOT/.DAT are **pre-stamped with the destructible
   buildings**: every .POS footprint cell carries its BDG
   CURRENT-state bank word/byte in the shipped files (434/435

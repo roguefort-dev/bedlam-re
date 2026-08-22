@@ -3479,3 +3479,61 @@ Nudge-Worker: ce347a0e-c2b8-4a25-9960-72473bedb8a8
    (the pickup tile-word producer unblock).
 
 Nudge-Worker: fc88ecf3-fd23-459f-99f6-8b9811141b66
+
+## D98 — 2026-08-22: P4/RE — the MISSIONVIEW §8 type-DB tail census CLOSED: +0x19/+0x1A = the sliding-door animation machine (FUN_00423081 epilogue tick); the 0x4dcae8 rect grammar resolved (7j.21 w/y/h permutation retired); +0x1D padding confirmed (worker a42c6027 claim 2)
+
+1. THE QUESTION (queue item 2 / NEXT item 3): the +0x1a/+0x1b/
+   +0x1c tail-byte producers of the 0x4796bc mirror rows, plus
+   the §7j.12-vs-§7j.32 door-byte re-verification. METHOD:
+   absolute census of 0x4796d4..0x4796d9 over the full .text
+   objdump (71 sites — every access in this family is absolute
+   [reg+0x4796dX]/[idx*2+0x4796dX], no displacement aliases),
+   then bounded decodes of the seven container functions; no
+   Ghidra run, no corpus read.
+2. RE-VERIFICATION VERDICT: the §7j.12 stamper VALUES were
+   right but TWO field citations were wrong — the "type ≥ 3"
+   qualifier reads word@+0 (STATE), not word@+2; and §7j.21's
+   restatement of the rect grammar had w/y/h permuted. The
+   resolved 0x4dcae8 45×0x10 record: {+0 state, +2 x0, +4 y0,
+   +6 w, +8 h, +0xA variant byte, +0xC countdown, +0xE SFX-due}.
+   State domain: 0 = end-of-list; 1/2 = SCRIPTED doors (pad-
+   script toggled); ≥3 = AUTO-CYCLING doors (timed).
+3. HEADLINE DECODE: FUN_00423081 (sole caller MissionShell
+   epilogue @0x44808f, after the platform-creep tick) = the
+   DOOR ANIMATOR. +0x19 = the door's TARGET-TAG byte
+   (variant<<4); +0x1A = {bit7 phase, bits0-6 running frame
+   counter}; per tick each unfinished door tile writes a
+   DAT-volume door-frame byte (0x40+2·nibble even/closing,
+   0x5F−2·nibble odd/opening — a new documented DAT byte
+   domain) at its walk-down stack level and increments the
+   counter; every 16 frames the FINISH pair runs (FUN_004236c6/
+   00423740 close: DAT seen 1/0 + z-stack PUSH-UP;
+   FUN_00423650/004235fb open: DAT 0 + z-stack DROP — the
+   door's level enters/leaves the tile stack); the counter
+   stops at low7 == +0x19; auto doors then XOR bit7, re-target,
+   pause 0x14 ticks, and cycle forever (SFX ELEV1/ELEV2 banks
+   0x4edfb0/0x4edfb4). The renderer draws mid-anim door tiles
+   with a −nibble·0x500 Y-bias (0x406c5c) — the door slide.
+   The 0x4237c5/0x4237da mystery readers = FUN_00423740's
+   south+east neighbor door-tile test before clearing plane 0.
+4. READER ANCHORS completed: 0x40bc60 (FUN_0040b9f6) — scorch
+   (+0x18) under a state-1 robot deals fire damage
+   (FUN_004100b7(robot,0x14)) vs the pod-countdown path: the
+   scorch→damage leg closes; 0x4110cb (FUN_00410823) — the
+   fire controller's door-tile reposition anchor (robot anim
+   word 0x4c720e); the +0x1B/+0x1C second stamp/clear walks in
+   FUN_0044889a (0x448b4f/61) and FUN_00448b80 (0x448d65/6c);
+   +0x1D = zero traffic (padding — the 7j.32 "[open]" closes).
+5. Engine seam: NONE (ZONEA/M1 ships zero active door rects —
+   the stamper walk terminates immediately; nothing animates in
+   the gates; never-invent). P4.2 hooks recorded in §7j.34
+   item 10 (a door scenario = a scripted .PAD step-on through
+   FUN_00433980; watch surface = +0x19/+0x1A via the 0x4796bc
+   row + the DAT door-frame byte class).
+6. Deliverables: RE-EXW-SIM §7j.34 + 2 rewritten + 1 new
+   ledger row; MISSIONVIEW §2 update + §8.1 CLOSED; FORMATS §2
+   mirror-grammar cross-ref refreshed. This UNBLOCKS the 7h.3
+   pickup tile-word producer (the mirror-row semantics are now
+   fully enumerated).
+
+Nudge-Worker: a42c6027-6acd-491d-b4a7-47ae4b4ae69f
