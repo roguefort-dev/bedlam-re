@@ -348,16 +348,35 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                 })
             }
             "move-target-words" => {
-                // extent "per-robot u16 arrays": the per-robot bound is
-                // not pinned as an extent formula — deferred explicitly.
-                if row.extent != "per-robot u16 arrays" {
+                // [derived-pinned] (D90, RE-EXD-MAP sec 5 row): the
+                // x/y u32 array pair 0x30 apart — the fixed 0x60-B
+                // span at the x base covers x[12]+y[12]; the per-robot
+                // bound is the cap cell 0x11950c (≤ 12) and the differ
+                // bounds by the same frame's robot-bank count.
+                if cells.len() != 2 || cells[1] - cells[0] != 0x30 {
                     return Err(die(format!(
-                        "row {id} extent {:?} changed from the symbolic form: \
-                         resolve it in dbx-plan if now pinned",
-                        row.extent
+                        "move-target-words exd_addr {:?} no longer carries \
+                         the x/y array pair 0x30 apart",
+                        row.exd_addr
                     )));
                 }
-                Ok(None)
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row {id} extent {:?} stopped parsing as fixed: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                if len != 0x60 {
+                    return Err(die(format!(
+                        "move-target-words extent is {len:#x}, not the pinned \
+                         0x60 x[12]+y[12] span: update dbx-plan"
+                    )));
+                }
+                plan(Form::Span {
+                    base: cells[0],
+                    len: 0x60,
+                    cells,
+                })
             }
             other => Err(die(format!(
                 "T1 registry row {other:?} has no dbx-plan resolution form"
@@ -1426,17 +1445,17 @@ mod tests {
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
         // T1: 17 rows - 2 gaps (blink-cursor/no-extract-latch;
-        // order-target closed by the W5-followup) - 1 deferred
-        // (move-target-words) = 14 resolved.
+        // order-target closed by the W5-followup) = 15 resolved (the
+        // move-target-words 0x60 span filled by W7-followup2, D90).
         // T0: 10 per-frame + TS: 9 anchor-only, same as S0.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 14, "T0 minus 1 gap + T1 resolved");
-        assert_eq!(anchor_count, 19 + 14, "T0 + TS + T1 rows");
+        assert_eq!(frame_count, 10 + 15, "T0 minus 1 gap + T1 resolved");
+        assert_eq!(anchor_count, 19 + 15, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            10,
-            "7 S0 deferrals + T1: 2 gaps + move-target-words"
+            9,
+            "7 S0 deferrals + T1: 2 gaps (move-target no longer deferred)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         assert!(emitted
@@ -1471,6 +1490,12 @@ mod tests {
                 .json
                 .contains("{ \"id\": \"order-target\", \"addr\": \"CS:0010E0A4\", \"len\": 12 }"),
             "order-target must emit its verified triple"
+        );
+        assert!(
+            emitted.json.contains(
+                "{ \"id\": \"move-target-words\", \"addr\": \"CS:000F75EC\", \"len\": 96 }"
+            ),
+            "move-target-words must emit the pinned 0x60 x[12]+y[12] span (D90)"
         );
     }
 

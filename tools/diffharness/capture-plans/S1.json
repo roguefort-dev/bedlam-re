@@ -40,6 +40,7 @@
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
     { "id": "per-player-selected", "addr": "CS:000971A4", "len": 48 },
     { "id": "order-target", "addr": "CS:0010E0A4", "len": 12 },
+    { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
     { "id": "beacon-family", "addr": "CS:00119628", "len": 10 },
     { "id": "spread-claims", "addr": "CS:00119632", "len": 24 },
     { "id": "tile-word-grid", "addr": "CS:000FE37C", "len": "$map_w*$map_h*2" },
@@ -75,6 +76,7 @@
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
     { "id": "per-player-selected", "addr": "CS:000971A4", "len": 48 },
     { "id": "order-target", "addr": "CS:0010E0A4", "len": 12 },
+    { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
     { "id": "beacon-family", "addr": "CS:00119628", "len": 10 },
     { "id": "spread-claims", "addr": "CS:00119632", "len": 24 },
     { "id": "tile-word-grid", "addr": "CS:000FE37C", "len": "$map_w*$map_h*2" },
@@ -89,7 +91,6 @@
   "_deferred": [
     "sfx-master-gate (4)",
     "blink-cursor (4)",
-    "move-target-words (per-robot u16 arrays)",
     "no-extract-latch (per-robot u32)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
