@@ -1,5 +1,30 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4/RE THE MISSIONVIEW §8 TYPE-DB TAIL
+    PRODUCERS unit COMPLETE, worker a42c6027 claim 2, commit
+    3530df5, D98, docs-only): the mirror-record tail is fully
+    enumerated — +0x19 = the door/scenery TARGET-TAG byte,
+    +0x1A = {bit7 phase, low7 frame counter}: the 15-frame
+    SLIDING-DOOR machine FUN_00423081 (MissionShell epilogue
+    tick @0x44808f; DAT door-frame bytes 0x40+2n even /
+    0x5F−2n odd at the walk-down level; nibble wrap → z-stack
+    DROP/PUSH-UP finish pairs; counter stops at low7==+0x19;
+    state≥3 rects auto-cycle with a 0x14 pause, states 1/2 are
+    the 86 pad-script stepper calls; renderer slide bias
+    −nibble·0x500 @0x406c5c). The 0x4dcae8 rect grammar
+    RESOLVED {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant,+0xC
+    cd,+0xE sfx} (7j.12 word@+2 qualifier + 7j.21 w/y/h
+    permutation corrected). Reader anchors: scorch→damage
+    0x40bc60, fire-anchor 0x4110cb, renderer adjacency
+    0x406bd6/0x406bf9, neighbor test 0x4237c5/da, the second
+    +0x1B/+0x1C objective stamp/clear walks; +0x1D zero traffic
+    CONFIRMED (71-site absolute census). RE-EXW-SIM §7j.34 +
+    2 rewritten + 1 new ledger row + MISSIONVIEW §2/§8.1
+    CLOSED + FORMATS §2 + D98; registry_anchors green; manifest
+    clean; PUSHED. The 7h.3 pickup tile-word producer is now
+    UNBLOCKED (queued item 3). NEXT: the pickup producer unit —
+    then the operator-adjacent W10/W11/W12 tail.
+
   - OPEN 2026-08-22 (P4/FORMATS THE .BLD RECORD WALK unit
     COMPLETE, worker fc88ecf3 claim 2, commit 6897326, D97,
     docs-only): the last FORMATS structure gap is CLOSED with a

@@ -118,23 +118,39 @@
     zone D DOES ship mission-level BLDs (§0 row fixed);
     zone-level BLDs byte-shared A≡F, B≡G. Docs-only; registry
     anchors green; manifest clean; PUSHED.
-3. [P4/RE] THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS unit
-   (unattended, bounded RE): the +0x1a/+0x1b/+0x1c tail bytes
-   of the type-DB mirror rows @0x4796bc (0x1E-B record grammar
-   now UNIFIED by §7j.32 — see the new §7j.32/§7j.33 rows for
-   the closed neighbors: +0x18 = the runtime scorch writer
-   FUN_00422287, +0x19 variant<<4 / +0x1A door bit7 via
-   FUN_00422fd1 §7j.12, +0x1B/+0x1C = the OBJECT-HEIGHT pair
-   via the objective family FUN_0044889a/FUN_00448b80 §7j.32 —
-   NOTE: re-verify the §7j.12 door byte vs the §7j.32 +0x1A
-   gloss before walking; the queue's older "+0x1a/+0x1b/+0x1c
-   producers" list predates the 7j.32 grammar unification).
-   Anchor remaining writers/readers in ghidra-project/
-   exw-text-objdump.txt; land RE-EXW-MISSIONVIEW §8 + ledger
-   rows. This UNBLOCKS the pickup tile-word producer (7h.3:
-   the 0x4796bc mirror rows + the probe-latch walk + the DAT
-   z-plane consume + the 0x454a90 floor-word swap → the
-   apply_pickup dispatch from host-seamed to corpus-real).
+ 3. DONE 2026-08-22 (worker a42c6027 claim 2, commit 3530df5, D98,
+    §7j.34): [P4/RE] THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS
+    unit — CLOSED. The 71-site absolute census of 0x4796d4..d9 +
+    bounded decodes of all seven container functions: +0x19 =
+    the door/scenery TARGET-TAG byte, +0x1A = {bit7 phase, low7
+    frame counter} — the 15-frame sliding-door machine
+    FUN_00423081 (MissionShell epilogue @0x44808f; DAT
+    door-frame bytes 0x40+2n even / 0x5F−2n odd; per-16-frame
+    z-stack DROP/PUSH-UP finish pairs FUN_004235fb/00423740 +
+    DAT seen 1/0; auto doors XOR bit7 + 0x14-tick pause
+    forever; renderer slide bias −nibble·0x500 @0x406c5c). Rect
+    grammar RESOLVED {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA
+    variant,+0xC cd,+0xE sfx} (7j.12 "word@+2" qualifier +
+    7j.21 w/y/h permutation corrected). New reader anchors:
+    scorch→damage 0x40bc60, fire-anchor 0x4110cb, the second
+    +0x1B/+0x1C stamp/clear walks; +0x1D zero traffic
+    CONFIRMED. MISSIONVIEW §8.1 CLOSED; docs-only;
+    registry_anchors green; manifest clean; PUSHED.
+ 3. [P4/RE] THE PICKUP TILE-WORD PRODUCER unit (7h.3 — NOW
+    UNBLOCKED by §7j.34): the 0x4796bc mirror rows' plane words
+    are the pickup-word substrate; walk the 7h.3 chain (the
+    probe-latch walk + the DAT z-plane consume + the 0x454a90
+    floor-word swap → the apply_pickup dispatch from
+    host-seamed to corpus-real). Anchor in
+    ghidra-project/exw-text-objdump.txt; land RE-EXW-SIM
+    ledger rows + the 7h.3 closure + engine seam if the corpus
+    path fires (check the ZONEA/M1 corpus: do pickups stage in
+    the gates? if not, docs-only + P4.2 hooks per the D98
+    pattern). RE NOTES: the §7j.34 door family is the closest
+    decoded neighbor (same mirror rows, same row table
+    0x4ea900, same z-plane tables 0x4eaac8-family); the 7h
+    pickup tables 0x454a58/74/90 sit right after the 7j.12
+    zone tables.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -206,22 +222,20 @@
   NOTE 7j.25/7j.30 CLOSED: the destroy-thud pair 0x4edfb8/
   0x4edfbc = DEADMAN1/DEADMAN2.RAW and the FULL bank-name walk
   landed as §7j.30 (commit a0f291c, D94).
-- The pickup tile-word PRODUCER (7h.3: the 0x4796bc type-DB
-  mirror rows + the probe-latch walk + the DAT z-plane consume +
-  the 0x454a90 floor-word swap) — unblocks the apply_pickup
-  dispatch from host-seamed to corpus-real; needs the
-  MISSIONVIEW sec 8 mirror producers first.
+- The pickup tile-word PRODUCER — PROMOTED to the Now queue
+  (7h.3, item 3): the 0x4796bc mirror-row semantics it needed
+  landed complete in §7j.34/D98.
 - Camera scroll input for the mission (cursor+drag, RE-EXW-INPUT).
-- RE-EXW-MISSIONVIEW sec 8 open items: type-DB tail producers
-  (+0x1a/+0x1b/+0x1c — NOTE +0x18 is CLOSED as the runtime scorch
-  writer FUN_00422287 per 7j.8/7j.9, reader verified raw), the
-  u32[0x456ca8] anim sequence + the water flag producer (needed
-  before the 0x12d/0x12e/0x12f flush remaps can leave water-off
-  semantics), BIN u32[bank+0] header word (NOTE 7j.16: the ".BIN"
-  load is pinned — header word -> 0x46cdb8; the [0x4ede1c] bank's
-  CONTENT consumers still open). CLOSED: u32[0x4dd444]
-  (7e.4 - the PALTRAN ramps); +0x18 producer (7j.8/7j.9 -
-  FUN_00422287, reader raw, ring landed D57).
+- RE-EXW-MISSIONVIEW sec 8 open items: CLOSED 2026-08-22 (§7j.34/
+  D98): the type-DB tail producers (the door animator family + all
+  reader anchors + +0x1D padding). REMAINS open: the u32[0x456ca8]
+  anim sequence + the water flag producer (needed before the
+  0x12d/0x12e/0x12f flush remaps can leave water-off semantics),
+  BIN u32[bank+0] header word (NOTE 7j.16: the ".BIN" load is
+  pinned — header word -> 0x46cdb8; the [0x4ede1c] bank's CONTENT
+  consumers still open). CLOSED: u32[0x4dd444] (7e.4 - the PALTRAN
+  ramps); +0x18 producer (7j.8/7j.9 - FUN_00422287, reader raw,
+  ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
   Shield/Variant bank staging (nodes enqueue, flush skips while
   unstaged). The debris physics/collision FUN_0040de9c (7j.7
@@ -270,6 +284,33 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4/RE THE MISSIONVIEW §8 TYPE-DB TAIL PRODUCERS unit
+  COMPLETE (worker a42c6027 claim 2, commit 3530df5, D98,
+  docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,
+  no Ghidra run, no corpus read). CLOSED with the door-machine
+  headline: +0x19 = the door/scenery TARGET-TAG byte, +0x1A =
+  {bit7 phase, low7 frame counter} — the 15-frame sliding-door
+  animator FUN_00423081 (sole caller MissionShell epilogue
+  0x44808f; DAT door-frame bytes 0x40+2n even / 0x5F−2n odd at
+  the walk-down level; nibble wrap → finish pairs
+  FUN_004236c6+00423740 (close: DAT seen 1/0 + z-stack PUSH-UP,
+  plane0 cleared when S+E neighbors are door tiles) /
+  FUN_00423650+004235fb (open: DAT 0 + z-stack DROP); counter
+  stops at low7==+0x19; state≥3 auto doors XOR bit7 + 0x14 pause
+  forever, states 1/2 script-toggled via FUN_004223b8's 86
+  FUN_00433980 callers; renderer slide bias −nibble·0x500
+  0x406c5c; [0x4eaae8] = a 9th z-plane offset). RECT GRAMMAR
+  RESOLVED {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant,+0xC cd,
+  +0xE sfx} — the 7j.12 "word@+2" qualifier and the 7j.21 w/y/h
+  permutation corrected. Reader anchors: scorch→damage 0x40bc60
+  (FUN_004100b7(robot,0x14)), fire-anchor 0x4110cb, renderer
+  adjacency 0x406bd6/0x406bf9, neighbor test 0x4237c5/da, the
+  second +0x1B/+0x1C stamp/clear walks (0x448b4f/61,
+  0x448d65/6c); +0x1D zero traffic CONFIRMED (71-site census).
+  Deliverables: RE-EXW-SIM §7j.34 + 2 rewritten + 1 new ledger
+  row + MISSIONVIEW §2/§8.1 + FORMATS §2 + D98. registry_anchors
+  green, manifest clean, PUSHED. Queued: the 7h.3 pickup
+  tile-word producer unit (item 3 → next slot 2).
 - 2026-08-22: P4/FORMATS THE .BLD RECORD WALK unit COMPLETE
   (worker fc88ecf3 claim 2, commit 6897326, D97, docs-only;
   objdump-only from exw-text-objdump.txt + read-only corpus
