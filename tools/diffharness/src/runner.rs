@@ -65,6 +65,20 @@ use std::fmt;
 // ---------------------------------------------------------------------
 // Scenario
 
+/// One staged weapon-slot group (grammar v1.3 `loadout` key, W12-S3):
+/// plain data — the canonical runner expands the pairs into the
+/// engine's 7-slot array through `stage_robot_weapons`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadoutRobot {
+    /// Robot bank index (0-based; the MRK robots then the `markers`
+    /// order — the same indexing the COMMAND record's id uses).
+    pub robot: usize,
+    /// The enable mask word (robot +0x6E; bit k = slot k fires).
+    pub mask: u16,
+    /// (weapon-stat id, ammo) per slot, listing order = slot order.
+    pub slots: Vec<(u16, i16)>,
+}
+
 /// One parsed scenario file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scenario {
@@ -83,6 +97,13 @@ pub struct Scenario {
     /// (the bank cap cell discipline). No O1 write exists; consumers
     /// record the seam explicitly (never fabricate).
     pub markers: Vec<(i32, i32, i32)>,
+    /// Staged weapon loadouts (grammar v1.3 `loadout` key, W12-S3):
+    /// per-robot slot ids + the enable mask, staged through the
+    /// engine's `stage_robot_weapons` host seam (the D51 pattern —
+    /// the original fills the slots at spawn from the session table,
+    /// which no engine path reaches; like `markers` this is an E-side
+    /// staging seam, recorded never fabricated).
+    pub loadout: Vec<LoadoutRobot>,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
@@ -182,6 +203,7 @@ impl Scenario {
         let mut frames: Option<u64> = None;
         let mut launch: Option<String> = None;
         let mut markers: Vec<(i32, i32, i32)> = Vec::new();
+        let mut loadout: Vec<LoadoutRobot> = Vec::new();
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -420,6 +442,123 @@ impl Scenario {
                                 ));
                             }
                         }
+                        "loadout" => {
+                            // W12-S3 (grammar v1.3): per-robot entries
+                            // `idx,mask,id:ammo[,id:ammo...]`, `;`-separated.
+                            // The slots stage through the engine host seam
+                            // (stage_robot_weapons); the bounds mirror the
+                            // original structures — 12 robots max, 7 slots,
+                            // ids in the consumer's 2..=0x28 dispatch domain,
+                            // positive i16 ammo, and no mask bit beyond the
+                            // staged slots (auto-rearm never arms an empty
+                            // slot, so such a bit is a scenario typo).
+                            for entry in value.split(';') {
+                                let fields: Vec<&str> = entry
+                                    .split(',')
+                                    .map(str::trim)
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                if fields.len() < 3 {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout entries are idx,mask,id:ammo[,id:ammo...]",
+                                    ));
+                                }
+                                let robot = parse_num(fields[0]).ok_or_else(|| {
+                                    scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout robot index must be an integer",
+                                    )
+                                })?;
+                                if !(0..=11).contains(&robot) {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout robot index out of range 0..11 (the 12-robot bank cap)",
+                                    ));
+                                }
+                                let mask = parse_num(fields[1]).ok_or_else(|| {
+                                    scen_err(line_no, line, "loadout mask must be an integer")
+                                })?;
+                                if !(0..=0x7F).contains(&mask) {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout mask out of range 0..0x7F (7 weapon slots)",
+                                    ));
+                                }
+                                let mut slots = Vec::new();
+                                for f in &fields[2..] {
+                                    let Some((id_s, ammo_s)) = f.split_once(':') else {
+                                        return Err(scen_err(
+                                            line_no,
+                                            line,
+                                            "loadout slots are id:ammo pairs (e.g. 9:2)",
+                                        ));
+                                    };
+                                    let id = parse_num(id_s).ok_or_else(|| {
+                                        scen_err(
+                                            line_no,
+                                            line,
+                                            "loadout slot id must be an integer",
+                                        )
+                                    })?;
+                                    if !(2..=0x28).contains(&id) {
+                                        return Err(scen_err(
+                                            line_no,
+                                            line,
+                                            "loadout slot id out of the dispatch domain 2..0x28",
+                                        ));
+                                    }
+                                    let ammo = parse_num(ammo_s).ok_or_else(|| {
+                                        scen_err(
+                                            line_no,
+                                            line,
+                                            "loadout slot ammo must be an integer",
+                                        )
+                                    })?;
+                                    if !(1..=0x7FFF).contains(&ammo) {
+                                        return Err(scen_err(
+                                            line_no,
+                                            line,
+                                            "loadout slot ammo out of range 1..0x7FFF",
+                                        ));
+                                    }
+                                    slots.push((id as u16, ammo as i16));
+                                }
+                                if slots.len() > 7 {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout exceeds 7 weapon slots",
+                                    ));
+                                }
+                                let mask = mask as u16;
+                                let staged = slots.len() as u32;
+                                if (mask >> staged) != 0 {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout mask arms a slot beyond the staged list \
+                                         (auto-rearm never arms an empty slot)",
+                                    ));
+                                }
+                                let robot = robot as usize;
+                                if loadout.iter().any(|l: &LoadoutRobot| l.robot == robot) {
+                                    return Err(scen_err(
+                                        line_no,
+                                        line,
+                                        "loadout stages the same robot twice",
+                                    ));
+                                }
+                                loadout.push(LoadoutRobot { robot, mask, slots });
+                            }
+                            if loadout.is_empty() {
+                                return Err(scen_err(line_no, line, "loadout must not be empty"));
+                            }
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -464,6 +603,7 @@ impl Scenario {
             frames,
             launch,
             markers,
+            loadout,
             steps,
         })
     }
@@ -893,6 +1033,46 @@ mod tests {
         let ten = "1,2,3; 4,5,6; 7,8,9; 10,11,12; 13,14,15; 16,17,18; \
                    19,20,21; 22,23,24; 25,26,27; 28,29,30";
         assert!(Scenario::parse(&format!("{base}markers = {ten}\n")).is_err());
+    }
+
+    #[test]
+    fn loadout_key_parses_and_bounds() {
+        // W12-S3 (grammar v1.3): `idx,mask,id:ammo[,...]` entries,
+        // `;`-separated; default empty.
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        assert!(Scenario::parse(base).unwrap().loadout.is_empty());
+        let s = Scenario::parse(&format!("{base}loadout = 0,0x01,9:2\n")).unwrap();
+        assert_eq!(
+            s.loadout,
+            vec![LoadoutRobot {
+                robot: 0,
+                mask: 1,
+                slots: vec![(9, 2)],
+            }]
+        );
+        let s = Scenario::parse(&format!(
+            "{base}loadout = 0,0x7F,9:2,0xA:2,0xB:2,0x10:2,0x14:2,0x1B:2,0x1D:2; 1,0x01,0x20:2\n"
+        ))
+        .unwrap();
+        assert_eq!(s.loadout.len(), 2);
+        assert_eq!(s.loadout[0].slots.len(), 7);
+        assert_eq!(s.loadout[0].slots[4], (0x14, 2));
+        assert_eq!(s.loadout[1].robot, 1);
+        assert_eq!(s.loadout[1].slots, vec![(0x20, 2)]);
+        // malformed: no pairs, bad id/ammo/mask, over the slot cap,
+        // mask beyond the staged list, duplicate robot, empty key
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0x01\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0x01,1:2\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0x01,9:0\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0xFF,9:2\n")).is_err());
+        assert!(Scenario::parse(&format!(
+            "{base}loadout = 0,0xFF,9:2,0xA:2,0xB:2,0x10:2,0x14:2,0x1B:2,0x1D:2,0x20:2\n"
+        ))
+        .is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0x03,9:2\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 0,0x01,9:2; 0,0x01,5:1\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = 12,0x01,9:2\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}loadout = \n")).is_err());
     }
 
     #[test]
