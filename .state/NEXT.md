@@ -86,6 +86,39 @@
    auto-records in `_e_staging` (the O1 side arms robots by
    playing the session — the weapon-slot/ammo diff is the
    scenario seam, never a finding).
+2. DONE 2026-08-22 (engine+tests by a predecessor session, left
+   uncommitted by session death — ADOPTED + FIXED + VALIDATED +
+   COMMITTED + PUSHED by continuation worker 65f39dff claim 2,
+   commit b8925a9, D105): [P4.2/W12-S4] THE S4.SCEN +
+   CANONICAL-CHAIN unit — CLOSED. (a) grammar v1.4 `destroy = 1`
+   (strictly 1, once, fail-loud) staging the mission's OWN
+   .BDG/.POS/.TRT through the existing stage_destroy_family host
+   seam — an EQUIVALENCE seam (the original loads the same files
+   natively; no O1 write to fabricate; dbx-plan records it in
+   _e_staging with the pre-S5 empty-mirror divergence noted);
+   (b) S4.scen on ZONEA/MISSION1, 49 records, chain
+   2ddd15ea50c8a14d byte-identical double run: the TRAP leg
+   (anchor-frame resolver-100 no-score destroy + 5×k12 + sel-9
+   k20 + the 3×3 splash ring + the restore into the empty-staged
+   mirror), the ARTILLERY leg (marker gunner 9/0xA/0xB at its
+   own tile — ring-0 TURRET rubble stamp, rings 4..6 CHAIN
+   cascade, the faithful gunner self-damage), the SURVIVOR leg
+   (monotone multi-hit subtract); (c) the canonical destroy rows
+   (23-B objects keyed by .POS slot, 20-B TRT, the shared w·h·2
+   grid spans, COMPACT-ACTIVE mirror with the nonzero-tile
+   filter on BOTH channels, FULL-bank debris/splash = E-only T3
+   coverage rows); (d) the differ O1 normalizers (guest
+   0x14/0x20-stride walks, dead id==-1 slot skip, Structural
+   count words) + differ_gate S4 = cross PASS-WITH-NOTES
+   (exactly the 4 E-only rows, zero field gaps); (e) the
+   MissionShell destroy-score fold + S0/S1/S2/S3 chains
+   re-asserted BYTE-IDENTICAL. Continuation fixes to the WIP:
+   the trt fabricator slice overrun, the count-cell stride
+   guards, the mirror compact-tail parser layout cross, clippy
+   lints, the dbx-plan destroy leg + its record-never-fabricate
+   test. Workspace 617 green, fmt+clippy clean,
+   registry_anchors green, manifest clean both sides. Queued:
+   W12-S5-prep (item 3) + the dbx-plan T2/T3 tier unit (item 4).
 2. DONE 2026-08-22 (worker d6b238f4 claim 2, commit cd304c6,
        D101, §7j.36): [P4/RE] THE [0x4ede1c] BIN-BANK CONTENT
        CONSUMERS unit — CLOSED (docs-only; objdump-only from
@@ -221,36 +254,44 @@
    T2-tier unit precedes a live S3); workspace green,
    fmt+clippy clean, registry_anchors green, manifest clean
    both sides. E-gaps in D104/§7j.39/8.
- 3. [P4.2/W12-S4] THE S4.SCEN + CANONICAL-CHAIN unit (DESIGN
-   §7 S4 row; pairs the LANDED W12-S4-prep destroy family
-   (D104, ad26952) with its scenario + dumps; engine+tests,
-   unattended-safe): (a) STAGING GRAMMAR: a destroy-family
-   staging key beside `loadout` (the .BDG table + the .POS
-   instances + the .TRT bank + zone/linear staged through the
-   EXISTING stage_destroy_family host seam — no new injection
-   surface; dbx-plan records the seam in _e_staging, never
-   fabricates); (b) S4.scen on ZONEA/MISSION1: the S3 COMMAND
-   volleys re-aimed onto STAGED destructibles — at least one
-   chainable cluster (the chain-walk detonation), one
-   survivor (multi-hit pure subtract), one turret (.TRT
-   rubble stamp), one trap tile-0x62 instance, and the
-   artillery burst pairs landing on footprints (the script
-   blast + k6/k11 gates); bullets/shell/homing remain
-   producer-E-gaps; (c) CANONICAL: the destroy-family dump
-   rows (object instances / structures / the TOT-mirror+seen
-   banks + the debris ring + the splash bank — the T1/T2/T3
-   surfaces as their own blob forms, OUT of state_hash per
-   the W6 split) emitted by parity_harness --canonical; pick
-   compact-active vs full-bank forms and document; (d)
-   DIFFER: the O1 normalizers for the new rows (registry
-   rows: check watches.toml T1/T2/T3 anchors — add EXD
-   aliases if pinned, else document the gap) + the
-   differ_gate S4 row (fabricated-O1 shape like S3's); (e)
-   the S4 chain PIN in canonical_dump_gate (double-run
-   byte-identical) + the S0/S1/S2/S3 chains re-asserted
-   BYTE-IDENTICAL (S3 stays e29f76f5585401e1). CONSTRAINTS:
-   fmt+clippy green; registry_anchors green; manifest checks
-   bracket any corpus-touching run; no live capture.
+ 3. [P4.2/W12-S5-prep] THE E-SIDE PICKUP PRODUCER unit (DESIGN
+   §7 S5 row; the 7h.4/D99 producer list; engine+tests,
+   unattended-safe): model the §7h.4 pickup machinery in the
+   engine so S5 can pair it — (a) the Terrain surface: the TOT
+   plane words + DAT byte + seen flag per tile beside the
+   existing mirror (the substrate 7h.4 pinned: init_tiles
+   copies EVERY nonzero TOT plane word into 0x4796bc; the DAT
+   byte gates ONLY the seen flag); the terrain-set cell
+   (TERRAIN SET [0x4edd8c] = zone_index+1, D99); (b) the FOUR
+   probe-latch writer sites {z/x/y}→0x4dc688/8c/90
+   last-write-wins + the robots() move-sub-tick collect
+   (±0.34..0.38 tile reach, no standing-on); (c) the CONSUMER
+   clear(0x40bef2)→robot_move→test(0x40bf0b) fire protocol
+   (DAT := 0, mirror word := floor word 0x454a90+4·set, seen
+   := 1, MP-only staging FUN_00425647, then FUN_0040eba0);
+   (d) the apply_pickup dispatch by set + word value (the case
+   list 7h.4; case-4 score/money pair) + the score/money folds
+   in the MissionShell (the destroy-score fold precedent);
+   host-seamed where no engine path reaches it (the D51
+   pattern). CONSTRAINTS: pickup cells are corpus-dead on
+   ZONEA (set 1 = 0 cells; ZONEB set 2 = 601, ZONEF set 6 =
+   149 — D99), so engine tests stay synthetic + the corpus
+   gate asserts ZERO pickup traffic on ZONEA (the S5 scenario
+   itself stages the zone seam later); fmt+clippy green;
+   registry_anchors green; manifest checks bracket any
+   corpus-touching run; no live capture; S0..S4 chains
+   BYTE-IDENTICAL (2ddd15ea50c8a14d joins the pinned set).
+ 4. [P4.2/dbx-plan-tiers] THE T2/T3 TIER COMPILE unit (the
+   W12-S3/S4 live-capture prerequisite; tooling, unattended-
+   safe): widen dbx-plan SUPPORTED_TIERS beyond T0/T1/TS so
+   S3 (T2) and S4 (T0/T1/T3) plans compile — per-row compile
+   forms for the weapon-anim (0x980d4)/projectile (0x10e174)
+   banks + the T3 aliased rows; the debris/splash unmapped T3
+   rows must STAY refused on O1 (the differ's coverage
+   discipline — a live S4 carries only the aliased T1 rows +
+   documents the 2 E-only rows); regenerate + byte-pin any
+   affected capture-plan; registry_anchors green; fmt+clippy
+   green.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -384,6 +425,30 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W12-S4 THE S4.SCEN + CANONICAL-CHAIN unit
+  COMPLETE (engine+tests by a predecessor session left
+  uncommitted by session death — ADOPTED + FIXED + VALIDATED +
+  COMMITTED + PUSHED by continuation worker 65f39dff claim 2,
+  commit b8925a9, D105). Grammar v1.4 `destroy = 1` (an
+  EQUIVALENCE seam — the original loads the same .BDG/.POS/.TRT
+  natively; dbx-plan records it in _e_staging, never
+  fabricates, with the pre-S5 empty-mirror divergence noted) +
+  S4.scen (trap/artillery-cascade/survivor legs, 49 records,
+  chain 2ddd15ea50c8a14d byte-identical double run) + the
+  canonical destroy rows on T1/T3 (23-B objects keyed by .POS
+  slot, 20-B TRT, shared grid spans, COMPACT-ACTIVE mirror with
+  the nonzero-tile filter on both channels, FULL-bank
+  debris/splash = E-only coverage rows) + the differ O1
+  normalizers + differ_gate S4 cross PASS-WITH-NOTES (4 E-only
+  rows, zero field gaps) + the MissionShell destroy-score fold.
+  Continuation fixes to the WIP: the trt fabricator slice
+  overrun, the count-cell stride guards, the mirror
+  compact-tail parser layout cross, clippy lints, the dbx-plan
+  destroy leg + its record-never-fabricate test. S0/S1/S2/S3
+  chains re-asserted BYTE-IDENTICAL; workspace 617 green,
+  fmt+clippy clean, registry_anchors green, manifest clean both
+  sides. Queued: W12-S5-prep (item 3) + the dbx-plan T2/T3
+  tier unit (item 4).
 - 2026-08-22: P4.2/W12-S4-prep THE E-SIDE IMPACT-APPLICATION +
   DESTROY-RESOLVER PRODUCER unit COMPLETE (RE 7j.38/7j.39 by
   worker 460d294e claim 2, commits dcc8865 + acf09ff; the

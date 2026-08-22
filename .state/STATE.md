@@ -1,5 +1,42 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W12-S4 THE S4.SCEN + CANONICAL-CHAIN
+    unit COMPLETE, commit b8925a9, D105; engine+tests by a
+    predecessor session left uncommitted by session death —
+    ADOPTED + FIXED + VALIDATED + COMMITTED + PUSHED by
+    continuation worker 65f39dff claim 2): the destroy-family
+    slice is live END-TO-END on E + the differ + the plan
+    compiler. Grammar v1.4 `destroy = 1` (an EQUIVALENCE seam —
+    the original loads the same .BDG/.POS/.TRT natively, so no
+    O1 write exists to fabricate; dbx-plan records the key in
+    _e_staging with the empty-mirror pre-S5 divergence noted).
+    S4.scen = ZONEA/MISSION1, 49 records, chain pinned
+    2ddd15ea50c8a14d byte-identical double run: the TRAP leg
+    (resolver-100 no-score destroy at the anchor + 5×k12 +
+    sel-9 k20 + 3×3 splash + the restore into the empty-staged
+    mirror), the ARTILLERY leg (marker gunner 9/0xA/0xB at its
+    own tile — ring-0 TURRET rubble stamp, rings 4..6 CHAIN
+    cascade, the faithful gunner self-damage), the SURVIVOR leg
+    (monotone multi-hit subtract, never destroyed). Canonical
+    rows: 23-B objects keyed by .POS slot, 20-B TRT, the shared
+    grid spans, COMPACT-ACTIVE mirror (nonzero-tile filter on
+    BOTH channels), FULL-bank debris/splash = E-only T3
+    coverage rows. Differ: the O1 guest normalizers (0x14/
+    0x20-stride walks, dead-slot skip) + Structural count
+    words; differ_gate S4 = cross PASS-WITH-NOTES (4 E-only
+    rows, zero field gaps). MissionShell destroy-score fold
+    (zero without staging — no-inject re-asserted: S0/S1/S2/S3
+    chains BYTE-IDENTICAL 8901789a88cf61fe / 1c4e7b4c9d9b0947 /
+    809f4961b7757da4 / e29f76f5585401e1). Continuation fixes to
+    the WIP: the trt fabricator slice overrun, the count-cell
+    stride guards, the mirror compact-tail parser layout cross,
+    clippy erasing-op/doc-lints, the dbx-plan destroy leg.
+    Workspace 617 tests green, fmt+clippy clean,
+    registry_anchors green, manifest clean both sides. A live
+    S4 capture needs the dbx-plan T3-tier unit (S3's T2
+    precedent). NEXT: the W12-S5-prep E-side pickup producer
+    (item 2).
+
   - OPEN 2026-08-22 (P4.2/W12-S4-prep THE E-SIDE
     IMPACT-APPLICATION + DESTROY-RESOLVER PRODUCER unit COMPLETE;
     RE 7j.38/7j.39 by worker 460d294e claim 2, commits dcc8865 +
