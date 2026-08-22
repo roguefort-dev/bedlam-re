@@ -123,14 +123,19 @@ fn damage_table_difficulty_rows_linear_then_flat_d2() {
 
 #[test]
 fn command_payload_parses_14_byte_fields() {
+    // The ORIGINAL grammar (re-verified vs the FUN_00409138 decompile,
+    // ghidra-project/exw-robottarget.txt:74-113): byte@+6 is the
+    // builder FILLER the consumer never reads; the words live at
+    // +7/+9/+0xB. The filler byte 0x0A here proves the offsets (the
+    // pre-S3 transcription read x at +6 and would see 0x0A15).
     let payload = [
-        0x01, 0x00, 0x00, 0x0A, 0x00, 0x03, 0x15, 0x00, 0x49, 0x00, 0x01, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x0A, 0x00, 0x02, 0x0A, 0x15, 0x00, 0x49, 0x00, 0x01, 0x00, 0x00,
     ];
     let rec = CommandRecord::from_payload(&payload).expect("parses");
     assert_eq!(rec.marker, 0x01);
     assert_eq!(rec.id, 0);
     assert_eq!(rec.spot, 10);
-    assert_eq!(rec.flags, 0x03);
+    assert_eq!(rec.flags, 0x02);
     assert_eq!(rec.x, 21);
     assert_eq!(rec.y, 73);
     assert_eq!(rec.z, 1);
@@ -857,7 +862,7 @@ fn frame_pipeline_consumes_and_ticks() {
     // rocket moves 4× per frame once flying.
     let mut s = sim();
     assert!(s.stage_command(&[
-        0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x14, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x80, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00,
     ]));
     assert_eq!(s.pending_commands(), 1);
     s.stage_robot_weapons(

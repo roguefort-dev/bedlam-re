@@ -158,9 +158,16 @@ pub struct EnemyProjectile {
 
 /// One COMMAND ring record — the W5 payload grammar shared with the
 /// O1 injector [D82/D83]: byte@+0 marker, short@+1 robot id, short@+3
-/// spot, byte@+5 flags, words@+7/+9/+0xB x/y/z. 14 payload bytes;
-/// the ring stride is host-side only (EXW 0x80, the capgen append
-/// zero-extends whatever it writes).
+/// spot, byte@+5 flags, byte@+6 the builder FILLER (SP: rand&0xF; the
+/// consumer never reads it), words@+7/+9/+0xB x/y/z — the SP consumer
+/// offsets re-verified instruction-exact (FUN_00409138: the local_e0
+/// word pointer is `rec+7`, bit0 reads [0]/[1] then bumps +2 shorts so
+/// bit0∧bit1 triples read +0xB/+0xD/+0xF; the MP-only mask block bumps
+/// the pointer first — SP never takes it). The words are RAW Q5 tile
+/// units (tile·32) on the fire path: the mine/grenade spawn math
+/// subtracts the muzzle in pos>>8 = Q5 [§7j.37]. 14 payload bytes
+/// (byte 13 padding; the ring stride is host-side only — EXW 0x80,
+/// the capgen append zero-extends whatever it writes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandRecord {
     pub marker: u8,
@@ -174,9 +181,10 @@ pub struct CommandRecord {
 
 impl CommandRecord {
     /// Parse the 14-byte payload form. `None` = short payload (the
-    /// canonical layer fails loud on it). The payload's words
-    /// +0xD/+0xF (record bytes 12/13) are stride padding in the
-    /// modeled grammar — reachable in the original only through the
+    /// canonical layer fails loud on it). The words +7/+9/+0xB
+    /// (record bytes 7..13) are the triple; byte@+6 is the builder
+    /// filler the consumer never reads; bytes 12/13 are the +0xD
+    /// padding reachable in the original only through the
     /// bit0∧bit1 pointer-bump quirk (see `consume_commands`).
     pub fn from_payload(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < 14 {
@@ -187,9 +195,9 @@ impl CommandRecord {
             id: i16::from_le_bytes([bytes[1], bytes[2]]),
             spot: i16::from_le_bytes([bytes[3], bytes[4]]),
             flags: bytes[5],
-            x: i16::from_le_bytes([bytes[6], bytes[7]]),
-            y: i16::from_le_bytes([bytes[8], bytes[9]]),
-            z: i16::from_le_bytes([bytes[10], bytes[11]]),
+            x: i16::from_le_bytes([bytes[7], bytes[8]]),
+            y: i16::from_le_bytes([bytes[9], bytes[10]]),
+            z: i16::from_le_bytes([bytes[11], bytes[12]]),
         })
     }
 }
