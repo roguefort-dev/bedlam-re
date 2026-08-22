@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - OPEN 2026-08-22 (P4.2/W7 THE DIFFER unit COMPLETE, worker
+    c594df62 claim 2, commits a9d741f + 04d1d27 + 0dfdb0c, D87):
+    the P4.2 comparison core EXISTS — `tools/diffharness/src/
+    differ.rs` + the `dbx-diff` CLI. Channel normalizers (E parses
+    the §6a canonical grammar; O1 converts raw guest bytes per the
+    RE-EXD-MAP §8 EXD field map — only individually pinned robot
+    offsets, every other field a metered coverage finding, never
+    fabricated; O2 per the EXW RE-EXW-SIM §3/7f/7g table, the
+    seed-#1 EXW-front conflict OPEN for W11). MODES: double-run (the
+    DH-G1 verdict instrument — identical modulo frame-counter T2 +
+    rng T3, draw-count checks still apply) + cross-channel (per-field
+    classes + O2 arbitration engine-bug vs original-divergence; the
+    `coverage` bucket notes-not-fails). Report + fingerprint
+    manifest (git-carried digests; dumps runtime-only). Verified:
+    15 differ tests + the corpus-gated differ_gate.rs (S0/S1 pinned
+    E chains × the inverse normalizer → cross PASS-WITH-NOTES with
+    exactly 2+26 coverage + the one T2 counter note on S1; double-run
+    PASS modulo counter/RNG, FAIL on money). The S0 live-session
+    checklist step 4 now uses dbx-diff. NEXT HEADS: the EXD robot
+    back-half probe (item 2, unattended — collapses the 26 coverage
+    gaps before the live S1 diff) + the W8 robot-count override pin
+    (item 3, unattended) + the operator S0 live session (item 1,
+    interactive-gated, S0W calibration hook).
+
   - OPEN 2026-08-22 (P4.2/W5-pad THE CAPGEN PAD OP unit COMPLETE,
     worker 85dedea3 claim 2, commits fb92286 + b5d1920, D86): the
     PAD step is fully landed on the O1 side — the capgen
@@ -13,10 +37,7 @@
     `dbgprobe pad` GREEN headless (positive + negative legs),
     gate/inject/flow/walk regression-green, workspace test/fmt/clippy
     green, byte-pinned plans unchanged. The E side still rejects pad
-    steps (S6 engine seam, W12 pairs it). NEXT HEADS: W7 the differ
-    (item 2, unattended — both sides of its input contract exist) +
-    the operator S0 live session (item 1, interactive-gated, S0W
-    calibration hook).
+    steps (S6 engine seam, W12 pairs it).
 
   - OPEN 2026-08-22 (P4.2/W6 THE ENGINE DUMP EMITTER unit COMPLETE,
     design by worker 1f758667 claim 2 / adopted + completed by worker

@@ -54,25 +54,37 @@
    counterparts now exist — `parity_harness --canonical --scenario
    tools/diffharness/scenarios/{S0,S1}.scen --out ...` — chains pinned
    in tests/canonical_dump_gate.rs (8901789a88cf61fe / 1c4e7b4c9d9b0947);
-   the live session's O1 chains compare against THOSE (modulo the
-   T2/T3 statistical classes) once W7's normalizer lands.
-2. [P4.2/W7] THE DIFFER (unattended; DESIGN §6 + §6a): the W7
-   normalizer + comparison modes + report writer + fingerprint
-   manifest. Input contract now EXISTS on both sides: O1 raw guest
-   bytes (dbx-stitch path) + E canonical dumps (channel E, commit
-   54d781a) — the normalizer converts O1 bytes into the §6a grammar
-   per registry row layout (robot-bank = the state_hash field order,
-   u32 count + 90-byte records; selection-triple 4-B alias; beacon
-   flag/timer/tile; the E-gap list = STRUCTURAL findings, never
-   silent). Comparison modes per DESIGN §6 (byte-identical,
-   T2/T3-statistical class masks for the RNG/frame-counter rows,
-   original-divergence → O2 arbitration); report writer + the
-   fingerprint manifest. Verify: workspace green; corpus-gated tests
-   vs the pinned E dumps in tests/canonical_dump_gate.rs (synthetic
-   reference = the synthetic_frames() fixture + the pinned chains).
-   NOTE (D86, W5-pad landed): the pad seam is now fully O1-side — S6
-   scenarios compile `pad <slot>` (census in DESIGN §7); W7 models
-   the pad op only through the order-target triple rows it carries.
+   the live session's O1 chains compare against THOSE with the
+   LANDED W7 differ (D87, `dbx-diff` -- cross-channel mode handles
+   the counter/RNG classes + the coverage findings automatically;
+   RUNTIME.md 'W7 the differ').
+2. [P4.2/W7-followup] THE EXD ROBOT BACK-HALF PROBE (unattended;
+   bounded Ghidra -process pass on BEDLAM.EXD): pin the remaining 26
+   canonical robot-record field offsets in EXD (dir_byte, facing,
+   anim, variant, probe_z[8], target fields, armor, hit_flash, alarm,
+   kind, shield x3, battery, armor_pool, alarm_ctr, death_flag — the
+   RE-EXD-MAP sec 8 coverage-gap census) by decoding the robots()
+   monolith FUN_0001c7dc's record accesses (the EXW offsets in
+   RE-EXW-SIM sec 3/7f/7g are the hypotheses: front {x@0,y@4,z@8,
+   state@0xC} is EXD-verified; back {drop@+0x2C, slots@+0x36,
+   stop@+0x74, hp@+0x78, alive@+0x7C} coincide EXACTLY in both, so
+   the transfer is plausible but unpinned). Deliverable: extend
+   RE-EXD-MAP sec 8's table with per-field provenance, then widen
+   EXD_ROBOT_MAP in tools/diffharness/src/differ.rs + re-pin the
+   differ_gate.rs coverage counts (26 -> 0 on S1 when fully pinned).
+   Verify: workspace green; the differ tests' gap math updated
+   deliberately. Ghidra discipline: NEVER re-import (-process
+   BEDLAM.EXD -noanalysis); check pgrep first.
+3. [P4.2/W8-prep] THE ROBOT-COUNT OVERRIDE PIN (unattended; bounded
+   probe, the DESIGN sec 10-W8 NOTE): does the original SP path fill
+   the network-marker override at 0x46cbe0/EXD 0x119588-adjacent
+   staging (E stages the host-default markers -> ZONEA single-robot
+   squad; if the ORIGINAL spawns the full squad, robot-count diffs
+   are a finding class of their own)? Anchor: the W5-followup command
+   count cell 0x46cbe0 + the spawn path FUN_0040cca0 twin. Deliverable:
+   the pinned answer in RE-EXD-MAP/DESIGN + (if the original fills
+   it) the E-side staging seam named for W8. Verify: docs-only or a
+   small engine test if a staging seam changes.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -207,6 +219,39 @@
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-22: P4.2/W7 THE DIFFER unit COMPLETE (worker
+  c594df62 claim 2, commits a9d741f + 04d1d27 + 0dfdb0c, D87 + the
+  RE-EXD-MAP sec 8 basis). (a) RE NOTES FIRST (a9d741f): the EXD
+  robot-record normalizer field map provenance-tagged — x@+0/y@+4
+  [seed#1+anchor writer], z@+0x08 PINNED NEW (the per-player writer's
+  d@(0xf6d3c+i)+0x20), state@+0x0C, drop@+0x2C, stop@+0x74, hp@+0x78,
+  alive@+0x7C; the 26 unmapped canonical fields = coverage findings
+  (never zero-filled); the seed-#1 EXW-front conflict recorded OPEN
+  (O2 uses the SIM sec 3 table; W11 arbitrates); the non-robot O1 row
+  forms (beacon u16-span widen, static-map-wh 0x2c span, typedb
+  len-0==all-zero-grid equivalence, rng u32->u64). (b) THE DIFFER
+  (04d1d27): differ.rs — channel normalizers (E canonical parse / O1
+  per sec 8 / O2 per EXW sec 3+7f/7g), MODES DoubleRun (the DH-G1
+  verdict: identical modulo frame-counter T2 + rng T3, draw-COUNT
+  checks still apply) + CrossChannel (per-field classes, O2
+  ARBITRATION: O2 sides with O1 -> engine-bug, with E ->
+  original-divergence, none -> provisional), the `coverage` bucket
+  (metered, never silent, notes-not-fails), constant-shift alignment
+  (<=8, T1-timing note), event-timing table, T3 draw-count gate,
+  report_text + manifest_json; bin/dbx-diff CLI (mode auto from
+  channels, --tiebreak/--t2-quantum/--report/--manifest, FAIL exit
+  code). (c) VERIFIED: 15 differ tests (hand-built EXD fixtures =
+  independent sec-8 transcription; the W6 canonical literal as the
+  shared-field contract; arbitration both ways; 26-gap math; shift;
+  determinism); corpus-gated differ_gate.rs — S0/S1 run_canonical
+  (pinned chains 8901789a88cf61fe / 1c4e7b4c9d9b0947 re-asserted) x
+  the INVERSE normalizer -> cross PASS-WITH-NOTES (S0: 0 coverage;
+  S1: 2+26 + the one T2 counter note, zero engine-bug/structural),
+  double-run PASS modulo counter/RNG, FAIL on money perturbation; CLI
+  smoke-tested on the real S0 E dump (PASS, chain pin shown). 52
+  diffharness tests total; workspace test/fmt/clippy green; manifest
+  clean. PUSHED 0dfdb0c. Queued: the EXD robot back-half probe
+  (item 2) + the W8 robot-count override pin (item 3).
 - 2026-08-22: P4.2/W5-pad THE CAPGEN PAD OP unit COMPLETE (worker
   85dedea3 claim 2, commits fb92286 + b5d1920, D86). (a) capgen
   `{op:"pad"}` inject form: reads the 8-B .PAD slot record
