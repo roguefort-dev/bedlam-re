@@ -338,6 +338,14 @@ fn s0_s1_cross_and_double_run() {
         // row exercises the D108 cell−1 convention end-to-end.
         ("S5", 16u64, "a4659f25d453b6a1", 2u64),
         ("S5B", 19u64, "93e976587a98d2a1", 2u64),
+        // W12-S5C (D108's observability follow-up): the pre-damaged
+        // walker run — same tier set as S5/S5B (T0/T1/TS: the
+        // artillery's debris/splash staging stays unwatched, no T3
+        // rows ride), so again exactly the 2 S1-class row-level
+        // findings. The destroy-chain cascade the burst rings
+        // detonate rides the SAME aliased T1 rows (the compact-tile
+        // filter + the destroy normalizers) — zero field gaps.
+        ("S5C", 55u64, "e0999fcb3455d3ef", 2u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

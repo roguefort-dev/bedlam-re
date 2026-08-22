@@ -1,0 +1,69 @@
+# S5C — pickups: the case-3 PRE-DAMAGED walker (DESIGN-DIFFHARNESS
+# .md §7 S5 row + §10-W12; D108's observability follow-up, the
+# W12-S5C unit). S5B's walker spawns AT the hp clamp (5000), so
+# apply_pickup case 3's +2500 was value-invisible there (5000 →
+# 5000). This run spends the walker's hp BELOW the clamp BEFORE the
+# walk, so the case-3 body lands in full: 1256 → 3756, the exact
+# +2500 (PICKUP_HEALTH), no clamp.
+#
+# The spend = the S4 artillery pattern (a loadout-armed gunner
+# command record): markers stage the clicker (78,10,3), the walker
+# (73,10,3) AND the gunner ON the walker's own tile (73,10,3) —
+# artillery bursts land at the FIRING robot's tile (§7j.38/5), and
+# the §7j.23 robot lane (312/pair) box-reaches a marker-staged
+# robot (+0xF00 offset) from the FOUR list-0 pairs {T,T+1}x{Ty,Ty+1}
+# of each burst. The frame-1 command fires all three records
+# (9/0xA/0xB, 1 ammo each): 3 records x 4 pairs x 312 = 3744 spend at frame 32 (tick 0x20 + duration windows; the walker AND
+# the gunner stand in the same box — both take 3744, both survive at
+# 1256; the 0xB's outer rings also spend the CLICKER 624 at frame 36
+# — it still arms the order). All damage lands while every robot is
+# state 3-or-0 — BEFORE the order, so the hp path applies (a state-4
+# robot converts damage to a shield tick, 7g.1). The gunner then
+# claims its own spread slot and walks behind the walker the whole
+# way (lower index moves first; it arrives at (76,10) at frame 43,
+# AFTER the walker consumed it at 41) — no cell steal, hp 1256
+# through the tail.
+#
+#   frame 32: the burst list-0 box — walker 5000 → 1256, gunner
+#             5000 → 1256 (the S5C observability spend)
+#   frame 36: the clicker 5000 → 4376 (the 0xB outer ring, 2 pairs)
+#   frame 37: `order 78 10 3` arms at the clicker (slot 0, state 3,
+#             snapped); the walker claims slot 1, the gunner slot 2
+#   frame 37: (74,10) case 4 — award draw
+#   frame 39: (75,10) case 4
+#   frame 41: (76,10) CASE 3 — hp 1256 → 3756, the exact +2500
+#             UNCLAMPED (the D108 value-invisibility closed) + the
+#             (76,9) side cell case 4 the same frame (the diagonal
+#             probe reach from (75,10)+0x1300/0x300)
+#   frame 44: (77,10) case 4
+#   frame 46: (78,10) case 4
+#   frame 48: arrival — state 4 → 3 snapped at (78,10)
+#
+# CORRIDOR CENSUS NOTE: unlike S5B (exactly the six cells), the
+# artillery's burst rings + the destroy CHAIN CASCADE rewrite many
+# off-corridor mirror words/seen bits (the 5000-damage structure/
+# object resolvers detonate the chainable cluster around (73,10) —
+# recursive 1000-damage walks out to columns 63..81). All of it is
+# deterministic destroy-family state, chain-pinned; the consume
+# asserts target the corridor cells + the hp schedule, not the
+# whole-map census. The command triple (2496,320,3) = (78,10,3) in
+# the record grammar's RAW Q5 words (tile·32) — the bit1 seam write
+# the row mirrors until the order step rewrites it at frame 37.
+scenario = "S5C"
+tiers = T0,T1,TS
+anchor = mission-start
+frames = 54
+zone = "B"
+destroy = 1
+pickup = 1
+markers = 78,10,3; 73,10,3; 73,10,3
+loadout = 3,0x07,9:1,0xA:1,0xB:1
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# frame 1: the gunner (robot 3) fires its artillery — one record per
+# armed slot (9/0xA/0xB), landing at its own tile = the walker's box
+command 01 03 00 00 00 02 00 C0 09 40 01 03 00 00
+step 35
+# frame 37: the burst window is spent (f32+f36) — arm the walk
+order 78 10 3
+step 17

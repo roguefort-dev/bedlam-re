@@ -451,7 +451,7 @@ identical state, by construction.
 | S2 | order→walk (the P4 slice) — **LANDED 2026-08-22 (D91)** | ORDER steps moving one squad member across ZONEA/MISSION1 (mirrors engine/bedlam-core/tests/mission_corpus_gate.rs; the walk needs a second robot — the `markers` staging key below, D91) | T0/T1 | slice field parity (positions, arrival snap, spread claims, move-target words); the engine's biggest existing seam |
 | S3 | weapon fire family | COMMAND records: one per weapon class (bullet 2..4, shell 5, artillery 9..0xB, ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F}, rocket 0x24, homing 0x29) at fixed targets | T0/T1/T2 + T4 | fire cadences, damage application (FUN_00419aff table), bank record lifecycle; the corpus-off weapon producers; T4 SFX events seed the SFX-family walk |
 | S4 | destroy family — **LANDED 2026-08-22 (D105)** | S3 fire onto destructibles (tile 0x62 traps, platform 0x7d4, chainable objects) | T0/T1/T3 + T4 | destroy resolver → terrain restore → 5-effect loop → chain walks end-to-end (§7j.25); **five-ring overlap read** (0x4796d4 bytes around overlapping corpse rings — statically mooted by §7j.10's ≤7-frame fade; the harness read is the confirming observation); debris producer kinds/delays (stager widening input) |
-| S5 | pickups & pads — **LANDED 2026-08-22 (W12-S5, D108; producer W12-S5-prep §7h.5)**: grammar v1.5 keys `zone = "B"` (the episode-slot host seam — the campaign-advance/save-load shells the host stands in for, D51 pattern; mission implicitly 1 via mask 0, linear 0) + `pickup = 1` (stage the mission's OWN .TOT through `stage_pickup_surface` AFTER any destroy staging + the §7j.12/6 hazard stamper, the original's load order) — S5/S5B run ZONEB/MISSION1 (set 2) with destroy staged too, so the typedb-mirror-rows go REAL (S4's recorded empty-mirror divergence closes for S5-class scenarios; the S4 chain itself is untouched — S4 sets no pickup key) | TWO short walks (the order-window constraint forces the split: a second `order` needs the first cleared — all-alive-state-3 or the 0x197-frame window expiry, and 407 idle frames × ~340 KB/record of REAL mirror rows is not a shippable dump, D108). **S5 = the row-21 z3 corridor** (the only spot in the corpus where cases 1 and 2 co-occur walkably: cells (26,21) c1 w0x76, (27,21) c2 w0x7e, (28,21) c4 w0x82 — clicker marker (28,21,3), walker marker (25,21,3), `order 28 21 3` → slot-1 target (29,21); the walker collects c1/c2/c4 at frames 1/2/4 and arrives frame 5). **S5B = the row-10 z3 corridor** (case 3 + 4× c4: cells (74..78,10) w0x83/0x83/0x7b(c3)/0x83/0x83 — clicker (78,10,3), walker (73,10,3), `order 78 10 3` → slot-1 (79,10); consumes all five incl. the diagonal probe reach at (78,10) from (77,9), arrives frame 12). ORDER_RADIUS staging note: the claim needs the walker within 0xC0 Q5 of the ORDER TILE CENTER — the marker's +0xF00 spawn offset makes a 6-tile gap read 0xC1 (rejected); keep walkers ≤5 tiles out. Case-3 observability note: the walker spawns hp 5000 (the clamp ceiling), so the c3 body's +2500 is value-invisible — the consume + dispatch still ride the mirror/T0 rows; a pre-damaged-walker variant is the live follow-up | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (7h.3/§7h.4): the consumed cell's mirror word (:= table-C floor 0x48F) + seen (:= 1) + the case-4 score/money folds + the case-1/2 robot fields (drop_countdown 1000 / shield 1000). DAT-byte visibility ANSWERED (D108): the consume's DAT := 0 (collision-plane empty) needs NO dedicated row — the mirror word/seen carry the pickup observation and the walkability change rides the robot-bank rows (the walker crosses the cells it consumes mid-walk); no watch set carries the raw DAT volume (it is not a guest span) |
+| S5 | pickups & pads — **LANDED 2026-08-22 (W12-S5, D108; producer W12-S5-prep §7h.5)**: grammar v1.5 keys `zone = "B"` (the episode-slot host seam — the campaign-advance/save-load shells the host stands in for, D51 pattern; mission implicitly 1 via mask 0, linear 0) + `pickup = 1` (stage the mission's OWN .TOT through `stage_pickup_surface` AFTER any destroy staging + the §7j.12/6 hazard stamper, the original's load order) — S5/S5B run ZONEB/MISSION1 (set 2) with destroy staged too, so the typedb-mirror-rows go REAL (S4's recorded empty-mirror divergence closes for S5-class scenarios; the S4 chain itself is untouched — S4 sets no pickup key) | TWO short walks (the order-window constraint forces the split: a second `order` needs the first cleared — all-alive-state-3 or the 0x197-frame window expiry, and 407 idle frames × ~340 KB/record of REAL mirror rows is not a shippable dump, D108). **S5 = the row-21 z3 corridor** (the only spot in the corpus where cases 1 and 2 co-occur walkably: cells (26,21) c1 w0x76, (27,21) c2 w0x7e, (28,21) c4 w0x82 — clicker marker (28,21,3), walker marker (25,21,3), `order 28 21 3` → slot-1 target (29,21); the walker collects c1/c2/c4 at frames 1/2/4 and arrives frame 5). **S5B = the row-10 z3 corridor** (case 3 + 4× c4: cells (74..78,10) w0x83/0x83/0x7b(c3)/0x83/0x83 — clicker (78,10,3), walker (73,10,3), `order 78 10 3` → slot-1 (79,10); consumes all five incl. the diagonal probe reach at (78,10) from (77,9), arrives frame 12). ORDER_RADIUS staging note: the claim needs the walker within 0xC0 Q5 of the ORDER TILE CENTER — the marker's +0xF00 spawn offset makes a 6-tile gap read 0xC1 (rejected); keep walkers ≤5 tiles out. Case-3 observability note: the walker spawns hp 5000 (the clamp ceiling), so the c3 body's +2500 is value-invisible in S5B — the consume + dispatch still ride the mirror/T0 rows; **the pre-damaged-walker variant LANDED as S5C (W12-S5C, D110 — §10-W12): the S4 artillery pattern spends the walker to 1256 pre-order, case 3 heals the exact +2500 → 3756 unclamped** | T0/T1 | pickup_case dispatch vs the type-DB mirror rows (7h.3/§7h.4): the consumed cell's mirror word (:= table-C floor 0x48F) + seen (:= 1) + the case-4 score/money folds + the case-1/2 robot fields (drop_countdown 1000 / shield 1000). DAT-byte visibility ANSWERED (D108): the consume's DAT := 0 (collision-plane empty) needs NO dedicated row — the mirror word/seen carry the pickup observation and the walkability change rides the robot-bank rows (the walker crosses the cells it consumes mid-walk); no watch set carries the raw DAT volume (it is not a guest span) |
 | S6 | extraction | ORDER onto the extraction .PAD (step-on) | T0/T1/T3 | **arm-extraction via scripted .PAD step-on** (beacon family, exit ring phases, dropship deploy, objective counters — §7j.19/§7j.20/§7j.27) |
 | S7 | platform dynamics | repeated fire on platforms (build/spread/creep/destroy) | T0/T1/T3 | platform family field parity (§7j.12) |
 | S8 | critter engagement | walk into critter aggro ranges | T0/T2/T3 | critter states/AI per difficulty; death handlers; bounty gate (§7j.17/§7j.23/§7j.24) |
@@ -884,6 +884,41 @@ differ come before any new scenario depth.
     scenario exposes the 1-based guest cell vs E's 0-based slot
     index (§6a zone convention, D108). S0..S4 chains re-asserted
     BYTE-IDENTICAL.
+    **S5C LANDED 2026-08-22 (W12-S5C, D110 — the case-3
+    observability variant):** S5B's walker spawns AT the hp clamp
+    (5000), so apply_pickup case 3's +2500 was value-invisible
+    there. S5C spends the walker below the clamp BEFORE the walk
+    with the S4 artillery pattern: a THIRD marker stages the
+    gunner ON the walker's tile (73,10,3 — ≤5 tiles from the order
+    tile, inside ORDER_RADIUS), its loadout arms 9/0xA/0xB (1 ammo
+    each), and the frame-1 `command` fires all three records at
+    its own tile (bursts land at the FIRING robot, §7j.38/5). The
+    §7j.23 robot lane (312/pair) box-reaches a marker-staged robot
+    (+0xF00 = Q5 offset 15) from FOUR list-0 pairs
+    ({T,T+1}×{Ty,Ty+1}) per burst: 3 records × 4 × 312 = 3744
+    spend at frame 32 (tick 0x20) on the walker AND the gunner —
+    both survive at 1256; the 0xB's outer rings spend the CLICKER
+    624 at frame 36; all damage lands pre-order (state 0/3 — the
+    hp path; a state-4 robot converts damage to a shield tick).
+    `order 78 10 3` arms at frame 37; case 3 fires at frame 41:
+    hp 1256 → 3756, the EXACT +2500 (PICKUP_HEALTH) UNCLAMPED —
+    the D108 value-invisibility gap closed. The gunner claims its
+    own spread slot and walks one robot behind the whole way (it
+    reaches no unconsumed cell, hp 1256 through the tail — lower
+    index moves first, deterministic). CORRIDOR CENSUS CAVEAT vs
+    S5B: the burst rings + the destroy CHAIN CASCADE rewrite many
+    off-corridor mirror words/seen bits (the 5000-damage resolvers
+    detonate the chainable cluster around (73,10) — S5B's
+    "exactly six cells" census does NOT hold; all of it is
+    deterministic destroy-family state, chain-pinned; the asserts
+    target the corridor cells + the hp schedule). 55 records,
+    chain e0999fcb3455d3ef pinned in canonical_dump_gate,
+    differ_gate row joined (same 2 S1-class findings — the
+    cascade rides the SAME aliased T1 rows), dbx-plan compiles
+    tiers T0/T1/TS (4 inject rows: the command append + the
+    frame-37 order triple; the loadout seam in `_e_staging`),
+    capture-plans/S5C.json committed + byte-pinned. S0..S5B
+    chains re-asserted BYTE-IDENTICAL.
     **dbx-plan T2/T3 TIERS LANDED 2026-08-22 (D109):** SUPPORTED_TIERS
     widens to T0/T1/T2/T3/TS — S3 (T2) and S4 (T0/T1/T3) plans
     compile (capture-plans/S3+S4.json committed, byte-pinned by

@@ -1555,3 +1555,122 @@ fn corpus_s5b_pickup_case_3() {
         "the whole-map consume census: the corridor five + the (76,9) side cell"
     );
 }
+
+#[test]
+fn corpus_s5c_pickup_case_3_predamaged() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    // S5C (DESIGN §7 S5 row, D108's observability follow-up — the
+    // W12-S5C unit): the S4 artillery pattern spends the walker's hp
+    // below the clamp BEFORE the walk, so apply_pickup case 3's
+    // +2500 lands IN FULL — 1256 → 3756, the exact PICKUP_HEALTH
+    // increment, no clamp (S5B could only show the dispatch: its
+    // walker spawns AT 5000). The gunner rides the same burst box
+    // (staged ON the walker's tile), takes the same 3744, claims its
+    // own spread slot, and walks one robot behind the whole way —
+    // it reaches no unconsumed case-3 cell, hp 1256 through the
+    // tail. 55 records (anchor + 54), pinned chain.
+    let s5c = fs::read_to_string(scen_path("S5C")).expect("S5C.scen committed");
+    let run = run_canonical(&s5c, &root).expect("S5C canonical run");
+    assert_eq!(run.manifest.frame_count, 55);
+    assert_eq!(
+        run.manifest.chain_digest, "e0999fcb3455d3ef",
+        "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
+    );
+    let run_b = run_canonical(&s5c, &root).expect("S5C canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    let dump = decode_dump(&run.bytes).expect("S5C dump verifies");
+
+    let m = |f: usize, tile: usize| {
+        mirror_cell(dump.frames[f].watch("typedb-mirror-rows").unwrap(), tile, 3)
+    };
+    let money = |f: usize| {
+        u32::from_le_bytes(
+            dump.frames[f].watch("money").unwrap()[..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    let score = |f: usize| {
+        u32::from_le_bytes(
+            dump.frames[f].watch("score").unwrap()[..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    let bank = |f: usize| robots_of(dump.frames[f].watch("robot-bank").unwrap());
+    let hp = |f: usize, i: usize| bank(f)[i].i32(56);
+    let state = |f: usize, i: usize| bank(f)[i].state();
+    let tile = |f: usize, i: usize| bank(f)[i].tile();
+    let t74 = 10 * 100 + 74;
+    let t75 = 10 * 100 + 75;
+    let t76 = 10 * 100 + 76;
+    let t77 = 10 * 100 + 77;
+    let t78 = 10 * 100 + 78;
+    let t769 = 9 * 100 + 76;
+    // The staged corridor (same ZONEB set-2 surface as S5B).
+    assert_eq!(m(0, t74), (0x83, 0));
+    assert_eq!(m(0, t75), (0x83, 0));
+    assert_eq!(m(0, t76), (0x7b, 0), "the case-3 word stages");
+    assert_eq!(m(0, t77), (0x83, 0));
+    assert_eq!(m(0, t78), (0x83, 0));
+    assert_eq!(m(0, t769), (0x83, 0));
+    assert_eq!((score(0), money(0)), (0, 4000));
+    // THE OBSERVABILITY SPEND (the S4 artillery pattern): the
+    // frame-1 command's three records (9/0xA/0xB) all walk their
+    // list-0 3x3 at tick 0x20 = frame 32; the four pairs whose blast
+    // boxes reach a marker-staged robot (+0xF00 offset) spend the
+    // walker AND the gunner 3x4x312 = 3744 each; the 0xB's outer
+    // ring spends the clicker 624 at frame 36. Everyone survives;
+    // all of it lands while the robots are state 0/3 (the hp path —
+    // a state-4 robot converts damage to a shield tick).
+    assert_eq!((hp(31, 1), hp(31, 2), hp(31, 3)), (5000, 5000, 5000));
+    assert_eq!(
+        (hp(32, 1), hp(32, 2), hp(32, 3)),
+        (5000, 1256, 1256),
+        "the burst box spends walker+gunner 3744 at frame 32"
+    );
+    assert_eq!(hp(36, 1), 4376, "the 0xB outer ring spends the clicker 624");
+    // The order arms at frame 37 (after the burst windows close).
+    assert_eq!((state(37, 1), state(37, 2), state(37, 3)), (3, 4, 4));
+    // The consume schedule: five case-4 cells + the case-3 cell.
+    assert_eq!(m(37, t74), (0x48F, 1), "case 4 at frame 37");
+    assert_eq!(m(39, t75), (0x48F, 1), "case 4 at frame 39");
+    assert_eq!(m(44, t77), (0x48F, 1), "case 4 at frame 44");
+    assert_eq!(m(46, t78), (0x48F, 1), "case 4 at frame 46");
+    assert_eq!(m(41, t769), (0x48F, 1), "the (76,9) side cell at frame 41");
+    // THE HEADLINE: case 3 at (76,10) fires at frame 41 and the
+    // walker's hp body is VALUE-VISIBLE — the exact +2500, unclamped
+    // (the S5B observability gap closed). Same frame as the consume,
+    // same frame as the (76,9) side draw (the diagonal probe reach).
+    assert_eq!(m(40, t76), (0x7b, 0), "not yet consumed at frame 40");
+    assert_eq!(m(41, t76), (0x48F, 1), "CASE 3 at frame 41");
+    assert_eq!(hp(40, 2), 1256);
+    assert_eq!(
+        hp(41, 2),
+        3756,
+        "case 3 heals the pre-damaged walker the exact +2500, unclamped"
+    );
+    assert_eq!(
+        hp(41, 3),
+        1256,
+        "the gunner (one robot behind, case 3 already consumed) never heals"
+    );
+    assert_eq!(hp(54, 3), 1256, "gunner hp through the tail");
+    assert_eq!(
+        money(41),
+        4150,
+        "the side cell's case-4 draw folds same-frame"
+    );
+    assert_eq!((score(54), money(54)), (2667, 4210), "the pinned tail");
+    // The arrival at frame 48: walker state 4→3 snapped at (78,10)
+    // (one tile short of its spread slot — the west-approach
+    // ARRIVE_RADIUS semantics, the S2 precedent).
+    assert_eq!(state(47, 2), 4);
+    assert_eq!(state(48, 2), 3, "the arrival clear at frame 48");
+    assert_eq!(tile(48, 2), (78, 10));
+    assert!(bank(48)[2].snapped(), "snapped at the tile origin");
+}

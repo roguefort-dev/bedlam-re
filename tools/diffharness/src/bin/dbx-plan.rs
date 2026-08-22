@@ -2081,6 +2081,42 @@ mod tests {
         assert_eq!(s5b.zone, Some('B'));
         assert!(s5b.pickup);
         assert!(emit_plan(&s5b, &registry()).is_ok());
+        // S5C (W12-S5C): the pre-damaged-walker variant — the third
+        // marker (the gunner ON the walker's tile) + its loadout seam
+        // + the frame-1 command and the frame-37 order both compile;
+        // the gunner's loadout records in _e_staging (never an O1
+        // write).
+        let s5c = Scenario::parse(include_str!("../../scenarios/S5C.scen")).unwrap();
+        assert_eq!(s5c.zone, Some('B'));
+        assert!(s5c.pickup);
+        assert_eq!(
+            s5c.markers,
+            vec![(78, 10, 3), (73, 10, 3), (73, 10, 3)],
+            "clicker + walker + gunner (on the walker's tile)"
+        );
+        let emitted = emit_plan(&s5c, &registry()).unwrap();
+        assert!(emitted.json.contains("\"loadout\": ["));
+        // 4 inject rows: the command append at frame 1 + the
+        // order-target triple at frame 37 (the S2 shape — no inject
+        // row ever touches the robot bank/count).
+        assert_eq!(emitted.inject_count, 4);
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert!(
+                !addr.to_uppercase().ends_with("F6D34") && !addr.to_uppercase().ends_with("11958C"),
+                "ghost staging write to the robot bank/count: {addr}"
+            );
+        }
+    }
+
+    #[test]
+    fn s5c_plan_matches_committed_artifact() {
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S5C.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S5C.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S5C.json is stale: regenerate with dbx-plan scenarios/S5C.scen --out capture-plans/S5C.json");
     }
 
     #[test]
