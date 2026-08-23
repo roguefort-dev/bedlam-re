@@ -4591,6 +4591,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff vx≠0 ∨ |vy|>0x40 [corrected 2026-08-22 bbbdedec], anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
 | projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {state u16@+0, x@+2, y@+6, z@+0xA Q13, vx@+0xE, vy@+0x12, vz@+0x16, +0x1A counter, +0x1E TTL}; dispatch state−0x65 ∈ 0..4 → table 0x411ffc {0x65 mover, 0x66 guided stepper ≤10 substeps + contact classes 1/2/3, 0x67/0x68 shared ballistic, 0x69 the beam}; terrain probe FUN_0041eaa1; impact damage keys §7j.50 (0x65/0x69 → literal 0x65, 0x66 → literal 0x66 + FUN_0041bc1c, 0x67/0x68 → OWN state via the [+0x4cc652]>>16 trick) → FUN_0041a894; producers = exactly 5 (k2 0x65/k3 0x67/k5-6 0x68/k7 0x69 + the TRT 0x66 @0x417a5c); the MID-FLIGHT DRAW walk §7j.28 (0x65/0x67/0x68 WEAPONS strips, 0x69 the per-level beam column, 0x66 loop-next invisible) | §7j.13, §7j.28, §7j.50 |
+| TRT-bolt robot-occupancy probe | FUN_00419756(x,y,z Q13), sole caller 0x4123ae (the 0x66 stepper's per-substep test): walks the robot bank 0x4c69e4/0xA8, count [0x46ccbc], ALIVE gate d@+0x7C≠0 → 1 on the FIRST record with \|Δ(x>>8)\|<0x10 ∧ \|Δ(y>>8)\|<0x10 ∧ \|z@+8 (Q5 raw) − z>>8\|<0x20 (±<0.5 tile lateral, ±<1 level z — the FUN_004197d4 box exactly; NOT octile); hit ⇒ contact class 3 = die via disburser (kind-8 debris, state := 0, pre-contact position after the substep revert) with ZERO damage queries — alive robots are a pure BLOCKER for the 0x66 bolt | §7j.51 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201); the per-type MID-FLIGHT DRAW map §7j.28 (types not listed there are NOT drawn mid-flight) | §7j.13, §7j.22, §7j.28 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
 | actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
@@ -8356,7 +8357,12 @@ full-.text objdump.
    key 0x66 + 0x41a894 + 0x41bc1c + die 0x412436..0x41247f). The
    write-back reverts the last substep (0x4123ff..0x412411). The
    §7j.13 "type-1/2/3" arms are these contact CLASSES of the 0x66
-   handler (1/2/3) — relabeled here by state id.
+   handler (1/2/3) — relabeled here by state id. [IDENTITY CLOSED
+   §7j.51: the probe takes (x,y,z) — all three args — and is the
+   first-alive ROBOT-BANK OCCUPANCY BOX; the "vz ≠ 0 → break" leg
+   only SKIPS the height probe (substeps continue); the §7j.16
+   spawn vz 0x14 = a ~2-frame terrain-arming delay, occupancy
+   tested every substep]
 7. **FUN_004126dc disburser — 0x69 arm pinned**: the kind switch
    (state 1→K2 @0x412716, 0x65→K0x14 @0x41274d, 0x66→K8 @0x4127f2,
    0x67→K4 @0x412784, 0x68→K4 @0x4127bb) falls through to the shared
@@ -8375,3 +8381,85 @@ full-.text objdump.
    level every frame, TTL 24) and must NOT damage robots; the 0x66
    TRT bolt is terrain-only damage 300/600/1200. Docs-only unit —
    no code, no watch rows (the 0x4cc654 bank is T2-class).
+
+## 7j.51. THE FUN_00419756 IDENTITY — CLOSED: the TRT-bolt class-3 probe is a first-alive ROBOT-BANK OCCUPANCY BOX (±<0.5 tile lateral, ±<1 level z — NOT octile, NOT critters, NOT TRT structures, NOT tile words); the class-3 death is the "hit an actor, ZERO damage of any kind" leg (2026-08-23, worker 9a23356a claim 2, D123; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read) [verified]
+
+1. **The body (126 B @0x419756..0x4197d3, instruction-exact).**
+   `FUN_00419756(x Q13 EAX, y Q13 EDX, z Q13 EBX) → 0/1`:
+   - prologue shelves the args: esi := x>>8, edi := y>>8, ebp :=
+     z>>8 (three `sar 0x8` @0x419762..0x419768), ecx := robot
+     index 0, ebx := bank byte offset 0 (Watcom wccc — the
+     `push ecx` @0x419756 is the alignment local, popped in the
+     epilogue);
+   - the loop `cmp ecx,ds:0x46ccbc; jge miss` (@0x419776) walks
+     rec := 0x4c69e4 + 0xA8·ecx:
+     - `cmp [ebx+0x4c6a60],0; je next` (@0x41977e) — ALIVE gate
+       (+0x7C); dead slots never block;
+     - `|(rec.x@+0)>>8 − (x>>8)| ≥ 0x10` → next (abs via
+       cdq/xor/sub @0x41978d..0x41979a);
+     - `|(rec.y@+4)>>8 − (y>>8)| ≥ 0x10` → next (0x4197a2..0x4197af);
+     - `|rec.z@+8 (RAW) − (z>>8)| ≥ 0x20` → next (0x4197b1..0x4197c1);
+     - all three pass → `mov eax,1` + epilogue (@0x4197c3);
+   - miss epilogue `xor eax,eax` + return (@0x4197cd).
+   FIRST match in bank order wins (lowest index) — it is a presence
+   predicate, not a nearest-scan (no distance returned).
+2. **The box geometry is scale-matched, not quirky.** All three axes
+   normalize to Q5 (32 units per tile/level): probe x/y are Q13
+   (tile·0x2000) so `>>8` lands at 1/32-tile units, threshold 0x10
+   = less than half a tile; robot z@+8 is STORED Q5 (§3 row +0x08,
+   clamped 0..0xFF = 0..~8 levels) so its RAW read is already in
+   the probe's `z>>8` scale — threshold 0x20 = less than one z
+   level. The apparent asymmetry (no `>>8` on the robot z) is the
+   scale match. FUN_004197d4's robot lane uses the IDENTICAL box
+   (|Δ(x>>8)|<0x10 @0x419856, |Δ(y>>8)|<0x10 @0x419876,
+   |z@+8 raw − proj.z@+0x4cc65e>>8|<0x20 @0x419893) — the §7j.13
+   item-4 walker and this probe share one geometry. NOT an octile
+   test (no FUN_0041ebf8 call; plain per-axis abs compares).
+3. **What it is NOT (the queue's four candidates).** Not the
+   critter bank 0x4cff98 (zero refs in the body), not TRT
+   structures (the bolt's structure damage rides the class-2 height
+   probe FUN_0041e231 + FUN_0041a894/FUN_0041bc1c, §7j.50/6), not a
+   tile-word test (no TOT/DAT/mirror reads). Caller census: EXACTLY
+   ONE call site 0x4123ae (exw-functions 1-caller + full-objdump
+   grep: only the definition @0x419756 + that call; no jump-table
+   refs).
+4. **Caller context refined (§7j.50/6 amendment, two gloss fixes).**
+   The state-0x66 guided stepper tests per substep in THIS order:
+   x+=vx ∧ y+=vy → x/y bounds vs [0x4eddec]/[0x4eddf0]<<0xd and z
+   bounds 0 ≤ z < 0x10000 (z = the record's UNSTEPPED z@+0x4cc65e,
+   read once at handler entry into [esp+0x24] @0x412315 — the bolt
+   never moves in z) → contact class 1; **FUN_00419756(x, y, z)** —
+   the §7j.50/6 "(x,y)" gloss corrected: ALL THREE args are passed
+   (ebx = z @0x412391) → class 3; THEN vz@+0x16 ≠ 0 → vz−− and
+   SKIP the height probe only (@0x4123c0..0x4123fa — the §7j.50/6
+   "break" gloss corrected: the substep loop CONTINUES, only the
+   terrain test is skipped; the §7j.16 spawn value +0x16 = 0x14
+   thus reads as a 20-substep (~2-frame) terrain-arming delay,
+   while the OCCUPANCY probe runs unconditionally every substep);
+   else FUN_0041e231(x>>8,y>>8) > z>>8 → class 2. The write-back
+   (0x4123ff..0x412411) reverts the contact substep BEFORE the
+   class dispatch, so the class-3 debris spawns at the pre-contact
+   position.
+5. **THE VERDICT (the queue's residual question).** Class 3 IS the
+   "hit an actor but no robot damage" leg — CONFIRMED, and
+   stronger: the class-3 path performs NO damage query of ANY kind.
+   0x41241f: `FUN_004126dc(slot)` (the disburser reads the record's
+   own state 0x66 → debris kind 8, §7j.50/7) then state := 0
+   (@0x41242a, belt-and-braces beside the disburser's own clear) —
+   NO FUN_00419aff, NO FUN_0041a894/0x41bc1c, NO FUN_0040e230 on
+   the path. What the TRT bolt interacts with: ALIVE ROBOTS are a
+   pure BLOCKER — the bolt stops at the first robot box it enters
+   and dies as cosmetic kind-8 debris; its heavy (d+1)·300 damage
+   is EXCLUSIVELY the class-2 terrain/structure contact. This
+   closes the §7j.50 residual ("0x66 never damages robots — what
+   DOES the bolt interact with"): the squad — as an obstruction,
+   never as a target.
+6. **Engine consequence: NONE today** (docs-only; the 0x4cc654 bank
+   is T2-class, no watch rows). When the E-side TRT fire routine
+   (the FUN_00417698 producer family) lands, its stepper must
+   reproduce the robot-blocker box verbatim — without it a bolt
+   would fly through the squad and detonate on the terrain behind
+   it (a death-POSITION divergence: class 3 vs class 2 at a
+   different tile); the class-3 death must spawn kind-8 debris at
+   the post-revert pre-contact position with zero damage, and the
+   probe is first-match-in-bank-order (lowest robot index blocks).
