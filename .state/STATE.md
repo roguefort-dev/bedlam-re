@@ -1,33 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
-  - 2026-08-23 P4.2/W12-S8 COMPLETE (D114; the §7j.42 decode by
-    f9af5743 + the engine leg 8786c9e + the differ/plan/docs legs
-    ebf1d0b by 40dd9473, which died after pushing but before the
-    queue rewrite; continuation worker b22cba4a claim 2 re-verified
-    green + completed the queue leg): bedlam-core::critter landed —
-    the 0x4cff98 bank + the .NME staging seam, the k4 seek steppers
-    + the k5/6 mixed-AI body (FIVE asm-verified §7j.43 corrections
-    over the WIP), the 0x68 fire cycle, the odd-pass damage walker,
-    the §7j.24 death handlers + the 80-row LRU effect bank, the
-    bounty gate (dark on the corpus path — script kills carry
-    attacker −1). Grammar v1.7 `critters = 1` (staging+arm; the
-    loader/controller RNG draws = the budgeted E-side stream gap on
-    unarmed scenarios, the D113 pattern). S8.scen = the ZONEA/M1
-    critter engagement (the corpus zone hosts 16: the (18,9)-row
-    kind-5 pack + 10 kind-4s; the gunner at the (18,13) FLAT row —
-    a plateau marker puts the burst one z-level high and misses;
-    2-3 critters run the fire cycle, 9 dead by f39, 80-row effect
-    turnover, dormancy tail). 121 records, chain b5ae3f8be91c7449 +
-    double-run byte-identical; corpus_s8 + differ_gate S8 row
-    (cross PASS-WITH-NOTES, 2 S1-class + the critter/effect E-only
-    pair, zero gaps) + capture-plans/S8.json byte-pinned.
-    RE-VERIFIED this run: canonical_dump_gate 13/13 (S0..S7
-    byte-identical + S8), differ_gate green, dbx-plan 31/31,
-    workspace 54 suites green, fmt+clippy clean (3 S8-test lints
-    fixed), manifest clean both sides, PUSHED. THE W12 SERIES
-    (S3..S8) IS COMPLETE. Queue: 1 = [BLOCKED] S0 live session
-    (operator), 2 = the FUN_0040de9c debris-physics/collision
-    family unit. NEXT: debris-physics (item 2).
+  - 2026-08-23 P4.2/debris-physics COMPLETE (D115; the §7j.44 RE
+    decode d467471 + the engine leg cebc178 landed by predecessor
+    a5ef2370 which died at session end mid-re-baseline; the
+    uncommitted gate pins were ADOPTED + INDEPENDENTLY re-verified +
+    COMPLETED by continuation worker 07ce0c25 claim 2, commits
+    b2c89af (the five-chain re-baseline + the damage-lane
+    assertions) + c4af24b (docs)): the tick FUN_00420549
+    (delay/anim/free lifecycle + the phys gate, MissionShell
+    epilogue slot) + the pass FUN_0040de9c in bedlam-core — the
+    +0x20 phys word is a COUNTDOWN (the 0x454510 table disproof
+    closes 7j.11/5), mag = kind==12?25:2, knock_mult = min(phys,3),
+    radius = min(16·phys+0x20,0x60); the robot lane (the
+    FUN_0040db9e dispatcher — damage + facing −1 + knock, five-k5
+    death tail), the terrain-gated critter lane (the §7j.24
+    register-gloss correction), the POI lane E-only documented.
+    RE-BASELINE: S3 9a11efa03baafb64 (mine/grenade expiry k12
+    chunks — NOT only destroy scenarios move), S4
+    35fa3a9234cbff37, S5C 786fd87565b67f4a (case-3 consume flips
+    to the gunner; the +2500 heal stays exact), S7
+    ecdce5472df6a324, S8 44d806b81bd1b1ff; S0/S1/S2/S5/S5B/S6
+    BYTE-IDENTICAL. Debris-damage observability: corpus_s4 (the
+    widened cascade + the freed-ring lifecycle), corpus_s7 (the
+    standing gunner's chunk-field schedule), corpus_s8 (the
+    burst-window chips). Verified this run: workspace 54 suites
+    green, fmt+clippy clean, manifest clean both sides, PUSHED.
+    THE E-SIDE PRODUCER SURFACE FOR THE DIFFHARNESS IS COMPLETE
+    (W1..W9 + W12 + debris physics; W10/W11 + the live DH-G1
+    verdict remain, operator/external gated). Queue: 1 =
+    [BLOCKED] S0 live session (operator), 2 = the RE-EXW-SIM §9
+    remainder (FUN_00440e45 identity + robots() extra-phase/state-1
+    producers). NEXT: the §9 remainder unit (item 2).
 
   - 2026-08-23 P4.2/W12-S7 COMPLETE (D113; the §7j.41 decode
     984a078 + the engine platform-dynamics family ea2f259 + the

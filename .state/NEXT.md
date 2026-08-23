@@ -123,25 +123,21 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4.2/debris-physics] THE FUN_0040de9c DEBRIS PHYSICS/COLLISION
-   FAMILY unit (medium; §7j.7 item 7 head decode + the Backlog
-   "debris-stager ENGINE widening" bullet + MISSIONVIEW §5d tail):
-   the per-frame physics pass behind the effect-row +0x20 classes
-   {1,2,3,6} — decode the WHOLE of FUN_0040de9c (movement model per
-   class; the 0x454510 physics-param dword table census §7j.11/5;
-   the 3 octile reads per §7j.16; the ALIVE-robot Q13 position
-   compares = the moving-chunk DAMAGE lane [ALIASED — robot bank];
-   the critter+POI count collision reads), land it engine-side in
-   bedlam-core (the debris rows now turn over on the corpus path —
-   S7 destroys + S8 critter deaths), then the observability
-   pairing: census FIRST which debris kinds carry physics classes
-   on the S7/S8 paths; if debris damage lands in-scenario, extend
-   the corpus_s7/corpus_s8 assertions; if not, an S-variant arms a
-   physics-class burst into the robot lane; the critter-POI
-   collision side stays E-only unless an EXD alias exists. Chain
-   pins: S0..S8 byte-identical re-assert (the physics pass must
-   stay OFF the unarmed paths — the staging-key discipline). RE-READ
-   §7j.7 item 7 + §7j.11 items 4-5 + §7j.16 first.
+2. [P4/RE] THE RE-EXW-SIM §9 ITEMS 2-3 REMAINDER unit (medium;
+   objdump-only from ghidra-project/exw-text-objdump.txt,
+   docs-only, unattended-safe): (a) the FUN_00440e45 full decode
+   (10661 B, GameMain call #2 — §9 item 2; the inter-mission
+   shell hypothesis to verify: 7d's WEAPICON/CONLITE/SHOPFONT/
+   SHOPLITE + SHOP.SMK + the weapon-table writer family + its
+   0x46cbe0 command-count read = MP shop sync; anchor every state
+   word its writers touch into the §3 ledger with §7j.45
+   provenance); (b) the robots() extra-phase semantics (fields
+   0x4c6a16/18/88/8c) + the state-1 producers (patrol? — §9
+   item 3; the S6 walk showed state 1 = move-target, the
+   producers of the AMR still un-decoded). Deliverables:
+   §7j.45 + ledger rows + §9 items 2-3 refresh + D116;
+   registry_anchors green; manifest brackets any corpus probe;
+   PUSH.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -182,14 +178,11 @@ renumbered queue keeps every open item claimable by number).
   mapping (which bank feeds which restore word — 7j.25 pinned
   banks @+0x46/+0x4A = TOT-mirror/seen+DAT; @+0x3E/+0x42
   readers still open).
-- The debris-stager ENGINE widening beyond kind 5 (fed by the
-  7j.11 20-kind table + the 11 seq tables): model the k2/k8
-  single-center scorch (values 3/4), the k1/k20 shared-tail
-  ring, and the +0x20 physics classes (0/1/2/3/6 ->
-  FUN_0040de9c) — all producers now DECODED (7j.22 weapon
-  family, 7j.24 critter deaths, 7j.25 destroy tail) but all
-  sit OFF the corpus path (nothing fires/dies/gets destroyed
-  in the gates); lands with the P4.2 harness.
+- RETIRED 2026-08-23 (D115/§7j.44): the "debris-stager ENGINE
+  widening" bullet — k2/k8 scorch + the k1/k20 ring landed with
+  the 7j.11 stager, the +0x20 physics classes landed as the
+  FUN_0040de9c family (commit cebc178; the 0x454510 census task
+  closed BY DISPROOF — no param table exists).
 - Keyboard latch wiring for the sidebar (F1/F2/F3, keys 1..7,
   MSpace; RE-EXW-INPUT line 95) - blocked on the P2e InputFrame
   button bit-map assignment.
@@ -233,16 +226,11 @@ renumbered queue keeps every open item claimable by number).
   ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
   Shield/Variant bank staging (nodes enqueue, flush skips while
-  unstaged). The debris physics/collision FUN_0040de9c (7j.7
-  head decode) lives here too (+ the 0x454510+ physics-param
-  dword table census-noted in 7j.11 item 5; 3 octile reads per
-  7j.16; reads BOTH the critter and POI counts — collision
-  family).
-- RE-EXW-SIM sec 9 open items 2-3: FUN_00440e45 identity (THE SHOP
-  per 7d: WEAPICON/CONLITE/SHOPFONT/SHOPLITE + SHOP.SMK + the
-  weapon-table writer family - see 7d.2; 1 octile read per 7j.16;
-  NOTE 7j.17: it also reads the command count 0x46cbe0 — MP shop
-  sync), robots() extra-phase semantics + state-1 producers.
+  unstaged). (The debris physics/collision FUN_0040de9c clause
+  CLOSED 2026-08-23, D115/§7j.44.)
+- RE-EXW-SIM sec 9 open items 2-3: PROMOTED to the Now queue
+  (item 2, 2026-08-23). The FUN_00440e45 identity + robots()
+  extra-phase/state-1 producers.
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DESIGN DOC LANDED 2026-08-22 (docs/DESIGN-DIFFHARNESS.md, D77, commit
   7bc2c9d) — oracle topology (O1 EXD/DOSBox-X primary instrument, O2
@@ -279,6 +267,42 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4.2/debris-physics THE FUN_0040de9c FAMILY unit
+   COMPLETE (D115; the §7j.44 RE decode d467471 + the engine leg
+   cebc178 landed by predecessor a5ef2370 claim 2, which died at
+   session end mid-re-baseline leaving the gate pins uncommitted;
+   continuation worker 07ce0c25 claim 2 ADOPTED the WIP +
+   INDEPENDENTLY re-verified + completed the re-baseline/docs/
+   queue legs, commits b2c89af + c4af24b): the tick FUN_00420549
+   (delay/anim/free lifecycle + the phys gate, MissionShell
+   epilogue slot) + the pass — the +0x20 phys word is a COUNTDOWN
+   (dec-on-exit; the 0x454510 "param table" DISPROVEN, closing
+   7j.11/5), mag = kind==12?25:2, knock_mult = min(phys,3),
+   critter radius = min(16·phys+0x20,0x60); the ROBOT lane (the
+   W12-S8 FUN_0040db9e dispatcher: damage + facing −1 + the
+   ≤3-px knock, five-k5 death tail), the TERRAIN-GATED critter
+   lane (3-row plane-0 dword probe; per-kind get/set scales; the
+   §7j.24 register-gloss correction — edx = knock/sin-cos factor,
+   ecx = the 2/25 hp subtraction), the POI squash lane E-only.
+   RE-BASELINE (the physics turn-on makes chunks mutators on the
+   aliased robot bank — mines/grenades expire to k12 mag-25 so
+   even NON-destroy scenarios move): S3 → 9a11efa03baafb64, S4 →
+   35fa3a9234cbff37, S5C → 786fd87565b67f4a (the case-3 consume
+   flips to the gunner — the +2500 heal stays exact/unclamped,
+   the scenario's purpose intact; an O1 capture arbitrates), S7
+   → ecdce5472df6a324, S8 → 44d806b81bd1b1ff; S0/S1/S2/S5/S5B/
+   S6 BYTE-IDENTICAL (staging-key discipline holds). The
+   observability pairing: corpus_s4 (the knock-widened cascade,
+   15 destroyed + the freed-ring lifecycle — 60 live at the tail,
+   the old never-free 128 saturation gone), corpus_s7 (the
+   standing gunner's chunk-field schedule: 19 hp-change frames
+   f32..f50, 1248 total spend), corpus_s8 (the burst-window
+   chips, end 3041). No new S-variant needed (the queue's
+   conditional satisfied — debris damage DOES land in-scenario);
+   the differ contract unchanged (zero new rows). Verified:
+   workspace 54 suites green, fmt+clippy clean, manifest clean
+   before AND after, PUSHED. Queued: the RE-EXW-SIM §9 items 2-3
+   remainder unit (item 2).
 - 2026-08-23: P4.2/W12-S8 THE E-SIDE CRITTER-ENGAGEMENT PRODUCER
    unit COMPLETE (D114; the §7j.42 RE decode b3e78cb+05f0d95 by
    predecessor f9af5743 claim 2; the engine leg 8786c9e + the
