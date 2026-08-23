@@ -1363,10 +1363,10 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    decrement, skip; else `+0x18 (seq) += 1`, read
    `(i16)table[+0x2C][seq]`: `== −1` → `+0 = 0` (done, slot freed);
    else if `+0x20 (physics flag) != 0` → `FUN_0040de9c(idx)`.
-   FUN_0040de9c [head verified] = the per-frame debris PHYSICS +
-   collision pass (walks ALIVE robots, compares positions in Q13 —
-   the moving-chunk damage family, callers 0x40df45/0x41a515
-   context). The kind-5 table at 0x454424 [bytes verified]:
+   FUN_0040de9c = the per-frame debris PHYSICS + collision
+   pass — DECODED WHOLE as §7j.44 (the flag is a COUNTDOWN;
+   three collision walks: robots/critters/POIs; sole caller =
+   this tick @0x420585). The kind-5 table at 0x454424 [bytes verified]:
    `{5,6,7,8,9,0xA,0xB,0xC,0xD,0xE,0xF,0x10,−1}` — 13-frame debris
    tumble, then free. The whole array is cleared 0x1800 B at
    0x476fbc by FUN_0041a4f8 (the full-reset family) alongside
@@ -1684,9 +1684,10 @@ the 20-kind table. All [verified] asm unless tagged.
    Field precision (corrects 7j.5's loose numbering):
    `+0x1C` stores the kind ARGUMENT verbatim (1..20 — the draw
    pass layer choice reads it); `+0x20` is a per-kind PHYSICS
-   constant (0 = no physics; 1/2/3/6 = run FUN_0040de9c each
-   tick — likely a physics-class index into the dword table at
-   0x454510+ [census-only]); `+0x24` ← [esp+0x20] (start
+   COUNTDOWN seed (0 = no physics; 1/2/3/6 = run FUN_0040de9c,
+   which DECREAMENTS it per frame — §7j.44 corrects this
+   gloss: never a 0x454510 table index; the params are
+   arithmetic); `+0x24` ← [esp+0x20] (start
    delay); `+0x28` ← [esp+0x24] (param); `+0x10/+0x14` init
    0x40 or 0x20; `+0x18` seq = 0; `+0x2C` = the seq-table ptr.
 3. **CORRECTION to 7j.9 item 4**: kinds 1/13/14/15 (shared
@@ -1725,8 +1726,9 @@ the 20-kind table. All [verified] asm unless tagged.
    kinds 7/10/4, 29..43 = kinds 3, 44..104 = the long physics
    kinds 16..20. The dword block at 0x454510+ ({0,1,0,0,0,1,
    0x20,0x10,0,0x10,0x20, 0x1D..0x14 descending}) is a
-   DIFFERENT table [census-only — likely FUN_0040de9c physics
-   params indexed by the +0x20 class].
+   DIFFERENT table — NOT the FUN_0040de9c params (§7j.44: the
+   physics params are arithmetic in the +0x20 countdown;
+   0x454510 remains census-only, unconsumed by this family).
 6. **The complete 47-site caller census** [verified; kind from
    the ecx immediate at each site]:
    k1 → 0x417ec3 (FUN_00417e2f), 0x4182b9 (FUN_00418250),
@@ -4551,7 +4553,9 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | mortar smoke-trail bank | 0x4e66b8 stride 0x68 {d@+0 active, d@+4 ring&7, 8×0xC xyz}: weapon-0xE tick appends prev pos {x−vx, y−vy, z−arc} every 2nd tick; link = record d@+0x32; SLOT ALLOCATOR CLOSED = FUN_00412a4a (20 slots, first active==0, else −1); allocated at spawn by FUN_0040a9ff when the robot slot weapon == 0xE (link := slot, active := 1, ring zeroed; non-mortar link := 0); cleared on free/detonate; DRAW PASS CLOSED §7j.28: FUN_00403938 @0x40442f draws all 8 ring positions (base +8+i·0xC, active/ring words unread) as WEAPONS.BIN frames 0x10+(tick+i)&7, mode 0x12E, screen+map clipped | §7j.22, §7j.23, §7j.28 |
 | critter death handlers | six per-kind handlers over bank 0x4cff98 (idx EAX; k4/k5-6 take weapon EDX): k1 FUN_00418835 state 7+presence 0+1× k1 debris; k2 FUN_004188d0 state 7+presence 0+1× k0xD; k3 FUN_00418aa6 state 7+timer 0+1× k7+3× k6 (delays 0/2/4)+FUN_00421f4c; k4 FUN_00418ca4 w@+0x02 := 1, hp 0, state 6, timer 6, 1× k7, weapon {0x24,0x29,0xC} → 3× k7 + 8 effect rows; k5/6 FUN_00418e26 w@+0x02 := 1, hp 0, state 6, sub-timer 0, 1× k7, weapon-gated 3× k7 + 12 rows; k7 FUN_0041896c state 6, w@+0x78 := 1, 3× k7 falling gibs (z 0xFF−r) + 1× k0xD, SFX FUN_0043a48e(0x4edff8,…,3); k1/k4 px-raw coords, others Q13 >>8, z raw-Q13 → stager-clamped 0xFF | §7j.24 |
 | critter bounty gate | all six handlers: attacker w@+0x04 ≠ −1 ∧ robot[attacker].type w@+0x2A == [0x4edb90] → score [0x4dd40c] += 30/50/500/75/150/1000 (k1/k2/k3/k4/k5-6/k7) + DAT_0046ccf0 := 2 (score-strip refresh, = the §7j.6 pickup mechanism); env kills award nothing | §7j.24 |
-| debris-crush death dispatcher | FUN_0040dce0(idx, mag, heading, dmg), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x02 ∉ {7,2} ∧ mag > 2 ∧ dmg ≠ 0; damage FUN_0040eb3c; sin/cos·mag knock + move FUN_00412998 (kind 7 ∨ wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24 |
+| debris-crush death dispatcher | FUN_0040dce0(idx, knock_mult EDX, heading EBX, dmg ECX), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x00(kind) ∉ {7,2} ∧ knock_mult > 2 ∧ dmg ≠ 0 (register gloss CORRECTED §7j.44/4 — 7j.24's mag/dmg names were swapped); damage FUN_0040eb3c(idx, dmg) = `if presence { hp w@+0x06 −= dmg }`; sin/cos·knock_mult>>8 + per-kind setter move FUN_00412998(idx, x', y', −1) (kind 7 always, else wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24, §7j.44 |
+| debris physics pass | FUN_0040de9c(idx), sole caller the debris tick FUN_00420549 @0x420585 (MissionShell epilogue 0x448076, after the phases, before the armor fade): +0x20 phys = a COUNTDOWN (dec per frame — class 6 runs 6 frames); knock_mult = min(phys,3), critter radius = min(16·phys+0x20, 0x60), mag = kind==12 ? 25 : 2; ROBOT lane (no gate): ALIVE ∧ state≠2 ∧ octile(ΔQ13)>>8 < 0x40 → FUN_0040db9e(idx, knock_mult, heading, mag, debris slot) = FUN_0040e230(robot, mag, owner=debris.+0x28) + facing −1 + robot_move knock (sin·k>>7, cos·k>>7); TERRAIN gate (3-row DAT dword probe rows y−1..y+1 col x−1 at the debris tile−1 — any nonzero → critters) gates ONLY the critter walk; CRITTER lane: presence ∧ mode ∉ {7,6,0xB}, getter FUN_004128ec per-kind scale, |Δ|<0x8000 ∧ octile>>8 < radius, falloff=((radius−1)−dist)>>3 → FUN_0040dce0; POI lane always: active w@+0 ∧ w@+2 ∉ {5,6,7}, octile>>8 < 0x30 ∧ |Δz|<0x20 → FUN_0040dc1b(poi, (0x40−dist)>>2): w@+2 −= mag, ≤0 → panic w@+4:=6 + timer 0 + DEADMAN SFX + k10 debris (E-only, no POI bank) | §7j.44 |
+| critter position get/set | FUN_004128ec getter (0x4128d0 table: kinds 1/4 x/y/z <<8, kind 2 raw, kinds 3/5/6/7 x/y raw z <<8) / FUN_00412998 setter (0x41297c table: kinds 1/4 args >>8, others raw; z arg −1 → z untouched) | §7j.44 |
 | critter-death SFX trio | FUN_00421f4c(x,y): [0x4ede58]≠0, RandB()%3 → banks 0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank,0,x,y,2); twin of the impact trio FUN_00421fc2 (0x4edf7c/80/84) | §7j.24 |
 | effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18 — the k7 body only, §7j.43/2); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16. LANDED (W12-S8/D114: the death-handler callers — the E-ONLY T3 `effect-rows` row) | §7j.24/§7j.43 |
 | robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age/claim d@+0xC, frame d@+0x10} — the MISSIONVIEW §5d/§5e "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age); anim tick FUN_004238af (frame ++ wrap 0x10→4); CONSUMER (7j.26) = enqueue pair SMOKER.BIN frame 0 mode 300 + frame d@+0x10+1 mode 0x12d (DARKPAL) at sy−0x20 | §7j.24, §7j.26 |
@@ -6658,3 +6662,103 @@ ghidra-project/exw-text-objdump.txt.
    observables: the RNG stream, the robot bank, the projectile
    bank (the 0x68s), the score bounty. Grammar v1.7
    `critters = 1`; the S0..S7 chains byte-identical without it.
+
+## 7j.44. THE FUN_0040de9c DEBRIS-PHYSICS DECODE — the whole per-frame pass: the countdown semantics, the three collision walks, and the param arithmetic (2026-08-23, worker a5ef2370 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt 0x40de9c..0x40e21b + the helper bodies 0x40db9e/0x40dc1b/0x40dce0/0x40eb3c/0x4128ec/0x412998/0x41e9a2/0x41eb65..0x41ebf8, no Ghidra run)
+
+1. **THE +0x20 PHYSICS WORD IS A COUNTDOWN, not a class index**
+   [verified whole]: FUN_0040de9c ends \`dec [R+0x20]\`
+   (0x40e20d, the fall-through exit) — every physics frame
+   decrements it, and the TICK gate (FUN_00420549 @0x420590,
+   \`+0x20 != 0\` → call) stops calling when it reaches 0. A
+   class-6 chunk therefore moves/damages for exactly 6 frames,
+   class-1 for one. **The 0x454510 dword table is NOT this
+   function's param table** — FUN_0040de9c reads no table: the
+   two params are ARITHMETIC in the CURRENT (pre-decrement)
+   phys value [verified]:
+   - knock_mult (robots) = \`min(phys, 3)\` (0x40def4).
+   - radius (critters) = \`min(16·phys + 0x20, 0x60)\` (0x40dfc6):
+     phys 1→0x30, 2→0x40, 3→0x50, 6→0x60. A class-6 chunk's
+     critter radius decays 96/96/96/80/64/48 across its frames.
+   - mag_const (both lanes) = \`kind == 12 ? 25 : 2\` (0x40dec6) —
+     the +0x1C kind word, nothing else. **Only the destroy-tail
+     k12 five-chunk burst carries mag 25**; every other physics
+     kind (1/3/4/6/8/9/13..20) deals mag 2.
+2. **THE ROBOT LANE = the ALIVE-robot Q13 damage walk**
+   [verified 0x40df06..0x40dfbc]: over ALL \`[0x46ccbc]\` robot
+   records (the TOTAL count, D89), gates \`d@+0x7C != 0\` (ALIVE)
+   ∧ \`word@+0x0C != 2\` (the unaligned \`dword@+0x0A sar 16\`
+   read; state 2 = dead). Δ = robot Q13 pos (d@+0/+4) −
+   (debris x/y \`<<8\`) — the debris Q5 pair up-scaled. Octile
+   (FUN_0041ebf8: max+min/2) \`>>8 ≥ 0x40\` (64 px = 2 tiles)
+   skips; 0→1. heading = the SAME atan2 pair the engine already
+   models (FUN_0041eb7d 64-bucket bin-search over the sin-table
+   quarter at [0x46cbd0]+4 + FUN_0041ebc1 quadrant fold —
+   byte-identical to \`AngleTable::angle_byte\`). Then
+   **FUN_0040db9e(idx, knock_mult, heading, mag_const,
+   debris_slot)** — the W12-S8 critter ranged-attack
+   dispatcher, already landed: \`FUN_0040e230(robot,
+   damage=mag_const, owner=debris.+0x28 param)\` + facing
+   w@+0x10 := −1 + the FUN_0040c536 knock
+   \`(sin·k>>7, cos·k>>7)\` = \`robot_move\`. So a robot under a
+   rolling chunk takes **2 (25 for k12) damage per frame per
+   chunk**, plus a ≤3-px knock. NO terrain gate on this lane.
+3. **THE TERRAIN GATE gates ONLY the critter lane** [verified
+   0x40dfbc..0x40e03f]: the 3-row DAT-volume dword probe at
+   tile (x>>5 −1, y>>5 −1) — rows y−1/y/y+1 via the y-line
+   table 0x4ea900 + [0x46af4c] + column x−1, each read a DWORD
+   (covers columns x−1..x). ANY nonzero dword → the critter
+   walk runs; ALL zero → skip straight to the POI walk. I.e.
+   debris over EMPTY ground cannot hit critters (the 3×2
+   up-left block is the cover test).
+4. **THE CRITTER LANE** [verified 0x40e03f..0x40e144]: over
+   \`[0x46cc2c]\` critters, gates presence w@+0x24 ≠ 0 ∧ mode
+   w@+0x0C ∉ {7, 6, 0xB}. Position via **FUN_004128ec = the
+   per-kind critter position GETTER** [verified whole + its
+   0x4128d0 jump table]: kinds 1/4 → (x,y) \`<<8\` + z \`<<8\`
+   (native Q5), kind 2 → x/y/z raw (native Q13), kinds 3/5/6/7
+   → x/y raw, z \`<<8\`. Pre-filters |Δx|,|Δy| < 0x8000 (4
+   tiles, overflow guard) then octile>>8 < radius. dmg_falloff
+   = \`((radius−1) − dist_px) >> 3\` (0x40e138 — always ≥ 0
+   since dist < radius). Then **FUN_0040dce0(idx, dmg_falloff,
+   heading, mag_const)** — the §7j.24 debris-crush dispatcher;
+   NOTE the 7j.24 arg gloss had mag/dmg REGISTER-swapped: the
+   body proves ebp(EDX) is the >2-gated knock multiplier AND
+   the sin/cos·mag factor, while ecx(ECX) — the mag_const
+   2/25 — is what FUN_0040eb3c subtracts from hp
+   (\`FUN_0040eb3c(idx, dmg)\` = \`if presence { hp w@+0x06 −=
+   dmg }\`, 21 bytes, verified whole). So: falloff > 2 required
+   (dist < radius − ~24), hp −= 2/25, knock = pos +
+   (sin·falloff>>8, cos·falloff>>8) stored per-kind via
+   **FUN_00412998 = the per-kind position SETTER** (0x41297c
+   jump table: kinds 1/4 take the args \`>>8\`, others raw; z
+   arg −1 leaves z untouched), the move gated kind 7 always /
+   otherwise **FUN_0041e9a2 = the 8-corner critter walk probe**
+   (the ±corner-offset tables 0x4543e4/0x454404, per-corner
+   bounds + FUN_0041e411 z-probe + |z−corner| ≤ 4), then hp ≤
+   0 → attacker := −1 + the per-kind death dispatch (k4 weapon
+   0, k5/6 weapon 0x24 skipped in modes {5,6} — §7j.24/3).
+5. **THE POI LANE runs ALWAYS (no terrain gate)** [verified
+   0x40e145..0x40e20c]: over \`[0x46cbf0]\` POI/personnel records
+   (0x4dabdc/0x1E, the FUN_00412a98 bank §7j.17), gates active
+   w@+0 ≠ 0 ∧ w@+2 ∉ {5,6,7}. Δx/Δy = POI xyz d@+0xE/+0x12 −
+   debris<<8 (Q13); octile>>8 ≥ 0x30 (48 px) skips; then
+   |POI z d@+0x16 − debris z| ≥ 0x20 skips. Hit →
+   **FUN_0040dc1b(poi, mag = (0x40 − dist_px)>>2)** [verified
+   whole]: \`w@+2 −= mag\`; on w@+2 ≤ 0 → w@+4 := 6 (PANIC
+   state) + w@+0xA := 0 (timer) + the RandB&1 DEADMAN1/2 thud
+   SFX pick (0x4edfb8/0x4edfbc) + a kind-10 debris staged at
+   the POI pos (delay 0, param −1). The personnel-squash
+   effect. E-side this lane is DEAD CODE (no POI bank is
+   staged — the §7j.18 .NME section-8 loader is not modeled);
+   documented, not landed.
+6. **Callers + corpus census**: FUN_0040de9c has exactly ONE
+   caller — the tick FUN_00420549 @0x420585 (the MissionShell
+   epilogue 0x448076, i.e. AFTER the robot phases, BEFORE the
+   armor-pad fade FUN_00424051). S7's destroy tail stages
+   k14/k16..19/k20 (the five-effect loop) + k15 (TRT death) +
+   k6 + FIVE k12 — every one phys-6 EXCEPT k10; S8's critter
+   deaths stage k7 only (phys 0 — no physics); S4's destroy
+   legs stage the same five-effect/k12 family; S0..S3/S5/S6
+   stage nothing. The ROBOT lane is aliased (robot bank
+   hashed), the critter lane is aliased on S8 (bank live), the
+   POI lane stays E-only.
