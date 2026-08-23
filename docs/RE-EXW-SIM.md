@@ -2228,13 +2228,17 @@ roots). All facts below [verified] against that dump unless tagged.
    word, 0 = free. Types pinned: 1 → debris K2, 0x65 → K0x14,
    0x66 → K8, 0x67 → K4, 0x68 → K4; coords (x>>8, y>>8, z>>8)
    — NO z−10 here (vs FUN_004124a4); every branch clears the
-   type word. Projectile type ids ARE weapon-stat ids (the 7j.13
-   impact damage FUN_00419aff(0x65/0x66) reads the projectile's
-   own type). Callers: 4 in FUN_00412010 (the 3 probe-hit sites
+   type word. Projectile type ids ARE weapon-stat ids — CORRECTED
+   2026-08-23 §7j.50: only the 0x67/0x68 terrain/robot impact legs
+   read the record's OWN state word (the [+0x4cc652]>>16 dword
+   trick); the 0x65/0x69 legs pass the LITERAL 0x65, the 0x66 leg
+   the literal 0x66. Callers: 4 in FUN_00412010 (the 3 probe-hit sites
    + axis-counter expiry 0x412425/0x41243f) + 2 in FUN_004197d4
    = the projectile-vs-ROBOT proximity walker (|dx| < 0x10 Q8 ∧
    |dz| < 0x20 vs robot rec @0x4c69e4+0xA8·i, z@+8 → expire on
-   robot hit, then 0x65 damage lookups) — the ROBOT-HIT arm of
+   robot hit, then 0x65 damage lookups; §7j.50: states 0x65/0x67/
+   0x68 admitted only — 0x66/0x69 never damage robots) — the
+   ROBOT-HIT arm of
    the projectile family [census-level].
 5. **7j.10 addendum (splash gates + eviction)** [verified in the
    depth-1 dumps]: FUN_0041bd78(x,y,z) scans UP from min(z,7)
@@ -2632,8 +2636,12 @@ run. All facts [verified] against the dumps unless tagged.
    - state 7 CLOSE-COMBAT: steer (atan2 + FUN_00412a19
      clamp) + sin/cos move; engage leash
      (d+1)·0x40+600 = 640/704/768; point-blank
-     (dist<0x50) projectile 0x69 — NEW type, absent from the
-     7j.15 damage table (→ "else 1") — fired at fire rate
+     (dist<0x50) projectile 0x69 — a 0x4cc654-bank STATE (the
+     per-level BEAM column), NOT a 400×0x36 weapon type; the
+     "absent from the 7j.15 damage table (→ 'else 1')" guess is
+     CORRECTED 2026-08-23 §7j.50: the impact re-keys to the
+     LITERAL 0x65 (50/100/200 by d, per-frame at the blocked
+     level; terrain-only, never robots) — fired at fire rate
      every 32/16/8 frames for d=0/1/2, {type 0x69, z=6,
      +0x1A=0, +0x1E=0x18}; attack-break odds d=0: 1/8,
      d=1: 1/16, d=2: never (RandA gates @0x41353e/56/6e).
@@ -2946,8 +2954,10 @@ bytes) + a corpus exact-consumption check
      shell progress display + a 0x4442xx helper); no other
      readers. Identity: per-slot objective completion flags.
    - Projectile type 0x69 vs the FUN_00419aff damage table:
-     NOT folded (would need the damage-table else-path dump;
-     stays open, low priority).
+     CLOSED 2026-08-23 §7j.50/D122 — the else path is dumped
+     (inline jump tree, no memory table), no caller ever passes
+     0x69, and the beam's impact re-keys to the LITERAL 0x65
+     (50/100/200 by d, terrain-only, never robots).
 5. Corpus-path verdict: docs + tooling (D66) — the
    inspector's heuristic NME walker is replaced by the exact
    8-section schedule (engine/bedlam-assets parse_nme + a
@@ -4243,13 +4253,19 @@ below). Part 1 = the 400×0x36 dispatch family.
      (sy −= z>>8; z-arg z>>13 clamp ≥0), WEAPONS frame
      **(g_frame_count&3)+0x3C** (60..63), mode 0x12C, +shake.
    - **0x66 → 0x404f8a = LOOP-NEXT: NOT drawn mid-flight** (the
-     heavy (d+1)·300 TRT bolt is invisible — 7j.16).
+     heavy (d+1)·300 TRT bolt is invisible — 7j.16; §7j.50: the
+     0x66 producer is the TRT fire routine @0x417a5c, its damage
+     key fires ONLY on the terrain contact class 2, and it never
+     damages robots).
    - **0x67 → 0x404fac**: enters the 0x404eb1 tail — draw IDENTICAL
      to 0x65 (frames 0x3C..0x3F, mode 0x12C).
    - **0x68 → 0x404ffc**: same projection (z Q13, shake), frame
      **(g_frame_count&3)+0x38** (56..59), mode 0x12C.
    - **0x69 → 0x404d96 — the vertical BEAM column** (the §7j.22/23
-     open-item type): NO shake term; sy base −= (d@+0xA<<5)+8 —
+     open-item type; §7j.50 CLOSED the damage question: producer =
+     the k7 close-combat leg @0x4135a2 {z=6, TTL 0x18, +0x1A=0},
+     terrain-only damage key LITERAL 0x65 per frame at the blocked
+     level, never robots): NO shake term; sy base −= (d@+0xA<<5)+8 —
      **+0xA re-used as the TOP z LEVEL** (not Q13); loop edi from
      d@+0xA DOWN TO d@+0x1A (the bottom level), one sprite per
      level, **sy += 0x20 per level**; frame
@@ -4574,7 +4590,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | editor-only extension set | ZERO string (case-insensitive byte census) in EXW/EXD/EXE/DIRECTX exes for: .BLD, .CTG, .COL, .MAP, .PTH, .TXT — the runtime never opens them (only "SAVED.BDL" @0x4597d6 = the savegame, unrelated); .BLD = the editor SOURCE of .BDG (record j ≡ BDG non-empty j: same hp/chain/type heads, same four template banks; FORMATS §17 grammar verified) | §7j.33 |
 | destruction-thud SFX pair | banks 0x4edfb8 = SOUND\SFX\DEADMAN1.RAW / 0x4edfbc = DEADMAN2.RAW (loader 0x43a29b..0x43a368, strings 0x458f41/0x458f58): RandB&1 pick, FUN_0043a48e(bank,0,x,y,push 2); consumers = destroy-tail cases 6/7 (0x41b19c/0x41b1ac) + the debris-crush dispatcher FUN_0040dce0 (0x40dc62) | §7j.25 |
 | projectile mid-flight draw | FUN_00403938 @0x404131 (after the 7j.27 ring passes): walk 400×0x36 offsets 0..0x5460; type w@+0 → 5 shell (WEAPONS 3..7, counter d@+0xE wraps 7→3), 9..0xB artillery (WEAPONS 8..15), 0xE mortar (WEAPONS frame 1 static + 8-puff trail 0x10+(tick+i)&7 mode 0x12E), 0xF/0x13/0x17/0x1A/0x1F damped (WEAPONS base 0x20/0x20/0x28/0x18/0x18 + (tick&7) iff vx≠0 ∨ |vy|>0x40 [corrected 2026-08-22 bbbdedec], anchor 0x108), 0x24 rocket (SHRIKE ((dir+0x7E)&0xFF)>>2 = 64-dir; ≤8 SMOKE puffs dist 0x20+0x10·i behind, count = d@+0xA/4), 0x29 homing (REAPER dir>>2; GENERAL reticle @ target d@+6 {0x1000 robot 0x4c69e4/0xA8, 0x2000 critter 0x4cccec/0x20, else FUN_004128ec} frame tick/3+2, anchor 0xF0; 4 SMOKE puffs dist 0x10+0x08·i); all FUN_0040798e modes 0x12C/0x12D; other types NOT drawn; banks WEAPONS/SHRIKE/REAPER/SMOKE/GENERAL = [0x4eddbc]/[0x46af30]/[0x46af2c]/[0x46af34]/[0x4edd7c] | §7j.28 |
-| projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {active, x, y, z Q13, vx, vy, vz}; per-frame +=v; terrain probe FUN_0041eaa1; impact → FUN_004126dc + FUN_0041a894(damage = FUN_00419aff(0x65/0x66)) + FUN_0041bc1c; the MID-FLIGHT DRAW walk §7j.28 (types 0x65/0x67/0x68 single WEAPONS 0x3C/0x3C/0x38-strip sprites, 0x69 the per-level beam column 0x34-strip, 0x66 NOT drawn) | §7j.13, §7j.28 |
+| projectile tick | FUN_00412010: 50 rec @0x4cc654 stride 0x22 {state u16@+0, x@+2, y@+6, z@+0xA Q13, vx@+0xE, vy@+0x12, vz@+0x16, +0x1A counter, +0x1E TTL}; dispatch state−0x65 ∈ 0..4 → table 0x411ffc {0x65 mover, 0x66 guided stepper ≤10 substeps + contact classes 1/2/3, 0x67/0x68 shared ballistic, 0x69 the beam}; terrain probe FUN_0041eaa1; impact damage keys §7j.50 (0x65/0x69 → literal 0x65, 0x66 → literal 0x66 + FUN_0041bc1c, 0x67/0x68 → OWN state via the [+0x4cc652]>>16 trick) → FUN_0041a894; producers = exactly 5 (k2 0x65/k3 0x67/k5-6 0x68/k7 0x69 + the TRT 0x66 @0x417a5c); the MID-FLIGHT DRAW walk §7j.28 (0x65/0x67/0x68 WEAPONS strips, 0x69 the per-level beam column, 0x66 loop-next invisible) | §7j.13, §7j.28, §7j.50 |
 | weapon-anim tick | FUN_00410823(phase 0..3, MissionShell 4×/frame): walks ALL 400 records 0x4c71f4 stride 0x36; record {w@+0 type=weapon id (0 free), d@+2 owner, d@+6 target sel (0x29), d@+0xA tick, xyz@+0x12/16/1A Q13, vxy@+0x1E/22, vz@+0x26, class@+0x2A (0x24/0x29 launch delay; 0xF/0x13 detonation cycles), arc@+0x2E (ballistic z-vel g=−0x100/t; 0x29 heading byte), trail link@+0x32}; per-type: 2..4 bullet 2-substep lookahead ray (commit 1), 5 shell + K3 trail, 9..0xB artillery burst (phase 0 only), {0xE,0xF,0x13,0x17,0x1A,0x1F} ballistic bounce family (0xE 3-blast mortar, 0x17 3-clone split, 0xF/0x13/0x1F damped), 0x24 rocket (launch delay, no gravity), 0x29 homing (robot 0x1000-bit/critter/TRT 0x2000-bit target, terrain-avoid steering, ttl 201); the per-type MID-FLIGHT DRAW map §7j.28 (types not listed there are NOT drawn mid-flight) | §7j.13, §7j.22, §7j.28 |
 | artillery burst tables | durations dword[0x456c78+4·id]: w9→2, w0xA→4, w0xB→7 frames; per-frame i16 (Δy,Δx) pair lists (500 sentinel) via PTR[0x456bf0+4·(ttl−0x20)] → 7 lists @0x45687c..0x456adc (frame 0 = 7-cell cluster, then radius-2/-3 rings); each pair = FUN_004244a1 scripted 5000-blast + 50% (RandA) K0xB debris at center | §7j.22 |
 | actor hit-test lanes | FUN_0041879d(owner,x,y,z,weapon) = critter lane (3-row presence-grid prefilter @0x4ea900 rows ±4 → FUN_004190bc(critter,owner,x>>8,y>>8,z>>8,weapon,mode 2), first hit returns; count [0x46cc2c]); FUN_0041874c = other-robot lane (MP-gated, FUN_00418fca(robot,…,2), skips owner, count [0x46ccbc]); odd phases only (2×/frame); third caller = renderer FUN_00403938 (weapon 0xC blast, owner −1, args <<5) | §7j.22, §7j.23 |
@@ -4601,7 +4617,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | terrain restamp list | [0x4ede24] ptr + [0x4ede28] count → 3-dword records {dest row (y·0x280 basis), tile-x, tile-y}; render-tail readers 0x4067a6/0x406b32 blit each via FUN_00401471 (border tile FUN_00408030 off-window, full LNK path in-window); CELL IS PER-SCREEN REUSE (§7j.49): BRIEF = 49×12 list (alloc 0x24c @0x43d0bd, writer FUN_00440a2d = the objective-minimap window stager, BRIEF-only) / mission = 1296×12 viewport cache (alloc 0x3cc0, writer FUN_0041d954) — resolves the backlog "7×7 screen-address table" hypothesis | §7j.26/§7j.49 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
-| weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
+| weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1 (inline jump tree, NO memory table — the else-path dump + per-state impact-key map §7j.50: no caller ever passes 0x69; the 0x69 beam re-keys to literal 0x65); 29 callers | §7j.15, §7j.50 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
 | critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); kind table 0x412f18 {k1 0x414c96, k2 0x415216, k3 0x4145c1, k4 0x414079, k5/6 0x41367c shared, k7 0x412f52}; per-frame: presence w@+0x24==0 skip, fuse/hit-flash w@+0x7C decrement, kind dispatch, epilogue (presence mark byte 1, 8-corner z-settle, moved→trap re-probe); state 4 body: species w@+0x02 = SUBSTEPS/frame, modes {0xB dormant (countdown vs 0x454edc[d] → wake mode 9 + hp 0xC8 + species 6 + RandA&3 dir), 7 dying 0x28→0xB, 6 ballistic, 9 seek walk (re-picker 25% RandA&3 / 75% FUN_004181bd + pause 0x20..0x5F + 4-way steppers ±1 + FUN_00415490 per step), 2 range-attack (dist<0x1F4: countdown==4→re-seek else FUN_0040db9e(target,2,heading<<6,1,−1), substep-0 countdown++)}; state 5/6 body: 1/32 facing drift w@+0x72, modes {0xB dormant (BEAMIN at table−9, wake mode 8 + hp 0x96 + species 3 + FUN_0041ec1c(0xFF) heading), 0xA pause→8, 7 dying, 6 ballistic, 5 rise, 8 ENGAGE (gate [0x4dd410]≡0 SP; FUN_00417c00 nearest-alive octile-px; dist<0x60 ∧ leash (d+1)·0x40+0x258 ∧ >0x80 → 1/128 FUN_00421ed6 + aim+step)}; k1/k2/k3/k7 bodies §7j.17 (state 1 wander / 2 sine-walk shooter 0x65 / 3 chase 0x67 / 7 close-combat 0x69). LANDED engine-side (bedlam-core::critter, W12-S8/D114: the k4/k56 subset; the §7j.42 band/roll glosses corrected by §7j.43 — the point-blank RETREAT band, the d=2 never-rolls break, the impact-aimed dives) | §7j.17/§7j.18/§7j.42/§7j.43 |
 | critter→robot ranged attack | FUN_0040db9e(robot, mult, seed, damage, param_5): damage word = dword[0x476fe4 + 0x30·param_5] (CORRECTED §7j.42/4: stride 0x30; param_5=−1 → 0x476FB4) → FUN_0040e230(robot, damage-seed=1, owner=the table dword); mult≠0 → robot w@+0x10 := 0xFFFF + FUN_0040c536(idx, cos(seed)·mult>>7, seed, sin(seed)·mult>>7) = the stun/knock applier (SP gate [0x4eaac0]==0, state∉{3,5}: w@+0x0E := seed, walk-probe-gated x/y += v, +0x10 := −1). LANDED (W12-S8/D114: apply_damage + the move_possible-gated knock, Q13 scale) | §7j.42/§7j.43 |
@@ -4640,7 +4656,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | weapon-anim disburser | FUN_004124a4(rec idx): rec 0x4c71f4+0x36·i (400 slots, free-slot FUN_00412848), kind word@+0; w2..4→K2 (±3 jitter), 5→K3, 0x24→K6, 0x29→K9, {0xE,0xF,0x13,0x17,0x1A,0x1F}→K0xC; z−10; 9..0xB clear-no-debris | §7j.14/§7j.17 |
 | weapon-anim tick (400×0x36 bank) | FUN_00410823(phase 0..3), 4×/frame from MissionShell: bullets 2..4 = 2 tested sub-steps, net TWO committed steps per call (3 moves − 1 rollback; tick += 6 — corrects the 7j.22 "1 committed" gloss; actor/terrain hits re-add + disburser K2 + impact pair via FUN_00419aff(type); records FREE ONLY at tick>99 — impacts do not kill them); shell 5 = 1 move, free on bounds/tick>100/z-OOB, critter-lane hit (odd phases) stores (x,y)+K3 debris at z>>8−10, MP-lane hit → disburser, floor hit → impact pair 75 + disburser + FREE; artillery 9..0xB phase-0-only, tick++, fall 0x200/tick to FUN_0041e411 settle (floor<<8), tick==0x18 ∧ player-kind → FUN_004245c9, burst window tick−0x20 < dword[0x456c78+4·TYPE] (durations 2/4/7 BY TYPE) walking the pair lists PTR[0x456bf0+4·(tick−0x20)] (sentinel 500, FUN_004244a1 5000-damage blasts + 50% K0xB), past the window → disburser + free; ballistic family gravity arc −0x100/tick with the per-type bounce/roll semantics (7j.22 item 6); rocket 0x24 class-countdown launch delay → straight flight, floor → 400 impact, ttl>0x64/bounds → free; homing 0x29 launch delay → z-ease ±0x200 clamp [0,0xFF00] + ground-lift ≥(z>>8)−4, heading := (heading + angle-diff·4)&0xFF over the target Q13 delta, vel = 2·(sin[heading]>>4, sin[heading−0x40]>>4), forward probe FUN_0041e56d, avoidance ±4-sector LEFT-first (left-OOB also climbs z+=0x600), dead-target gates → disburser+fizzle, floor → 250 impact, ttl>0xC8/bounds → free | §7j.22, §7j.37 |
 | byte-angle sine table | SINTABLE.BIN (512 B = 256 i16): word[a] = round(sin(a·π/128)·32767) [corpus-verified]; FUN_0041eb65 "cos" = movsx word[base+(a&0xFF)·2], FUN_0041eb77 "sin" = the same at (a−0x40)&0xFF; the 64-word sector-scan threshold table (FUN_0041eb7d, base+4) = words[2..66] of the same array — one dual-use file table at [0x46cbd0] | §7j.37 |
-| projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4; coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20) | §7j.14 |
+| projectile disburser | FUN_004126dc(rec idx): rec 0x4cc654+0x22·i, TYPE word@+0 (0=free; NOT plain "active"); 1→K2, 0x65→K0x14, 0x66→K8, 0x67/0x68→K4, 0x69→SILENT shared-epilogue return (no debris, no clear — defensive; the beam handler never calls it, §7j.50); coords z NO −10; robot-hit expiry via FUN_004197d4 (|dx|<0x10 Q8, |dz|<0x20; states 0x65/0x67/0x68 ONLY — 0x66/0x69 never damage robots) | §7j.14, §7j.50 |
 | splash gates/eviction | FUN_0041bd78: first z ≥ min(z,7) with DAT 0 ∧ seen 0; FUN_00424355 gates: DAT-empty ∧ TOT word 0 ∧ claim byte[0x46af58+tile]=0; full ring → evict max-age + FUN_0042394a flush | §7j.14 |
 | splash records | 250 × 0xA @0x4e9778 {x,y,z,delay,age}; ticks in the epilogue | §7j.10 |
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
@@ -5858,7 +5874,7 @@ contradicted; three rows are rewritten/added.
    needs the terrain-structure bank — S4), the disburser/debris
    tails (off-path), the SFX/message families (T4), the 0x22-bank
    spawn producers (enemy fire — the critter family), and the
-   0x69-vs-table question (unchanged).
+   0x69-vs-table question — CLOSED 2026-08-23 §7j.50.
 
 ## 7j.38. THE S4-PREP RE ADDENDUM — the destroy-family RNG-draw
 census + the chain-walk geometry + the four missing DGROUP tables
@@ -6251,8 +6267,8 @@ below is [verified] against the objdump unless tagged.
    open from that head: the full per-zone FUN_00433980 case
    table and the per-zone record↔pad arm mapping (deferred
    until P4.2 needs it).
-   Projectile type 0x69 vs the FUN_00419aff damage table
-   remains open (low priority). The FUN_00410823 weapon-anim
+   Projectile type 0x69 vs the FUN_00419aff damage table —
+   CLOSED 2026-08-23 §7j.50. The FUN_00410823 weapon-anim
    machine is CLOSED 2026-08-21 §7j.22 (the full per-type
    tick — bullets 2..4 / shell 5 / artillery 9..0xB /
    ballistic {0xE,0xF,0x13,0x17,0x1A,0x1F} / rocket 0x24 /
@@ -8226,3 +8242,136 @@ tagged.
 9. Engine consequence: NONE (docs-only — the BRIEF screen is outside
    the P4 mission-diff scope; the cells 0x46cbb0/0x4dc6c0/0x4e9628
    are BRIEF-lifecycle only). No new watch rows; no E-side work.
+
+## 7j.50. THE FUN_00419aff ELSE-PATH DUMP + THE PROJECTILE-0x69 VERDICT — CLOSED: the per-level BEAM column re-keys its damage query to the LITERAL 0x65 (never consults the table at its own id, never the else); the (d+1)·300 damage belongs to the TRT-bolt state 0x66 alone; + the complete 0x4cc654-bank producer/impact census (2026-08-23, worker 6bb948aa claim 2, D122; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read)
+
+Closes the §7j.18 low-priority residue "projectile type 0x69 vs the
+FUN_00419aff damage table — NOT folded (would need the damage-table
+else-path dump)". All addresses below are instruction-exact from the
+full-.text objdump.
+
+1. **FUN_00419aff ELSE PATH — fully dumped.** There is NO memory
+   table: the resolver is a compiled binary jump tree (base/stride:
+   N/A), reached by `cmp` chains at 0x419b0a/0x419b15/0x419b26/
+   0x419b2f/0x419b45/0x419b4e and 0x419c14..0x419c4a/0x419c55..72.
+   `EAX := 1` is pre-set at entry (0x419b05); the ELSE is the plain
+   fall-through returning it (stubs 0x419b57 [w>0x68], 0x419c2c
+   [w=0x2A..0x64], 0x419c50 [w=0xE..0x19], 0x419c5e [w=6..11]) plus
+   TWO shared-epilogue arms carrying the default (w<2 and
+   0x1B≤w<0x24 → `jb/jne 0x418aa1`). **0x418aa1 is a Watcom
+   cross-function shared-epilogue gadget** (0x418aa1..0x418aa5 =
+   `pop esi/edx/ecx/ebx; ret` — pops EXACTLY FUN_00419aff's own
+   four entry pushes; same gadget family as the 7j.49 multi-entry
+   epilogues): FIVE branch arms jump there — the two default-EAX
+   ones above plus the three difficulty arms below. The full key
+   census re-verified instruction-exact (the §7j.17 table stands):
+   | w | damage | arm |
+   |---|---|---|
+   | <2 | 1 (else) | 0x419c66→0x418aa1 |
+   | 2/3/4/5 | 20/30/40/75 | 0x419c72/0x419c63+0x419c72/0x419b66/0x419b70 |
+   | 6..11 | 1 (else) | 0x419c5e |
+   | 0xC / 0xD | 5000 / 312 | 0x419b8e / 0x419b98 |
+   | 0xE..0x19 | 1 (else) | 0x419c50 |
+   | 0x1A | 75 | 0x419b70 |
+   | 0x1B..0x23 | 1 (else) | 0x419c17→0x418aa1 |
+   | 0x24 | 400 | 0x419b7a |
+   | 0x25..0x28 | 1 (else) | 0x419c2c |
+   | 0x29 | 250 | 0x419b84 |
+   | 0x2A..0x64 | 1 (else) | 0x419c2c |
+   | 0x65 | 50·(d+1); d=2 → +50 = 200 | 0x419bcc (d≠2 → 0x418aa1) |
+   | 0x66 | 300·(d+1); d=2 → +300 = 1200 | 0x419ba2 (d≠2 → 0x418aa1) |
+   | 0x67/0x68 | 75·(d+1); d=2 → 75·3+75 = 300 | 0x419bf1/0x419c07 (d≠2 → 0x418aa1) |
+   | ≥0x69 | 1 (else) | 0x419b57 |
+   (d = difficulty [0x46cbf8]; the d=2 legs add a flat constant via
+   the `ADD`/`LEA` idioms at 0x419be9/0x419bc2/0x419c00; the 75·(d+1)
+   product is staged in EBX at 0x419b34..0x419b40 — EBX clobber
+   noted because ECX carries the d=2 constant 75·(d+1)+0x4B.)
+   **FUN_00419aff(0x69) would return 1** — but no caller ever asks
+   (point 4).
+2. **The 0x4cc654-bank STATE-word census (complete, 25 sites).**
+   Every `mov` touching a state-word address 0x4cc654+k·0x22:
+   4 readers (0x404d75 the §7j.28 draw walk, 0x412021 the tick
+   dispatch, 0x4126ea the disburser, 0x41980f the robot-hit walker),
+   12 zero-writes (7 tick deaths 0x412079/096/1eb/2cc/42a/479/490 +
+   5 disburser deaths 0x412741/778/7af/7e6/81d), and exactly
+   **FIVE producers**:
+   | state | producer site | family |
+   |---|---|---|
+   | 0x65 | 0x41540e (k2 sine-walk shooter; range gate 0x12C−(2−d)·0x40) | critter bolt (ballistic vx/vy) |
+   | 0x66 | 0x417a5c (FUN_00417698 TRT fire routine; `[eax*2+0x4cc654]` scaled form) | TRT structure bolt |
+   | 0x67 | 0x414b79 (k3 chase, octile-aimed) | critter bolt |
+   | 0x68 | 0x413def (k5/6 ENGAGE, octile-aimed, vz set) | critter bolt |
+   | 0x69 | 0x4135a2 (k7 close-combat; §7j.16's fire-rate gates 32/16/8 frames) | the BEAM column |
+   (The earlier "0x66 has no producer" reading was a grep-truncation
+   artifact — the 0x417a5c site uses the scaled-index operand form.)
+3. **The tick dispatch (FUN_00412010 head)**: state−0x65 bounds 0..4
+   (0x412021..0x41203a) → jump table 0x411ffc {0x65→0x41216b mover,
+   0x66→0x412307 guided stepper, 0x67/0x68→0x41224c shared ballistic,
+   0x69→0x412042 the beam}. Record layout re-confirmed: u16 state@+0,
+   x@+2, y@+6, z@+0xA, vx@+0xE, vy@+0x12, vz@+0x16, +0x1A counter,
+   +0x1E TTL (dwords, Q13/Q8 as §7j.13).
+4. **THE 0x69 VERDICT (the queue question).** The per-level BEAM
+   column is a 0x4cc654-bank STATE, not a 400×0x36 weapon type. Its
+   handler (0x412042) NEVER calls FUN_00419aff with its own id:
+   - per frame: TTL@+0x1E −− (0x412085; spawn value 0x18; at 0 the
+     record dies SILENTLY — state := 0, no debris); counter@+0x1A
+     k := min(k+1,7); terrain probe FUN_0041eaa1(x>>8, y>>8,
+     (z−k)·0x20) — the column DESCENDS one level per frame;
+   - on contact at level z−k: k −− (0x4120e9 — the probe level is
+     RE-TESTED next frame ⇒ the blocked level takes damage EVERY
+     FRAME while the TTL lasts), RandA±7-spread debris kind 0x14 via
+     FUN_00420608 (0x412102..0x412153), then **`mov eax,0x65`**
+     (0x41215a) → FUN_00419aff → FUN_0041a894(x, y, damage, score
+     flag 0) at the beam's (x,y) — the record does NOT die, does NOT
+     call FUN_004126dc;
+   - **damage = the 0x65 row: 50/100/200 by d** — through the table,
+     at a DIFFERENT key, never the else. The §7j.16 k7 note
+     "(→ 'else 1')" is CORRECTED. The "(d+1)·300 as type 0x66"
+     hypothesis is REFUTED for 0x69: that damage belongs to the TRT
+     bolt alone (point 5).
+   - **0x69 NEVER damages robots**: FUN_004197d4 (the projectile-vs-
+     robot proximity walker, |dx|<0x10 ∧ |dy|<0x10 ∧ |dz|<0x20 Q8)
+     admits states 0x65/0x67/0x68 ONLY (0x419816..0x419836: 0x66
+     falls in the `cmp ax,0x67; jb` skip, 0x69 in the final
+     `jmp 0x4198b7` skip). The beam is terrain-only.
+5. **The per-state IMPACT-KEY map (supersedes the §7j.13/§7j.14
+   "reads the projectile's own type" gloss — only the 0x67/0x68
+   terrain leg self-keys):**
+   | state | terrain/object key (FUN_0041a894) | robot key (FUN_0040e230 via FUN_004197d4) |
+   |---|---|---|
+   | 0x65 | literal 0x65 @0x412211 + disburser K0x14 | literal 0x65 @0x41989f |
+   | 0x66 | literal 0x66 @0x412449 (class-2 contact; + 0x41bc1c) + disburser K8 | NEVER (filtered) |
+   | 0x67/0x68 | OWN state word (the `[+0x4cc652]>>16` dword trick @0x4122f7/0x41992d) + disburser K4 | OWN state word @0x41992d |
+   | 0x69 | literal 0x65 @0x41215a, per-frame, no disburser, no death | NEVER (filtered) |
+   So a robot hit by a 0x67/0x68 bolt takes 75/150/300, by a 0x65
+   bolt 50/100/200; the TRT 0x66 bolt NEVER hits robots at all
+   (consistent with its §7j.28 loop-next invisibility — the heavy
+   (d+1)·300 key exists ONLY on its terrain contact).
+6. **The state-0x66 handler decoded (0x412307)** — a GUIDED STEPPER,
+   ≤10 substeps/frame (0x412351..0x4123a1): per substep x+=vx, y+=vy;
+   out-of-bounds → contact class 1 (silent die 0x41248e);
+   FUN_00419756(x,y)≠0 → class 3 (disburser + die 0x41241f);
+   vz@+0x16 ≠ 0 → break (0x4123f3 vz−−); else height probe
+   FUN_0041e231(x>>8,y>>8) > z>>8 → class 2 (disburser + damage
+   key 0x66 + 0x41a894 + 0x41bc1c + die 0x412436..0x41247f). The
+   write-back reverts the last substep (0x4123ff..0x412411). The
+   §7j.13 "type-1/2/3" arms are these contact CLASSES of the 0x66
+   handler (1/2/3) — relabeled here by state id.
+7. **FUN_004126dc disburser — 0x69 arm pinned**: the kind switch
+   (state 1→K2 @0x412716, 0x65→K0x14 @0x41274d, 0x66→K8 @0x4127f2,
+   0x67→K4 @0x412784, 0x68→K4 @0x4127bb) falls through to the shared
+   epilogue `jmp 0x411ff3` for 0x69 (0x412711) — NO debris, NO state
+   clear; defensive only (the beam handler never calls the
+   disburser). The §7j.14 row gains the 0x69 arm.
+8. Caller census cross-check: 29 `call 0x419aff` sites total
+   (§7j.17's 28 + the 0x41215a beam site), across FUN_00410823
+   (the 400-bank fire/tick controller), FUN_004190bc-family stat
+   readers, FUN_00412010 ×5 (0x41215a/0x412211/0x412218+0x4122f7
+   entry/0x412449/0x412462 — was ×4), FUN_004197d4 ×2
+   (0x41989f/0x4198a9). NONE passes 0x69.
+9. Engine consequence: the E-side critter k7 close-combat leg (when
+   it lands) must model the beam as a PERSISTENT per-frame terrain
+   DoT keyed 0x65 with the k-oscillation (re-damage the blocked
+   level every frame, TTL 24) and must NOT damage robots; the 0x66
+   TRT bolt is terrain-only damage 300/600/1200. Docs-only unit —
+   no code, no watch rows (the 0x4cc654 bank is T2-class).
