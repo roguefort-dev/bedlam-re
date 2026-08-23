@@ -363,6 +363,27 @@ O1 field-map contract.
   O1 → `engine-bug`; O2 sides with E → `original-divergence`; no O2 →
   provisional `engine-bug`). T3 rows never bit-compare — the DRAW-COUNT
   (state-change census) is the statistical gate.
+  **Arbitration lanes GATED (2026-08-23, W11-prep):** all four
+  `compare_field` T1-exact tiebreak lanes are driven headless by
+  `differ_gate` (`s1_o2_tiebreak_arbitration`, landing with this
+  note): the O2 side is
+  FABRICATED from the same E frames through the existing `inv_frame`
+  inverse (valid because `normalize_o2_row`'s alias list takes EXW
+  guest forms identical to EXD for every aliased row, and
+  `EXW_ROBOT_MAP == EXD_ROBOT_MAP` — the §8 back-half probe; the O2
+  `static-map-wh` row deliberately normalizes to zero fields pending
+  the W11 pin, so its bytes never arbitrate), the E side is
+  re-stitched as a Channel::Engine dump when perturbed. The four
+  lanes assert class+detail verbatim: (a) O2 agrees with O1 on a
+  perturbed-E `money` → `engine-bug` "the engine (E) is the outlier"
+  (verdict FAIL); (b) O2 agrees with E on a perturbed-O1 `money` →
+  `original-divergence` "EXD diverges from EXW" (verdict back to
+  PASS-WITH-NOTES — the re-class is budgeted); (c) all three differ →
+  `engine-bug` "E wrong against both oracles"; (d) no tiebreak dump →
+  `engine-bug` "provisional". No production change intended — the
+  lanes are expected as-written (W11's live channel inherits a
+  proven arbiter; if the gate proves the arbitration logic wrong,
+  the fix rides the same unit with a note here).
 - **Class policy refinement**: a `coverage` bucket beside `structural`
   — row/field coverage asymmetry (the E-gap list, the §8 normalizer
   gaps) is metered + reported, never silent, but NOTES the verdict
