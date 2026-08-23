@@ -133,43 +133,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4/RE] THE EXD NO-EXTRACT-LATCH TWIN CENSUS
-      (small-medium; docs+registry; unattended-safe). Close W1
-      schema gap #2 (blink-cursor + selection-triple were closed
-      by D132): the watches.toml `no-extract-latch` row (exw
-      0x46aed4, per-robot u32 array idx*4) still has
-      exd_status = "gap" + RE-EXD-MAP §5 "TODO (gap)". THE D132
-      METHOD IS THE TEMPLATE — the substrate is the COMMITTED
-      tools/exd-relod.py relocation objdump (regenerate:
-      python3 tools/exd-relod.py game-data/BEDLAM/BEDLAM.EXD
-      /tmp/opencode/exd-image.bin
-      ghidra-project/exd-text-objdump.txt — the artifact stays
-      LOCAL per the /ghidra-project/ gitignore convention; it
-      already exists from the D132 run). METHOD: (a) EXW side
-      first — census 0x46aed4 in ghidra-project/exw-text-
-      objdump.txt (grep '46aed4'; committed facts to reconcile:
-      the MP respawn gate read [idx*4+0x46aed4]≠0 → death-flag
-      path §7j.57; the SP no-extract tail 0x40eac0 area; WHO
-      SETS the latch — the §5 note says anchor via the POD-RING
-      animator; FUN_0041f8c1 is NOT it, that is the debrief/
-      payout fn); (b) EXD twin — grep the exd-text-objdump for
-      the per-robot indexed array near the robot-bank family
-      (bank 0xf6d34, the 0x1195xx cells; candidates: the
-      spawn-staging zero-fill family, the MP-respawn twin of
-      the 0x40ea59/0x40eac0 pair, the extraction animator),
-      verify hits against known twin constants (stride 4,
-      per-robot, cap-bounded). DELIVERABLES: twin base +
-      writer/reader census, RE-EXD-MAP §5 row fill,
-      watches.toml exd_addr (T1 row alias), registry_anchors
-      re-green, D133, PUSH. CAVEATS: MANIFEST bracket before
-      AND after any corpus-touching command (the relod
-      regeneration reads game-data); raw-binary greps are
-      garbage-tolerant — verify against constants; D118
-      pre-queue check performed 2026-08-23 (RE-EXD-MAP §5 row
-      TODO, watches.toml empty).
-      (QUEUED 2026-08-23 by the D132 blink-cursor twin close,
-      worker c653b51a claim 2.)
-   3. [P4/RE] THE EXD SFX-MASTER-GATE TWIN CENSUS
+   2. [P4/RE] THE EXD SFX-MASTER-GATE TWIN CENSUS
       (small; docs+registry; unattended-safe). Last of the four
       W1 schema gaps: the watches.toml `sfx-master-gate` row
       (exw 0x4ede58 — the ≠0 gate in the §7j.52 BOOM/RICOCHT
@@ -2285,3 +2249,31 @@ renumbered queue keeps every open item claimable by number).
   §6c.2/§6c.6e corrections, MISSIONVIEW zoom-path precision
   note, D130. Queued: item 2 = the [0x4dc5d0] blink/effect-
   list producer census (this unit's neighbor open producer).
+- 2026-08-23: P4/RE THE EXD NO-EXTRACT-LATCH TWIN CENSUS unit
+  COMPLETE (worker 36c6f950 claim 2; RE-notes commit fe1d1d9 +
+  impl commit 85d7954, both pushed). TWIN = 0xf929c+i*4: 8 EXD
+  readers ONE-FOR-ONE with the EXW 8-reader census + the boot
+  memset(0x30=12 dwords) pair @0x2cd41<->0x41c412. HEADLINE:
+  WRITER ASYMMETRY — EXD-only setter FUN_0005bb71 @0x5bba0 :=1
+  (DOS MP LOBBY ROBOT-PICK: [0x1195dc]:=idx, alive:=0, staging
+  memset 0x80, census cmp 2, msg) + the EXD-only lobby type-tally
+  0x5ba83; EXW setter set EMPTY (census-complete: 9 literal sites
+  = 8 readers + boot memset; no span overlap) — the committed
+  §7j.19/§7j.27 "writers" lists CORRECTED in place (those four
+  fns are readers); semantics = per-robot CLAIMED flag (EXW
+  always takes ==0 paths in SP; engine consequence NONE for the
+  SP corpus). 14 §5f cascade aliases (MP-mode 0x1075d8,
+  current-robot 0x1075c0 — refines D132's player-type gloss,
+  staging 0x9255c, marks 0x8b744, counts 0x10760c/0x107660,
+  cursor 0x107688, pod bank 0x8d314, staging quad 0x107764..70,
+  selector family 0x8b60c + tables 0x82e5a/0x82e8a, msg gate
+  0x894d5, switch/callee + msg-post fn twins, memset fn twin
+  0x12206) + robot-bank base 0xf6d34 TRIPLE-confirmed via the
+  respawn tail. watches.toml filled (count*4, count cell
+  0x11958c), dbx-plan count-driven emission, registry gap set =
+  {sfx-master-gate} only, capture-plans S1..S8 regenerated;
+  93 diffharness + 13 canonical_dump_gate tests green, MANIFEST
+  clean pre+post, no Ghidra run. NOTE: .state/PAUSE (operator
+  menu-pointer fix) appeared mid-run at 20:28 — this unit's
+  commits stage diffharness/docs paths only, zero overlap; the
+  operator's work untouched.

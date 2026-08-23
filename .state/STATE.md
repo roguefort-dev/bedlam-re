@@ -1,5 +1,35 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE EXD NO-EXTRACT-LATCH TWIN CENSUS unit
+    COMPLETE (D133; RE-notes commit fe1d1d9 + impl commit
+    85d7954, both PUSHED, worker 36c6f950 claim 2; objdump-only
+    from the D132 substrate ghidra-project/exd-text-objdump.txt,
+    no Ghidra run; MANIFEST.sha256 clean before AND after; 93
+    diffharness tests + 13 canonical_dump_gate green, fmt+clippy
+    clean): the no-extract-latch EXD twin = [0xf929c+i*4], 12
+    .text sites with 8 readers ONE-FOR-ONE vs the EXW 8-reader
+    census (0x19c71⟷0x408ef7 death-anim walk w/ 0x65 + tables
+    0x82e5a/0x82e8a; 0x1f4cf⟷0x40e7a1 death-core MP respawn gate;
+    0x30c87⟷0x4200db pod animator; 0x5b1cc/0x5b34a/0x5b51c ⟷
+    0x449dc8/0x449ee8/0x44a08c MP cycler trio; 0x5b7ea ⟷
+    0x44a322; 0x5b89c ⟷ 0x44a3d2 endgame census) + the boot
+    memset(0x30) pair 0x2cd41⟷0x41c412. HEADLINE = the WRITER
+    ASYMMETRY: EXD-only setter FUN_0005bb71 @0x5bba0 :=1 (the
+    DOS MP lobby robot-pick) + lobby type-tally 0x5ba83; EXW
+    setter set EMPTY — the §7j.19/§7j.27 writer lists corrected
+    in place (four fns are READERS); semantics = per-robot
+    CLAIMED flag; engine consequence NONE for the SP corpus
+    (reads 0 on both channels). BY-PRODUCTS: 14 §5f cascade
+    aliases + robot-bank base 0xf6d34 triple-confirmed via the
+    respawn tail ([0xf6dd0]:=1 death-flag ⟷ [0x4c6a80]).
+    REGISTRY: watches.toml gap set now {sfx-master-gate} ONLY
+    (the last W1 gap = queue item 2, the SFX-master-gate census);
+    dbx-plan emits the latch as $robot_count*4; capture-plans
+    S1..S8 regenerated. NOTE: .state/PAUSE (operator
+    menu-pointer fix) appeared mid-run 20:28 — this unit staged
+    diffharness/docs paths only, zero overlap.
+
+
   - 2026-08-23 P4/RE THE EXD BLINK-CURSOR TWIN CENSUS unit
     COMPLETE (D132; docs+registry, commit f9986b0, worker
     c653b51a claim 2 — adopted + re-validated at HEAD the
