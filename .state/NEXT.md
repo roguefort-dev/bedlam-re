@@ -123,18 +123,32 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE .BDG TEMPLATE-BANK ↔ RESTORE-WORD MAPPING unit
-   (small-medium; objdump-only from ghidra-project/exw-text-objdump.txt
-   + read-only corpus probes, docs-only, unattended-safe): 7j.25 pinned
-   the destroy-tail restore words @+0x46/+0x4A = TOT-mirror/seen+DAT
-   bank feeds; the @+0x3E/+0x42 template-bank readers are STILL OPEN
-   (which template bank feeds which restore word — the four 16·W·H
-   template slots of the .BDG/.BLD grammar, FORMATS §17/§97-D97).
-   Deliverables: the reader-side anchor census (every 0x3E/0x42
-   displacement site in the destroy family + the template-bank
-   consumers), the plane↔word mapping table, FORMATS §17 + §2 notes,
-   ledger rows, D118; registry_anchors green; manifest brackets any
-   corpus probe; PUSH.
+2. [P4/RE] THE TOT PLANE-6/7 SEMANTICS unit (small-medium;
+   docs-only, unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt + read-only corpus probes):
+   FORMATS §2 leaves plane 6/7 open — TOT plane-6/7 values ≤1868
+   (< the 2000-slot POS count; 8016 + 2882 nonzero cells globally;
+   ZONEA/M1 has exactly ONE, tile 642 = (x=17,y=25) with 1355/1356
+   adjacent), the naive "plane value = POS slot" read is REFUTED
+   (POS[1355]/[1356] are empty in ZONEA/M1), and §7j.16 pinned the
+   materializer FUN_00440a2d copies ALL 8 planes' nonzero words
+   into the mirror. Deliverables: (a) the RENDERER VERDICT — do
+   plane-6/7 mirror words ever DRAW (walk the 0x4796bc consumers
+   of the draw/occlusion family 0x406xxx for any plane/z ≥6 gate
+   or z-pass skip; §7j.32's readers 0x406891/0x4068ec/0x406907/
+   0x406a0e/0x406a1a are the entry points); (b) the corpus
+   census — which missions carry plane-6/7 words, and whether
+   those tiles are ALSO nonzero at planes 0..5 (pure overlay vs
+   standalone) + the value domain vs the 0..5 planes; (c) the
+   ~2000-entry target-table hypothesis resolved OR formally
+   recorded [open] with the refutation evidence; (d) FORMATS §2
+   note + ledger row + D119; registry_anchors green; manifest
+   brackets any corpus probe; PUSH. Pre-queue check (the D118
+   discipline): grep'd DECISIONS + RE-EXW-SIM + the Done log for
+   "plane 6/7"/"plane-6/7" — ZERO prior closure (only this
+   Backlog bullet). NOTE the D118 word-unit header addressing for
+   any TOT-plane probe (the §2 planes start at BYTE 4 = WORD 2;
+   plane-major w·h stride, y·w+x within plane).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -170,11 +184,13 @@ renumbered queue keeps every open item claimable by number).
 - RETIRED 2026-08-22 (D93/§7j.29): the ".MOFO loader" — never
   existed (string-tail misparse). REMAINING from this bullet:
   the .BLD record walk (names/graphics
-  side; FORMATS §17 — the 201-B/64-B-extension hypothesis
-  still unanchored) + the .BDG template-bank plane↔mirror-word
-  mapping (which bank feeds which restore word — 7j.25 pinned
-  banks @+0x46/+0x4A = TOT-mirror/seen+DAT; @+0x3E/+0x42
-  readers still open).
+  side; FORMATS §17 — CLOSED 2026-08-22 by §7j.33/D97, editor-only)
+  + the .BDG template-bank plane↔mirror-word mapping — the
+  parenthetical here ("@+0x3E/+0x42 readers still open") was STALE
+  and caused the 2026-08-23 queue re-queue caught by hygiene #3:
+  CLOSED 2026-08-22 by §7j.32/D96 (+0x46/+0x4A the only consumed
+  banks; +0x3E/+0x42 = dead editor payload; independently
+  re-verified at HEAD 2026-08-23 by D118).
 - RETIRED 2026-08-23 (D115/§7j.44): the "debris-stager ENGINE
   widening" bullet — k2/k8 scorch + the k1/k20 ring landed with
   the 7j.11 stager, the +0x20 physics classes landed as the
@@ -249,8 +265,9 @@ renumbered queue keeps every open item claimable by number).
   destroy family is now fully decoded end-to-end (resolver →
   restore → 5-effect loop → chain walks), ready for the harness.
 - TOT semantics follow-up: FORMATS sec 2 plane 6/7 (the ~2000-slot
-  POS linkage) — KNOWN-staged (word mirror at record words 6/7)
-  but the drawer treats them as ordinary stack levels - check
+  POS linkage) — PROMOTED to the Now queue 2026-08-23 (item 2,
+  the D118 close-out): KNOWN-staged (word mirror at record words
+  6/7) but the drawer treats them as ordinary stack levels - check
   whether plane 6/7 words ever draw on shipped maps (ZONEA tile
   642 is the only cell) before touching FORMATS. NOTE 7j.16: the
   .TOT volume->mirror materializer FUN_00440a2d copies ALL 8
@@ -264,6 +281,35 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE QUEUE HYGIENE #3 — THE .BDG TEMPLATE-BANK ↔
+  RESTORE-WORD MAPPING item REMOVED AS ALREADY-CLOSED (D96/§7j.32,
+  2026-08-22, commits 4210f55 + f554bee; worker e26508a9 claim 2,
+  D118; docs-only). The queued item text was stale pre-D96 state
+  copied from the Backlog's RETIRED-D93 bullet (the closure sat in
+  the Done log AND D96 at queue-write time); the bullet's stale
+  parenthetical is now annotated CLOSED in place (the D111 lesson
+  extended: a COPIED stale parenthetical defeats the headline grep
+  — re-check the bullet before copying). The closure re-verified
+  genuinely green at HEAD with FRESH evidence, every leg
+  reproducing: the loader disk order (stores +0x3E/+0x46/+0x42/
+  +0x4A at 0x41a727/0x41a742/0x41a75d/0x41a77c), the restore
+  three writes instruction-exact (mirror word ← +0x46 0x41ab59→
+  0x41ab6b; seen := +0x4A word==0 0x41ab72→0x41ab80; DAT volume ←
+  +0x4A&0xFF 0x41ab8a→0x41abdb; index (z'·H+i)·W+j), the
+  zero-reader census both legs (absolute 0x4dee30/0x4dee34 =
+  loader stores only; 6×[reg+0x3e] + 12×[reg+0x42] displacement
+  sites, none type-table-relative; arena 0x46ad5c loader-only),
+  and the corpus numbers byte-identical from a fresh parser
+  (ZONEA/M1: 211 typed instances, 435 cells — 434/435, 11/435,
+  434/435, 155/435 + the (14,29,z1) overlap cell
+  last-.POS-slot-wins). NEW method note (D118/3): the TOT
+  word-plane header is WORD-unit (planes start at BYTE 4 = WORD
+  2) — a byte-unit +4×2 double-count yields a false 67/435 (this
+  run's own first pass); the u8 DAT path is immune. Backlog
+  hygiene: the D93-bullet parenthetical annotated CLOSED;
+  registry_anchors 2/2 green; manifest clean before AND after;
+  no Ghidra run, no corpus write. Queued: the TOT plane-6/7
+  semantics unit (item 2, pre-queue grep performed per D118).
 - 2026-08-23: P4/RE THE FUN_00433980 CASE TABLE + FUN_00424a6f
    MESSAGE TABLE unit COMPLETE (worker 0c2df9b4 claim 2, commit
    fcf97c3, D117; docs-only; clean objdump windows on the read-only

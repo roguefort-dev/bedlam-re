@@ -1,5 +1,30 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE QUEUE HYGIENE #3 (D118; docs-only, worker
+    e26508a9 claim 2): the queued ".BDG template-bank ↔
+    restore-word mapping" item REMOVED AS ALREADY-CLOSED — it was
+    stale pre-D96 state copied from the Backlog's RETIRED-D93
+    bullet (the closure sat in the Done log + D96 at queue-write
+    time; the stale bullet parenthetical now annotated CLOSED in
+    place so it cannot tempt a third re-queue). The D96/§7j.32
+    closure re-verified genuinely green at HEAD with FRESH
+    evidence: the loader bank disk order instruction-exact
+    (+0x3E,+0x46,+0x42,+0x4A), the destroy-restore three writes
+    instruction-exact (mirror word/seen/DAT volume ← the UNDER
+    pair +0x46/+0x4A), the zero-reader census both legs (absolute
+    + displacement scans; arena loader-only), and the corpus role
+    proof byte-identical from a fresh parser (ZONEA/M1 435 cells:
+    b1 434/435 ≡ shipped TOT, b2 11/435, b3 434/435 ≡ shipped
+    DAT, b4 155/435, the one miss = the (14,29,z1) overlap cell,
+    last-slot-wins). New method note: the TOT word-plane header is
+    WORD-unit — byte-unit +4×2 double-counts it (a false 67/435
+    first pass this run; the u8 DAT path immune). Verified:
+    registry_anchors 2/2 green, manifest clean before AND after
+    the read-only probes, no Ghidra run, no corpus write, PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    TOT plane-6/7 semantics unit (pre-queue grep performed per the
+    D118 discipline). NEXT: the plane-6/7 unit (item 2).
+
   - 2026-08-23 P4/RE THE FUN_00433980 CASE TABLE + FUN_00424a6f
     MESSAGE SYSTEM COMPLETE (D117; docs-only, §7j.46, commit fcf97c3,
     worker 0c2df9b4 claim 2): the 7j.19 item-6 residual CLOSED — the
