@@ -6385,3 +6385,153 @@ asm this run)
    corpus timeline gate b9cbcf3 (chain b41db389f3ad8947), the
    differ_gate row + capture-plans/S7.json 4c6c068/13bae85 — see
    DESIGN §7 S7 row + D113.
+
+## 7j.42. THE S8 CRITTER-CONTROLLER DECODE — the whole-kind dispatch, the state-4/5 mixed-AI mode machines, and the critter→robot damage lane instruction-exact (2026-08-23, worker f9af5743 claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; corpus probes read-only in /tmp/opencode)
+
+Method: raw-table bytes extracted PE-exact from BEDLAM.EXW
+(image base 0x400000; BEGTEXT RVA 0x1000 = file 0x400) +
+instruction-walk of 0x412f34..0x41547e (the whole controller,
+scratch /tmp/opencode/critter_ctrl.txt). All facts [verified]
+against that dump unless tagged.
+
+1. **THE MAIN LOOP, instruction-exact** (corrects the §7j.17
+   gloss in two places): prologue 0x412f34 zeroes idx ([esp+0x24])
+   and the record OFFSET ([esp+0xc4] — the record pointer idiom is
+   `[reg + 0x4cff98 + field]` with reg = idx·0x7E, so a
+   displacement D addresses field D−0x4cff98). Loop head 0x413ff6:
+   idx vs count [0x46cc2c]; **presence w@+0x24 == 0 → skip the
+   critter whole**; save x/y (d@+0x36/+0x3A → [esp+0x38]/+0x3c);
+   **fuse w@+0x7C: nonzero → DECREMENT, every frame, BEFORE the
+   dispatch** (0x414032..0x41404c — this is the SAME word the
+   §7j.23 hit-flash write sets to 1: flash = a fuse the main loop
+   burns, unified); then `ax = w@+0x00; dec; cmp 6; ja` → the
+   7-entry KIND table @0x412f18 (PE-extract): **k1 → 0x414c96,
+   k2 → 0x415216, k3 → 0x4145c1, k4 → 0x414079, k5 → 0x41367c,
+   k6 → 0x41367c (shared body), k7 → 0x412f52**. Kind w@+0x00 is
+   the .NME section's state word (§7j.18/§7j.23) — CORRECTS the
+   §7j.17 "state w@+0" naming (the word IS the kind; the runtime
+   MODE is w@+0xC). Epilogue per critter (0x413f8f..0x413fdc,
+   run from the state bodies AND the invalid-kind skip): the
+   presence mark (byte 1 at [row-ptr + DAT-volume + x>>13] with
+   row-ptr = [0x4ea900 + (y>>13)·4], asm 0x413f8f..0x413fa7), the
+   8-corner z-settle FUN_004182c3, moved? → FUN_0040ff92 (the
+   tile-0x62 trap re-probe), offset += 0x7E, idx++.
+2. **STATE 4 (seek steppers) — the body 0x414079** [verified]:
+   entry zeroes the substep counter [esp+0x104], saves 6 record
+   copies, jmp the dispatch head 0x414374. Head: `species w@+0x02
+   ≤ substep-count → exit` — **the SPECIES word is the SUBSTEPS-PER-
+   FRAME count** (S4 stamps 6; the wake re-stamps 6); the loop
+   runs `species` iterations per frame. Mode dispatch (mode =
+   dword@+0xA>>16 = w@+0xC):
+   - **mode 0xB dormant** (0x41439e): countdown w@+0x56 vs
+     DAT_00454edc[difficulty]; below → substep-0 increments it
+     (0x4140b8); at/above → WAKE: presence := 1, anim w@+0xE := 0,
+     countdown := 0, seek-dir d@+0x10 := RandA()&3, mode := 9,
+     species := 6, hp w@+0x06 := 0xC8 (200), SFX BEAMIN 0x4edfe0
+     (FUN_0043a48e, x>>8, y>>8, 2). §7j.29's wake-path record
+     confirmed; its "+0x6 timer/+0x2 pause" gloss corrected to
+     hp/substeps (the S4 loader stamps +0x02 = 6 = substeps, not
+     "pause").
+   - **mode 7 dying** (0x4140d7): counter dword@+0x52++, anim
+     := 0; ≥ 0x28 → mode := 0xB, countdown := 0, BEAMIN.
+   - **mode 6 ballistic** (0x414123): drift vs home ±0x8000 Q13
+     leash, aim atan2 → FUN_00415ff2 step; ≥ 8 → mode := 7,
+     counter := 0 (the landing → death-dive of §7j.17's mode-6
+     family — full landing producers documented §7j.17 item 1).
+   - **mode 9 SEEK walk** (tail 0x4142bd → the §7j.29 walk):
+     gate dist < 0x1F4 (500 px); countdown w@+0x56 == 0 → the
+     RE-PICKER: RandA, (al&3)==0 → heading := RandA&3 (25%
+     random) else heading := FUN_004181bd(idx) (dominant-axis
+     direction toward the nearest robot), then countdown :=
+     (RandA&0x3F)+0x20; countdown ≠ 0 → 0x4144d7: countdown −= 1,
+     4-way dispatch (dir 0 FUN_00417f2c y−1: OK → y--, call
+     FUN_00415490; blocked → countdown := 0 | dir 1 FUN_00417fe8
+     x+1: x++ … | dir 2 FUN_004180c0 y+1: y++ … | dir 3
+     FUN_0041813d x−1: x−− …), table @0x412ef8 PE-exact
+     {0x414346, 0x41443b, 0x41446f, 0x4144a3} ✓ §7j.29.
+   - **mode 2 RANGE-ATTACK** (0x4144f8): gate dist < 0x1F4;
+     countdown == 4 → mode := 9 (re-seek); else FIRE
+     **FUN_0040db9e(robot = w@+0x7A, mult = 2, seed =
+     heading<<6, damage = 1, param_5 = −1)** (asm 0x414549..
+     0x414575 — §7j.17's gloss anchored); substep-0 →
+     countdown++ (so a fresh acquisition fires `species` hits per
+     frame for 4 frames then re-seeks).
+3. **STATE 5/6 (the shared body 0x41367c)** [verified]: entry —
+   RandA gate (al&0x1F)==0 (1/32) → facing w@+0x72 :=
+   (RandA&0x1F)−0xF idle drift; then the mode ladder:
+   - **mode 0xB dormant** (0x413a28): countdown w@+0x56 vs
+     DAT_00454edc[difficulty]; below → substep-0 increments +
+     the countdown == table−9 gate plays BEAMIN (the pre-wake
+     sound, 0x4136bc..0x4136fc); at/above → WAKE: anim := 0,
+     countdown := 0, presence := 1, heading d@+0x10 :=
+     FUN_0041ec1c(0xFF) (a RandA&0x7FFF-bucketed pick, body
+     0x41ec1c: `idiv 0x8000/n` clamp n−1), species := 3, mode
+     := 8, hp := 0x96 (150 — the k5/6 base, §7j.18 S3/S6).
+   - mode 0xA (0x41370e): countdown == 0 → mode := 8, anim := 2
+     (a timed pause → re-engage).
+   - mode 7 dying (0x41373b): anim := 0, counter++ ≥ 0x28 →
+     mode 0xB, countdown 0, BEAMIN. mode 6 ballistic
+     (0x41378a): atan2 at home, FUN_00415ff2 step, anim++ ≥ 8 →
+     mode 7 + counter 0. mode 5 (0x41383d): anim > 1 → mode 8 +
+     anim 2; else aim home + step (§7j.17's "brief rise").
+   - **mode 8 ENGAGE** (0x413a98): gate [0x4dd410] == 0 (SOLE
+     text reference = this cmp — a computed-store MP cell, ≡ 0
+     on SP); FUN_00417c00(x>>8, y>>8, &dist) — the
+     nearest-ALIVE-robot scan (0x4c69e4 bank, stride 0xA8, alive
+     d@+0x7C ≠ 0, RAW octile FUN_0041ebf8 on px deltas, sentinel
+     (idx 0, 10,000,000) when none, asm 0x417c00..0x417c5c);
+     dist < 0x60 (96 px) → 0x413b63: leash `(d+1)·0x40 + 0x258`
+     (600/664/728) ∧ dist > 0x80 → 1/128 (RandA&0x7F==0)
+     FUN_00421ed6(x>>8, y>>8) [identity open — a juice/squawk
+     family], aim heading := angle(robot−critter)+0x80&0xFF →
+     step; dist ≥ leash or ≤ 0x80 → 0x413c20 (the
+     approach/retreat path — §7j.17 mode-3/10 family);
+     dist ≥ 0x60 → aim + FUN_00415ff2 step toward (0x413aae
+     tail).
+4. **FUN_0040db9e — the critter ranged-attack applier, whole
+   body** [verified 0x40db9e..0x40dc13; CORRECTS the §7j.18/4
+   table gloss]: damage = `dword[0x476fe4 + 0x30·param_5]`
+   (stride 0x30 = 48, NOT 0xC — the §7j.17 "0xC-stride" was
+   wrong; param_5 = −1 → **0x476FB4**), then FUN_0040e230(robot,
+   damage-seed ecx = 1, owner = the table dword) — so the critter
+   lane is damage 1/hit with the owner tag = dword@0x476fb4.
+   mult ≠ 0 (the mode-2 call passes 2) → the STUN/KNOCK half:
+   robot w@+0x10 := 0xFFFF (via `[0x4c69f4 + 0xA8·idx]`), then
+   FUN_0040c536(idx, cos(seed)·mult>>7, seed, sin(seed)·mult>>7):
+   SP gate [0x4eaac0] == 0, robot state ∉ {3,5} → robot
+   w@+0x0E := seed, walk-probe gate FUN_0041e897((x+vx)>>8,
+   (y+vy)>>8, …) → x += vx, y += vy, w@+0x10 := −1 (asm
+   0x40c536..0x40c604). §7j.17's "dist·mult>>7" gloss corrected
+   (the scale factors are cos/sin of the SEED, not the distance).
+5. **The corpus census** (read-only, /tmp/opencode/nme_census.py,
+   the §7j.18 exact schedule): **ZONEA/MISSION1.NME hosts
+   critters** — S3/MixedState5 = 6 records
+   {(1,1,18,9),(1,1,18,8),(1,1,18,7),(1,1,7,8),(1,1,7,7),
+   (1,1,7,6)} and S4/SeekSteppers = 5 records
+   {(1,1,13,9),(1,1,22,8),(1,1,22,6),(1,2,3,6),(1,2,2,7)}; at
+   difficulty 0 the loader spawns 6 kind-5 (max(d,1) = 1 each,
+   ACTIVE mode 8) + 10 kind-4 ((d>>1)+2 = 2 each, ACTIVE mode 9,
+   one RandA&3 heading draw each) = **16 critters, all ACTIVE
+   from frame 0** (neither ZONEA family spawns dormant — the
+   dormant path is only reached after a death: mode 7 → 0xB).
+   ZONEB/M1 (S5's zone) hosts 63 critters (24 wander + 20 state-5
+   + 10 chase + 9 state-6) — the S5-family chains are unaffected
+   (no `critters` key → no staging, no draws).
+   **STREAM CONSEQUENCE (the D113 pattern, bigger)**: the
+   original loads .NME natively at EVERY mission load and the
+   controller (MissionShell 0x447fe1, ungated) runs all ACTIVE
+   critters EVERY frame — the ZONEA/M1 loader alone consumes 10
+   RandA (the kind-4 headings) at load + per-frame draws
+   (kind-5: 1/frame each idle-gate + the 1/32 extras; kind-4:
+   the walk re-picker draws on countdown expiry) — an E-side
+   stream gap on S0..S7 until a deliberate re-baseline; S8+ arms
+   the family (`critters = 1`) and models them.
+6. Engine routing this unit (D114): the critter bank + the .NME
+   staging host seam + the state-4/5 controller subset (the
+   corpus kinds — k1/k2/k3/k7 bodies stay E-gaps until a zone
+   hosting them needs them) land in `bedlam-core::critter`;
+   the damage lane lands as FUN_0040e230's existing
+   `apply_damage` + the stun/knock half; the §7j.24 death
+   handlers land beside them (bounty → score, debris → the
+   destroy ring). SFX stays T4/E-gap (BEAMIN, the FUN_00421ed6
+   juice, the death trios).
