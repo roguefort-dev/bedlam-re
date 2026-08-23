@@ -1,5 +1,33 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE unit
+    COMPLETE (D122; docs-only, §7j.50, commits 897f524 + e5596c7,
+    worker 6bb948aa claim 2): FUN_00419aff ELSE PATH DUMPED — no
+    memory table (inline jump tree; else = default eax=1 via 4
+    fall-through stubs + the 0x418aa1 cross-function
+    shared-epilogue gadget, 5 arms: 2 default + 3 carrying the
+    d≠2 products 50/300/75·(d+1)). THE 0x69 VERDICT: the
+    per-level BEAM column (k7 close-combat state @0x4135a2,
+    {z=6, TTL 0x18}) re-keys its impact to the LITERAL 0x65
+    (50/100/200 by d, terrain-only, PER-FRAME at the blocked
+    level via the probe-counter oscillation k++/k−−); NEVER
+    robots; no caller ever passes 0x69. The "(d+1)·300" key =
+    the TRT-bolt state 0x66 alone (FUN_00417698 @0x417a5c,
+    guided stepper, classes 1/2/3; also never robots —
+    FUN_004197d4 admits 0x65/0x67/0x68 only, the 0x67/0x68 via
+    own-state keys). Complete 25-site state census: 5 producers /
+    12 zero-writes / 4 readers; tick dispatch = table 0x411ffc on
+    state−0x65; disburser 0x69 arm = silent. Engine consequence:
+    the future E-side k7 leg = per-frame 0x65-keyed terrain DoT,
+    no robot damage; 0x66 TRT bolt terrain-only. Verified:
+    registry_anchors 2/2 green, manifest clean, objdump-only (no
+    Ghidra run, no corpus read), PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    FUN_00419756 identity unit (the §7j.50 class-3 probe; 126 B,
+    1 caller, genuinely open), 3 = the debris arrival-SFX pair
+    FUN_00421e60/FUN_00421dec unit (7j.11 item 4).
+    NEXT: the FUN_00419756 identity unit (item 2).
+
   - 2026-08-23 P4/RE THE FUN_00440dc2 IDENTITY COMPLETE (D121;
     docs-only, §7j.49, worker 21c18e9e claim 2): FUN_00440dc2 =
     the BRIEF OBJECTIVE-MINIMAP SNAPSHOTTER (sole caller
