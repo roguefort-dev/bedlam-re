@@ -106,8 +106,8 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x1A..+0x29 | 8×u16 | per-probe floor z cache (written by move_is_possible; +0x1A doubles as the climb-compare z: `dword@+0x18 >> 16`) | 0x4c69fe |
 | +0x2A | u16 | robot TYPE (indexes the 0x62-stride ORDER/stats table at 0x4de664; all player robots take the global word@0x4edb90) | via 0x4c6a0c>>16, 0x40cdf3 |
 | +0x2C | u16 | DROP-POD descent timer: ≠0 freezes the whole robot brain per sub-tick (FUN_0040b9f6); 0-hit → pod anim FUN_0041fb4b + msgs 9/10/0xB. Writers: spawn stagger `1+k·(2000−m·1000/27)` (FUN_0040cca0 @0x40d132), MP respawn 0x28 (FUN_0040e230 @0x40e89d) | 0x4c6a10, §7j.20 |
-| +0x30 | u16 | burn-damage accumulator: −0xA per phase-1 pass off-scorch (signed, clamp 0), paired with the FUN_004100b7 scorch lane [§7j.45] | 0x4c6a14 |
-| +0x32 | u16 | BURN cooldown: := 0x64 by FUN_004100b7 @0x4103e3 (gate ==0), dec 1/frame — scorched tiles re-burn every ~100 frames [§7j.45] | 0x4c6a16 |
+| +0x30 | u16 | HEAT accumulator [re-labeled §7j.55 from the §7j.45 "burn-damage/armor" gloss per §7j.53's corpus strings]: +0x14 per phase-1 pass ON-scorch (FUN_004100b7 @0x40bc72, behind the +0x98 damper), −0xA per pass off-scorch (clamp 0); clamp ≤ 0xBB8; 0x753 crossing → "TEMPERATURE CRITICAL", 0x9C4 → "HAS OVERHEATED"; sidebar HEAT gauge scale 2500; SP death/MP respawn reset 0 | 0x4c6a14 |
+| +0x32 | u16 | LOSING-AMMO warning cooldown [gloss corrected §7j.55; was "BURN cooldown ... scorched tiles re-burn"]: := 0x64 by the FUN_004102b6 cook-off tail @0x4103e3 (gate ==0), dec 1/walk (robots() pre-walk 0x40bab7, gate ≠0); sole producer/sole reader = the cook-off — no tile-burn role exists | 0x4c6a16 |
 | +0x34 | u16 | ALARM cooldown: set by the FUN_0040e230 alarm path (with +0xA4), dec 1/frame; sidebar reads dword@+0x34 [§7j.45] | 0x4c6a18 |
 | +0x36/+0x38/+0x3A | u16×3 | per-order stats-group copy i (8-byte groups, i=0..6): word0 = group availability (spawn default probe), word1 = the sidebar order gate (copied twice) [§6c.6] | 0x4c6a1a/1c/1e, spawn 0x40cf05..0x40cf42 |
 | +0x6E | u16 | ORDER BITS (bit i = order i active; bits 0..6 toggled by keys 1..7 / the 7 sidebar order rows; spawn default = 1 << first available) | 0x4c6a52, §6c |
@@ -908,6 +908,10 @@ asm agree; the four draw functions are fully pinned.
      `sprite = 0x8E - (armor * 0x2E) / 0x9C4`, then `> 0x8D → 0x8D`;
      ids 0x60 (full 2500) .. 0x8E (empty), 47 sprites. Armor 0 (no
      armor) still DRAWS the empty 0x8E bar every frame.
+     **RE-LABELED 2026-08-23 (§7j.55/D127)**: this is the HEAT
+     gauge, not armor — +0x30 is the HEAT accumulator, and the
+     bar's full scale 2500 IS the "HAS OVERHEATED" threshold;
+     empty = not heated.
 2. **FUN_004085ce = the score/money strip** [verified, 0x4085ce..0x4085cd?
    size 837]: NUMBERS.BIN (`DAT_0046af3c`, ESI at every call), transp=1:
    icon 0xA @ (0x1FE, 0x18E); nine score digits of `_DAT_004dd40c`
@@ -1071,6 +1075,17 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    all-zero stats → pool 0 → pads charge armor immediately.
    [mechanics verified; the drain-before-charge design intent
    stays tagged unclear]
+   **TERMINOLOGY SUPERSEDED 2026-08-23 (§7j.55/D127)**: this
+   item's "armor"/"pool"/"charge ticks" vocabulary predates
+   §7j.53's corpus-verified WARNING strings — the family is the
+   HEAT machine: +0x30 = the HEAT accumulator (0x753 crossing
+   → "TEMPERATURE CRITICAL" ids 6/7/8, 0x9C4 → "HAS OVERHEATED"
+   ids 3/4/5), +0x98 = the DAMPER ("DAMPER EXHAUSTED" ids
+   0x2E..0x30), FUN_004102b6 = the AMMO COOK-OFF ("LOSING AMMO"
+   ids 0x31..0x33, 1/128 per pass, drain = ammo>>3 floor 1),
+   and the drain-before-charge design is CLEAR: the damper
+   absorbs heat before the accumulator builds — the "intent
+   unclear" tag is RETIRED. Full decode §7j.55.
 5. **The 0x7d2/0x7d3 tile words** [verified 0x40bbef..0x40bc38]:
    the per-tile word at `0x460dfa + 2*tile` (read as the dword
    at 0x460df8+2*tile >> 16) — word == 0x7d2 ∧ phase 0 →
@@ -4719,6 +4734,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | SFX register/play family | FUN_0043a36e = 1-voice register, FUN_0043a39c = 4-voice register (clone pair; stage via scratch cell 0x46af0c → arena 0x2b11 → 0x44c64c returns the VOICE-BASE handle — SFX cells hold handles, not pointers); FUN_0043a48e = play/steal (x,y=−1,−1 → vol 0x7f/pan 0x8000; else FUN_0043a3e0 pan / FUN_0043a447 vol vs listener 0x4edde4/0x4edde8; 4-voice probe 0x44c5ac, steal by priority [0x4ee1c2+2v]>>16 + age [0x4ee2e2+2v], start 0x44c904); speech bypasses it (indexed slot pick + 0x44c8c4 direct, vol 0x7f00) | §7j.30 |
 | radio-warning dispatcher | FUN_004239ef(id, channel): 4-channel message queue 0x4eb954, stride 0x28 {8 id+1 words +0..+0x1C, insert idx +0x20 wrap 8, voice handle +0x24}; dedupe per id per channel; ids 0x19..0x1B flush their channel then post at slot 0; 55 call sites = the 53-line [WARNINGS] id map (§7j.53); channels 0/1/2 = squad slots, 3 = system (drained first) | §7j.53 |
 | radio-warning consumer | FUN_00423a85 (MissionShell @0x447ff5, per frame): channels 3→0, oldest slot first, one per channel per frame; voice leg (ids 0xF/0x29 skip; gates [0x4eb93c]/[0x4ede5c]/[0x4ede58]): still-playing poll 0x44c5ac keeps the slot queued, else play take A/B = **RandA bit0** from 0x4ee014+8·id via 0x44c8c4 (vol 0x7f00), handle := ret+1; consume leg: slot := 0, roll the 4×0x26 display ring 0x4ea13c {text[0x20], reveal u16 +0x22, valid u16 +0x24} (active = record 3, latches 0x4ea1d0/d2), stage text 0x46c18c+id·0x30 (WARNINGS table, GameMain-loaded from LANGUAGE.*), typewriter render tail (tables 0x454c20/0x454b70); both structures MissionShell-cleared @0x4479de/0x4479fc | §7j.53 |
+| heat machine | CLOSED §7j.55/D127: FUN_004100b7 = the HEAT-IN (sole caller robots() phase-1 0x40bc72, amount 0x14 on a nonzero +0x18 scorch byte): the +0x98 DAMPER (equipment stat 0x2C ×200, spawn 0x40d013/MP-respawn 0x40ea59) absorbs first — pool −= amt, >0 return, ≤0 → zero + "DAMPER EXHAUSTED" ids 0x2E..0x30 ONCE + return (no heat that pass); pool==0 → word@+0x30 += amt (i16 wrap) clamp 0xBB8, edge-triggered crossings 0x753 → "TEMPERATURE CRITICAL" ids 6/7/8 (@0x41025e/0x410280/0x4102ac), 0x9C4 → "HAS OVERHEATED" ids 3/4/5 (@0x4101d7/0x4101f9/0x41021d), old ≥ 0x9C4 → FUN_004102b6 EVERY pass; FUN_004102b6 = the AMMO COOK-OFF (sole caller 0x41019a): RandA&0x7F==0 (1/128), w = RandA&7 <7, drain = max(1, ammo@+0x38+8w >>3), ammo −= drain floor 1 (empty slot → 1 quirk), player-type → [0x46ccec]:=2, +0x32==0 → "LOSING AMMO" ids 0x31..0x33 + +0x32 := 100; +0x30 census: bleed −0xA/clamp0 + SP-death/MP-respawn resets + the sidebar HEAT gauge FUN_0040807f ×3 (scale 2500 = the overheat threshold); corpus UNREACHABLE by construction (scorch byte ≤7, fade 1/frame → crossing 0x753 needs ≥14 same-tile writes ≤94 frames under a parked robot; below 0x9C4 zero RNG) | §7j.55 |
 | hot-rect click-target array | ONE array base 0x4787bc (record 0; the dispatcher's 1-based view 0x47879c = base−0x20), stride 0x20, 8 dwords {+0 world X, +4 world Y, +8 hit-box X origin, +0xC Y origin, +0x10 z, +0x14 w, +0x18 h, +0x1C type}, count [0x46ccd8] cap 0x77 (extent ..0x47969c), per-frame reset @0x403a9a; writers = 7 sites ALL in FUN_00403938: w1 0x403c87 robots MP-only ([0x4edb88]==2 ∧ ≠local player) type (idx+1)\|0x1000 w/h 0x40 z=rec+8+0x21 corner tile+0xB; w2-w7 0x4056f1/0x4058b8/0x405c4d/0x405f7b/0x406142/0x4062c6 critter .NME paths (state ∉{6,7,0xB}; w7 {6,7}) type idx+1, z ∈ {[crit+0x3E] raw/+0x20/+0x10/>>8}, w ∈ {0x3C,0x40} h 0x40 | §7j.31 |
 | click picker | FUN_00419943 (only caller = dispatcher 0x41068e): scans hot rects i<[0x46ccd8], box = origin+(w/2,h/2) ± (w/2,h/2); priority = octile FUN_0041ebf8 max(\|dx\|,\|dy\|)+min/2, early-out <4; returns i+1; ground fallback = iso (mx−0xF0)·[0x4ede54]/0x1E0 + camera + TRT active-scan (x/y/z @+0x14/18/1C ×0x20, windows −0x10..+0x30) → 0x2000\|(idx+1) else 0 | §7j.31 |
 | click order dispatcher | FUN_00410644 (MissionShell @0x448021; gates mouse≠−1/[0x4ede14]≠0/[0x4edba0]==0/mx<0x1E0): picked → type cell [0x46cc00] (NEW pin); bit13 TRT: rec(id−1) via −0xC-bias base 0x4cccec, coords ×0x20+0x10 → ORDER TARGET 0x4dd484/88/8c; bit12 robot: corner +0/+4 + z +0x10; else critter: corner + FUN_004128ec(id−1)>>8+0x15; ground: camera+view-mouse z0; tail [0x4ddb20]\|=2 order latch (NEW pin) + [0x4ede00]:=−1 consume | §7j.31 |
@@ -8751,7 +8767,10 @@ id = call-site census (55 sites, every one reconciled):
 S1-class); 0x22..0x24 need fences/elevators (ZONEB/F surfaces);
 0x26..0x2A + 0x34 need objective completion/extraction (S5/S6-
 class); ids 0x3..0x8 need the heat machine (no corpus scenario
-exercises it today). The queue/render cells are UI-presentation
+exercises it today — mechanism + unreachability proof §7j.55:
+the scorch byte's 7-cap + 1/frame fade bound +0x30 below ~140
+absent ≥14 same-tile re-scorches under a parked robot). The
+queue/render cells are UI-presentation
 state — no engine or watch-row consequence (the spoken-line
 RandA draw joins the existing T3/T4 budget class).
 
@@ -8913,3 +8932,143 @@ an SP capture would need the SELECTED robot left state-0 for
 terrain/kill traffic through FUN_004244a1 + kind-6 disburser);
 [0x4ea238] and [0x4de658] are additive watch-row candidates,
 deliberately NOT in the first golden.
+
+## 7j.55. THE HEAT MACHINE — FUN_004100b7 (heat-in) + FUN_004102b6 (ammo cook-off) DECODED WHOLE: the §7j.45 "armor/pool" gloss RE-LABELED HEAT/DAMPER per §7j.53's corpus strings; +0x30 = HEAT accumulator, +0x98 = DAMPER pool, +0x32 = the LOSING-AMMO cooldown (its "producer unknown" residue CLOSED); corpus reachability = the warnings/cook-off are UNREACHABLE by construction (2026-08-23, worker 19d79ca9 claim 2, D127; docs-only; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; manifest clean; registry_anchors 2/2 green) [verified]
+
+§7j.53 named the twelve call sites (ids 3..8 "OVERHEATED"/
+"TEMPERATURE CRITICAL", 0x2E..0x30 "DAMPER EXHAUSTED",
+0x31..0x33 "LOSING AMMO") but left their containing family
+undecoded; §7j.45 item 4 had the mechanics under a pre-§7j.53
+"armor" reading. This unit decodes both functions
+instruction-exact, arbitrates the terminology, and closes the
+reachability question.
+
+**1. FUN_004100b7 = the HEAT-IN machine** [verified
+0x4100b7..0x4102b6, sole caller = the robots() phase-1 pass
+0x40bc72 with amount 0x14 on a nonzero scorch byte — the SAME
+byte==0 branch bleeds −0xA clamp ≥0 @0x40bc7d/0x40bc98]:
+args eax = robot idx, edx = amount. `amount == 0` → return
+(@0x4100be). Record address = idx·0xA8 + 0x4c69e4 (the §3 bank).
+- **DAMPER branch** (dword@+0x98 ≠ 0): `pool −= amount`
+  (@0x4100e1); still > 0 → return; ≤ 0 → `pool := 0`
+  (@0x4100f9) + post "UNIT n DAMPER EXHAUSTED"
+  (FUN_004239ef(0x2E+k, k) @0x41010a/0x41012c/0x410158→tail
+  0x4102ac) + return. The pass that breaks the damper adds NO
+  heat; the triple fires ONCE (pool stays 0 until the
+  MP-respawn stats-copy re-arms it). +0x98 = **the DAMPER**
+  (equipment stat 0x2C, word×200 @0x40d013 spawn / 0x40ea59
+  MP respawn — the same chassis switch as 0x2A shield charges
+  +0x8C / 0x2B battery +0x94, §7j.45).
+- **HEAT branch** (+0x98 == 0): `word@+0x30 += amount` (16-bit
+  wrap @0x41015d..0x41016c), clamp new > 0xBB8 (3000) → 0xBB8
+  (@0x41017f..0x41018e). Threshold logic keyed on OLD
+  (pre-add: dword@+0x2E sar 0x10) vs NEW:
+  (a) old ≥ 0x9C4 (2500) → **FUN_004102b6 EVERY pass**
+      (@0x410190..0x41019a — the cook-off attempt below);
+  (b) old < 2500 ∧ new ≥ 2500 → "UNIT n HAS OVERHEATED"
+      (FUN_004239ef(3+k, k) @0x4101d7/0x4101f9/0x41021d);
+  (c) old ≥ 0x753 (1875) → return (@0x410222..0x410228 — the
+      already-critical short-circuit);
+  (d) old < 1875 ∧ new ≥ 1875 → "UNIT n TEMPERATURE CRITICAL"
+      (FUN_004239ef(6+k, k) @0x41025e/0x410280/0x4102ac — the
+      ch-2 leg SHARES the 0x4102ac tail call with the damper
+      id 0x30 arm).
+  Both crossings are EDGE-triggered; a single huge add crossing
+  both posts BOTH (overheat first, critical second). Rising
+  heat escalates 1875 CRITICAL → 2500 OVERHEATED (the CRITICAL
+  warning PRECEDES the OVERHEAT state — the corpus strings read
+  as "about to" vs "has"). All four triples use the standard
+  per-squad-slot dispatch: `idx == [0x46cbd4]+k` gated
+  `[0x46cbd8] > k`, one post per event (current player's squad
+  only).
+
+**2. FUN_004102b6 = the AMMO COOK-OFF** [verified
+0x4102b6..0x4103ed, sole caller 0x41019a; arg eax = robot idx]:
+- Gate 1: `RandA() & 0x7F == 0` — 1/128 per pass (@0x4102be;
+  phase 1 runs once per frame → ~0.47 cooks/sec while
+  overheated).
+- Gate 2: `w = RandA() & 7` must be < 7 (@0x4102cb) → uniform
+  over the SEVEN weapon slots (a rejected 7 aborts, no drain).
+- Drain: `ammo = word@(record + 0x38 + 8w)` (the slot's word1 —
+  §6c.6's "order gate" ≡ §7j.37's ammo, the same cell);
+  `drain = ammo >> 3`, 0 → 1; `ammo −= drain`, then result ≤ 1
+  → `:= 1` (@0x41031a..0x410336) — **the last round never
+  cooks off** (floor 1, and an empty slot stays 0: 0 ≤ 1 → :=1
+  would ARM an empty slot to 1 — the ≥2500 precondition means
+  this quirk is only observable in a cooked unit).
+- If `type(+0x2A) == [0x4edb90]` (a player-type robot):
+  `[0x46ccec] := 2` (@0x410344..0x410358) — the sidebar_control
+  cell (the same producer value as §7j.45's player-present
+  walk; presentation).
+- Rate limiter: `word@+0x32 == 0` → post "UNIT n LOSING AMMO"
+  (FUN_004239ef(0x31+k, k) @0x41038c/0x4103ae/0x4103d2) +
+  `word@+0x32 := 100` (@0x4103e3) — one warning per 100 frames
+  max while overheated.
+- RNG: ONE RandA per failed gate-1, TWO per attempt that
+  reaches the slot pick (draw-count class T3/T4; relevant only
+  if ever corpus-reachable, see 5).
+
+**3. THE +0x32 CELL CLOSED** (§7j.45 Part B's "producer
+unknown" residue): writers = FUN_004102b6's tail ALONE
+(:= 0x64 @0x4103e3); decay = the robots() pre-walk dec-gated-≠0
+trio site 0x40bab7..0x40bac6 (alongside +0x34/+0xA4 — dec 1
+per walk each); reader = the 0x41036e gate ALONE. The §3
+"scorched tiles re-burn every ~100 frames" gloss RETIRED —
+the cell is the **LOSING-AMMO warning cooldown**, nothing
+else. The +0x34/+0xA4 ALARM pair has NO relation to this
+family (zero traffic in 0x4100b7..0x4103f2) — they belong to
+FUN_0040e230; the only tie is the shared decay walk.
+
+**4. FULL CELL CENSUS** [objdump traffic, displacement-aware]:
+- word@+0x30 (0x4c6a14; the dword@+0x2E sar-16 view): writers =
+  the phase-1 bleed (−0xA + clamp-0 @0x40bc7d/0x40bc98),
+  FUN_004100b7 (add 0x41016c / clamp 0x410187), the SP death
+  reset (:= 0 @0x40eacf — inside the SP branch of the death
+  tail), the MP respawn reset (:= 0 @0x40e864). NOTE: the
+  0x40e6e2 `mov WORD [eax+0x4c6a14],di` match is the
+  seven-order-words zeroing walk (eax = idx·0xA8 + 8k, k =
+  8..0x38 → effective record+0x38..+0x68, §7j.45 item 6), NOT
+  a +0x30 site. Readers = FUN_004100b7 internal + the sidebar
+  gauge FUN_0040807f ×3 slots (0x408129/0x408252/0x40837d —
+  §7f.4's "armor bar": clamp 2500, sprites 0x60..0x8E; **the
+  gauge's FULL SCALE = the OVERHEATED threshold 2500 exactly**
+  — re-labeled the HEAT gauge, §7f.4 gloss corrected) + the
+  bleed clamp check 0x40bc85. NO other traffic.
+- dword@+0x98 (0x4c6a7c): writers = the spawn stats-copy case
+  0x2C (word×200 @0x40d013), the MP-respawn stats-copy
+  (@0x40ea59, same formula), FUN_004100b7's drain/zero; reader
+  = FUN_004100b7 ALONE. Fresh campaign: all-zero stats →
+  damper 0 → scorch heats immediately.
+
+**5. CORPUS REACHABILITY — UNREACHABLE BY CONSTRUCTION** [the
+§7j.53 note CONFIRMED with the mechanism]: the only pad-armer
+is the type-DB +0x18 SCORCH byte (robot-death rings 1/2/4
+corner/edge/center §7j.9; platform weaken/build +4 §7j.41;
+clamp 7; the unconditional −1/frame fade §7j.10). One write
+keeps a tile armed ≤ 7 frames → ≤ +140 heat per event chain;
+crossing 1875 needs ≥ 94 NET armed passes = the byte
+re-written ≥ ~14× within ~94 frames under a PARKED robot. The
+corpus stages no robot deaths on parked robots at all (S4/S5C
+destroys are structures/critters; S7's platform events are
+sparse single writes; the death of the standing robot itself
+resets its OWN +0x30 to 0), so +0x30 leaves 0 in every
+canonical run except ≤140-scale S7-class wiggles — and BELOW
+2500 the machine is FULLY DETERMINISTIC (zero RNG — both RandA
+draws live in FUN_004102b6) mutating only +0x30/+0x98, both
+in-span robot-bank bytes E models verbatim (armor_charge/
+bleed/resets). The pinned chains therefore hold; warning ids
+3..8 + 0x2E..0x33 never post on corpus paths.
+
+**6. Engine/differ consequences**: NONE today. E's state side
+is exact (the damper absorb + accumulator add/clamp, the
+bleed, the SP/MP resets); the presentation legs (warnings) and
+the unreachable cook-off are correctly omitted; E's
+deliberately-unmodeled +0x32 decay is unobservable (the sole
+producer never runs in corpus). IF a future scenario arms
+sustained scorch under a parked robot (≥14 same-tile writes in
+≤94 frames — e.g. a scripted kill-cascade), E MUST add
+FUN_004102b6 verbatim (the gate RandA draws + the ammo drain
+would otherwise diverge the RNG stream AND the weapon banks) —
+recorded seam; additive watch rows only then. The
+"armor-pad-reads" watch id keeps its legacy name (the registry
+anchor is load-bearing; the byte is the scorch byte).
