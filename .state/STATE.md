@@ -1,5 +1,42 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE DEBRIS ARRIVAL-SFX PAIR unit COMPLETE
+    (D124; docs-only, §7j.52, commits 01d380b + 2728351, worker
+    a553aa84 claim 2): FUN_00421e60 (118 B, 11 callers inside
+    the FUN_00420608 kind legs) = the BOOM1/2/3 spawn trio
+    ([0x4ede58]≠0 gate, RandB idiv-3, cells 0x4edf64/68/6c,
+    play priority 2); FUN_00421dec (116 B, k2/k8) = the
+    RICOCHT1..4 quad (RandB&3 jump table @0x421ddc, cells
+    0x4edf98/9c/a0/a4, priority 1 — one steal class below
+    BOOM); every cell named via §7j.30. RNG CORRECTION: item
+    4's "RandA()%3" named the wrong draw — the pick is RandB
+    (0x4029b6/0x4ede4c; RandA 0x402975/0x4ede48 only gates
+    k11's ~50% al&1 play) — corrected in place, history
+    preserved; pick = T4 unmodeled, k11 gate = modeled RandA
+    draw-count. TRIGGER: all 13 sites fire at DEBRIS-STAGE
+    time (before the record fields; "arrival" = arrival on the
+    field); 12/13 = in-map bounds recheck of the raw Q5 args
+    then UNCONDITIONAL call; k11 alone adds the RandA&1 gate
+    (two RNGs on one leg). Kind→leg map re-verified byte-exact
+    vs jump table @0x4205b8. Caller census complete (raw-dword
+    scan → zero refs). CORPUS REACH: k5 via apply_damage is
+    the only reachable producer → the only reachable arrival
+    SFX is k5's e60 leg @0x421364 (one RandB + one BOOM at
+    the death position); FUN_00421dec unreachable. Adjacent:
+    third sibling FUN_00421ed6 = GRUNT1/2/3 trio (callers
+    0x413ba0/0x413f2a = the §7j.42 engage juice) — its
+    [identity open] gloss closed in place (2728351); the
+    arrival-SFX family is four decode-complete members.
+    Engine consequence NONE today; the beyond-k5 E-side stager
+    draws one RandB per staging (T4). Verified: registry_anchors
+    2/2 green, manifest clean before AND after, objdump-only
+    (no Ghidra run), PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 =
+    the FUN_004239ef SFX-message dispatcher unit (17 cited
+    call sites, zero body decode — the id→cell map is the
+    deliverable; D125).
+    NEXT: the FUN_004239ef dispatcher unit (item 2).
+
   - 2026-08-23 P4/RE THE FUN_00419756 IDENTITY unit COMPLETE
     (D123; docs-only, §7j.51, commit 224188f, worker 9a23356a
     claim 2): the TRT-bolt class-3 probe = a first-alive

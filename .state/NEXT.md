@@ -123,22 +123,28 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE DEBRIS ARRIVAL-SFX PAIR UNIT (small; docs-only,
-   unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt): close the 7j.11 item-4
-   residue — FUN_00421e60 (118 B, 11 callers) + FUN_00421dec
-   (116 B, 2 callers), the per-ring arrival SFX consumers named
-   in the §7j.11 table (k20 tail / center-write legs). Decode
-   both bodies: which FUN_0043a48e voice cells / bank names they
-   play (the §7j.30 bank→name map is the anchor — name every
-   cell), the trigger condition inside each caller family, and
-   whether any caller is corpus-reachable (the §7j.11 table's
-   producer rows). Ledger rows + D124; registry_anchors green;
-   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS
-   + RE-EXW-SIM — only the §7j.11 consumer-table rows exist, no
-   body decode, no closure; the Backlog "Mission SFX tier" bullet
-   still lists the pair as open item 4. (RENUMBERED from 3 by the
-   7j.51/D123 close, 2026-08-23.)
+ 2. [P4/RE] THE FUN_004239ef SFX-MESSAGE DISPATCHER UNIT (small;
+   docs-only, unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt): decode the body of
+   FUN_004239ef — cited 17× across §7/§7g/§7j as the id-indexed
+   SFX-message dispatcher (select-ack pair 0xC+k/0xF @0x40c1ae..,
+   armer click 0x2A, robot msgs 9/10/0xB, damage/alarm 0x10/0x11/
+   0x12, weapon msgs 0x1C..0x21/0x22/0x23/0x24/0x26/0x27) but
+   NEVER body-decoded. Head already visible in the objdump: an
+   8-slot × 0x28-stride message queue @0x4eb954 keyed by id+1
+   (scan loop 0x423a0e), ids 0x19..0x1B special-cased (a clear
+   walk 0x423a39). Deliverables: the full slot grammar (+0..+0x28
+   fields incl. the 0x4eb974 tail word), the id→voice-cell /
+   bank-name map (anchor §7j.30 — name every id the 17 call
+   sites pass), the expiry/consume path (who drains the queue —
+   find the tick reader), and per-id corpus reachability. Ledger
+   row(s) + D125; registry_anchors green; PUSH. Pre-queue check
+   (D118 discipline): grep'd DECISIONS + RE-EXW-SIM — ZERO body
+   decode of FUN_004239ef exists (only consumer citations at 17
+   sites + the §7j.12 delayed-trigger row's passing mention);
+   the Backlog "Mission SFX tier" bullet still lists the
+   select-ack pair + armer click as open. (QUEUED 2026-08-23 by
+   the 7j.52/D124 close, worker a553aa84 claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -206,9 +212,14 @@ renumbered queue keeps every open item claimable by number).
   202 durable assignments, zero unnamed cells) + the order SFX 0x2A armer click + the
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
   entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
-  debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4
-  — PROMOTED to the Now queue, 2026-08-23; Now item 2 after the
-  7j.51/D123 renumber).
+  debris arrival-SFX pair FUN_00421e60/FUN_00421dec — CLOSED
+  2026-08-23 (§7j.52/D124, commit 01d380b: BOOM1/2/3 trio +
+  RICOCHT1..4 quad, RandB pick — item 4's "RandA" corrected,
+  stage-time trigger, corpus reach = k5 only; the §7j.42
+  FUN_00421ed6 [identity open] gloss closed in the same unit,
+  commit 2728351). The select-ack pair + armer click remain
+  open — PROMOTED as the FUN_004239ef dispatcher unit (Now
+  item 2, queued 2026-08-23 by the D124 close).
   NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
@@ -275,6 +286,50 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE DEBRIS ARRIVAL-SFX PAIR unit COMPLETE
+  (worker a553aa84 claim 2, commits 01d380b + 2728351, D124,
+  §7j.52, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt + one read-only raw-dword
+  scan of game-data/cd-root/BEDLAM.EXW; no Ghidra run; MANIFEST
+  clean before AND after; registry_anchors 2/2 green; PUSHED).
+  CLOSED with the verdict set: (1) FUN_00421e60 (118 B, 11
+  callers, all inside the FUN_00420608 kind legs) = the
+  BOOM1/BOOM2/BOOM3 spawn trio — [0x4ede58]≠0 gate, RandB()
+  signed-idiv-3 pick (cells 0x4edf64/68/6c), play
+  FUN_0043a48e(handle,0,x,y,priority 2); FUN_00421dec (116 B, 2
+  callers = k2/k8) = the RICOCHT1..4 quad — RandB()&3 jump
+  table @0x421ddc (cells 0x4edf98/9c/a0/a4), priority 1, one
+  voice-steal class BELOW the BOOM trio; every cell named via
+  the §7j.30 anchor. (2) THE RNG CORRECTION: §7j.11 item 4's
+  "RandA()%3" was the WRONG draw — both bodies call RandB
+  (FUN_004029b6, state 0x4ede4c; RandA 0x402975/0x4ede48 is
+  drawn ONLY by k11's ~50% al&1 play gate) — corrected in place,
+  history preserved; bank pick = T4 (unmodeled), k11's gate = a
+  modeled RandA draw-count. (3) THE TRIGGER: all 13 sites fire
+  at DEBRIS-STAGE time (entity creation, BEFORE the record
+  fields — "arrival" = arrival on the field); 12 of 13 share
+  one shape: per-leg in-map bounds recheck of the raw Q5 args
+  (x/y≥0, x<[0x4eddec]<<5, y<[0x4eddf0]<<5; fail → ret-8, no
+  record, no SFX) then the UNCONDITIONAL call; the 13th (k11
+  @0x420e93) adds the RandA&1 gate (two RNGs on one leg).
+  Kind→leg map re-verified byte-exact vs jump table @0x4205b8
+  (6+12 and 1+13/14/15 body-sharing). Caller census COMPLETE:
+  raw-dword scan → ZERO refs — the 13 direct calls are the
+  whole graph. (4) CORPUS REACH: k5 via apply_damage remains
+  the only reachable producer → the only reachable arrival-SFX
+  site is k5's e60 leg @0x421364 (one RandB + one BOOM at the
+  death position, priority 2); FUN_00421dec has NO
+  corpus-reachable caller. (5) Adjacent census: third sibling
+  FUN_00421ed6 = the GRUNT1/2/3 trio (RandB()%3 →
+  0x4ee000/04/08, p2; callers 0x413ba0/0x413f2a = the §7j.42
+  k5/6 engage-cycle juice) — the §7j.42 [identity open] gloss
+  closed in place (commit 2728351); the arrival-SFX family is
+  now four decode-complete members. Engine consequence NONE
+  today; the beyond-k5 E-side stager must draw one RandB per
+  staging (T4) at the spawn position.
+  Queue: 1 = [BLOCKED] S0 live session (operator-gated,
+  unchanged), 2 = the FUN_004239ef SFX-message dispatcher unit.
+  NEXT: the FUN_004239ef dispatcher unit (item 2).
 - 2026-08-23: P4/RE THE FUN_00419756 IDENTITY unit COMPLETE
   (worker 9a23356a claim 2, commit 224188f, D123, docs-only;
   objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra
