@@ -111,7 +111,7 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x34 | u16 | ALARM cooldown: set by the FUN_0040e230 alarm path (with +0xA4), dec 1/frame; sidebar reads dword@+0x34 [§7j.45] | 0x4c6a18 |
 | +0x36/+0x38/+0x3A | u16×3 | per-order stats-group copy i (8-byte groups, i=0..6): word0 = group availability (spawn default probe), word1 = the sidebar order gate (copied twice) [§6c.6] | 0x4c6a1a/1c/1e, spawn 0x40cf05..0x40cf42 |
 | +0x6E | u16 | ORDER BITS (bit i = order i active; bits 0..6 toggled by keys 1..7 / the 7 sidebar order rows; spawn default = 1 << first available) | 0x4c6a52, §6c |
-| +0x70 | i32 | REINFORCEMENT/RESURRECT delay (§7j.45: ++ at phase 0 while state==0 vs table DAT_00454ee8[DAT_0046cbf8]; threshold ∧ zone ∉{1,7} ∧ [0x4de658]==0 ∧ SP → SFX 0xC/0xD/0xE + blink [0x4dc5d0] + [0x4de658]:=0x80 + the 8-marker scatter; cleared by the states-3/5 block + the arrival tail) | 0x4c6a54 |
+| +0x70 | i32 | IDLE-TIME BOMBARDMENT ARM counter (§7j.54 CORRECTED the old "reinforcement/ resurrect delay" gloss: ++ at phase 0 while state==0 — SP only for the SELECTED robot (idx == [0x46cbd4]+[0x46cbdc]), MP for every idle robot — vs difficulty table DAT_00454ee8[[0x46cbf8]] = {400, 300, 200, 5000≈never}; threshold ∧ zone ∉{1,7} ∧ [0x4de658]==0 ∧ mode≠2 → the aerial-BOMBARDMENT salvo: SFX 0xC/0xD/0xE + blink [0x4dc5d0] + [0x4de658]:=0x80 + the 8-shell scatter into 0x4ea238 (§7j.54); cleared by the states-3/5 block + the arm tail — i.e. ORDERING the robot resets the idle timer) | 0x4c6a54 |
 | +0x74 | i32 | stop distance for the active order (1000000 = go all the way) | 0x4c6a58 |
 | +0x78 | i32 | (label corrected 2026-08-21, §6c.7: this row had drifted +4 — alive is +0x7C) — | — |
 | +0x7C | i32 | alive flag (0 = slot free; sidebar select gate + armer's one-alive count) | 0x4c6a60 |
@@ -191,9 +191,11 @@ Per phase call (6×/frame from MissionShell), for each robot record:
   on a 0x7d3 tile the body runs only while phase ≤ (+0x80 == 0 ? 2 : 4)),
   0x7d2 (phase 0) triggers FUN_0040e230(robot, 0xF, -1) [verified reads
   via 0x4ea900 + TOT mirror DAT_00460df8].
-- Reinforcement ready: deploy-delay counter +0x70 vs
+- Reinforcement ready [GLOSS CORRECTED §7j.54 — it is the IDLE-TIME
+  BOMBARDMENT arm, not a reinforcement]: idle counter +0x70 vs
   DAT_00454ee8[DAT_0046cbf8] → slot SFX (0xC/0xD/0xE) + scatter of 8
-  jittered markers into 0x4ea238 (10-byte records).
+  jittered SHELL records into 0x4ea238 (10-byte records, the falling
+  salvo — full grammar + resolver §7j.54).
 - **Order consumption** [verified, the click→move bridge]:
   `word@0x4eabb0 != 0` (order armed) and state ∉ {3,4,5} and
   `dist_octagonal(pos_q5, order_tile*0x20+0x10) < 0xC0` (6-tile radius)
@@ -1373,8 +1375,13 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    "select SFX" gloss corrected; the walk is §7g.5's threshold
    announcer) — and `[0x4dc5d0] = k+1` (the cursor write is the
    attention-draw on the endangered unit); MissionShell
-   entry zeroes it (0x447871); FUN_00423e1c (the selection chaser,
-   0x423e8c..) re-points the selection when cursor ≠ selected+1, and
+   entry zeroes it (0x447871); FUN_00423e1c — GLOSS CORRECTED
+   §7j.54: NOT a "selection chaser" — it is the BOMBARDMENT
+   SHELL TICK/RESOLVER (sole caller MissionShell 0x447ffa; its
+   record-0 impact block 0x423e7c..0x423ed5, gated SP ∧ cursor ≠
+   selected+1 ∧ cursor-robot is player-type, stages a 15-frame
+   chase-CAMERA cut to the impact via FUN_004245c9 → 0x4de648,
+   see §7j.54; it never writes the selection), and
    its exit path 0x423fef clears both the cursor and word 0x4ea240.
    Consumer = the 7f.4 sidebar switch [0x407420..0x407989, verified]:
    `edx = [0x4dc5d0]`; edx ∈ {1,2,3} → blink-cursor sprite
@@ -1765,7 +1772,8 @@ the 20-kind table. All [verified] asm unless tagged.
    death tail, 7g.6; the ONLY k5 site) · k6 → 0x4125e6
    (FUN_004124a4), 0x413177 (FUN_00412f34), 0x418b60/
    0x418bcb/0x418c36 (FUN_00418aa6 ×3), 0x423f6d
-   (FUN_00423e1c — the selection chaser!), 0x424536
+   (FUN_00423e1c — §7j.54: the bombardment shell resolver,
+   not a "selection chaser"), 0x424536
    (FUN_004244a1) · k7 → 0x418a20 (FUN_0041896c), 0x418af5
    (FUN_00418aa6), 0x418d1c/0x418d94 (FUN_00418ca4),
    0x418eac/0x418f3c (FUN_00418e26), 0x4227b9 (FUN_00422693 —
@@ -1784,7 +1792,8 @@ the 20-kind table. All [verified] asm unless tagged.
    weapon-fire/impact families (FUN_00410823 cluster +
    FUN_00412f34 + the 0x417e2f..0x418f3c per-weapon handlers +
    FUN_0041a894/FUN_0041bc1c), the platform/destructible family
-   (FUN_00422693), the selection chaser (FUN_00423e1c) and
+   (FUN_00422693), the bombardment shell resolver
+   (FUN_00423e1c, §7j.54) and
    FUN_004244a1 — all outside the current corpus path (weapons
    never fire in the gates; the platform family is unstaged).
    k5 via apply_damage is the only corpus-reachable producer
@@ -1914,7 +1923,8 @@ the type-DB tail producers. All [verified] asm unless tagged.
    stride 0x18 `{dword payload, word@+4 countdown}`; producers
    FUN_00422c9b (find-free + set countdown 8) and FUN_00422e0a
    (payload = FUN_00439c20() result, then rec-id match →
-   FUN_004245c9(x<<5, y<<5, z<<5) — census). On countdown 0 the
+   FUN_004245c9(x<<5, y<<5, z<<5) — the §7j.54 chase-camera
+   cut — census). On countdown 0 the
    payload's LOW and HIGH bytes each select 0x46cbf4 records by
    id: flags |= 0x40; their z-plane-A occupancy byte is CLEARED;
    `FUN_0041bd54(x, y, z, word[0x454a90+4·zone])` — writes the
@@ -3272,7 +3282,10 @@ process-exw-arrival*.log) + the 7j.19 exitfamily dumps. All
    state (1 open / 2 close); rect at 0x4dcae8+idx·0x10 =
    {+0 state, +2 x, +4 w, +6 y, +8 h, +0xA type}; guard
    state ≠ wanted ∧ state < 3; redraws the wall strip
-   (FUN_004245c9, (x·0x20+w·0x10, y·0x20+h·0x10)); per cell tests
+   (per-tile FUN_004235e4/FUN_004235bf stamping; the
+   FUN_004245c9 call beside it is the §7j.54 CHASE-CAMERA
+   cut, (x·0x20+w·0x10, y·0x20+h·0x10) — the old "wall-strip
+   redraw" attribution of THAT call retired); per cell tests
    the type-DB door-tile words (0x4796d5/0x4796d6 & 0x7f) and
    stamps/clears type<<4 via FUN_004235e4/FUN_004235bf; state
    word written back; SFX FUN_004239ef(0x23/0x24, 3) + bank
@@ -3380,8 +3393,9 @@ facts [verified] against those dumps unless tagged.
 5. **Types 9..0xB = ARTILLERY (scripted burst) @0x411583:
    fall 0x200/tick to the FUN_0041e411 floor (settle floor<<8);
    ttl==0x18 ∧ owner-robot word@+0x2A == player TYPE
-   [0x4edb90] → FUN_004245c9 wall-strip redraw (spotter
-   reveal); ttl≥0x20: while ttl−0x20 < dword[0x456c78+4·id]
+   [0x4edb90] → FUN_004245c9 — §7j.54: the chase-CAMERA
+   cut to the shell (the "wall-strip redraw (spotter
+   reveal)" attribution retired); ttl≥0x20: while ttl−0x20 < dword[0x456c78+4·id]
    walk the i16 (Δy,Δx) pair list PTR[0x456bf0 + 4·(ttl−0x20)]
    (sentinel first-short 500) firing FUN_004244a1 (the
    5000-damage scripted blast) at tile+offset, 50%
@@ -4573,7 +4587,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | arrival marker draw | FUN_00403938 tail 0x4065e5..0x4066e3: skip inactive/countdown-0; isometric marker tile; sprite 0x12E (FUN_0040798e, bank [0x46af38]) width clamp(11−countdown, 0, 9) | §7j.21 |
 | memset-0 | FUN_00402965(EAX=0, ECX=len bytes, EDI=dst); 176 callers | §7j.21 |
 | door-rect list boundary | 0x4dcae8..0x4dcdb8 = 45×0x10 door rects (0x2d0); MissionShell clears it @0x447b7b AFTER the stager — ends EXACTLY at the arrival base, no overlap; door consumers use idx 0..0x24 | §7j.21 |
-| door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant} (§7j.34-corrected; the §7j.21 w/y/h permutation retired); state<3 only; anim-complete tile test low7(+0x1A)==+0x19 → FUN_004235e4 (state 1: +0x1A:=0x80) / FUN_004235bf (state 2: +0x1A:=0), +0x19 := variant<<4; FUN_004245c9 wall redraw; SFX 0x23/0x24 bank ELEV1 0x4edfb0; 86 callers (FUN_00433980 pads) | §7j.21, §7j.34 |
+| door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant} (§7j.34-corrected; the §7j.21 w/y/h permutation retired); state<3 only; anim-complete tile test low7(+0x1A)==+0x19 → FUN_004235e4 (state 1: +0x1A:=0x80) / FUN_004235bf (state 2: +0x1A:=0), +0x19 := variant<<4; FUN_004245c9 = the §7j.54 chase-camera cut (old "wall redraw" attribution retired); SFX 0x23/0x24 bank ELEV1 0x4edfb0; 86 callers (FUN_00433980 pads) | §7j.21, §7j.34, §7j.54 |
 | door animator tick | FUN_00423081 (sole caller MissionShell epilogue 0x44808f, after the creep tick 0x44808a): walks the 45 rects; state≥3 = AUTO doors (countdown@+0xC −1 per tick; at 0 → animate; on completion XOR bit7, re-target +0x19, countdown 0x14, SFX ELEV2 0x4edfb4 — cycles forever); state 1/2 = SCRIPTED doors (animate to target, stop); per tile with low7(+0x1A)≠+0x19: walk planes down (bit7: 5, else 6) → DAT volume door-frame byte 0x40+2·nibble (bit7, even) / 0x5F−2·nibble (clear, odd) at the 0x4eaac8-table level; low7++ ; nibble wrap → FINISH PAIR: FUN_004236c6+00423740 (close: DAT seen 1/0 + STACK PUSH-UP word[z+1]:=word[z], plane0:=0 if S+E neighbors are door tiles) / FUN_00423650+004235fb (open: DAT 0 + STACK DROP word[z]:=word[z+1], top cleared — the level leaves the stack); [0x4eaae8] = the 9th z-plane offset | §7j.34 |
 | tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
 | platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via the FUN_00422600 zone-code trigger at the dying instance's own record / 199 via creep; weaken −damage; ≤0 → destroy: clear water z-word + both banks + 5× k7 debris, NO site latch); CORRECTED §7j.41/3 ring gate = (old ≥ 200 ∧ new < 200) ∨ (old ≥ 100 ∧ new < 100) (the 7j.12 "≥100 ∧ (hit <200 ∨ new <100)" gloss rejected by the asm) | §7j.12, §7j.41 |
@@ -4719,7 +4733,9 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | SHOP MP sync | exit: FUN_00449c94(4, 0x4e43e0) appends the type-4 SHOP-LOADOUT COMMAND record (63 B staging struct 0x4e43e0 = 7×9, consumed MissionShell 0x44853e + save 0x4475fd); then the player walk p < [0x46cbe0]: 7 (name,ammo) word pairs from record 0x4dd4a0+p·0x80 (+1 byte skip) → 0x4de664+p·0x62+g·0xE{,+2} — the per-player loadout mirror (D89's 0x46cbe0 count bounds it) | §7j.45 |
 | SHOP lockout array | 0x46cd48..0x46cd80 = 16 dwords; := 1 at shop entry when [0x4edb88]==2 (MP) ∨ [0x4edd8c]==7 (final zone); value 2 = transient (exit normalize: cols 0x46cd48/5c/70+i for i∈{0,4,8,0xC} == 2 → 1) | §7j.45 |
 | SHOP category rank table | dword[0x456c7c + 4·cat] — the auto-loadout bubble-sort key over the 7 weapon groups (swap via 3× FUN_00402aaa through scratch 0x4dec4c) | §7j.45 |
-| reinforcement pending gate | [0x4de658] (the dword 0xC below the weapon table base): := 0x80 by the robots() +0x70 threshold arm (the reinforcement arrival: SFX 0xC/0xD/0xE + blink [0x4dc5d0] + the 8-marker scatter); gates the next arm | §7j.45 |
+| bombardment salvo cooldown | [0x4de658] (the dword 0xC below the weapon table base 0x4de664): := 0x80 by the robots() +0x70 threshold arm (the aerial-bombardment salvo — §7j.54 corrected the old "reinforcement pending gate"/"pending-arrival" gloss); gates the next arm while ≠ 0; FULL census §7j.54: arm write 0x40c27f, arm gate read 0x40c18b, read+dec 0x423e25..0x423e32 (FUN_00423e1c head, 1/frame), MissionShell clear 0x447877; the 0x442ba7 match is a weapon-table displacement alias ([eax+0x4de658], eax ≥ 0xC → ≥ 0x4de664), NOT a real access | §7j.45, §7j.54 |
+| aerial-bombardment marker bank | 0x4ea238, 8 × 10-byte records (0x50 total, MissionShell memset 0x447a51): {u16 x@+0, u16 y@+2 (screen-pixel ground point), u16 fall-z@+4 (starts 0xFF, −0x20/frame), u16 start-delay@+6 (0x20+2i, −1/frame), u16 valid@+8}; writer = the robots() idle arm 0x40c25e..0x40c351 (8 shells: x = robot.px + RandA&0x7F − 0x3F, y = robot.py − 0x80 + i·0x20, tile-bounds-gated); tick/resolver = FUN_00423e1c (MissionShell @0x447ffa; NOT a "selection chaser" — §7j.54): fall until get_z_pos(x,y,+4) ≥ +4 → SIX kind-6 debris (3 RandA each) + NINE FUN_004244a1 5000-damage script blasts over the 3×3 tile patch (tx−1..tx+2, ty−1..ty+2, z_level+1) + cursor clear + valid clear; renderer 0x4066e4..0x4067a6 (FUN_00403938 draw tail): +8≠0 ∧ +6==0 → iso-project, +4 fall-z subtracted from the screen axis (sprite visibly descends 32px/frame), GENERAL.BIN sprite 0x12C via FUN_0040798e | §7j.54 |
+| chase-camera override staging | FUN_004245c9(x,y,z) = a 5-instruction STAGER 0x4245c9..0x4245e5: {x,y,z} → 0x4de648/4c/50 + const 0xF → 0x4de654 (retires the "wall-strip redraw" gloss family — §7j.19/§7j.21/§7j.22 + the door row — and §7j item-6's "selection chaser" for its sibling); consumer FUN_00403938 0x4039b0..0x403a42: [0x4edbd8]≠0 ∧ [0x4de654]≠0 → the camera-point ring slot (0x4c71c4/cc/c8, 4-slot ring [0x46ccdc]) loads the staged triple instead of the selected robot's pos; [0x4de654]−− per frame; second consumer robots() 0x40b885 gates the camera-recenter block off while ≠ 0; MissionShell clears 0x4de654 (0x4478ad); FULL caller census (4, §7j.54): door stepper FUN_004223b8 @0x422427 + delayed-trigger expiry FUN_00422e0a @0x422e55 (§7j.12) + artillery spotter reveal @0x41173a (§7j.22) + the bombardment record-0 impact (SP ∧ record 0 ∧ cursor ≠ selected+1 ∧ cursor-robot is player-type, 0x423e7c..0x423ed5) | §7j.54 |
 | robot shield-charge machine | d@robot+0x88 shield points (−2/frame clamp 0; 0x20 per charge/state-3; 0x2710 while +0xA0 flash) + d@+0x8C charges (spawn = word@chassis_row+2 via the 0x40cc8c 5-slot jump table, chassis ids 0x2A..0x2E; hit consume FUN_0040e230 @0x40e2a4) | §7j.45 |
 | scorch-lane timers | w@+0x32 burn cooldown := 0x64 (FUN_004100b7 @0x4103e3, gate ==0 @0x41036e), dec 1/frame (phase-0 pre-pass); w@+0x30 accumulator −0xA/phase-1 off-scorch; alarm w@+0x34 cooldown + d@+0xA4 counter (dec 1/frame — D90's question closed) | §7j.45 |
 | robot state-1 producer | THE ONLY writer of state 1 = FUN_00409138 COMMAND bit0 @0x40a37b (:= 1 + stop := 0xF4240) — no patrol semantics; SP never produces state 1 (full census §7j.45 Part B/4) | §7j.45 |
@@ -5219,8 +5235,9 @@ tile z-stack when a door finishes opening/closing.**
    ALL in the 0x433xxx-0x435xxx FUN_00433980 pad-script family;
    verified 0x4223b8..0x4225cf): args (rect idx, wanted ∈
    {1,2}); guard state ≠ wanted ∧ state < 3 (scripted doors
-   only); wall-strip redraw FUN_004245c9(x0·0x20+w·0x10,
-   y0·0x20+h·0x10); per rect tile whose low7(+0x1A) == +0x19
+   only); FUN_004245c9(x0·0x20+w·0x10,
+   y0·0x20+h·0x10) = the §7j.54 chase-camera cut (the old
+   "wall-strip redraw" attribution of this call retired); per rect tile whose low7(+0x1A) == +0x19
    (the §7j.21 "door-tile words" test = the ANIM-COMPLETE
    gate, now explained): wanted==1 → FUN_004235e4 (+0x19 :=
    word@+0xA<<4, +0x1A := 0x80, 0x4224cd) / wanted==2 →
@@ -5853,7 +5870,8 @@ contradicted; three rows are rewritten/added.
 5. **ARTILLERY (9..0xB)** [verified]: phase-0 call only; tick++;
    `floor = FUN_0041e411(x>>8,y>>8,z>>8); floor < z>>8 → z −=
    0x200 else z = floor<<8`; tick==0x18 ∧ owner-kind == player →
-   the wall-strip redraw FUN_004245c9 (presentation); the burst
+   FUN_004245c9 = the §7j.54 chase-camera cut (the old
+   "wall-strip redraw (presentation)" attribution retired); the burst
    window is `tick−0x20 < dword[0x456c78 + 4·TYPE]` — **the
    duration table is indexed BY TYPE** (durations 9→2, 0xA→4,
    0xB→7; entries 0..8 unused), NOT id−9; inside the window the
@@ -6317,7 +6335,8 @@ below is [verified] against the objdump unless tagged.
    decay 1/frame — the D90 question closed; +0x88 shield −2/frame with
    the 10000 flash-invuln and the +0x8C CHARGE machine sourced from the
    equipment-chassis row word+2; +0x70 = the reinforcement delay with the
-   [0x4de658] pending gate); phases 4/5 gate re-verified; the 0x7d3
+   [0x4de658] pending gate — both glosses §7j.54-corrected: the
+   IDLE-TIME BOMBARDMENT arm + salvo cooldown); phases 4/5 gate re-verified; the 0x7d3
    countdown-dependent phase bound CORRECTED; state 1 has EXACTLY ONE
    producer — the FUN_00409138 COMMAND bit0 arm (no patrol semantics;
    SP never produces it).
@@ -7047,24 +7066,31 @@ producers** (§9 item 3) [verified]:
      documents no decay") is CLOSED: EXW DOES decay it, once per frame,
      phase 0 only. (The queue's "0x4c6a8c" tail has ZERO sites — the
      intended pair was +0x88/+0x8C.)
-   - **d@+0x70 (0x4c6a54) = the REINFORCEMENT/RESURRECT delay** (§3/§5's
-     deploy-delay, now with the full arm/disarm): cleared at 0x40c003
-     (the states-3/5 block) and 0x40c271; incremented at 0x40c16e gated
+   - **d@+0x70 (0x4c6a54) = the IDLE-TIME BOMBARDMENT ARM counter**
+     (§3/§5's "deploy-delay"/"reinforcement delay" gloss CORRECTED
+     by §7j.54 — nothing in the family stages an arrival): cleared at 0x40c003
+     (the states-3/5 block — ORDERING the robot resets the
+     idle timer) and 0x40c271 (the arm tail); incremented at 0x40c16e gated
      state==0 ∧ phase==0 vs dword[0x454ee8 + 4·[0x46cbf8]] (the
-     difficulty-scaled delay table); at threshold ∧ zone ∉ {1,7} ∧
-     **[0x4de658] == 0** ∧ mode ≠ 2 → the reinforcement ARRIVAL: SFX
+     difficulty-scaled idle table {400, 300, 200, 5000≈never}; SP
+     accumulates ONLY the SELECTED robot — idx == [0x46cbd4]+
+     [0x46cbdc], 0x40c0fc..0x40c12c — MP every idle robot); at threshold ∧ zone ∉ {1,7} ∧
+     **[0x4de658] == 0** ∧ mode ≠ 2 → the aerial-BOMBARDMENT salvo: SFX
      0xC/0xD/0xE per squad slot (FUN_004239ef) + blink-cursor
      [0x4dc5d0] := slot+1 + **[0x4de658] := 0x80** + the 8-jittered-
-     marker scatter into 0x4ea238. NEW pin: **[0x4de658]** = the
-     pending-reinforcement gate (the dword 0xC below the weapon-table
-     base 0x4de664; 0x80 while an arrival is staged) — its other reader
-     is the arrival marker family. [§7j.53 CONTENT NOTE: the posted
+     SHELL scatter into 0x4ea238 (the falling salvo — resolver, draw
+     and the D125 arbitration in §7j.54). NEW pin: **[0x4de658]** = the
+     salvo COOLDOWN latch (the dword 0xC below the weapon-table
+     base 0x4de664; 0x80 while a salvo runs) — full census §7j.54.
+     [§7j.53 CONTENT NOTE → ARBITRATED §7j.54: the posted
      pair's corpus text is "DANGER - UNIT n TARGETTED FOR" +
      "IMMINENT AERIAL BOMBARDMENT" (all six LANGUAGE.* files) —
-     whatever the mechanism's staging semantics, the ANNOUNCED
-     warning is a targeting/bombardment alert; the "arrival"
-     reading of the announcement is not supported by the WARNINGS
-     corpus. Mechanism facts above unchanged.]
+     and the resolver CONFIRMS the announcement: each falling
+     shell impacts into NINE 5000-damage kill-anything script
+     blasts over a 3×3 tile patch centered on the targetted
+     robot — an OFFENSIVE bombardment, NOT a reinforcement
+     arrival. The §7g.5/§7f.6 "reinforcement ARRIVAL" reading
+     is RETIRED.]
 3. **Extra-phase semantics (phases 4/5)**: the §5 gate expression is
    re-verified exact — body runs only while +0x80 (the drop_countdown,
    D90's raw +0x80) > phase·0x20 (128/160) — and +0x80 decrements every
@@ -8728,3 +8754,162 @@ class); ids 0x3..0x8 need the heat machine (no corpus scenario
 exercises it today). The queue/render cells are UI-presentation
 state — no engine or watch-row consequence (the spoken-line
 RandA draw joins the existing T3/T4 budget class).
+
+## 7j.54. THE 0x4ea238 AERIAL-BOMBARDMENT SHELL FAMILY + THE FUN_004245c9 CHASE-CAMERA STAGER — DECODED WHOLE: the "8-jittered-marker scatter" is a FALLING-SHELL salvo (8×10-byte shell records, staggered falls, nine 5000-damage script blasts per impact); FUN_00423e1c = its tick/resolver (NOT a "selection chaser"); FUN_004245c9 = a 15-frame chase-camera stager (NOT a "wall-strip redraw", 4 callers); the D125 content note ARBITRATED: an OFFENSIVE bombardment of the idle robot — the §7g.5 "reinforcement ARRIVAL" gloss RETIRED (2026-08-23, worker ed78ecdc claim 2, D126; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run; adopts + fully re-verifies the interrupted same-item WIP whose edits were already staged in this file; manifest clean before AND after) [verified]
+
+The queue unit decoded the whole 0x4ea238 family: the writer
+(the robots() idle-arm scatter §7g.5/§7j.45 cite), the resolver
+FUN_00423e1c (formerly "the selection chaser"), the renderer
+reader 0x40671a, the MissionShell clear 0x447a56, and the
+[0x4de658] cooldown latch census; FUN_004245c9 fell out as a
+necessary sibling decode (the resolver's record-0 impact calls
+it — and it is NOT what three earlier sections called it).
+
+**1. THE BANK GRAMMAR** [verified writer 0x40c25e..0x40c351 +
+resolver 0x423e46..0x424048 + renderer 0x4066e4..0x4067a6]:
+bank 0x4ea238 = 8 shell records × 10 bytes (0x50; MissionShell
+entry memsets it, 0x447a51 ecx=0x50 / 0x447a56 edi=0x4ea238 via
+the 0x402965 helper). Record `i` at 0x4ea238+i·0xA:
+- +0 u16 **x** — world-PIXEL ground point (Q0; get_z_pos/tile
+  views do >>5, the renderer subtracts the camera cells
+  0x4edde4/0x4edde8 directly)
+- +2 u16 **y** — world-pixel ground point
+- +4 u16 **fall-z** — writer starts 0xFF; −0x20 (32 px) per
+  frame while falling; the resolver pins it := ground+1 at
+  impact (0x423ee8)
+- +6 u16 **start-delay** — writer sets 0x20+2·i (staggered
+  launch); −1 per frame (0x42403d); NO fall, NO draw, NO
+  resolve while ≠ 0
+- +8 u16 **valid** — 1 = live shell; cleared at impact
+So §3's passing "10-byte records" note = this grammar (the
+"markers" are the shells themselves — see the arbitration).
+
+**2. THE WRITER = the robots() idle-arm scatter** [verified
+0x40c25e..0x40c351, the §7g.5/§7f.6 threshold tail]: after the
+idle counter +0x70 reaches the difficulty threshold
+DAT_00454ee8[[0x46cbf8]] (SP: only the SELECTED robot
+accumulates — the 0x40c0fc..0x40c12c gate `mode==0 ∧ state==0
+∧ idx == [0x46cbd4]+[0x46cbdc]`; MP: every state-0 robot) with
+zone ∉ {1,7} ∧ [0x4de658]==0 ∧ mode≠2, the announced warning
+pair posts (§7j.53 ids 0xC/0xD/0xE + 0xF per occupied squad
+slot, 0x40c1c1..0x40c24f) and the scatter runs: +0x70 := 0
+(0x40c271) + [0x4de658] := 0x80 (0x40c27f), then 8 shells i =
+0..7: `x = (robot.x Q8 >>8) + RandA&0x7F − 0x3F` (ONE RandA per
+shell attempt, drawn BEFORE the bounds gate), `y = (robot.y Q8
+>>8) − 0x80 + i·0x20` (deterministic fan, no y jitter — an
+0xE0-px y-stride column straddling the robot, py−0x80 …
+py+0x60), tile-bounds gate x≥0 ∧ y≥0 ∧
+(y>>5)<[0x4eddf0] ∧ (x>>5)<[0x4eddec] (a failed shell is
+simply dropped), then fall-z := 0xFF, start-delay := 0x20+2·i,
+valid := 1. The salvo is centered ON THE IDLE ROBOT — x jitter
+±0x3F px, the y fan straddling it with a slight up-screen
+bias.
+
+**3. THE RESOLVER = FUN_00423e1c, the shell tick** [verified
+whole 0x423e1c..0x424048; sole caller MissionShell @0x447ffa,
+once per frame, immediately after the §7j.53 radio-warning
+consumer @0x447ff5]. Head 0x423e25..0x423e32: [0x4de658] ≠ 0 →
+−− (the cooldown decay lives HERE — see census 5). Then per
+record: valid==0 → skip; start-delay ≠ 0 → −−, skip.
+- FALL LEG: ebx = fall-z; eax = get_z_pos(x, y, fall-z)
+  (FUN_0041e231, the §6 z-query); `ground < fall-z` → fall-z
+  −= 0x20 (0x424001). get_z_pos's z-clamp side effect: its
+  "==3" branch latches the probe cell 0x4dc688/8c/90 (§6 note).
+- IMPACT LEG (ground ≥ fall-z):
+  - **record-0 camera cut** 0x423e7c..0x423ed5 — gates
+    [0x4edb88]==0 (SP) ∧ record INDEX 0 ∧ [0x46cbdc]+1 ≠
+    [0x4dc5d0] (cursor ≠ selected+1 — i.e. the blink-cursor is
+    ON some OTHER robot than the selected one) ∧ cursor-robot
+    ([0x46cbd4]+cursor−1) word@+0x2A == [0x4edb90] (player
+    TYPE) → FUN_004245c9(x, y, fall-z): a 15-frame
+    chase-CAMERA cut to the first impact (see 6).
+  - **blast tail** 0x423eda..0x423ffc: fall-z := ground+1; SIX
+    kind-6 debris (FUN_00420608, ecx=6, owner −1) at jittered
+    (x+r&0x7F−0x3F, y+r&0x7F−0x3F, z+r&0x3F) — 3 RandA each,
+    18 draws; then tile = (x>>5, y>>5, fall-z>>5), tile-z
+    +1 if < 7 (0x423fa5); NINE FUN_004244a1 script blasts
+    over the 3×3 patch x_tile−1..+2 × y_tile−1..+2 (outer x,
+    inner y, 0x423fb6..0x423fe6) — the §7j.39 kill-anything
+    5000-damage entry (splash + critter/robot sweeps, each
+    call 1 RandA gate + a 1-in-8 kind-6 debris tail ⇒ ≈27–29
+    RandA per impacting shell total); then [0x4dc5d0] := 0
+    (blink-cursor off) and valid := 0 (0x423fef/0x423ff5).
+    The resolver never touches the selection — the old §7j
+    item-6 "selection chaser / re-points the selection" gloss
+    is RETIRED (its only selection-adjacent act is CLEARING
+    the blink cursor at impact).
+
+**4. THE RENDERER** [verified 0x4066e4..0x4067a6, inside
+FUN_00403938's draw tail]: loops the 8 records (stride 0xA to
+0x50); gates valid≠0 ∧ start-delay==0 (0x4066f4/0x4066fe);
+iso-projects (x−camx, y−camy: screen-x = dx−dy+0x10D, base
+screen-y = (dx+dy)/2+0xAC+scroll) and SUBTRACTS fall-z from the
+screen-y axis (0x406758) — the sprite starts 255 px above its
+ground point and visibly DESCENDS 32 px/frame; bounds-culls
+0..0x23F/0..0x23E; draws GENERAL.BIN sprite 0x12C via
+FUN_0040798e (bank cell 0x4edd7c, 0x40678d..0x40679c). The
+reader 0x40671a the queue cited = the record's y-word load.
+
+**5. [0x4de658] CENSUS — the salvo COOLDOWN latch, closed**
+[full objdump traffic census]: arm write 0x80 @0x40c27f; arm
+precondition read (==0) @0x40c18b; read+dec 1/frame
+@0x423e25..0x423e32 (the resolver head — so the latch is the
+128-frame salvo cooldown); MissionShell entry clear @0x447877.
+The ONLY other text match, 0x442ba7 (`WORD [eax+0x4de658]`,
+eax = p·0x62+0xE), is the §7j.45/D89 SHOP MP loadout-mirror
+write 0x4de664+p·0x62+g·0xE — a displacement ALIAS (address ≥
+0x4de672), NOT an access to the latch. No other writers or
+readers exist. (The 0x80 dword sits 0xC below the weapon-table
+base 0x4de664 — it is NOT part of the weapon table.)
+
+**6. FUN_004245c9 = the CHASE-CAMERA OVERRIDE STAGER** [verified
+0x4245c9..0x4245e5 — 5 instructions, no redraw of anything]:
+eax/edx/ebx (x,y,z) → [0x4de648]/[0x4de64c]/[0x4de650], and
+const 0xF → [0x4de654] (the 15-frame countdown). Consumers:
+(a) FUN_00403938 0x4039b0..0x403a42 — while [0x4edbd8]≠0 ∧
+[0x4de654]≠0 the camera-point ring slot (0x4c71c4/c8/cc,
+4-slot ring [0x46ccdc]) loads the STAGED triple instead of the
+selected robot's pos (Q8>>8), and [0x4de654]−− per frame —
+a 15-frame camera cut to the staged point; (b) robots()
+0x40b885 — the camera-RECENTER block is gated OFF while
+[0x4de654]≠0; MissionShell clears [0x4de654] @0x4478ad.
+**FULL caller census (4, verified)**: door/section stepper
+FUN_004223b8 @0x422427 (§7j.21/§7j.34); delayed-trigger expiry
+FUN_00422e0a @0x422e55 (§7j.12); artillery spotter reveal
+@0x41173a (FUN_00410823 types 9..0xB at ttl==0x18, §7j.22);
+bombardment record-0 impact @0x423ed5 (this section). ALL
+"wall-strip redraw"/"wall redraw" glosses for this function
+(§7j.19, §7j.21, §7j.22 ×2, the door ledger row) are RETIRED —
+every caller stages a LOOK-AT-ME camera cut; the wall redraw
+that accompanies doors is the per-tile FUN_004235e4/FUN_004235bf
+stamping around it, not this call.
+
+**7. THE D125 ARBITRATION — CLOSED: OFFENSIVE BOMBARDMENT.**
+The announced pair ("DANGER - UNIT n TARGETTED FOR / IMMINENT
+AERIAL BOMBARDMENT", all six languages) is CONFIRMED by the
+mechanism: each shell's impact converts into NINE 5000-damage
+kill-anything script blasts over a 3×3-tile patch centered on
+the scatter center = the IDLE ROBOT'S OWN POSITION (±0x3F px x
+jitter, the y fan straddling it) — the salvo punishes the PLAYER'S
+idle unit (difficulty idle thresholds {400,300,200,5000}
+frames ≈ 6.7/5/3.3/83 s at 60 fps; ordering the robot resets
++0x70 via the states-3/5 block). The markers are NEITHER
+targeting reticles NOR arrival beacons — they are the SHELLS
+THEMSELVES (falling sprites, §7g's kind-6 debris + §7j.39
+blasts at the end). §7g.5's "reinforcement ready/ARRIVAL"
+gloss and §7f.6's threshold-walk framing are RETIRED (the
+in-place corrections landed with this unit; §7h's separate
+"reinforcement staging" powerup case-1 family — drop(+0x80)
+=1000, §7h item 1 — is a DIFFERENT, real reinforcement
+mechanism and stands).
+
+**8. Engine/differ consequences**: NONE today — the bank, the
+latch, and the camera cells are SP-UI/staging state with zero
+engine reads, and NO corpus scenario exercises the idle
+threshold (S0..S7 keep the selected robot ordered or active;
+an SP capture would need the SELECTED robot left state-0 for
+400/300/200/5000 frames). If ever modeled: the salvo costs
+8 RandA at arm + ≈27–29 per impacting shell (T2/T3-class
+terrain/kill traffic through FUN_004244a1 + kind-6 disburser);
+[0x4ea238] and [0x4de658] are additive watch-row candidates,
+deliberately NOT in the first golden.
