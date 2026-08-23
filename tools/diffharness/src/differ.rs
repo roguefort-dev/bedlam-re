@@ -1434,6 +1434,16 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
             need(id, no, b, "u32 cell", 4)?;
             Ok(row(vec![int("value", u32le(b) as i128)]))
         }
+        // blink-cursor (D132): the EXD twin 0x10e108 is a plain 4-B
+        // u32 cell (dbx-plan Form::Fixed) — it MUST ride the named
+        // u32 arm, not the raw passthrough: E normalizes it to the
+        // "value" field, and the field-name join would otherwise
+        // turn it into two field-level coverage findings instead of
+        // a clean compare (the D136 sfx-master-gate precedent).
+        "blink-cursor" => {
+            need(id, no, b, "u32 cell", 4)?;
+            Ok(row(vec![int("value", u32le(b) as i128)]))
+        }
         "zone" => {
             // D108 (§6a zone convention): the guest cell (EXW
             // 0x4edd8c / EXD 0x107500) is the 1-based terrain SET
@@ -1584,6 +1594,11 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "spread-claims"
         | "no-extract-latch"
         | "sfx-master-gate"
+        // blink-cursor: EXW cell 0x4dc5d0 (§6a sidebar family,
+        // [verified]) is the same plain 4-B u32 form as the EXD
+        // twin 0x10e108 — the named-arm requirement is identical to
+        // O1 (D132; the D136 sfx three-channel precedent).
+        | "blink-cursor"
         | "per-player-selected"
         | "typedb-fade-byte"
         | "armor-pad-reads" => normalize_o1_row(id, no, b),

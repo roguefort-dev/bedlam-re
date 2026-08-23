@@ -9,11 +9,13 @@
 //! the differ:
 //!
 //! 1. CROSS-CHANNEL (E vs fabricated O1): verdict PASS-WITH-NOTES
-//!    with exactly the expected coverage findings (blink-cursor +
-//!    move-target-words rows are E-only — the move-target span is
-//!    spliced into the O1 robot-bank row, so its E row has no raw
-//!    counterpart — and ZERO robot field gaps: the D90 splice sources
-//!    the target trio) + the one T2 frame-counter note (the
+//!    with exactly the expected coverage findings (move-target-words
+//!    is the one E-only row — its 0x60 span is spliced into the O1
+//!    robot-bank row, so the E row has no raw counterpart; blink-
+//!    cursor fabricates identity since D132 closed the EXD twin
+//!    0x10e108, exactly like the D136 sfx precedent, so both
+//!    channels carry it — and ZERO robot field gaps: the D90 splice
+//!    sources the target trio) + the one T2 frame-counter note (the
 //!    O1 counter carries menu frames — never matches E by construction).
 //!    No engine-bug/structural findings: the mapped-field contract
 //!    holds on the real corpus.
@@ -117,14 +119,18 @@ fn inv_frame(
     for w in &e.watches {
         let id = w.id.as_str();
         let bytes: Vec<u8> = match id {
-            // E-only rows: the O1 plan cannot carry them (blink-cursor
-            // is a registry gap; move-target-words is CONSUMED into the
-            // robot-bank splice on the O1 side, so the E row stays
-            // E-only at the row level; the W12-S4 debris/splash T3
-            // rows have no EXD alias pinned yet — the stitcher's
-            // O1-address rule excludes them, the differ reports the
-            // E-only row as a coverage finding, never fabricated).
-            "blink-cursor" => continue,
+            // E-only rows: the O1 plan cannot carry them
+            // (move-target-words is CONSUMED into the robot-bank
+            // splice on the O1 side, so the E row stays E-only at
+            // the row level; the W12-S4 debris/splash T3 rows have
+            // no EXD alias pinned yet — the stitcher's O1-address
+            // rule excludes them, the differ reports the E-only row
+            // as a coverage finding, never fabricated). blink-cursor
+            // is NO LONGER in this set: D132 closed the EXD twin
+            // 0x10e108 (a plain 4-B u32 cell — capture-plans/S1.json
+            // carries the row), so it fabricates identity through
+            // the scalar catch-all below and compares clean (the
+            // D136 sfx-master-gate precedent).
             "debris-stager" | "splash-records" => continue,
             // The W12-S6 dropship row: no EXD alias (exd_status
             // unmapped) — the stitcher's O1-address rule excludes
@@ -320,78 +326,82 @@ fn s0_s1_cross_and_double_run() {
     let reg = registry();
 
     // S0 = T0+TS only (no T1 rows -> no coverage asymmetry); S1 adds
-    // the T1 slice: blink-cursor + move-target-words rows are E-only
-    // (the latter because the O1 side consumes its span into the
-    // robot-bank splice) and the robot field gaps are ZERO — the D90
+    // the T1 slice: the move-target-words row is E-only (the O1 side
+    // consumes its span into the robot-bank splice; blink-cursor
+    // fabricates identity since D132 closed the EXD twin 0x10e108 —
+    // the real capture plans dump the row, so the fabricated side
+    // must too, exactly like the D136 sfx precedent) and the robot
+    // field gaps are ZERO — the D90
     // splice sources the record-external target trio (34 canonical
     // leaves, all 34 shared, RE-EXD-MAP §8). S2 (D91) is the first
     // scenario whose splice carries a live present=1 span both ways:
     // the staged walker's target (22,73) fabricates into the EXD
-    // x[1]/y[1] u32 pair and splices back — same 2 row-level
-    // findings, zero field gaps. S3 (W12-S3, D103) adds the T2 slice:
+    // x[1]/y[1] u32 pair and splices back — same 1 row-level
+    // finding, zero field gaps. S3 (W12-S3, D103) adds the T2 slice:
     // the two full bank rows fabricate as the bare spans and parse
-    // back through the shared field walk — still exactly the 2
-    // row-level findings, zero field gaps, zero T2 diffs.
+    // back through the shared field walk — still exactly the 1
+    // row-level finding, zero field gaps, zero T2 diffs.
     for (id, frames_total, pinned_chain, expect_coverage) in [
         ("S0", 3u64, "dac1cfd17bc7ede3", 0u64),
-        ("S1", 401u64, "a18cb11ac8e4314e", 2u64),
-        ("S2", 17u64, "d6649ce272ad6d96", 2u64),
+        ("S1", 401u64, "a18cb11ac8e4314e", 1u64),
+        ("S2", 17u64, "d6649ce272ad6d96", 1u64),
         // Re-pinned at the W12-S4-prep landing (D104, §7j.39/9) —
         // the artillery burst-pair application draws the shared
         // stream (was 49193732e6dbc546).
-        ("S3", 133u64, "f4f5b4351e976ed5", 2u64),
+        ("S3", 133u64, "f4f5b4351e976ed5", 1u64),
         // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
         // the guest banks and parse back through the destroy
         // normalizers — the T1 destroy rows join the exact-exact
         // set, the debris/splash T3 rows are E-only (no EXD alias
         // yet — 2 more row-level coverage findings, documented
         // never fabricated).
-        ("S4", 49u64, "63ab5ac7679f6de7", 2u64 + 2),
+        ("S4", 49u64, "63ab5ac7679f6de7", 1u64 + 2),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
-        // the debris/splash rows never ride — exactly the 2 S1-class
-        // row-level findings. The REAL-staged mirror rows (every
+        // the debris/splash rows never ride — exactly the 1 S1-class
+        // row-level finding (move-target-words only, post-D132).
+        // The REAL-staged mirror rows (every
         // tile active) fabricate as the full 100x100 guest grid and
         // parse back through the same compact-tile filter; the zone
         // row exercises the D108 cell−1 convention end-to-end.
-        ("S5", 16u64, "8a718339e0702fd6", 2u64),
-        ("S5B", 19u64, "b72f57e0b8e7042b", 2u64),
+        ("S5", 16u64, "8a718339e0702fd6", 1u64),
+        ("S5B", 19u64, "b72f57e0b8e7042b", 1u64),
         // W12-S5C (D108's observability follow-up): the pre-damaged
         // walker run — same tier set as S5/S5B (T0/T1/TS: the
         // artillery's debris/splash staging stays unwatched, no T3
-        // rows ride), so again exactly the 2 S1-class row-level
-        // findings. The destroy-chain cascade the burst rings
+        // rows ride), so again exactly the 1 S1-class row-level
+        // finding. The destroy-chain cascade the burst rings
         // detonate rides the SAME aliased T1 rows (the compact-tile
         // filter + the destroy normalizers) — zero field gaps.
-        ("S5C", 55u64, "de5b80a6177aecdd", 2u64),
+        ("S5C", 55u64, "de5b80a6177aecdd", 1u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
         // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
-        // alias), so exactly the 2 S1-class findings + 1 more. The
+        // alias), so exactly the 1 S1-class finding + 1 more. The
         // beacon-family row's post-deploy latch {0,0,19,70,31} and
         // the surviving claims fabricate through the u16-cell map
         // and parse back exactly; the swept robot's state-5/stop-1e6
         // words ride the aliased robot bank — zero field gaps.
-        ("S6", 75u64, "c27bff339929339d", 2u64 + 1),
+        ("S6", 75u64, "c27bff339929339d", 1u64 + 1),
         // W12-S7 (§7j.41, D113): the platform-dynamics lifecycle —
         // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
         // destroy rows + both platform banks ride, and the T3
         // debris/splash rows carry the k7 destroy debris — no
-        // dropship, no T2 banks). Exactly the 2 S1-class row-level
-        // findings + the debris/splash E-only pair (like S4). The
+        // dropship, no T2 banks). Exactly the 1 S1-class row-level
+        // finding + the debris/splash E-only pair (like S4). The
         // platform rows fabricate as the identity spans their
         // normalizers define (both channels carry the same form);
         // the creep-grown mirror words parse back through the
         // compact-tile filter — zero field gaps.
-        ("S7", 1361u64, "b0db22840310e82a", 2u64 + 2),
+        ("S7", 1361u64, "b0db22840310e82a", 1u64 + 2),
         // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
         // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
         // cycle — ALIASED, S3 pinned the T2 form; the critter bank
         // itself + the effect rows are E-ONLY). No destroy staging:
-        // the debris/splash rows never ride. Exactly the 2 S1-class
-        // row-level findings + the critter-bank/effect-rows pair —
+        // the debris/splash rows never ride. Exactly the 1 S1-class
+        // row-level finding + the critter-bank/effect-rows pair —
         // zero field gaps (the 0x68 records fabricate through the
         // same bare-span T2 form).
-        ("S8", 121u64, "29fa2f400a10974b", 2u64 + 2),
+        ("S8", 121u64, "29fa2f400a10974b", 1u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -433,20 +443,24 @@ fn s0_s1_cross_and_double_run() {
         );
         assert_eq!(res.count(Class::EngineBug), 0, "{id}");
         assert_eq!(res.count(Class::Structural), 0, "{id}");
-        // blink-cursor + move-target-words rows are E-only (S1): the
-        // splice sources every robot leaf, so exactly the 2 row-level
-        // findings remain — no field-level gaps.
+        // move-target-words is the one E-only row (S1+): the splice
+        // sources every robot leaf, so exactly the 1 row-level
+        // finding remains — no field-level gaps.
         assert_eq!(res.count(Class::Coverage), expect_coverage, "{id}");
         if expect_coverage > 0 {
             assert!(res
                 .findings
                 .iter()
-                .any(|f| f.row == "blink-cursor" && f.class == Class::Coverage));
-            assert!(res
-                .findings
-                .iter()
                 .any(|f| f.row == "move-target-words" && f.class == Class::Coverage));
         }
+        // The D132-alignment guard: blink-cursor is carried by BOTH
+        // channels (identity u32; the named O1 normalizer arm), so it
+        // must never appear as a finding — row- or field-level.
+        assert!(
+            res.findings.iter().all(|f| f.row != "blink-cursor"),
+            "{id}: blink-cursor must compare clean post-D132\n{}",
+            report_text(&res)
+        );
         if id == "S4" || id == "S7" {
             // The debris/splash rows have no EXD alias yet — exactly
             // the 2 extra row-level findings (E-only rows, never

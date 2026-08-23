@@ -393,7 +393,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 | sfx-master-gate | u32 | **constant 1 (D136)** — the E engine's sound-on construction assumption (no audio config model; every dispatch the gate guards is presentation-tier). A capture machine with sound DISABLED dumps 0 → the intended loud finding; the D134 fingerprint companion (one dbgprobe read of [0x10743c] at the anchor stop) is the remedy, the D128 ACTIONPAN pattern |
 | robot-bank | u32 count + count records; record = the modeled Robot field list in the `state_hash` order: alive u8, pos_x i32, pos_y i32, z i32, state u16, dir_byte u16, facing u16, anim u16, variant u16, probe_z u16×8, stop_dist i32, target_present u8, target_x i32, target_y i32, drop_countdown i32, hp i32, armor i16, hit_flash u16, alarm u16, kind u16, shield i32, shield_charges i32, shield_boost i32, battery i32, armor_pool i32, alarm_ctr i32, death_flag u16 | `MissionSim::robots()` |
 | selection-triple | u32 selected idx only (the D83 anti-fabrication precedent: the alias-covered cell; cursor/squad join when their engine models + EXD aliases land) | `sidebar_selected()` |
-| blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector) |
+| blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector). **Cross-channel note (D132, aligned 2026-08-23):** the O1 capture plans dump the EXD twin cell 0x10e108 (plain 4-B u32, `Form::Fixed`) — the O1 normalizer carries the named u32 arm so the row compares CLEAN cross-channel (no E-only finding; the differ_gate fabricated O1 side fabricates it identity, the D136 sfx precedent) |
 | per-player-selected | 4 × {x i32, y i32, z i32} (player 0 = selected robot pos>>8 Q5 + z; 1..3 zero) | sim + sidebar |
 | order-target | i32 ×3 | the ORDER-seam write (last injected target; the 0x4dd484 cells persist, so does the E session value) |
 | move-target-words | u32 count + per-robot {present u8, tx i32, ty i32} (Q5, same units both sides — EXD writers are `tile<<5`, D90; the O1/O2 side dumps the 0x60-B EXD span and the differ SPLICES the trio into the robot-bank row, so this row stays E-only in cross-channel reports) | `Robot::target` |
@@ -796,7 +796,10 @@ differ come before any new scenario depth.
     BOTH channels (E: count+records; O1: the bare guest span — no
     count cell, the free-slot walk is the bound) through the SAME
     field walk; differ_gate S3 = cross PASS-WITH-NOTES (exactly the
-    2 E-only rows, zero field gaps, zero T2 diffs). S4 (the destroy
+    2 E-only rows at landing — blink-cursor + move-target-words; the
+    D132 blink-cursor alignment of 2026-08-23 fabricates the row on
+    the gate's O1 side and drops it to 1, move-target-words only —
+    zero field gaps, zero T2 diffs). S4 (the destroy
     family onto destructibles) is the next scenario unit, gated on
     the S3 finding set.
     **S4-PREP LANDED 2026-08-22 (D104, §7j.38 + §7j.39):** the
@@ -857,8 +860,11 @@ differ come before any new scenario depth.
     walks (the guest object 0x14-stride count-bounded walk skipping
     dead id==-1 slots, the TRT 0x20-stride stride-offset map, the
     mirror tile filter); differ_gate S4 = cross PASS-WITH-NOTES
-    (exactly the 4 E-only rows — blink-cursor, move-target-words,
-    debris, splash — zero field gaps, zero T2 diffs beyond the
+    (exactly the 4 E-only rows at landing — blink-cursor,
+    move-target-words, debris, splash; the D132 blink-cursor
+    alignment of 2026-08-23 fabricates the row, dropping it to 3 —
+    move-target-words, debris, splash —
+    zero field gaps, zero T2 diffs beyond the
     single counter note). The score fold landed in the MissionShell
     (the destroy award folds into the campaign score cell — zero
     without staged destructibles, the no-inject invariant):
@@ -986,8 +992,10 @@ differ come before any new scenario depth.
     corpus_s7_platform_dynamics timeline gate, chain
     b41db389f3ad8947) landed the same session; THIS run completed the
     differ/plan/docs legs (4c6c068 + 13bae85): the differ_gate S7 row
-    (cross PASS-WITH-NOTES, exactly the 2 S1-class findings + the
-    debris/splash E-only pair, zero field gaps; the platform rows
+    (cross PASS-WITH-NOTES, exactly the 2 S1-class findings at
+    landing + the debris/splash E-only pair — 1 S1-class after the
+    D132 blink-cursor alignment of 2026-08-23 —
+    zero field gaps; the platform rows
     fabricate as the identity spans) + dbx-plan's grammar-v1.6
     platforms arm note in _e_staging (the RNG-stream equivalence,
     never a fabricated write) + capture-plans/S7.json (34 anchor +
@@ -1008,7 +1016,9 @@ differ come before any new scenario depth.
     lifecycle) + the differ legs (the critter-bank/effect-rows
     normalizers as E-ONLY coverage rows; the differ_gate S8 row —
     cross PASS-WITH-NOTES, exactly the 2 S1-class + the
-    critter/effect pair, zero field gaps) + dbx-plan's grammar-v1.7
+    critter/effect pair at landing — 1 S1-class after the D132
+    blink-cursor alignment of 2026-08-23 —
+    zero field gaps) + dbx-plan's grammar-v1.7
     critters seam note + capture-plans/S8.json (36 anchor + 27
     per-frame, 1 command inject, byte-pinned). The S0..S7 chains
     re-asserted BYTE-IDENTICAL (the staging+arm key keeps the
