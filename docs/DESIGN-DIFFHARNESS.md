@@ -591,8 +591,10 @@ instances, 3 turrets).
   gated files (the synthetic §6a grammar fixture, the dump schema,
   the registry anchors, the stitch replay, the differ unit tests)
   run for real. WHAT CI DOES NOT PROVE: the pinned-chain corpus
-  assertions (`8901789a88cf61fe` / `1c4e7b4c9d9b0947` /
-  `809f4961b7757da4` + the differ cross-channel verdicts) — CI
+  assertions (`dac1cfd17bc7ede3` / `a18cb11ac8e4314e` /
+  `d6649ce272ad6d96` + the differ cross-channel verdicts — the
+  D136 re-baseline: E now emits sfx-master-gate + no-extract-latch,
+  every chain moved deliberately) — CI
   checkouts never carry game-data (it is never committed), so those
   run wherever a corpus is present (dev/operator machines run the
   same commands pre-push; the identical test names make the leg
