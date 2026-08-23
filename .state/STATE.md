@@ -1,5 +1,37 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE FUN_00440dc2 IDENTITY COMPLETE (D121;
+    docs-only, §7j.49, worker 21c18e9e claim 2): FUN_00440dc2 =
+    the BRIEF OBJECTIVE-MINIMAP SNAPSHOTTER (sole caller
+    FUN_0043dc65 = the per-objective brief panel inside the BRIEF
+    screen FUN_0043d00b, GameMain 0x41c4d5, ret 2 = launch):
+    stages the 7×7 restamp list + materializes TOT→mirror + ZEROES
+    the BRIEF's OWN 0x64000 backbuffer (FUN_00440a2d), draws the
+    8-z iso stack dest−z·0x5000 (FUN_00440c34 = the REAL owner of
+    the 7j.36 sites 0x440d1c/0x440d93), then a plain 2× downsample
+    bb[(64+2r)·0x280+64+2c] → 256×256 cache [0x46cbb0] (alloc
+    0x10100) + flag [0x4dc6c0], consumer = the flag-gated
+    palette-remap blit FUN_00402a28 @0x43d9a2; objective bank =
+    24×14 B @0x4e9628 (+0/+2 marker x/y, +4/+6 TOT row/col, +8
+    counter, +0xA latch; parser 0x43e5b1..0x43e7b2). The caller
+    census is CLOSED (one site + zero data refs — raw dword scan);
+    the "jmp into the caller" = Watcom shared-epilogue gadgets
+    (0x43c801/0x43c802/0x43f49e multi-entry pop variants). The §1
+    mid-frame/terrain-pass ordering question CLOSED BY SCREEN
+    LIFECYCLE: FUN_00403938 runs only under MissionShell
+    (0x447c9b/0x448094) — the FUN_00440a2d/0x440c34 family NEVER
+    runs in-game; 7j.26 gloss corrected ([0x4ede24] = per-screen
+    cell reuse: BRIEF 49×12 list vs mission 1296×12 viewport
+    cache from FUN_0041d954). Engine consequence NONE (BRIEF
+    outside the P4 diff scope; no new watch rows). Verified:
+    registry_anchors 2/2 green, manifest clean before AND after
+    the read-only string/dword probes, objdump-only (no Ghidra
+    run), no corpus write, PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    projectile-type-0x69 damage-table unit (7j.18 low-priority
+    residue; pre-queue grep per D118 — genuinely open).
+    NEXT: the projectile-0x69 damage-table unit (item 2).
+
   - 2026-08-23 P4/RE THE MISSIONVIEW §5d TAIL COMPLETE (D120;
     docs-only, §7j.48, commit dd8d5e2, worker 328b7651 claim 2;
     adopted + validated the interrupted predecessor WIP in

@@ -123,25 +123,26 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE FUN_00440dc2 IDENTITY unit — THE SCROLL/CAMERA
-   RESTAMP DRAWER'S OWN FRAME (small; docs-only, unattended-safe;
-   objdump from ghidra-project/exw-text-objdump.txt): the drawer
-   half is pinned (7j.16/§7j.26/ledger: 0x440d1c/0x440d93 type-DB
-   word → FUN_00401471 into the backbuffer; reads the backbuffer
-   [0x4ede18] @0x440e02) but the Backlog "REMAINS open slim"
-   clause wants the function's OWN identity: (a) the CALLER census
-   (who invokes FUN_00440dc2 — the scroll/camera restamp stager
-   FUN_00440a2d is its callee, not caller; pin every caller +
-   gates); (b) the full frame flow (what it reads besides the
-   backbuffer @0x440e02, what it writes, when it fires relative to
-   the FUN_00403938 render pass); (c) whether it can run mid-frame
-   (the terrain-pass overwrite ordering question §1 flags) or is a
-   scroll-edge-only path; (d) close the Backlog slim clause +
-   ledger row update + D121; registry_anchors green; PUSH. Pre-queue
-   check (the D118 discipline): grep'd DECISIONS + RE-EXW-SIM +
-   MISSIONVIEW + the Done log for "440dc2" — partial pins exist
-   (the drawer half + the 0x440e02 backbuffer read) but the caller
-   census + frame-flow closure is unpinned; no prior closure found.
+2. [P4/RE] THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE UNIT (small;
+   docs-only, unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt): close the 7j.18 low-
+   priority residue "projectile type 0x69 vs the FUN_00419aff
+   damage table — NOT folded (would need the damage-table
+   else-path dump)". Decode FUN_00419aff fully (the per-weapon
+   damage resolver used by every critter/robot hit applier,
+   7j.23): the table base + stride + the ELSE path when the
+   weapon id is not a table row — then answer whether the
+   per-level BEAM column projectile 0x69 (7j.16 line: "0x69
+   the per-level BEAM column 0x34-strip"; turret fire path
+   arms it with damage (d+1)·300 as type 0x66 — check which
+   family 0x69 belongs to and what damage a 0x69-source hit
+   applies) resolves through the table or the else path;
+   ledger row + D122; registry_anchors green; PUSH. Pre-queue
+   check (the D118 discipline): grep'd DECISIONS (line ~2303
+   "projectile 0x69 vs damage table" = the 7j.18 open note),
+   RE-EXW-SIM (7j.18 "NOT folded ... stays open, low
+   priority"), and the Done log — genuinely open, no closure
+   exists.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -154,9 +155,12 @@ renumbered queue keeps every open item claimable by number).
   table" question — it is the terrain RESTAMP list (count + 3-dword
   {dest row, tile-x, tile-y} records, blitted via FUN_00401471;
   writer FUN_00440a2d = the scroll/camera restamp stager, confirming
-  the hypothesis). REMAINS open slim: FUN_00440dc2's own identity
-  (reads the backbuffer [0x4ede18] @0x440e02; the 7j.16
-  TOT-materializer caller). CLOSED by 7j.17: the [0x4edd60] height-bank family and the
+  the hypothesis). CLOSED 2026-08-23 by 7j.49/D121: FUN_00440dc2 =
+  the BRIEF objective-minimap SNAPSHOTTER (sole caller FUN_0043dc65,
+  the per-objective brief panel; the drawer sites 0x440d1c/0x440d93
+  belong to callee FUN_00440c34; BRIEF-only — the whole
+  FUN_00440a2d/FUN_00440c34 family never runs during the mission
+  render pass; [0x4ede24] is a per-screen cell reuse). CLOSED by 7j.17: the [0x4edd60] height-bank family and the
   projectile z-encoding census. CLOSED by 7j.24: the critter
   death-handler family. CLOSED by 7j.25: the destroy-tail
   effect-entry map + the 160-vs-0xA8 stride anomaly + the
@@ -271,6 +275,43 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE FUN_00440dc2 IDENTITY unit COMPLETE (worker
+  21c18e9e claim 2, D121/§7j.49, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt, no Ghidra run; read-only
+  DGROUP string probes + a raw-dword pointer scan of BEDLAM.EXW
+  (zero hits for 0x00440dc2/0x00440a2d/0x00440c34 — no jump-table
+  refs); MANIFEST.sha256 clean before AND after; registry_anchors
+  2/2 green). CLOSED with the verdict set: (1) CALLER CENSUS
+  COMPLETE — exactly ONE call site 0x43dfb3 inside FUN_0043dc65 =
+  the per-objective BRIEF panel renderer; strict closed trio
+  FUN_0043dc65 → FUN_00440dc2 → {FUN_00440a2d, FUN_00440c34}; the
+  "jmp into the caller" red flag DECODED as Watcom MULTI-ENTRY
+  SHARED-EPILOGUE GADGETS (0x43c801 6-pop / 0x43c802 5-pop /
+  0x43f49e) — all three return normally. (2) IDENTITY: FUN_0043d00b
+  = the MISSION BRIEF screen (GameMain 0x41c4d5, ret 2 = launch);
+  objective bank 24×14 B @0x4e9628 (+0/+2 marker x/y, +4/+6 TOT
+  row/col, +8 counter, +0xA latch; staged by the BRIEF text parser
+  0x43e5b1..0x43e7b2; "OBJECTIVE_%c%c" strings 0x4592b6/0x4592c1);
+  FUN_00440dc2 = the OBJECTIVE-MINIMAP SNAPSHOTTER — stager +
+  mirror materializer + FULL backbuffer zero (FUN_00440a2d), 8-z
+  iso draw dest−z·0x5000 (FUN_00440c34, the real owner of
+  0x440d1c/0x440d93), then a plain 2× DOWNSAMPLE
+  bb[(64+2r)·0x280+64+2c] → the 256×256 cache [0x46cbb0]
+  (alloc 0x10100), flag [0x4dc6c0], consumer = the flag-gated
+  transparent palette-remap blit FUN_00402a28 @0x43d9a2; the
+  `mov ecx,0x10000` @0x440de2 is the pre-set zero-fill count, not
+  a stager arg. (3) MID-FRAME/§1 ORDERING CLOSED BY SCREEN
+  LIFECYCLE — FUN_00403938 is called only from MissionShell
+  (0x447c9b/0x448094); the BRIEF holds its OWN [0x4ede18] alloc,
+  so no mission frame can be wiped and no in-game path exists.
+  (4) GLOSS CORRECTIONS landed with history preserved: 7j.26
+  "scroll/camera restamp stager" → BRIEF minimap window stager;
+  [0x4ede24] = per-screen cell reuse (BRIEF 49×12 list vs mission
+  1296×12 viewport cache, FUN_0041d954 = the in-game producer);
+  7j.36 cluster-(b) drawer = FUN_00440c34 BRIEF-only; 7j.16 lead
+  RESOLVED. Engine consequence NONE (BRIEF screen outside the P4
+  diff scope; no new watch rows). Queued: the projectile-0x69
+  damage-table unit.
 - 2026-08-23: P4/RE THE MISSIONVIEW §5d TAIL unit COMPLETE (worker
   328b7651 claim 2, commit dd8d5e2, D120, docs-only; objdump-only
   from ghidra-project/exw-text-objdump.txt, no Ghidra run;
