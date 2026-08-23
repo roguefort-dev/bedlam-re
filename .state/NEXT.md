@@ -146,31 +146,32 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W7-followup, SMALL] DIFFER_GATE FABRICATION <-> REAL-PLAN
-      ALIGNMENT: the fabricated O1 side in
-      engine/bedlam-game/tests/differ_gate.rs still SKIPS
-      blink-cursor (its comment "blink-cursor is a registry gap"
-      is STALE since D132 closed the EXD twin [0x10e108] and the
-      regenerated capture plans carry the row — verified in
-      capture-plans/S1.json alongside sfx-master-gate +
-      no-extract-latch + move-target-words). A real O1 capture
-      dumps blink-cursor, so the live S1+ verdicts will show ONE
-      fewer row-level coverage finding than the gate test pins
-      (only move-target-words stays E-only — the D90 splice
-      consumes its span into robot-bank; that one is correct).
-      METHOD: make inv_frame fabricate blink-cursor like the real
-      plan (identity u32 — E emits sidebar_cursor(), guest cell is
-      the u32 twin), re-derive expect_coverage per scenario
-      (S1/S2/S3/S5*/S6: 2->1; S4/S7: 4->3 keeping the debris/
-      splash pair; S8: 4->3 keeping critter-bank/effect-rows),
-      drop the stale blink-cursor coverage assertions + comment,
-      and check whether the O1 normalizer needs blink-cursor in a
-      named arm (raw passthrough already byte-compares 4==4, but a
-      named arm matches the D136 sfx precedent). No chain pins
-      move (the E side is untouched). Record a DECISIONS note only
-      if the coverage-class semantics change.
-      (QUEUED 2026-08-23 by the D136 close — noticed while
-      verifying the real S1 plan row set.)
+   2. [P4.2/W11-prep, SMALL] DIFFER_GATE O2 TIEBREAK FABRICATION —
+      exercise the differ's UNTESTED arbitration path (differ.rs
+      compare_field EngineBug lane: "O2/EXW canon agrees with
+      O1" / "agrees with E → OriginalDivergence" / "all three
+      differ" / "provisional, no tiebreak"). METHOD: in
+      engine/bedlam-game/tests/differ_gate.rs add a third
+      fabricated side — an O2 dump (Channel::O2ExwWine, stitch a
+      transcript through the O2 normalizers) built from the SAME
+      E frames (inv_frame is already channel-form-correct for the
+      aliased rows: EXW guest forms = EXD forms per
+      normalize_o2_row's alias list — EXCEPT static-map-wh, whose
+      O2 row deliberately normalizes to ZERO fields pending the
+      W11 pin, and robot-bank which walks EXW_ROBOT_MAP). Then:
+      (a) tiebreak agreeing with O1 on a DELIBERATELY perturbed
+      E-side T1 field (e.g. money -7 on a re-stitched E run)
+      keeps class EngineBug with the "engine is the outlier"
+      detail; (b) tiebreak agreeing with E (perturb the O1 side
+      instead) re-classes to OriginalDivergence; (c) no-tiebreak
+      keeps the "provisional" detail. Assert the three details +
+      classes explicitly. No chain pins move, no production code
+      changes expected (this is a gate-coverage unit; if the
+      arbitration logic itself proves wrong, fix it in the same
+      unit with a DESIGN note). (QUEUED 2026-08-23 by the D132
+      alignment unit — the tiebreak machinery landed with W7/D87
+      but no gate ever drives it; the W11 live channel needs it
+      proven headless first.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -2404,3 +2405,28 @@ renumbered queue keeps every open item claimable by number).
    differ_gate + 76+132 engine lib tests green; fmt+clippy clean;
    MANIFEST clean pre+post. Queued next: item 2 = the differ_gate
    blink-cursor fabrication alignment (noticed this run).
+
+2. DONE (2026-08-23, worker 9035ca6a claim 2, commit 2d53aaa,
+   PUSHED): P4.2/W7-followup DIFFER_GATE FABRICATION <->
+   REAL-PLAN ALIGNMENT — the fabricated O1 side now carries
+   blink-cursor exactly like the real post-D132 capture plans.
+   inv_frame fabricates it identity (E canonical u32 == the EXD
+   twin cell 0x10e108 form); the differ's O1 normalizer gained
+   the NAMED u32 arm (raw passthrough would name-join E's
+   "value" vs O1's "raw" and fabricate two field-level coverage
+   findings instead of a clean compare — the D136 sfx precedent;
+   the O2 alias list carries it too, EXW cell 0x4dc5d0).
+   expect_coverage re-derived: S1/S2/S3/S5/S5B/S5C 2->1,
+   S4/S7 4->3, S6 3->2, S8 4->3 (S0 stays 0); new guard asserts
+   blink-cursor NEVER appears as a finding (any class); the
+   stale "registry gap" comment dropped. No chain pins moved
+   (E side + both engines untouched). DESIGN §6a blink-cursor
+   row carries the cross-channel note; S3/S4/S7/S8 landing
+   paragraphs amended in place with history preserved. No
+   DECISIONS entry (coverage-class semantics unchanged — the
+   row simply moved from one-side to both-sides). Verified:
+   differ_gate 1/1 green on corpus (692s), canonical_dump_gate
+   13/13, diffharness 76, bedlam-game lib 132, bedlam-core lib
+   76, fmt+clippy clean, MANIFEST.sha256 clean post-run. Queued
+   next: item 2 = the differ_gate O2 tiebreak fabrication (the
+   W7/D87 arbitration path has no gate coverage).

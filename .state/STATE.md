@@ -1,5 +1,23 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/W7-followup THE DIFFER_GATE BLINK-CURSOR
+    FABRICATION ALIGNMENT unit COMPLETE (commit 2d53aaa PUSHED,
+    worker 9035ca6a claim 2): the gate's fabricated O1 side now
+    carries blink-cursor like every real post-D132 capture plan
+    (inv_frame identity u32; the differ O1 normalizer named u32
+    arm + the O2 alias — raw passthrough would name-join "value"
+    vs "raw" and fabricate 2 field-level findings; the D136 sfx
+    precedent). Coverage pins dropped one per scenario: S1/S2/S3/
+    S5/S5B/S5C = 1 (move-target-words only), S4/S7 = 3, S6 = 2,
+    S8 = 3 (S0 = 0); a new guard asserts blink-cursor never
+    appears as any finding. No chains moved (E + engines
+    untouched); DESIGN §6a row note + landing-paragraph
+    amendments. Verified green on corpus: differ_gate 692s,
+    canonical_dump_gate 13, diffharness 76, engine libs 132+76,
+    fmt+clippy clean, MANIFEST clean. Queue now: item 1 =
+    [BLOCKED] S0 live session (operator), item 2 = the
+    differ_gate O2 tiebreak fabrication (W11-prep; the W7/D87
+    arbitration path has no gate coverage).
   - 2026-08-23 P4/W6 THE SFX-MASTER-GATE + NO-EXTRACT-LATCH E-GAP
     EMISSION unit COMPLETE — DECIDED EMIT NOW + LANDED (D136;
     decision commit 3e3bace + impl commit cfc6b4c + docs commit
