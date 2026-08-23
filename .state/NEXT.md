@@ -123,19 +123,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
- 2. [P4/RE] THE HEAT-MACHINE WARNING FAMILY UNIT (small; docs-only,
-   unattended-safe; objdump from ghidra-project/
-   exw-text-objdump.txt): decode the caller family of the
-   OVERHEATED/TEMPERATURE-CRITICAL posts (0x4101d7/0x41025e, ch
-   0/1/2 — §7j.53's only un-named producer family): the containing
-   function's counter/threshold logic, its relation to the §7j.45
-   scorch-lane/heat cells (w@+0x30/+0x32/+0x34/+0xA4), and corpus
-   reachability (no scenario exercises it today). Deliverables:
-   family decode + ledger row(s) + D127; registry_anchors green;
-   PUSH. Pre-queue check: ZERO decode exists (only §7j.53's
-   citation). (QUEUED 2026-08-23 by the 7j.53/D125 close.)
-
-  3. [P4/RE] THE [0x4edbd8] CAMERA-GATE CELL UNIT (small;
+ 2. [P4/RE] THE [0x4edbd8] CAMERA-GATE CELL UNIT (small;
     docs-only, unattended-safe; objdump from ghidra-project/
     exw-text-objdump.txt): census the writers/readers of
     [0x4edbd8] - the precondition that arms the §7j.54
@@ -152,6 +140,23 @@ renumbered queue keeps every open item claimable by number).
     own text); 0x4ede54 appears only as a passing reader
     citation. (QUEUED 2026-08-23 by the 7j.54/D126 close,
     worker ed78ecdc claim 2.)
+
+  3. [P4/RE] THE ROBOT +0x9C DEATH-FLAG READER CENSUS UNIT
+     (small; docs-only, unattended-safe; objdump from
+     ghidra-project/exw-text-objdump.txt): §7j.45 item 6 left
+     "+0x9C = 1 (readers not yet census'd)" open. Pre-queue
+     census (D118 discipline, performed 2026-08-23): exactly
+     THREE text sites for 0x4c6a80 — the two known producers
+     (MP-respawn reset 0x40e82a `mov [ebp+0x4c6a80],edi` — pin
+     the edi value; SP-death write 0x40eac0 := 1) and ONE
+     reader: `cmp DWORD [eax+0x4c6a80],0` @0x447697 inside
+     MissionShell — decode what that reader gates (likely the
+     dead-robot per-frame handling; check whether the §7j.55
+     heat-family [0x46ccec] sidebar row pass consumes it), pin
+     both producer values, close the §3 +0x9C row (E's
+     death_flag field gloss). Deliverables: census + §3/ledger
+     row + D129; registry_anchors green; PUSH. (QUEUED 2026-08-23
+     by the 7j.55/D127 close, worker 19d79ca9 claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -298,6 +303,57 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE HEAT-MACHINE WARNING FAMILY unit COMPLETE
+  (worker 19d79ca9 claim 2, commit 18e59ed, D127, §7j.55,
+  docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,
+  no Ghidra run, no corpus read — the reachability corpus facts ride
+  the committed §7j.53/§7j.9/§7j.41/§7j.10 evidence; MANIFEST.sha256
+  clean before AND after; registry_anchors 2/2 green; PUSHED).
+  CLOSED with the verdict set: (1) FUN_004100b7 (0x4100b7..0x4102b6,
+  sole caller robots() phase-1 0x40bc72 amount 0x14 on-scorch) = the
+  HEAT-IN machine — the +0x98 DAMPER (equipment stat 0x2C ×200,
+  spawn 0x40d013 / MP-respawn 0x40ea59) absorbs first (≤0 → zero +
+  "DAMPER EXHAUSTED" ids 0x2E..0x30 ONCE + return, no heat that
+  pass); pool==0 → word@+0x30 += amt i16-wrap clamp 0xBB8, with
+  EDGE-triggered OLD-vs-NEW crossings: 0x753 → "TEMPERATURE
+  CRITICAL" ids 6/7/8 (@0x41025e/80/0x4102ac), 0x9C4 → "HAS
+  OVERHEATED" ids 3/4/5 (@0x4101d7/f9/21d), old ≥ 0x9C4 →
+  FUN_004102b6 EVERY pass, old ≥ 0x753 → early return; rising heat
+  escalates CRITICAL→OVERHEATED; one huge add posts BOTH (overheat
+  first); standard idx==[0x46cbd4]+k ∧ [0x46cbd8]>k dispatch, one
+  post per event. (2) FUN_004102b6 (0x4102b6..0x4103ed, sole caller
+  0x41019a) = the AMMO COOK-OFF — RandA&0x7F==0 (1/128), w=RandA&7<7,
+  drain = max(1, ammo@+0x38+8w >>3), floor 1 (empty slot → 1 quirk),
+  player-type → [0x46ccec]:=2, +0x32==0 → "LOSING AMMO" ids
+  0x31..0x33 + cooldown := 100 (one per 100 frames). (3) THE +0x32
+  CELL CLOSED: sole writer = the cook-off tail 0x4103e3, sole reader
+  = its own gate 0x41036e, decay = the robots() pre-walk trio
+  0x40bab7..0x40bac6; the §3 "scorched tiles re-burn" gloss RETIRED
+  (it is the LOSING-AMMO cooldown); §7j.45 Part B's
+  "producer unknown" residue closed; +0x34/+0xA4 = ZERO family
+  traffic (FUN_0040e230's cells). (4) TERMINOLOGY ARBITRATED:
+  §7j.45 item 4's "armor/pool/charge ticks" vocabulary SUPERSEDED
+  (history-preserved corrections in §3 +0x30/+0x32 rows, §7f.4
+  item 1, §7j.45 item 4): +0x30 = HEAT accumulator, +0x98 = DAMPER,
+  the FUN_0040807f "armor bar" = the HEAT gauge (scale 2500 IS the
+  overheat threshold), the "design intent unclear" tag RETIRED;
+  the 0x40e6e2 text match = the seven-order-words walk, NOT a +0x30
+  site (displacement-aware filtering). (5) CORPUS REACHABILITY =
+  UNREACHABLE BY CONSTRUCTION: scorch byte (rings 1/2/4 + platform
+  +4, clamp 7, fade −1/frame) arms a tile ≤7 frames → ≤+140 heat
+  per event; crossing 0x753 needs ≥14 same-tile re-scorches within
+  ~94 frames under a PARKED robot — no corpus scenario (S0..S8)
+  comes close; below 0x9C4 ZERO RNG + only in-span robot-bank bytes
+  E models verbatim → pinned chains hold; E's omissions
+  (warnings/cook-off/+0x32 decay) unobservable; recorded seam: a
+  future sustained-scorch scenario MUST add FUN_004102b6 verbatim.
+  The "armor-pad-reads" watch id keeps its legacy name (anchor
+  load-bearing). Deliverables: §7j.55 + the heat-machine ledger row
+  + 3 gloss corrections + D127. Queued: the [0x4edbd8] camera-gate
+  cell unit (item 2, unchanged) + the NEW robot +0x9C death-flag
+  reader census unit (item 3 — pre-queue census found exactly one
+  reader @0x447697 MissionShell + the two producers; §7j.45 item 6
+  left it open). NEXT: item 2 (the camera-gate cell unit).
 - 2026-08-23: P4/RE THE DEBRIS ARRIVAL-SFX PAIR unit COMPLETE
   (worker a553aa84 claim 2, commits 01d380b + 2728351, D124,
   §7j.52, docs-only; objdump-only from
