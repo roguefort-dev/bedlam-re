@@ -1,5 +1,25 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W11-prep THE O2 STATIC-MAP-WH PIN unit COMPLETE
+    (commits 1438ca6 RE notes/D137 by predecessor a3532435 +
+    0ea13b8 impl by 05178a0c claim 2, both PUSHED): the LAST
+    deliberate zero-field differ row closes. normalize_o2_row's
+    static-map-wh arm parses the D137-pinned EXW form (the 0x28
+    span @0x4eddec, w@+0x00/h@+0x24 — exact-length need rejects the
+    EXD 0x30 span on O2 and vice versa on O1); the differ_gate
+    fabrication is CHANNEL-SPLIT (inv_frame emits the EXD 0x30
+    span under O1, the EXW 0x28 span under O2); a NEW direct
+    E-vs-O2 cross in s1_o2_tiebreak_arbitration proves the row
+    compares CLEAN through the real O2 normalizer (coverage
+    exactly 1 = move-target-words; S0 stays 0); new o2_row_forms
+    unit + tools/differ o2_frame fabrication. All four tiebreak
+    lanes re-verified on their own channel forms. The W11-prep
+    DIFFER side is now COMPLETE — what remains for W11 is the
+    live ptrace driver (operator/Wine-gated) + the plan side.
+    differ_gate 2/2 green (697s, corpus), diffharness 43, fmt+
+    clippy clean, MANIFEST clean pre+post. Queue now: item 1 =
+    [BLOCKED] S0 live session (operator), item 2 = dbx-plan O2
+    channel support (the headless W11 prerequisite).
   - 2026-08-23 P4.2/W11-prep THE DIFFER_GATE O2 TIEBREAK FABRICATION
     unit COMPLETE (commits 04cd6b0 + 4591f52 PUSHED, worker
     7956a0e8 claim 2): all four compare_field T1-exact arbitration

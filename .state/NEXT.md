@@ -146,30 +146,33 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W11-prep, SMALL] O2 STATIC-MAP-WH PIN — close the LAST
-   deliberate O2 zero-field row: `normalize_o2_row`'s static-map-wh
-   arm returns zero fields "pending the W11 pin" (differ.rs ~1610).
-   METHOD: locate the EXW terrain w/h cells from the committed
-   material (RE-EXW-SIM §terrain — the zone cell 0x4edd8c /
-   mission 0x4edd88 neighborhood is documented; the EXD side reads
-   a 0x30 span with h@0x10748c +0x00 and w@0x1074b8 +0x2c — find
-   the EXW twins in exw-functions.txt / RE-EXW-SIM; re-anchor
-   every fact to EXW addresses, provenance + confidence tags).
-   Then: registry row exw note updated, `normalize_o2_row`
-   static-map-wh arm parses the pinned cells into the canonical
-   (w, h) fields, and `differ_gate`'s `s1_o2_tiebreak_arbitration`
-   baseline extends: the fabricated O2 side gains the true EXW-form
-   static-map-wh bytes (inv_frame currently emits the EXD 0x30
-   span — replace with whatever form the pin defines) and the
-   assertion flips from "no static-map-wh finding" to "compares
-   clean" (the cross suite's existing guard stays green — S0's
-   expect_coverage is 0 and must stay 0). Run the FULL differ_gate
-   suite + fmt + clippy; commit RE notes before the impl (the
-   stream-survival rule). NO live Wine session — headless pin only
-   (the live capture stays W11/operator-gated). (QUEUED 2026-08-23
-   by the O2-tiebreak-fabrication unit, commit 4591f52 — the
-   arbitration lanes are proven; the zero-field row is the last
-   differ-side W11 gap.)
+   2. [P4.2/W11-prep, SMALL] DBX-PLAN O2 CHANNEL SUPPORT — compile
+   the O2-side capture-plan form (the headless W11 prerequisite;
+   the differ side is COMPLETE since 0ea13b8 + 1438ca6/D137).
+   CONTEXT: every committed plan is O1/EXD-form (`addr` =
+   CS:<hex> EXD cells, capture-plans/*.json), but the registry
+   carries `exw_addr` for EVERY row and the W11 ptrace driver
+   (DESIGN §10 W11) reads EXW addresses directly (zero translation,
+   DESIGN §2 O2 row). METHOD: add a channel flag to dbx-plan (o1
+   default = byte-identical output to the committed plans, gated
+   by the existing s*_plan_matches_committed_artifact tests);
+   under o2 swap every row's addr to its registry exw_addr and
+   emit per-channel lengths where span forms differ —
+   static-map-wh is the ONE D137-pinned split (O2 = the 0x28 span
+   @0x4eddec w@+0x00/h@+0x24 vs O1's 0x30 span h LOW; every other
+   row's EXW form == its EXD form per the §8 back-half probe +
+   the D137 census); the resolve section's map_w/map_h pair reads
+   the EXW cells 0x4eddec (w) / 0x4eddf0 (h). Check how the exd
+   side already folds two-cell addr strings ("a / b") into one
+   span and mirror that machinery. Byte-pin ONE compiled O2 plan
+   artifact (S1 — the tiebreak-lane scenario) + a
+   plan-compiles-o2 unit test; registry_anchors + differ_gate +
+   the committed-plan gates stay green; fmt + clippy. NO live
+   Wine session (the ptrace driver itself stays W11/operator-
+   gated; this unit is pure plan compilation). (QUEUED 2026-08-24
+   by the static-map-wh pin unit, commit 0ea13b8 — the last
+   differ-side W11 gap closed; the plan side is what remains
+   headless-reachable.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -322,6 +325,33 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W11-prep THE O2 STATIC-MAP-WH PIN unit COMPLETE
+  (worker 05178a0c claim 2, commits 1438ca6 RE notes/D137/registry/
+  DESIGN/watches amendments by predecessor a3532435 + 0ea13b8 impl,
+  both PUSHED — the impl unit adopted + validated + completed
+  interrupted predecessor WIP found uncommitted over 1438ca6; the
+  full diff re-read and every call site checked before staging,
+  unrelated dirt untouched). The LAST deliberate zero-field differ
+  row closes: normalize_o2_row's static-map-wh arm parses the
+  D137-pinned EXW form — the 0x28 span @0x4eddec, w@+0x00/h@+0x24
+  (exact-length need BOTH directions: the EXD 0x30 span REJECTED
+  on O2 and the 0x28 span on O1 — the reversed field order vs
+  address order can never silently mis-parse). differ_gate
+  fabrication CHANNEL-SPLIT since the pin: inv_frame takes the
+  channel (EXD 0x30 span under O1, EXW 0x28 under O2; Engine/O3
+  unreachable — guest channels only). NEW direct E-vs-O2 cross in
+  s1_o2_tiebreak_arbitration proves the row COMPARES CLEAN through
+  the real O2 normalizer (coverage exactly 1 = move-target-words,
+  zero EngineBug/Structural, no static-map-wh finding); all four
+  tiebreak lanes re-verified on their own channel forms; the cross
+  suite's S0 expect_coverage stays 0. New o2_row_forms unit (the
+  0x28 parse + symmetric cross-form rejection) + tools/differ
+  o2_frame fabrication for the tiebreak lanes. Green: differ_gate
+  2/2 (697s, corpus), diffharness 43 (incl. the new unit), fmt +
+  clippy clean, MANIFEST.sha256 clean before AND after; no Ghidra
+  run, no corpus write. Queued next: item 2 = dbx-plan O2 channel
+  support (the headless W11 prerequisite — plans are still
+  EXD/CS:-form only).
 - 2026-08-23: P4.2/W11-prep DIFFER_GATE O2 TIEBREAK FABRICATION
   unit COMPLETE (worker 7956a0e8 claim 2, commits 04cd6b0 RE/design
   note + 4591f52 impl, both PUSHED). All four compare_field
