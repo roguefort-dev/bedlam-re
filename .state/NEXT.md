@@ -65,7 +65,12 @@ renumbered queue keeps every open item claimable by number).
    corpus-touching steps. NOTE (D85 completion): the E-side S0/S1
    counterparts now exist — `parity_harness --canonical --scenario
    tools/diffharness/scenarios/{S0,S1}.scen --out ...` — chains pinned
-   in tests/canonical_dump_gate.rs (8901789a88cf61fe / 1c4e7b4c9d9b0947);
+   in tests/canonical_dump_gate.rs (SUPERSEDED 2026-08-23 by the
+   D136 re-baseline, commit cfc6b4c — E now emits sfx-master-gate
+   (T0, constant 1) + no-extract-latch (T1, count-prefixed zeros):
+   the CURRENT pins are dac1cfd17bc7ede3 / a18cb11ac8e4314e; the
+   O1 capture side already dumps both rows per D133/D134, so the
+   live S0/S1 verdicts compare BOTH rows clean);
    the live session's O1 chains compare against THOSE with the
    LANDED W7 differ (D87, `dbx-diff` -- cross-channel mode handles
    the counter/RNG classes + the coverage findings automatically;
@@ -141,22 +146,31 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W6-followup, DECISION-NEEDED] THE SFX-MASTER-GATE +
-      NO-EXTRACT-LATCH E-GAP EMISSION (small; design + impl;
-      unattended-safe AFTER a DECISIONS entry). Both rows are
-      documented E-gaps (DESIGN §6a E-gaps list, D133/D134
-      precedent: closing the EXD twin does NOT force E to emit).
-      If E emits them (sfx := constant 1 — the E engine's
-      sound-on assumption; no-extract := constant 0 — the SP
-      corpus construction), the canonical chains RE-BASELINE
-      deliberately (the pinned hashes in canonical_dump_gate.rs +
-      every corpus_*/chain reference). Decide: emit now (rows
-      ride every T0/T1 scenario on BOTH channels — cleanest for
-      the live S0 verdict) vs keep deferred until a live session
-      needs them. METHOD: a DECISIONS entry first, then
-      canonical.rs emit_frame + the canonical_dump_gate corpus
-      chains + the DESIGN §6a E-gaps list amendment.
-      (QUEUED 2026-08-23 by the D134 close.)
+   2. [P4.2/W7-followup, SMALL] DIFFER_GATE FABRICATION <-> REAL-PLAN
+      ALIGNMENT: the fabricated O1 side in
+      engine/bedlam-game/tests/differ_gate.rs still SKIPS
+      blink-cursor (its comment "blink-cursor is a registry gap"
+      is STALE since D132 closed the EXD twin [0x10e108] and the
+      regenerated capture plans carry the row — verified in
+      capture-plans/S1.json alongside sfx-master-gate +
+      no-extract-latch + move-target-words). A real O1 capture
+      dumps blink-cursor, so the live S1+ verdicts will show ONE
+      fewer row-level coverage finding than the gate test pins
+      (only move-target-words stays E-only — the D90 splice
+      consumes its span into robot-bank; that one is correct).
+      METHOD: make inv_frame fabricate blink-cursor like the real
+      plan (identity u32 — E emits sidebar_cursor(), guest cell is
+      the u32 twin), re-derive expect_coverage per scenario
+      (S1/S2/S3/S5*/S6: 2->1; S4/S7: 4->3 keeping the debris/
+      splash pair; S8: 4->3 keeping critter-bank/effect-rows),
+      drop the stale blink-cursor coverage assertions + comment,
+      and check whether the O1 normalizer needs blink-cursor in a
+      named arm (raw passthrough already byte-compares 4==4, but a
+      named arm matches the D136 sfx precedent). No chain pins
+      move (the E side is untouched). Record a DECISIONS note only
+      if the coverage-class semantics change.
+      (QUEUED 2026-08-23 by the D136 close — noticed while
+      verifying the real S1 plan row set.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -2360,3 +2374,33 @@ renumbered queue keeps every open item claimable by number).
    in exw-text-objdump.txt + 20 DGROUP strings re-read from
    BEDLAM.EXW); objdump-only, no Ghidra run; MANIFEST clean
    pre+post; registry_anchors 2/2 green; pushed.
+
+2. DONE (2026-08-23, worker ec979f34 claim 2, commits 3e3bace +
+   cfc6b4c + 6967d3c, all PUSHED): P4/W6 SFX-MASTER-GATE +
+   NO-EXTRACT-LATCH E-GAP EMISSION — DECIDED EMIT NOW (D136) and
+   landed. E emits sfx-master-gate := constant 1 (T0, every frame
+   incl. anchor — the sound-on construction assumption; a
+   sound-disabled capture machine dumps 0 = the intended loud
+   finding, D134 fingerprint companion intact) and no-extract-latch
+   := u32 count + count zero words (T1, count = the robot-bank
+   count; MP-lobby-claimed only, all-zero by SP construction,
+   D133). Differ: sfx joins the u32 scalar arms on E/O1/O2; the
+   latch is count-prefixed canonical with the O1/O2 bare
+   $robot_count*4 span converted by prepending len/4; its count
+   field STRUCTURAL (the robot-count scenario seams surface exactly
+   as on robot-bank.count). ALL canonical chains re-baselined
+   deliberately (S0 dac1cfd17bc7ede3, S1 a18cb11ac8e4314e, S2
+   d6649ce272ad6d96, S3 f4f5b4351e976ed5, S4 63ab5ac7679f6de7, S5
+   8a718339e0702fd6, S5B b72f57e0b8e7042b, S5C de5b80a6177aecdd,
+   S6 c27bff339929339d, S7 b0db22840310e82a, S8 29fa2f400a10974b,
+   synthetic 6517d1c0b7169446 + frame digest c0268bf499a505c1) —
+   live-session O1 comparisons pin against these from cfc6b4c.
+   DESIGN 6a: both rows in the canonical table; the E-gaps list
+   drops them AND is corrected for D85-era staleness (the
+   destroy-family five + T2/T3 staged rows emit since W12). The
+   differ's cross-channel coverage counts UNCHANGED (both channels
+   carry both rows — the rows compare clean, the cleanest-for-S0
+   outcome). 93 diffharness + 13 canonical_dump_gate +
+   differ_gate + 76+132 engine lib tests green; fmt+clippy clean;
+   MANIFEST clean pre+post. Queued next: item 2 = the differ_gate
+   blink-cursor fabrication alignment (noticed this run).

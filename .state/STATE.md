@@ -1,5 +1,32 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/W6 THE SFX-MASTER-GATE + NO-EXTRACT-LATCH E-GAP
+    EMISSION unit COMPLETE — DECIDED EMIT NOW + LANDED (D136;
+    decision commit 3e3bace + impl commit cfc6b4c + docs commit
+    6967d3c, all PUSHED, worker ec979f34 claim 2): E emits
+    sfx-master-gate := constant 1 (T0; sound-on construction
+    assumption) and no-extract-latch := u32 count + count zero
+    words (T1; MP-lobby-claimed only — D133; count = the
+    robot-bank count). The differ normalizes both on E/O1/O2 (the
+    latch count-prefixed, the O1/O2 bare span prepended len/4; the
+    count field STRUCTURAL). ALL canonical chains RE-BASELINED
+    deliberately (S0 dac1cfd17bc7ede3 / S1 a18cb11ac8e4314e / S2
+    d6649ce272ad6d96 / S3 f4f5b4351e976ed5 / S4 63ab5ac7679f6de7 /
+    S5 8a718339e0702fd6 / S5B b72f57e0b8e7042b / S5C
+    de5b80a6177aecdd / S6 c27bff339929339d / S7 b0db22840310e82a /
+    S8 29fa2f400a10974b / synthetic 6517d1c0b7169446) — the live
+    S0 session (item 1) compares against THESE (its NEXT entry
+    carries the supersession note; DESIGN §9 examples updated).
+    DESIGN §6a E-gaps list amended (both rows leave it; the D85
+    staleness corrected — destroy-family five + T2/T3 staged rows
+    emit since W12). Coverage counts UNCHANGED on every scenario —
+    both channels carry both rows clean (the cleanest-for-S0
+    outcome the decision wanted). Verified: 93 diffharness + 13
+    canonical_dump_gate + differ_gate + 76+132 engine lib tests
+    green, fmt+clippy clean, MANIFEST clean pre+post. Queue now:
+    item 1 = [BLOCKED] S0 live session (operator), item 2 = the
+    differ_gate blink-cursor fabrication alignment (the fabricated
+    O1 still skips the row the D132 plans actually carry).
   - 2026-08-23 P4/RE THE EXW BANK-CELL TWIN CROSS-CHECK unit
     COMPLETE (D135; commit 115e240 PUSHED, worker 9a48b338 claim
     2; docs-only, RE-EXD-MAP §5g-bis): all 17 §5g leftover
