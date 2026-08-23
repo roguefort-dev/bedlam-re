@@ -1723,9 +1723,12 @@ the 20-kind table. All [verified] asm unless tagged.
 4. **FUN_00421e60 = the 3-way arrival-SFX pick** [verified]:
    gated on dword 0x4ede58 != 0; picks RandA()%3 → plays
    FUN_0043a48e(bank 0x4edf64/0x4edf68/0x4edf6c, 0, x, y,
-   push 2). **FUN_00421dec = the 4-way variant** [verified]:
-   RandA()&3 (jump table 0x421ddc) → banks 0x4edf98/0x4edf9c/
-   0x4edfa0/0x4edfa4, push 1; sole callers kinds 2+8.
+   push 2) [CORRECTED §7j.52: the draw is **RandB**
+   (FUN_004029b6), not RandA; cells = BOOM1/2/3; fires at STAGE
+   time — full decode there]. **FUN_00421dec = the 4-way
+   variant** [verified]: RandA()&3 (jump table 0x421ddc) → banks
+   0x4edf98/0x4edf9c/0x4edfa0/0x4edfa4, push 1 [draw also RandB
+   per §7j.52; cells = RICOCHT1..4]; sole callers kinds 2+8.
    **FUN_00402975 = a 16-bit LCG** over the 32-bit state
    word@0x4ede48 (add tail constants 0x62E9/0x3619), returns
    the new high word — kind 11 gates its SFX on `al & 1`
@@ -4558,7 +4561,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | +0x18 fade | every frame, all w*h tiles, nonzero → −1 (FUN_00424051 head) | §7j.10 |
 | debris kinds | 20-kind jump table 0x4205b8; +0x1C=kind, +0x20=physics class 0/1/2/3/6, +0x24←[esp+0x20] delay, +0x28←[esp+0x24] param; ring kinds 1(+13/14/15)/3/4/5/6+12/9/11/20 (nine 3×3), 2/8 single center 3/4, 7/10/16..19 none | §7j.11 |
 | debris seq tables | 11 tables, i16 −1-terminated, DGROUP 0x454424..0x454510 (k5-family {5..16}; k2/k8 {0..4}; …{44..104} = k16..20) | §7j.11 |
-| debris arrival SFX | FUN_00421e60 3-way (banks 0x4edf64/68/6c, push 2) · FUN_00421dec 4-way (0x4edf98/9c/a0/a4, push 1); both gated [0x4ede58]≠0 | §7j.11 |
+| debris arrival SFX | FUN_00421e60 3-way BOOM1/2/3 (cells 0x4edf64/68/6c, priority 2) · FUN_00421dec 4-way RICOCHT1..4 (0x4edf98/9c/a0/a4, priority 1); both gated [0x4ede58]≠0, pick = RandB (T4); fire at STAGE time on in-map bounds alone (k11 + RandA&1 ~50% gate) | §7j.11, §7j.52 |
 | arrival ride tick | FUN_0042034c epilogue 0x448076: 45 rec @0x4dcdb8 stride 0x24 {active, marker xyz tile, dest xyz, countdown, robot slot}; walk STOPS at first inactive (contiguous run from rec 0); countdown 0 = dormant skip; ==0xA SFX bank 0x4edfe0 at marker; →0 teleport robot to dest + burn platform (both gate banks) + FUN_0042394a(x,y,z,0,0) water clear | §7j.11, §7j.21 |
 | elevator stager | FUN_00425da4 (MissionShell boot @0x447b4e): clear 45 records then per-(zone [0x4edd8c] 1..7, mode [0x4edb88], mission [0x4edd88]) fixed-address staging; marker ← .PAD slot u16 x/y/z @0x4e44f8+slot·8+2; dest := immediates; +0x20:=−1; countdown never written (dormant); Z1 0..6, Z2/Z3 0..16, Z4 0..8, Z5 0..9, Z6 0..14, Z7 0..6 | §7j.21 |
 | elevator ride armer | FUN_00433980 ride cases: guard +0x20≠−1; rider state@+0x0C:=2, pre-position at marker+0x1000, countdown:=10, +0x20:=rider; all armed countdowns = 10 | §7j.19, §7j.21 |
@@ -8463,3 +8466,94 @@ full-.text objdump.
    different tile); the class-3 death must spawn kind-8 debris at
    the post-revert pre-contact position with zero damage, and the
    probe is first-match-in-bank-order (lowest robot index blocks).
+
+## 7j.52. THE DEBRIS ARRIVAL-SFX PAIR — CLOSED: FUN_00421e60 = the BOOM1/2/3 spawn trio (RandB()%3, play priority 2), FUN_00421dec = the RICOCHT1..4 quad (RandB()&3, priority 1); both fire at STAGE time on in-map bounds alone (k11 alone adds a RandA&1 ~50% play gate); the bank-pick draw is RandB — item 4's "RandA()%3" CORRECTED; corpus-reachable today ONLY via the k5 damage-death leg (2026-08-23, worker a553aa84 claim 2, D124; objdump-only from ghidra-project/exw-text-objdump.txt + one raw-dword scan of BEDLAM.EXW — no Ghidra run; manifest clean before AND after) [verified]
+
+1. **The two bodies, instruction-exact.**
+   - `FUN_00421e60(x Q5 EAX, y Q5 EDX)` (118 B @0x421e60..0x421ed5):
+     shelves y→ebp, spills x to stack; gate `[0x4ede58]==0` →
+     shared-family epilogue `jmp 0x41dc51` (add esp,4; pop
+     ebp/edi/esi/ecx/ebx; ret — the §7j.49-style Watcom shared
+     gadget); else `call FUN_004029b6` (**RandB**, state word
+     0x4ede4c) then signed `idiv 3`: rem 0 → cell ds:0x4edf64,
+     rem 1 → 0x4edf68, rem 2 → 0x4edf6c; play
+     `FUN_0043a48e(handle=eax, 0, x EBX, y ECX, priority 2)` at
+     the debris position. The rem-2 leg re-pushes the remainder
+     itself as the priority arg (value 2 on that path — Watcom
+     value reuse, identical effect to the literal `push 2` of
+     the other two legs).
+   - `FUN_00421dec(x Q5 EAX, y Q5 EDX)` (116 B @0x421dec..0x421e5f):
+     same prologue/gate/epilogue shape (x→ebp, y spilled);
+     **RandB()&3** → jump table @0x421ddc {0x421e07, 0x421e20,
+     0x421e2d, 0x421e3a} → cells 0x4edf98 / 0x4edf9c / 0x4edfa0 /
+     0x4edfa4; play priority **1** — one steal class BELOW the
+     BOOM trio (§7j.30: steal by priority + age). METHOD NOTE:
+     the flat objdump's linear pass MISPARSES 0x421dd9..0x421deb
+     (the 16 B table + 3 B entry padding) — the table bytes were
+     decoded from the raw stream (cf. §7j.46's table-farm note).
+   - **Every cell named** (§7j.30 anchor, the queue's ask):
+     0x4edf64 **BOOM1**, 0x4edf68 **BOOM2**, 0x4edf6c **BOOM3**
+     (the 3-way); 0x4edf98 **RICOCHT1**, 0x4edf9c **RICOCHT2**,
+     0x4edfa0 **RICOCHT3**, 0x4edfa4 **RICOCHT4** (the 4-way).
+2. **THE RNG CORRECTION (the one prior-text fix this unit).**
+   §7j.11 item 4 says the 3-way "picks RandA()%3" — WRONG draw
+   identity: both bodies call **FUN_004029b6 = RandB** (@0x421ea9
+   and @0x421e47), exactly like the sibling trios FUN_00421fc2 /
+   FUN_00421f4c (§7j.23/§7j.24, both already documented as
+   "RandB()%3"). RandA = FUN_00402975 (state 0x4ede48) is drawn
+   ONLY by k11's local play gate (item 4's second sentence is
+   correct). The twins are byte-identical 16-bit LCGs (add tail
+   0x62E9/0x3619) over adjacent state words 0x4ede48 / 0x4ede4c.
+   Differ consequence: the bank pick is a **T4 draw** (unmodeled —
+   the destroy-tail census language "RandB feeds only the T4 SFX
+   bank pick" now covers this pair too); k11's gate is a RandA
+   draw (modeled draw-count — relevant only if k11 ever gains a
+   corpus producer).
+3. **The 13 call sites — all inside FUN_00420608 kind legs; the
+   trigger is STAGE time, not a landing tick.** e60 ×11: k16
+   0x4206ed, k17 0x4207a1, k18 0x42084e, k19 0x4208f6, k20
+   0x42099e, k6+12 0x420cfb, k9 0x42101a, k1(+13/14/15 shared
+   body) 0x4212d7, k5 0x421364, k4 0x4218ae, k11 0x420e93; dec
+   ×2: k2 0x421619, k8 0x421762 (kind→leg re-verified against
+   the 20-entry jump table @0x4205b8, byte-exact incl. the 6+12
+   and 1+13/14/15 body sharing). TWELVE of 13 sites share ONE
+   trigger shape: a per-leg in-map bounds RECHECK of the raw Q5
+   args (x≥0, y≥0, x < [0x4eddec]<<5, y < [0x4eddf0]<<5 — width/
+   height words; fail → 0x421dd0 `ret 8`, NO record written, NO
+   SFX) then the UNCONDITIONAL call with (x, y) — the sound fires
+   at debris-CREATION, before the record fields are written (k16:
+   call @0x4206ed, record writes from 0x4206f2). "Arrival SFX" =
+   the debris' arrival ON THE FIELD. The sole local gate: k11
+   (RandA @0x420e82 → `test al,1` @0x420e87 → je skip) — a ~50%
+   play chance; that leg draws TWO different RNGs (RandA gate +
+   the RandB pick inside the callee). Caller-census completeness:
+   raw little-endian dword scan of BEDLAM.EXW for 0x00421e60 /
+   0x00421dec → ZERO hits (no jump-table or function-pointer
+   refs) — the 13 direct calls are the entire graph.
+4. **Corpus reachability (the queue's ask, re-anchored to the
+   §7j.11 item-6 caller census).** The ONLY corpus-reachable
+   debris producer today is **k5 via apply_damage** (FUN_0040e230
+   death tail, call 0x40e771) — therefore the only reachable
+   arrival-SFX site is **k5's FUN_00421e60 leg @0x421364**: every
+   damage-death of a robot in a corpus scenario draws ONE RandB
+   and plays one BOOM1/2/3 at the death position (priority 2)
+   iff [0x4ede58]≠0. FUN_00421dec has NO corpus-reachable caller
+   (k2/k8 producers are all in the weapon-fire/impact families,
+   §7j.11 item 6 — outside the corpus path).
+5. **Adjacent census (one line, not the pair):** a THIRD sibling
+   FUN_00421ed6 (~0x421ed6..0x421f4b) = the GRUNT1/2/3 trio
+   (RandB()%3 → cells 0x4ee000/0x4ee004/0x4ee008, priority 2,
+   same shape/epilogue); callers 0x413ba0/0x413f2a (outside the
+   debris family; zero raw-dword refs). The arrival-SFX family
+   now has four decode-complete members: 0x421dec (RICOCHT 4-way
+   p1), 0x421e60 (BOOM 3-way p2), 0x421ed6 (GRUNT 3-way p2), plus
+   the §7j.23/24 twins 0x421fc2/0x421f4c (HURT/DEATH trios).
+6. **Engine consequence: NONE today** (docs-only, no code, no
+   watch rows — the cells already sit under the sfx-master-gate /
+   SFX-register rows). When the E-side debris stager widens beyond
+   k5 (backlog), each widening kind's staging must draw ONE RandB
+   for the BOOM pick (T4, no chain effect) at the spawn position;
+   k11 additionally consumes one RandA draw BEFORE the pick; the
+   BOOM-vs-RICOCHT priority split (2 vs 1) is audible only
+   through FUN_0043a48e's voice-steal order — no dump-visible
+   state either way.
