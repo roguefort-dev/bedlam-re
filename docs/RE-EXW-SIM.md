@@ -3027,15 +3027,20 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
      0x4dcdbc..0x4dd330), arrival platform +0x84 := 0..6,
      event latch −1-pair + countdown 10 (per-destination
      dwords 0x4dcdd4..0x4dd330);
-   - message ids (≥0x3d range per zone) → FUN_00424a6f(id) =
-     the zone MESSAGE SHOWER (string table @0x458ca7 "BOOT
-     CAMP"…, SFX _DAT_004edfd0, per-id latch 0x4eb5f8);
+   - message ids → FUN_00424a6f(id) = the zone MESSAGE SHOWER —
+     §7j.46-corrected: zone A / mission 1 ONLY, ids 0..0xE = the
+     BOOT_CAMP_%03i sections of the LANGUAGE.* blob (NOT an
+     in-memory "string table @0x458ca7" — that is just the name
+     prefix; the "≥0x3d range per zone" gloss retired), SFX
+     _DAT_004edfd0 = TEXTBOX1, per-id latch 0x4eb5f8;
    - door ids → FUN_004223b8(rect, 1|2) = the DOOR toggler
      over the 45×0x10 trigger-rect bank @0x4dcae8 (TOT
      stamps FUN_004235e4/FUN_004235bf over the rect W×H, SFX
      0x23/0x24);
-   - **case 0x1B → FUN_004223b8(0x13, 2) + FUN_0041fa51(slot)
-     — the SOLE exit-pad activation**: robot steps on the
+   - **exit-pad activations → DOOR + FUN_0041fa51(slot) pairs**
+     (§7j.46: NOT one case — zone F M1..M5 + zone G M1 carry them;
+     the old "case 0x1B @0x43900e = the SOLE activation" gloss
+     retired): robot steps on the
      scripted pad → exit elevator deploys. The personnel-
      rescue loop is now CLOSED end-to-end: .PAD load (7j.16)
      → FUN_00433980 script → FUN_0041fa51 activator (7j.18)
@@ -3062,10 +3067,12 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
 6. Residuals (small, queued): CLOSED 2026-08-21 by §7j.20 (the
    beacon writer FUN_004247b5, the spread-claim picker
    FUN_004248c8 body, the 0x4c6a10 pod-countdown producers).
-   Still open: the full per-zone FUN_00433980 case table beyond
-   the head (≈28 pad ids × 7 zones — mechanical, decode per zone
-   only when P4.2 needs it; §7j.20 item 2 gives the ~25 armer
-   pairs as an index); FUN_00424a6f string table contents.
+   CLOSED 2026-08-23 by §7j.46: the full per-zone FUN_00433980 case
+   table (all zones/modes; the ride-record bank grammar 0x4dcdbc
+   stride 0x24; the 21 beacon slots; the zone-F/G EXIT pairs; zone E
+   = verified negative) + the FUN_00424a6f message table (the
+   LANGUAGE.* section system, the 15 BOOT_CAMP ids, the latch/timer
+   semantics — §7j.46).
 7. Corpus-path verdict: docs-only (D67) — no engine change;
    the escape family stays unwired like the rest of the
    mission runtime (nothing escapes in the gates; all
@@ -4601,7 +4608,9 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | spread-claim picker | FUN_004248c8(&tx,&ty): first free slot of 12×u16 0x4eabba (bound DAT_0046ccbc), marks 1, returns beacon tile + {center, 8 neighbors, (−2,0),(0,−2),(+2,0)}; ≥12 → out-params untouched (callers store garbage); claims never released; callers FUN_004247b5 @0x424865 + FUN_0040b9f6 @0x40c08f | §7j.20 |
 | pod-deploy countdown writers | w@robot+0x2C (0x4c6a10): FUN_0040cca0 spawn tail @0x40d132 stagger 1+k·(2000−m·1000/27) per player group (m = linear mission 0x46ae8c); FUN_0040e230 MP respawn @0x40e89d = 0x28; reader/decrementer FUN_0040b9f6 (brain gate) | §7j.20 |
 | per-player selected anchor | 0x4c71c4: 4×0xC {x>>8, y>>8, z}, spawn-seeded by FUN_0040cca0 tail (selected robot idx DAT_0046cbd4), renderer-updated FUN_00403938 @0x403994/0x4039d2/0x403a27; sits immediately before the 0x4c71f4 bank base | §7j.20 |
-| pad-trigger dispatcher | FUN_00433980 (3185 B, caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); per-zone switch on 0x4edd8c — elevator rides [§7j.21: arm the matching 0x4dcdb8 record — rider state@+0x0C := 2, pos := the record's own marker x/y ·0x2000+0x1000 (dwords 0x4dcdbc..0x4dd330), countdown := 10, +0x20 := rider], messages FUN_00424a6f (strings 0x458ca7…, latch 0x4eb5f8), doors FUN_004223b8 over the 45×0x10 rects @0x4dcae8, case 0x1B = the exit-pad activation | §7j.19, §7j.21 |
+| pad-trigger dispatcher | FUN_00433980 (sole caller FUN_0040b9f6 @0x40bd58 when state∈{1,4} ∧ order 0x46cc30[idx]≠−1): FUN_00422e5e = the PAD-TILE PROBE (DAT byte 0xFF → 999×8B .PAD slot scan @0x4e44f8 → slot id; revisit latch 0x4eb9fc/counter 0x4eb9f4); zone switch jmp [zone−1 ·4+0x433964] on 0x4edd8c (A..G → 0x43399f/0x434058/0x435bda/0x4386c5/0x432c8e/0x439323/0x439ae2) → per-mode [0x4edb88] / per-mission [0x4edd88] gates → per-mission slot cascade/table → actions: ELEVATOR RIDE (ride-record bank 0x4dcdbc stride 0x24 {+0/+4 dest tile, +0x18 latch :=10, +0x1C rider gate −1/idx}; robot state :=2, +0x84 := arrival plat 0..0xE, pos := dest·0x2000+0x1000, y-stamp tail 0x43475f), DOOR FUN_004223b8(rect 0..0x25, 1\|2), BEACON FUN_004247b5 (21 SP slots), EXIT pairs DOOR+FUN_0041fa51(slot) (zones F/G), MSG FUN_00424a6f (zone A M1 only); zone E = rect/dest overlay restage, NO case actions (§7j.46/4); H2H = rides-only tables | §7j.19, §7j.21, §7j.46 |
+| zone-A message shower | FUN_00424a6f(id) (sole caller 0x433d07): SP-only ([0x4edb88]==0), per-id show-once latch word 0x4eb5f8+2·id := 1, SFX TEXTBOX1 0x4edfd0, name = "BOOT_CAMP_%03i" (prefix 0x458ca7, fmt 0x458cb2), section finder FUN_00424679 in the LANGUAGE.{ENG..DCH} blob [0x46cbb4] (alloc 0x13C68 @0x41d64d, load 0x41c1fb, lang selector [0x4eba1c]), `]`-terminated line records 0x46-stride, MONOFONT 0x46cdb0 wrap, window 0x4eaab8 {x=0xF0−w/2, 200}, bank 0x4e8818, timer [0x4eaac0] := 0xFDE8; ticker/drawer FUN_00425010 (MissionShell 0x448381) decrements; COMMAND sites 0x40a2bc/0x40a396 dismiss (≥8/44 frames); 0x40c570 gates the state-0 write; ids 0..0xE = BOOT_CAMP_000..014 in LANGUAGE.ENG (421 sections) | §7j.46 |
+| ride-record bank | 0x4dcdbc stride 0x24 ≥16 records (gates +0x1C: 0x4dcdd8..0x4dcff4); filled from .PAD slot records 0x4e44f8 by the 0x426058-family stagers at dispatch; the 7j.19/7j.21 "dword tables 0x4dcdbc..0x4dd330" = this bank | §7j.19, §7j.21, §7j.46 |
 | critter/POI (.NME) loader | FUN_00416458 (the mission-load dispatcher's critter hop): stages ".NME" (@0x457a57) → 8 fixed-order sections (widths 10/10/8/8/10/8/6/8) feeding critter states {2,1,5,4,3,6,7} + 4 POIs/record; spawn multipliers by difficulty; hp = base+(base·d)/27, bases 0xAF/0xC8/0x96/0x5DC/0x9C4; corpus-exact on all 37 files (ZONEA/M1 16-B orphan tail unread) | §7j.18 |
 | command-record consumer | FUN_00409138 (MissionShell @0x448030 after FUN_00410644+FUN_00449c94): records 0x4dd4a0 stride 0x80 count DAT_0046cbe0 (count NOT reset by the consumer; the recharge pass runs once at the loop exit for EVERY robot × 7 slots: enabled ∧ cooldown≠0 → −−); spot@+3 → robot+0x14 + cursor angle 0x4dc678; robot = rec_idx·0x46cbd8 + id@+1; bit0 select → move-target words (state ∉ 3/4/5) + auto-arm state:=1/stop:=10⁶ (state ∉ 2..5) — and the bit0 block BUMPS the word pointer +2, so bit0∧bit1 records take the order triple from +0xB/+0xD/+0xF; bit1 order → 0x4dc6bc:=1, triple 0x4dd484/88/8c, 0x4eb940..50 clear, then (alive ∧ deploy-delay+0xA0==0 ∧ state≠2) the 7-slot loop with FIRE GATES mask∧cooldown==0∧ammo≠0: artillery w9..0xB INLINE 1× (type=id, pos+0x100, z=(z+0x15)<<8, no velocity, cooldown 0, mask bit XORed UNCONDITIONALLY); mines w0x10..0x12/0x14..0x16 INLINE 2/4/6× types 0xF/0x13 (2×RandA jitter ±0x20 on the order target, octile>>3 normalize, vel>>2/>>1, ttl RandA&0xF+1, arc 0x900−RandA&0x2FF, class 4, cooldown 8, 4 draws/record); grenades w0x1B..0x1E INLINE 4/6× types 0x1A/0x1F (3D vz from the order z, ttl 0x32∓/＋RandA&0xF, arc 0xB00−/0x900−RandA&0x2FF, class 0, trail:=0); rocket w0x20 INLINE 1× type 0x24 (no jitter, ttl 0, cooldown 5, arc := angle_pair); the AI-order families w2/3/4,w6/7/8,w0x18/0x19,w0x21..0x23,w0x25..0x28 with counts 3/2/1, 0/1/2, 1/2, 3/6/9, 1/2/4/6 (internals OPEN); auto-rearm first id≠0∧ammo≠0 slot when the mask emptied + msgs 0x1C..0x21; idle AI ticks (10/9/2/6) when deploy-delay≠0 ∧ frame&3==0 | §7j.17, §7j.37 |
 | mission-objective resolver | FUN_00448b80(type: 5000 = rescue, else destroyed object type): 6×0x20 slots @0x4eaaee {remaining w@+2, type w@+6, status w@+0xC, quota w@+0x1E}; kill-stats [0x46cbf4]+type·0x14; mirror-row wipe 0x4796d7/d8; msgs 0x26/0x27/0x34, all-done 0x28+0x29; DAT_0046cd00 = phase state 1/2/3/4; zone-7 counter [0x46cce0] types 0x44..0x47 | §7j.17 |
@@ -7030,3 +7039,815 @@ facts for any future shop/mission-boundary engine work are the money
 floor, the catalog grammar + immediate data range, the lockout array, the
 MP loadout sync via the type-4 COMMAND record, and the +0x8C charge
 machine's chassis-row source.
+
+## 7j.46. THE COMPLETE FUN_00433980 PER-ZONE CASE TABLE + THE FUN_00424a6f/LANGUAGE.* MESSAGE SYSTEM (2026-08-23, worker 0c2df9b4 claim 2, D117; objdump-only — targeted `objdump -d/-s` windows on game-data/BEDLAM/BEDLAM.EXW (READ-ONLY; manifest clean before AND after) + read-only DGROUP string probes + read-only LANGUAGE.ENG/EDITOR corpus probes; no Ghidra run, no corpus write)
+
+Closes the 7j.19 item-6 residual (the full per-zone case table) + the
+queue's FUN_00424a6f message-table unit. Method: clean re-disassembly of
+0x426000..0x43a000 (the flat exw-text-objdump.txt misparses the table
+farm 0x43301c..0x433963 — jump-table DATA decoded as code), then a
+static cascade walker (Watcom binary-search switch decode: `cmp eax,K;
+jb T` => T covers (prev,K-1], a `jbe` in the SAME flag shadow => ==K, a
+bare `jbe` => (prev,K], plus `jmp [eax*4+base]` tables with a `cmp eax,N;
+ja` bound). Every leaf action hand-verified against raw dumps (spot
+checks at 0x433a14, 0x433c8e, 0x433cbc, 0x433e89, 0x43475f, 0x438927,
+0x439000).
+
+### 1. The dispatch STRUCTURE [verified]
+
+```
+FUN_00433980(eax = robot idx)            ; sole caller FUN_0040b9f6 @0x40bd58
+  push ebx,ecx,edx,esi,edi,ebp           ; 6-save prologue
+  eax = [0x4edd8c] - 1                   ; zone cell A..G -> 0..6
+  if > 6 -> ret                          ; shared 6-pop epilogue 0x42602f
+  jmp [eax*4 + 0x433964]                 ; THE zone table (7 entries):
+    A(1)->0x43399f  B(2)->0x434058  C(3)->0x435bda  D(4)->0x4386c5
+    E(5)->0x432c8e  F(6)->0x439323  G(7)->0x439ae2
+```
+Each zone entry gates on **mode [0x4edb88]** (0 SP / 1 Coop / 2 Head2Head,
+§7j.33) then on **mission [0x4edd88]** (within-zone 1..5(9)):
+- SP/Coop: a mission cascade or a 5-entry `jmp [eax*4+T]` table
+  (A: ==1 cascade only; B: table 0x4331d0; C: cascade; D: table
+  0x433650; F: table 0x433950; G: ==1 only);
+- H2H: missions 1..2 get their own probe+case blocks (B 0x434f90/
+  0x43548f, C 0x437688/0x43805f, D 0x4387a1-family, F 0x4393ad/0x439434;
+  zone A H2H runs the probe at 0x4339ad and DISCARDS the result — MP
+  training-camp pads are inert, only the revisit latch updates).
+Each mission block reads the robot x/y/z (bank **0x4c69e4, stride
+0xA8**: +0 x, +4 y, +8 z), calls the pad-tile probe **FUN_00422e5e
+(x>>8, y>>8, z)** and dispatches on the returned .PAD slot id.
+
+### 2. The four action families [verified]
+
+- **ELEVATOR/TELEPORT RIDE** — the "dword tables 0x4dcdbc..0x4dd330"
+  of 7j.19/7j.21 are ONE **ride-record bank, base 0x4dcdbc, stride
+  0x24**: record = {+0x00 dest tile-x, +0x04 dest tile-y, +0x18 the
+  countdown LATCH (:= 10 at arm), +0x1C the RIDER-IN-USE gate (-1 =
+  free; := robot idx at arm)}. 16 records pinned live (gates
+  0x4dcdd8, 0x4dcdfc, 0x4dce20, 0x4dce44, 0x4dce68, 0x4dce8c,
+  0x4dceb0, 0x4dced4, 0x4dcef8, 0x4dcf1c, 0x4dcf40, 0x4dcf64,
+  0x4dcf88, 0x4dcfac, 0x4dcfd0, 0x4dcff4 = base+0x24·k+0x1C). Arm:
+  gate==-1 else ret; robot state w@+0x0C := 2 (in transit),
+  d@+0x74 := 0, **d@+0x84 := the arrival platform 0..0xE** (per case),
+  order 0x46cc30[idx] := -1, 0x46cc60[idx] := -1, pos.x :=
+  dest_x·0x2000+0x1000, latch := 10, gate := idx; the shared tail
+  0x43475f stamps pos.y := dest_y·0x2000+0x1000. (The 7j.21
+  "marker x/y·0x2000+0x1000 from dwords 0x4dcdbc.." gloss = these
+  record words; the staging blocks that FILL them from .PAD slot
+  records 0x4e44f8 are the 0x426058-family — e.g. it reads slot
+  records and stamps 0x4dcdbc/c0/c4.. 0x42606c..0x426105.)
+- **DOOR** — FUN_004223b8(rect, 1|2) over rect ids 0..0x25 of the
+  45×0x10 rect bank 0x4dcae8 (7j.34-corrected grammar). Multi-door
+  cases (up to 4 rects per pad) share one thunk (e.g. 0x43890c,
+  0x438a05, 0x4394ae).
+- **EXTRACTION BEACON** — FUN_004247b5 (sole call site 0x433cfb in the
+  0x433cbc block). **21 SP beacon slots** (cross-checks 7j.20's "~25
+  (zone,slot) pairs" which counted H2H variants too): zone A M1 0x10;
+  zone B M1..M5 0x18/0x04/0x01/0x00/0x08; zone C M1..M5
+  0x0A/0x0E/0x15/0x16/0x3D; zone D M1..M5 0x08/0x07/0x0F/0x10/0x09;
+  zone F M1..M5 0x12/0x11/0x00/0x15/0x1A.
+- **EXIT-PAD ACTIVATION** — FUN_0041fa51(slot) (7j.18) — zone A's
+  7j.19 "case 0x1B @0x43900e" gloss corrected: exit activations are
+  NOT one case — they are DOOR+EXIT pairs in zone F (M1 slot 8, M2
+  slots 0xC/0x12, M3 slots 0x10/0x11, M4 slots 0x12/0x13, M5 slots
+  5/7/0x19/0x1B) and zone G (M1 slot 0), via thunks 0x439000
+  (DOOR(0,1)+EXIT), 0x439018, 0x438f97, 0x4395ab, 0x439664, 0x439673,
+  0x4396df, 0x4396ee, 0x43975c, 0x439775. The activated pad id =
+  the .PAD slot id at the trigger (ebx carries it into FUN_0041fa51).
+
+### 3. ZONE A / MISSION 1 — the full case table [verified]
+
+```
+slot 0x00 RIDE gate 0x4dcdd8          slot 0x0B RIDE 0x4dce20 plat 2
+slot 0x01 DOOR(0,2)                   slot 0x0C RIDE 0x4dce44 plat 3
+slot 0x02 DOOR(1,1)                   slot 0x0D RIDE 0x4dce68 plat 4
+slot 0x03 DOOR(2,1)+DOOR(3,2)         slot 0x0E RIDE 0x4dce8c plat 5
+slot 0x04..0x07 DOOR(4,2)             slot 0x0F RIDE 0x4dceb0 plat 6
+slot 0x08 DOOR(5,1)                   slot 0x10 BEACON
+slot 0x09 DOOR(6,2)                   slot 0x11..0x15 MSG(0)
+slot 0x0A RIDE gate 0x4dcdfc plat 1   slot 0x16..0x1D MSG(1)
+                                      slot 0x1E..0x2B MSG(2)
+                                      slot 0x2C..0x33 MSG(3)
+                                      slot 0x34..0x38 MSG(4)
+                                      slot 0x39..0x3D MSG(5)
+                                      slot 0x3E..0x42 MSG(6)
+                                      slot 0x43..0x48 MSG(7)
+                                      slot 0x49..0x4B MSG(8)
+                                      slot 0x4C..0x4F MSG(9)
+                                      slot 0x50..0x51 MSG(0xA)
+                                      slot 0x52..0x55 MSG(0xB)
+                                      slot 0x56..0x66 MSG(0xC)
+                                      slot 0x67..0x69 MSG(0xD)
+                                      slot 0x6A..0x71 MSG(0xE)
+```
+(Message slots are RANGES — 45 .PAD slots carry the 15 hints.)
+
+### 4. Zones B..G SP census (compact; rides by gate k =
+base 0x4dcdbc+0x24·k; the FULL generated table is §8-bis below) [verified]
+
+- **B** M1(≤0x18): rides 0..7, doors 5/8/7 + door-6 ×15 slots +
+  beacon 0x18; M2(≤4): DOOR(0,2) ride0 ride1 DOOR(1,2) beacon;
+  M3(≤4): 4-door burst, beacon 1, DOOR(4,1), 4-door burst;
+  M4(≤0x11): beacon 0, rides 0/1/2/3/4, doors; M5(≤9): doors +
+  rides 0/4 + beacon 8.
+- **C** M1(≤0xA): doors + rides 0/1 + beacon 0xA; M2(≤0xF): door
+  clusters + rides 0/1/2/3/4 + beacon 0xE; M3(≤0x17): rides 0/1/2/3 +
+  doors + beacon 0x15 + rides 4/5; M4(≤0x17): rides 0..0xE (the full
+  15-record bank!) + doors + beacon 0x16 + ride 0xF; M5(≤0x3D): the
+  door-heavy finale (rects 5..0x25, many multi-slot) + rides 0/1/3/4 +
+  beacon 0x3D.
+- **D** M1(≤8): 4×4-door bursts + rides 0/1/2/3 + beacon 8;
+  M2(≤7): doors + rides 0/1/2 + beacon 7; M3(≤0xF): doors +
+  rides 0..3 + beacon 0xF; M4(≤0x10): doors + rides 0/1 +
+  beacon 0x10; M5(≤9): doors + rides 0/1/5 + beacon 9.
+- **E** — **VERIFIED NEGATIVE**: the zone entry 0x432c8e lands in the
+  0x430b27..0x433030 "zone overlay" word-stamp family (restages the
+  rect bank 0x4dcae8..0x4dcc22 + ride-dest tables), then
+  `cmp [0x4edd88],1; je 0x432f8b` (M1 restamps rect 0) and EXITS —
+  **no probe, no slot cases, no beacon, no messages on the zone-E
+  path**. Zone E missions ride the shared machinery with NO .PAD
+  triggers of their own. [hypothesis on the oddity: the overlay
+  blocks exit via the 5-pop thunk 0x426030 (0x42602f minus `pop ebp`)
+  while FUN_00433980's prologue pushes 6 — the overlay family is
+  compiler-shared with a 5-save sibling function; if the zone-E path
+  ever ran, the mis-pop would corrupt the caller frame, so the SP
+  zone-E entry is most plausibly never exercised — every other zone
+  path uses the 6-pop exit. Recorded as a quirk, not a blocker: no
+  E-side seam depends on it.]
+- **F** M1(≤0x13): rides 0..7 + DOOR(10,1)+EXIT(10)/DOOR(9,2)/
+  DOOR(8,1) + 4-door bursts + beacon 0x12 + DOOR(20,2); M2(≤0x12):
+  rides 0..0xD + EXIT pairs + beacon 0x11; M3(≤0x12): 5-door burst +
+  rides + EXIT pairs + beacon 0; M4(≤0x15): rides 0..0xD + EXIT
+  pairs + beacon 0x15; M5(≤0x1B): doors + EXIT pairs + rides 2/3 +
+  beacon 0x1A.
+- **G** M1: slot 0 → DOOR(0,1)+EXIT(0), slot 1 → DOOR(1,2). No
+  beacon (the G campaign finale extracts by other means).
+- **H2H variants** (missions 1..2): rides-only tables (B M1 ≤0x18,
+  B M2 ≤0x14, C M1 ≤0x26, C M2 ≤0x1B, F M1 ≤0xE, F M2 ≤6) + D's
+  0x4387a1 family — no doors/beacons/messages in MP pad triggers
+  (the MP geometry changes are the ride/dest staging only).
+
+### 5. FUN_00424a6f = the ZONE-A BOOT_CAMP MESSAGE SHOWER [verified]
+
+Sole caller 0x433d07 (the zone-A M1 MSG cases). Full decode:
+```
+FUN_00424a6f(eax = msg id):
+  if ([0x4edb88] != 0) return        ; SP ONLY — no message boxes in MP
+  if (word[0x4eb5f8 + 2*id] != 0) return   ; per-id show-once latch
+  word[0x4eb5f8 + 2*id] := 1               ; ARM latch
+  FUN_0043a48e(_DAT_004edfd0=TEXTBOX1.RAW, -1, 0, 2)   ; the box SFX
+  name = "BOOT_CAMP_" (0x458ca7) + sprintf("%03i", id) (fmt 0x458cb2)
+  FUN_00424679(name)   ; section finder (below)
+  parse until byte ']' : per line {dword cursor-ptr, char text[0x42]}
+  (0x46-stride records) ; word-wrap widths via
+  FUN_00402a12(MONOFONT 0x46cdb0, c-0x21)+1, space=3
+  window struct 0x4eaab8 := {x = 0xF0 - maxw/2 (centered), 0xC8=200,
+    w = (maxw+4)/5+2, h = (lines-1)*9+0xA)/7+2}
+  clear the 3600-B display bank 0x4e8818 ; per-line FUN_0043e2eb
+  draw box frame FUN_00424e9f(...) ; timer [0x4eaac0] := 0xFDE8 (65000)
+```
+**The string table is a FILE, not DGROUP**: FUN_00424679 scans the
+language blob for `[NAME]` markers — buffer [0x46cbb4] = the boot
+alloc 0x13C68 (0x41d64d) filled ONCE at 0x41c1f5/0x41c1fb
+(FUN_0041cc7f) with **LANGUAGE.{ENG,GER,SPA,FRE,ITL,DCH}** (selector
+switch on [0x4eba1c] at 0x41c1e3, paths 0x457a70..0x457ab1; ENG
+69,485 B fits the 81,000-B alloc; miss => "Could not find a
+menu_heading" 0x458c5f + FUN_00420100/exit). LANGUAGE.ENG carries
+**421 `[NAME]` sections** (`[NAME].../]` grammar, the same 0x5D
+terminator the parser tests): BOOT_CAMP_000..014 (the 15 zone-A ids —
+exactly the §3 MSG census), OBJECTIVE_{A..F}{1..5}_{00..},
+MARKER_A..F, OVERVIEW_A..F, DM_OVERVIEW_B..F, CREDIT_1..13,
+MENU_ITEMS, WARNINGS (the OBJECTIVE/MARKER/OVERVIEW families feed the
+briefing readers at 0x41c2e1/0x41c309/0x447111/0x43ddd1/0x43e3d4/
+0x43e52a — the FUN_00424679 caller census — NOT the pad dispatcher).
+
+### 6. The latch/timer semantics [verified]
+
+- **latch 0x4eb5f8+2·id** := 1 at show — show-once per mission (the
+  MissionShell boot resets the family). NO id ever writes a countdown
+  there (the 7j.19 "per-id latch" gloss stands, value pinned to 1).
+- **timer [0x4eaac0]** := 0xFDE8 at show; **FUN_00425010 = the
+  per-frame message-box ticker/drawer** (sole caller MissionShell
+  0x448381): if timer==0 ret; timer−−; draw the box (window struct +
+  0x46cdb0 glyphs). So the box self-expires after 65000 frames ≈ 18
+  min — practically until dismissed.
+- **DISMISSAL = a COMMAND**: inside FUN_00409138 (the COMMAND
+  consumer, §7j.37) the bit0-SELECT arm site 0x40a2bc checks
+  `[0x4eaac0] < 0xFDE0` (i.e. the box has been up ≥ 8 frames) ⇒
+  timer := 0, and the sibling site 0x40a396 (threshold 0xFDD4, ≥ 44
+  frames) clears likewise — any player select/fire command dismisses
+  the on-screen hint after a minimum display. A third reader 0x40c570
+  (`cmp 0x4eaac0,0; je`) gates the state-0 robot-write at 0x40c587 —
+  the box holds the freeze write while visible. MissionShell
+  0x44790f resets the timer at mission start.
+- **Producers' "msgs 9/10/0xB/0x1C..0x21/0x26-0x29" CLARIFIED**: those
+  ids (cited at the pod spawner/POI loops in 7j.17/7j.19) are
+  **FUN_004239ef SFX ids**, not text messages — the text-message
+  producer set is EXACTLY the 15 zone-A BOOT_CAMP cases of §3.
+
+### 7. Engine/differ consequences
+
+Docs-only unit (D117): no engine change, no new watch rows needed for
+S0..S8 (the latch/timer/window cells are SP-UI presentation; the
+pad-case semantics are already modeled through the existing seams —
+the beacon armer (S6), the .PAD probe, and the exit activator). For
+any future live-message expectation: a live zone-A/M1 capture walking
+a hint pad should show [0x4eaac0] := 0xFDE8 + the per-id latch bit —
+candidate additive watch rows if ever needed (not in the first
+golden).
+
+### 8-bis. The FULL generated case table [verified, static decode]
+
+Complete static decode, all zones/modes (slot `HHh (lo..hi) ->
+handler : actions`; RIDE gate k = ride record 0x4dcdbc+0x24·k whose
+in-use word is +0x1C; plat = the +0x84 arrival-platform stamp; dest =
+the record's +0x00/+0x04 tile words; BEACON = FUN_004247b5;
+DOOR = FUN_004223b8(rect,state); EXIT = FUN_0041fa51(.PAD slot);
+MSG = FUN_00424a6f(id)):
+
+```
+========================================================================
+ZONE A  entry 0x43399f
+  H2H @0x4339fa (mode==2 gate; missions 1..2 -> probe blocks)
+  M1 @0x433d5e dispatch@0x433da6 slots<=0x71:
+    slot 00h (0) -> 0x433a14 : RIDE 0x4dcdd8 dest=0x4dcdd8,0x4dcdbc) latch=0x4dcdd4]
+    slot 01h (1) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 02h (2) -> 0x43402c : DOOR(rect=1,state=1)
+    slot 03h (3) -> 0x433ad9 : DOOR(rect=2,state=1) + DOOR(rect=3,state=2)
+    slot 06h (4..6) -> 0x438927 : DOOR(rect=4,state=2)
+    slot 07h (7) -> 0x438927 : DOOR(rect=4,state=2)
+    slot 08h (8) -> 0x433af7 : DOOR(rect=5,state=1)
+    slot 09h (9) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Ah (10) -> 0x433f53 : RIDE 0x4dcdfc plat=1 dest=0x4dcdfc,0x4dcde0) latch=0x4dcdf8]
+    slot 0Bh (11) -> 0x433b01 : RIDE 0x4dce20 plat=2 dest=0x4dce20,0x4dce04) latch=0x4dce1c]
+    slot 0Ch (12) -> 0x433bbe : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 0Dh (13) -> 0x433c62 : RIDE 0x4dce68]
+    slot 0Eh (14) -> 0x433e89 : RIDE 0x4dce8c plat=5 dest=0x4dce8c,0x4dce70) latch=0x4dce88]
+    slot 0Fh (15) -> 0x433c8e : RIDE 0x4dceb0]
+    slot 10h (16) -> 0x433cc8 : BEACON-ARM
+    slot 15h (17..21) -> 0x433d05 : MSG(0) + call_424a6f
+    slot 1Dh (22..29) -> 0x433e52 : MSG(1) + call_424a6f
+    slot 2Bh (30..43) -> 0x433d11 : MSG(2) + call_424a6f
+    slot 33h (44..51) -> 0x433d18 : MSG(3) + call_424a6f
+    slot 38h (52..56) -> 0x433d1f : MSG(4) + call_424a6f
+    slot 3Dh (57..61) -> 0x433e36 : MSG(5) + call_424a6f
+    slot 42h (62..66) -> 0x433d26 : MSG(6) + call_424a6f
+    slot 48h (67..72) -> 0x433d2d : MSG(7) + call_424a6f
+    slot 4Bh (73..75) -> 0x433d34 : MSG(8) + call_424a6f
+    slot 4Fh (76..79) -> 0x433e0c : MSG(9) + call_424a6f
+    slot 51h (80..81) -> 0x433d3b : MSG(10) + call_424a6f
+    slot 55h (82..85) -> 0x433d42 : MSG(11) + call_424a6f
+    slot 66h (86..102) -> 0x433d49 : MSG(12) + call_424a6f
+    slot 69h (103..105) -> 0x433d50 : MSG(13) + call_424a6f
+    slot 71h (106..113) -> 0x433d57 : MSG(14) + call_424a6f
+  H2H @0x4339fa (mode==2 gate; missions 1..2 -> probe blocks)
+========================================================================
+ZONE B  entry 0x434058
+  M1 @0x43552f dispatch@0x435579 slots<=0x18:
+    slot 00h (0) -> 0x435507 : DOOR(rect=5,state=1) + DOOR(rect=8,state=1) + DOOR(rect=7,state=1)
+    slot 01h (1) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 02h (2) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 03h (3) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 04h (4) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 05h (5) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 06h (6) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 07h (7) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 08h (8) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 09h (9) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Ah (10) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Bh (11) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Ch (12) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Dh (13) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Eh (14) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Fh (15) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 10h (16) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 11h (17) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 12h (18) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 13h (19) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 14h (20) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 15h (21) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 16h (22) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 17h (23) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 18h (24) -> 0x433cbc : BEACON-ARM
+  M2 @0x43558a dispatch@0x4355d4 slots<=0x4:
+    slot 00h (0) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 01h (1) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 02h (2) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 03h (3) -> 0x438430 : DOOR(rect=1,state=2)
+    slot 04h (4) -> 0x433cbc : BEACON-ARM
+  M3 @0x43565c dispatch@0x4356a6 slots<=0x4:
+    slot 00h (0) -> 0x4355e5 : DOOR(rect=0,state=1) + DOOR(rect=0,state=1) + DOOR(rect=2,state=1) + DOOR(rect=3,state=1)
+    slot 01h (1) -> 0x433cbc : BEACON-ARM
+    slot 02h (2) -> 0x435616 : DOOR(rect=4,state=1)
+    slot 03h (3) -> 0x435620 : DOOR(rect=5,state=2) + DOOR(rect=6,state=2) + DOOR(rect=7,state=2) + DOOR(rect=8,state=2)
+    slot 04h (4) -> 0x435620 : DOOR(rect=5,state=2) + DOOR(rect=6,state=2) + DOOR(rect=7,state=2) + DOOR(rect=8,state=2)
+  M4 @0x4357c8 dispatch@0x435812 slots<=0x11:
+    slot 00h (0) -> 0x433cbc : BEACON-ARM
+    slot 01h (1) -> 0x4356b7 : RIDE 0x4dcdd8]
+    slot 02h (2) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 03h (3) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 04h (4) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 05h (5) -> 0x4356e3 : DOOR(rect=0,state=1)
+    slot 06h (6) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 07h (7) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 08h (8) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 09h (9) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Ah (10) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Bh (11) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 0Ch (12) -> 0x4356ed : RIDE 0x4dce68]
+    slot 0Dh (13) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 0Eh (14) -> 0x435719 : DOOR(rect=7,state=2) + DOOR(rect=8,state=2) + DOOR(rect=9,state=2) + DOOR(rect=10,state=2)
+    slot 0Fh (15) -> 0x435755 : DOOR(rect=11,state=1) + DOOR(rect=12,state=1) + DOOR(rect=13,state=1) + DOOR(rect=14,state=1)
+    slot 10h (16) -> 0x4343c4 : RIDE 0x4dceb0]
+    slot 11h (17) -> 0x43578c : DOOR(rect=19,state=2) + DOOR(rect=20,state=2) + DOOR(rect=21,state=2) + DOOR(rect=22,state=2)
+  M5 @0x435b81 dispatch@0x435bc9 slots<=0x9:
+    slot 00h (0) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 01h (1) -> 0x438430 : DOOR(rect=1,state=2)
+    slot 02h (2) -> 0x435823 : RIDE 0x4dcdd8]
+    slot 03h (3) -> 0x4358a9 : <no-action>
+    slot 04h (4) -> 0x435943 : <no-action>
+    slot 05h (5) -> 0x4359fe : <no-action>
+    slot 06h (6) -> 0x435ab9 : RIDE 0x4dce68]
+    slot 07h (7) -> 0x435b77 : DOOR(rect=2,state=2)
+    slot 08h (8) -> 0x433cbc : BEACON-ARM
+    slot 09h (9) -> 0x4392b7 : DOOR(rect=6,state=2)
+  H2H @0x4354ea (mode==2 gate; missions 1..2 -> probe blocks)
+  H2H-M1 @0x434f90 dispatch@0x434fd8 slots<=0x18:
+    slot 00h (0) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 03h (3) -> 0x43421e : RIDE 0x4dce44]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x4343c4 : RIDE 0x4dceb0]
+    slot 07h (7) -> 0x4343ee : RIDE 0x4dced4]
+    slot 08h (8) -> 0x43441a : RIDE 0x4dcef8 plat=8 dest=0x4dcedc,0x4dcee0)]
+    slot 09h (9) -> 0x4344d7 : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x434594 : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x4345be : RIDE 0x4dcf64]
+    slot 0Ch (12) -> 0x4345ea : RIDE 0x4dcf88 plat=c dest=0x4dcf6c,0x4dcf70)]
+    slot 0Dh (13) -> 0x4346a7 : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 0Eh (14) -> 0x43476b : RIDE 0x4dcfd0 plat=e dest=0x4dcfb4,0x4dcfb8)]
+    slot 0Fh (15) -> 0x434828 : RIDE 0x4dcff4 plat=f]
+    slot 10h (16) -> 0x4348e7 : RIDE 0x4dd018 plat=10]
+    slot 11h (17) -> 0x4349a4 : RIDE 0x4dd03c plat=11]
+    slot 12h (18) -> 0x434a61 : RIDE 0x4dd060 plat=12]
+    slot 13h (19) -> 0x434b1e : RIDE 0x4dd084 plat=13]
+    slot 14h (20) -> 0x434bdd : RIDE 0x4dd0a8 plat=14]
+    slot 15h (21) -> 0x434c9a : RIDE 0x4dd0cc plat=15]
+    slot 16h (22) -> 0x434d57 : RIDE 0x4dd0f0 plat=16]
+    slot 17h (23) -> 0x434e14 : RIDE 0x4dd114 plat=17]
+    slot 18h (24) -> 0x434ed3 : RIDE 0x4dd138 plat=18]
+  H2H-M2 @0x43548f dispatch@0x4354d9 slots<=0x14:
+    slot 00h (0) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x434fe9 : RIDE 0x4dce20 plat=2]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x435165 : RIDE 0x4dceb0 plat=6]
+    slot 07h (7) -> 0x435224 : RIDE 0x4dced4 plat=7 dest=0x4dceb8,0x4dcebc)]
+    slot 08h (8) -> 0x43441a : RIDE 0x4dcef8 plat=8 dest=0x4dcedc,0x4dcee0)]
+    slot 09h (9) -> 0x4344d7 : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x4352e1 : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x43539c : RIDE 0x4dcf64 plat=b dest=0x4dcf48,0x4dcf4c)]
+    slot 0Ch (12) -> 0x438621 : DOOR(rect=15,state=2)
+    slot 0Dh (13) -> 0x438621 : DOOR(rect=15,state=2)
+    slot 0Eh (14) -> 0x438621 : DOOR(rect=15,state=2)
+    slot 0Fh (15) -> 0x435459 : DOOR(rect=15,state=1)
+    slot 10h (16) -> 0x435459 : DOOR(rect=15,state=1)
+    slot 11h (17) -> 0x435459 : DOOR(rect=15,state=1)
+    slot 12h (18) -> 0x4345ea : RIDE 0x4dcf88 plat=c dest=0x4dcf6c,0x4dcf70)]
+    slot 13h (19) -> 0x4346a7 : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 14h (20) -> 0x435463 : RIDE 0x4dcfd0]
+========================================================================
+ZONE C  entry 0x435bda
+  H2H @0x4380b8 (mode==2 gate; missions 1..2 -> probe blocks)
+  M1 @0x438128 dispatch@0x438172 slots<=0xa:
+    slot 00h (0) -> 0x4381ad : DOOR(rect=5,state=2)
+    slot 01h (1) -> 0x433a14 : RIDE 0x4dcdd8 dest=0x4dcdd8,0x4dcdbc) latch=0x4dcdd4]
+    slot 02h (2) -> 0x4380d6 : DOOR(rect=6,state=1) + DOOR(rect=7,state=2)
+    slot 03h (3) -> 0x43890c : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 04h (4) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 05h (5) -> 0x4380f4 : DOOR(rect=1,state=1) + DOOR(rect=9,state=1) + DOOR(rect=10,state=1) + DOOR(rect=11,state=1)
+    slot 06h (6) -> 0x43890c : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 07h (7) -> 0x4376e3 : RIDE 0x4dcdfc]
+    slot 08h (8) -> 0x43890c : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 09h (9) -> 0x43890c : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 0Ah (10) -> 0x433cbc : BEACON-ARM
+  M2 @0x4383c1 dispatch@0x438409 slots<=0xf:
+    slot 00h (0) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 01h (1) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 02h (2) -> 0x438ad6 : DOOR(rect=11,state=2) + DOOR(rect=12,state=2)
+    slot 03h (3) -> 0x438183 : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2) + DOOR(rect=5,state=2)
+    slot 04h (4) -> 0x4381bc : DOOR(rect=13,state=2) + DOOR(rect=14,state=2) + DOOR(rect=15,state=2) + DOOR(rect=16,state=2)
+    slot 05h (5) -> 0x4381f8 : DOOR(rect=7,state=1) + DOOR(rect=8,state=1) + DOOR(rect=9,state=1) + DOOR(rect=10,state=1)
+    slot 06h (6) -> 0x43822f : RIDE 0x4dcdd8]
+    slot 07h (7) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 08h (8) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 09h (9) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 0Ah (10) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 0Bh (11) -> 0x433f53 : RIDE 0x4dcdfc plat=1 dest=0x4dcdfc,0x4dcde0) latch=0x4dcdf8]
+    slot 0Ch (12) -> 0x435cd0 : RIDE 0x4dce20]
+    slot 0Dh (13) -> 0x4382ef : RIDE 0x4dce44]
+    slot 0Eh (14) -> 0x433cbc : BEACON-ARM
+    slot 0Fh (15) -> 0x43831d : RIDE 0x4dce20 plat=4 dest=0x4dce4c,0x4dce50)]
+  M3 @0x43843f dispatch@0x438489 slots<=0x17:
+    slot 00h (0) -> 0x433a14 : RIDE 0x4dcdd8 dest=0x4dcdd8,0x4dcdbc) latch=0x4dcdd4]
+    slot 01h (1) -> 0x433f53 : RIDE 0x4dcdfc plat=1 dest=0x4dcdfc,0x4dcde0) latch=0x4dcdf8]
+    slot 02h (2) -> 0x433b01 : RIDE 0x4dce20 plat=2 dest=0x4dce20,0x4dce04) latch=0x4dce1c]
+    slot 03h (3) -> 0x433bbe : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43841a : DOOR(rect=9,state=2)
+    slot 05h (5) -> 0x438424 : DOOR(rect=0,state=2) + DOOR(rect=1,state=2)
+    slot 06h (6) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 07h (7) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 08h (8) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 09h (9) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Ah (10) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Bh (11) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Ch (12) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Dh (13) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Eh (14) -> 0x4392b7 : DOOR(rect=6,state=2)
+    slot 0Fh (15) -> 0x43564d : DOOR(rect=8,state=2)
+    slot 10h (16) -> 0x43564d : DOOR(rect=8,state=2)
+    slot 11h (17) -> 0x4381ad : DOOR(rect=5,state=2)
+    slot 12h (18) -> 0x4381ad : DOOR(rect=5,state=2)
+    slot 13h (19) -> 0x43890c : DOOR(rect=2,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 14h (20) -> 0x4380e5 : DOOR(rect=7,state=2)
+    slot 15h (21) -> 0x433cbc : BEACON-ARM
+    slot 16h (22) -> 0x433c62 : RIDE 0x4dce68]
+    slot 17h (23) -> 0x433e89 : RIDE 0x4dce8c plat=5 dest=0x4dce8c,0x4dce70) latch=0x4dce88]
+  M4 @0x4384a9 dispatch@0x4384f3 slots<=0x17:
+    slot 00h (0) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 01h (1) -> 0x4356e3 : DOOR(rect=0,state=1)
+    slot 02h (2) -> 0x435bfe : RIDE 0x4dcdd8]
+    slot 03h (3) -> 0x435c2c : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 04h (4) -> 0x435cd0 : RIDE 0x4dce20]
+    slot 05h (5) -> 0x435cfc : RIDE 0x4dce44 plat=3 dest=0x4dce44,0x4dce28) latch=0x4dce40]
+    slot 06h (6) -> 0x435db7 : RIDE 0x4dce68 plat=4 dest=0x4dce68,0x4dce4c) latch=0x4dce64]
+    slot 07h (7) -> 0x435e74 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 08h (8) -> 0x438430 : DOOR(rect=1,state=2)
+    slot 09h (9) -> 0x435f18 : RIDE 0x4dceb0 plat=6 dest=0x4dceb0,0x4dce94) latch=0x4dceac]
+    slot 0Ah (10) -> 0x435fd3 : RIDE 0x4dced4 plat=7 dest=0x4dced4,0x4dceb8) latch=0x4dced0]
+    slot 0Bh (11) -> 0x43608e : RIDE 0x4dcef8 plat=8 dest=0x4dcef8,0x4dcedc) latch=0x4dcef4]
+    slot 0Ch (12) -> 0x43614b : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Dh (13) -> 0x4361ef : RIDE 0x4dcf40 dest=0x4dcf40,0x4dcf24)]
+    slot 0Eh (14) -> 0x4362a7 : RIDE 0x4dcf64 plat=b dest=0x4dcf64,0x4dcf48) latch=0x4dcf60]
+    slot 0Fh (15) -> 0x436362 : RIDE 0x4dcf88 plat=c dest=0x4dcf88,0x4dcf6c) latch=0x4dcf84]
+    slot 10h (16) -> 0x43641f : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 11h (17) -> 0x4364c3 : RIDE 0x4dcfd0 plat=e dest=0x4dcfd0,0x4dcfb4) latch=0x4dcfcc]
+    slot 12h (18) -> 0x43849a : DOOR(rect=2,state=1)
+    slot 13h (19) -> 0x43560c : DOOR(rect=3,state=1)
+    slot 14h (20) -> 0x433af7 : DOOR(rect=5,state=1)
+    slot 15h (21) -> 0x438927 : DOOR(rect=4,state=2)
+    slot 16h (22) -> 0x433cbc : BEACON-ARM
+    slot 17h (23) -> 0x43657e : RIDE 0x4dcff4 plat=f dest=0x4dcff4,0x4dcfd8) latch=0x4dcff0]
+  M5 @0x43866c dispatch@0x4386b4 slots<=0x3d:
+    slot 00h (0) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 01h (1) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 02h (2) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 03h (3) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 04h (4) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 05h (5) -> 0x438513 : DOOR(rect=8,state=2) + DOOR(rect=35,state=2) + DOOR(rect=36,state=2) + DOOR(rect=37,state=2)
+    slot 06h (6) -> 0x43855e : DOOR(rect=6,state=2) + DOOR(rect=32,state=2) + DOOR(rect=33,state=2) + DOOR(rect=34,state=2)
+    slot 07h (7) -> 0x438630 : DOOR(rect=5,state=2) + DOOR(rect=26,state=2) + DOOR(rect=27,state=2) + DOOR(rect=28,state=2)
+    slot 08h (8) -> 0x43859a : DOOR(rect=7,state=2) + DOOR(rect=29,state=2) + DOOR(rect=30,state=2) + DOOR(rect=31,state=2)
+    slot 09h (9) -> 0x43854f : DOOR(rect=25,state=1)
+    slot 0Ah (10) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 0Bh (11) -> 0x435bfe : RIDE 0x4dcdd8]
+    slot 0Ch (12) -> 0x435c2c : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 0Dh (13) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 0Eh (14) -> 0x435cd0 : RIDE 0x4dce20]
+    slot 0Fh (15) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 10h (16) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 11h (17) -> 0x435cfc : RIDE 0x4dce44 plat=3 dest=0x4dce44,0x4dce28) latch=0x4dce40]
+    slot 12h (18) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 13h (19) -> 0x435db7 : RIDE 0x4dce68 plat=4 dest=0x4dce68,0x4dce4c) latch=0x4dce64]
+    slot 14h (20) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 15h (21) -> 0x438603 : DOOR(rect=19,state=2) + DOOR(rect=20,state=2) + DOOR(rect=15,state=2)
+    slot 16h (22) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 17h (23) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 18h (24) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 19h (25) -> 0x438504 : DOOR(rect=21,state=2)
+    slot 1Ah (26) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 1Bh (27) -> 0x4357b9 : DOOR(rect=22,state=2)
+    slot 1Ch (28) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 1Dh (29) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 1Eh (30) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 1Fh (31) -> 0x4385d6 : DOOR(rect=24,state=2) + DOOR(rect=23,state=2) + DOOR(rect=13,state=2)
+    slot 20h (32) -> 0x4385d6 : DOOR(rect=24,state=2) + DOOR(rect=23,state=2) + DOOR(rect=13,state=2)
+    slot 21h (33) -> 0x4385d6 : DOOR(rect=24,state=2) + DOOR(rect=23,state=2) + DOOR(rect=13,state=2)
+    slot 22h (34) -> 0x4385d6 : DOOR(rect=24,state=2) + DOOR(rect=23,state=2) + DOOR(rect=13,state=2)
+    slot 23h (35) -> 0x4385d6 : DOOR(rect=24,state=2) + DOOR(rect=23,state=2) + DOOR(rect=13,state=2)
+    slot 24h (36) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 25h (37) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 26h (38) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 27h (39) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 28h (40) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 29h (41) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 2Ah (42) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 2Bh (43) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 2Ch (44) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 2Dh (45) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 2Eh (46) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 2Fh (47) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 30h (48) -> 0x4357b9 : DOOR(rect=22,state=2)
+    slot 31h (49) -> 0x4357b9 : DOOR(rect=22,state=2)
+    slot 32h (50) -> 0x4357b9 : DOOR(rect=22,state=2)
+    slot 33h (51) -> 0x4357b9 : DOOR(rect=22,state=2)
+    slot 34h (52) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 35h (53) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 36h (54) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 37h (55) -> 0x438504 : DOOR(rect=21,state=2)
+    slot 38h (56) -> 0x438504 : DOOR(rect=21,state=2)
+    slot 39h (57) -> 0x438504 : DOOR(rect=21,state=2)
+    slot 3Ah (58) -> 0x438504 : DOOR(rect=21,state=2)
+    slot 3Bh (59) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 3Ch (60) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 3Dh (61) -> 0x433cbc : BEACON-ARM
+  H2H @0x4380b8 (mode==2 gate; missions 1..2 -> probe blocks)
+  H2H-M1 @0x437688 dispatch@0x4376d2 slots<=0x26:
+    slot 00h (0) -> 0x435bfe : RIDE 0x4dcdd8]
+    slot 01h (1) -> 0x435c2c : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x435cd0 : RIDE 0x4dce20]
+    slot 03h (3) -> 0x435cfc : RIDE 0x4dce44 plat=3 dest=0x4dce44,0x4dce28) latch=0x4dce40]
+    slot 04h (4) -> 0x435db7 : RIDE 0x4dce68 plat=4 dest=0x4dce68,0x4dce4c) latch=0x4dce64]
+    slot 05h (5) -> 0x435e74 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x435f18 : RIDE 0x4dceb0 plat=6 dest=0x4dceb0,0x4dce94) latch=0x4dceac]
+    slot 07h (7) -> 0x435fd3 : RIDE 0x4dced4 plat=7 dest=0x4dced4,0x4dceb8) latch=0x4dced0]
+    slot 08h (8) -> 0x43608e : RIDE 0x4dcef8 plat=8 dest=0x4dcef8,0x4dcedc) latch=0x4dcef4]
+    slot 09h (9) -> 0x43614b : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x4361ef : RIDE 0x4dcf40 dest=0x4dcf40,0x4dcf24)]
+    slot 0Bh (11) -> 0x4362a7 : RIDE 0x4dcf64 plat=b dest=0x4dcf64,0x4dcf48) latch=0x4dcf60]
+    slot 0Ch (12) -> 0x436362 : RIDE 0x4dcf88 plat=c dest=0x4dcf88,0x4dcf6c) latch=0x4dcf84]
+    slot 0Dh (13) -> 0x43641f : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 0Eh (14) -> 0x4364c3 : RIDE 0x4dcfd0 plat=e dest=0x4dcfd0,0x4dcfb4) latch=0x4dcfcc]
+    slot 0Fh (15) -> 0x43657e : RIDE 0x4dcff4 plat=f dest=0x4dcff4,0x4dcfd8) latch=0x4dcff0]
+    slot 10h (16) -> 0x436639 : RIDE 0x4dd018 plat=10 latch=0x4dd014]
+    slot 11h (17) -> 0x4366f6 : RIDE 0x4dd03c plat=11]
+    slot 12h (18) -> 0x43679a : RIDE 0x4dd060 plat=12 latch=0x4dd05c]
+    slot 13h (19) -> 0x436855 : RIDE 0x4dd084 plat=13 latch=0x4dd080]
+    slot 14h (20) -> 0x436910 : RIDE 0x4dd0a8 plat=14 latch=0x4dd0a4]
+    slot 15h (21) -> 0x4369cd : RIDE 0x4dd0cc plat=15]
+    slot 16h (22) -> 0x436a71 : RIDE 0x4dd0f0 plat=16 latch=0x4dd0ec]
+    slot 17h (23) -> 0x436b2c : RIDE 0x4dd114 plat=17 latch=0x4dd110]
+    slot 18h (24) -> 0x436be7 : RIDE 0x4dd138 plat=18 latch=0x4dd134]
+    slot 19h (25) -> 0x436ca4 : RIDE 0x4dd15c plat=19]
+    slot 1Ah (26) -> 0x436d48 : RIDE 0x4dd180 plat=1a latch=0x4dd17c]
+    slot 1Bh (27) -> 0x436e03 : RIDE 0x4dd1a4 plat=1b latch=0x4dd1a0]
+    slot 1Ch (28) -> 0x436ebe : RIDE 0x4dd1c8 plat=1c latch=0x4dd1c4]
+    slot 1Dh (29) -> 0x436f7b : RIDE 0x4dd1ec plat=1d]
+    slot 1Eh (30) -> 0x43701f : RIDE 0x4dd210 plat=1e latch=0x4dd20c]
+    slot 1Fh (31) -> 0x4370da : RIDE 0x4dd234 plat=1f latch=0x4dd230]
+    slot 20h (32) -> 0x437195 : RIDE 0x4dd258 plat=20 latch=0x4dd254]
+    slot 21h (33) -> 0x437252 : RIDE 0x4dd27c plat=21]
+    slot 22h (34) -> 0x4372f6 : RIDE 0x4dd2a0 plat=22 latch=0x4dd29c]
+    slot 23h (35) -> 0x4373b1 : RIDE 0x4dd2c4 plat=23 latch=0x4dd2c0]
+    slot 24h (36) -> 0x43746c : RIDE 0x4dd2e8 plat=24 latch=0x4dd2e4]
+    slot 25h (37) -> 0x437529 : RIDE 0x4dd30c plat=25]
+    slot 26h (38) -> 0x4375cd : RIDE 0x4dd330 plat=26 latch=0x4dd32c]
+  H2H-M2 @0x43805f dispatch@0x4380a7 slots<=0x1b:
+    slot 00h (0) -> 0x433a14 : RIDE 0x4dcdd8 dest=0x4dcdd8,0x4dcdbc) latch=0x4dcdd4]
+    slot 01h (1) -> 0x4376e3 : RIDE 0x4dcdfc]
+    slot 02h (2) -> 0x437711 : RIDE 0x4dce20 plat=2 dest=0x4dce04,0x4dce08)]
+    slot 03h (3) -> 0x435cfc : RIDE 0x4dce44 plat=3 dest=0x4dce44,0x4dce28) latch=0x4dce40]
+    slot 04h (4) -> 0x433c62 : RIDE 0x4dce68]
+    slot 05h (5) -> 0x4377cf : RIDE 0x4dce8c]
+    slot 06h (6) -> 0x4377fd : RIDE 0x4dceb0 plat=6 dest=0x4dce94,0x4dce98)]
+    slot 07h (7) -> 0x435fd3 : RIDE 0x4dced4 plat=7 dest=0x4dced4,0x4dceb8) latch=0x4dced0]
+    slot 08h (8) -> 0x4378a1 : RIDE 0x4dcef8]
+    slot 09h (9) -> 0x4378cd : RIDE 0x4dcf1c plat=9 dest=0x4dcf1c,0x4dcf00) latch=0x4dcf18]
+    slot 0Ah (10) -> 0x43798a : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x4362a7 : RIDE 0x4dcf64 plat=b dest=0x4dcf64,0x4dcf48) latch=0x4dcf60]
+    slot 0Ch (12) -> 0x437a2b : RIDE 0x4dcf88]
+    slot 0Dh (13) -> 0x437a57 : RIDE 0x4dcfac plat=d dest=0x4dcfac,0x4dcf90) latch=0x4dcfa8]
+    slot 0Eh (14) -> 0x437b14 : RIDE 0x4dcfd0 plat=e dest=0x4dcfb4,0x4dcfb8)]
+    slot 0Fh (15) -> 0x43657e : RIDE 0x4dcff4 plat=f dest=0x4dcff4,0x4dcfd8) latch=0x4dcff0]
+    slot 10h (16) -> 0x437bb8 : RIDE 0x4dd018]
+    slot 11h (17) -> 0x437be4 : RIDE 0x4dd03c plat=11 latch=0x4dd038]
+    slot 12h (18) -> 0x437ca1 : RIDE 0x4dd060 plat=12]
+    slot 13h (19) -> 0x436855 : RIDE 0x4dd084 plat=13 latch=0x4dd080]
+    slot 14h (20) -> 0x437d45 : RIDE 0x4dd0a8]
+    slot 15h (21) -> 0x437d71 : RIDE 0x4dd0cc plat=15 latch=0x4dd0c8]
+    slot 16h (22) -> 0x437e2e : RIDE 0x4dd0f0 plat=16]
+    slot 17h (23) -> 0x436b2c : RIDE 0x4dd114 plat=17 latch=0x4dd110]
+    slot 18h (24) -> 0x437ed2 : RIDE 0x4dd138]
+    slot 19h (25) -> 0x437efe : RIDE 0x4dd15c plat=19 latch=0x4dd158]
+    slot 1Ah (26) -> 0x437fbb : RIDE 0x4dd180 plat=1a]
+    slot 1Bh (27) -> 0x436e03 : RIDE 0x4dd1a4 plat=1b latch=0x4dd1a0]
+========================================================================
+ZONE D  entry 0x4386c5
+  M1 @0x4388a2 dispatch@0x4388ec slots<=0x8:
+    slot 00h (0) -> 0x4387be : DOOR(rect=0,state=2) + DOOR(rect=1,state=2) + DOOR(rect=2,state=2) + DOOR(rect=3,state=2)
+    slot 01h (1) -> 0x4387e5 : DOOR(rect=4,state=2) + DOOR(rect=5,state=2) + DOOR(rect=6,state=2) + DOOR(rect=7,state=2)
+    slot 02h (2) -> 0x43880d : DOOR(rect=8,state=2) + DOOR(rect=9,state=2) + DOOR(rect=10,state=2) + DOOR(rect=11,state=2)
+    slot 03h (3) -> 0x438849 : DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2) + DOOR(rect=15,state=2)
+    slot 04h (4) -> 0x435823 : RIDE 0x4dcdd8]
+    slot 05h (5) -> 0x438876 : RIDE 0x4dcdfc]
+    slot 06h (6) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 07h (7) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 08h (8) -> 0x433cbc : BEACON-ARM
+  M2 @0x43894f dispatch@0x438999 slots<=0x7:
+    slot 00h (0) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 01h (1) -> 0x4388fd : DOOR(rect=1,state=2) + DOOR(rect=1,state=2) + DOOR(rect=3,state=2) + DOOR(rect=4,state=2)
+    slot 02h (2) -> 0x438936 : DOOR(rect=5,state=2) + DOOR(rect=6,state=1)
+    slot 03h (3) -> 0x4380e5 : DOOR(rect=7,state=2)
+    slot 04h (4) -> 0x435823 : RIDE 0x4dcdd8]
+    slot 05h (5) -> 0x438876 : RIDE 0x4dcdfc]
+    slot 06h (6) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 07h (7) -> 0x433cbc : BEACON-ARM
+  M3 @0x4389aa dispatch@0x4389f4 slots<=0xf:
+    slot 00h (0) -> 0x438424 : DOOR(rect=0,state=2) + DOOR(rect=1,state=2)
+    slot 01h (1) -> 0x435b77 : DOOR(rect=2,state=2)
+    slot 02h (2) -> 0x433ae8 : DOOR(rect=3,state=2)
+    slot 03h (3) -> 0x438927 : DOOR(rect=4,state=2)
+    slot 04h (4) -> 0x435620 : DOOR(rect=5,state=2) + DOOR(rect=6,state=2) + DOOR(rect=7,state=2) + DOOR(rect=8,state=2)
+    slot 05h (5) -> 0x439655 : DOOR(rect=9,state=1)
+    slot 06h (6) -> 0x435746 : DOOR(rect=10,state=2)
+    slot 07h (7) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 08h (8) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 09h (9) -> 0x434fe9 : RIDE 0x4dce20 plat=2]
+    slot 0Ah (10) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 0Bh (11) -> 0x43883a : DOOR(rect=11,state=2)
+    slot 0Ch (12) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 0Dh (13) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 0Eh (14) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 0Fh (15) -> 0x433cbc : BEACON-ARM
+  M4 @0x438a5f dispatch@0x438aa7 slots<=0x10:
+    slot 00h (0) -> 0x433acd : DOOR(rect=0,state=2)
+    slot 01h (1) -> 0x438430 : DOOR(rect=1,state=2)
+    slot 02h (2) -> 0x43849a : DOOR(rect=2,state=1)
+    slot 03h (3) -> 0x433ae8 : DOOR(rect=3,state=2)
+    slot 04h (4) -> 0x435616 : DOOR(rect=4,state=1)
+    slot 05h (5) -> 0x4381ad : DOOR(rect=5,state=2)
+    slot 06h (6) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 07h (7) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 08h (8) -> 0x438a05 : DOOR(rect=8,state=2) + DOOR(rect=9,state=2) + DOOR(rect=10,state=2) + DOOR(rect=7,state=2)
+    slot 09h (9) -> 0x438a05 : DOOR(rect=8,state=2) + DOOR(rect=9,state=2) + DOOR(rect=10,state=2) + DOOR(rect=7,state=2)
+    slot 0Ah (10) -> 0x438a05 : DOOR(rect=8,state=2) + DOOR(rect=9,state=2) + DOOR(rect=10,state=2) + DOOR(rect=7,state=2)
+    slot 0Bh (11) -> 0x438a32 : DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2) + DOOR(rect=11,state=2)
+    slot 0Ch (12) -> 0x438a32 : DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2) + DOOR(rect=11,state=2)
+    slot 0Dh (13) -> 0x438a32 : DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2) + DOOR(rect=11,state=2)
+    slot 0Eh (14) -> 0x438621 : DOOR(rect=15,state=2)
+    slot 0Fh (15) -> 0x438621 : DOOR(rect=15,state=2)
+    slot 10h (16) -> 0x433cbc : BEACON-ARM
+  M5 @0x438dd1 dispatch@0x438e1b slots<=0x9:
+    slot 00h (0) -> 0x43560c : DOOR(rect=3,state=1)
+    slot 01h (1) -> 0x438ab8 : DOOR(rect=9,state=2) + DOOR(rect=10,state=2) + DOOR(rect=11,state=2) + DOOR(rect=12,state=2)
+    slot 02h (2) -> 0x438af9 : DOOR(rect=8,state=1)
+    slot 03h (3) -> 0x4356b7 : RIDE 0x4dcdd8]
+    slot 04h (4) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 05h (5) -> 0x438b03 : <no-action>
+    slot 06h (6) -> 0x438b9b : <no-action>
+    slot 07h (7) -> 0x438c56 : <no-action>
+    slot 08h (8) -> 0x438d13 : RIDE 0x4dce8c]
+    slot 09h (9) -> 0x433cbc : BEACON-ARM
+  H2H @0x4387a1 (mode==2 gate; missions 1..2 -> probe blocks)
+========================================================================
+ZONE E  entry 0x432c8e
+========================================================================
+ZONE F  entry 0x439323
+  M1 @0x43954e dispatch@0x439596 slots<=0x13:
+    slot 00h (0) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x434fe9 : RIDE 0x4dce20 plat=2]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x435165 : RIDE 0x4dceb0 plat=6]
+    slot 07h (7) -> 0x435224 : RIDE 0x4dced4 plat=7 dest=0x4dceb8,0x4dcebc)]
+    slot 08h (8) -> 0x438f97 : DOOR(rect=10,state=1) + EXIT-ACTIVATE(pad=10)
+    slot 09h (9) -> 0x43841a : DOOR(rect=9,state=2)
+    slot 0Ah (10) -> 0x438af9 : DOOR(rect=8,state=1)
+    slot 0Bh (11) -> 0x4394ae : DOOR(rect=11,state=2) + DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 0Ch (12) -> 0x4394ae : DOOR(rect=11,state=2) + DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 0Dh (13) -> 0x4394ae : DOOR(rect=11,state=2) + DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 0Eh (14) -> 0x4394ae : DOOR(rect=11,state=2) + DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 0Fh (15) -> 0x4394ae : DOOR(rect=11,state=2) + DOOR(rect=12,state=2) + DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 10h (16) -> 0x4394ea : DOOR(rect=15,state=1) + DOOR(rect=16,state=1)
+    slot 11h (17) -> 0x439503 : DOOR(rect=7,state=2) + DOOR(rect=17,state=2) + DOOR(rect=18,state=2) + DOOR(rect=19,state=2)
+    slot 12h (18) -> 0x433cbc : BEACON-ARM
+    slot 13h (19) -> 0x43953f : DOOR(rect=20,state=2)
+  M2 @0x4395ba dispatch@0x439604 slots<=0x12:
+    slot 00h (0) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x434fe9 : RIDE 0x4dce20 plat=2]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x435165 : RIDE 0x4dceb0 plat=6]
+    slot 07h (7) -> 0x435224 : RIDE 0x4dced4 plat=7 dest=0x4dceb8,0x4dcebc)]
+    slot 08h (8) -> 0x43441a : RIDE 0x4dcef8 plat=8 dest=0x4dcedc,0x4dcee0)]
+    slot 09h (9) -> 0x4344d7 : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x4352e1 : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x43539c : RIDE 0x4dcf64 plat=b dest=0x4dcf48,0x4dcf4c)]
+    slot 0Ch (12) -> 0x439000 : DOOR(rect=0,state=1) + EXIT-ACTIVATE(pad=0)
+    slot 0Dh (13) -> 0x43402c : DOOR(rect=1,state=1)
+    slot 0Eh (14) -> 0x43849a : DOOR(rect=2,state=1)
+    slot 0Fh (15) -> 0x4345ea : RIDE 0x4dcf88 plat=c dest=0x4dcf6c,0x4dcf70)]
+    slot 10h (16) -> 0x4346a7 : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 11h (17) -> 0x433cbc : BEACON-ARM
+    slot 12h (18) -> 0x4395ab : DOOR(rect=12,state=1) + EXIT-ACTIVATE(pad=12)
+  M3 @0x439682 dispatch@0x4396ca slots<=0x12:
+    slot 00h (0) -> 0x433cbc : BEACON-ARM
+    slot 01h (1) -> 0x439619 : DOOR(rect=5,state=1) + DOOR(rect=6,state=1) + DOOR(rect=7,state=1) + DOOR(rect=8,state=1) + DOOR(rect=9,state=1)
+    slot 02h (2) -> 0x438ae5 : DOOR(rect=12,state=2)
+    slot 03h (3) -> 0x4394cc : DOOR(rect=13,state=2) + DOOR(rect=14,state=2)
+    slot 04h (4) -> 0x4356b7 : RIDE 0x4dcdd8]
+    slot 05h (5) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 06h (6) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 07h (7) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 08h (8) -> 0x4356ed : RIDE 0x4dce68]
+    slot 09h (9) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 0Ah (10) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Bh (11) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Ch (12) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Dh (13) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Eh (14) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Fh (15) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 10h (16) -> 0x439664 : DOOR(rect=17,state=2) + EXIT-ACTIVATE(pad=17)
+    slot 11h (17) -> 0x439673 : DOOR(rect=18,state=2) + EXIT-ACTIVATE(pad=18)
+    slot 12h (18) -> 0x43578c : DOOR(rect=19,state=2) + DOOR(rect=20,state=2) + DOOR(rect=21,state=2) + DOOR(rect=22,state=2)
+  M4 @0x4396fd dispatch@0x439747 slots<=0x15:
+    slot 00h (0) -> 0x43407e : RIDE 0x4dcdd8 dest=0x4dcdbc,0x4dcdc0)]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x434fe9 : RIDE 0x4dce20 plat=2]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x434307 : RIDE 0x4dce8c plat=5 dest=0x4dce70,0x4dce74)]
+    slot 06h (6) -> 0x435165 : RIDE 0x4dceb0 plat=6]
+    slot 07h (7) -> 0x435224 : RIDE 0x4dced4 plat=7 dest=0x4dceb8,0x4dcebc)]
+    slot 08h (8) -> 0x43441a : RIDE 0x4dcef8 plat=8 dest=0x4dcedc,0x4dcee0)]
+    slot 09h (9) -> 0x4344d7 : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x4352e1 : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x43539c : RIDE 0x4dcf64 plat=b dest=0x4dcf48,0x4dcf4c)]
+    slot 0Ch (12) -> 0x4381ad : DOOR(rect=5,state=2)
+    slot 0Dh (13) -> 0x435459 : DOOR(rect=15,state=1)
+    slot 0Eh (14) -> 0x4381e9 : DOOR(rect=16,state=2)
+    slot 0Fh (15) -> 0x4345ea : RIDE 0x4dcf88 plat=c dest=0x4dcf6c,0x4dcf70)]
+    slot 10h (16) -> 0x4346a7 : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 11h (17) -> 0x43841a : DOOR(rect=9,state=2)
+    slot 12h (18) -> 0x4396df : DOOR(rect=13,state=1) + EXIT-ACTIVATE(pad=13)
+    slot 13h (19) -> 0x4396ee : DOOR(rect=11,state=1) + EXIT-ACTIVATE(pad=11)
+    slot 14h (20) -> 0x435782 : DOOR(rect=14,state=1)
+    slot 15h (21) -> 0x433cbc : BEACON-ARM
+  M5 @0x439a4f dispatch@0x439a7d slots<=0x1b:
+    slot 00h (0) -> 0x435616 : DOOR(rect=4,state=1)
+    slot 01h (1) -> 0x435616 : DOOR(rect=4,state=1)
+    slot 02h (2) -> 0x433af7 : DOOR(rect=5,state=1)
+    slot 03h (3) -> 0x433af7 : DOOR(rect=5,state=1)
+    slot 04h (4) -> 0x438945 : DOOR(rect=6,state=1)
+    slot 05h (5) -> 0x43975c : DOOR(rect=7,state=1) + EXIT-ACTIVATE(pad=7)
+    slot 06h (6) -> 0x438af9 : DOOR(rect=8,state=1)
+    slot 07h (7) -> 0x4396ee : DOOR(rect=11,state=1) + EXIT-ACTIVATE(pad=11)
+    slot 08h (8) -> 0x43976b : DOOR(rect=12,state=1)
+    slot 09h (9) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 0Ah (10) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 0Bh (11) -> 0x4394db : DOOR(rect=14,state=2)
+    slot 0Ch (12) -> 0x4381da : DOOR(rect=15,state=2) + DOOR(rect=16,state=2)
+    slot 0Dh (13) -> 0x4381da : DOOR(rect=15,state=2) + DOOR(rect=16,state=2)
+    slot 0Eh (14) -> 0x4381da : DOOR(rect=15,state=2) + DOOR(rect=16,state=2)
+    slot 0Fh (15) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 10h (16) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 11h (17) -> 0x4382d1 : DOOR(rect=17,state=2)
+    slot 12h (18) -> 0x4382e0 : DOOR(rect=18,state=2)
+    slot 13h (19) -> 0x439775 : <no-action>
+    slot 14h (20) -> 0x4397ea : <no-action>
+    slot 15h (21) -> 0x43985a : RIDE 0x4dce20]
+    slot 16h (22) -> 0x4398cb : RIDE 0x4dce44]
+    slot 17h (23) -> 0x439941 : <no-action>
+    slot 18h (24) -> 0x4399b5 : <no-action>
+    slot 19h (25) -> 0x4396df : DOOR(rect=13,state=1) + EXIT-ACTIVATE(pad=13)
+    slot 1Ah (26) -> 0x439a29 : BEACON-ARM
+    slot 1Bh (27) -> 0x439a40 : DOOR(rect=19,state=2) + EXIT-ACTIVATE(pad=19)
+  H2H @0x439491 (mode==2 gate; missions 1..2 -> probe blocks)
+  H2H-M1 @0x4393ad dispatch@0x4393f5 slots<=0xe:
+    slot 00h (0) -> 0x4356b7 : RIDE 0x4dcdd8]
+    slot 01h (1) -> 0x434137 : RIDE 0x4dcdfc plat=1 dest=0x4dcde0,0x4dcde4)]
+    slot 02h (2) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x4356ed : RIDE 0x4dce68]
+    slot 05h (5) -> 0x439349 : RIDE 0x4dcdd8]
+    slot 06h (6) -> 0x4343c4 : RIDE 0x4dceb0]
+    slot 07h (7) -> 0x435224 : RIDE 0x4dced4 plat=7 dest=0x4dceb8,0x4dcebc)]
+    slot 08h (8) -> 0x439355 : RIDE 0x4dcef8]
+    slot 09h (9) -> 0x4344d7 : RIDE 0x4dcf1c plat=9 dest=0x4dcf00,0x4dcf04)]
+    slot 0Ah (10) -> 0x434594 : RIDE 0x4dcf40]
+    slot 0Bh (11) -> 0x43539c : RIDE 0x4dcf64 plat=b dest=0x4dcf48,0x4dcf4c)]
+    slot 0Ch (12) -> 0x439381 : RIDE 0x4dcf88]
+    slot 0Dh (13) -> 0x4346a7 : RIDE 0x4dcfac plat=d dest=0x4dcf90,0x4dcf94)]
+    slot 0Eh (14) -> 0x43476b : RIDE 0x4dcfd0 plat=e dest=0x4dcfb4,0x4dcfb8)]
+  H2H-M2 @0x439434 dispatch@0x43947e slots<=0x6:
+    slot 00h (0) -> 0x435823 : RIDE 0x4dcdd8]
+    slot 01h (1) -> 0x438876 : RIDE 0x4dcdfc]
+    slot 02h (2) -> 0x4341f4 : RIDE 0x4dce20]
+    slot 03h (3) -> 0x4350a8 : RIDE 0x4dce44 plat=3 dest=0x4dce28,0x4dce2c)]
+    slot 04h (4) -> 0x43424a : RIDE 0x4dce68 plat=4 dest=0x4dce4c,0x4dce50)]
+    slot 05h (5) -> 0x439408 : RIDE 0x4dce8c]
+    slot 06h (6) -> 0x4343c4 : RIDE 0x4dceb0]
+========================================================================
+ZONE G  entry 0x439ae2
+  M1 @0x439aa6 dispatch@0x439ad2 slots<=0x1:
+    slot 00h (0) -> 0x439a92 : DOOR(rect=0,state=2) + EXIT-ACTIVATE(pad=0)
+    slot 01h (1) -> 0x439a9c : DOOR(rect=1,state=2)   ; rect/state inherit live regs
+```
