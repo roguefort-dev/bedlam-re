@@ -174,6 +174,11 @@ fn synthetic_grammar_pins_the_6a_bytes() {
         frame.watch("linear-mission-m"),
         Some(&17u32.to_le_bytes()[..])
     );
+    // The SFX master gate (D136): the sound-on construction constant.
+    assert_eq!(
+        frame.watch("sfx-master-gate"),
+        Some(&1u32.to_le_bytes()[..])
+    );
 
     // --- T1 rows ---
     // robot-bank: u32 count + the state_hash field order
@@ -270,6 +275,11 @@ fn synthetic_grammar_pins_the_6a_bytes() {
     expect_claims.extend_from_slice(&[0u8; 18]);
     assert_eq!(frame.watch("spread-claims"), Some(&expect_claims[..]));
 
+    // no-extract-latch (D136): u32 count (the robot-bank count) +
+    // count all-zero u32 words — one robot, never claimed (SP).
+    let expect_latch: [u8; 8] = [0x01, 0, 0, 0, 0, 0, 0, 0];
+    assert_eq!(frame.watch("no-extract-latch"), Some(&expect_latch[..]));
+
     // the +0x18 byte family: u32 len + raw bytes (both rows, same bank).
     let expect_pads: [u8; 7] = [0x03, 0x00, 0x00, 0x00, 0xAB, 0xCD, 0xEF];
     assert_eq!(frame.watch("typedb-fade-byte"), Some(&expect_pads[..]));
@@ -300,7 +310,7 @@ fn synthetic_grammar_pins_the_6a_bytes() {
     let digest = frame_digest(&canon).expect("digest computes");
     assert_eq!(
         digest.to_string(),
-        "b359f7d282db7cb8",
+        "c0268bf499a505c1",
         "grammar drift: re-derive the hand bytes above, then re-pin (deliberately)"
     );
 }
@@ -413,7 +423,7 @@ fn synthetic_sim_dump_decodes_with_pinned_chain() {
     );
 
     assert_eq!(
-        stitched.manifest.chain_digest, "ea0bc53dc95ff0b2",
+        stitched.manifest.chain_digest, "6517d1c0b7169446",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
 }
@@ -434,7 +444,7 @@ fn corpus_s0_s1_canonical_runs() {
     let s0 = fs::read_to_string(scen_path("S0")).expect("S0.scen committed");
     let run0 = run_canonical(&s0, &root).expect("S0 canonical run");
     assert_eq!(run0.manifest.frame_count, 3);
-    assert_eq!(run0.manifest.chain_digest, "8901789a88cf61fe");
+    assert_eq!(run0.manifest.chain_digest, "dac1cfd17bc7ede3");
     let run0b = run_canonical(&s0, &root).expect("S0 canonical re-run");
     assert_eq!(run0.bytes, run0b.bytes, "byte-identical double run");
 
@@ -463,7 +473,7 @@ fn corpus_s0_s1_canonical_runs() {
     let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
     let run1 = run_canonical(&s1, &root).expect("S1 canonical run");
     assert_eq!(run1.manifest.frame_count, 401);
-    assert_eq!(run1.manifest.chain_digest, "1c4e7b4c9d9b0947");
+    assert_eq!(run1.manifest.chain_digest, "a18cb11ac8e4314e");
     let run1b = run_canonical(&s1, &root).expect("S1 canonical re-run");
     assert_eq!(run1.bytes, run1b.bytes, "byte-identical double run");
 }
@@ -568,7 +578,7 @@ fn corpus_s3_command_fire() {
     // moved from 49193732e6dbc546 BEFORE any O1 S3 capture exists
     // (the D103 dbx-plan T2-tier unit precedes any live S3).
     assert_eq!(
-        run.manifest.chain_digest, "9a11efa03baafb64",
+        run.manifest.chain_digest, "f4f5b4351e976ed5",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s3, &root).expect("S3 canonical re-run");
@@ -732,7 +742,7 @@ fn corpus_s2_order_walk() {
     let run = run_canonical(&s2, &root).expect("S2 canonical run");
     assert_eq!(run.manifest.frame_count, 17);
     assert_eq!(
-        run.manifest.chain_digest, "809f4961b7757da4",
+        run.manifest.chain_digest, "d6649ce272ad6d96",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s2, &root).expect("S2 canonical re-run");
@@ -1071,7 +1081,7 @@ fn corpus_s4_destroy_family() {
     let run = run_canonical(&s4, &root).expect("S4 canonical run");
     assert_eq!(run.manifest.frame_count, 49);
     assert_eq!(
-        run.manifest.chain_digest, "35fa3a9234cbff37",
+        run.manifest.chain_digest, "63ab5ac7679f6de7",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s4, &root).expect("S4 canonical re-run");
@@ -1286,12 +1296,12 @@ fn corpus_s4_destroy_family() {
     // a malformed corpus file — pinned by the destroy_gate parser
     // rows. Here: the destroy-less S0 shape carries NO destroy rows
     // (the S0/S1/S2/S3 pinned chains in this file are the
-    // no-inject invariant; S3 re-pinned 9a11efa03baafb64 by the debris-physics unit, D115).
+    // no-inject invariant; S3 re-pinned f4f5b4351e976ed5 by the debris-physics unit, D115).
     let s0 = fs::read_to_string(scen_path("S0")).unwrap();
     let run0 = run_canonical(&s0, &root).unwrap();
     let dump0 = decode_dump(&run0.bytes).unwrap();
     assert!(dump0.frames[0].watch("object-instances").is_none());
-    assert_eq!(run0.manifest.chain_digest, "8901789a88cf61fe");
+    assert_eq!(run0.manifest.chain_digest, "dac1cfd17bc7ede3");
 }
 
 /// One typedb-mirror-rows cell (word, seen) at (tile, z) — the
@@ -1328,7 +1338,7 @@ fn corpus_s5_pickup_cases_1_2_4() {
     let run = run_canonical(&s5, &root).expect("S5 canonical run");
     assert_eq!(run.manifest.frame_count, 16);
     assert_eq!(
-        run.manifest.chain_digest, "a4659f25d453b6a1",
+        run.manifest.chain_digest, "8a718339e0702fd6",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5, &root).expect("S5 canonical re-run");
@@ -1507,7 +1517,7 @@ fn corpus_s5b_pickup_case_3() {
     let run = run_canonical(&s5b, &root).expect("S5B canonical run");
     assert_eq!(run.manifest.frame_count, 19);
     assert_eq!(
-        run.manifest.chain_digest, "93e976587a98d2a1",
+        run.manifest.chain_digest, "b72f57e0b8e7042b",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5b, &root).expect("S5B canonical re-run");
@@ -1618,7 +1628,7 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     let run = run_canonical(&s5c, &root).expect("S5C canonical run");
     assert_eq!(run.manifest.frame_count, 55);
     assert_eq!(
-        run.manifest.chain_digest, "786fd87565b67f4a",
+        run.manifest.chain_digest, "de5b80a6177aecdd",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5c, &root).expect("S5C canonical re-run");
@@ -1745,7 +1755,7 @@ fn corpus_s6_pad_extraction() {
     let run = run_canonical(&s6, &root).expect("S6 canonical run");
     assert_eq!(run.manifest.frame_count, 75);
     assert_eq!(
-        run.manifest.chain_digest, "c96f0735df1059ea",
+        run.manifest.chain_digest, "c27bff339929339d",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s6, &root).expect("S6 canonical re-run");
@@ -1891,7 +1901,7 @@ fn corpus_s7_platform_dynamics() {
     let run = run_canonical(&s7, &root).expect("S7 canonical run");
     assert_eq!(run.manifest.frame_count, 1361);
     assert_eq!(
-        run.manifest.chain_digest, "ecdce5472df6a324",
+        run.manifest.chain_digest, "b0db22840310e82a",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s7, &root).expect("S7 canonical re-run");
@@ -2119,7 +2129,7 @@ fn corpus_s8_critter_engagement() {
     assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
     // Chain pin (the fingerprint discipline, D28: moves only on a
     // deliberate engine/dump change, re-baselined loudly).
-    assert_eq!(run.manifest.chain_digest, "44d806b81bd1b1ff");
+    assert_eq!(run.manifest.chain_digest, "29fa2f400a10974b");
 
     let dump = decode_dump(&run.bytes).expect("S8 dump verifies");
     assert_eq!(dump.header.scenario, "S8");
@@ -2265,7 +2275,7 @@ fn corpus_s8_critter_engagement() {
     // no critter rows without the key).
     let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
     let run1 = canonical::run_canonical(&s1, &root).expect("S1 canonical run");
-    assert_eq!(run1.manifest.chain_digest, "1c4e7b4c9d9b0947");
+    assert_eq!(run1.manifest.chain_digest, "a18cb11ac8e4314e");
     assert!(decode_dump(&run1.bytes)
         .expect("S1 verifies")
         .frames

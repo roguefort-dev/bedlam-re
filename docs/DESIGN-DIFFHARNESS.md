@@ -390,6 +390,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 | score / money | u32 / u32 | `MissionScene::campaign()` (0 / 4000 fresh; boot difficulty seeds money `4000−500·d`, the engine's own `menu::start_score`) |
 | difficulty | u32 | the session BOOT value (engine difficulty producers unmodeled — the record carries the injected scalar) |
 | zone / mission / mode / linear-mission-m | u32 ×4 | host episode slot (`mission_slot()` / `episode().linear()`); mode = 0 (SP, engine-modeled constant). **ZONE CONVENTION (D108):** E's zone is the 0-based mission-slot INDEX (0..6); the guest cell (EXW 0x4edd8c / EXD 0x107500) is 1-based set (zone_index+1, D99) — the O1 normalizer maps `cell−1` so both channels canonicalize to the index. First exercised by S5/S5B (zone 1 = ZONEB); the `linear` counter is the staged fresh-slot 0, recorded as the live-capture seam (a campaign-walk O1 session carries its own linear) |
+| sfx-master-gate | u32 | **constant 1 (D136)** — the E engine's sound-on construction assumption (no audio config model; every dispatch the gate guards is presentation-tier). A capture machine with sound DISABLED dumps 0 → the intended loud finding; the D134 fingerprint companion (one dbgprobe read of [0x10743c] at the anchor stop) is the remedy, the D128 ACTIONPAN pattern |
 | robot-bank | u32 count + count records; record = the modeled Robot field list in the `state_hash` order: alive u8, pos_x i32, pos_y i32, z i32, state u16, dir_byte u16, facing u16, anim u16, variant u16, probe_z u16×8, stop_dist i32, target_present u8, target_x i32, target_y i32, drop_countdown i32, hp i32, armor i16, hit_flash u16, alarm u16, kind u16, shield i32, shield_charges i32, shield_boost i32, battery i32, armor_pool i32, alarm_ctr i32, death_flag u16 | `MissionSim::robots()` |
 | selection-triple | u32 selected idx only (the D83 anti-fabrication precedent: the alias-covered cell; cursor/squad join when their engine models + EXD aliases land) | `sidebar_selected()` |
 | blink-cursor | u32 (0 or slot+1) | `sidebar_cursor()` (the 7j.6 select-ack selector) |
@@ -398,16 +399,27 @@ STRUCTURAL missing-on-E, never silently skipped).
 | move-target-words | u32 count + per-robot {present u8, tx i32, ty i32} (Q5, same units both sides — EXD writers are `tile<<5`, D90; the O1/O2 side dumps the 0x60-B EXD span and the differ SPLICES the trio into the robot-bank row, so this row stays E-only in cross-channel reports) | `Robot::target` |
 | beacon-family | flag u32, timer u32, tile i32×3 | `MissionSim::order()` (window = timer 0x197) |
 | spread-claims | u16 ×12 | `Order::claims` |
+| no-extract-latch | u32 count + count u32 (all zero) | **(D136)** count = the robot-bank count (`robots().len()`); the latch is MP-lobby-claimed ONLY (D133) — never set on any SP path, so E's SP corpus construction is the all-zero bank (the guest boot-memset twin). The O1/O2 raw side is the bare `$robot_count*4` span — the normalizers prepend `len/4`; the count field is STRUCTURAL like every count word, so the robot-count scenario seams (D91/D103/D108 `_e_staging`) surface here exactly as on robot-bank.count |
 | typedb-fade-byte, armor-pad-reads | u32 len + len bytes (the engine bank is lazily materialized; len 0 ≡ all-zero w·h — the ZONEA corpus until a death) | `armor_pads()` (the +0x18 byte family, 7g.3/7j.9) |
 | static-map-wh (TS, anchor frame only) | u32 w, u32 h | terrain/view size |
 
-**E-gaps (rows the E side does not emit in W6):** sfx-master-gate (T0),
-no-extract-latch, tile-word-grid (the 7h.3 tile-word producer is
-host-seamed), platform-strength, typedb-mirror-rows, variant-flag-bytes,
-object-instances, trt-array (T1); every TS row except static-map-wh (the
-engine parses the volumes into internal forms and does not retain raw
-bytes); all T2/T3/T4 (unmapped tiers); all TI (the E injection surface is
-the scenario step list, not watched keystore bytes).
+**E-gaps (rows the E side does not emit in W6):** variant-flag-bytes
+(T1); mortar-trail-bank + poi-bank (T2); the unmodeled T3 banks
+(rising-debris, blast-bank, arrival-rides, door-rects,
+trigger-timers, pod-ring, exit-ring, objective-slots,
+escape-counters, tile-claims); s0-trigger (S0); every TS row except
+static-map-wh (the engine parses the volumes into internal forms and
+does not retain raw bytes); all T4 (event capture); all TI (the E
+injection surface is the scenario step list, not watched keystore
+bytes). **AMENDED 2026-08-23 (D136):** sfx-master-gate and
+no-extract-latch LEAVE the list — E emits both now (the two table
+rows above; the W6-followup to D133/D134). The same amendment
+corrects the list for staleness, history preserved: the D85-era list
+still named the destroy-family five (tile-word-grid,
+platform-strength, typedb-mirror-rows, object-instances, trt-array)
+and "all T2/T3" as gaps although W12-S3/S4/S6/S8 landed their
+emitters (gated on the scenario staging keys — `destroy = 1` / T2
+tiers / `pad` steps / `critters = 1`).
 
 **Frame model (E):** one MissionShell-equivalent frame = one
 `pump_frame(dt=4)` = `MissionScene::tick` (six phases + epilogue) +

@@ -152,6 +152,15 @@ fn inv_frame(
                 (v + 1).to_le_bytes().to_vec()
             }
             "robot-bank" => inv_robot_bank(&w.bytes),
+            // The no-extract latch (D133/D136): E canonical = u32
+            // count + count*4 zero words; the O1 raw form = the bare
+            // count-driven span (dbx-plan's $robot_count*4) — strip
+            // the prefix so the O1 normalizer's len/4 round-trips.
+            "no-extract-latch" => {
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 4);
+                w.bytes[4..].to_vec()
+            }
             // The T2 banks (W12-S3): E canonical = u32 count + the
             // records; the O1 raw form = the bare span (no count cell
             // on the guest — the free-slot walk is the bound).
@@ -324,20 +333,20 @@ fn s0_s1_cross_and_double_run() {
     // back through the shared field walk — still exactly the 2
     // row-level findings, zero field gaps, zero T2 diffs.
     for (id, frames_total, pinned_chain, expect_coverage) in [
-        ("S0", 3u64, "8901789a88cf61fe", 0u64),
-        ("S1", 401u64, "1c4e7b4c9d9b0947", 2u64),
-        ("S2", 17u64, "809f4961b7757da4", 2u64),
+        ("S0", 3u64, "dac1cfd17bc7ede3", 0u64),
+        ("S1", 401u64, "a18cb11ac8e4314e", 2u64),
+        ("S2", 17u64, "d6649ce272ad6d96", 2u64),
         // Re-pinned at the W12-S4-prep landing (D104, §7j.39/9) —
         // the artillery burst-pair application draws the shared
         // stream (was 49193732e6dbc546).
-        ("S3", 133u64, "9a11efa03baafb64", 2u64),
+        ("S3", 133u64, "f4f5b4351e976ed5", 2u64),
         // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
         // the guest banks and parse back through the destroy
         // normalizers — the T1 destroy rows join the exact-exact
         // set, the debris/splash T3 rows are E-only (no EXD alias
         // yet — 2 more row-level coverage findings, documented
         // never fabricated).
-        ("S4", 49u64, "35fa3a9234cbff37", 2u64 + 2),
+        ("S4", 49u64, "63ab5ac7679f6de7", 2u64 + 2),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
         // the debris/splash rows never ride — exactly the 2 S1-class
@@ -345,8 +354,8 @@ fn s0_s1_cross_and_double_run() {
         // tile active) fabricate as the full 100x100 guest grid and
         // parse back through the same compact-tile filter; the zone
         // row exercises the D108 cell−1 convention end-to-end.
-        ("S5", 16u64, "a4659f25d453b6a1", 2u64),
-        ("S5B", 19u64, "93e976587a98d2a1", 2u64),
+        ("S5", 16u64, "8a718339e0702fd6", 2u64),
+        ("S5B", 19u64, "b72f57e0b8e7042b", 2u64),
         // W12-S5C (D108's observability follow-up): the pre-damaged
         // walker run — same tier set as S5/S5B (T0/T1/TS: the
         // artillery's debris/splash staging stays unwatched, no T3
@@ -354,7 +363,7 @@ fn s0_s1_cross_and_double_run() {
         // findings. The destroy-chain cascade the burst rings
         // detonate rides the SAME aliased T1 rows (the compact-tile
         // filter + the destroy normalizers) — zero field gaps.
-        ("S5C", 55u64, "786fd87565b67f4a", 2u64),
+        ("S5C", 55u64, "de5b80a6177aecdd", 2u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
         // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
         // alias), so exactly the 2 S1-class findings + 1 more. The
@@ -362,7 +371,7 @@ fn s0_s1_cross_and_double_run() {
         // the surviving claims fabricate through the u16-cell map
         // and parse back exactly; the swept robot's state-5/stop-1e6
         // words ride the aliased robot bank — zero field gaps.
-        ("S6", 75u64, "c96f0735df1059ea", 2u64 + 1),
+        ("S6", 75u64, "c27bff339929339d", 2u64 + 1),
         // W12-S7 (§7j.41, D113): the platform-dynamics lifecycle —
         // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
         // destroy rows + both platform banks ride, and the T3
@@ -373,7 +382,7 @@ fn s0_s1_cross_and_double_run() {
         // normalizers define (both channels carry the same form);
         // the creep-grown mirror words parse back through the
         // compact-tile filter — zero field gaps.
-        ("S7", 1361u64, "ecdce5472df6a324", 2u64 + 2),
+        ("S7", 1361u64, "b0db22840310e82a", 2u64 + 2),
         // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
         // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
         // cycle — ALIASED, S3 pinned the T2 form; the critter bank
@@ -382,7 +391,7 @@ fn s0_s1_cross_and_double_run() {
         // row-level findings + the critter-bank/effect-rows pair —
         // zero field gaps (the 0x68 records fabricate through the
         // same bare-span T2 form).
-        ("S8", 121u64, "44d806b81bd1b1ff", 2u64 + 2),
+        ("S8", 121u64, "29fa2f400a10974b", 2u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

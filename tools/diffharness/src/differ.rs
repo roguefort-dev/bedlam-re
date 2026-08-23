@@ -1120,7 +1120,7 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
     match id {
         // u32 scalar rows.
         "frame-counter" | "score" | "money" | "difficulty" | "zone" | "mission" | "mode"
-        | "linear-mission-m" | "selection-triple" | "blink-cursor" => {
+        | "linear-mission-m" | "selection-triple" | "blink-cursor" | "sfx-master-gate" => {
             need(id, no, b, "u32", 4)?;
             Ok(row(vec![int("value", u32le(b) as i128)]))
         }
@@ -1335,6 +1335,35 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
             }
             Ok(row(fields))
         }
+        // The no-extract latch (D133/D136): E's canonical form =
+        // u32 count + count u32 slot words (all zero on SP — the
+        // claim path is MP-lobby-only). The O1/O2 raw side is the
+        // BARE count-driven span (parsed in `normalize_o1_row`).
+        "no-extract-latch" => {
+            if b.len() < 4 || !(b.len() - 4).is_multiple_of(4) {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: "u32 count + count*4 (the no-extract latch)".into(),
+                });
+            }
+            let n = u32le(b) as usize;
+            if b.len() != 4 + n * 4 {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: format!("u32 count + count*4 (count says {n})"),
+                });
+            }
+            let mut fields = Vec::with_capacity(1 + n);
+            fields.push(int("count", n as i128));
+            for i in 0..n {
+                fields.push(int(&format!("slots[{i}]"), u32le(&b[4 + i * 4..]) as i128));
+            }
+            Ok(row(fields))
+        }
         "per-player-selected" => {
             need(id, no, b, "4 * {x,y,z} i32", 48)?;
             let mut fields = Vec::new();
@@ -1401,7 +1430,7 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
     };
     match id {
         "frame-counter" | "score" | "money" | "difficulty" | "mission" | "mode"
-        | "linear-mission-m" | "selection-triple" => {
+        | "linear-mission-m" | "selection-triple" | "sfx-master-gate" => {
             need(id, no, b, "u32 cell", 4)?;
             Ok(row(vec![int("value", u32le(b) as i128)]))
         }
@@ -1469,6 +1498,27 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
             }
             Ok(row(fields))
         }
+        // The no-extract latch (D133/D136): the O1 raw form is the
+        // BARE count-driven span (dbx-plan's $robot_count*4 — the
+        // count cell bounds the walk, no prefix rides) — canonical
+        // form = u32 count + count u32 slot words.
+        "no-extract-latch" => {
+            if !b.len().is_multiple_of(4) {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: "count*4 u32 slots (the bare no-extract latch span)".into(),
+                });
+            }
+            let n = b.len() / 4;
+            let mut fields = Vec::with_capacity(1 + n);
+            fields.push(int("count", n as i128));
+            for i in 0..n {
+                fields.push(int(&format!("slots[{i}]"), u32le(&b[i * 4..]) as i128));
+            }
+            Ok(row(fields))
+        }
         "per-player-selected" => {
             need(id, no, b, "4*0xC anchor cells", 48)?;
             let mut fields = Vec::new();
@@ -1532,6 +1582,8 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "order-target"
         | "beacon-family"
         | "spread-claims"
+        | "no-extract-latch"
+        | "sfx-master-gate"
         | "per-player-selected"
         | "typedb-fade-byte"
         | "armor-pad-reads" => normalize_o1_row(id, no, b),
@@ -1620,6 +1672,11 @@ fn field_class(row: &str, field: &str, tier: &str) -> Class {
         ("rng-state-a", _) | ("rng-state-b", _) => Class::AcceptedT3,
         ("robot-bank", "count") | ("move-target-words", "count") => Class::Structural,
         ("weapon-anim-bank", "count") | ("projectile-bank", "count") => Class::Structural,
+        // The no-extract-latch count (D136): structural like every
+        // other count word — the robot-count scenario seams (D91/
+        // D103/D108 `_e_staging`) surface here exactly as they
+        // already do on robot-bank.count.
+        ("no-extract-latch", "count") => Class::Structural,
         // The destroy-family counts (W12-S4): structural like the
         // other count words.
         ("object-instances", "count")

@@ -495,6 +495,14 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         f.push_watch("mission", u32b(st.mission));
         f.push_watch("mode", u32b(st.mode));
         f.push_watch("linear-mission-m", u32b(st.linear));
+        // The SFX master gate (D136): E has no audio config model —
+        // the row carries the engine's sound-on construction
+        // constant 1 (every dispatch the gate guards is
+        // presentation-tier; §0's state-only scope). A capture
+        // machine with sound DISABLED dumps 0 here — the intended
+        // loud finding, the D134 fingerprint companion (the D128
+        // ACTIONPAN pattern).
+        f.push_watch("sfx-master-gate", u32b(1));
     }
     if want("T1") {
         f.push_watch("robot-bank", robot_bank_blob(st.robots));
@@ -558,6 +566,16 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
             claims.extend_from_slice(&u16::from(c).to_le_bytes());
         }
         f.push_watch("spread-claims", claims);
+        // The no-extract latch (D133/D136): the per-robot CLAIMED
+        // flags — MP-lobby-set only, never on any SP path; E's SP
+        // corpus construction is the all-zero bank (the guest boot
+        // memset twin). Canonical = u32 count (the robot-bank count
+        // — the O1 plan dumps the same count-driven $robot_count*4
+        // span) + count zero words.
+        let mut latch = Vec::with_capacity(4 + st.robots.len() * 4);
+        latch.extend_from_slice(&(st.robots.len() as u32).to_le_bytes());
+        latch.resize(4 + st.robots.len() * 4, 0);
+        f.push_watch("no-extract-latch", latch);
         let mut pads = Vec::with_capacity(4 + st.armor_pads.len());
         pads.extend_from_slice(&(st.armor_pads.len() as u32).to_le_bytes());
         pads.extend_from_slice(st.armor_pads);
