@@ -109,6 +109,16 @@ renumbered queue keeps every open item claimable by number).
    E's (S0..S6) — the budgeted RNG class, never a structural
    diff; a live S7 runs the tick on both channels (equivalence,
    no drift beyond the ordinary budget).
+   NOTE D128 (2026-08-23): the §7j.54 chase-camera pans are
+   gated by [0x4edbd8] = the ACTIONPAN REGISTRY flag
+   (HKCU\Software\Mirage\Bedlam\1.00) with DEFAULT 1 = ON —
+   the FINGERPRINT step of this session should record
+   [0x4edbd8] (plus the five sibling config cells SOUND/
+   SPEECH/CINEMATICS/LANGUAGE/DEFAULTNAME) once: a stale
+   registry 0 on the capture machine would silently disable
+   pans on the original while E models them (regedit query or
+   one dbgprobe read at the anchor stop; a one-frame additive
+   watch row is the remedy if it ever bites).
    NOTE D108 (2026-08-22): S5/S5B
    exist E-side (chains a4659f25d453b6a1 / 93e976587a98d2a1, the
    canonical_dump_gate corpus_s5* + differ_gate rows; dbx-plan
@@ -123,25 +133,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
- 2. [P4/RE] THE [0x4edbd8] CAMERA-GATE CELL UNIT (small;
-    docs-only, unattended-safe; objdump from ghidra-project/
-    exw-text-objdump.txt): census the writers/readers of
-    [0x4edbd8] - the precondition that arms the §7j.54
-    chase-camera swap (FUN_00403938 0x4039b0: !=0 ∧ [0x4de654]!=0
-    -> the per-player anchor slot 0x4c71c4/c8/cc loads the staged
-    triple instead of the selected robot's pos) - pin WHAT
-    sets/clears it (game-state? mission phase? a config cell?)
-    and whether any other reader exists; while there, census
-    [0x4ede54] (the robots() 0x40b8aa recenter speed-factor
-    reader) if still un-decoded. Deliverables: census + ledger
-    row(s) + D128; registry_anchors green; PUSH. Pre-queue check
-    (D118 discipline): ZERO decode of 0x4edbd8 exists (grep -
-    only §7j.54's precondition mention, both hits this unit's
-    own text); 0x4ede54 appears only as a passing reader
-    citation. (QUEUED 2026-08-23 by the 7j.54/D126 close,
-    worker ed78ecdc claim 2.)
-
-  3. [P4/RE] THE ROBOT +0x9C DEATH-FLAG READER CENSUS UNIT
+  2. [P4/RE] THE ROBOT +0x9C DEATH-FLAG READER CENSUS UNIT
      (small; docs-only, unattended-safe; objdump from
      ghidra-project/exw-text-objdump.txt): §7j.45 item 6 left
      "+0x9C = 1 (readers not yet census'd)" open. Pre-queue
@@ -157,6 +149,26 @@ renumbered queue keeps every open item claimable by number).
      death_flag field gloss). Deliverables: census + §3/ledger
      row + D129; registry_anchors green; PUSH. (QUEUED 2026-08-23
      by the 7j.55/D127 close, worker 19d79ca9 claim 2.)
+
+  3. [P4/RE] THE [0x4ede34] TEMP-VIEWPORT CENSUS UNIT (small;
+     docs-only, unattended-safe; objdump from
+     ghidra-project/exw-text-objdump.txt): the §7j.56/B zoom
+     census left [0x4ede34]'s IDENTITY open (9 sites; the
+     FUN_00401107 second gate ≠0 → the temp viewport v :=
+     480−min([0x4ede34],479) save/restore path): decode the
+     producers 0x40d286/0x40d311/0x40d398 (the FUN_0040d2xx
+     family — same neighborhood as the recenter head's
+     0x40d197 call) + `:=1` @0x40ea8b (MP-respawn region —
+     likely a screen wipe) + the MissionShell frame cluster
+     0x4480af/0x4480d6/0x448121 (after the 0x44809e read) +
+     the 0x4476a2 `cmp 0x1E0` test + the 0x403952 gate; pin
+     the value grammar and WHAT the temp render shows (a
+     cinema/wipe effect?). Deliverables: census + ledger row +
+     D130; registry_anchors green; PUSH. Pre-queue check
+     (D118 discipline): zero decode of 0x4ede34 exists (grep —
+     only §7j.56/B's census pointer + the §7e map-present
+     row's passing mention). (QUEUED 2026-08-23 by the
+     7j.56/D128 close, worker 21e88d3b claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -216,7 +228,13 @@ renumbered queue keeps every open item claimable by number).
   menu BACKDROP content (RE-EXW-TITLEMENU sec 8 - the 0x64000
   PresentCopy buffer), HOF + CREDIT_1..13 page flows (RE sec 6),
   the save-load restore path (FUN_0044745e + completion bits),
-  CONFIG.BDL writer family (FUN_0042540c) for name persistence,
+  CONFIG.BDL writer family (FUN_0042540c) for name persistence
+  — CLOSED 2026-08-23 (§7j.56/D128: the family is REGISTRY-
+  backed, HKCU\Software\Mirage\Bedlam\1.00 via
+  RegCreateKeyExA/RegQueryValueExA/RegSetValueExA; the
+  "CONFIG.BDL" name RETIRED — zero binary refs; the loader is
+  FUN_004252c0 @boot + the saver FUN_0042540c at the
+  name-entry exit, both decoded),
   OPTIONS.MRS staging on Title (music track_name wiring), and the
   FUN_00448ef1 multiplayer lobby if ever needed.
 - Mission SFX tier (MENU1/MENU2-style mixer instruments; the
@@ -303,6 +321,67 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE [0x4edbd8] CAMERA-GATE CELL + [0x4ede54]
+  ZOOM CELL unit COMPLETE (worker 21e88d3b claim 2, commit
+  d80fd8b, D128, §7j.56, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt + read-only string/import
+  probes of game-data/cd-root/BEDLAM.EXW (.idata parsed to name
+  IAT 0x4f010c = RegQueryValueExA); no Ghidra run, no corpus
+  write; MANIFEST.sha256 clean before AND after;
+  registry_anchors 2/2 green; PUSHED). CLOSED with the verdict
+  set: (1) [0x4edbd8] = the "ACTIONPAN" value of the REGISTRY
+  key HKCU\Software\Mirage\Bedlam\1.00 — the whole §7j.54
+  chase-camera subsystem's enable bit: 4-site census = the two
+  known readers EXACTLY (FUN_00403938 0x4039b0 camera-slot swap;
+  robots() 0x40b875 recenter gate w/ the [0x4de654] leg
+  0x40b885 — address refined, the double-je @0x40b87f a dead
+  Watcom artifact) + the boot loader registration 0x42535c +
+  the saver read 0x42545c (name-entry exit 0x43b03b +
+  0x41c59b); .bss; bounds [0,1], DEFAULT 1 ⇒ pans ENABLED on
+  default installs; NO game-state/mission-phase/UI writer —
+  session-constant. (2) THE CONFIG FAMILY IS REGISTRY I/O
+  (.idata pinned: FUN_0044ed40 = RegCreateKeyExA(HKCU,
+  "Software\Mirage\Bedlam\1.00", KEY_ALL_ACCESS) → hKey
+  [0x4ef770]; FUN_0044ede4 = the bounded loader —
+  RegQueryValueExA writes the cell DIRECTLY, absent/malformed
+  ⇒ the ecx default @0x44ee23..27, out-of-bounds ⇒ same;
+  FUN_0044ed98 = query-then-RegSetValueExA self-heal writer;
+  FUN_0044eee0 = the REG_SZ create-if-missing for
+  DEFAULTNAME="Player"; family pattern cross-checked via
+  INSTALLDRIVE ['A'..'Z'] default 'C' + SOUND [0, volume]) —
+  the "CONFIG.BDL" gloss RETIRED (the string has ZERO binary
+  refs; on-disk CONFIG.BDL/OPTIONS.BDL = DOS leftovers EXW
+  never opens; SAVED.BDL the only referenced .BDL; TITLEMENU
+  §4 corrected history-preserved). (3) [0x4ede54] = the
+  VIEWPORT ZOOM height (backbuffer rows, clamp [0xF0,0x1E0] =
+  [240,480]), NOT a plain speed factor — 26-site census:
+  writers = the ±0x10 zoom-key handler (the FUN_0042034c tail
+  0x4204ea..0x420548; scan 0x4E/0x0D in vs 0x4A/0x0C out;
+  keystore 0x4edc92/0x4edc51/0x4edc8e/0x4edc50) + the
+  MissionShell leftover-edx init 0x447883 (the 0x1E0
+  @0x44784a does not provably survive FUN_004034ef
+  (`imul edx,edx,0x26`)/FUN_0041d954 (xor tails) — benign:
+  ≥480 dispatches 1:1 + first keypress re-clamps) + the temp
+  save/restore pair in FUN_00401107's [0x4ede34] path
+  (0x4012c7/0x4012e5/0x4012f1); readers = the Q16 magnify
+  zoom blitter FUN_00401107 (scale (v<<16)/480 → 0x454060/68
+  + halves 0x45405c/64, source offset (480−v)/2; ≥480 → 1:1
+  rep-movs; [0x4edba0] map-overlay ≠0 → the map path; the two
+  MissionShell render sites 0x447ca0/0x448094) + the recenter
+  speed (cursor−240)·v/480 @0x40b89e/0x40b8c5 + the cursor
+  un-zoom mappers 0x4106a1/0x4106d4/0x419a41. (4) DIFFER:
+  zoom = ZERO rows (no corpus keypresses, deterministic per
+  mission, zero RNG/robot-bank bytes, presentation-only);
+  ACTIONPAN = one LIVE-CHANNEL CONFUND recorded (default-1
+  pans live; a stale registry 0 on the O1 machine silently
+  disables them while E models them — the S0 fingerprint step
+  notes it now, D128 folded into queue item 1). [0x4ede34]
+  census pointer recorded (9 sites, identity open — queued as
+  item 3). Deliverables: §7j.56 + 2 ledger rows + the §7j.54
+  address refinement + the TITLEMENU correction + D128.
+  Queued: item 2 = the robot +0x9C death-flag census
+  (unchanged), item 3 = the NEW [0x4ede34] temp-viewport
+  census. NEXT: item 2 (the +0x9C death-flag census).
 - 2026-08-23: P4/RE THE HEAT-MACHINE WARNING FAMILY unit COMPLETE
   (worker 19d79ca9 claim 2, commit 18e59ed, D127, §7j.55,
   docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,

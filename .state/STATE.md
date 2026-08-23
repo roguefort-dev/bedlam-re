@@ -1,5 +1,42 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE [0x4edbd8] CAMERA-GATE CELL + [0x4ede54]
+    ZOOM CELL unit COMPLETE (D128; docs-only, §7j.56, commit
+    d80fd8b, worker 21e88d3b claim 2; objdump-only + read-only
+    string/import probes of BEDLAM.EXW — .idata parsed to name
+    IAT 0x4f010c = RegQueryValueExA; no Ghidra run, no corpus
+    write; manifest clean both sides; registry_anchors 2/2
+    green; PUSHED): [0x4edbd8] = the "ACTIONPAN" value of the
+    REGISTRY key HKCU\Software\Mirage\Bedlam\1.00 — 4-site
+    census (the two §7j.54 readers 0x4039b0/0x40b875 + the
+    boot loader 0x42535c + the saver read 0x42545c; NO
+    game-state writer; .bss; bounds [0,1] DEFAULT 1 = pans
+    ENABLED on default installs); the config family is
+    REGISTRY I/O (FUN_0044ed40 RegCreateKeyExA / FUN_0044ede4
+    bounded loader writing the cell directly, default-on-
+    absent / FUN_0044ed98 RegSetValueExA self-heal /
+    FUN_0044eee0 REG_SZ create-if-missing) — the "CONFIG.BDL"
+    gloss RETIRED (zero binary refs; on-disk CONFIG.BDL/
+    OPTIONS.BDL = DOS leftovers; TITLEMENU corrected history-
+    preserved). [0x4ede54] = the VIEWPORT ZOOM height (clamp
+    [240,480] backbuffer rows) — 26-site census: ±0x10 zoom-key
+    handler (FUN_0042034c tail 0x4204ea..0x420548, scan
+    0x4E/0x0D vs 0x4A/0x0C), MissionShell leftover-edx init
+    0x447883 (benign — ≥480 dispatches 1:1), the [0x4ede34]
+    temp save/restore pair in FUN_00401107; readers = the Q16
+    magnify zoom blitter (FUN_00401107, cells 0x45405c..68),
+    the camera-recenter speed (cursor−240)·v/480
+    (0x40b89e/0x40b8c5), the cursor un-zoom mappers
+    (0x4106a1/0x4106d4/0x419a41). [0x4ede34] census pointer
+    recorded (9 sites, identity open — follow-up queued).
+    DIFFER: zoom = no rows (no corpus keypresses, zero RNG);
+    ACTIONPAN = one live-channel confund recorded (the S0
+    session fingerprint step should record [0x4edbd8] + the
+    five sibling config cells once; D128 folded into queue
+    item 1). Queued: item 2 = the robot +0x9C death-flag
+    reader census (D129); item 3 = the [0x4ede34] temp-
+    viewport/cinema census.
+
   - 2026-08-23 P4/RE THE 0x4ea238 MARKER FAMILY + [0x4de658]
     CENSUS unit COMPLETE (D126; docs-only, §7j.54, commit
     51800a0, worker ed78ecdc claim 2; objdump-only, no Ghidra
