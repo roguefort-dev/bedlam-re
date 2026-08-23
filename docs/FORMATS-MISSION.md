@@ -661,3 +661,24 @@ Notable **negative** results (things that did NOT fit):
 5. **LNK/CTG/LNG consumers** — one routine likely walks all three; identifying
    the 8192-object index space unlocks three files at once. NOTE (§0.2): only
    .LNK/.LNG are ever loaded (the language gate); .CTG is editor-only.
+
+## 22. LANGUAGE.* — the INI-style localisation pack (boot-table grammar decoded 2026-08-23; EXW §7j.53)
+
+- **Files:** LANGUAGE.{DCH,ENG,FRE,GER,ITL,SPA} — six locales, ~69–79 KB each,
+  pure text, CRLF. The active file is picked by the language gate
+  ([0x4eba1c] per §7j.30; index 1 = ENG family). VERIFIED
+- **Grammar:** `[SECTION]\r\n\r\n[\r\n<record>\r\n<record>\r\n...\r\n]` —
+  bracketed sections whose records are LINE-delimited (one line = one
+  record; multi-line free text only in the hint/overview sections). VERIFIED
+- **Boot tables loaded from it (GameMain):**
+  - `[MENU_ITEMS]` (name @0x457abe) → 0x46af5c, 0x30-B records; the boot
+    walk bounds at 0x1200 = 64 records while the ENG section carries 96 —
+    the overflow is not consumed by this loader. [observed]
+  - `[WARNINGS]` (name @0x457ac9) → **0x46c18c, 53 × 0x30-B records** =
+    the radio-warning text table indexed by the FUN_004239ef message id
+    (all 53 lines + the id map: EXW §7j.53). All six locales carry
+    exactly 53 records in the same order. VERIFIED
+- **What RE must confirm:** the section-name → file-position resolution
+  inside FUN_004424679 (the open-by-section reader) is not yet decoded;
+  the [BOOT_CAMP_*] hint sections (§3 of EXW-SIM / D117) use the same
+  container.

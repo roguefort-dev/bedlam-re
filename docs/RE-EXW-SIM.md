@@ -1366,8 +1366,13 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    all xrefs]: value = the SELECTED robot's SLOT + 1 (1..3).
    Producers: the robots() per-robot walk 0x40c1ae..0x40c25e — when
    `idx == [0x46cbd4] + k` (k = 0..2, squad-window base 0x46cbd4)
-   and squad size `0x46cbd8 > k`: select SFX `FUN_004239ef(0xC+k, k)`
-   + `FUN_004239ef(0xF, k, 1)` and `[0x4dc5d0] = k+1`; MissionShell
+   and squad size `0x46cbd8 > k`: posts the radio-warning PAIR
+   `FUN_004239ef(0xC+k, k)` + `FUN_004239ef(0xF, k)` — per §7j.53
+   these are the "DANGER - UNIT n TARGETTED FOR / IMMINENT AERIAL
+   BOMBARDMENT" WARNINGS lines, NOT a select sound (the former
+   "select SFX" gloss corrected; the walk is §7g.5's threshold
+   announcer) — and `[0x4dc5d0] = k+1` (the cursor write is the
+   attention-draw on the endangered unit); MissionShell
    entry zeroes it (0x447871); FUN_00423e1c (the selection chaser,
    0x423e8c..) re-points the selection when cursor ≠ selected+1, and
    its exit path 0x423fef clears both the cursor and word 0x4ea240.
@@ -4698,6 +4703,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | dither blit | FUN_00401ae6(y,h,x,w,src_off,mode): mode 0 = rep-movsb full copy (dead/unoccupied boxes), mode ≠ 0 = nonzero-only overlay (hit flash); reseed `RandB()&0x1ff` when src_off+96 ≥ 0x800; seed `(RandB()&0x7fff)/15` clamp ≤ 0x7f5 | §7i |
 | SFX bank→name map (COMPLETE) | 202 durable assignments, zero unnamed durable cells: mission set 0x4edf60..0x4edfbc+ELEV/BEEP/TEXTBOX = 27 registers by FUN_0043a1d3 (MIDIGUN dup at 0x4edf70 quirk), screen sets MENU1/2+BEEP1/4/5/7+TEXTBOX1+DOOROPEN/DOORCLSE (0x4edfc0..0x4edfec, cells reused per screen; 0x4ee00c/0x4ee010 = the debrief MENU1/2 alias), mission-extra 0x4edfe0..0x4ee008 (BEAMIN/THROW/BIOFIRE/PEXPLODE/CACODETH/SQUAWK/GRUNT1..3), speech 0x4ee014+8i 53 records {A,B} (95 files, 11 empty +4 slots, pair slot-order flip at SPCH16); GFX 0x46af2c..0x46af54 + 0x4eddXX/0x4edeXX/0x46cbXX families + G-variant picks (language index 0x4eba1c==1, edition gate [0x4edd8c]>4 → GRILLA family); palettes SHARE role cells (0x4edbf8 current-screen PAL ×6 names, 0x4edbfc TXPAL1..3, 0x4edc00 DARKPAL family); full dump ghidra-project/exw-banknames.txt | §7j.30 |
 | SFX register/play family | FUN_0043a36e = 1-voice register, FUN_0043a39c = 4-voice register (clone pair; stage via scratch cell 0x46af0c → arena 0x2b11 → 0x44c64c returns the VOICE-BASE handle — SFX cells hold handles, not pointers); FUN_0043a48e = play/steal (x,y=−1,−1 → vol 0x7f/pan 0x8000; else FUN_0043a3e0 pan / FUN_0043a447 vol vs listener 0x4edde4/0x4edde8; 4-voice probe 0x44c5ac, steal by priority [0x4ee1c2+2v]>>16 + age [0x4ee2e2+2v], start 0x44c904); speech bypasses it (indexed slot pick + 0x44c8c4 direct, vol 0x7f00) | §7j.30 |
+| radio-warning dispatcher | FUN_004239ef(id, channel): 4-channel message queue 0x4eb954, stride 0x28 {8 id+1 words +0..+0x1C, insert idx +0x20 wrap 8, voice handle +0x24}; dedupe per id per channel; ids 0x19..0x1B flush their channel then post at slot 0; 55 call sites = the 53-line [WARNINGS] id map (§7j.53); channels 0/1/2 = squad slots, 3 = system (drained first) | §7j.53 |
+| radio-warning consumer | FUN_00423a85 (MissionShell @0x447ff5, per frame): channels 3→0, oldest slot first, one per channel per frame; voice leg (ids 0xF/0x29 skip; gates [0x4eb93c]/[0x4ede5c]/[0x4ede58]): still-playing poll 0x44c5ac keeps the slot queued, else play take A/B = **RandA bit0** from 0x4ee014+8·id via 0x44c8c4 (vol 0x7f00), handle := ret+1; consume leg: slot := 0, roll the 4×0x26 display ring 0x4ea13c {text[0x20], reveal u16 +0x22, valid u16 +0x24} (active = record 3, latches 0x4ea1d0/d2), stage text 0x46c18c+id·0x30 (WARNINGS table, GameMain-loaded from LANGUAGE.*), typewriter render tail (tables 0x454c20/0x454b70); both structures MissionShell-cleared @0x4479de/0x4479fc | §7j.53 |
 | hot-rect click-target array | ONE array base 0x4787bc (record 0; the dispatcher's 1-based view 0x47879c = base−0x20), stride 0x20, 8 dwords {+0 world X, +4 world Y, +8 hit-box X origin, +0xC Y origin, +0x10 z, +0x14 w, +0x18 h, +0x1C type}, count [0x46ccd8] cap 0x77 (extent ..0x47969c), per-frame reset @0x403a9a; writers = 7 sites ALL in FUN_00403938: w1 0x403c87 robots MP-only ([0x4edb88]==2 ∧ ≠local player) type (idx+1)\|0x1000 w/h 0x40 z=rec+8+0x21 corner tile+0xB; w2-w7 0x4056f1/0x4058b8/0x405c4d/0x405f7b/0x406142/0x4062c6 critter .NME paths (state ∉{6,7,0xB}; w7 {6,7}) type idx+1, z ∈ {[crit+0x3E] raw/+0x20/+0x10/>>8}, w ∈ {0x3C,0x40} h 0x40 | §7j.31 |
 | click picker | FUN_00419943 (only caller = dispatcher 0x41068e): scans hot rects i<[0x46ccd8], box = origin+(w/2,h/2) ± (w/2,h/2); priority = octile FUN_0041ebf8 max(\|dx\|,\|dy\|)+min/2, early-out <4; returns i+1; ground fallback = iso (mx−0xF0)·[0x4ede54]/0x1E0 + camera + TRT active-scan (x/y/z @+0x14/18/1C ×0x20, windows −0x10..+0x30) → 0x2000\|(idx+1) else 0 | §7j.31 |
 | click order dispatcher | FUN_00410644 (MissionShell @0x448021; gates mouse≠−1/[0x4ede14]≠0/[0x4edba0]==0/mx<0x1E0): picked → type cell [0x46cc00] (NEW pin); bit13 TRT: rec(id−1) via −0xC-bias base 0x4cccec, coords ×0x20+0x10 → ORDER TARGET 0x4dd484/88/8c; bit12 robot: corner +0/+4 + z +0x10; else critter: corner + FUN_004128ec(id−1)>>8+0x15; ground: camera+view-mouse z0; tail [0x4ddb20]\|=2 order latch (NEW pin) + [0x4ede00]:=−1 consume | §7j.31 |
@@ -7051,7 +7058,13 @@ producers** (§9 item 3) [verified]:
      marker scatter into 0x4ea238. NEW pin: **[0x4de658]** = the
      pending-reinforcement gate (the dword 0xC below the weapon-table
      base 0x4de664; 0x80 while an arrival is staged) — its other reader
-     is the arrival marker family.
+     is the arrival marker family. [§7j.53 CONTENT NOTE: the posted
+     pair's corpus text is "DANGER - UNIT n TARGETTED FOR" +
+     "IMMINENT AERIAL BOMBARDMENT" (all six LANGUAGE.* files) —
+     whatever the mechanism's staging semantics, the ANNOUNCED
+     warning is a targeting/bombardment alert; the "arrival"
+     reading of the announcement is not supported by the WARNINGS
+     corpus. Mechanism facts above unchanged.]
 3. **Extra-phase semantics (phases 4/5)**: the §5 gate expression is
    re-verified exact — body runs only while +0x80 (the drop_countdown,
    D90's raw +0x80) > phase·0x20 (128/160) — and +0x80 decrements every
@@ -7279,10 +7292,14 @@ briefing readers at 0x41c2e1/0x41c309/0x447111/0x43ddd1/0x43e3d4/
   (`cmp 0x4eaac0,0; je`) gates the state-0 robot-write at 0x40c587 —
   the box holds the freeze write while visible. MissionShell
   0x44790f resets the timer at mission start.
-- **Producers' "msgs 9/10/0xB/0x1C..0x21/0x26-0x29" CLARIFIED**: those
-  ids (cited at the pod spawner/POI loops in 7j.17/7j.19) are
-  **FUN_004239ef SFX ids**, not text messages — the text-message
-  producer set is EXACTLY the 15 zone-A BOOT_CAMP cases of §3.
+- **Producers' "msgs 9/10/0xB/0x1C..0x21/0x26-0x29" CLARIFIED**:
+  those ids (cited at the pod spawner/POI loops in 7j.17/7j.19)
+  are FUN_004239ef RADIO-WARNING ids — spoken WARNINGS lines +
+  on-screen text both (§7j.53 SUPERSEDES this section's earlier
+  "SFX ids, not text messages" framing; they were never
+  BOOT_CAMP hint-box texts). The text-message producer set of
+  the 15 zone-A BOOT_CAMP cases of §3 (the hint-box system,
+  [0x4eaac0]) is a SEPARATE channel and stands unchanged.
 
 ### 7. Engine/differ consequences
 
@@ -8559,3 +8576,155 @@ full-.text objdump.
    BOOM-vs-RICOCHT priority split (2 vs 1) is audible only
    through FUN_0043a48e's voice-steal order — no dump-visible
    state either way.
+
+## 7j.53. THE FUN_004239ef SFX-MESSAGE DISPATCHER — DECODED WHOLE: it is the RADIO-WARNING system (4-channel speech+text message queue → per-frame drain → spoken WARNINGS line + on-screen typewriter history); the 53 ids = the [WARNINGS] records of LANGUAGE.*; ids 0xF/0x29 text-only, 0x19..0x1B channel-flush, take A/B = RandA bit0 (2026-08-23, worker d1578d5c claim 2, D125; objdump-only from ghidra-project/exw-text-objdump.txt + read-only corpus probes of BEDLAM.EXW DGROUP strings and all six LANGUAGE.* files — no Ghidra run; manifest clean before AND after) [verified]
+
+The 17-site citation name "SFX-message dispatcher" is now
+body-decoded (0x4239ef..0x423a84 whole; consumer
+FUN_00423a85 0x423a85..0x423e18 whole; sole consumer caller =
+MissionShell @0x447ff5, once per frame). FUN_004239ef is NOT a
+beep-picker: every id it queues drives BOTH a spoken WARNINGS
+line (speech bank, §7j.30's 53 {A,B} records) AND an on-screen
+radio-warning text (the [WARNINGS] table). Channels 0/1/2 = the
+three squad slots (UNIT 1/2/3), channel 3 = the system/HQ
+channel (drained FIRST, priority over robots).
+
+**PRODUCER FUN_004239ef(EAX id, EDX channel)** [verified]:
+per-channel record @0x4eb954 + channel·0x28, 0x28-stride,
+4 channels (0..3, cells 0x4eb954..0x4eb9f3):
+- +0x00..+0x1C: EIGHT message words, value = id+1 (0 = empty)
+- +0x20: insert index (post at slot[idx], idx++, wrap 8→0 —
+  a full ring silently overwrites the oldest pending message)
+- +0x24: current VOICE handle for the channel (consumer-side;
+  0 = silent)
+Scan 0x423a0e..0x423a19 first dedupes: if id+1 already queued in
+THAT channel → return (one pending instance per id per channel).
+Ids 0x19..0x1B (0x423a20..0x423a4c) = CHANNEL-FLUSH: zero all 8
+words + insert index of the caller's own channel, THEN post at
+slot 0 — i.e. "UNIT n IS TOAST" is a flush+announce (a dead
+robot's pending warnings die with it). Queue + display ring are
+zeroed at MissionShell entry (memset 0x4eb954 ×0xA0, 0x4ea13c
+×0x98 @0x4479de/0x4479fc) — no other writers exist (full
+traffic census of 0x4eb954/74/78: producer, consumer, this
+reset only).
+
+**CONSUMER FUN_00423a85 (the tick reader)** [verified]: walks
+channels 3→2→1→0 (offset 0x78 decreasing by 0x28, 0x423c6a..c78;
+channel 3 first = system warnings preempt robot chatter). Per
+channel: scan the 8 slots OLDEST-FIRST (starts at the channel's
++0x20 insert index, 0x423c8c; ≤8 probes, first non-zero word →
+id = word−1). If none → next channel. If found:
+- VOICE LEG (skipped for ids 0xF and 0x29 — text-only
+  continuation lines; and gated [0x4eb93c]≠0 (audio-system
+  handle, writers 0x41d4db/0x425401/0x43a1b7) ∧ [0x4ede5c]≠0 ∧
+  [0x4ede58]≠0 (the two speech-enable config cells, boot-zeroed
+  0x41c15f; 0x4ede58 also gates the §7j.52 arrival-SFX pair)):
+  if the channel's +0x24 handle ≠ 0, poll it
+  (FUN_0044c5ac(handle−1): eax=0 ⇒ finished, edx = refreshed
+  handle); still-playing ⇒ leave the message queued, next
+  channel (the slot is the channel's "now playing" latch).
+  Silent ⇒ start: take pick = **RandA (FUN_004029b6) bit0** —
+  odd ∧ record.B ≠ 0 → the +4 word, else the +0 word of
+  speech record id @0x4ee014+8·id (§7j.30's 53 {A,B} table,
+  95 SPCH files); play direct via 0x44c8c4 (edx=0, ecx=0x7f00,
+  ebx=0x10000 — the D94 speech bypass, vol 0x7f), handle :=
+  ret+1 → +0x24. Each spoken line therefore consumes ONE RandA
+  draw (T3/T4 budget class, same as every other SFX pick).
+- CONSUME LEG (runs when the voice finished, never started, or
+  the gates are off): slot word := 0 (0x423ba6..bb1); roll the
+  display-history ring (below) if the active line's +0x24
+  latch ≠ 0 (WORD 0x4ea1d2); stage the id's TEXT: clear + copy
+  the NUL-terminated string from **0x46c18c + id·0x30** (the
+  WARNINGS table) into the active display record
+  (0x44ec90 clear + byte copy 0x423c51..c67), set the active
+  record's +0x22/+0x24 (0x4ea1d0/0x4ea1d2) := 1
+  (0x423c2d/c34), then next channel. One message per channel
+  per frame — a busy channel serializes its warnings.
+
+**DISPLAY RING** [verified]: 4 records × 0x26 @0x4ea13c
+(text[0x20] @+0, reveal-counter u16 @+0x22, valid u16 @+0x24);
+records 0..2 = the visible history, record 3 (0x4ea1ae) = the
+line being typed. Roll = copy {0x20-B text, +0x22, +0x24} of
+record k+1 → record k, k=0..2 (word pair first 0x423bdd..bf9,
+then rep-movs 0x20 @0x423c06). The render tail (same function,
+after all channels): walks the 4 records as a 4-line staircase
+(x = +0x15a + k·8), typewriter reveal (+0x22 increments per
+frame vs the +0x20 dword hi-word char state; ≥0x80 = done →
++0x22/+0x24 cleared 0x423d2a..d37), per-char x-offset tables
+0x454c20/0x454b70, glyph metrics 0x402884/0x402a12, chars
+≥0x80 remapped FUN_00410493 (accented locales), glyphs
+[0x46cdb0].
+
+**THE 53-ID → LINE MAP [corpus-verified]**: the text table is
+loaded at GameMain boot from the **[WARNINGS]** section of the
+active LANGUAGE.* file (name string "WARNINGS" @0x457ac9, loader
+0x424679 + 53 × 0x30 record walk 0x41c2ff..0x41c325 into
+0x46c18c; sibling "MENU_ITEMS" @0x457abe → 0x46af5c, walk bounds
+0x1200 = 64 records of the 96 in the section [observed; reader
+internals not decoded]). All six corpus languages (DCH/ENG/FRE/
+GER/ITL/SPA) carry EXACTLY 53 records, same order. ENG text,
+id = call-site census (55 sites, every one reconciled):
+- 0/1/2 "UNIT n HAS NOW ARRIVED" — pod release, one per player
+  p: FUN_004239ef(p, p) @0x41ffd4/0x41fff7/0x420024 (§7j.19's
+  citation).
+- 3/4/5 "UNIT n HAS OVERHEATED", 6/7/8 "UNIT n TEMPERATURE
+  CRITICAL" — heat machine @0x4101d7/0x41025e (ch 0/1/2).
+- 9/0xA/0xB "UNIT n ARRIVAL IS IMMINENT" — pod-descent arm,
+  FUN_0041fb4b caller @0x40c4d6/0x40c4fc/0x40c52c (§7j.20's
+  "msgs 9/10/0xB" citation).
+- 0xC/0xD/0xE "DANGER - UNIT n TARGETTED FOR" + 0xF "IMMINENT
+  AERIAL BOMBARDMENT" — the §7g.5/§7f.6 threshold walk
+  0x40c1c1..0x40c24f posts the PAIR (0xC+k, k)+(0xF, k). **The
+  §7f.6 "select SFX" gloss is CORRECTED**: nothing here is a
+  select sound; the walk is §7g.5's counter-threshold announcer
+  (robot bank +0x70 delay vs difficulty table 0x454ee8, zone ∉
+  {1,7}, cooldown latch [0x4de658]=0x80, blink-cursor
+  [0x4dc5d0]:=slot+1 — the cursor write is the attention-draw,
+  §7f.6's cell facts stand) and the ANNOUNCED CONTENT is the
+  targeting/bombardment warning, per the corpus text in all six
+  languages. The §7j.37 claim that 4239ef ids are "SFX ids, not
+  text messages" is likewise CORRECTED: they are both (speech +
+  WARNINGS text); the BOOT_CAMP hint-box system of §3/§7j.37 is
+  the SEPARATE text channel it always was.
+- 0x10/0x11/0x12 "UNIT n IS TAKING HITS" — FUN_0040e230 damage
+  applier @0x40e31f.. (§7g citation).
+- 0x13/0x14/0x15 "UNIT n DOWN TO HALF POWER" @0x40e4c5..;
+  0x16/0x17/0x18 "UNIT n POWER AT CRITICAL" @0x40e567.. (same
+  family).
+- 0x19/0x1A/0x1B "UNIT n IS TOAST" — death path @0x40eae3.. =
+  the CHANNEL-FLUSH triple.
+- 0x1C/0x1D/0x1E "UNIT n AUTO WEAPON CHANGE"; 0x1F..0x21 "UNIT
+  n OUT OF WEAPONS" — weapon watcher @0x40a105..0x40a1d2
+  (§7j.37's weapon-switch citation).
+- 0x22 "LASER FENCE DEACTIVATED" — delayed-trigger expiry
+  (§7j.12) + fence family @0x422cdc (ch3).
+- 0x23 "SECTION RAISED" @0x4224e5, 0x24 "SECTION LOWERED"
+  @0x422592 — the elevator/section mover (ch3; §7j.21/§7j.46
+  citations).
+- 0x25 "X" — placeholder, ZERO call sites (the only unposted id
+  besides none).
+- 0x26 "MAIN OBJECTIVE COMPLETED" @0x448dd9, 0x27 "SUB
+  OBJECTIVE COMPLETED" @0x448e45, 0x34 "PART OBJECTIVE
+  COMPLETED" @0x448e6f — objective family (ch3; §7j.32).
+- 0x28 "CONGRATULATIONS" + 0x29 "ALL OBJECTIVES COMPLETED" —
+  the MISSION-COMPLETE pair @0x448c64/0x448c78 and the second
+  site 0x448ec1/0x448ed5 (ch3; §7j.32's citation). 0x29 is the
+  second text-only id — the pair types out as one two-line
+  congratulation.
+- 0x2A "EVACUATION COMMENCED" — extraction-beacon armer
+  FUN_004247b5 @0x42488d (ch3; §7j.20's "SFX 0x2A" = the
+  ticket's "armer click").
+- 0x2B/0x2C/0x2D "UNIT n BATTERY EXHAUSTED" @0x40e424..;
+  0x2E/0x2F/0x30 "UNIT n DAMPER EXHAUSTED" @0x41010a/0x41012c/
+  0x410153→tail-jmp 0x4102ac; 0x31..0x33 "UNIT n LOSING AMMO"
+  @0x41038c.. (ch 0/1/2 each).
+
+**CORPUS REACHABILITY** (SP, corpus scenarios): ids 0/1/2 + 9/
+0xA/0xB fire on every ZONEA drop (S0-class boots); 0x10..0x18 +
+0x19..0x1B + 0x2B..0x33 need combat/attrition (damage paths,
+S1-class); 0x22..0x24 need fences/elevators (ZONEB/F surfaces);
+0x26..0x2A + 0x34 need objective completion/extraction (S5/S6-
+class); ids 0x3..0x8 need the heat machine (no corpus scenario
+exercises it today). The queue/render cells are UI-presentation
+state — no engine or watch-row consequence (the spoken-line
+RandA draw joins the existing T3/T4 budget class).
