@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W11-prep THE DBX-STITCH O2 TRANSCRIPT CHANNEL
+    SUPPORT unit COMPLETE (worker 74bae49c claim 2, commits 1cc53b4
+    + ab0738b, both PUSHED; D139): runner::stitch threads the dump
+    channel through the anti-ghost validation — O2 transcripts
+    validate ids against exw_addr (NoExwAddress; the EXD-only row
+    static-cursor-clamp rejects LOUD; the rules are PER-CHANNEL
+    MIRRORS: the T3 EXD-gap rows with live EXW cells dump legally
+    on O2); dbx-stitch --channel o1|o2. Verified by the new runner
+    unit + a new differ_gate corpus lane (the REAL S0 run
+    fabricated under O2 through the enforced rule, the 8-byte D138
+    map-wh span intact, the EXD-only row refusing, the same row
+    legal on O1); full differ_gate 3/3 (829s), canonical_dump_gate
+    13/13, diffharness 99, fmt+clippy clean, MANIFEST clean pre+
+    post, no Ghidra run. THE O2 HEADLESS TRIANGLE (plan D138 <->
+    differ D137/D138 <-> stitch D139) IS CHANNEL-COMPLETE — the
+    remaining W11 work is the operator-gated ptrace driver + the S0
+    live session (item 1, [BLOCKED]-on-operator). Queue: item 2 =
+    the capgen O2 transcript emitter skeleton (plan->driver->
+    transcript->stitch proven headless on a synthetic feed).
   - 2026-08-24 P4.2/W11-prep THE DBX-PLAN O2 CHANNEL SUPPORT unit
     COMPLETE (commits c57eae3 RE notes + b199ece impl, both PUSHED,
     worker c44a3c8b claim 2; D138 + D137-CORRECTION): dbx-plan

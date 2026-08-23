@@ -146,25 +146,30 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W11-prep, SMALL] DBX-STITCH O2 TRANSCRIPT CHANNEL SUPPORT —
-   the stitch side of the D138 O2 plan form (the dbx-plan side is
-   COMPLETE since b199ece; the differ side since 0ea13b8/D137+D138).
-   CONTEXT: runner::stitch validates every transcript id against the
-   registry with the O1 anti-ghost rule ("registry row has no EXD
-   address" = StitchError) and dbx-stitch bins consume it; an O2
-   capture (the W11 ptrace driver, DESIGN §10-W11) carries EXW-guest
-   rows that must validate against exw_addr instead. METHOD: thread
-   the channel through the stitch validation (O2 = the exw_addr rule;
-   the EXD-only rows — static-cursor-clamp — reject LOUD on O2, never
-   silently) + the plan-form expectations the D138 artifact pins
-   (flat 0x addrs, the 8-byte static-map-wh span, trigger-fed anchor
-   alignment) — same stitch_output/chain machinery (channel-agnostic
-   by DESIGN §3). differ_gate gains one O2-transcript lane if the
-   fixture shape permits it headless; fmt + clippy; NO live Wine
-   session (the driver itself stays W11/operator-gated). (QUEUED
-   2026-08-24 by the dbx-plan O2 unit, commit b199ece/D138 — the
-   O2 plan + differ are now both channel-complete; the stitch is the
-   last headless-reachable piece before the driver.)
+   2. [P4.2/W11-prep, SMALL] THE CAPGEN O2 TRANSCRIPT EMITTER SKELETON —
+   the runtime-side producer of the O2 DBXCAP the stitcher now
+   consumes (the last headless-reachable W11 piece after D139 made
+   dbx-plan/differ/dbx-stitch all channel-complete). CONTEXT: tools/
+   runtime/dbx-capgen.py emits the O1 DBXCAP from the DOSBox-X
+   debugger log; an O2 capture is produced by the W11 host ptrace
+   driver (DESIGN §10-W11, operator-gated: Wine + ptrace +
+   process_vm_readv). The headless piece: the TRANSCRIPT side of the
+   D138 plan form — a small `capgen-o2` (or a --channel o2 mode of
+   dbx-capgen) that takes the o2 capture-plan.json + a dump feed
+   (per-trigger-hit watch reads; for the headless skeleton a
+   synthetic/file feed) and emits the DBXCAP v1 lines the D139
+   dbx-stitch validates (flat plan row order, the 8-byte map-wh
+   span, anchor-frame TS rows, per-frame T0/T1 rows, injection
+   flags) — proving the plan->driver->transcript->stitch->differ
+   chain end-to-end headless before any Wine session. METHOD: read
+   the S1-o2.json plan form, emit the transcript, dbx-stitch
+   --channel o2, decode; NO live Wine/ptrace (the driver itself
+   stays operator-gated W11 work — the skeleton's feed is
+   synthetic, clearly marked). fmt + clippy (or flake8/py syntax
+   check for the python side); manifest bracket any corpus read.
+   (QUEUED 2026-08-24 by the dbx-stitch O2 unit, commits 1cc53b4 +
+   ab0738b/D139 — the plan + differ + stitch are all
+   channel-complete; this closes the headless loop.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -317,6 +322,44 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W11-prep THE DBX-STITCH O2 TRANSCRIPT CHANNEL
+  SUPPORT unit COMPLETE (worker 74bae49c claim 2, commits 1cc53b4 +
+  ab0738b, both PUSHED; D139). (a) THE CHANNEL-THREADED ANTI-GHOST
+  RULE: runner::stitch validates every transcript id per the DUMP
+  HEADER's channel — O1 keeps the exd_addr rule verbatim, O2 gains
+  the mirror (StitchError::NoExwAddress, carrying the row's note).
+  PER-CHANNEL MIRRORS, never global: a T3 EXD-gap row with a live
+  EXW cell (debris-stager 0x476fbc) dumps LEGALLY on O2 (the EXW
+  cell is the canon there + the D138 plan emits it); the ONE
+  live-registry EXD-only row (static-cursor-clamp, TS — empty
+  exw_addr) rejects LOUD on O2 and stays legal on O1 (EXD pair
+  0x1074ac/0x1074b0). Pre-D139 the O2 path enforced NOTHING (only
+  the differ downstream would surface a bogus row as coverage
+  noise). Engine/O3 carry no address rule. (b) dbx-stitch
+  --channel o1|o2 (o1 default, O1 behavior byte-identical — the W3
+  machinery was already channel-agnostic by DESIGN §3, which is why
+  the D87 fabricated tiebreak lanes were correct by construction);
+  CLI smoke-verified both ways (o2 manifest "O2:EXW/Wine"; the clamp
+  transcript FAILS o2 with the note, PASSES o1). (c) VERIFIED: new
+  runner unit stitch_o2_channel_rules (the D138 row forms
+  end-to-end: the 8-byte ADJACENT map-wh span w@+0x00/h@+0x04
+  stitches + decodes channel-marked; the LOUD rejection; the mirror
+  both ways) + new differ_gate lane s0_o2_transcript_stitch_
+  channel_rule (the REAL S0 run dac1cfd17bc7ede3 fabricated through
+  the channel-aware inv_frame, stitched under O2 THROUGH the
+  enforced rule, decoded with the 8-byte span intact; the EXD-only
+  row refuses; the same row on O1 forms stitches clean). Full
+  differ_gate 3/3 corpus green (829s — the S0..S8 cross/double-run
+  lane + all four tiebreak lanes UNCHANGED: the only empty-exw
+  registry row is static-cursor-clamp itself, so the rule guards
+  never breaks the existing fabrications); canonical_dump_gate
+  13/13; diffharness 99; bedlam-game lib 132; fmt+clippy clean;
+  MANIFEST clean pre+post; no Ghidra run. THE O2 HEADLESS TRIANGLE
+  (plan D138 <-> differ D137/D138 <-> stitch D139) IS CHANNEL-
+  COMPLETE — only the operator-gated W11 ptrace driver remains.
+  Queued: item 2 = the capgen O2 transcript emitter skeleton (the
+  plan->driver->transcript->stitch chain proven headless on a
+  synthetic feed).
 - 2026-08-24: P4.2/W11-prep THE DBX-PLAN O2 CHANNEL SUPPORT unit
   COMPLETE (worker c44a3c8b claim 2, commits c57eae3 RE-notes +
   b199ece impl, both PUSHED; D138 + D137-CORRECTION). (a) dbx-plan
