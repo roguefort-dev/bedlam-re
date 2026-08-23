@@ -543,7 +543,13 @@ terrain pass overwrites everything the present window reads.
 - Zoom path (`0x4ede34 != 0`, FUN_004012f7/FUN_004013e8):
   Bresenham-style row/column replication from 0x1e0-source-height
   scale factor `_DAT_004ede54` (heights 0x1e0/0x1df); not needed at
-  camera 0/full zoom for the crop gate.
+  camera 0/full zoom for the crop gate. [2026-08-23 precision,
+  §7j.58/D130: this is the death-wipe IRIS path — FUN_004012f7
+  fill-0 + centered v×v SHRINK (row routine 0x401430, scale
+  (0x1E0<<16)/v) of the FROZEN frame, v := 480−min([0x4ede34],479);
+  FUN_004013e8 is the NORMAL zoom path's STRETCH row routine
+  (480←v bytes, scale (v<<16)/480) — the two row routines are
+  inverse twins, not one path]
 
 ## 8. Open items
 

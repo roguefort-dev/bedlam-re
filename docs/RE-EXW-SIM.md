@@ -340,10 +340,11 @@ consumed unconditionally at the tail (`= -1`, 0x40d70d).
    ALIVE dword `0x4c6a60 + 0xA8*(DAT_0046cbd4 + slot)` ≠ 0. Action:
    `DAT_0046cbdc = slot` (the squad slot), `DAT_0046ccec = 2`,
    `_DAT_004ede34 = 0`, `_DAT_004ea8f8 = 0`; the F-latch clears
-   regardless of the alive gate. `_DAT_004ede34/_DAT_004ea8f8` are
-   map-overlay/present aux globals (readers FUN_00401107,
-   FUN_00403938, FUN_0044764c) — cleared on select, consumers not
-   decoded this pass.
+   regardless of the alive gate. `_DAT_004ede34/_DAT_004ea8f8`
+   [identity CLOSED §7j.58/D130]: 4ede34 = the death-wipe iris
+   cell — these strips are its CLICK-SELECT CANCELS (selecting an
+   alive squadmate aborts the iris); 4ea8f8 = the MP death-position
+   marker countdown, zeroed in tandem.
 3. **Order keys 1..7** [asm 0x40d3b0..0x40d659]: latches
    0x4edc18+4*(k-1). Selected robot idx = `DAT_0046cbd4 +
    DAT_0046cbdc`. Gate: word@`0x4c6a1c + 0xA8*idx + 8*(k-1)` ≠ 0
@@ -519,8 +520,9 @@ stay unwired (button map P2e; overlay machinery open).
    `0x46ccec` producers: sidebar_control = 2 [2-4], robot death
    FUN_00409138 = 3 [5], ammo pickup = 2 [b], the MissionShell
    auto-reselect (0x448111..0x448117: when it changes
-   `DAT_0046cbdc` it writes 0x46ccec = ebx(2), clearing
-   `_DAT_004ede34`/`_DAT_004ea8f8`).
+   `DAT_0046cbdc` it writes 0x46ccec = ebx(3) [value CORRECTED
+   §7j.58/D130 from this pass's "(2)": ebx := 3 @0x4480de],
+   clearing `_DAT_004ede34`/`_DAT_004ea8f8`).
 
    Engine seam (this unit): GENERAL.BIN + SMLFONT.BIN stage with
    the mission (the GAMEGFX tail grows to 12 files); present draws
@@ -4760,6 +4762,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | chase-camera override staging | FUN_004245c9(x,y,z) = a 5-instruction STAGER 0x4245c9..0x4245e5: {x,y,z} → 0x4de648/4c/50 + const 0xF → 0x4de654 (retires the "wall-strip redraw" gloss family — §7j.19/§7j.21/§7j.22 + the door row — and §7j item-6's "selection chaser" for its sibling); consumer FUN_00403938 0x4039b0..0x403a42: [0x4edbd8]≠0 ∧ [0x4de654]≠0 → the camera-point ring slot (0x4c71c4/cc/c8, 4-slot ring [0x46ccdc]) loads the staged triple instead of the selected robot's pos; [0x4de654]−− per frame; second consumer robots() 0x40b885 gates the camera-recenter block off while ≠ 0; MissionShell clears 0x4de654 (0x4478ad); FULL caller census (4, §7j.54): door stepper FUN_004223b8 @0x422427 + delayed-trigger expiry FUN_00422e0a @0x422e55 (§7j.12) + artillery spotter reveal @0x41173a (§7j.22) + the bombardment record-0 impact (SP ∧ record 0 ∧ cursor ≠ selected+1 ∧ cursor-robot is player-type, 0x423e7c..0x423ed5) | §7j.54 |
 | ACTIONPAN registry gate | [0x4edbd8] = the "ACTIONPAN" value of HKCU\Software\Mirage\Bedlam\1.00 (REGISTRY, not a file — the "CONFIG.BDL" gloss RETIRED §7j.56: the string has zero binary refs, on-disk CONFIG.BDL/OPTIONS.BDL are DOS leftovers): 4-site census — readers = exactly the §7j.54 pair (0x4039b0 camera-slot swap; 0x40b875 recenter gate w/ the [0x4de654] leg 0x40b885); writers = the boot config family ONLY (loader FUN_004252c0 → FUN_0044ede4("ACTIONPAN",&cell, bounds [0,1], default 1) @0x42535c — RegQueryValueExA writes the cell directly, absent/malformed ⇒ default 1 = pans ON; saver FUN_0042540c @0x42545c via FUN_0044ed98/RegSetValueExA at the name-entry exit 0x43b03b + 0x41c59b); .bss; NO game-state/mission-phase/UI writer — session-constant enable bit for the whole chase-camera subsystem | §7j.56 |
 | viewport zoom cell | [0x4ede54] = the vertical viewport height (ZOOM) in backbuffer rows, clamp [0xF0,0x1E0]=[240,480]: ±0x10/frame on keys (scan 0x4E/0x0D in, 0x4A/0x0C out — keystore 0x4edc92/0x4edc51/0x4edc8e/0x4edc50), the FUN_0042034c tail 0x4204ea..0x420548; per-mission init = the leftover-edx store 0x447883 (0x1E0 @0x44784a not provably surviving FUN_004034ef/FUN_0041d954 — benign: ≥480 dispatches 1:1, first keypress re-clamps); consumers: FUN_00401107 the zoom blitter (Q16 magnify scale (v<<16)/480 → 0x454060/68 + halves 0x45405c/64, source offset (480−v)/2; ≥480 → 1:1 rep-movs; [0x4edba0] map-overlay ≠0 → the map path; [0x4ede34]≠0 → temp v := 480−min([0x4ede34],479) w/ save/restore 0x4012c7/0x4012e5/0x4012f1), the recenter speed (cursor−240)·v/480 @0x40b89e/0x40b8c5, the cursor un-zoom mappers 0x4106a1/0x4106d4/0x419a41; NO corpus writer (no scenario presses zoom keys) → no differ rows | §7j.56 |
+| death-wipe iris cell | [0x4ede34] = the CLOSING-IRIS death-wipe progress: 0 inactive; `:=1` at selected-robot SP death (FUN_0040e230 SP tail 0x40ea8b — MP never arms, posts the marker latch instead); `+=0x28`/frame by the MissionShell frame cluster (0x4480af, after the present call); terminal `:=0x1E0` @0x4480d6 when ≥480 + the AUTO-RESELECT pass (last ALIVE player-type squad slot ≠ selected → select it, flash [0x46ccec]:=3, cancel cell:=0 via xor-of-equals 0x448121 + [0x4ea8f8]:=0; no eligible mate → parks at 480 = the fail-detector conjunct 0x4476a2, §7j.57); cancels: 3 click-select strips 0x40d286/0x40d311/0x40d398 + per-mission zero 0x44787d; consumers: FUN_00401107 gate 0x401119 → temp v := 480−min(cell,479) render (fill-0 + centered v×v SHRINK of the FROZEN frame, §7j.58 C) + FUN_00403938 head 0x403952 skips the render body during the wipe; presentation-only → no differ rows | §7j.58 |
+| MP death-position marker countdown | [0x4ea8f8] := 0x20 at MP selected-robot death (FUN_0040e230 MP branch 0x40e7ef, posting the dying position (rec+0/+4)>>8, rec+8 into [0x4ea8ec/f0/f4]); consumer = FUN_00403938 head 0x403974..0x4039a5: while ≠0 copies the trio into [0x46ccdc]·12 + 0x4c71cc/c4/c8 (the dropship-ring 0x4c71b8 bank region) + dec; zeroed in tandem with the iris cell at every cancel site + per-mission init 0x4478f1; SP never sets it (SP arms the iris instead); presentation-only → no differ rows | §7j.58 |
 | robot shield-charge machine | d@robot+0x88 shield points (−2/frame clamp 0; 0x20 per charge/state-3; 0x2710 while +0xA0 flash) + d@+0x8C charges (spawn = word@chassis_row+2 via the 0x40cc8c 5-slot jump table, chassis ids 0x2A..0x2E; hit consume FUN_0040e230 @0x40e2a4) | §7j.45 |
 | scorch-lane timers | w@+0x32 burn cooldown := 0x64 (FUN_004100b7 @0x4103e3, gate ==0 @0x41036e), dec 1/frame (phase-0 pre-pass); w@+0x30 accumulator −0xA/phase-1 off-scorch; alarm w@+0x34 cooldown + d@+0xA4 counter (dec 1/frame — D90's question closed) | §7j.45 |
 | robot state-1 producer | THE ONLY writer of state 1 = FUN_00409138 COMMAND bit0 @0x40a37b (:= 1 + stop := 0xF4240) — no patrol semantics; SP never produces state 1 (full census §7j.45 Part B/4) | §7j.45 |
@@ -9228,17 +9232,7 @@ Complete text census: 26 sites, no indirect refs.
 4. (The [0x4ede34] temp path itself reads v 5×:
    0x4012c7/0x40134a/0x40136b/0x401389/0x4013ac.)
 
-*[0x4ede34] census pointer (adjacent cell, identity NOT
-decoded here — follow-up candidate):* 9 sites; producers =
-0x40d286/0x40d311/0x40d398 (FUN_0040d2xx ride/transport
-neighborhood — same family as the recenter head's 0x40d197
-call), `:= 1` @0x40ea8b (MP-respawn region), the MissionShell
-frame cluster 0x4480af/0x4480d6/0x448121 (:= 0 — right after
-the 0x44809e read and the 0x448094 FUN_00401107 call), the
-0x4476a2 `cmp 0x1E0` test, the per-mission zero 0x44787d, and
-the two FUN_00401107 gates 0x401119/0x403952. Reads as a
-per-frame-driven TEMP viewport/cinema source (e.g. a screen
-wipe on MP respawn).
+*[0x4ede34] census pointer (adjacent cell) — **CLOSED by §7j.58/D130** (2026-08-23): it is the CLOSING-IRIS death-wipe cell — `:=1` at selected-robot SP death 0x40ea8b, +0x28/frame 0x4480af, terminal 0x1E0 + auto-reselect 0x4480d6/0x448121, cancels = click-select ×3 + per-mission 0x44787d; FUN_00401107 renders fill-0 + centered v×v shrink of the frozen frame, FUN_00403938 skips its render body during the wipe; the [0x4ea8f8] sibling = the MP death-position marker countdown. Full grammar in §7j.58.*
 
 **C. Engine/differ consequences.** ZOOM: none — no corpus
 scenario presses the zoom keys (the harness injects COMMAND
@@ -9276,7 +9270,7 @@ Both sit in FUN_0040e230 death epilogue (gate [0x46cd0c]==0 at the head); the §
 - Walks the player squad records [0x46cbd4] .. [0x46cbd4]+[0x46cbd8]−1 (0xA8 stride, loop 0x44768e..0x44769e): the FIRST record with **+0x9C == 0 → return 0** (someone alive); +0x9C≠0 = dead → skip.
 - All squad records dead ∧ [0x4ede34] == 0x1E0 → the FAIL SEQUENCE: FUN_0042391d ([0x4eddc0]:=0 + FUN_0044b3f8), FUN_00425a03 (FUN_0044acf4 + [0x4edb3c]:=0 + FUN_0044ad18), optional FUN_0042595a (gated [0x4edbe8]≠0 ∧ [0x4edbec]≠0), FUN_00425bf5, then the [0x46cca4]-gated animation posting ([0x46af0c]:=[0x46af20], FUN_0042582a(0x800,0), string 0x459852 via FUN_0044567c, FUN_00425851) → **eax := 1**.
 - Sole caller: MissionShell 0x44870d, gated [0x4dc67c]==0 = **extraction NOT complete** (§7j.27 dropship cell; the alternate branch 0x4486e4 handles [0x4eb8b8]≠0/[0x4edd8c]==1 → ret 4). Result 1 → eax := 3 → **MissionShell returns 3** (the fail/debrief screen transition; cf. ret 2 = launch). A wiped squad AFTER extraction completed never fails — the detector stops running.
-- The [0x4ede34]==0x1E0 conjunct = the death-wipe viewport cell at its terminal 480 value: set := 1 at the selected robot death (0x40ea8b), zeroed per-mission (0x44787d) and on click-select (0x40d286) — i.e. the fail waits for the death wipe to FINISH before transitioning. The cell own grammar is item 3 unit (§7j.56/B pointer).
+- The [0x4ede34]==0x1E0 conjunct = the death-wipe viewport cell at its terminal 480 value: set := 1 at the selected robot death (0x40ea8b), zeroed per-mission (0x44787d) and on click-select (0x40d286) — i.e. the fail waits for the death wipe to FINISH before transitioning. The cell own grammar is CLOSED by §7j.58/D130 (the closing-iris machine).
 
 **Semantics verdict:** +0x9C is the MISSION-FAIL liveness oracle — DISTINCT from +0x7C (alive: the select/AI gate, zeroed at death but RE-SET by the MP respawn) and +0x78 (hp). Within a mission it is set-only (once 1, never 0); a dead MP bot respawns with alive/hp restored but +0x9C still 1 — legal because nothing in MP ever reads it.
 
@@ -9285,3 +9279,51 @@ Both sit in FUN_0040e230 death epilogue (gate [0x46cd0c]==0 at the head); the §
 **D. The §7j.55 sidebar cross-question answered: NO.** The heat-family sidebar row pass never reads +0x9C. [0x46ccec] census this unit: the sole reader is 0x407205 (the per-frame sidebar updater pass: cell ≠0 → dec → FUN_00408403) — [0x46ccec] is a FLASH-COUNTDOWN cell in the [0x46ccf0]/[0x46ccf8] timer family (≠0 → dec → FUN_004085ce / FUN_00401ca2(0x12,1,…)), values 2/3 = flash durations; writers incl. death :=3 (0x40e6d2), cook-off :=2 (0x410358), click-select :=2 (0x40d280 family), MissionShell head/frame sites. The queue "likely the dead-robot per-frame handling" hypothesis is retired: the reader is the fail detector, a mission-level control-flow gate, not per-robot handling.
 
 **E. Engine/differ consequence: NONE.** E already conforms (mission.rs death tail `death_flag = 1` with alive=false/drop_countdown=0/hp=0/armor=0 per the SP subset; fresh records per mission ≡ the whole-bank zero-fill) and `death_flag` is already a field leaf of the T1 robot-bank differ row (+0x9C, U16 — upper word always 0 since every write is a dword store of 1). No watch rows, no differ changes; the fail detector itself is a screen-transition gate outside the dump surface.
+
+## 7j.58. THE [0x4ede34] DEATH-WIPE CELL — CENSUS CLOSED: it is the CLOSING-IRIS death wipe (value grammar 0 → 1 at selected-robot SP death → +0x28/frame → terminal 0x1E0 = auto-reselect/fail-detector conjunct); the temp render = full-screen fill-0 + a centered v×v SHRINK of the FROZEN world frame (v := 480−min(cell,479)); the [0x4ea8f8] sibling = the MP-only death-position marker countdown (0x20 frames) (2026-08-23, worker 27b33f6c claim 2, D130; docs-only; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before AND after; registry_anchors green) [verified]
+
+Closes the §7j.56/B census pointer (queue item: pin the value grammar + WHAT the temp render shows). Complete displacement-aware text census: **13 sites** for 0x4ede34, no indirect/register-displacement refs (absolute-only addressing).
+
+**A. Site census + value grammar.** Writers by value:
+- **`:= 1` (ARM)** — sole site 0x40ea8b: FUN_0040e230 SP/other tail, when the dying robot IS the selected one (idx == [0x46cbd4]+[0x46cbdc], the D129 decode; reached when [0x4edb88]==0 SP ∨ no-extract latch). MP never arms — the MP branch posts the [0x4ea8f8] marker latch instead (E below) and respawns.
+- **`+= 0x28` (+40/frame)** — sole site 0x4480af, the MissionShell frame cluster (B below).
+- **`:= 0x1E0` (TERMINAL clamp)** — sole site 0x4480d6, same cluster (when cell+40 ≥ 480).
+- **`:= 0` (CANCEL)** — five sites: the three squad-slot click-select strips 0x40d286/0x40d311/0x40d398 (§6c.2 — selecting an ALIVE squadmate y∈[5,0x35], x∈[0x1E7,0x217]/[0x219,0x249]/[0x24B,0x27B]; also zero [0x4ea8f8] in tandem), the auto-reselect cancel 0x448121 (B below — a Watcom xor-of-equals zero: `xor ecx,edi` where the branch just proved ecx==edi), and the per-mission reset 0x44787d (MissionShell straight-line block: xor ecx,ecx @0x44785e, callee-saved through FUN_0041d954, zero-stores 0x4dc678/0x4edba0/0x4dc5d0/0x4de658/[0x4ede34]/… — [0x4ea8f8] zeroed too @0x4478f1, ecx provably still 0).
+
+Readers (four):
+1. **FUN_00401107** (the zoom blitter, MissionShell present call 0x448099): dispatch 0x40110c [0x4edba0] map-overlay first, then gate 0x401119 `cell≠0` → the temp path (C below); read 0x4012cd inside it.
+2. **FUN_00403938** (the world/sidebar render, present call 0x448094): head gate 0x403952 `cell≠0` → jmp 0x4071d5 (the shared tail: map-present FUN_004089b1 only in map mode, FUN_004072bf, FUN_0040807f, the [0x46ccf0]/[0x46ccec] frame timers) — the whole render body is SKIPPED while the wipe runs. (Address-attribution correction to §7j.56/B: 0x403952 is FUN_00403938's gate, not "a FUN_00401107 gate".)
+3. **FUN_0044764c** 0x4476a2 `cmp 0x1E0` — the §7j.57/D129 squad-wipe fail-detector conjunct (the wipe must FINISH before the fail fires).
+4. **MissionShell frame machine** 0x44809e (B below).
+
+**B. The frame machine + timeline** (MissionShell main loop, immediately AFTER the present call 0x448099):
+```
+44809e: edi := [0x4ede34]; test; je done        ; only runs when armed
+4480ac: ebp := edi + 0x28; [0x4ede34] := ebp    ; +40 per frame
+4480b5: cmp ebp,0x1E0; jl done                  ; <480 → keep wiping
+4480c1: eax := [0x46cbd4]*0xA8                  ; terminal block:
+4480d0: edi := [0x4edb90]                       ;   the global PLAYER-TYPE word
+4480d6: [0x4ede34] := 0x1E0                     ;   clamp TERMINAL
+4480de: ebx := 3                                ;   flash duration 3
+        walk slot edx = 0..[0x46cbd8)-1, record := [0x46cbd4]+edx:
+          skip dead (record+0x7C alive == 0)
+          skip non-player (record TYPE +0x2A (=`dword@+0x28>>16`) ≠ [0x4edb90])
+          skip currently-selected (edx == [0x46cbdc])
+          → [0x46cbdc] := edx (AUTO-SELECT); [0x46ccec] := 3
+            [0x4ede34] := 0 (xor-of-equals); [0x4ea8f8] := 0; CONTINUE walk
+```
+NO break on match — the LAST eligible slot wins. The eligible set = ALIVE player-type squad slots ≠ the dead selected one — i.e. any living squadmate (squad slots are player-type by construction, +0x2A row). Timeline: death frame cell=1 → blit v=479; frames 2..12: cell = 41..441 → v = 439..39; frame 12's increment hits 481 → clamp 480 + reselect. Cancel → next frame renders normal (v_old restored). No cancel → cell PARKS at 480: every later frame blits v := 480−min(480,479) = **1** (a 1×1 dot) until the fail detector (all-dead ∧ 0x1E0) fires. In SP "no cancel" ⟺ squad wiped — the two fail-detector conjuncts are the same event observed twice. MP never arms, so the whole machine is SP-only (consistent with D129's detector being SP-only).
+
+**C. WHAT the temp render shows — the closing iris.** FUN_00401107 temp path 0x4012c7..0x4012f6: push [0x4ede54] (v_old); `v := 0x1E0 − min(cell,0x1DF)` @0x4012e5 (guaranteed ∈[1,480]); call 0x4012f7; restore. 0x4012f7:
+1. **FIRST call 0x40129e** = the full-screen fill: 480 rows × 0x78 dwords of 0 to the visible page ([0x4edb3c]/[0x4edb40]) — palette-0/black.
+2. Source window = the SAME base + fine-cam scroll-offset math as the normal path (backbuffer [0x4ede18]+0xA040, colAdj/rowAdj from [0x4edde4]/[0x4edde8] &0x1F) — but WITHOUT the normal path's (480−v)/2 source-centering add; the full 480×480 window is used.
+3. Scales = the INVERSE of the normal zoom path: 0x454068/0x454060 := (0x1E0<<16)/v with halves 0x454064/0x45405c.
+4. DEST is centered instead: edi := [0x4edb3c] + (480−v)/2 + (480−v)/2·[0x4edb40] — the v×v box centered at (240,240).
+5. v row iterations of the row routine 0x401430 — the horizontal SHRINK twin of the normal path's 0x4013e8 stretch: v dest bytes ← 480 source bytes (`movsb; dec esi; esi += acc>>16; acc += (480<<16)/v`); between rows the source advances by whole 640-byte rows on a second sub-pixel accumulator (0x4013c9..0x4013dc) — over v rows the source covers exactly 480 rows.
+Because FUN_00403938 skips its render body while the wipe runs (A.2), the backbuffer holds the last pre-death world frame — the iris shrinks a FROZEN snapshot [skip verified; frozen-frame consequence inferred]. Net effect: on the selected robot's SP death the view freezes and closes like an iris — a centered square window shrinking 40 px/frame per side from 479×479 to a 1×1 dot on black over ~13 frames; the user zoom [0x4ede54] is save/restored around it, untouched. This is the death cinema effect; the queue's "wipe/cinema" hypothesis confirmed with the iris geometry pinned.
+
+**D. The §6c.6e flash-value correction.** §6c.6e says the auto-reselect "writes 0x46ccec = ebx(2)" — the code loads ebx := 3 @0x4480de, so the auto-reselect flash is **3** (same duration class as the FUN_00409138 death flash, per the [0x46ccec] values-2/3 grammar in §7j.57 D). Corrected in place below.
+
+**E. The [0x4ea8f8] sibling — the MP death-position marker countdown** (8-site census): sole `≠0` producer 0x40e7ef := 0x20, in FUN_0040e230's MP branch (reached when [0x4edb88]≠0 ∧ extract-latch==0 ∧ dying == selected): posts the dying robot's position — [0x4ea8ec] := (rec+0x00)>>8, [0x4ea8f0] := (rec+0x04)>>8, [0x4ea8f4] := (rec+0x08) — then arms the 32-frame countdown. Sole reader/consumer: the FUN_00403938 head block 0x403974..0x4039a5 (runs only when the wipe is NOT active — the wipe gate 0x403952 precedes it): while ≠0, copies the trio into `[0x46ccdc]·12 + 0x4c71cc/0x4c71c4/0x4c71c8` — inside the §7j.56 DROPSHIP-ring 0x4c71b8 12-byte-stride bank region — and decrements (0x40399f). Exact rendering consumer of those cells not decoded (presentation-only, out of unit scope). Zero sites: the three click-select tandems (0x40d28c/0x40d317/0x40d39e), the auto-reselect cancel (0x448127), per-mission init (0x4478f1). Semantics: a ~32-frame "last known position of your dead selected robot" marker for the MP respawn HUD; cancelled by selecting another robot. The SP tail (0x40ea77) does NOT post it — SP death arms the iris instead.
+
+**F. Engine/differ consequence: NONE.** The wipe is presentation-only (render-path + screen-transition control flow): zero RNG draws, zero robot-bank bytes, no dump-surface cell. The fail-detector TIMING consequence (fail waits for the 12-frame wipe to finish) is the same D129 class — a MissionShell screen-transition gate outside the dump surface. E's death tail already conforms; no watch rows, no differ changes. Future E-side render-parity note only: the iris grammar (fill-0, centered v×v, (480<<16)/v Q16 shrink both axes, +40/frame, frozen source) is now fully specified for the presentation layer.
