@@ -234,6 +234,14 @@ impl SceneFsm {
         self.scene_ticks = self.scene_ticks.saturating_add(1);
         let next = match self.scene {
             Scene::Boot => {
+                // Host skip intent (operator 2026-08-23): the EXW boot
+                // pair is unskippable (gate 004edbc4), so the INPUT path
+                // never advances Boot - only an explicit host intent
+                // (apply(Advance), like the menu intents) may zero the
+                // countdown. Modernization default; classic = timer only.
+                if action == SceneAction::Advance {
+                    self.boot_left = 0;
+                }
                 if self.boot_left > 0 {
                     self.boot_left -= 1;
                 }
@@ -503,6 +511,23 @@ mod tests {
         fsm.tick(&left());
         assert_eq!(fsm.scene(), Scene::Quit);
         assert_ne!(fsm.scene_hash(), before, "scene_ticks still hashes");
+    }
+
+    #[test]
+    fn boot_advance_intent_zeroes_the_countdown() {
+        let mut fsm = SceneFsm::new();
+        assert_eq!(fsm.scene(), Scene::Boot);
+        // boot_left starts at BOOT_TICKS (> 0); no accessor needed here.
+        // The input path never advances Boot (EXW gate 004edbc4 reads 0;
+        // unskippable pair) - only the explicit host intent may.
+        let skip = InputFrame {
+            buttons: (1 << 9) | (1 << 10),
+            ..InputFrame::default()
+        };
+        assert_eq!(fsm.tick(&skip), SceneAction::None);
+        assert_eq!(fsm.scene(), Scene::Boot);
+        fsm.apply(SceneAction::Advance);
+        assert_eq!(fsm.scene(), Scene::Title);
     }
 
     #[test]

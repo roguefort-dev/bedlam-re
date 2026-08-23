@@ -8,6 +8,16 @@ use bedlam_audio::{Mixer, MusicScript};
 use bedlam_core::frame::SimDriver;
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
+
+/// Skip chord bits mirrored from the shell button module (ESCAPE |
+/// ADVANCE); pending the P2e input-RE bit pinning.
+const SKIP_BUTTONS: u32 = (1 << 9) | (1 << 10);
+
+/// Level-based skip test for one input frame (also true when the left
+/// mouse button is held).
+fn cinema_skip_requested(input: &InputFrame) -> bool {
+    input.buttons & SKIP_BUTTONS != 0 || input.mouse_buttons & 1 != 0
+}
 use bedlam_core::sim::SimConfig;
 use bedlam_render::{render, Frame, MovieFrame, RenderInput, Vga6};
 
@@ -122,6 +132,7 @@ impl GameHost {
     /// 4. the canonical frame is re-rendered and stored for present.
     pub fn pump_frame(&mut self, dt_subticks: u32, input: &InputFrame) -> u32 {
         let executed = self.driver.advance(dt_subticks, input);
+        self.apply_cinema_skip(input);
         // Menu input ownership (D42.1): while a menu is staged on
         // Title, the menu IS the Title input path - the FSM is fed
         // NEUTRAL frames (ticks count, no generic click-advance) and
@@ -607,6 +618,47 @@ impl GameHost {
     }
 
     /// Whether a Title-scene movie owns the screen: one that is
+    /// Cinematic skip router (operator 2026-08-23). One frame-level
+    /// intent: Space/Enter (ADVANCE), Escape, or left-click while a
+    /// cinematic holds the screen finishes it NOW, so the ordinary
+    /// end-of-movie sync paths advance exactly as on natural
+    /// completion (parity baselines are inputless and unaffected).
+    /// Skippable: the Title entry movie (EXW skip gate 004edbc4 is
+    /// armed there - MoviePlayer::finish is the D42 skip) and the
+    /// Cutscene movie (the D34 loading tail runs unconditionally
+    /// after the movie call). The Boot attract pair is UNSKIPPABLE
+    /// in EXW (the gate reads 0 there); skipping it is an operator
+    /// modernization - the flow is dropped like an early Boot leave
+    /// and an explicit Advance intent zeroes the countdown.
+    /// Brief (unskippable, D37) and the Shop ambient ring are not
+    /// cinematics and are never touched.
+    fn apply_cinema_skip(&mut self, input: &InputFrame) {
+        if !cinema_skip_requested(input) {
+            return;
+        }
+        if self.title_movie_playing() {
+            if let Some(slot) = self.movie.as_mut() {
+                slot.player.finish();
+            }
+            return;
+        }
+        let cutscene_holds = self
+            .movie
+            .as_ref()
+            .is_some_and(|slot| slot.scene == Scene::Cutscene && !slot.player.finished());
+        if cutscene_holds {
+            if let Some(slot) = self.movie.as_mut() {
+                slot.player.finish();
+            }
+            return;
+        }
+        if self.fsm.scene() == Scene::Boot && self.boot.is_some() {
+            self.boot = None;
+            self.mixer.clear_pcm_stream();
+            self.fsm.apply(SceneAction::Advance);
+        }
+    }
+
     /// playing (started, not finished) OR staged but not yet started
     /// by the scene sync (the load-to-sync gap of one pump - the
     /// EXW title movie takes the screen before the menu loop runs).
@@ -1148,6 +1200,27 @@ mod tests {
             streams: vec![Vec::new(), stream],
         }
         .to_bytes()
+    }
+
+    #[test]
+    fn cinema_skip_chord_levels() {
+        let neutral = InputFrame::default();
+        assert!(!cinema_skip_requested(&neutral));
+        let space = InputFrame {
+            buttons: 1 << 10,
+            ..InputFrame::default()
+        };
+        let escape = InputFrame {
+            buttons: 1 << 9,
+            ..InputFrame::default()
+        };
+        let click = InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        };
+        assert!(cinema_skip_requested(&space));
+        assert!(cinema_skip_requested(&escape));
+        assert!(cinema_skip_requested(&click));
     }
 
     #[test]

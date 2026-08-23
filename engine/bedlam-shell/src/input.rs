@@ -31,6 +31,7 @@ pub mod button {
     pub const WEAPON3: u32 = 1 << 7;
     pub const WEAPON4: u32 = 1 << 8;
     pub const ESCAPE: u32 = 1 << 9;
+    pub const ADVANCE: u32 = 1 << 10;
 }
 
 /// A logical shell key (the winit-independent half of the seam).
@@ -43,6 +44,7 @@ pub enum ShellKey {
     Fire,
     Weapon(u8),
     Escape,
+    Advance,
 }
 
 impl ShellKey {
@@ -61,6 +63,7 @@ impl ShellKey {
             // Not a shell key: maps to nothing (callers drop it).
             ShellKey::Weapon(_) => 0,
             ShellKey::Escape => button::ESCAPE,
+            ShellKey::Advance => button::ADVANCE,
         }
     }
 }
@@ -90,6 +93,9 @@ pub fn map_physical_key(key: PhysicalKey) -> Option<ShellKey> {
         PhysicalKey::Code(KeyCode::Digit3) => Some(ShellKey::Weapon(3)),
         PhysicalKey::Code(KeyCode::Digit4) => Some(ShellKey::Weapon(4)),
         PhysicalKey::Code(KeyCode::Escape) => Some(ShellKey::Escape),
+        PhysicalKey::Code(KeyCode::Space)
+        | PhysicalKey::Code(KeyCode::Enter)
+        | PhysicalKey::Code(KeyCode::NumpadEnter) => Some(ShellKey::Advance),
         PhysicalKey::Code(_) | PhysicalKey::Unidentified(_) => None,
     }
 }
@@ -230,6 +236,8 @@ mod tests {
             (KeyCode::Digit3, ShellKey::Weapon(3)),
             (KeyCode::Digit4, ShellKey::Weapon(4)),
             (KeyCode::Escape, ShellKey::Escape),
+            (KeyCode::Space, ShellKey::Advance),
+            (KeyCode::Enter, ShellKey::Advance),
         ];
         for (code, want) in cases {
             assert_eq!(
@@ -240,7 +248,6 @@ mod tests {
         }
         // Unbound keys are dropped, as are unidentified ones.
         assert_eq!(map_physical_key(PhysicalKey::Code(KeyCode::KeyQ)), None);
-        assert_eq!(map_physical_key(PhysicalKey::Code(KeyCode::Space)), None);
         assert_eq!(
             map_physical_key(PhysicalKey::Unidentified(
                 winit::keyboard::NativeKeyCode::Unidentified
