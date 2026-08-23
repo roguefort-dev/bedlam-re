@@ -371,8 +371,10 @@ O1 field-map contract.
   inverse (valid because `normalize_o2_row`'s alias list takes EXW
   guest forms identical to EXD for every aliased row, and
   `EXW_ROBOT_MAP == EXD_ROBOT_MAP` — the §8 back-half probe; the O2
-  `static-map-wh` row deliberately normalizes to zero fields pending
-  the W11 pin, so its bytes never arbitrate), the E side is
+  `static-map-wh` row is W11-PINNED (D137, 2026-08-23): the EXW cells
+  are 0x24 apart with w LOW, so the O2 capture form is the 0x28 span
+  @0x4eddec (w@+0x00, h@+0x24) — NOT the EXD 0x30 span (h LOW,
+  0x2c apart), so the fabrication is channel-aware since), the E side is
   re-stitched as a Channel::Engine dump when perturbed. The four
   lanes assert class+detail verbatim: (a) O2 agrees with O1 on a
   perturbed-E `money` → `engine-bug` "the engine (E) is the outlier"
