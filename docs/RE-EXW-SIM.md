@@ -119,6 +119,7 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x88 | i32 | SHIELD POINTS: −2/frame clamp 0 (phase-0 pre-pass); 0x20 per consumed charge / on state-3 (FUN_0040e230); 0x2710 while +0xA0 flash runs; renderer 0x403ef4 [§7j.45] | 0x4c6a6c |
 | +0x8C | i32 | SHIELD CHARGES: spawn seeds word@chassis_row+2 (the equipment-chassis 0x2A..0x2E jump table 0x40cc8c); a hit with charges≠0 ∧ shield==0 consumes one → shield 0x20 [§7j.45] | 0x4c6a70 |
 | +0x90 | i32 | dying countdown (states 5/6 → despawn/revive) | 0x4c6a74 |
+| +0x9C | i32 | DEATH FLAG — the mission-fail liveness oracle [§7j.57/D129 closes the reader census]: set-only := 1 in BOTH FUN_0040e230 death tails (SP 0x40eac0 edx=1; MP respawn 0x40e82a edi=1 — the respawn re-init does NOT clear it); sole reader = the SP squad-wipe fail detector 0x44764c (any squad record +0x9C==0 → alive; all dead ∧ [0x4ede34]==0x1E0 → fail seq → MissionShell ret 3; MP ret 0 immediately); cleared ONLY by the mission-staging whole-bank zero-fill FUN_00402965(ecx=0x7E0, edi=0x4c69e4) @0x40cd38 — the bank is 12 slots; DISTINCT from +0x7C alive / +0x78 hp (both re-staged by MP respawn, this is not) | 0x4c6a80, §7j.57 |
 | +0xA0 | i32 | hit-flash/fade countdown (nonzero → shield := 10000 + the player-robot palette strobe ladder; −1/frame) [§7j.45] | 0x4c6a84 |
 | +0xA4 | i32 | ALARM COUNTER (§7g +3 on alarm; decays 1/frame phase-0 pre-pass — the D90 EXW-decay question CLOSED §7j.45) | 0x4c6a88 |
 
@@ -1111,7 +1112,10 @@ exw-sidebarbars FUN_004072bf). Three 7f glosses are CORRECTED here.
    stream are the sim side). Then the SP/MP gate
    (`mp_mode == 0 || respawn_ok[idx] != 0`): SP subset = alive =
    0, drop(+0x80) = 0, hp = 0, +0x9C = 1 (readers not yet
-   census'd), armor = 0, SFX 0x19/0x1a/0x1b + the selected-robot
+   census'd — CLOSED 2026-08-23 §7j.57/D129: both death tails
+   store 1; the sole reader = the SP squad-wipe fail detector
+   0x44764c; the MP respawn tail also stores 1, no reset),
+   armor = 0, SFX 0x19/0x1a/0x1b + the selected-robot
    `_DAT_004ede34 = 1` flag. MP branch = the full respawn
    (zeroes hit_flash/state/facing/armor/order-bits, variant =
    RandA&3, +0x2C = 0x28, re-spawn from MRK + probe re-seed +
@@ -4635,6 +4639,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | critter hit applier | FUN_004190bc(critter,owner,x,y,z,weapon,mode): presence w@+0x24; kind switch w@+0x00 (1..7 = the .NME section states); mode 2 = octile<0x20 on x/y + z-box (kinds 1/4 cell-unit coords, 2/3/5/6/7 Q13; z 0x20/0x24/0x40), mode 1 = x/y only; kinds 3..7 immune while state w@+0x0C ∈ {6,7,0xB}; hit → hp w@+0x06 −= FUN_00419aff(weapon), attacker w@+0x04, flash w@+0x7C, kinds 4..7 state := 5; death per kind 1→FUN_00418835 2→FUN_004188d0 3→FUN_00418aa6 4→FUN_00418ca4(+weapon) 5/6→FUN_00418e26(+weapon) 7→FUN_0041896c (§7j.24; the debris-crush dispatcher FUN_0040dce0 is the second dispatch site) | §7j.23 |
 | robot hit applier | FUN_00418fca(robot,x,y,z,weapon,mode): presence d@+0x7C; box test \|dx\|,\|dy\| < 0x20 (d@+4/+8 >>8) + mode-2 \|dz\| < 0x30 (d@+0xC raw); hit → FUN_0040e230(robot, FUN_00419aff(w@rec+0), d@rec+2 owner) + hp d@+0x78 clamp ≥0 | §7j.23 |
 | robot damage applier | FUN_0040e230(robot,damage,owner): state w@+0x0C==2 skip; state 3 → shield d@+0x88 := 0x20; gate d@+0x8C==0 ∨ d@+0x88≠0; alarm w@+0x34==0 → counter d@+0xA4 += 3, >100 → SFX 0x10/11/12 per player slot + w@+0x34 := 100; shield-down: hitcount w@+0x2E++, hp d@+0x78 −= dmg, tier SFX 0x2B/0x2C/0x2D, 0x13..0x15 (≤50%), 0x16..0x18 (≤12.5%) vs 5000+100·variant d@+0x94; shield-up: d@+0x88 absorb clamp 0; death MP: scoreboard 0xC-stride @0x4ebaa8 {score d@+0, flag d@+4, d@+8 := 0xB} suicide gate killer==victim∨−1, killer++ cap 999/victim−− clamp 0; shared tail: FUN_0042382c blast record + DAT_0046ccec := 3 + 7 order words zeroed + 5× k5 debris; SP tail: selected→[0x4ede34] := 1, alive/drop/hp := 0, +0x9C := 1, armor 0, SFX 0x19/1A/1B; MP respawn: full reset + variant RandA&3, pod 0x28, MRK reposition, weapon/equipment re-copy | §7j.23, §7j.24 |
+| squad-wipe fail detector | FUN_0044764c..0x44770a (sole caller MissionShell 0x44870d, gated [0x4dc67c]==0 = extraction incomplete): MP → ret 0; walks squad [0x46cbd4]..+[0x46cbd8]−1 — FIRST record with death-flag +0x9C==0 → ret 0 (someone alive); ALL dead ∧ [0x4ede34]==0x1E0 (death wipe finished) → FUN_0042391d + FUN_00425a03 (+cond. FUN_0042595a) + FUN_00425bf5 + [0x46cca4]-gated anim string 0x459852 → ret 1 → MissionShell ret 3 (fail screen; ret 2 = launch) | §7j.57 |
+| robot-bank zero-fill | mission staging FUN_0040cca2 @0x40cd29..38: FUN_0041cd42 (file rewind [0x4eba20]) then FUN_00402965(ecx=0x7E0, edi=0x4c69e4) zeroes the WHOLE 12-slot bank (0x7E0 = 12·0xA8) — the ONLY +0x9C clear + the 0x4e64c0/0x150 sibling; the only immediate-load of 0x4c69e4 in the binary | §7j.57 |
 | critter knockback juice | kinds 4/5/6 survive-hit 25% (RandA&3==0, owner ≠ −1) → FUN_0041a028(x,y,z Q13, robot x,y Q13): 2nd spawner of the 0x4cec38 0x20-stride effect rows (row {w@+0 0, xyz d@+2/+6/+0xA, cos d@+0xE, sin d@+0x12, ttl d@+0x16 = RandA&0x3F+0x1F, kind w@+0x1A = FUN_0041ec1c(5,0)+3}), heading away-from-shooter ±0x10 jitter + FUN_00420608(x+1,y+1,max(z−0x20,0),10,0,−1); kind 7 in-record knock instead (heading d@+0x10, vx/vy w@+0x74/+0x76 = cos/sin>>6) | §7j.23 |
 | impact SFX trio | FUN_00421fc2(x,y): [0x4ede58]≠0, RandB()%3 → one of banks 0x4edf7c/0x4edf80/0x4edf84 → FUN_0043a48e(bank,0,x,y,2) — the critter-hit spark sound | §7j.23 |
 | octile distance | FUN_0041ebf8(dx,dy) = max(\|dx\|,\|dy\|) + min/2 — the hit metric (and §7j.22 prefilter) | §7j.23 |
@@ -9252,3 +9258,30 @@ cells) once; a ONE-FRAME additive watch row is the remedy if
 it ever bites (deliberately NOT in the first golden). The
 §7j.54 machinery itself is unchanged (its staging row and the
 [0x4de654] countdown already cover the pan state).
+
+## 7j.57. THE ROBOT +0x9C DEATH FLAG — READER CENSUS CLOSED: the sole reader is the SP SQUAD-WIPE FAIL DETECTOR (FUN_0044764c → MissionShell ret 3); lifecycle CLOSED — set-only := 1 in both FUN_0040e230 death tails, cleared ONLY by the mission-staging WHOLE-BANK ZERO-FILL (0x7E0 = 12·0xA8 bytes — the bank is 12 slots); the §7j.55 sidebar cross-question answered NO (2026-08-23, worker 18039414 claim 2, D129; docs-only; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before AND after; registry_anchors 2/2 green) [verified]
+
+Closes §7j.45 item 6 open point (the queue pre-census re-run, displacement-aware: exactly THREE text sites for 0x4c6a80 — the two §7j.23/24 producers + ONE reader — plus the implicit clear via the bank base; every +0x9c] text match is an [esp+0x9c] stack slot, no register-base displacement form and no *8+0x9c scaled form exists).
+
+**A. The two producer values PINNED** (the queue ask — both are **1**, so the queue "MP-respawn reset" phrasing is a misnomer, corrected history-preserved in §7j.45 item 6):
+
+1. SP/other tail @0x40eac0 `mov [eax*8+0x4c6a80],edx` — edx := 1 @0x40eab4, no intervening def. Reached when [0x4edb88]==0 (SP) OR the no-extract latch [idx*4+0x46aed4]≠0 (the §7j.24-8 "SP gate" — the SP-style death bookkeeping: [0x4ede34]:=1 when idx is the SELECTED robot [0x46cbd4]+[0x46cbdc], alive/+0x80/hp := 0, heat +0x30 := 0, per-slot death SFX 0x19/0x1A/0x1B).
+2. MP respawn tail @0x40e82a `mov [ebp+0x4c6a80],edi` — edi := 1 @0x40e807, no intervening def. Reached when [0x4edb88]≠0 ∧ [idx*4+0x46aed4]==0 (the §7j.24-8 full respawn re-init: new position from the 0x4e6430 spawn table, variant RandA&3, pod timer 0x28, weapon/equipment re-copy, alive/hp/heat/shield re-staged). **The re-init does NOT clear +0x9C — the respawned MP slot stays death-flagged** (harmless: the sole reader is SP-only, see B).
+
+Both sit in FUN_0040e230 death epilogue (gate [0x46cd0c]==0 at the head); the §7j.23/24 decode stands unchanged.
+
+**B. The sole reader — the SP SQUAD-WIPE FAIL DETECTOR** (FUN_0044764c..0x44770a, decoded whole):
+
+- [0x4edb88]≠0 (MP) → xor eax,eax ret 0 — SP only, exactly.
+- Walks the player squad records [0x46cbd4] .. [0x46cbd4]+[0x46cbd8]−1 (0xA8 stride, loop 0x44768e..0x44769e): the FIRST record with **+0x9C == 0 → return 0** (someone alive); +0x9C≠0 = dead → skip.
+- All squad records dead ∧ [0x4ede34] == 0x1E0 → the FAIL SEQUENCE: FUN_0042391d ([0x4eddc0]:=0 + FUN_0044b3f8), FUN_00425a03 (FUN_0044acf4 + [0x4edb3c]:=0 + FUN_0044ad18), optional FUN_0042595a (gated [0x4edbe8]≠0 ∧ [0x4edbec]≠0), FUN_00425bf5, then the [0x46cca4]-gated animation posting ([0x46af0c]:=[0x46af20], FUN_0042582a(0x800,0), string 0x459852 via FUN_0044567c, FUN_00425851) → **eax := 1**.
+- Sole caller: MissionShell 0x44870d, gated [0x4dc67c]==0 = **extraction NOT complete** (§7j.27 dropship cell; the alternate branch 0x4486e4 handles [0x4eb8b8]≠0/[0x4edd8c]==1 → ret 4). Result 1 → eax := 3 → **MissionShell returns 3** (the fail/debrief screen transition; cf. ret 2 = launch). A wiped squad AFTER extraction completed never fails — the detector stops running.
+- The [0x4ede34]==0x1E0 conjunct = the death-wipe viewport cell at its terminal 480 value: set := 1 at the selected robot death (0x40ea8b), zeroed per-mission (0x44787d) and on click-select (0x40d286) — i.e. the fail waits for the death wipe to FINISH before transitioning. The cell own grammar is item 3 unit (§7j.56/B pointer).
+
+**Semantics verdict:** +0x9C is the MISSION-FAIL liveness oracle — DISTINCT from +0x7C (alive: the select/AI gate, zeroed at death but RE-SET by the MP respawn) and +0x78 (hp). Within a mission it is set-only (once 1, never 0); a dead MP bot respawns with alive/hp restored but +0x9C still 1 — legal because nothing in MP ever reads it.
+
+**C. Lifecycle CLOSED — where the flag is cleared.** NO literal zero-writer exists; the clear is the mission-staging WHOLE-BANK ZERO-FILL: FUN_0040cca2 @0x40cd29..0x40cd38 — ecx := 0x7E0; edi := 0x4c69e4; call FUN_0041cd42 (the [0x4eba20] file rewind; edi/ecx are callee-saved, NOT its args); call FUN_00402965 = the memset-0 ledger row (§7j.21: EAX=0, ECX=len, EDI=dst) → zeroes **0x7E0 = 12·0xA8 bytes = the whole 12-SLOT bank** (new fact: the bank is 12 slots; [0x46ccbc] counts the staged robots). A sibling zero-fill FUN_00402965(ecx=0x150, edi=0x4e64c0) follows it (aux bank, out of scope). The per-record staging walk 0x40ce70..0x40d0a0 never writes +0x9C — so EVERY mission entry starts with the flag clean for all slots (bss-zero at process start; wiped squads cannot leak into a re-entered mission). The only site in the binary that loads 0x4c69e4 as an immediate is this zero-fill — no bulk-copy/save-load restore path touches the bank.
+
+**D. The §7j.55 sidebar cross-question answered: NO.** The heat-family sidebar row pass never reads +0x9C. [0x46ccec] census this unit: the sole reader is 0x407205 (the per-frame sidebar updater pass: cell ≠0 → dec → FUN_00408403) — [0x46ccec] is a FLASH-COUNTDOWN cell in the [0x46ccf0]/[0x46ccf8] timer family (≠0 → dec → FUN_004085ce / FUN_00401ca2(0x12,1,…)), values 2/3 = flash durations; writers incl. death :=3 (0x40e6d2), cook-off :=2 (0x410358), click-select :=2 (0x40d280 family), MissionShell head/frame sites. The queue "likely the dead-robot per-frame handling" hypothesis is retired: the reader is the fail detector, a mission-level control-flow gate, not per-robot handling.
+
+**E. Engine/differ consequence: NONE.** E already conforms (mission.rs death tail `death_flag = 1` with alive=false/drop_countdown=0/hp=0/armor=0 per the SP subset; fresh records per mission ≡ the whole-bank zero-fill) and `death_flag` is already a field leaf of the T1 robot-bank differ row (+0x9C, U16 — upper word always 0 since every write is a dword store of 1). No watch rows, no differ changes; the fail detector itself is a screen-transition gate outside the dump surface.
