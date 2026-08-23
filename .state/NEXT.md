@@ -342,7 +342,17 @@ renumbered queue keeps every open item claimable by number).
   listings + read-only string probes of game-data (vma↔fileoff
   via the DEADMAN1 anchor); no Ghidra run, no corpus write;
   MANIFEST.sha256 clean before AND after; 93 diffharness tests +
-  13 canonical_dump_gate green; fmt+clippy clean; PUSHED). THE W1
+  13 canonical_dump_gate green; fmt+clippy clean; PUSHED). LANDED
+  + RE-VALIDATED by the respawned slot worker e104cbd0 claim 2
+  (commit b0e105a, D134 landing note in DECISIONS): every census
+  family independently re-derived before adoption, and the census
+  COUNTS corrected with history preserved — EXW 18 / EXD 17
+  literal sites (not 19/18; 13 reader sites one-for-one, EXW-only
+  {0x43a16c, 0x42530a, 0x4253f3} vs EXD-only {0x4c593, 0x12767}),
+  + two gloss fixes (0x43a79e = the options-handler drop-flag
+  pair, NOT inside FUN_0043a48e; 0x4c9a0/0x4c9a9 ⟷ 0x43a795/
+  0x43a79e same order — the "arg order swapped" note retracted).
+  THE W1
   REGISTRY GAP SET IS NOW EMPTY — the last of the four W1 schema
   gaps closed. CLOSED with the verdict set: (1) THE TWIN =
   [0x10743c], pinned by the queue's own anchor — the EXD

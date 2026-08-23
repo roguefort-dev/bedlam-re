@@ -3,14 +3,20 @@
   - 2026-08-23 P4/RE THE EXD SFX-MASTER-GATE TWIN CENSUS unit
     COMPLETE — **W1 IS NOW FULLY CLOSED (registry gap set
     EMPTY)** (D134; RE-notes commit 5178420 + impl commit d341c65,
-    both PUSHED, worker 2a9f1b9f claim 2; objdump-only from the
+    both PUSHED, worker 2a9f1b9f claim 2; LANDED + RE-VALIDATED +
+    COUNT-CORRECTED by the respawned slot worker e104cbd0 claim 2
+    (commit b0e105a: every family independently re-derived; census
+    counts corrected to EXW 18 / EXD 17 — 13 reader sites
+    one-for-one; two gloss fixes: 0x43a79e = the options-handler
+    drop-flag pair NOT inside FUN_0043a48e, and the "arg order
+    swapped" 0x4c593 mispairing retracted); objdump-only from the
     committed exd/exw listings + read-only game-data string
     probes, no Ghidra run; MANIFEST.sha256 clean before AND
     after; 93 diffharness tests + 13 canonical_dump_gate green,
     fmt+clippy clean): the sfx-master-gate EXD twin = [0x10743c],
     pinned by the BOOM-trio twin FUN_00032de9 @0x32df1 ⟷
     FUN_00421e60 @0x421e68 (play twin FUN_0004c584 ⟷
-    FUN_0043a48e @0x32f95); EXW 19-site / EXD 18-site censuses
+    FUN_0043a48e @0x32f95); EXW 18-site / EXD 17-site censuses
     one-for-one (arrival family five, music-sequencer trio,
     radio-warning consumer, driver-sync, play gates,
     MissionShell volume keys). HEADLINE = the CONFIG DIVERGENCE:
