@@ -17,12 +17,28 @@
 //! coverage discipline); the aliased rows compile to their full fixed
 //! bank spans.
 //!
+//! Channels (`--channel o1|o2`, D138): `o1` (default) = the EXD/DOSBox
+//! form every committed plan pins — addresses are the registry rows'
+//! `exd_addr` cells in the `CS:` selector form capgen consumes.
+//! `o2` = the EXW/Wine spot-check form (DESIGN §2 O2 / §10 W11): every
+//! address swaps to the row's `exw_addr` canon cell in flat
+//! `0x`-prefixed linear form (the W11 host ptrace driver reads EXW
+//! addresses directly — zero translation), the DOSBox boot/arm
+//! command machinery is replaced by a `trigger` object (the s0-trigger
+//! EXW frame-tail site + the EXW frame-counter cell), and the ONE
+//! D137-pinned span split applies (`static-map-wh` = the 8-byte span
+//! @0x4eddec, w LOW/adjacent cells — vs the EXD 0x30 span, h LOW;
+//! D137's 0x24-apart arithmetic was corrected by D138). Walk-phase
+//! keystore scenarios are O1-only (the BPLM stop-indexed menu walk is
+//! DOSBox machinery, D84).
+//!
 //! Usage:
 //! ```text
-//! dbx-plan <scenario.scen> [--out <capture-plan.json>]
+//! dbx-plan <scenario.scen> [--out <capture-plan.json>] [--channel o1|o2]
 //! ```
-//! Default output: stdout. The committed artifact for review is
-//! `capture-plans/<id>.json` (tests/plan_regen.rs pins byte-equality).
+//! Default output: stdout. The committed artifacts for review are
+//! `capture-plans/<id>.json` (o1) and `capture-plans/<id>-o2.json`
+//! (o2) — tests pin byte-equality for both.
 
 use diffharness::registry;
 use diffharness::runner::{Scenario, Step};
@@ -33,6 +49,51 @@ use std::process::ExitCode;
 /// The tiers this compiler can resolve today (T0/T1/TS + the D109
 /// T2/T3 widening: unaliased rows are deferred, never fabricated).
 const SUPPORTED_TIERS: [&str; 5] = ["T0", "T1", "T2", "T3", "TS"];
+
+/// The capture channel a plan targets (DESIGN §2, D138): O1 =
+/// BEDLAM.EXD under pinned DOSBox-X (the rows' `exd_addr` cells, `CS:`
+/// selector form, capgen/D81 boot+arm command machinery); O2 =
+/// BEDLAM.EXW under pinned Wine (the rows' `exw_addr` CANON cells in
+/// flat linear form, read directly by the W11 host ptrace driver —
+/// zero address translation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Channel {
+    O1,
+    O2,
+}
+
+impl Channel {
+    /// The registry address field this channel compiles from. A row
+    /// whose channel-side address is EMPTY is a gap on that channel
+    /// (on O2 today: the EXD-only rows, e.g. static-cursor-clamp — its
+    /// EXW cursor clamps live in host 640x480 space with no alias
+    /// row) and never emits there — the mirror of the EXD-gap rule.
+    fn src(self, row: &diffharness::Watch) -> &str {
+        match self {
+            Channel::O1 => &row.exd_addr,
+            Channel::O2 => &row.exw_addr,
+        }
+    }
+
+    /// One cell address as a plan-JSON `addr` string: O1 = the `CS:`
+    /// flat-selector form (capgen resolves CS to the DOSBox flat
+    /// selector); O2 = the flat `0x`-prefixed Win32 linear form.
+    fn addr(self, a: u64) -> String {
+        match self {
+            Channel::O1 => format!("CS:{a:08X}"),
+            Channel::O2 => format!("0x{a:08X}"),
+        }
+    }
+
+    /// A `$symbol` reference (PtrCell rows): the driver substitutes
+    /// the resolve-row value; the CS: prefix only exists on O1.
+    fn sym_addr(self, sym: &str) -> String {
+        match self {
+            Channel::O1 => format!("CS:${sym}"),
+            Channel::O2 => format!("${sym}"),
+        }
+    }
+}
 
 // ------------------------------------------------------------- resolution
 
@@ -192,9 +253,19 @@ fn grid(id: &str, addr: u64, extent: &str, per_tile: &str) -> Result<Option<RowP
 
 /// The per-row resolution table: form + the registry facts to ASSERT
 /// (anti-ghost — a changed row fails the build, it never silently
-/// re-emits). Deferred rows list the missing pin explicitly.
-fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
+/// re-emits). Deferred rows list the missing pin explicitly. `ch`
+/// selects the address source (O1 = exd_addr, O2 = exw_addr).
+fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>, PlanError> {
     let id = row.id.as_str();
+    // The channel gate: a row whose CHANNEL-side address is a gap
+    // never emits on that channel (on O2: the EXD-only rows). Note the
+    // EXD-unmapped T2/T3 coverage rows stay deferred on BOTH channels
+    // below — the differ's O2 arms cover exactly the aliased set, so
+    // widening the O2 emission set is a deliberate W11-era decision,
+    // never a silent side effect of the address swap.
+    if ch.src(row).is_empty() {
+        return Ok(None);
+    }
     let plan = |form: Form| {
         Ok(Some(RowPlan {
             id: row.id.clone(),
@@ -204,7 +275,7 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
 
     // --- T0: every verified row is a fixed 4-byte cell read.
     if row.tier == "T0" {
-        if row.exd_addr.is_empty() {
+        if ch.src(row).is_empty() {
             return Ok(None); // defensive: a gap-status row (none remain —
                              // difficulty closed by the W5-followup, the
                              // sfx gate by the D134 twin census)
@@ -216,10 +287,15 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                 row.extent, row.indirect
             )));
         }
-        let addr = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+        let addr = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
             die(format!(
-                "T0 row {id} has no parsable exd_addr: {:?}",
-                row.exd_addr
+                "T0 row {id} has no parsable {} address: {:?}",
+                if ch == Channel::O1 {
+                    "exd_addr"
+                } else {
+                    "exw_addr"
+                },
+                ch.src(row)
             ))
         })?;
         return plan(Form::Fixed { addr, len: 4 });
@@ -229,16 +305,21 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     // skipped like T0 gaps; bank rows are count-driven (resolve rows
     // feed $symbols); grid rows derive their extent from map w/h.
     if row.tier == "T1" {
-        if row.exd_addr.is_empty() {
+        if ch.src(row).is_empty() {
             return Ok(None); // defensive: a gap-status row (none remain —
                              // the last W1 gap, sfx-master-gate, was closed
                              // by the D134 twin census) would never dump
         }
-        let cells = exd_cells(&row.exd_addr);
+        let cells = exd_cells(ch.src(row));
         let first = cells.first().copied().ok_or_else(|| {
             die(format!(
-                "T1 row {id} has no parsable exd_addr: {:?}",
-                row.exd_addr
+                "T1 row {id} has no parsable {} address: {:?}",
+                if ch == Channel::O1 {
+                    "exd_addr"
+                } else {
+                    "exw_addr"
+                },
+                ch.src(row)
             ))
         })?;
         return match id {
@@ -301,12 +382,57 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             // selection triple fully mapped since D132 (slot/base/size
             // cells 0x11954c/0x11955c/0x11958c) — but the EXD cells are
             // NOT contiguous, so the plan still dumps the canonical 4-B
-            // D83 form = cells[0] = the SELECTED-SLOT cell (the differ's
-            // u32 row); base/size ride the bank rows' count cells.
-            "selection-triple" => plan(Form::Fixed {
-                addr: first,
-                len: 4,
-            }),
+            // D83 form = the SELECTED-SLOT cell (the differ's u32 row);
+            // base/size ride the bank rows' count cells.
+            // [derived-pinned] (D138): the two channels list the cells
+            // in DIFFERENT orders — the EXD list is field-ordered
+            // (selected FIRST: 0x11954c, +0x10 base, +0x30 size), the
+            // EXW list is field-ordered TOO but NOT ascending (base
+            // 0x46cbd4 / selected 0x46cbdc / size 0x46cbd8 — selected
+            // is the HIGHEST address, size sits between; the D132
+            // label-swap pairing, RE-EXD-MAP sec 5 row) — so the
+            // selected-slot pick is per-channel: cells[0] on O1,
+            // cells[1] on O2. The gap asserts pin the geometry; a
+            // registry reorder fails loud.
+            "selection-triple" => {
+                if cells.len() != 3 {
+                    return Err(die(format!(
+                        "selection-triple {} no longer has exactly 3 cells",
+                        if ch == Channel::O1 {
+                            "exd_addr"
+                        } else {
+                            "exw_addr"
+                        }
+                    )));
+                }
+                let sel = match ch {
+                    Channel::O1 => {
+                        if cells[1] - cells[0] != 0x10 || cells[2] - cells[1] != 0x30 {
+                            return Err(die(format!(
+                                "selection-triple exd_addr {:?} no longer the EXD field \
+                                 order (selected/base/size 0x10+0x30 apart)",
+                                row.exd_addr
+                            )));
+                        }
+                        cells[0]
+                    }
+                    Channel::O2 => {
+                        // [derived-pinned] the EXW list is FIELD-ordered
+                        // (base/selected/size) but NOT ascending: the
+                        // selected cell is the HIGHEST (base 0x46cbd4
+                        // +8 size 0x46cbd8 +4 selected 0x46cbdc).
+                        if cells[1] - cells[0] != 8 || cells[1] - cells[2] != 4 {
+                            return Err(die(format!(
+                                "selection-triple exw_addr {:?} no longer the EXW field \
+                                 order (base +8 size +4 selected)",
+                                row.exw_addr
+                            )));
+                        }
+                        cells[1]
+                    }
+                };
+                plan(Form::Fixed { addr: sel, len: 4 })
+            }
             // blink-cursor twin 0x10e108 (D132): plain 4-B u32 scalar —
             // the S1 blink-cursor-from-spawn hypothesis watch (expected
             // constant 0 on corpus paths, §7j.59.E).
@@ -487,12 +613,21 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     if row.tier == "T2" || row.tier == "T3" {
         if row.exd_addr.is_empty() {
             return Ok(None); // E-only coverage row (debris/splash/mortar/...)
+                             // — deferred on BOTH channels: the differ's
+                             // O2 arms cover exactly the aliased set (the
+                             // O2 emission set is channel-symmetric, D138)
         }
-        let cells = exd_cells(&row.exd_addr);
+        let cells = exd_cells(ch.src(row));
         let first = cells.first().copied().ok_or_else(|| {
             die(format!(
-                "{} row {id} has no parsable exd_addr: {:?}",
-                row.tier, row.exd_addr
+                "{} row {id} has no parsable {} address: {:?}",
+                row.tier,
+                if ch == Channel::O1 {
+                    "exd_addr"
+                } else {
+                    "exw_addr"
+                },
+                ch.src(row)
             ))
         })?;
         return match id {
@@ -563,43 +698,91 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                     row.extent
                 )));
             };
-            let addr = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+            let addr = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
                 die(format!(
-                    "row {id} has no parsable exd_addr: {:?}",
-                    row.exd_addr
+                    "row {id} has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
                 ))
             })?;
             plan(Form::Fixed { addr, len })
         }
-        // Two-cell rows dumped as one contiguous span.
+        // Two-cell rows dumped as one contiguous span. THE ONE
+        // D137-PINNED CHANNEL SPLIT (arithmetic corrected by D138):
+        // the EXD pair (w 0x1074b8 / h 0x10748c) sits 0x2c apart with
+        // h LOW — the O1 span = 0x30 @h; the EXW pair (w 0x4eddec /
+        // h 0x4eddf0) is ADJACENT (4 apart) with w LOW — the O2 span
+        // = 8 @w. The port reversed the field order relative to
+        // address order (O1's low cell is h, O2's is w), so the O2
+        // form is NOT the O1 form relabelled (RE-EXW-SIM sec 7j.60).
         "static-map-wh" => {
-            let cells = exd_cells(&row.exd_addr);
+            let cells = exd_cells(ch.src(row));
             if cells.len() != 2 {
                 return Err(die(format!(
-                    "static-map-wh exd_addr {:?} no longer has exactly 2 cells",
-                    row.exd_addr
+                    "static-map-wh {} no longer has exactly 2 cells",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    }
                 )));
             }
             let (lo, hi) = (cells[0].min(cells[1]), cells[0].max(cells[1]));
-            // [derived-pinned] w 0x1074b8 / h 0x10748c are 0x2c apart
-            // (RE-EXD-MAP sec 5b); the span covers both u32s.
-            if hi - lo != 0x2c {
-                return Err(die(format!(
-                    "static-map-wh cells are no longer 0x2c apart: {lo:#x}..{hi:#x}"
-                )));
+            match ch {
+                // [derived-pinned] w 0x1074b8 / h 0x10748c are 0x2c
+                // apart (RE-EXD-MAP sec 5b); the span covers both u32s.
+                Channel::O1 => {
+                    if hi - lo != 0x2c {
+                        return Err(die(format!(
+                            "static-map-wh exd_addr cells are no longer 0x2c apart: \
+                             {lo:#x}..{hi:#x}"
+                        )));
+                    }
+                    plan(Form::Span {
+                        base: lo,
+                        len: 0x2c + 4,
+                        cells,
+                    })
+                }
+                // [derived-pinned] (D137, arithmetic CORRECTED by
+                // D138): the O2 capture form = ONE 8-byte span
+                // @0x4eddec, w@+0x00 / h@+0x04 — the EXW cells are
+                // ADJACENT u32s with w LOW (0x4eddf0−0x4eddec = 4;
+                // the stride cell 0x4eddf4 right after, excluded like
+                // the EXD span excludes 0x1074e4) — the differ's
+                // normalize_o2_row arm parses exactly this. (D137's
+                // "0x24 apart / len 0x28" was an arithmetic
+                // impossibility for these cells; this assert is what
+                // caught it.)
+                Channel::O2 => {
+                    if hi - lo != 4 {
+                        return Err(die(format!(
+                            "static-map-wh exw_addr cells are no longer adjacent: \
+                             {lo:#x}..{hi:#x}"
+                        )));
+                    }
+                    plan(Form::Span {
+                        base: lo,
+                        len: 4 + 4,
+                        cells,
+                    })
+                }
             }
-            plan(Form::Span {
-                base: lo,
-                len: 0x2c + 4,
-                cells,
-            })
         }
         "static-cursor-clamp" => {
-            let cells = exd_cells(&row.exd_addr);
+            let cells = exd_cells(ch.src(row));
             if cells.len() != 2 {
                 return Err(die(format!(
-                    "static-cursor-clamp exd_addr {:?} no longer has exactly 2 cells",
-                    row.exd_addr
+                    "static-cursor-clamp {} no longer has exactly 2 cells",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    }
                 )));
             }
             let (lo, hi) = (cells[0].min(cells[1]), cells[0].max(cells[1]));
@@ -619,10 +802,15 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             if !row.indirect {
                 return Err(die("static-tot-volume lost its indirect flag".into()));
             }
-            let cell = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
                 die(format!(
-                    "static-tot-volume has no parsable exd_addr: {:?}",
-                    row.exd_addr
+                    "static-tot-volume has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
                 ))
             })?;
             // TOT volume = u16 w + u16 h + 8 planes * w*h u16
@@ -636,10 +824,15 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             if !row.indirect {
                 return Err(die("static-dat-volume lost its indirect flag".into()));
             }
-            let cell = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
                 die(format!(
-                    "static-dat-volume has no parsable exd_addr: {:?}",
-                    row.exd_addr
+                    "static-dat-volume has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
                 ))
             })?;
             // DAT volume = u16 w + u16 h + 8 planes * w*h u8
@@ -653,10 +846,15 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
             if !row.indirect {
                 return Err(die("static-claim-bank lost its indirect flag".into()));
             }
-            let cell = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
                 die(format!(
-                    "static-claim-bank has no parsable exd_addr: {:?}",
-                    row.exd_addr
+                    "static-claim-bank has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
                 ))
             })?;
             let Some(len) = parse_extent(&row.extent) else {
@@ -792,12 +990,20 @@ struct WalkWatch {
 /// writes, anchor-relative mission inject rows, stop-indexed walk rows.
 type CompiledSteps = (Vec<InjectWrite>, Vec<InjectWrite>, Vec<WalkWrite>);
 
-fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<CompiledSteps, PlanError> {
+fn compile_steps(
+    scen: &Scenario,
+    reg: &[diffharness::Watch],
+    ch: Channel,
+) -> Result<CompiledSteps, PlanError> {
     // Walk phase (before until-anchor): BOOT writes at frame 0 + the
     // SCRIPTED MENU WALK (D84) — stop-indexed keystore writes, one stop
     // per counter-writing screen frame, re-armed per input because the
     // AnyKeyWait twin consumes bytes on read. ORDER/PAD/COMMAND are
     // mission-phase seams — the menu walk is keyboard-driven.
+    // O2: the walk is REFUSED — the BPLM stop machinery is DOSBox/O1
+    // only (D84); a scripted menu walk under Wine needs W11 driver
+    // support that does not exist yet (the channel flag never invents
+    // capture semantics, it only swaps addresses).
     let (walk, mission) = scen.phases();
     let mut boot: Vec<InjectWrite> = Vec::new();
     let mut walk_rows: Vec<WalkWrite> = Vec::new();
@@ -811,17 +1017,18 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                 let row = reg.iter().find(|r| r.id == row_id).ok_or_else(|| {
                     die(format!("boot key {key:?}: registry row {row_id:?} missing"))
                 })?;
-                let cells = exd_cells(&row.exd_addr);
+                let cells = exd_cells(ch.src(row));
                 if cells.is_empty() {
                     return Err(die(format!(
-                        "boot write {key} ({row_id}): EXD alias is a registry gap \
-                         (status {:?}) — the O1 plan never fabricates its address",
+                        "boot write {key} ({row_id}): the {} alias is a registry gap \
+                         (status {:?}) — the plan never fabricates its address",
+                        if ch == Channel::O1 { "EXD" } else { "EXW" },
                         row.exd_status
                     )));
                 }
                 boot.push(InjectWrite::Plain {
                     frame: None,
-                    addr: format!("CS:{:08X}", cells[0]),
+                    addr: ch.addr(cells[0]),
                     bytes: (*value as u32)
                         .to_le_bytes()
                         .iter()
@@ -830,12 +1037,20 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                 });
             }
             Step::Keystore { entries } => {
+                if ch == Channel::O2 {
+                    return Err(die(
+                        "o2 channel: walk-phase keystore steps have no O2 form — the \
+                         BPLM stop-indexed menu walk is DOSBox/O1 machinery (D84); a \
+                         scripted menu walk under Wine needs W11 driver support"
+                            .into(),
+                    ));
+                }
                 walk_boundary += 1;
                 let row = reg
                     .iter()
                     .find(|r| r.id == "inj-key-state")
                     .ok_or_else(|| die("registry row inj-key-state missing".into()))?;
-                let base = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
+                let base = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
                     die(
                         "walk keystore step: inj-key-state EXD alias is a registry gap \
                          (status {:?}) — anchor it before this scenario can compile for O1"
@@ -845,7 +1060,7 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                 for (scan, val) in entries {
                     walk_rows.push(WalkWrite {
                         stop: walk_boundary,
-                        addr: format!("CS:{:08X}", base + *scan as u64),
+                        addr: ch.addr(base + *scan as u64),
                         bytes: format!("{val:02x}"),
                     });
                 }
@@ -894,14 +1109,14 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .iter()
                     .find(|r| r.id == "inj-key-state")
                     .ok_or_else(|| die("registry row inj-key-state missing".into()))?;
-                let base = exd_cells(&row.exd_addr).first().copied().ok_or_else(|| {
-                    die("keystore step: inj-key-state EXD alias is a registry gap".into())
+                let base = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                    die("keystore step: inj-key-state channel alias is a registry gap".into())
                 })?;
                 entries
                     .iter()
                     .map(|(scan, val)| InjectWrite::Plain {
                         frame: Some(boundary),
-                        addr: format!("CS:{:08X}", base + *scan as u64),
+                        addr: ch.addr(base + *scan as u64),
                         bytes: format!("{val:02x}"),
                     })
                     .collect::<Vec<_>>()
@@ -911,10 +1126,10 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .iter()
                     .find(|r| r.id == "order-target")
                     .ok_or_else(|| die("registry row order-target missing".into()))?;
-                let cells = exd_cells(&row.exd_addr);
+                let cells = exd_cells(ch.src(row));
                 if cells.len() != 3 {
                     return Err(die(
-                        "order step: order-target EXD alias is a registry gap (needs \
+                        "order step: order-target channel alias is a registry gap (needs \
                          all three xyz cells)"
                             .into(),
                     ));
@@ -924,7 +1139,7 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .zip(cells)
                     .map(|(v, cell)| InjectWrite::Plain {
                         frame: Some(boundary),
-                        addr: format!("CS:{cell:08X}"),
+                        addr: ch.addr(cell),
                         bytes: (v as u32)
                             .to_le_bytes()
                             .iter()
@@ -944,14 +1159,15 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .iter()
                     .find(|r| r.id == "static-pad-slots")
                     .ok_or_else(|| die("registry row static-pad-slots missing".into()))?;
-                let bank = exd_cells(&bank_row.exd_addr)
+                let bank = exd_cells(ch.src(bank_row))
                     .first()
                     .copied()
                     .ok_or_else(|| {
                         die(format!(
-                            "pad step: static-pad-slots EXD alias is a registry gap \
+                            "pad step: static-pad-slots {} alias is a registry gap \
                          (status {:?}) — the pad bank is the step's READ anchor and \
                          is never fabricated",
+                            if ch == Channel::O1 { "EXD" } else { "EXW" },
                             bank_row.exd_status
                         ))
                     })?;
@@ -959,10 +1175,10 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .iter()
                     .find(|r| r.id == "order-target")
                     .ok_or_else(|| die("registry row order-target missing".into()))?;
-                let cells = exd_cells(&row.exd_addr);
+                let cells = exd_cells(ch.src(row));
                 if cells.len() != 3 {
                     return Err(die(
-                        "pad step: order-target EXD alias is a registry gap (needs \
+                        "pad step: order-target channel alias is a registry gap (needs \
                          all three xyz cells)"
                             .into(),
                     ));
@@ -974,9 +1190,9 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                 }
                 vec![InjectWrite::Pad {
                     frame: boundary,
-                    bank: format!("CS:{bank:08X}"),
+                    bank: ch.addr(bank),
                     slot: *slot,
-                    target: core::array::from_fn(|i| format!("CS:{:08X}", cells[i])),
+                    target: core::array::from_fn(|i| ch.addr(cells[i])),
                 }]
             }
             Step::Command { bytes } => {
@@ -988,16 +1204,16 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                     .iter()
                     .find(|r| r.id == "inj-command-count")
                     .ok_or_else(|| die("registry row inj-command-count missing".into()))?;
-                let base = exd_cells(&ring.exd_addr).first().copied().ok_or_else(|| {
-                    die("command step: inj-command-ring EXD alias is a registry gap".into())
+                let base = exd_cells(ch.src(ring)).first().copied().ok_or_else(|| {
+                    die("command step: inj-command-ring channel alias is a registry gap".into())
                 })?;
-                let cell = exd_cells(&count.exd_addr).first().copied().ok_or_else(|| {
-                    die("command step: inj-command-count EXD alias is a registry gap".into())
+                let cell = exd_cells(ch.src(count)).first().copied().ok_or_else(|| {
+                    die("command step: inj-command-count channel alias is a registry gap".into())
                 })?;
                 vec![InjectWrite::Command {
                     frame: boundary,
-                    base: format!("CS:{base:08X}"),
-                    count_cell: format!("CS:{cell:08X}"),
+                    base: ch.addr(base),
+                    count_cell: ch.addr(cell),
                     bytes: bytes.iter().map(|b| format!("{b:02x}")).collect(),
                 }]
             }
@@ -1008,12 +1224,13 @@ fn compile_steps(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Compiled
                 .iter()
                 .find(|r| r.id == *row_id)
                 .ok_or_else(|| die(format!("registry row {row_id:?} missing")))?;
-            if exd_cells(&row.exd_addr).is_empty() {
+            if exd_cells(ch.src(row)).is_empty() {
                 return Err(die(format!(
-                    "injection step on seam {row_id} ({}): EXD alias is a registry \
+                    "injection step on seam {row_id} ({}): the {} alias is a registry \
                      gap (status {:?}) — anchor it before this scenario can compile \
-                     for O1; the engine side (W6) consumes the step directly",
+                     on this channel; the engine side (W6) consumes the step directly",
                     step_kind(step),
+                    if ch == Channel::O1 { "EXD" } else { "EXW" },
                     row.exd_status
                 )));
             }
@@ -1094,7 +1311,9 @@ fn walk_json(w: &WalkWrite) -> String {
 
 /// The fixed calibration trio for walk scenarios: the T0 screen-state
 /// cells (mode/zone/mission), every address registry-derived (the
-/// anti-ghost rule holds for calibration rows too).
+/// anti-ghost rule holds for calibration rows too). O1-ONLY by
+/// construction: the O2 channel refuses walk-bearing scenarios in
+/// compile_steps, so walk_rows is empty there and this never runs.
 fn walk_watches(reg: &[diffharness::Watch]) -> Result<Vec<WalkWatch>, PlanError> {
     let mut out = Vec::new();
     for (row_id, cal_id) in [
@@ -1150,16 +1369,19 @@ fn span_form(form: &Form) -> &Form {
 
 /// One RowPlan as a plan-JSON watch row (addr/len per form; a
 /// Prefixed row adds the capgen `prefix` sub-row — dump the 4-byte
-/// count cell first, then the span, one concatenated blob).
-fn watch_row_json(p: &RowPlan) -> String {
+/// count cell first, then the span, one concatenated blob). The addr
+/// FORM is channel-selected (CS: selector vs flat EXW linear).
+fn watch_row_json(p: &RowPlan, ch: Channel) -> String {
     match &p.form {
         Form::Fixed { addr, len } => format!(
-            "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {len} }}",
-            jstr(&p.id)
+            "    {{ \"id\": {}, \"addr\": \"{}\", \"len\": {len} }}",
+            jstr(&p.id),
+            ch.addr(*addr)
         ),
         Form::Span { base, len, .. } => format!(
-            "    {{ \"id\": {}, \"addr\": \"CS:{base:08X}\", \"len\": {len} }}",
-            jstr(&p.id)
+            "    {{ \"id\": {}, \"addr\": \"{}\", \"len\": {len} }}",
+            jstr(&p.id),
+            ch.addr(*base)
         ),
         Form::PtrCell { len_expr, .. } => {
             let sym = match p.id.as_str() {
@@ -1170,22 +1392,30 @@ fn watch_row_json(p: &RowPlan) -> String {
                 _ => unreachable!("emit_plan gates the PtrCell ids"),
             };
             format!(
-                "    {{ \"id\": {}, \"addr\": \"CS:${sym}\", \"len\": {} }}",
+                "    {{ \"id\": {}, \"addr\": \"{}\", \"len\": {} }}",
                 jstr(&p.id),
+                ch.sym_addr(sym),
                 jstr(len_expr)
             )
         }
         Form::CountExpr { addr, len_expr } => format!(
-            "    {{ \"id\": {}, \"addr\": \"CS:{addr:08X}\", \"len\": {} }}",
+            "    {{ \"id\": {}, \"addr\": \"{}\", \"len\": {} }}",
             jstr(&p.id),
+            ch.addr(*addr),
             jstr(len_expr)
         ),
         Form::Prefixed { cell, inner } => {
-            let mut s = watch_row_json(&RowPlan {
-                id: p.id.clone(),
-                form: inner.as_ref().clone(),
-            });
-            let tail = format!(", \"prefix\": {{ \"addr\": \"CS:{cell:08X}\", \"len\": 4 }} }}");
+            let mut s = watch_row_json(
+                &RowPlan {
+                    id: p.id.clone(),
+                    form: inner.as_ref().clone(),
+                },
+                ch,
+            );
+            let tail = format!(
+                ", \"prefix\": {{ \"addr\": \"{}\", \"len\": 4 }} }}",
+                ch.addr(*cell)
+            );
             let cut = s.trim_end_matches(" }").len();
             s.replace_range(cut.., &tail);
             s
@@ -1212,7 +1442,26 @@ struct Emitted {
     walk_count: usize,
 }
 
+/// The O1 default (byte-identical to every committed capture plan —
+/// the `s*_plan_matches_committed_artifact` tests pin it). Test-module
+/// convenience: `main` calls `emit_plan_channel` directly.
+#[cfg(test)]
 fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, PlanError> {
+    emit_plan_channel(scen, reg, Channel::O1)
+}
+
+/// The channel-aware emitter (D138): `--channel o2` swaps every
+/// address to the registry `exw_addr` canon cell (flat linear form),
+/// applies the ONE D137 span split (static-map-wh), reads the map w/h
+/// resolve pair from the EXW cells, and replaces the DOSBox boot/arm
+/// command machinery with the ptrace `trigger` object. Everything
+/// else (row set, extents, resolve symbols, staging seams, frames
+/// contract) is channel-symmetric.
+fn emit_plan_channel(
+    scen: &Scenario,
+    reg: &[diffharness::Watch],
+    ch: Channel,
+) -> Result<Emitted, PlanError> {
     // Tier gate: only the S0 shape today.
     for t in &scen.tiers {
         if !SUPPORTED_TIERS.contains(&t.as_str()) {
@@ -1229,7 +1478,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // gated on registry aliases (gaps are named, never fabricated).
     // Emitted keys exist only when the scenario carries them (S0/S1
     // artifacts stay minimal).
-    let (boot_writes, inject_rows, walk_rows) = compile_steps(scen, reg)?;
+    let (boot_writes, inject_rows, walk_rows) = compile_steps(scen, reg, ch)?;
     let walk_cal = if walk_rows.is_empty() {
         Vec::new()
     } else {
@@ -1284,20 +1533,20 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     // The two registry anchors of the live flow (anti-ghost: derived, not typed).
     let frame_counter = reg
         .iter()
-        .find(|r| r.id == "frame-counter" && r.tier == "T0" && !r.exd_addr.is_empty())
+        .find(|r| r.id == "frame-counter" && r.tier == "T0" && !ch.src(r).is_empty())
         .ok_or_else(|| die("registry row frame-counter (T0) missing".into()))?;
     let trigger = reg
         .iter()
-        .find(|r| r.id == "s0-trigger" && r.tier == "S0" && !r.exd_addr.is_empty())
+        .find(|r| r.id == "s0-trigger" && r.tier == "S0" && !ch.src(r).is_empty())
         .ok_or_else(|| die("registry row s0-trigger (S0) missing".into()))?;
-    let fc_cell = exd_cells(&frame_counter.exd_addr)
+    let fc_cell = exd_cells(ch.src(frame_counter))
         .first()
         .copied()
-        .ok_or_else(|| die("frame-counter exd_addr does not parse".into()))?;
-    let tail = exd_cells(&trigger.exd_addr)
+        .ok_or_else(|| die("frame-counter channel address does not parse".into()))?;
+    let tail = exd_cells(ch.src(trigger))
         .first()
         .copied()
-        .ok_or_else(|| die("s0-trigger exd_addr does not parse".into()))?;
+        .ok_or_else(|| die("s0-trigger channel address does not parse".into()))?;
 
     // Resolve rows (registry order preserved).
     let mut anchor: Vec<RowPlan> = Vec::new();
@@ -1307,7 +1556,7 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         if !scen.tiers.contains(&row.tier) {
             continue; // e.g. the S0 trigger row: not a dump row
         }
-        match resolve_row(row)? {
+        match resolve_row(row, ch)? {
             Some(p) => {
                 if row.tier == "TS" {
                     anchor.push(p);
@@ -1321,26 +1570,48 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
     }
 
     // Resolve cells: the map w/h loader statics + the pointer cells of
-    // every PtrCell row above (each derived from ITS row's exd_addr).
+    // every PtrCell row above (each derived from ITS row's channel
+    // address field).
     let map_wh = reg
         .iter()
         .find(|r| r.id == "static-map-wh")
         .ok_or_else(|| die("registry row static-map-wh missing".into()))?;
-    let map_cells = exd_cells(&map_wh.exd_addr);
+    let map_cells = exd_cells(ch.src(map_wh));
     if map_cells.len() != 2 {
         return Err(die(format!(
-            "static-map-wh exd_addr {:?} no longer has exactly 2 cells",
-            map_wh.exd_addr
+            "static-map-wh {} no longer has exactly 2 cells",
+            if ch == Channel::O1 {
+                "exd_addr"
+            } else {
+                "exw_addr"
+            }
         )));
     }
-    // [derived-pinned] slash order = w / h (RE-EXD-MAP sec 5b
-    // "w 0x1074b8 / h 0x10748c"); the first cell is the larger one
-    // (the span asserts the 0x2c gap).
+    // [derived-pinned] the slash order is w / h on BOTH channels, but
+    // the GEOMETRY differs (the D137 split, arithmetic corrected by
+    // D138): the EXD pair (w 0x1074b8 / h 0x10748c, RE-EXD-MAP sec 5b)
+    // sits 0x2c apart with h LOW, while the EXW pair (w 0x4eddec / h
+    // 0x4eddf0, sec 7j.60) is ADJACENT (4 apart) with w LOW — the
+    // resolve pair reads the channel's own cells and the gap assert
+    // pins the geometry per channel.
     let (w_cell, h_cell) = (map_cells[0], map_cells[1]);
-    if w_cell <= h_cell {
-        return Err(die(format!(
-            "static-map-wh cell order changed: expected w > h, got {w_cell:#x}/{h_cell:#x}"
-        )));
+    match ch {
+        Channel::O1 => {
+            if w_cell != h_cell + 0x2c {
+                return Err(die(format!(
+                    "static-map-wh exd_addr cell geometry changed: expected w above h \
+                     by 0x2c, got {w_cell:#x}/{h_cell:#x}"
+                )));
+            }
+        }
+        Channel::O2 => {
+            if h_cell != w_cell + 4 {
+                return Err(die(format!(
+                    "static-map-wh exw_addr cell geometry changed: expected w below h \
+                     by 4 (adjacent u32s), got {w_cell:#x}/{h_cell:#x}"
+                )));
+            }
+        }
     }
     let mut resolve: Vec<(String, u64)> = vec![("map_w".into(), w_cell), ("map_h".into(), h_cell)];
     for p in &anchor {
@@ -1388,10 +1659,15 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                     .iter()
                     .find(|r| r.id == row_id)
                     .ok_or_else(|| die(format!("symbol ${name} has no source registry row")))?;
-                exd_cells(&row.exd_addr).get(1).copied().ok_or_else(|| {
+                exd_cells(ch.src(row)).get(1).copied().ok_or_else(|| {
                     die(format!(
-                        "row {} exd_addr {:?} lost its count cell",
-                        row.id, row.exd_addr
+                        "row {} {} lost its count cell",
+                        row.id,
+                        if ch == Channel::O1 {
+                            "exd_addr"
+                        } else {
+                            "exw_addr"
+                        }
                     ))
                 })?
             }
@@ -1404,18 +1680,31 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         resolve.push((name, cell));
     }
 
-    let watch_json = |p: &RowPlan| -> String { watch_row_json(p) };
+    let watch_json = |p: &RowPlan| -> String { watch_row_json(p, ch) };
 
     let mut j = String::new();
     j.push_str("{\n");
-    j.push_str(&format!(
-        "  \"_comment\": \"{} live capture plan (D81/D84; GENERATED by dbx-plan from watches.toml - do not hand-edit, regenerate). Boot trap: BPLM {fc_cell:X} (the frame-counter cell) armed at the parked pre-boot halt fires on the first post-boot write. Arm stop: SELINFO CS flat guard (base==0), then BP CS:{tail:08X} = the registry s0-trigger row (the BP ack echoes the numeric selector - the per-run pin). resolve_at=anchor: the loader statics (map w/h, TOT/DAT/claim pointers) are MISSION-load values - they are read at the anchor stop (mission start), never at the pre-mission arm stop (D84). WALK phase (D84, when the walk key is present): the BPLM stays armed after the accept stop; one stop per counter-writing screen frame; stop i applies its rows via SMV (they become screen frame i+1 input - keystore writes need re-arm per input, the AnyKeyWait twin consumes on read); arm_commands run at the LAST walk stop (BPDEL * drops the BPLM, BP arms the anchor); walk_watches are calibration dumps at every stop riding the transcript as comments. Anchor frame = the first BP hit after arm; alignment is by the frame-counter watch. TS statics ride the anchor frame; T0 rows every frame. Deferred TS rows carry unpinned extents (see _deferred). Without a walk key the operator walks the title menu on the desktop; the anchor frame-counter and RNG bytes are menu-timing dependent across runs (T2/T3 classes, DESIGN section 6) - the live double-run verdict is identical-chains-modulo-those-cells; byte-identical chains need the scripted walk (S0W).\",\n",
-        scen.id
-    ));
-    j.push_str("  \"logfile\": \"dosbox-harness.log\",\n");
-    j.push_str("  \"time_limit\": 1800,\n");
-    j.push_str("  \"boot_timeout\": 1800,\n");
-    j.push_str("  \"boot_retries\": 24,\n");
+    match ch {
+        Channel::O1 => {
+            j.push_str(&format!(
+                "  \"_comment\": \"{} live capture plan (D81/D84; GENERATED by dbx-plan from watches.toml - do not hand-edit, regenerate). Boot trap: BPLM {fc_cell:X} (the frame-counter cell) armed at the parked pre-boot halt fires on the first post-boot write. Arm stop: SELINFO CS flat guard (base==0), then BP CS:{tail:08X} = the registry s0-trigger row (the BP ack echoes the numeric selector - the per-run pin). resolve_at=anchor: the loader statics (map w/h, TOT/DAT/claim pointers) are MISSION-load values - they are read at the anchor stop (mission start), never at the pre-mission arm stop (D84). WALK phase (D84, when the walk key is present): the BPLM stays armed after the accept stop; one stop per counter-writing screen frame; stop i applies its rows via SMV (they become screen frame i+1 input - keystore writes need re-arm per input, the AnyKeyWait twin consumes on read); arm_commands run at the LAST walk stop (BPDEL * drops the BPLM, BP arms the anchor); walk_watches are calibration dumps at every stop riding the transcript as comments. Anchor frame = the first BP hit after arm; alignment is by the frame-counter watch. TS statics ride the anchor frame; T0 rows every frame. Deferred TS rows carry unpinned extents (see _deferred). Without a walk key the operator walks the title menu on the desktop; the anchor frame-counter and RNG bytes are menu-timing dependent across runs (T2/T3 classes, DESIGN section 6) - the live double-run verdict is identical-chains-modulo-those-cells; byte-identical chains need the scripted walk (S0W).\",\n",
+                scen.id
+            ));
+            j.push_str("  \"logfile\": \"dosbox-harness.log\",\n");
+            j.push_str("  \"time_limit\": 1800,\n");
+            j.push_str("  \"boot_timeout\": 1800,\n");
+            j.push_str("  \"boot_retries\": 24,\n");
+        }
+        Channel::O2 => {
+            j.push_str(&format!(
+                "  \"_comment\": \"{} O2 spot-check capture plan (W11-prep, D138; GENERATED by dbx-plan --channel o2 from watches.toml - do not hand-edit, regenerate). Channel form (DESIGN section 2 O2 + section 10 W11): every addr is the registry row EXW canon address (0x-prefixed flat linear), read DIRECTLY by the host ptrace driver - zero address translation. trigger.site = the s0-trigger EXW row (the frame-tail PresentEnd breakpoint site; the first hit after mission load is the anchor frame), trigger.frame_counter = the EXW g_frame_count cell (frame alignment). resolve rows are read at the anchor hit (resolve_at=anchor - the loader statics are mission-load values). static-map-wh rides the D137/D138 O2 form: ONE 8-byte span at 0x004EDDEC with w at +0x00 / h at +0x04 (the EXW cells are ADJACENT u32s with w LOW - NOT the EXD 0x30 span, h LOW 0x2c apart; D137 0x24-apart arithmetic corrected by D138). selection-triple dumps the SELECTED-SLOT cell 0x0046CBDC (the EXW list is FIELD-ordered base/selected/size but selected is the highest address - the D132 pairing). Deferred rows: the EXD-unmapped T2/T3 coverage rows stay deferred on BOTH channels (the differ O2 arms cover exactly the aliased set; widening the O2 row set is a W11 decision), plus any row whose EXW address is a registry gap (the EXD-only rows - static-cursor-clamp; never fabricated). inject/boot_writes rows carry EXW seam cells with frame = the Nth trigger hit after the anchor; injection on O2 is driver policy (DESIGN section 10 W11 names process_vm_readv observation - the rows are data for a writing driver). Walk-phase keystore scenarios are REFUSED on o2 (the BPLM stop-indexed menu walk is DOSBox/O1 machinery, D84). TS statics ride the anchor frame; T0 rows every frame. The tiebreak verdict this plan feeds: dbx-diff cross-channel with the O2 dump as the arbiter.\",\n",
+                scen.id
+            ));
+            j.push_str("  \"channel\": \"o2\",\n");
+            j.push_str("  \"logfile\": \"o2-harness.log\",\n");
+            j.push_str("  \"time_limit\": 1800,\n");
+        }
+    }
     j.push_str(&format!("  \"frames\": {},\n", scen.frames + 1));
     j.push_str("  \"resolve_at\": \"anchor\",\n");
     // D91: the markers staging key is an E-side seam — the O1 capture
@@ -1564,24 +1853,44 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
         j.push_str(&staging.join(",\n"));
         j.push_str("\n  },\n");
     }
-    j.push_str("  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n");
-    j.push_str("  \"boot_commands\": [\n");
-    j.push_str(&format!(
-        "    {{ \"cmd\": \"BPLM {:X}\", \"expect\": \"Set linear memory breakpoint at {fc_cell:08X}\" }}\n",
-        fc_cell
-    ));
-    j.push_str("  ],\n");
-    j.push_str("  \"arm_commands\": [\n");
-    j.push_str("    { \"cmd\": \"BPDEL *\", \"expect\": \"Breakpoints deleted\" },\n");
-    j.push_str(&format!(
-        "    {{ \"cmd\": \"BP CS:{tail:08X}\", \"expect\": \"Set breakpoint at\" }}\n",
-    ));
-    j.push_str("  ],\n");
+    match ch {
+        Channel::O1 => {
+            // The DOSBox debugger machinery (D81/D84): env, the BPLM
+            // boot trap on the frame-counter cell, the arm stop.
+            j.push_str(
+                "  \"env\": { \"SDL_VIDEODRIVER\": \"\", \"SDL_AUDIODRIVER\": \"dummy\" },\n",
+            );
+            j.push_str("  \"boot_commands\": [\n");
+            j.push_str(&format!(
+                "    {{ \"cmd\": \"BPLM {:X}\", \"expect\": \"Set linear memory breakpoint at {fc_cell:08X}\" }}\n",
+                fc_cell
+            ));
+            j.push_str("  ],\n");
+            j.push_str("  \"arm_commands\": [\n");
+            j.push_str("    { \"cmd\": \"BPDEL *\", \"expect\": \"Breakpoints deleted\" },\n");
+            j.push_str(&format!(
+                "    {{ \"cmd\": \"BP CS:{tail:08X}\", \"expect\": \"Set breakpoint at\" }}\n",
+            ));
+            j.push_str("  ],\n");
+        }
+        Channel::O2 => {
+            // The ptrace trigger (DESIGN section 10 W11): the EXW
+            // frame-tail site + the EXW frame-counter cell, both
+            // registry-derived (anti-ghost), replacing the DOSBox
+            // boot/arm commands.
+            j.push_str(&format!(
+                "  \"trigger\": {{ \"site\": \"{}\", \"frame_counter\": \"{}\" }},\n",
+                ch.addr(tail),
+                ch.addr(fc_cell)
+            ));
+        }
+    }
     j.push_str("  \"resolve\": [\n");
     for (i, (name, cell)) in resolve.iter().enumerate() {
         j.push_str(&format!(
-            "    {{ \"name\": {}, \"addr\": \"CS:{cell:08X}\", \"len\": 4 }}{}",
+            "    {{ \"name\": {}, \"addr\": \"{}\", \"len\": 4 }}{}",
             jstr(name),
+            ch.addr(*cell),
             if i + 1 < resolve.len() { ",\n" } else { "\n" }
         ));
     }
@@ -1626,17 +1935,28 @@ fn main() -> ExitCode {
     let scen_path = match args.next() {
         Some(p) => PathBuf::from(p),
         None => {
-            eprintln!("usage: dbx-plan <scenario.scen> [--out <capture-plan.json>]");
+            eprintln!(
+                "usage: dbx-plan <scenario.scen> [--out <capture-plan.json>] [--channel o1|o2]"
+            );
             return ExitCode::FAILURE;
         }
     };
     let mut out_path: Option<PathBuf> = None;
+    let mut channel = Channel::O1;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--out" => match args.next() {
                 Some(p) => out_path = Some(PathBuf::from(p)),
                 None => {
                     eprintln!("dbx-plan: --out needs a path");
+                    return ExitCode::FAILURE;
+                }
+            },
+            "--channel" => match args.next().as_deref() {
+                Some("o1") => channel = Channel::O1,
+                Some("o2") => channel = Channel::O2,
+                other => {
+                    eprintln!("dbx-plan: --channel expects o1 or o2, got {other:?}");
                     return ExitCode::FAILURE;
                 }
             },
@@ -1662,7 +1982,7 @@ fn main() -> ExitCode {
         }
     };
     let reg = registry();
-    let emitted = match emit_plan(&scen, &reg) {
+    let emitted = match emit_plan_channel(&scen, &reg, channel) {
         Ok(e) => e,
         Err(e) => {
             eprintln!("{e}");
@@ -1670,9 +1990,13 @@ fn main() -> ExitCode {
         }
     };
     eprintln!(
-        "dbx-plan: scenario {} -> {} anchor rows + {} per-frame rows, {} deferred, {} inject rows, {} walk rows; \
+        "dbx-plan: scenario {} -> channel {} -> {} anchor rows + {} per-frame rows, {} deferred, {} inject rows, {} walk rows; \
          frames={} (anchor + {} post-anchor records for the stitcher)",
         scen.id,
+        match channel {
+            Channel::O1 => "o1",
+            Channel::O2 => "o2",
+        },
         emitted.anchor_count,
         emitted.frame_count,
         emitted.deferred.len(),
@@ -1873,6 +2197,169 @@ mod tests {
         let emitted = emit_plan(&s1(), &registry()).unwrap();
         let committed = include_str!("../../capture-plans/S1.json");
         assert_eq!(emitted.json, committed, "capture-plans/S1.json is stale: regenerate with dbx-plan scenarios/S1.scen --out capture-plans/S1.json");
+    }
+
+    #[test]
+    fn s1_plan_compiles_o2() {
+        // D138: the O2 channel form — every address swaps to the
+        // registry exw_addr canon cell (flat 0x form), the DOSBox
+        // boot/arm machinery is replaced by the ptrace trigger, and
+        // the ONE span split + the D132 cell-order pick apply.
+        let scen = s1();
+        let reg = registry();
+        let emitted = emit_plan_channel(&scen, &reg, Channel::O2).unwrap();
+        // channel marker + no DOSBox machinery + no CS: form anywhere
+        assert!(emitted.json.contains("  \"channel\": \"o2\",\n"));
+        for banned in ["CS:", "boot_commands", "arm_commands", "\"env\""] {
+            assert!(
+                !emitted.json.contains(banned),
+                "o2 plan must not carry the DOSBox machinery: found {banned:?}"
+            );
+        }
+        // the ptrace trigger: registry-derived EXW cells (the s0-trigger
+        // PresentEnd site + the EXW g_frame_count cell)
+        assert!(emitted.json.contains(
+            "\"trigger\": { \"site\": \"0x00425A03\", \"frame_counter\": \"0x0046AE68\" }"
+        ));
+        // THE span split (D137 arithmetic CORRECTED by D138): the EXW
+        // w/h cells are ADJACENT u32s with w LOW — the 8-byte span,
+        // NOT the EXD 0x30 span
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"static-map-wh\", \"addr\": \"0x004EDDEC\", \"len\": 8 }"));
+        assert!(
+            !emitted
+                .json
+                .contains("{ \"id\": \"static-map-wh\", \"addr\": \"0x004EDDEC\", \"len\": 48 }"),
+            "the O2 map-wh row must NOT be the EXD 0x30 span form"
+        );
+        // the resolve pair reads the EXW cells
+        assert!(emitted
+            .json
+            .contains("\"name\": \"map_w\", \"addr\": \"0x004EDDEC\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"map_h\", \"addr\": \"0x004EDDF0\""));
+        // count cells + pointer cells read the EXW twins — the
+        // robot_count is 0x46cbd8 (the PER-PLAYER 0x11958c twin, the
+        // W8-prep correction; the registry parenthetical was fixed in
+        // this unit), NOT the TOTAL 0x46ccbc
+        assert!(emitted
+            .json
+            .contains("\"name\": \"robot_count\", \"addr\": \"0x0046CBD8\""));
+        assert!(!emitted.json.contains("0x0046CCBC"));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"trt_count\", \"addr\": \"0x0046CCD4\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"obj_ptr\", \"addr\": \"0x0046CBF4\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"claim_ptr\", \"addr\": \"0x0046AF58\""));
+        // bank rows keep their forms on the EXW cells
+        assert!(emitted.json.contains(
+            "{ \"id\": \"robot-bank\", \"addr\": \"0x004C69E4\", \"len\": \"$robot_count*0xA8\" }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"trt-array\", \"addr\": \"0x004CCCF8\", \"len\": \"$trt_count*0x20\", \
+             \"prefix\": { \"addr\": \"0x0046CCD4\", \"len\": 4 } }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"object-instances\", \"addr\": \"$obj_ptr\", \"len\": \"2000*0x14\", \
+             \"prefix\": { \"addr\": \"0x0046CBE8\", \"len\": 4 } }"
+        ));
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"no-extract-latch\", \"addr\": \"0x0046AED4\", \"len\": \"$robot_count*4\" }"));
+        // selection-triple dumps the EXW SELECTED-SLOT cell 0x46cbdc
+        // (the EXW list is FIELD-ordered base/selected/size but NOT
+        // ascending — the D132 pairing; cells[1], never cells[0])
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"selection-triple\", \"addr\": \"0x0046CBDC\", \"len\": 4 }"));
+        assert!(!emitted.json.contains("0x0046CBD4"));
+        // every emitted id is a real registry row of the scenario
+        // tiers with a non-empty EXW address (never a fabricated gap)
+        for id in row_ids(&emitted.json) {
+            let row = reg
+                .iter()
+                .find(|r| r.id == id)
+                .unwrap_or_else(|| panic!("plan id {id:?} is not in the registry"));
+            assert!(
+                scen.tiers.contains(&row.tier),
+                "plan id {id:?} tier {} not in scenario tiers",
+                row.tier
+            );
+            assert!(
+                !row.exw_addr.is_empty(),
+                "plan id {id:?} is an EXW gap — must never be emitted on o2"
+            );
+        }
+        // row-set symmetry with O1 minus the EXD-only row: the same
+        // 28 per-frame rows, 37-1 anchor rows (static-cursor-clamp is
+        // EXD-only), 6+1 deferred
+        assert_eq!(count_rows(&emitted.json, "watches"), 28);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 36);
+        assert_eq!(emitted.deferred.len(), 7);
+        assert!(emitted
+            .deferred
+            .iter()
+            .any(|d| d.starts_with("static-cursor-clamp")));
+        // stitcher contract unchanged
+        assert_eq!(extract_frames(&emitted.json), scen.frames + 1);
+    }
+
+    #[test]
+    fn s1_o2_plan_matches_committed_artifact() {
+        let emitted = emit_plan_channel(&s1(), &registry(), Channel::O2).unwrap();
+        let committed = include_str!("../../capture-plans/S1-o2.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S1-o2.json is stale: regenerate with dbx-plan scenarios/S1.scen --channel o2 --out capture-plans/S1-o2.json");
+    }
+
+    #[test]
+    fn o2_refuses_walk_scenarios() {
+        // The BPLM stop-indexed menu walk is DOSBox/O1 machinery
+        // (D84); the o2 channel never invents capture semantics.
+        let src = "scenario = X\ntiers = T0\nframes = 2\nkeystore 0x01=1\nuntil-anchor m\n";
+        let scen = Scenario::parse(src).unwrap();
+        let err = emit_plan_channel(&scen, &registry(), Channel::O2)
+            .err()
+            .map(|e| e.to_string())
+            .expect("walk scenario must not compile on o2");
+        assert!(
+            err.contains("menu walk") && err.contains("O1"),
+            "error must name the walk gate: {err}"
+        );
+    }
+
+    #[test]
+    fn o2_compiles_inject_steps_on_exw_cells() {
+        // Mission-phase steps swap to the EXW seam cells (the W11
+        // driver's injection policy reads them as data); the frame
+        // accounting is channel-neutral.
+        let src = "scenario = X\ntiers = T0\nframes = 4\n\
+                    until-anchor mission-start\n\
+                    step 2\n\
+                    keystore 0x1f=1\n\
+                    order 29 18 0\n\
+                    command 01\n";
+        let scen = Scenario::parse(src).unwrap();
+        let emitted = emit_plan_channel(&scen, &registry(), Channel::O2).unwrap();
+        // boundaries: anchor=1, step 2 -> 3; keystore @3 (EXW keystore
+        // base 0x4edc44 + scan 0x1f), order @4 (EXW triple
+        // 0x4dd484/88/8c), command @5 (EXW ring 0x4dd4a0 + count
+        // 0x46cbe0)
+        assert!(emitted
+            .json
+            .contains("\"frame\": 3, \"addr\": \"0x004EDC63\", \"bytes\": \"01\""));
+        assert!(emitted
+            .json
+            .contains("\"frame\": 4, \"addr\": \"0x004DD484\", \"bytes\": \"1d000000\""));
+        assert!(emitted.json.contains(
+            "\"frame\": 5, \"op\": \"command\", \"base\": \"0x004DD4A0\", \
+             \"stride\": 128, \"count_cell\": \"0x0046CBE0\", \"bytes\": \"01\""
+        ));
     }
 
     fn s2() -> Scenario {

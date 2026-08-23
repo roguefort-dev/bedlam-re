@@ -1603,21 +1603,22 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "typedb-fade-byte"
         | "armor-pad-reads" => normalize_o1_row(id, no, b),
         "robot-bank" => robot_row_from_map(id, no, b, EXW_ROBOT_MAP),
-        // The W11 pin (D137, §7j.60): the EXW w/h cells are 0x24 apart
-        // with w LOW (0x4eddec) and h HIGH (0x4eddf0) — the port
-        // reversed the field order vs the EXD pair (0x2c apart, h
-        // LOW), so the O2 capture form is NOT the O1 0x30 span. The
-        // capgen dumps ONE contiguous 0x28 span @0x4eddec covering
-        // exactly the two cells: w @+0x00, h @+0x24 (the product cell
-        // 0x4eddf4 is excluded, exactly like the EXD span excludes
-        // 0x1074e4).
+        // The W11 pin (D137, §7j.60; arithmetic corrected by D138):
+        // the EXW w/h cells are ADJACENT u32s with w LOW (w 0x4eddec,
+        // h 0x4eddf0 — 4 apart; 0x4eddf0−0x4eddec = 4, the stride cell
+        // 0x4eddf4 right after) — the port reversed the field order vs
+        // the EXD pair (0x2c apart, h LOW), so the O2 capture form is
+        // NOT the O1 0x30 span. The capgen dumps ONE contiguous 8-byte
+        // span @0x4eddec covering exactly the two cells: w @+0x00,
+        // h @+0x04 (the product cell 0x4eddf4 is excluded, exactly
+        // like the EXD span excludes 0x1074e4).
         "static-map-wh" => {
-            need(id, no, b, "0x24+4 span", 0x24 + 4)?;
+            need(id, no, b, "4+4 span", 8)?;
             Ok(NormRow {
                 id: id.to_string(),
                 fields: vec![
                     ("w".to_string(), FieldVal::Int(u32le(b) as i128)),
-                    ("h".to_string(), FieldVal::Int(u32le(&b[0x24..]) as i128)),
+                    ("h".to_string(), FieldVal::Int(u32le(&b[4..]) as i128)),
                 ],
             })
         }

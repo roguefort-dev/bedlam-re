@@ -246,13 +246,14 @@ fn o1_row_forms() {
 
 #[test]
 fn o2_row_forms() {
-    // static-map-wh (D137/§7j.60): the W11-pinned O2 capture form —
-    // the EXW cells are 0x24 apart with w LOW (0x4eddec base, h at
-    // 0x4eddf0): a 0x28 span, w@+0x00, h@+0x24. NOT the EXD 0x30
-    // span (0x2c apart, h LOW) the O1 arm parses.
-    let mut span = vec![0u8; 0x28];
+    // static-map-wh (D137/§7j.60, arithmetic corrected by D138): the
+    // W11-pinned O2 capture form — the EXW cells are ADJACENT u32s
+    // with w LOW (w 0x4eddec, h 0x4eddf0 — 4 apart): an 8-byte span,
+    // w@+0x00, h@+0x04. NOT the EXD 0x30 span (0x2c apart, h LOW)
+    // the O1 arm parses.
+    let mut span = vec![0u8; 8];
     span[0x00..0x04].copy_from_slice(&25u32.to_le_bytes());
-    span[0x24..0x28].copy_from_slice(&75u32.to_le_bytes());
+    span[0x04..0x08].copy_from_slice(&75u32.to_le_bytes());
     let f = frame(0, vec![WatchRecord::new("static-map-wh", span.clone())]);
     let rows = normalize_frame(&f, Channel::O2ExwWine, &reg()).unwrap();
     let get = |n: &str| rows[0].field(n).cloned();
@@ -704,15 +705,16 @@ fn o1_frame(no: u64, money: u32) -> FrameRecord {
 }
 
 /// The O2-side fabrication (the inverse of the O2 normalizer): the
-/// EXW map w/h cells are 0x24 apart with w LOW (0x4eddec/h
-/// 0x4eddf0, D137/§7j.60) — a 0x28 span, w@+0x00/h@+0x24, NOT the
-/// EXD 0x30 span of `o1_frame`.
+/// EXW map w/h cells are ADJACENT u32s with w LOW (w 0x4eddec / h
+/// 0x4eddf0, 4 apart — D137/§7j.60, arithmetic corrected by D138) —
+/// an 8-byte span, w@+0x00/h@+0x04, NOT the EXD 0x30 span of
+/// `o1_frame`.
 fn o2_frame(no: u64, money: u32) -> FrameRecord {
     let mut f = o1_frame(no, money);
     if no == 0 {
-        let mut span = vec![0u8; 0x28];
+        let mut span = vec![0u8; 8];
         span[0x00..0x04].copy_from_slice(&25u32.to_le_bytes());
-        span[0x24..0x28].copy_from_slice(&75u32.to_le_bytes());
+        span[0x04..0x08].copy_from_slice(&75u32.to_le_bytes());
         f.watches.retain(|w| w.id != "static-map-wh");
         f.push_watch("static-map-wh", span);
     }

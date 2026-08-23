@@ -371,10 +371,13 @@ O1 field-map contract.
   inverse (valid because `normalize_o2_row`'s alias list takes EXW
   guest forms identical to EXD for every aliased row, and
   `EXW_ROBOT_MAP == EXD_ROBOT_MAP` — the §8 back-half probe; the O2
-  `static-map-wh` row is W11-PINNED (D137, 2026-08-23): the EXW cells
-  are 0x24 apart with w LOW, so the O2 capture form is the 0x28 span
-  @0x4eddec (w@+0x00, h@+0x24) — NOT the EXD 0x30 span (h LOW,
-  0x2c apart), so the fabrication is channel-aware since), the E side is
+  `static-map-wh` row is W11-PINNED (D137, 2026-08-23; arithmetic
+  CORRECTED by D138, 2026-08-24): the EXW cells are ADJACENT u32s
+  with w LOW (0x4eddec/0x4eddf0, 4 apart — D137's "0x24 apart" was
+  an arithmetic impossibility for these cells), so the O2 capture
+  form is the 8-byte span @0x4eddec (w@+0x00, h@+0x04) — NOT the
+  EXD 0x30 span (h LOW, 0x2c apart), so the fabrication is
+  channel-aware since), the E side is
   re-stitched as a Channel::Engine dump when perturbed. The four
   lanes assert class+detail verbatim: (a) O2 agrees with O1 on a
   perturbed-E `money` → `engine-bug` "the engine (E) is the outlier"
@@ -781,6 +784,16 @@ differ come before any new scenario depth.
     frame-tail breakpoint at the EXW site + process_vm_readv bulk reads of
     the same registry rows; used to arbitrate every `original-divergence`
     finding and for canon-only EXW behaviors.
+    **O2 PLAN FORM LANDED 2026-08-24 (D138, W11-prep):** `dbx-plan
+    --channel o2` compiles the O2-side plan (every address = the
+    registry `exw_addr` canon cell in flat linear form — zero
+    translation; the DOSBox boot/arm machinery replaced by the
+    `trigger` object; walk scenarios refused) and byte-pins
+    `capture-plans/S1-o2.json`. The D137 static-map-wh pin's span
+    arithmetic was CORRECTED by D138: the EXW w/h cells are ADJACENT
+    (4 apart), so the O2 capture form is the 8-byte span @0x4eddec
+    (w@+0x00/h@+0x04) — see D137-CORRECTION. The driver itself stays
+    operator-gated W11 work.
 12. **W12 — scenario depth S3–S8** as producer families land in-engine
     (each S3+ unit pairs the engine producer with its scenario).
     **S3-PREP LANDED 2026-08-22 (D102, §7j.37):** the E-side

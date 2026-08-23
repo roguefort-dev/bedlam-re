@@ -26,7 +26,8 @@
 //!    `inv_frame` output stitched under Channel::O2ExwWine — valid
 //!    because `normalize_o2_row`'s alias list takes EXW guest forms
 //!    identical to EXD, `EXW_ROBOT_MAP == EXD_ROBOT_MAP`, and
-//!    static-map-wh fabricates the D137-pinned EXW 0x28 span) drives
+//!    static-map-wh fabricates the D137-pinned EXW 8-byte span
+//!    (arithmetic corrected by D138)) drives
 //!    all four `compare_field` T1-exact lanes on a perturbed
 //!    `money`: O2-with-O1 → EngineBug "engine is the outlier";
 //!    O2-with-E → OriginalDivergence (verdict back to
@@ -123,9 +124,10 @@ fn inv_robot_bank(canon: &[u8]) -> Vec<u8> {
 /// `menu_frames` offsets the frame-counter (the never-resetting O1
 /// counter carries the menu walk); `rng_wander` perturbs the RNG words.
 /// `chan` selects the guest raw form of the channel-split rows —
-/// static-map-wh (D137/§7j.60): the EXD cells are 0x2c apart with h
-/// LOW (the O1 0x30 span) while the EXW cells are 0x24 apart with w
-/// LOW (the O2 0x28 span, w@+0x00/h@+0x24).
+/// static-map-wh (D137/§7j.60, arithmetic corrected by D138): the EXD
+/// cells are 0x2c apart with h LOW (the O1 0x30 span) while the EXW
+/// cells are ADJACENT u32s with w LOW (the O2 8-byte span,
+/// w@+0x00/h@+0x04).
 fn inv_frame(
     e: &FrameRecord,
     map_wh: Option<(u32, u32)>,
@@ -315,12 +317,13 @@ fn inv_frame(
                         span[0x2c..0x30].copy_from_slice(&wv.to_le_bytes());
                         span
                     }
-                    // O2 (D137/§7j.60): the EXW 0x28 span — cells 0x24
-                    // apart with w LOW (0x4eddec) / h HIGH (0x4eddf0).
+                    // O2 (D137/§7j.60, corrected by D138): the EXW
+                    // 8-byte span — ADJACENT cells with w LOW
+                    // (0x4eddec) / h HIGH (0x4eddf0, 4 apart).
                     Channel::O2ExwWine => {
-                        let mut span = vec![0u8; 0x28];
+                        let mut span = vec![0u8; 8];
                         span[0x00..0x04].copy_from_slice(&wv.to_le_bytes());
-                        span[0x24..0x28].copy_from_slice(&hv.to_le_bytes());
+                        span[0x04..0x08].copy_from_slice(&hv.to_le_bytes());
                         span
                     }
                     // inv_frame fabricates GUEST channels only; the
@@ -644,9 +647,9 @@ fn s1_o2_tiebreak_arbitration() {
     // aliased row's EXW guest form IS the EXD form
     // (normalize_o2_row delegates to normalize_o1_row) and the robot
     // map is the same table (EXW_ROBOT_MAP == EXD_ROBOT_MAP) — but
-    // static-map-wh is NOT (EXW cells 0x24 apart w LOW vs the EXD
-    // 0x2c h LOW), so the O1 and O2 dumps stitch from their own
-    // inv_frame channel forms.
+    // static-map-wh is NOT (EXW cells adjacent u32s w LOW vs the EXD
+    // 0x2c h LOW, D138-corrected arithmetic), so the O1 and O2 dumps
+    // stitch from their own inv_frame channel forms.
     let mut map_wh: Option<(u32, u32)> = None;
     let mut fab_o1: Vec<FrameRecord> = Vec::new();
     let mut fab_o2: Vec<FrameRecord> = Vec::new();
