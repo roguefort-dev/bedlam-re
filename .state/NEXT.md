@@ -146,32 +146,30 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W11-prep, SMALL] DIFFER_GATE O2 TIEBREAK FABRICATION —
-      exercise the differ's UNTESTED arbitration path (differ.rs
-      compare_field EngineBug lane: "O2/EXW canon agrees with
-      O1" / "agrees with E → OriginalDivergence" / "all three
-      differ" / "provisional, no tiebreak"). METHOD: in
-      engine/bedlam-game/tests/differ_gate.rs add a third
-      fabricated side — an O2 dump (Channel::O2ExwWine, stitch a
-      transcript through the O2 normalizers) built from the SAME
-      E frames (inv_frame is already channel-form-correct for the
-      aliased rows: EXW guest forms = EXD forms per
-      normalize_o2_row's alias list — EXCEPT static-map-wh, whose
-      O2 row deliberately normalizes to ZERO fields pending the
-      W11 pin, and robot-bank which walks EXW_ROBOT_MAP). Then:
-      (a) tiebreak agreeing with O1 on a DELIBERATELY perturbed
-      E-side T1 field (e.g. money -7 on a re-stitched E run)
-      keeps class EngineBug with the "engine is the outlier"
-      detail; (b) tiebreak agreeing with E (perturb the O1 side
-      instead) re-classes to OriginalDivergence; (c) no-tiebreak
-      keeps the "provisional" detail. Assert the three details +
-      classes explicitly. No chain pins move, no production code
-      changes expected (this is a gate-coverage unit; if the
-      arbitration logic itself proves wrong, fix it in the same
-      unit with a DESIGN note). (QUEUED 2026-08-23 by the D132
-      alignment unit — the tiebreak machinery landed with W7/D87
-      but no gate ever drives it; the W11 live channel needs it
-      proven headless first.)
+   2. [P4.2/W11-prep, SMALL] O2 STATIC-MAP-WH PIN — close the LAST
+   deliberate O2 zero-field row: `normalize_o2_row`'s static-map-wh
+   arm returns zero fields "pending the W11 pin" (differ.rs ~1610).
+   METHOD: locate the EXW terrain w/h cells from the committed
+   material (RE-EXW-SIM §terrain — the zone cell 0x4edd8c /
+   mission 0x4edd88 neighborhood is documented; the EXD side reads
+   a 0x30 span with h@0x10748c +0x00 and w@0x1074b8 +0x2c — find
+   the EXW twins in exw-functions.txt / RE-EXW-SIM; re-anchor
+   every fact to EXW addresses, provenance + confidence tags).
+   Then: registry row exw note updated, `normalize_o2_row`
+   static-map-wh arm parses the pinned cells into the canonical
+   (w, h) fields, and `differ_gate`'s `s1_o2_tiebreak_arbitration`
+   baseline extends: the fabricated O2 side gains the true EXW-form
+   static-map-wh bytes (inv_frame currently emits the EXD 0x30
+   span — replace with whatever form the pin defines) and the
+   assertion flips from "no static-map-wh finding" to "compares
+   clean" (the cross suite's existing guard stays green — S0's
+   expect_coverage is 0 and must stay 0). Run the FULL differ_gate
+   suite + fmt + clippy; commit RE notes before the impl (the
+   stream-survival rule). NO live Wine session — headless pin only
+   (the live capture stays W11/operator-gated). (QUEUED 2026-08-23
+   by the O2-tiebreak-fabrication unit, commit 4591f52 — the
+   arbitration lanes are proven; the zero-field row is the last
+   differ-side W11 gap.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -324,6 +322,32 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4.2/W11-prep DIFFER_GATE O2 TIEBREAK FABRICATION
+  unit COMPLETE (worker 7956a0e8 claim 2, commits 04cd6b0 RE/design
+  note + 4591f52 impl, both PUSHED). All four compare_field
+  T1-exact arbitration lanes driven headless by the new
+  s1_o2_tiebreak_arbitration test: ONE inv_frame fabrication
+  stitched under BOTH O1ExdDosboxX and O2ExwWine (valid because
+  normalize_o2_row's alias list takes EXD-identical EXW guest
+  forms, EXW_ROBOT_MAP == EXD_ROBOT_MAP per the sec 8 back-half
+  probe, and the O2 static-map-wh row ignores its bytes pending
+  the W11 pin); the engine-is-wrong lane re-stitches the REAL E
+  frames under Channel::Engine with money perturbed (stitch_o1
+  generalized to stitch_chan — the O1-address rule binds only
+  O1). Lanes asserted class+detail+a/b VERBATIM: (a) O2 sides
+  with O1 vs perturbed E -> EngineBug "the engine (E) is the
+  outlier" FAIL; (b) O2 sides with E vs perturbed O1 ->
+  OriginalDivergence "EXD diverges from EXW" PASS-WITH-NOTES
+  (budgeted); (c) all three differ -> EngineBug "E wrong against
+  both oracles"; (d) no tiebreak -> EngineBug "provisional"; plus
+  the idle-tiebreak baseline (coverage stays exactly 1 on S1,
+  tiebreak fingerprint O2:EXW/Wine + S1). NO production change —
+  the arbitration logic verified as-written (W11's live channel
+  inherits a proven arbiter). Full differ_gate suite green
+  (2 tests, 693s incl. the S0..S8 corpus gate), fmt+clippy
+  clean, MANIFEST.sha256 clean after the corpus-reading run;
+  no Ghidra run. Queued next: item 2 = the O2 static-map-wh pin
+  (the last deliberate zero-field row).
 - 2026-08-23: P4/RE THE EXD SFX-MASTER-GATE TWIN CENSUS unit
   COMPLETE (worker 2a9f1b9f claim 2, commits 5178420 notes +
   d341c65 impl + the D134 DECISIONS entry riding the impl commit;

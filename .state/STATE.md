@@ -1,5 +1,25 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4.2/W11-prep THE DIFFER_GATE O2 TIEBREAK FABRICATION
+    unit COMPLETE (commits 04cd6b0 + 4591f52 PUSHED, worker
+    7956a0e8 claim 2): all four compare_field T1-exact arbitration
+    lanes now driven headless (s1_o2_tiebreak_arbitration) — one
+    inv_frame fabrication stitched under BOTH O1 and O2 channel
+    tags (normalize_o2_row alias list = EXD-identical forms;
+    EXW_ROBOT_MAP == EXD_ROBOT_MAP; the O2 static-map-wh row is
+    zero-field pending the W11 pin), the engine-is-wrong lane
+    re-stitches the REAL E frames under Channel::Engine with money
+    perturbed (stitch_o1 generalized to stitch_chan). Lanes assert
+    class+detail+a/b verbatim: O2-with-O1 -> EngineBug "engine is
+    the outlier" FAIL; O2-with-E -> OriginalDivergence
+    PASS-WITH-NOTES (budgeted); all-three -> EngineBug "wrong
+    against both oracles"; none -> "provisional"; idle-tiebreak
+    baseline = nothing changes. NO production change — the W7/D87
+    arbiter verified as-written (W11's live channel inherits it).
+    differ_gate 2 tests green (693s, corpus), fmt+clippy clean,
+    MANIFEST clean post-run. Queue now: item 1 = [BLOCKED] S0 live
+    session (operator), item 2 = the O2 static-map-wh pin (the
+    last deliberate zero-field W11-prep row).
   - 2026-08-23 P4/W7-followup THE DIFFER_GATE BLINK-CURSOR
     FABRICATION ALIGNMENT unit COMPLETE (commit 2d53aaa PUSHED,
     worker 9035ca6a claim 2): the gate's fabricated O1 side now
