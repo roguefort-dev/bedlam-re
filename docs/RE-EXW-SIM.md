@@ -4650,6 +4650,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | pickup range tables | A/B dwords @0x454a58/0x454a74 (7 terrain sets, 4-word closed groups → cases 1/3/2/4 + 9/7/8); floor word table @0x454a90; the set [0x4edd8c] = zone_index+1 ('A'+set−1 = the path zone letter, §7h.4) | §7h, §7h.4 |
 | pickup probe latch | {z@0x4dc688, x@0x4dc68c, y@0x4dc690}: FOUR writer sites in get_z_pos (z / z+1 / z−2 empty-search / slope z+1), each gated on the probed DAT plane byte == 3, last-write-wins, no auto-clear; SOLE consumer = the robots() move-toward-target block: clear −1 (0x40bef2) → robot_move (0x40bf06) → test ≠ −1 (0x40bf0b) → mirror-word range test → DAT byte := 0 + mirror word := floor word + seen := 1 + {x,y,z} staged 0x4dc6ac/b0/b4 (MP-only FUN_00425647 tails) → FUN_0040eba0; corpus: ZERO pickup cells ZONEA/M1 (set 1), 601 ZONEB (set 2) + 149 ZONEF (set 6), zones C/D/E/G none | §7h.4 |
 | TOT mirror staging | init_tiles@00407e11 (MissionShell load): EVERY nonzero TOT plane word → mirror @0x4796bc+30·tile+2z (DAT byte UNCONDITIONAL); the DAT==0 gate is the SEEN flag only (byte @+0x10+z := 1) — the pickup/decoration words at DAT≠0 cells DO stage (corrects the §7j.16 gloss; FUN_00440a2d restamp = the incremental word+seen path) | §7h.4 |
+| TOT plane-6/7 semantics | CLOSED §7j.47/D119: planes 6/7 = ordinary z-levels 6/7 (tall-structure tops; per-level sprite ids, e.g. ZONEA/M1 (17,25) column [454,1354,1355,1356] at z=4..7); NO z≥6 gate in ANY consumer — the FUN_00403938 restamp z-stack loop runs z 0..7 (outer `cmp 8` @0x406863, chain @0x40695c; Block-1 restart draw @0x406882..0x406941 gates on word≠0 ALONE, no seen — so every nonzero plane word draws), the overlay scanner 0x408a49..0x408ade walks planes 1..7, the range consumer 0x42035c..0x4203a5 planes 0..7; corpus: 36/37 missions (only ZONEG/M1 zero; 8 016+2 882 words, 6 504 overlay / 2 792 standalone); value domain ≡ planes 1..5 (35..1868 vs 33..1868); the FORMATS §2 plane-value=POS-slot hypothesis REFUTED (9 217 live/1 681 empty .POS resolutions = coincidence; ZONEA's 1355/1356 hit empty slots; p7==p6+1 at only 83/9 296 cells) | §7j.47 |
 | map present | FUN_00401107 map mode: 480×480 from backbuffer base, stride 640; button chrome 0x8f/0x5f/0x5e @ (0x213,0x1b5) | §7e |
 | backbuffer | [0x4ede18] = ArenaAlloc(0x64000) = 640×640; overlay clears 0x4b000 (480 rows) | §7e |
 | order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
@@ -7851,3 +7852,109 @@ ZONE G  entry 0x439ae2
     slot 00h (0) -> 0x439a92 : DOOR(rect=0,state=2) + EXIT-ACTIVATE(pad=0)
     slot 01h (1) -> 0x439a9c : DOOR(rect=1,state=2)   ; rect/state inherit live regs
 ```
+
+## 7j.47. THE TOT PLANE-6/7 SEMANTICS — CLOSED: planes 6/7 are ordinary z-levels 6/7 of the word stack (tall-structure tops); they STAGE and DRAW like every other plane (no z≥6 gate anywhere); the ~2000-entry target-table hypothesis REFUTED (2026-08-23, worker f29066bd claim 2, D119; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run; read-only corpus probes over game-data TOT/DAT/POS, scratch /tmp/opencode; manifest clean before AND after)
+
+Method: instruction walk of every 0x4796bc/0x4796cc consumer family in the
+0x406xxx draw range (the §7j.32 reader sites 0x406891/0x4068ec/0x406907/
+0x406a0e/0x406a1a + their enclosing loop 0x4067cf..0x406c73) + init_tiles
+0x407e11 staging + the two non-draw mirror walkers, then a full-corpus
+census (37 missions × 8 planes; TOT grammar per FORMATS §2 with the D118
+word-unit addressing).
+
+### 1. The renderer verdict — plane-6/7 words DO draw [verified]
+
+The terrain z-stack draw loop (in FUN_00403938; consumes the
+[0x4ede24]/[0x4ede28] RESTAMP LIST built by init_tiles for the initial
+full screen + appended by FUN_00440a2d on scroll) walks per record:
+`[esp+0x154]` = z 0..7 (`cmp ebx,0x8; jge next-record` @0x406863/0x406866;
+loop-next 0x406821: mirror ptr +2 @0x406840, screen y −0x5000 @0x40683a,
+overlay scan ptr +0x1440 @0x406843) and `[esp+0x3c]` = k, the stack-draw
+cursor, reset to 0 for EVERY record (@0x406c00/0x406c08 — `xor eax,eax`
+unconditional on both the +0x19-door-tag branches):
+- **Block 1** (the restart draw, 0x406882..0x406941): fires when k == z;
+  gate = mirror word@[record+2z] ≠ 0 ALONE (`cmp WORD PTR [eax+0x4796bc],0;
+  je 0x406941` @0x406891 — **NO seen check**). Draws via the LNK remap
+  (word → u16@(0x45cdda+2·word), write-back @0x4068e3), the palette pick
+  (objective-height pair +0x1B/+0x1C in range [z0 ≤ z < z0+D] → the
+  §7j.35 ping-pong const 0x456ca8 @0x40691a; else scorch +0x18 @0x406928)
+  and FUN_00401471 (bank [0x4ede1c], PALTRAN ramps 0x4dd444).
+- **Block 2** (the contiguous chain, 0x40695c..0x406a59): k++ while
+  k < 8 ∧ seen@[record+0x10+k] ≠ 0 (@0x40696e) ∧ word@[record+2k] ≠ 0
+  (@0x40697b); same remap/palette + the §7j.35 water special-case
+  (word within [u32@0x454aac+4·[0x4edd8c], +0xE) → FUN_0040167a instead,
+  @0x4069c7..0x4069fb).
+- **Catch-up**: when the chain breaks at plane m (seen==0 or word==0),
+  the outer z loop reaches m and Block 1 re-fires (word-only gate), so
+  **every plane 0..7 whose word is nonzero draws** (seen only short-cuts
+  the contiguous fast path, never suppresses a word). Screen-bounds
+  culling (0x40689f..0x4068bb / 0x4069a2..0x4069b0 vs backbuffer
+  [0x4ede18]) and the 0x24×0x24 occlusion bounds (0x406a87..0x406ab1)
+  are plane-agnostic.
+- init_tiles stages ALL 8 planes: z loop `cmp esi,0x8` @0x407fce, word≠0
+  → mirror @0x407fe4, DAT byte gates ONLY seen @0x407ff1 (§7h.4 shape).
+- The two adjacent non-draw walkers are equally unbounded: the terrain
+  overlay scanner 0x408a49..0x408ade walks planes 1..7 (ebp 2..0xE step
+  2, `cmp ebp,0x10` @0x40889; LNK remap @0x408aab, nonzero → 0x402ab8),
+  and the per-plane range consumer 0x42035c..0x4203a5 walks planes 0..7
+  (edx 0..0xE step 2, `cmp edx,0x10` @0x420360) testing the mirror word
+  against [0x454ae4+4·[0x4edd8c]] (+0xE window) → FUN_0042394a.
+**No z ≥ 6 gate, skip, or special case exists in any of the four
+families.** A TOT plane-6/7 word stages, remaps, palette-picks and blits
+exactly like a plane-0..5 word; the only z-dependent draw behavior in the
+loop is the screen-y offset (−0x5000 per level).
+
+### 2. The corpus census [verified, full 37-mission sweep]
+
+- 36/37 missions carry plane-6/7 words (ZONEG/MISSION1 is the only zero;
+  totals: 9 296 cells, 8 016 nonzero plane-6 words + 2 882 plane-7 words
+  — matching FORMATS §2; cells: 6 414 p6-only / 1 280 p7-only / 1 602
+  both). Heaviest: ZONEB/M5 (1 105), ZONEF/M3 (1 008), ZONEE/M2 (526).
+- **Overlay vs standalone**: 6 504 cells ALSO nonzero at planes 0..5
+  (upper levels of an existing column), 2 792 standalone (planes 0..5 all
+  zero — floating z=6/7 sprites; drawn by the Block-1 catch-up path).
+- **Value domain identity**: global nonzero domains plane 0 = 1..1494,
+  planes 1..5 = 33..1868 (maxes 1866/1867/1868/1866/1867), plane 6 =
+  35..1868, plane 7 = 36..1868 — the SAME word population; 8 738/10 898
+  plane-6/7 values also occur at planes 0..5 of the same mission.
+- **The tall-tower shape**: the words are per-level sprite ids of
+  multi-storey structures. ZONEA/M1 tile (17,25) — the corpus only zone-A
+  cell — is one tower column: TOT = [0,0,0,0,454,1354,1355,1356], DAT =
+  [1,0,0,0,1,1,1,1] (base at z=4, three stacked levels; the famous
+  \"1355/1356 adjacent integers\" are simply the z-6/z-7 sprite ids).
+  ZONEB/M1 (88,19) = [0,345,345,303,1866,1867,**1868**]; ZONEB/M1
+  (26..30,26) = descending ramps 1755,1754,1754,1754 → **1753**;
+  ZONEB/M1 (19..26, 88..90) = sequential 1153..1161 across adjacent
+  tiles (one multi-tile building with sequential per-level ids).
+- DAT bytes at the plane-6/7 words: overwhelmingly 1 (5 558/8 016 at p6,
+  1 733/2 882 at p7), 0 in ~7% → seen=1 staged at load for ~93%, seen=0
+  cells still draw via the catch-up restart; the full DAT value spread
+  (2/3/10/37/99..102…) is the ordinary decoration/type mix.
+
+### 3. The ~2000-entry target-table hypothesis — REFUTED [verified]
+
+FORMATS §2 plane-value=POS-slot reading (values ≤ 1868 \"just under\"
+the 2000-slot .POS count) is dead on three independent legs:
+1. **Domain coincidence**: the tile-word domain tops at 1868 at planes
+   1..5 TOO (pre-LNK terrain-type ids); the \"just under 2000\" nearness
+   is a property of the word grammar, not of .POS.
+2. **No linkage**: resolving every plane-6/7 value as a .POS slot in its
+   own mission gives 9 217 live / 1 681 empty — the coincidental live
+   fraction of dense 2000-slot banks, not a semantic map (a real linkage
+   resolves 100%); ZONEA/M1 only pair (1355/1356) hits EMPTY slots.
+3. **The words draw**: §7j.47/1 — they are consumed as sprite ids by the
+   ordinary terrain stack path (LNK remap → .BIN blit), the same as
+   planes 0..5. p7 == p6+1 holds at only 83/9 296 cells — the ZONEA
+   adjacent-pair pattern is not systematic.
+
+### 4. Consequences
+
+- FORMATS §2 plane-6/7 paragraph closed (this section is its anchor);
+  the §2 \"what RE must confirm: the plane-6/7 target table\" item CLOSED.
+- E-side: no seam change — stage_pickup_surface already stages EVERY
+  nonzero plane word (D107), so E treats planes 6/7 uniformly today;
+  a future scenario that walks a tall tower (z up to 7) exercises the
+  same chain, with the caveat that robots() pathing probes remain
+  z-bounded by their own families (not by the draw stack).
+- Differ/watch set: nothing new to watch — plane 6/7 words live inside
+  the EXISTING typedb-mirror/TOT rows.

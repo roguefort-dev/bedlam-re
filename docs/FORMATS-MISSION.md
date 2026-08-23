@@ -136,17 +136,26 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
     **not** a trivial overlay; e.g. ZONEA/M1 plane 0 tile 409: MAP=347, TOT=789.
   - Plane-equality pattern varies per mission (plane 0 equal in 10/37, plane 7
     equal in 9/37, etc.).
-- **Planes 6/7:** almost empty in MAP (4 771 + 1 155 nonzero cells globally),
-  fuller in TOT (8 016 + 2 882). TOT plane-6/7 values are ≤ 1868 — just under
-  the 2000 POS slot count. ZONEA/M1 has exactly one such cell: tile 642
-  (x=17, y=25) with plane6=1355, plane7=1356 (adjacent integers).
-  HYPOTHESIS: planes 6/7 store indices into the 2000-slot POS table (or another
-  ~2000-entry table). **Negative result:** POS[1355] and POS[1356] in
-  ZONEA/M1 are empty (0xFFFFFFFF), so the naive "plane value = POS slot" reading
-  is *not* confirmed; the linkage, if any, is indirect.
+- **Planes 6/7 — CLOSED (RE-EXW-SIM §7j.47/D119, 2026-08-23):** almost empty
+  in MAP (4 771 + 1 155 nonzero cells globally), fuller in TOT (8 016 +
+  2 882; 36/37 missions carry them — only ZONEG/M1 is zero; 6 504 cells are
+  overlays on planes 0..5, 2 792 standalone). **Semantics: planes 6/7 are
+  ordinary z-levels 6/7 of the same word stack** — the tops of tall
+  structures, carrying per-level sprite ids (ZONEA/M1's single cell, tile
+  642 = (17,25), is one tower column: TOT words [454,1354,1355,1356] at
+  z=4..7 — the "1355/1356 adjacent integers" are just the z-6/z-7 sprite
+  ids). The value domain is IDENTICAL to planes 1..5 (35..1868 vs 33..1868
+  global nonzero). **The "~2000-entry target-table" hypothesis is REFUTED**:
+  the "≤1868, just under the 2000-slot POS count" nearness is a property of
+  the tile-word grammar (planes 1..5 reach 1868 too); resolving every
+  plane-6/7 value as a POS slot gives 9 217 live / 1 681 empty records in
+  their own missions (coincidence, not linkage — and ZONEA's 1355/1356 hit
+  EMPTY slots); and the renderer draws plane-6/7 words exactly like planes
+  0..5 (no z≥6 gate anywhere: the FUN_00403938 restamp z-stack loop runs
+  z 0..7 with a word-only restart gate; init_tiles stages all 8 planes).
 - **What RE must confirm:** what "TOT" stands for and when the engine reads it
-  (working copy? editor "totals"? merged runtime map?), and the plane-6/7
-  target table.
+  (working copy? editor "totals"? merged runtime map?). The plane-6/7 target
+  table item is CLOSED (§7j.47).
 
 ## 3. COL — per-tile attribute codes, 8 planes of u16
 
@@ -371,8 +380,9 @@ What RE must confirm: everything beyond the layout.
   INSTANCE list (4 × u32 per record); the semantics of words 2/3 refine the
   kind/index gloss — word 3 lands in the record id dword consumed as the
   .BDG/type-table row index (the 7j.12/7j.13 family).
-- **TOT planes 6/7** have values ≤ 1868 < 2000 (see §2) — a POS-slot linkage is
-  plausible but unconfirmed.
+- **TOT planes 6/7** — CLOSED (§2 + RE-EXW-SIM §7j.47): ordinary z-levels
+  6/7 of the word stack (tall-structure sprite tops); the POS-slot linkage
+  is REFUTED.
 - **What RE must confirm:** field semantics, the kind vocabulary, and whether
   index really references BLD records (or CGR sprites for some kinds).
 
@@ -586,7 +596,7 @@ What RE must confirm: everything beyond the layout.
 | Link | Status | Evidence |
 |------|--------|----------|
 | MAP ⊂ TOT (support superset) | VERIFIED | 0 counterexamples in 37×8 planes; 85 758 added + 4 292 rewritten cells |
-| TOT plane 6/7 values < 2000 = POS slots | LIKELY | max 1868; but ZONEA/M1 tile 642→1355/1356 while POS[1355] is empty ⇒ indirect |
+| TOT plane 6/7 values < 2000 = POS slots | REFUTED → planes 6/7 are ordinary z-levels (tall-structure sprite ids; domain ≡ planes 1..5, max 1868 there too; 9 217 live/1 681 empty .POS resolutions = coincidence; renderer draws them ungated — RE-EXW-SIM §7j.47) | §7j.47 |
 | POS.index → BLD record | SUPERSEDED → indexes the BDG row (7j.25); BLD row count ≡ BDG non-empty count, so the index is bounded by both (ZONEA max 196 < 197) | §7j.25, §7j.33 |
 | BDG ↔ BLD same object list | VERIFIED = COMPILED PAIR (EXW §7j.33: BLD record j ≡ BDG non-empty record j — same hp/chain/type heads + the SAME four template banks; BLD = the editor source, BDG = the compiled runtime spec; .POS word 3 indexes the BDG row; BLD never loaded at runtime) | 7 286/7 907 records walked byte-exact incl. all four bank-slot heads; "SAVED.BDL" is the savegame, unrelated |
 | LNK ↔ CTG same index space | LIKELY; NOTE .CTG is NEVER loaded at runtime (§0.2 — editor-only like .BLD) | LNK cycles ⊆ CTG nonzero ranges (partial overlap only) |
