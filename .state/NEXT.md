@@ -146,33 +146,25 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W11-prep, SMALL] DBX-PLAN O2 CHANNEL SUPPORT — compile
-   the O2-side capture-plan form (the headless W11 prerequisite;
-   the differ side is COMPLETE since 0ea13b8 + 1438ca6/D137).
-   CONTEXT: every committed plan is O1/EXD-form (`addr` =
-   CS:<hex> EXD cells, capture-plans/*.json), but the registry
-   carries `exw_addr` for EVERY row and the W11 ptrace driver
-   (DESIGN §10 W11) reads EXW addresses directly (zero translation,
-   DESIGN §2 O2 row). METHOD: add a channel flag to dbx-plan (o1
-   default = byte-identical output to the committed plans, gated
-   by the existing s*_plan_matches_committed_artifact tests);
-   under o2 swap every row's addr to its registry exw_addr and
-   emit per-channel lengths where span forms differ —
-   static-map-wh is the ONE D137-pinned split (O2 = the 0x28 span
-   @0x4eddec w@+0x00/h@+0x24 vs O1's 0x30 span h LOW; every other
-   row's EXW form == its EXD form per the §8 back-half probe +
-   the D137 census); the resolve section's map_w/map_h pair reads
-   the EXW cells 0x4eddec (w) / 0x4eddf0 (h). Check how the exd
-   side already folds two-cell addr strings ("a / b") into one
-   span and mirror that machinery. Byte-pin ONE compiled O2 plan
-   artifact (S1 — the tiebreak-lane scenario) + a
-   plan-compiles-o2 unit test; registry_anchors + differ_gate +
-   the committed-plan gates stay green; fmt + clippy. NO live
-   Wine session (the ptrace driver itself stays W11/operator-
-   gated; this unit is pure plan compilation). (QUEUED 2026-08-24
-   by the static-map-wh pin unit, commit 0ea13b8 — the last
-   differ-side W11 gap closed; the plan side is what remains
-   headless-reachable.)
+   2. [P4.2/W11-prep, SMALL] DBX-STITCH O2 TRANSCRIPT CHANNEL SUPPORT —
+   the stitch side of the D138 O2 plan form (the dbx-plan side is
+   COMPLETE since b199ece; the differ side since 0ea13b8/D137+D138).
+   CONTEXT: runner::stitch validates every transcript id against the
+   registry with the O1 anti-ghost rule ("registry row has no EXD
+   address" = StitchError) and dbx-stitch bins consume it; an O2
+   capture (the W11 ptrace driver, DESIGN §10-W11) carries EXW-guest
+   rows that must validate against exw_addr instead. METHOD: thread
+   the channel through the stitch validation (O2 = the exw_addr rule;
+   the EXD-only rows — static-cursor-clamp — reject LOUD on O2, never
+   silently) + the plan-form expectations the D138 artifact pins
+   (flat 0x addrs, the 8-byte static-map-wh span, trigger-fed anchor
+   alignment) — same stitch_output/chain machinery (channel-agnostic
+   by DESIGN §3). differ_gate gains one O2-transcript lane if the
+   fixture shape permits it headless; fmt + clippy; NO live Wine
+   session (the driver itself stays W11/operator-gated). (QUEUED
+   2026-08-24 by the dbx-plan O2 unit, commit b199ece/D138 — the
+   O2 plan + differ are now both channel-complete; the stitch is the
+   last headless-reachable piece before the driver.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -325,6 +317,48 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W11-prep THE DBX-PLAN O2 CHANNEL SUPPORT unit
+  COMPLETE (worker c44a3c8b claim 2, commits c57eae3 RE-notes +
+  b199ece impl, both PUSHED; D138 + D137-CORRECTION). (a) dbx-plan
+  --channel o2: every watch/resolve/step address swaps to the
+  registry exw_addr canon cell in flat 0x form; the DOSBox
+  boot/arm/env machinery replaced by the registry-derived trigger
+  object {site 0x425a03, frame_counter 0x46ae68}; resolve_at=anchor
+  + frames contract channel-neutral; walk-phase keystore scenarios
+  REFUSED on o2 (the BPLM menu walk is DOSBox/O1 machinery);
+  mission-phase steps emit on the EXW seam cells. o1 default
+  BYTE-IDENTICAL to all 12 committed plans (gates prove it);
+  capture-plans/S1-o2.json committed + byte-pinned (36 anchor / 28
+  per-frame / 7 deferred — static-cursor-clamp is the EXD-only
+  deferral; the EXD-unmapped T2/T3 rows deferred on BOTH channels —
+  channel-symmetric emission set). (b) HEADLINE — THE D137 SPAN
+  ARITHMETIC CORRECTION: the new registry-derived span assert
+  CAUGHT that D137(2)/§7j.60 C-D's "EXW cells 0x24 apart / O2 = the
+  0x28 span h@+0x24" was ARITHMETICALLY IMPOSSIBLE for the cells it
+  quotes (0x4eddf0−0x4eddec = 4 — adjacent u32s, stride cell right
+  after; 0x4eddec+0x24 = 0x4ede10 ≠ 0x4eddf0). CORRECTED PIN: O2
+  form = the 8-byte span @0x4eddec, w@+0x00/h@+0x04 (the
+  field-order asymmetry vs the EXD 0x30 h-LOW span SURVIVES — O2 is
+  still not O1 relabelled). Fixed everywhere the wrong form had
+  landed: §7j.60 C/D, RE-EXD-MAP §5b, watches.toml layout note,
+  DESIGN §10-W7 + §10-W11, normalize_o2_row (need 8 — the 0x28 arm
+  would have failed every REAL live O2 capture structurally), the
+  differ.rs fixtures, the differ_gate inv_frame fabrication; the
+  corrected triangle re-verified green on corpus. (c) TWO REGISTRY
+  CORRECTIONS the address swap forced (committed-pin citations, no
+  new RE): robot-bank + no-extract-latch exw_addr count-cell
+  parentheticals 0x46ccbc→0x46cbd8 (the PER-PLAYER 0x11958c twin
+  per the W8-prep count-mapping; 0x46ccbc = the TOTAL/cap twin —
+  SP values coincide, the semantic binding is now correct), and
+  selection-triple's EXW pick = cells[1] 0x46cbdc with geometry
+  asserts (the EXW list is field-ordered base/selected/size but
+  NOT ascending — the D132 pairing; O1 keeps cells[0] 0x11954c).
+  VERIFIED: diffharness 98 (4 new O2 tests incl. the artifact pin +
+  the walk refusal + the EXW-cell step emission), differ_gate 2/2
+  (696s corpus), canonical_dump_gate 13/13, bedlam-game lib 132,
+  fmt+clippy clean, MANIFEST clean pre+post, no Ghidra run, no
+  corpus write. Queued: dbx-stitch O2 transcript support (item 2 —
+  the last headless-reachable W11 piece before the driver).
 - 2026-08-24: P4.2/W11-prep THE O2 STATIC-MAP-WH PIN unit COMPLETE
   (worker 05178a0c claim 2, commits 1438ca6 RE notes/D137/registry/
   DESIGN/watches amendments by predecessor a3532435 + 0ea13b8 impl,

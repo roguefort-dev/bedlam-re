@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W11-prep THE DBX-PLAN O2 CHANNEL SUPPORT unit
+    COMPLETE (commits c57eae3 RE notes + b199ece impl, both PUSHED,
+    worker c44a3c8b claim 2; D138 + D137-CORRECTION): dbx-plan
+    --channel o2 compiles the O2-side plan (exw_addr canon cells in
+    flat 0x form, the trigger object replacing the DOSBox boot/arm
+    machinery, walk scenarios refused, steps on EXW seam cells);
+    capture-plans/S1-o2.json byte-pinned; o1 output byte-identical
+    to all 12 committed plans. HEADLINE: the new registry-derived
+    span assert CAUGHT D137's static-map-wh arithmetic being
+    IMPOSSIBLE ("0x24 apart / 0x28 span" vs the cells' actual
+    0x4eddf0−0x4eddec = 4) — corrected everywhere to the 8-byte
+    span @0x4eddec w@+0x00/h@+0x04 (differ arm + fixtures + gate
+    fabrication included; the field-order asymmetry story
+    survives). Two registry corrections: robot-bank/no-extract-
+    latch EXW count-cell 0x46ccbc→0x46cbd8 (the per-player twin,
+    W8-prep) + selection-triple's EXW pick cells[1] 0x46cbdc
+    (D132). diffharness 98, differ_gate 2/2 corpus (696s),
+    canonical_dump_gate 13/13, fmt+clippy clean, MANIFEST clean
+    pre+post. The W11-prep headless surface is now plan+differ
+    COMPLETE; queue: item 2 = dbx-stitch O2 transcript support
+    (the last headless piece), then only the operator-gated live
+    work remains (S0 session item 1 + the W11 ptrace driver).
   - 2026-08-24 P4.2/W11-prep THE O2 STATIC-MAP-WH PIN unit COMPLETE
     (commits 1438ca6 RE notes/D137 by predecessor a3532435 +
     0ea13b8 impl by 05178a0c claim 2, both PUSHED): the LAST
