@@ -134,7 +134,15 @@ FUN_0044ef51(7) default name; **FUN_0042540c persists the config**:
 SOUND(004ede5c)/SPEECH(004eb93c)/CINEMATICS(0046cca4)/ACTIONPAN
 (004edbd8)/LANGUAGE(004eba1c)/DEFAULTNAME(004e444c,8) via
 FUN_0044ed98/FUN_0044edcc + FUN_0044ed84 commit (the CONFIG.BDL
-writer family).
+writer family). [§7j.56 correction, history preserved: the
+family is REGISTRY-backed, not file —
+HKCU\Software\Mirage\Bedlam\1.00 via RegCreateKeyExA
+(FUN_0044ed40)/RegQueryValueExA (IAT 0x4f010c)/RegSetValueExA
+(IAT 0x4f0110); the "CONFIG.BDL writer family" name is
+RETIRED — the string "CONFIG.BDL" has ZERO references in
+BEDLAM.EXW and the on-disk CONFIG.BDL/OPTIONS.BDL are
+DOS-build leftovers EXW never opens; ACTIONPAN = the §7j.54
+chase-camera enable, default 1 = ON.]
 
 ## 2a. Glyph base 0 vs 0x82 [corpus-pinned, this run]
 

@@ -4752,6 +4752,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | bombardment salvo cooldown | [0x4de658] (the dword 0xC below the weapon table base 0x4de664): := 0x80 by the robots() +0x70 threshold arm (the aerial-bombardment salvo — §7j.54 corrected the old "reinforcement pending gate"/"pending-arrival" gloss); gates the next arm while ≠ 0; FULL census §7j.54: arm write 0x40c27f, arm gate read 0x40c18b, read+dec 0x423e25..0x423e32 (FUN_00423e1c head, 1/frame), MissionShell clear 0x447877; the 0x442ba7 match is a weapon-table displacement alias ([eax+0x4de658], eax ≥ 0xC → ≥ 0x4de664), NOT a real access | §7j.45, §7j.54 |
 | aerial-bombardment marker bank | 0x4ea238, 8 × 10-byte records (0x50 total, MissionShell memset 0x447a51): {u16 x@+0, u16 y@+2 (screen-pixel ground point), u16 fall-z@+4 (starts 0xFF, −0x20/frame), u16 start-delay@+6 (0x20+2i, −1/frame), u16 valid@+8}; writer = the robots() idle arm 0x40c25e..0x40c351 (8 shells: x = robot.px + RandA&0x7F − 0x3F, y = robot.py − 0x80 + i·0x20, tile-bounds-gated); tick/resolver = FUN_00423e1c (MissionShell @0x447ffa; NOT a "selection chaser" — §7j.54): fall until get_z_pos(x,y,+4) ≥ +4 → SIX kind-6 debris (3 RandA each) + NINE FUN_004244a1 5000-damage script blasts over the 3×3 tile patch (tx−1..tx+2, ty−1..ty+2, z_level+1) + cursor clear + valid clear; renderer 0x4066e4..0x4067a6 (FUN_00403938 draw tail): +8≠0 ∧ +6==0 → iso-project, +4 fall-z subtracted from the screen axis (sprite visibly descends 32px/frame), GENERAL.BIN sprite 0x12C via FUN_0040798e | §7j.54 |
 | chase-camera override staging | FUN_004245c9(x,y,z) = a 5-instruction STAGER 0x4245c9..0x4245e5: {x,y,z} → 0x4de648/4c/50 + const 0xF → 0x4de654 (retires the "wall-strip redraw" gloss family — §7j.19/§7j.21/§7j.22 + the door row — and §7j item-6's "selection chaser" for its sibling); consumer FUN_00403938 0x4039b0..0x403a42: [0x4edbd8]≠0 ∧ [0x4de654]≠0 → the camera-point ring slot (0x4c71c4/cc/c8, 4-slot ring [0x46ccdc]) loads the staged triple instead of the selected robot's pos; [0x4de654]−− per frame; second consumer robots() 0x40b885 gates the camera-recenter block off while ≠ 0; MissionShell clears 0x4de654 (0x4478ad); FULL caller census (4, §7j.54): door stepper FUN_004223b8 @0x422427 + delayed-trigger expiry FUN_00422e0a @0x422e55 (§7j.12) + artillery spotter reveal @0x41173a (§7j.22) + the bombardment record-0 impact (SP ∧ record 0 ∧ cursor ≠ selected+1 ∧ cursor-robot is player-type, 0x423e7c..0x423ed5) | §7j.54 |
+| ACTIONPAN registry gate | [0x4edbd8] = the "ACTIONPAN" value of HKCU\Software\Mirage\Bedlam\1.00 (REGISTRY, not a file — the "CONFIG.BDL" gloss RETIRED §7j.56: the string has zero binary refs, on-disk CONFIG.BDL/OPTIONS.BDL are DOS leftovers): 4-site census — readers = exactly the §7j.54 pair (0x4039b0 camera-slot swap; 0x40b875 recenter gate w/ the [0x4de654] leg 0x40b885); writers = the boot config family ONLY (loader FUN_004252c0 → FUN_0044ede4("ACTIONPAN",&cell, bounds [0,1], default 1) @0x42535c — RegQueryValueExA writes the cell directly, absent/malformed ⇒ default 1 = pans ON; saver FUN_0042540c @0x42545c via FUN_0044ed98/RegSetValueExA at the name-entry exit 0x43b03b + 0x41c59b); .bss; NO game-state/mission-phase/UI writer — session-constant enable bit for the whole chase-camera subsystem | §7j.56 |
+| viewport zoom cell | [0x4ede54] = the vertical viewport height (ZOOM) in backbuffer rows, clamp [0xF0,0x1E0]=[240,480]: ±0x10/frame on keys (scan 0x4E/0x0D in, 0x4A/0x0C out — keystore 0x4edc92/0x4edc51/0x4edc8e/0x4edc50), the FUN_0042034c tail 0x4204ea..0x420548; per-mission init = the leftover-edx store 0x447883 (0x1E0 @0x44784a not provably surviving FUN_004034ef/FUN_0041d954 — benign: ≥480 dispatches 1:1, first keypress re-clamps); consumers: FUN_00401107 the zoom blitter (Q16 magnify scale (v<<16)/480 → 0x454060/68 + halves 0x45405c/64, source offset (480−v)/2; ≥480 → 1:1 rep-movs; [0x4edba0] map-overlay ≠0 → the map path; [0x4ede34]≠0 → temp v := 480−min([0x4ede34],479) w/ save/restore 0x4012c7/0x4012e5/0x4012f1), the recenter speed (cursor−240)·v/480 @0x40b89e/0x40b8c5, the cursor un-zoom mappers 0x4106a1/0x4106d4/0x419a41; NO corpus writer (no scenario presses zoom keys) → no differ rows | §7j.56 |
 | robot shield-charge machine | d@robot+0x88 shield points (−2/frame clamp 0; 0x20 per charge/state-3; 0x2710 while +0xA0 flash) + d@+0x8C charges (spawn = word@chassis_row+2 via the 0x40cc8c 5-slot jump table, chassis ids 0x2A..0x2E; hit consume FUN_0040e230 @0x40e2a4) | §7j.45 |
 | scorch-lane timers | w@+0x32 burn cooldown := 0x64 (FUN_004100b7 @0x4103e3, gate ==0 @0x41036e), dec 1/frame (phase-0 pre-pass); w@+0x30 accumulator −0xA/phase-1 off-scorch; alarm w@+0x34 cooldown + d@+0xA4 counter (dec 1/frame — D90's question closed) | §7j.45 |
 | robot state-1 producer | THE ONLY writer of state 1 = FUN_00409138 COMMAND bit0 @0x40a37b (:= 1 + stop := 0xF4240) — no patrol semantics; SP never produces state 1 (full census §7j.45 Part B/4) | §7j.45 |
@@ -8892,6 +8894,9 @@ selected robot's pos (Q8>>8), and [0x4de654]−− per frame —
 a 15-frame camera cut to the staged point; (b) robots()
 0x40b885 — the camera-RECENTER block is gated OFF while
 [0x4de654]≠0; MissionShell clears [0x4de654] @0x4478ad.
+[§7j.56 refinement: [0x4edbd8] = the ACTIONPAN registry config
+flag, DEFAULT 1 = ON; the recenter's [0x4edbd8] read is
+@0x40b875, the [0x4de654] leg @0x40b885.]
 **FULL caller census (4, verified)**: door/section stepper
 FUN_004223b8 @0x422427 (§7j.21/§7j.34); delayed-trigger expiry
 FUN_00422e0a @0x422e55 (§7j.12); artillery spotter reveal
@@ -9072,3 +9077,178 @@ would otherwise diverge the RNG stream AND the weapon banks) —
 recorded seam; additive watch rows only then. The
 "armor-pad-reads" watch id keeps its legacy name (the registry
 anchor is load-bearing; the byte is the scorch byte).
+
+## 7j.56. THE [0x4edbd8] CAMERA-GATE CELL + THE [0x4ede54] ZOOM CELL — CLOSED: [0x4edbd8] = the ACTIONPAN REGISTRY config flag (HKCU\Software\Mirage\Bedlam\1.00, DEFAULT 1 = pans ENABLED; the "CONFIG.BDL" gloss retired — the string has zero binary references); [0x4ede54] = the viewport ZOOM height (240..480 backbuffer rows, ± keys) (2026-08-23, worker 21e88d3b claim 2, D128; docs-only; objdump-only from ghidra-project/exw-text-objdump.txt + read-only string/import probes of game-data/cd-root/BEDLAM.EXW (.idata parsed to name IAT 0x4f010c = RegQueryValueExA); no Ghidra run, no corpus write; manifest clean before AND after) [verified]
+
+**A. [0x4edbd8] = ACTIONPAN — a REGISTRY-backed config flag,
+session-constant, default ON.** Complete text census: FOUR
+sites.
+
+*Readers (exactly two, both the §7j.54 consumers):*
+1. FUN_00403938 `cmp [0x4edbd8],0` @0x4039b0 — with
+   [0x4de654]≠0 the camera-point ring slot loads the staged
+   triple (§7j.54 (a); the pan camera cut).
+2. robots() recenter gate @0x40b875 (`mov edi,[0x4edbd8];
+   test; je do-recenter`) + the second leg 0x40b885
+   (`cmp [0x4de654],0; jne skip`) — the address refinement of
+   §7j.54's "0x40b885" citation: [0x4edbd8] is read at
+   0x40b875; ==0 → recenter runs unconditionally; ≠0 → recenter
+   suppressed ONLY while a pan countdown is live (the dead
+   `je 0x40b970` @0x40b87f immediately after the taken-je is a
+   Watcom branch-shape artifact, never taken). No other reader
+   exists in the binary.
+
+*Writers (exactly the config family, zero game-state writers):*
+the boot loader FUN_004252c0 registers the parse
+`FUN_0044ede4(eax="ACTIONPAN"@0x458ccf, edx=&0x4edbd8,
+ebx=4, ecx=1, stack(min=0,max=1))` @0x42535c; the saver
+FUN_0042540c re-persists the cell @0x42545c via
+`FUN_0044ed98(eax="ACTIONPAN"@0x458d1f, edx=[0x4edbd8],
+ebx=4)`. The string "ACTIONPAN" appears EXACTLY TWICE in the
+binary (loader key + saver name — file offsets 0x572cf/0x5731f,
+i.e. VA 0x458ccf/0x458d1f); the cell itself is .bss
+(zero-init; PE: BEGTEXT 0x401000/DGROUP 0x454000/.bss
+0x45b000..0x4efa00, ImageBase 0x400000).
+
+*The config family is REGISTRY, not file I/O* [.idata parsed:
+0x4f0108=RegCreateKeyExA, 0x4f010c=RegQueryValueExA,
+0x4f0110=RegSetValueExA (ADVAPI32)]:
+- FUN_0044ed40 (0x44ed40..0x44ed83) = the opener:
+  RegCreateKeyExA(HKEY_CURRENT_USER (0x80000001),
+  "Software\Mirage\Bedlam\1.00"@0x456e28, 0, "DATA",
+  KEY_ALL_ACCESS 0xF003F, ..., &hKey) → hKey [0x4ef770];
+  called at the loader head 0x4252f6.
+- FUN_0044ede4 (0x44ede4..0x44ee94) = the bounded loader:
+  RegQueryValueExA(hKey, name, 0, &type@stack, edx-dest,
+  &cb) — the value is written DIRECTLY into the dest cell;
+  SUCCESS (eax==0) → switch on cb: 2 → sign-extended WORD
+  bounds-check, 4 → DWORD bounds-check vs the stack pair
+  (min@+0x1C, max@+0x20), else keep; FAIL (value absent) →
+  dest := low byte of the ecx DEFAULT @0x44ee23..27 (+ a
+  FUN_0044ed98 self-heal call); out-of-bounds → same default
+  rewrite @0x44ee79..8a (WORD variant 0x44ee54..65). The
+  family pattern cross-checks: INSTALLDRIVE (0x42539e) uses
+  bounds ['A'(0x41),'Z'(0x5A)] default 'C'(0x43); SOUND
+  bounds [0, current-volume]; DEFAULTNAME via the string
+  sibling FUN_0044eee0 (create-if-missing REG_SZ "Player", 8
+  bytes, 0x4253bb..0x4253cf).
+  **⇒ ACTIONPAN post-boot ∈ {0,1} with DEFAULT 1 (ON)** —
+  absent or malformed registry value ⇒ pans enabled; only an
+  explicit stored 0 disables them.
+- FUN_004252c0 (loader) is called ONCE per boot @0x41c129
+  (GameMain init; it also pre-seeds [0x4edbd4]=[0x4edbf0]=
+  [0x4edbe0]=1, [0x4edbe8]=2, [0x4ddb2c]=0x4B); the saver
+  FUN_0042540c runs at the name-entry exit 0x43b03b (the
+  TITLEMENU §4 path) + 0x41c59b (FUN_0044ed98
+  query-then-RegSetValueExA @0x44edb7/0x44edbe, ebx = the
+  REG_DWORD type word 4 [inferred]; FUN_0044ed84 = the hKey
+  user @0x44ed86, 19 B — close/flush-class [inferred]).
+- **THE "CONFIG.BDL" GLOSS RETIRED**: the byte sequence
+  "CONFIG.BDL" occurs ZERO times in BEDLAM.EXW (only
+  "CONFIG.SYS file, or" inside an error string @0x45860f);
+  the on-disk game-data CONFIG.BDL/OPTIONS.BDL are DOS-build
+  leftovers EXW never opens (SAVED.BDL is the only referenced
+  .BDL — savegames, different family). The TITLEMENU §4 note
+  is corrected in place below.
+
+*In-game identity:* [0x4edbd8] is a per-SESSION constant
+enable bit for the entire §7j.54 chase-camera subsystem — no
+mission phase, no game state, no menu UI writes it (EXW has no
+options screen for it; TITLEMENU's unreferenced MENU_ITEMS
+"Options" row survives only in the DOS string table).
+
+**B. [0x4ede54] = the VIEWPORT ZOOM (vertical viewport height
+in backbuffer rows, clamp [0xF0,0x1E0] = [240,480]).**
+Complete text census: 26 sites, no indirect refs.
+
+*Writers (three families):*
+1. **MissionShell per-mission init** 0x447883
+   `mov [0x4ede54],edx` — in the straight-line reset block
+   (xor ecx,ecx at 0x44785e, then the zero-stores 0x4dc678/
+   0x4edba0/0x4dc5d0/0x4de658/0x4ede34, then this store).
+   CAVEAT [dataflow pinned]: the edx loaded at 0x44784a
+   (=0x1E0, the FUN_004034ef music arg) does NOT provably
+   survive the three intervening calls — FUN_004034ef's last
+   edx write is `imul edx,edx,0x26` @0x403570 and FUN_0041d954
+   zeroes edx on its xor tails (@0x41db1c/0x41db45); the
+   stored dword is formally callee-leftover. BENIGN by
+   construction: every consumer dispatches v≥480 as the 1:1
+   copy, and the first zoom keypress re-clamps into
+   [240,480] — the mission-start zoom reads full-width
+   regardless [inferred].
+2. **The zoom-key handler** = the FUN_0042034c tail
+   (0x4204ea..0x420548): key held (scan 0x4E keypad-plus ∨
+   0x0D '=') → `add [0x4ede54],0x10` @0x4204fc; (scan 0x4A
+   keypad-minus ∨ 0x0C '-') → `sub ...,0x10` @0x420515;
+   then clamp floor 0xF0 @0x420528 / ceiling 0x1E0
+   @0x42053e. Key cells = the g_keystore (base 0x4edc44)
+   at +0x4E/+0x0D/+0x4A/+0x0C = 0x4edc92/0x4edc51/0x4edc8e/
+   0x4edc50. FUN_0042034c (prologue 0x42034c, sole caller
+   MissionShell 0x448076) = the overlay-word range consumer
+   of D119 with this input tail.
+3. **The temp-override save/restore pair** inside
+   FUN_00401107's [0x4ede34] path: v_old pushed 0x4012c7,
+   `v := 0x1E0 − min([0x4ede34],0x1DF)` @0x4012e5
+   (guaranteed ∈ [1,480]), scaled render, `restore` @0x4012f1.
+
+*Readers (four families):*
+1. **FUN_00401107 = the ZOOM BLITTER** (called from the two
+   MissionShell render sites 0x447ca0/0x448094 — the same
+   pair as FUN_00403938): dispatch — [0x4edba0]≠0 (the
+   §6c.1 map-overlay toggle) → 1:1 map copy 0x401266..0x40129d;
+   [0x4ede34]≠0 → the temp path above; else v=[0x4ede54]:
+   v ≥ 0x1E0 → plain rep-movs 1:1 (0x401178..0x4011a4);
+   v < 480 → the SCALED MAGNIFY path: Q16 scale
+   0x454068 = 0x454060 = (v<<16)/480, halves 0x454064/
+   0x45405c (0x4011aa..0x4011ef; the temp path uses the
+   INVERSE (0x1E0<<16)/v @0x40134a..0x40137f), source
+   window offset (480−v)/2 rows (0x4011f9/0x401208), per-row
+   sub-pixel stepping through the Q16 pair — a software
+   2×-max vertical magnifier of the 640-wide backbuffer
+   ([0x4ede18], 0xA0-byte rows) onto the 480-visible screen.
+   (The §7e "map present" row's FUN_00401107 attribution
+   covers the map path; the zoom path is this census's
+   addition.)
+2. **The camera-recenter speed factor** (robots()
+   0x40b89e/0x40b8c5): new camera target +=
+   (cursor−240)·v/480 per axis — full-speed at zoom-out
+   (480), half-speed at max zoom-in (240).
+3. **The cursor un-zoom mappers** (screen→world): 0x4106a1/
+   0x4106d4 (the FUN_004106xx family — cursor cells
+   [0x4ede00]/[0x4ede04] minus 240, ×v/480, feeding the
+   0x4eddf8/0x4eddfc lane; gated off while [0x4edba0]≠0
+   @0x410675) and 0x419a41 (the same transform inside the
+   0x4198xx octile-scan family near FUN_0041ebf8).
+4. (The [0x4ede34] temp path itself reads v 5×:
+   0x4012c7/0x40134a/0x40136b/0x401389/0x4013ac.)
+
+*[0x4ede34] census pointer (adjacent cell, identity NOT
+decoded here — follow-up candidate):* 9 sites; producers =
+0x40d286/0x40d311/0x40d398 (FUN_0040d2xx ride/transport
+neighborhood — same family as the recenter head's 0x40d197
+call), `:= 1` @0x40ea8b (MP-respawn region), the MissionShell
+frame cluster 0x4480af/0x4480d6/0x448121 (:= 0 — right after
+the 0x44809e read and the 0x448094 FUN_00401107 call), the
+0x4476a2 `cmp 0x1E0` test, the per-mission zero 0x44787d, and
+the two FUN_00401107 gates 0x401119/0x403952. Reads as a
+per-frame-driven TEMP viewport/cinema source (e.g. a screen
+wipe on MP respawn).
+
+**C. Engine/differ consequences.** ZOOM: none — no corpus
+scenario presses the zoom keys (the harness injects COMMAND
+records/.PAD, never raw keyboard), the cell is deterministic
+per mission (init + no writer), touches zero RNG and zero
+robot-bank bytes, and the render-path difference is
+presentation-only → NO differ rows; the zoom machine is
+recorded for the future E-side render parity only (v∈[240,480],
+±16/frame, the Q16 magnifier grammar). ACTIONPAN: **one live-
+channel confund to record** — default 1 means the §7j.54 pans
+are LIVE on a default install; the O1 capture machine's
+registry could hold a stale 0 (any pre-DOS-era install or a
+hand-edit) which would silently disable pans on the original
+while E models them → the S0 live-session fingerprint step
+(item 1) should record [0x4edbd8] (and the five sibling config
+cells) once; a ONE-FRAME additive watch row is the remedy if
+it ever bites (deliberately NOT in the first golden). The
+§7j.54 machinery itself is unchanged (its staging row and the
+[0x4de654] countdown already cover the pan state).
