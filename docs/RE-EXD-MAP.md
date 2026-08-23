@@ -10,7 +10,7 @@ gaps: difficulty, order-target triple, keystore, command ring + count
 label-swap correction + squad-base cell 0x11955c, §5). D133 (2026-08-23)
 CLOSED the no-extract-latch gap (twin [0xf929c], §5/§5f). D134
 (2026-08-23) CLOSED the LAST gap — the SFX master gate (twin
-[0x10743c], 18-site census, §5g): the W1 registry gap set is now EMPTY.
+[0x10743c], 17-site census, §5g): the W1 registry gap set is now EMPTY.
 T2-T4 aliasing stays later per the W1 ticket.
 Purpose: the DESIGN-DIFFHARNESS.md W1 deliverable — the `exd_addr` fills
 for the harness watch rows.
@@ -171,7 +171,7 @@ to docs/DIVERGENCES.md as a seed.
 | mission | 0x4edd88 | **0x119610** | TRT hp formula `(m·250)/27+250` EXACT (EXW 250+250·m/27) + pod-stagger `2000−m·1000/27` EXACT (both in EXD read [0x119610]) | [verified] |
 | mode | 0x4edb88 | **0x1075d8** | SP/MP branch `DAT_001075d8 == 0` in the spawn twin + mission-loop `== 2` MP gates + new-game `MOV [0x1075d8],1`. EXW one-hop PINNED (W8-prep, exw-spawncount-asm.txt): the spawn override gate is `CMP [0x4edb88],0` @0x40cd8d, and the title-menu SP handler @0x43aaa3 sets `0x4edb88=0 ∧ 0x46cbe0=1` (RE-EXW-TITLEMENU §4 [verified]; MP lobby: 1 = Coop, 2 = Head2Head) — the gate is never taken in SP | [verified] |
 | linear mission m | 0x46ae8c | **0x119610** (SAME cell as mission) | the stagger consumer reads 0x119610 — EXD uses ONE scalar where EXW has two (see divergence seed #3) | [verified] |
-| SFX master gate | 0x4ede58 | **0x10743c** | D134 twin census (§5g): the BOOM-trio twin FUN_00032de9 gates `cmp [0x10743c],0` @0x32df1 ⟷ FUN_00421e60 @0x421e68, shape-identical (prologue, RandB idiv-3, cell trio, play tail `call 0x4c584` ⟷ FUN_0043a48e); 18-site EXD census mirrors the 19-site EXW census (§5g); writers = the sound init FUN_0004be7d (CONFIG.BDL file parse) ⟷ FUN_0043a144 (registry SOUND + probe) | [verified] |
+| SFX master gate | 0x4ede58 | **0x10743c** | D134 twin census (§5g): the BOOM-trio twin FUN_00032de9 gates `cmp [0x10743c],0` @0x32df1 ⟷ FUN_00421e60 @0x421e68, shape-identical (prologue, RandB idiv-3, cell trio, play tail `call 0x4c584` ⟷ FUN_0043a48e); 17-site EXD census mirrors the 18-site EXW census (§5g); writers = the sound init FUN_0004be7d (CONFIG.BDL file parse) ⟷ FUN_0043a144 (registry SOUND + probe) | [verified] |
 
 ## 5. T1 — the P4 slice (EXW → EXD)
 
@@ -331,12 +331,17 @@ je 0x32f9a` @0x32df1) is shape-identical to EXW FUN_00421e60 (gate
 signed idiv-3 dispatch, same per-arm `push 0x2; mov ebx,[esp+4]; mov
 eax,<cell>; mov ecx,ebp` bodies over the BOOM cell trio, same shared
 play tail (EXD `call 0x4c584` @0x32f95 ⟷ EXW `call 0x43a48e` — THE
-PLAY TWIN: FUN_0004c584 ≡ FUN_0043a48e). Whole-objdump greps: EXW 19
-literal sites ('4ede58'), EXD 18 ('10743c') — both sides census-complete,
+PLAY TWIN: FUN_0004c584 ≡ FUN_0043a48e). Whole-objdump greps: EXW 18
+literal sites ('4ede58'), EXD 17 ('10743c') — both sides census-complete,
 no displacement-form or address-load strays (the one EXW address-load is
-the registry loader below).
+the registry loader below). COUNT CORRECTION (landing pass; history: the
+first draft said 19/18 — it counted the EXD init's second CALLER 0x5b03f
+as a census site and mis-summed the EXW side): 13 reader sites pair
+ONE-FOR-ONE; EXW-only = the init pre-check 0x43a16c + the loader
+address-take 0x42530a + the saver read 0x4253f3; EXD-only = the play-twin
+entry gate 0x4c593 + the frame-tick hook 0x12767.
 
-**EXW census (19 sites).** WRITERS (2, both in the sound-system init
+**EXW census (18 sites).** WRITERS (2, both in the sound-system init
 FUN_0043a144, entry 0x43a144 `push ebx; push edx; push esi; push edi`,
 SOLE caller GameMain 0x41c33f, raw-dword scan zero hits): 0x43a198
 :=ebx(1) SET branch / 0x43a1b1 :=edi(0) CLEAR branch. Init head:
@@ -351,7 +356,7 @@ the Win32 REGISTRY, not the init: boot loader FUN_004252c0 @0x42530a
 bounded loader, HKCU\Software\Mirage\Bedlam\1.00; the volume cell
 [0x4ddb2c] is loaded two instructions earlier @0x4252f0); saver
 FUN_0042540c @0x4253f3 `mov ebp,[0x4ede58]` → FUN_00444ed98
-RegSetValueExA("SOUND" @0x458d07) at the name-entry exit. READERS (13
+RegSetValueExA("SOUND" @0x458d07) at the name-entry exit. READERS (14
 cmp + the saver read): the arrival/impact family FIVE — 0x421df9
 FUN_00421dec (RICOCHT1-4, priority 1), 0x421e68 FUN_00421e60 (BOOM1-3,
 p2), 0x421ede FUN_00421ed6 (GRUNT1-3, p2), 0x421f54 FUN_00421f4c
@@ -361,8 +366,10 @@ music-sequencer trio 0x4033df FUN_004033d4 / 0x4034fa FUN_004034ef /
 also ∧ [0x4ee9b0]≠-1); the radio-warning queue consumer 0x423af7 (inside
 FUN_00423a85, §7j.53: arg≠0 ∧ [0x4ede5c] ∧ [0x4ede58] ∧ id∉{0xF,0x29});
 the driver-sync wait 0x425bfe in FUN_00425bf5 ([0x4ede5c] ∧ [0x4ede58]
-→ spin `call 0x44c600`); the play dispatcher's own master gate 0x43a79e
-inside FUN_0043a48e (pair [0x4ede5c]/[0x4ede58], fail →
+→ spin `call 0x44c600`); the options-handler drop-flag gate 0x43a79e
+(NOT inside FUN_0043a48e — the landing-pass correction: the play twin is
+ungated on EXW, its callers gate instead; 0x43a79e is the master half of
+the sister/master pair 0x43a795/0x43a79e, fail →
 `[0x46ae78]:=1` drop-flag); the init's own 0x43a16c; the MissionShell
 volume-key pair 0x447e72 (up) / 0x447efd (down) — gate
 ([0x4ede58]≠0 ∨ [0x4edbe8]≠0) ∧ key-latch ∧ repeat-timer<0x12 → volume
@@ -386,16 +393,20 @@ FUN_0005f471; parse failure → CLEAR. EXW instead pre-loads the
 registry SOUND scalar (0x42530a) and forces CLEAR through the
 [0x4ee9b0]:=-1 path — the DOS file-config vs Win32 registry port seam
 (the EXW TITLEMENU "CONFIG.BDL" gloss was already retired by D128;
-this is the EXD side of that same port). READERS (15 cmp + 1 read):
+this is the EXD side of that same port). READERS (14 cmp + 1 read):
 the arrival family FIVE one-for-one — 0x32d88 (RICOCHT quad twin:
 cells 0x11a918/0x11a910/0x11a914/0x11a920, priority 1), 0x32df1
 FUN_00032de9 (BOOM trio: 0x11a944/0x11a940/0x11a93c), 0x32e68 (GRUNT
 trio: 0x11a8b8/0x11a8b4/0x11a8b0 — cell order REVERSED vs EXW
 0x4ee000/04/08), 0x32eda (DEATH trio: 0x11a948/0x11a8d8/0x11a8dc),
 0x32f49 (HURT trio: 0x11a938/0x11a930/0x11a934); the play twin's own
-gates 0x4c593 (entry master gate, pair [0x10743c]/[0x107444] — arg
-order swapped vs EXW 0x43a79e, codegen only) and 0x4c9a9 (mid-body
-drop-flag gate → `[0x1195f4]:=1`); the music-sequencer trio
+entry gate 0x4c593 (pair [0x10743c]/[0x107444] — EXD-ONLY: EXW
+FUN_0043a48e is ungated, its callers gate instead; redundant with the
+per-family gates) and the options-handler drop-flag gate 0x4c9a9
+(sibling cmp [0x107444] @0x4c9a0, fail → `[0x1195f4]:=1` — the DIRECT
+twin of the EXW 0x43a795/0x43a79e pair in the SAME sister-then-master
+order; the first draft's "arg order swapped" note was an artifact of
+mispairing 0x4c593 with 0x43a79e); the music-sequencer trio
 0x13e0f/0x13f26/0x1406a (each gates ∧ [0x107578]); the frame-tick
 music hook 0x12767 (FUN_00012762: [0x10743c] ∧ [0x107444] ∧
 [0x107578] → call 0x135ef, then `inc [0x801a0]`); the radio-warning
@@ -409,8 +420,9 @@ FUN_00425bf5/0x44c600); the MissionShell volume-key pair 0x59eae (up)
 ebx,7` and the [0x107570] OR-leg. EXW-only sites (no EXD twin): the
 registry loader address-take + the saver read + the init's own
 0x43a16c — all three absorbed by the file-config divergence (the EXD
-init never reads its own gate). EXD-only: 0x12767 + the second init
-caller 0x5b03f.
+init never reads its own gate). EXD-only: 0x12767 + 0x4c593 (the
+init's second caller 0x5b03f is a CALLER, not a census site — the first
+draft's 18 counted it).
 
 **Bank-name walk (FUN_0004c121, called from the MissionShell reset
 cascade @0x5982a — the §4 lead):** loads via FUN_0004c3dd with name
@@ -431,7 +443,7 @@ CACODETH/SQUAWK companions (the §7j.30/D120 mission-bank family).
 
 | EXW | EXD | anchor (what the decode showed) | tag |
 |---|---|---|---|
-| sister gate 0x4ede5c | **0x107444** | init SET/CLEAR tandem writes; the play-gate pair 0x4c593/0x4c9a0 ⟷ 0x43a79e/0x43a795; the radio triple | [verified] |
+| sister gate 0x4ede5c | **0x107444** | init SET/CLEAR tandem writes; the drop-flag gate pair 0x4c9a0/0x4c9a9 ⟷ 0x43a795/0x43a79e (same sister-then-master order; the play-twin entry pair 0x4c593 is EXD-only); the radio triple | [verified] |
 | SPEECH cell 0x4eb93c | **0x10766c** | init CLEAR zero + the radio consumer first gate (EXW arg edi ≡ EXD cell load @0x34a6e) | [verified] |
 | mixer arena cell 0x46ae84 | **0x119620** | :=0xfe000 / :=0 in both init branches | [verified] |
 | 16-entry voice table 0x4eada8 | **0x8b938** | the 0x10-step/0xa0-bound/0x3e8 fill loop instruction-exact (0x4c0a6..0x4c0bb ⟷ 0x43a15a..0x43a16a) | [verified] |

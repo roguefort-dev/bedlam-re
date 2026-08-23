@@ -166,7 +166,7 @@ layout = "u32 (nonzero = SFX enabled); gates every SFX dispatch"
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "SFX master gate"
-note = "D134: the EXD twin census closed the gap — twin [0x10743c], 18-site census one-for-one vs the 19-site EXW set (arrival family five, music-sequencer trio, radio-warning consumer, driver-sync, play dispatcher, MissionShell volume keys; writers = the sound inits FUN_0004be7d CONFIG.BDL parse ⟷ FUN_0043a144 registry SOUND + probe — RE-EXD-MAP §5g)."
+note = "D134: the EXD twin census closed the gap — twin [0x10743c], 17-site census one-for-one vs the 18-site EXW set (arrival family five, music-sequencer trio, radio-warning consumer, driver-sync, play dispatcher, MissionShell volume keys; writers = the sound inits FUN_0004be7d CONFIG.BDL parse ⟷ FUN_0043a144 registry SOUND + probe — RE-EXD-MAP §5g)."
 
 # ------------------------------------------------- T1 the P4 slice (robots, orders, terrain)
 
