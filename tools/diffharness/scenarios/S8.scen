@@ -1,0 +1,83 @@
+# S8 — critter engagement: the controller lifecycle + the fire
+# cycle + the script-blast deaths (DESIGN-DIFFHARNESS.md §7 S8 row
+# + §10-W12; RE-EXW-SIM §7j.42 the critter-controller decode,
+# D114). ONE RUN, ZONEA/MISSION1 — the corpus zone that hosts
+# critters (§7j.42/5: the .NME stages 6 kind-5 MixedState5 at
+# (18,9)/(18,8)/(18,7)/(7,8)/(7,7)/(7,6) z1 + 10 kind-4 SeekSteppers
+# — 2 each at (13,9)/(22,8)/(22,6) z1 and (3,6)/(2,7) z2 — 16
+# critters, all ACTIVE from frame 0 at difficulty 0).
+#
+# `critters = 1` stages the .NME through the FUN_00416458 spawn
+# schedule (the §7j.18 grammar, difficulty-scaled) and arms the
+# controller (FUN_00412f34, MissionShell 0x447fe1). The ORIGINAL
+# runs it every mission; the loader's 10 kind-4 heading draws +
+# the controller's per-frame draws on unarmed paths are the
+# recorded E-side stream gap (§7j.42/5) — S0..S7 stay
+# byte-identical without the key.
+#
+# THE ENGAGE INSTRUMENT: the marker stages the GUNNER at (18,13)
+# z1 — the flat floor-31 row SOUTH of the 95-plateau at row 11/12
+# (the terrain probe: rows 5-10 and 13+ are floor 31; staging the
+# gunner on the plateau puts the artillery burst one z-level high
+# and the §7j.23 z-box misses every critter). 4 tiles south of
+# the (18,9) pack: from the first frames the pack members cross
+# the [0x60..0x80] transition band (approaching under the juice
+# roll) and run the mode-2 FIRE CYCLE — the 3-D-aimed 0x68
+# projectiles into the 50-slot bank, the odd-pass walker
+# FUN_004197d4 applying weapon_damage(0x68)=75 + owner −1 to the
+# gunner when the |dx|<0x10/|dy|<0x10/|dz|<0x20 box crosses; the
+# chase mode 3 + the re-engage loop cycle while the survivors
+# keep approaching. The kind-4s SEEK the gunner (the re-picker
+# draws + the ±1 px steppers — visible movement frame over frame).
+#
+# THE DEATH INSTRUMENT: the gunner's slot 0 = artillery 0xB (the
+# 7-frame burst window, pair lists 0..6 — the ±7-tile ring
+# coverage). The frame-1 COMMAND fires it (the burst walks f32..38):
+# every critter inside a blast box takes the kind-0xC hit (§7j.23
+# mode 2 — box octile <0x20 px + the z window at the blast's z'),
+# hp goes negative, and the §7j.24 death handlers run — the deaths
+# stage 1× k7 debris + (the {0xC} weapon gate) 3× jittered k7 +
+# the 8/12-row effect-row bursts (the 0x4cec38 LRU bank turns
+# over all 80 rows); each record flips to the mode-6 BALLISTIC
+# DIVE (the (x<<8)−impact leash, countdown 6 = the dive speed),
+# then mode 7 dying 0x28 frames, then dormant (the 1500-frame
+# respawn table at d=0 — the run ends still dormant). The bounty
+# gate stays DARK: the blast is a script kill (attacker −1) —
+# robot-owned kills need the bullet family, whose AI-order spawn
+# internals are the S3-documented E-gap.
+#
+#   f1:    the artillery command (the gunner's slot 0); the first
+#          controller pass — the pack approaches/fires
+#   f2..32: the fire/chase/re-engage cycle (2-3 critters cycling,
+#          0x68s in flight), the kind-4 seek walks
+#   f33..38: THE BURST — the pair-walk blasts kill the approached
+#          pack + the kind-4s that walked in (9 dead by f39: the
+#          3 north kind-5s + 6 kind-4s)
+#   f39..79: the dives complete → the dying counters (0x28) run
+#          out
+#   f80..: dormant (mode 0xB) through the end
+#
+# TIERS: T0/T1/T2/T3/TS — the RNG stream + score carry the draws,
+# the robot bank the damage lanes, the projectile bank the 0x68
+# records (ALIASED — S3 pinned it), the critter-bank + effect-rows
+# rows are E-ONLY coverage (no EXD alias), and the debris row
+# (T3) carries the death debris (destroy-staging-gated on the
+# E side; the sim stages the records regardless). NOTE the burst
+# also crosses the destroy family UNSTAGED (S3's note: no
+# `destroy = 1` — the empty object/structure banks make the
+# resolvers no-ops; a live O1 capture that hits .POS instances on
+# the burst tiles is a seam, not a finding).
+scenario = "S8"
+tiers = T0,T1,T2,T3,TS
+anchor = mission-start
+frames = 120
+critters = 1
+markers = 18,13,1
+loadout = 1,0x01,0xB:1
+launch = "DOS4GW.EXE BEDLAM.EXD"
+until-anchor mission-start
+# f1: the gunner (robot 1) fires the artillery (spot 0 = its slot
+# 0; the target words are zeros — the artillery record takes no
+# velocity) — the burst walks the pair lists f32..f38
+command 01 01 00 00 00 02 00 00 00 00 00 00 00 00
+step 119

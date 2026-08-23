@@ -134,11 +134,29 @@ pub struct TickState<'a> {
     /// split: watched bank rows are their own dump blobs).
     pub weapon_bank: &'a [WeaponRecord],
     pub enemy_bank: &'a [EnemyProjectile],
+    /// The critter-family watch surfaces (W12-S8), gated on the
+    /// scenario's `critters = 1` key — `None` on S0..S7 (their
+    /// pinned bytes carry no critter rows). The bank is the
+    /// E-ONLY T2 `critter-bank` row (no EXD alias — the differ
+    /// reports it as a coverage finding, never fabricated on
+    /// O1); the effect-row bank is the E-ONLY T3 `effect-rows`
+    /// row. NEVER in `state_hash` (the W6 split).
+    pub critter: Option<CritterView<'a>>,
     /// The destroy-family watch surfaces (W12-S4), gated on the
     /// scenario's `destroy = 1` staging key — `None` on S0..S3
     /// (their pinned bytes carry no destroy rows). NEVER in
     /// `state_hash` (the W6 split).
     pub destroy: Option<DestroyView<'a>>,
+}
+
+/// The per-frame critter-family surfaces (W12-S8, DESIGN §7 S8
+/// row + the registry's T2 critter-bank / T3 effect-rows rows).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CritterView<'a> {
+    /// The 0x4cff98 bank (count cell 0x46cc2c).
+    pub critters: &'a [bedlam_core::critter::CritterRecord],
+    /// The 0x4cec38 effect-row bank (§7j.24/5).
+    pub effect_rows: &'a [bedlam_core::critter::EffectRow],
 }
 
 /// The per-frame destroy-family surfaces (W12-S4, DESIGN §7 S4 row
@@ -401,6 +419,63 @@ fn robot_bank_blob(robots: &[Robot]) -> Vec<u8> {
     b
 }
 
+/// The critter-bank blob (E-ONLY T2 row, W12-S8): u32 count +
+/// count × the modeled 0x7E-record subset, the field order pinned
+/// here (kind, species, attacker, hp, mode, anim, heading,
+/// presence, target triple, impact pair, xyz, home pair,
+/// countdown, death_ctr, target_robot, fuse, facing) — the
+/// differ's `critter-bank` normalizer mirrors it.
+fn critter_bank_blob(cs: &[bedlam_core::critter::CritterRecord]) -> Vec<u8> {
+    // 74 B per record (the differ's critter-bank normalizer pins it).
+    let mut b = Vec::with_capacity(4 + cs.len() * 74);
+    b.extend_from_slice(&(cs.len() as u32).to_le_bytes());
+    for c in cs {
+        b.extend_from_slice(&c.kind.to_le_bytes());
+        b.extend_from_slice(&c.species.to_le_bytes());
+        b.extend_from_slice(&c.attacker.to_le_bytes());
+        b.extend_from_slice(&c.hp.to_le_bytes());
+        b.extend_from_slice(&c.mode.to_le_bytes());
+        b.extend_from_slice(&c.anim.to_le_bytes());
+        b.extend_from_slice(&c.heading.to_le_bytes());
+        b.extend_from_slice(&u32::from(c.presence).to_le_bytes());
+        b.extend_from_slice(&c.target_x.to_le_bytes());
+        b.extend_from_slice(&c.target_y.to_le_bytes());
+        b.extend_from_slice(&c.target_z.to_le_bytes());
+        b.extend_from_slice(&c.impact_x.to_le_bytes());
+        b.extend_from_slice(&c.impact_y.to_le_bytes());
+        b.extend_from_slice(&c.x.to_le_bytes());
+        b.extend_from_slice(&c.y.to_le_bytes());
+        b.extend_from_slice(&c.z.to_le_bytes());
+        b.extend_from_slice(&c.home_x.to_le_bytes());
+        b.extend_from_slice(&c.home_y.to_le_bytes());
+        b.extend_from_slice(&c.countdown.to_le_bytes());
+        b.extend_from_slice(&c.death_ctr.to_le_bytes());
+        b.extend_from_slice(&c.target_robot.to_le_bytes());
+        b.extend_from_slice(&c.fuse.to_le_bytes());
+        b.extend_from_slice(&c.facing.to_le_bytes());
+    }
+    b
+}
+
+/// The effect-rows blob (E-ONLY T3 row, W12-S8): u32 count + the
+/// fixed rows {age u16, id u16, x, y, z, cos, sin, ttl} — 28 B
+/// per row (the E-modeled subset of the 0x20-stride guest row).
+fn effect_rows_blob(rs: &[bedlam_core::critter::EffectRow]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(4 + rs.len() * 28);
+    b.extend_from_slice(&(rs.len() as u32).to_le_bytes());
+    for r in rs {
+        b.extend_from_slice(&r.age.to_le_bytes());
+        b.extend_from_slice(&r.id.to_le_bytes());
+        b.extend_from_slice(&r.x.to_le_bytes());
+        b.extend_from_slice(&r.y.to_le_bytes());
+        b.extend_from_slice(&r.z.to_le_bytes());
+        b.extend_from_slice(&r.cos.to_le_bytes());
+        b.extend_from_slice(&r.sin.to_le_bytes());
+        b.extend_from_slice(&r.ttl.to_le_bytes());
+    }
+    b
+}
+
 /// Emit one canonical frame record: the §6a rows whose tier the
 /// scenario captures (`tiers` = the scenario's tier list; `anchor`
 /// adds the TS rows — they ride the mission-start frame only).
@@ -529,6 +604,19 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
             b.extend_from_slice(&c.group.to_le_bytes());
             b.extend_from_slice(&c.dwell.to_le_bytes());
             f.push_watch("dropship-frame", b);
+        }
+    }
+    // The critter-family rows (W12-S8): the T2 critter bank is
+    // E-ONLY (no EXD alias — coverage finding, never fabricated
+    // on O1); the T3 effect-row bank likewise. Gated on the
+    // scenario's `critters = 1` key — S0..S7 pinned bytes carry
+    // neither row.
+    if let Some(v) = &st.critter {
+        if want("T2") {
+            f.push_watch("critter-bank", critter_bank_blob(v.critters));
+        }
+        if want("T3") {
+            f.push_watch("effect-rows", effect_rows_blob(v.effect_rows));
         }
     }
     if anchor && want("TS") {
@@ -849,6 +937,43 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         scene.sim_mut().arm_platform_family();
     }
 
+    // The critter-family staging + arm (W12-S8, grammar v1.7
+    // `critters = 1`, D114): the mission's .NME through the
+    // FUN_00416458 spawn schedule (`stage_critters` — the §7j.18
+    // grammar, difficulty-scaled), then ARM the controller
+    // (FUN_00412f34, MissionShell 0x447fe1). The ORIGINAL loads
+    // .NME natively at EVERY mission load and runs the controller
+    // UNGATED; E arms it per scenario so the S0..S7 chains stay
+    // byte-identical (the loader's kind-4 heading draws + the
+    // controller's per-frame draws on unarmed paths are the
+    // recorded E-side stream gap, §7j.42/5). The critter bank is
+    // the E-ONLY T2 coverage row (no EXD alias); the ALIASED
+    // observables are the RNG stream, the robot bank (the
+    // damage/stun lanes), the projectile bank (the 0x68 fire
+    // cycle), the debris/effect-row stagings, and the score
+    // bounty. A file hosting an unmodeled kind REFUSES (fail
+    // loud — never spawn a brain the engine does not carry).
+    if scen.critters {
+        let (zone_idx, mission_no) = host.mission_slot();
+        let zone_dir = format!("ZONE{}", (b'A' + zone_idx as u8) as char);
+        let nme_bytes = source
+            .load(&format!("{zone_dir}/MISSION{mission_no}.NME"))
+            .map_err(|e| CanonicalError(format!("critter staging: {e}")))?;
+        let scene = host.mission_mut().expect("mission staged");
+        if scene
+            .sim_mut()
+            .stage_critters(&nme_bytes, difficulty)
+            .is_none()
+        {
+            return Err(CanonicalError(
+                "critter staging rejected (the .NME hosts a kind the E controller \
+                 does not model — §7j.42/6)"
+                    .into(),
+            ));
+        }
+        scene.sim_mut().arm_critter_family();
+    }
+
     // The LOADOUT staging seam (W12-S3, grammar v1.3): expand the
     // per-robot entries into the 7-slot arrays through the engine
     // host seam (`stage_robot_weapons`, the D51 pattern — the
@@ -926,6 +1051,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
             map_wh,
             scen.destroy,
             extraction,
+            scen.critters,
         ),
         &scen.tiers,
         false,
@@ -955,6 +1081,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                             None,
                             scen.destroy,
                             extraction,
+                            scen.critters,
                         ),
                         &scen.tiers,
                         false,
@@ -987,6 +1114,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                         None,
                         scen.destroy,
                         extraction,
+                        scen.critters,
                     ),
                     &scen.tiers,
                     true,
@@ -1022,6 +1150,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                         None,
                         scen.destroy,
                         extraction,
+                        scen.critters,
                     ),
                     &scen.tiers,
                     true,
@@ -1066,6 +1195,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                         None,
                         scen.destroy,
                         extraction,
+                        scen.critters,
                     ),
                     &scen.tiers,
                     true,
@@ -1109,6 +1239,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                         None,
                         scen.destroy,
                         extraction,
+                        scen.critters,
                     ),
                     &scen.tiers,
                     true,
@@ -1136,6 +1267,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 None,
                 scen.destroy,
                 extraction,
+                scen.critters,
             ),
             &scen.tiers,
             false,
@@ -1185,6 +1317,7 @@ fn tick_state<'a>(
     map_wh: Option<(u32, u32)>,
     destroy: bool,
     extraction: bool,
+    critter: bool,
 ) -> TickState<'a> {
     let scene = host.mission().expect("mission staged");
     let sim = scene.sim();
@@ -1211,6 +1344,10 @@ fn tick_state<'a>(
         map_wh,
         weapon_bank: sim.weapon_bank(),
         enemy_bank: sim.enemy_bank(),
+        critter: critter.then_some(CritterView {
+            critters: sim.critters(),
+            effect_rows: sim.effect_rows(),
+        }),
         destroy: destroy.then(|| DestroyView {
             objects: sim.objects(),
             structures: sim.structures(),

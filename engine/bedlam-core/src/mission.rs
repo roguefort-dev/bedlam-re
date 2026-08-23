@@ -762,7 +762,7 @@ pub struct MissionSim {
     armor_pads: Vec<u8>,
     /// The player TYPE word ([0x4edb90]): 0 in all SP games
     /// (GameMain 0x41c34c) — gates the alarm trip + case-4 pickup.
-    player_type: u16,
+    pub(crate) player_type: u16,
     /// The COMMAND ring (the W5 injection seam's E-side home):
     /// staged payloads, drained once per frame by the consumer
     /// [§7j.37/1]. NOT hashed (empty on every corpus path).
@@ -870,6 +870,22 @@ pub struct MissionSim {
     pub(crate) objective_phase: u32,
     pub(crate) objective_blink: u32,
     pub(crate) objective_light: u32,
+    // --- The critter family (W12-S8, `critter.rs`; NONE of it
+    //     enters `state_hash` — the W6 split: the bank is its own
+    //     T2 dump row, the critter-driven robot writes ride the
+    //     hashed robot fields) ---
+    /// The critter bank 0x4cff98 (0x7E stride, count 0x46cc2c).
+    pub(crate) critters: Vec<crate::critter::CritterRecord>,
+    /// The 0x4cec38 effect-row bank (80 × 0x20, §7j.24/5 — the
+    /// critter-death staging surface; E-ONLY T3 row, never
+    /// hashed).
+    pub(crate) effect_rows: Vec<crate::critter::EffectRow>,
+    /// The critter-family ARM (grammar `critters = 1`): the
+    /// original's controller runs every mission; E arms it per
+    /// scenario so the S0..S7 chains stay byte-identical (the
+    /// per-frame draws on unarmed paths are the recorded stream
+    /// gap, §7j.42/5).
+    pub(crate) critter_family_armed: bool,
 }
 
 impl MissionSim {
@@ -920,6 +936,21 @@ impl MissionSim {
             objective_phase: 0,
             objective_blink: 0,
             objective_light: 0,
+            critters: Vec::new(),
+            effect_rows: vec![
+                crate::critter::EffectRow {
+                    age: 0,
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    cos: 0,
+                    sin: 0,
+                    ttl: 0,
+                    id: 0
+                };
+                crate::critter::EFFECT_ROWS
+            ],
+            critter_family_armed: false,
             terrain,
         }
     }
@@ -1645,6 +1676,15 @@ impl MissionSim {
     /// sidebar draw for the SLOT robots; every corpus robot is a
     /// slot robot (single squad, base 0).
     pub fn advance_frame(&mut self) {
+        // The CRITTER CONTROLLER (FUN_00412f34, MissionShell
+        // 0x447fe1) runs BEFORE the click dispatcher / command
+        // consumer / robot phases (0x448021+). Armed per scenario
+        // (`critters = 1`, D114): unarmed = the S0..S7 pinned
+        // chains, byte-identical (the original's per-frame draws
+        // on unarmed paths are the recorded stream gap, §7j.42/5).
+        if self.critter_family_armed {
+            self.critter_tick();
+        }
         // The COMMAND-record consumer (FUN_00409138) runs after the
         // input/click chain and BEFORE the six robot phases
         // [MissionShell §1, verified]. With no staged records it
@@ -1656,12 +1696,20 @@ impl MissionSim {
         }
         // The enemy pass [MissionShell §1]: 4× per frame — the
         // weapon-anim tick (FUN_00410823, phase arg i) + the 50×0x22
-        // projectile tick (FUN_00412010). FUN_004197d4 (the odd-pass
-        // robot-hit expiry walker) is an E-gap until the enemy-fire
-        // producers land — nothing stages the 0x22 bank today.
+        // projectile tick (FUN_00412010) + on ODD passes the
+        // robot-hit expiry walker FUN_004197d4 (0x44805c `test
+        // dl,1`): for every alive robot × every projectile of type
+        // {0x65, 0x67, 0x68}, the 0x10/0x10/0x20 px box at the
+        // record's position → the disburser + FUN_0040e230(robot,
+        // FUN_00419aff(type), owner −1) [§7j.42; the walker draws
+        // nothing on its own]. With an empty bank it is a structural
+        // no-op (the pre-S8 behavior), so it runs ungated.
         for i in 0..4 {
             self.weapon_tick(i);
             self.enemy_tick();
+            if i & 1 == 1 {
+                self.critter_projectile_walker();
+            }
         }
         // The mission-epilogue +0x18 fade [7j.10, verified
         // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue
@@ -2104,7 +2152,7 @@ impl MissionSim {
     /// OWN cached word `probe_z[i]` (sar → signed; 0xFFFF = −1); on any
     /// failure nothing is written, on pass the probe floors are cached
     /// and the center re-read sets the robot z.
-    fn move_possible(&mut self, idx: usize, wx: i32, wy: i32) -> bool {
+    pub(crate) fn move_possible(&mut self, idx: usize, wx: i32, wy: i32) -> bool {
         let (q5x, q5y) = (wx >> 8, wy >> 8);
         let (w, h) = self.terrain.size();
         let Self {

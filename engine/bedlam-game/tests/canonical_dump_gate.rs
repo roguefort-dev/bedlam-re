@@ -145,6 +145,7 @@ fn synthetic_grammar_pins_the_6a_bytes() {
         map_wh: Some((300, 150)),
         weapon_bank: &[],
         enemy_bank: &[],
+        critter: None,
         destroy: None,
     };
     let tiers: Vec<String> = ["T0", "T1", "TS"].iter().map(|s| s.to_string()).collect();
@@ -344,6 +345,7 @@ fn synthetic_frames() -> Vec<diffharness::dump::FrameRecord> {
             map_wh: (i == 0).then_some((4, 4)),
             weapon_bank: sim.weapon_bank(),
             enemy_bank: sim.enemy_bank(),
+            critter: None,
             destroy: None,
         };
         frames.push(emit_frame(&st, &tiers, false, i == 0));
@@ -2036,4 +2038,181 @@ fn corpus_s7_platform_dynamics() {
     // the same FUN_004228ce write half).
     assert_eq!(grid7d4(1360, 2, 57), 0x7d4);
     assert_eq!(mirror(1360, 2, 57, 2), (0x25D, 0));
+}
+
+// ---------------------------------------------------------------------
+// W12-S8 (D114): the critter-engagement scenario.
+// ---------------------------------------------------------------------
+
+/// Read one critter field out of the critter-bank blob (the
+/// emitter's pinned 74 B record layout — the differ's
+/// `critter-bank` normalizer mirrors it).
+fn critter_field(b: &[u8], i: usize, off: usize, len: usize) -> i64 {
+    let o = 4 + i * 74 + off;
+    match len {
+        2 => i16::from_le_bytes([b[o], b[o + 1]]) as i64,
+        _ => i32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]) as i64,
+    }
+}
+
+/// Mode histogram of the critter bank at one frame.
+fn critter_modes(b: &[u8]) -> std::collections::BTreeMap<u16, usize> {
+    let n = u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize;
+    let mut m = std::collections::BTreeMap::new();
+    for i in 0..n {
+        let mode = critter_field(b, i, 8, 2) as u16;
+        *m.entry(mode).or_insert(0) += 1;
+    }
+    m
+}
+
+#[test]
+fn corpus_s8_critter_engagement() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    let s8 = fs::read_to_string(scen_path("S8")).expect("S8.scen committed");
+    let run = canonical::run_canonical(&s8, &root).expect("S8 canonical run");
+    assert_eq!(run.manifest.frame_count, 121);
+    let run_b = canonical::run_canonical(&s8, &root).expect("S8 canonical re-run");
+    assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
+    // Chain pin (the fingerprint discipline, D28: moves only on a
+    // deliberate engine/dump change, re-baselined loudly).
+    assert_eq!(run.manifest.chain_digest, "b5ae3f8be91c7449");
+
+    let dump = decode_dump(&run.bytes).expect("S8 dump verifies");
+    assert_eq!(dump.header.scenario, "S8");
+    let frames = &dump.frames;
+
+    // The staging: 16 critters (6 kind-5 + 10 kind-4, §7j.42/5),
+    // the mode split {8: 6, 9: 10} at the anchor.
+    let b = frames[0].watch("critter-bank").expect("T2 critter row");
+    let n = u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize;
+    assert_eq!(n, 16);
+    let mut kinds = std::collections::BTreeMap::new();
+    for i in 0..n {
+        let kind = critter_field(b, i, 0, 2) as u16;
+        *kinds.entry(kind).or_insert(0) += 1;
+    }
+    assert_eq!(kinds.get(&5), Some(&6));
+    assert_eq!(kinds.get(&4), Some(&10));
+    // All ACTIVE from frame 0 (neither ZONEA family spawns
+    // dormant): kind-5 engage-family modes (the anchor snapshot
+    // sits AFTER the first controller pass — the near pack has
+    // already transitioned/fired once), kind-4 mode 9, hp scaled
+    // base+base·0/27 = 150/200.
+    for i in 0..6 {
+        let mode = critter_field(b, i, 8, 2);
+        assert!(
+            matches!(mode, 2 | 3 | 8),
+            "kind-5 engage-family mode (got {mode})"
+        );
+        assert_eq!(critter_field(b, i, 6, 2), 150, "kind-5 hp 0x96");
+    }
+    for i in 6..16 {
+        assert_eq!(critter_field(b, i, 8, 2), 9, "kind-4 mode 9");
+        assert_eq!(critter_field(b, i, 6, 2), 200, "kind-4 hp 0xC8");
+    }
+
+    // The fire cycle: 0x68 records appear in the ALIASED
+    // projectile bank from the first frames (the mode-2 spawn).
+    let mut fired = 0usize;
+    for f in frames.iter().take(32) {
+        if let Some(pb) = f.watch("projectile-bank") {
+            let pn = u32::from_le_bytes([pb[0], pb[1], pb[2], pb[3]]) as usize;
+            for i in 0..pn {
+                let o = 4 + i * 0x22;
+                if u16::from_le_bytes([pb[o], pb[o + 1]]) == 0x68 {
+                    fired += 1;
+                    break;
+                }
+            }
+        }
+    }
+    assert!(
+        fired >= 10,
+        "the 0x68 fire cycle ran ({fired} firing frames in f0..32)"
+    );
+
+    // The gunner (robot 1) takes the 0x68 damage: hp < 5000 by
+    // the burst (75/hit through the walker, owner −1).
+    // (robot-bank blob: 4 + n*0x54, hp at +0x34 per record —
+    // asserted via the first hit-flash > 0 before f32.)
+    let mut flashed = 0usize;
+    for f in frames.iter().take(31) {
+        if let Some(rb) = f.watch("robot-bank") {
+            let o = 4 + 1 * 0x54 + 0x2E;
+            if u16::from_le_bytes([rb[o], rb[o + 1]]) > 0 {
+                flashed += 1;
+            }
+        }
+    }
+    assert!(
+        flashed > 0,
+        "the gunner's hit-flash bumped (0x68 damage landed)"
+    );
+
+    // The deaths: the burst (f33..38) kills the approached pack +
+    // the walked-in kind-4s — hp ≤ 0 and mode 6 (the dive) by
+    // f39; the effect-rows bank fully turned over (80 live rows).
+    let b39 = frames[39].watch("critter-bank").expect("critter row f39");
+    let m39 = critter_modes(b39);
+    let diving = m39.get(&6).copied().unwrap_or(0);
+    assert!(
+        diving >= 8,
+        "the burst deaths (>= 8 divers at f39, got {diving})"
+    );
+    let mut dead = 0usize;
+    for i in 0..16 {
+        if critter_field(b39, i, 6, 2) <= 0 {
+            dead += 1;
+        }
+    }
+    assert_eq!(dead, diving, "every diver is hp<=0");
+    let er = frames[39].watch("effect-rows").expect("T3 effect row f39");
+    let ern = u32::from_le_bytes([er[0], er[1], er[2], er[3]]) as usize;
+    let live = (0..ern)
+        .filter(|i| {
+            let o = 4 + i * 28 + 24;
+            i32::from_le_bytes([er[o], er[o + 1], er[o + 2], er[o + 3]]) != 0
+        })
+        .count();
+    assert!(live >= 80, "the LRU bank turned over ({live} live rows)");
+
+    // The dying tail: the dives run their countdown-6 leash, the
+    // mode-7 counters (0x28) run out, and the survivors' dormancy
+    // (mode 0xB) holds through the end (the d=0 respawn table
+    // 1500 frames out).
+    let b110 = frames[110].watch("critter-bank").expect("critter row f110");
+    let m110 = critter_modes(b110);
+    assert!(m110.get(&7).is_none(), "the dying window closed by f110");
+    assert!(m110.get(&6).is_none(), "the dives completed by f110");
+    let b119 = frames[120].watch("critter-bank").expect("critter row f119");
+    let m119 = critter_modes(b119);
+    let dormant = m119.get(&0xB).copied().unwrap_or(0);
+    assert_eq!(dormant, diving, "the dead are dormant at f120");
+    // The south pack + the far kind-4s survive: modes 8/9 remain.
+    assert!(
+        m119.get(&8).copied().unwrap_or(0) >= 3,
+        "the south pack survives"
+    );
+    assert!(
+        m119.get(&9).copied().unwrap_or(0) >= 4,
+        "the far kind-4s seek on"
+    );
+
+    // NO-INJECT re-assertion: S0..S7 chains stay byte-identical
+    // (the family is armed ONLY by `critters = 1` — the canonical
+    // suite's own pins cover each; this asserts the dump carries
+    // no critter rows without the key).
+    let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
+    let run1 = canonical::run_canonical(&s1, &root).expect("S1 canonical run");
+    assert_eq!(run1.manifest.chain_digest, "1c4e7b4c9d9b0947");
+    assert!(decode_dump(&run1.bytes)
+        .expect("S1 verifies")
+        .frames
+        .iter()
+        .all(|f| f.watch("critter-bank").is_none()));
 }

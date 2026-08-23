@@ -11,7 +11,7 @@
 //!
 //! Two formats:
 //!
-//! **Scenario grammar v1.6** (`scenarios/*.scen`, committed):
+//! **Scenario grammar v1.7** (`scenarios/*.scen`, committed):
 //! ```text
 //! # comment / blank lines
 //! scenario = S0              ; id (dump header; <=255 bytes)
@@ -25,6 +25,7 @@
 //! zone = "B"                 ; episode-slot zone letter (D108, v1.5)
 //! pickup = 1                 ; stage the .TOT pickup surface (D108, v1.5)
 //! platforms = 1              ; arm the epilogue creep tick (D113, v1.6)
+//! critters = 1               ; stage .NME + arm the critter controller (D114, v1.7)
 //! step 10                    ; advance N frames, no input      (runner)
 //! capture                    ; force a frame dump              (runner)
 //! until-anchor mission-start ; run to the anchor event         (runner)
@@ -157,6 +158,20 @@ pub struct Scenario {
     /// O1 runs the tick natively, nothing is staged on the guest,
     /// consumers record the key in `_e_staging`.
     pub platforms: bool,
+    /// The critter-family staging+arm key (grammar v1.7 `critters = 1`,
+    /// W12-S8/D114): stage the mission's .NME through the
+    /// FUN_00416458 spawn schedule (`stage_critters`) and ARM the
+    /// controller (FUN_00412f34, MissionShell 0x447fe1). The
+    /// ORIGINAL loads .NME natively at EVERY mission load and runs
+    /// the controller ungated; E arms it per scenario so the
+    /// S0..S7 chains stay byte-identical (the loader's kind-4
+    /// heading draws + the controller's per-frame draws on
+    /// unarmed paths are the recorded E-side stream gap,
+    /// §7j.42/5). The critter bank is the E-ONLY T2 coverage row;
+    /// the ALIASED observables are the RNG stream, the robot bank
+    /// (the damage/stun lanes), the projectile bank (0x68 fire),
+    /// the debris/effect-row stagings, and the score bounty.
+    pub critters: bool,
     /// Validated step directives in file order (runner metadata).
     pub steps: Vec<Step>,
 }
@@ -261,6 +276,7 @@ impl Scenario {
         let mut zone: Option<char> = None;
         let mut pickup = false;
         let mut platforms = false;
+        let mut critters = false;
         let mut steps: Vec<Step> = Vec::new();
 
         for (idx, raw) in src.lines().enumerate() {
@@ -716,6 +732,32 @@ impl Scenario {
                             }
                             platforms = true;
                         }
+                        "critters" => {
+                            // W12-S8 (grammar v1.7, D114): the boolean
+                            // critter-family staging+arm key —
+                            // `critters = 1` stages the mission's .NME
+                            // through the FUN_00416458 spawn schedule
+                            // and arms the controller (the original
+                            // runs it every mission; the loader/
+                            // controller draws on unarmed paths are
+                            // the recorded stream gap). Strictly `1`
+                            // (same fail-loud rule as the others).
+                            if value.trim() != "1" {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "critters key is boolean arming: use `critters = 1`",
+                                ));
+                            }
+                            if critters {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "critters armed twice (one key per scenario)",
+                                ));
+                            }
+                            critters = true;
+                        }
                         other => {
                             return Err(scen_err(
                                 line_no,
@@ -765,6 +807,7 @@ impl Scenario {
             zone,
             pickup,
             platforms,
+            critters,
             steps,
         })
     }

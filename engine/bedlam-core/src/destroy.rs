@@ -1813,8 +1813,11 @@ impl MissionSim {
             self.stage_debris(x * 0x20, y * 0x20, z * 0x20, 6, delay, -1);
         }
         let zq = (z - 1).max(1);
-        // The critter lane: the 0x46cc2c bank has no E model —
-        // an S4+ coverage finding class, never silent state.
+        // The critter lane (W12-S8): every critter takes the
+        // kind-0xC hit through the §7j.23 applier at the blast's
+        // z' (owner −1 — no bounty on a script kill).
+        let (bx, by, bz) = (x * 0x20, y * 0x20, zq * 0x20);
+        self.critter_hit_test(bx, by, bz, 0xC, -1);
         // The robot lane [§7j.23 box test, §7j.39/1]:
         let (bx, by, bz) = (x * 0x20, y * 0x20, zq * 0x20);
         let n = self.robots.len();

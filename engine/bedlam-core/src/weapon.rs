@@ -301,7 +301,9 @@ impl MissionSim {
         Some(slot)
     }
 
-    fn enemy_free_slot(&self) -> Option<usize> {
+    /// FUN_0041286f: first free slot of the 50×0x22 bank (the
+    /// critter fire family's producer seam, W12-S8).
+    pub(crate) fn enemy_free_slot(&self) -> Option<usize> {
         self.enemy_bank.iter().position(|r| r.kind == 0)
     }
 
@@ -721,7 +723,7 @@ impl MissionSim {
             }
             let kind = self.weapon_bank[i].kind;
             match kind {
-                2..=4 => self.tick_bullet(i, map_w, map_h),
+                2..=4 => self.tick_bullet(i, map_w, map_h, phase),
                 5 => self.tick_shell(i, map_w, map_h, phase),
                 9..=0xB => {
                     if phase == 0 {
@@ -740,8 +742,12 @@ impl MissionSim {
     /// sub-steps per call, then a one-step rollback; hits re-add the
     /// step; the record frees ONLY at tick > 99 (impacts do not kill
     /// bullets — the impact pair + disburser applications are the
-    /// S4/T4 E-gaps).
-    fn tick_bullet(&mut self, i: usize, map_w: i32, map_h: i32) {
+    /// S4/T4 E-gaps). The CRITTER actor lane (FUN_004190bc) runs on
+    /// the odd phases at the substep test position (W12-S8): a hit
+    /// applies the per-weapon damage/death lane; the record itself
+    /// keeps flying exactly like the original (the lane does not
+    /// free it).
+    fn tick_bullet(&mut self, i: usize, map_w: i32, map_h: i32, phase: i32) {
         const NO_RESULT: i32 = 0;
         const BOUNDS: i32 = 1;
         const TERRAIN: i32 = 2;
@@ -771,11 +777,16 @@ impl MissionSim {
                 {
                     result = BOUNDS;
                 } else {
-                    // Actor lanes: critter (E-gap) / MP robot lane
-                    // (SP-only model) — no-ops.
+                    // Actor lanes: the critter lane (FUN_004190bc,
+                    // odd phases — the modeled W12-S8 surface) at the
+                    // substep test position; the MP robot lane stays
+                    // the SP-model no-op.
                     let floor = self.terrain.floor_z(x >> 8, y >> 8, z >> 8);
                     if z >> 8 < floor {
                         result = TERRAIN;
+                    } else if phase & 1 == 1 {
+                        let (wk, wo) = (self.weapon_bank[i].kind, self.weapon_bank[i].owner as i16);
+                        self.critter_hit_test(x >> 8, y >> 8, z >> 8, wk, wo as i32);
                     }
                 }
             } else {

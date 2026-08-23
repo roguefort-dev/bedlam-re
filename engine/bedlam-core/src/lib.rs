@@ -35,6 +35,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod critter;
 pub mod destroy;
 pub mod frame;
 pub mod fx;

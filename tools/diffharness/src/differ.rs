@@ -1163,6 +1163,109 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
                 int("dwell", i32le(&b[24..]) as i128),
             ]))
         }
+        // The critter-bank row (W12-S8): E-ONLY (no EXD alias; the
+        // watch's exd_status is unmapped). Canonical = u32 count +
+        // count × the modeled 0x7E-record subset exactly as the
+        // emitter lays it out (74 B/record; §7j.42/1).
+        "critter-bank" => {
+            if b.len() < 4 {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: "u32 count + count*74 (the critter record)".into(),
+                });
+            }
+            let count = u32le(b) as usize;
+            if b.len() != 4 + count * 74 {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: format!("4 + {count}*74 (the critter record)"),
+                });
+            }
+            let mut fields = Vec::with_capacity(2 + count * 18);
+            fields.push(int("count", count as i128));
+            let u16at = |o: usize| u16::from_le_bytes([b[o], b[o + 1]]) as i128;
+            let i32at = |o: usize| i32le(&b[o..]) as i128;
+            for i in 0..count {
+                let o = 4 + i * 74;
+                fields.push(int(&format!("critter[{i}].kind"), u16at(o)));
+                fields.push(int(&format!("critter[{i}].species"), u16at(o + 2)));
+                fields.push(int(
+                    &format!("critter[{i}].attacker"),
+                    u16at(o + 4) as i16 as i128,
+                ));
+                fields.push(int(
+                    &format!("critter[{i}].hp"),
+                    u16at(o + 6) as i16 as i128,
+                ));
+                fields.push(int(&format!("critter[{i}].mode"), u16at(o + 8)));
+                fields.push(int(&format!("critter[{i}].anim"), u16at(o + 10)));
+                fields.push(int(&format!("critter[{i}].heading"), i32at(o + 12)));
+                fields.push(int(&format!("critter[{i}].presence"), i32at(o + 16)));
+                fields.push(int(&format!("critter[{i}].target_x"), i32at(o + 20)));
+                fields.push(int(&format!("critter[{i}].target_y"), i32at(o + 24)));
+                fields.push(int(&format!("critter[{i}].target_z"), i32at(o + 28)));
+                fields.push(int(&format!("critter[{i}].impact_x"), i32at(o + 32)));
+                fields.push(int(&format!("critter[{i}].impact_y"), i32at(o + 36)));
+                fields.push(int(&format!("critter[{i}].x"), i32at(o + 40)));
+                fields.push(int(&format!("critter[{i}].y"), i32at(o + 44)));
+                fields.push(int(&format!("critter[{i}].z"), i32at(o + 48)));
+                fields.push(int(&format!("critter[{i}].home_x"), i32at(o + 52)));
+                fields.push(int(&format!("critter[{i}].home_y"), i32at(o + 56)));
+                fields.push(int(&format!("critter[{i}].countdown"), i32at(o + 60)));
+                fields.push(int(&format!("critter[{i}].death_ctr"), i32at(o + 64)));
+                fields.push(int(
+                    &format!("critter[{i}].target_robot"),
+                    u16at(o + 68) as i16 as i128,
+                ));
+                fields.push(int(&format!("critter[{i}].fuse"), u16at(o + 70)));
+                fields.push(int(&format!("critter[{i}].facing"), u16at(o + 72)));
+            }
+            Ok(row(fields))
+        }
+        // The effect-rows row (W12-S8): E-ONLY (§7j.24/5). Canonical
+        // = u32 count + count × 28 B {age u16, id u16, x, y, z, cos,
+        // sin, ttl} (the E-modeled subset of the 0x20-stride guest
+        // row).
+        "effect-rows" => {
+            const STRIDE: usize = 28;
+            if b.len() < 4 || !(b.len() - 4).is_multiple_of(STRIDE) {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: "u32 count + count*28 (the effect row)".into(),
+                });
+            }
+            let count = u32le(b) as usize;
+            if b.len() != 4 + count * STRIDE {
+                return Err(NormalizeError::BadLength {
+                    id: id.to_string(),
+                    frame_no: no,
+                    len: b.len(),
+                    want: format!("4 + {count}*28 (the effect row)"),
+                });
+            }
+            let mut fields = Vec::with_capacity(2 + count * 8);
+            fields.push(int("count", count as i128));
+            let u16at = |o: usize| u16::from_le_bytes([b[o], b[o + 1]]) as i128;
+            let i32at = |o: usize| i32le(&b[o..]) as i128;
+            for i in 0..count {
+                let o = 4 + i * STRIDE;
+                fields.push(int(&format!("row[{i}].age"), u16at(o)));
+                fields.push(int(&format!("row[{i}].id"), u16at(o + 2)));
+                fields.push(int(&format!("row[{i}].x"), i32at(o + 4)));
+                fields.push(int(&format!("row[{i}].y"), i32at(o + 8)));
+                fields.push(int(&format!("row[{i}].z"), i32at(o + 12)));
+                fields.push(int(&format!("row[{i}].cos"), i32at(o + 16)));
+                fields.push(int(&format!("row[{i}].sin"), i32at(o + 20)));
+                fields.push(int(&format!("row[{i}].ttl"), i32at(o + 24)));
+            }
+            Ok(row(fields))
+        }
         "tile-word-grid" | "platform-strength" => {
             // Both channels dump the same w·h·2 span — one shared
             // field walk (a length mismatch is a STRUCTURAL
