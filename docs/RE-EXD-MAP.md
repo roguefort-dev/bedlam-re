@@ -11,6 +11,9 @@ label-swap correction + squad-base cell 0x11955c, §5). D133 (2026-08-23)
 CLOSED the no-extract-latch gap (twin [0xf929c], §5/§5f). D134
 (2026-08-23) CLOSED the LAST gap — the SFX master gate (twin
 [0x10743c], 17-site census, §5g): the W1 registry gap set is now EMPTY.
+D135 (2026-08-23) closed the §5g leftovers — the EXW bank-cell twins
+for the 17 un-aliased walk cells (§5g-bis; ordinal-identical walks,
+1:1 reader parity, dup quirks twin too).
 T2-T4 aliasing stays later per the W1 ticket.
 Purpose: the DESIGN-DIFFHARNESS.md W1 deliverable — the `exd_addr` fills
 for the harness watch rows.
@@ -473,6 +476,79 @@ constant 1). A live O1 capture machine with sound DISABLED would dump
 0 where E-side chains assume the row exists — recorded as the S0
 fingerprint-step companion to the D128 ACTIONPAN registry note (one
 dbgprobe read of [0x10743c] at the anchor stop settles it).
+
+### 5g-bis. The bank-cell twin cross-check — the §5g leftovers closed (D135, 2026-08-23)
+
+Method [verified]: D94's EXW walk re-verified independently — every
+register idiom grepped in ghidra-project/exw-text-objdump.txt (the
+`mov eax,NAME; call 0x43a39c; mov ds:CELL,eax` triple), every name
+string re-read from BEDLAM.EXW DGROUP (PE VA 0x454000 = file 0x52600),
+EXD stores re-confirmed in ghidra-project/exd-text-objdump.txt, and
+reader censuses run whole-objdump on BOTH sides (grep by cell; the
+`mov ds:CELL,eax` store form excluded; all readers feed the play twin
+— EXW `call 0x43a48e` / EXD `call 0x4c584`). Objdump-only, no Ghidra
+run; MANIFEST clean before and after the corpus reads.
+
+**HEADLINE 1 — the two mission walks are STORE-FOR-STORE
+ORDINAL-IDENTICAL:** FUN_0043a1d3 (EXW, stores 0x43a1d8..0x43a368)
+and FUN_0004c121 (EXD, stores 0x4c130..0x4c2b6) write the same 27
+registers in the same order — MIDIGUN, BOOM1/2/3, MIDIGUN-dup,
+SQUISH2/3, HURT1/2/3, DEATH1/2/3, PLASMA, RICOCHT1..4, MISSILE1,
+POWERUP, ELEV1/2, DEADMAN1/2, BEEP5, TEXTBOX1, BEEP5#2.
+
+**HEADLINE 2 — every reader count matches 1:1** across the whole
+17-cell leftover set (below); the dup quirks are twins too: the
+MIDIGUN second register is consumer-LESS on both sides (EXW 0x4edf70
+zero readers ⟷ EXD 0x11a958 zero readers — the D94 quirk is a twin
+quirk), and the two BEEP5 cells pair BY ORDINAL (first BEEP5:
+0x4edfdc ⟷ 0x11a92c; second: 0x4edfd8 ⟷ 0x11a8ec), independently
+confirmed by the briefing-screen re-registration twins (EXW
+0x43d17d/0x43d18c/0x43d19b → 0x4edfdc/0x4edfd0/0x4edfd8 ⟷ EXD
+0x4f343/0x4f352/0x4f361 → 0x11a92c/0x11a8f8/0x11a8ec — same order,
+so TEXTBOX1 0x4edfd0 ⟷ 0x11a8f8 rides along).
+
+**HEADLINE 3 — the MissionShell-head walks are ordinal-identical
+too:** EXW 0x447bb7..0x447c3b and EXD 0x59b83..0x59c09 both store
+BEAMIN, THROW, PEXPLODE, BIOFIRE, CACODETH, SQUAWK, GRUNT1, GRUNT2,
+GRUNT3 in that order (9 stores, no re-ordering) — the EXW twin of
+the §5g FUN_0004c384-flavor head walk is the plain block inside the
+MissionShell cascade (no separate flavor needed on EXW).
+
+**The §5g-leftover alias table (all [verified]):**
+
+| EXW | EXD | file | readers EXW ⟷ EXD | consumer census (one-liner, cited — not re-decoded) |
+|---|---|---|---|---|
+| 0x4edf60 | **0x11a954** | MIDIGUN.RAW | 2 ⟷ 2 (0x40b3ef, 0x40b6a7 ⟷ 0x1c1d6, 0x1c48d) | robot weapon fire — robot-stride index + robot-array coords 0x4c69e8, priority 2 (§7j.17 fire family) |
+| 0x4edf70 | **0x11a958** | MIDIGUN.RAW (dup) | 0 ⟷ 0 | consumer-less dup register on BOTH sides (the D94 quirk is a twin quirk) |
+| 0x4edf74 | **0x11a950** | SQUISH2.RAW | 2 ⟷ 2 (0x419d34, 0x419e90 ⟷ 0x2a692, 0x2a775) | critter contact/melee — critter-bank coords 0x4cec3e/a, priority 1 (§7j.30 critter family) |
+| 0x4edf78 | **0x11a94c** | SQUISH3.RAW | 2 ⟷ 2 (0x419d57, 0x419eb7 ⟷ 0x2a6ad, 0x2a789) | same family |
+| 0x4edfa8 | **0x11a924** | POWERUP.RAW | 9 ⟷ 9 | the pickup family (§7h.2 ✓, §7j.30 ✓) |
+| 0x4edfac | **0x11a8e0** | MISSILE1.RAW | 3 ⟷ 3 (0x409339, 0x40a8d9, 0x40ae67 ⟷ 0x1a525, 0x1b633, 0x1bba1) | robot missile fire (§7j.17 ✓) |
+| 0x4edfb0 | **0x11a8e8** | ELEV1.RAW | 3 ⟷ 3 (0x4224f1, 0x422599, 0x4230ef ⟷ 0x33411, 0x334b1, 0x3400a) | TRT structure/elevator move — after the 0x4239ef(eax=0x23) structure call, structure coords 0x4dcae8/a ≫16 ≪5 (§7j.41 platform family) |
+| 0x4edfb4 | **0x11a91c** | ELEV2.RAW | 2 ⟷ 2 (0x423229, 0x423455 ⟷ 0x3426e, 0x344c2) | same family |
+| 0x4edfdc | **0x11a92c** | BEEP5.RAW (#1) | 6 ⟷ 6 | UI beep — menu/countdown tick (readers incl. 0x425249 after a dec-countdown loop; whole-menu −1,−1 idiom) |
+| 0x4edfd8 | **0x11a8ec** | BEEP5.RAW (#2) | 6 ⟷ 6 | UI beep — per-screen re-registered (briefing/selector/shop twins above) |
+| 0x4edfd0 | **0x11a8f8** | TEXTBOX1.RAW | 2 ⟷ 2 (0x424aaf, 0x43efe0 ⟷ 0x359f4, 0x5114d) | text-box print sound (−1,−1 idiom; the §5g "COULD NOT FIND SAMPLE:%s" 0x86a39 walk companion) |
+| 0x4edfe0 | **0x11a900** | BEAMIN.RAW | 8 ⟷ 8 | pod release + critter wake family (§7j.27 ✓, §7j.30 ✓) |
+| 0x4edfe4 | **0x11a90c** | THROW.RAW | 5 ⟷ 5 (0x409646, 0x4098db, 0x409b11, 0x409da1, 0x40a621 ⟷ 0x1a77d, 0x1aa18, 0x1ad1b, 0x1afa8, 0x1b41b) | robot fire w6/7/8 (§7j.17 ✓) |
+| 0x4edff0 | **0x11a8c0** | BIOFIRE.RAW | 1 ⟷ 1 (0x413e4b ⟷ 0x248d6) | biower critter fire (§7j.30 ✓) |
+| 0x4edff4 | **0x11a8bc** | PEXPLODE.RAW | 1 ⟷ 1 (0x421dc4 ⟷ 0x32d56) | player explosion — head of the arrival/impact family region (FUN_00421dec neighbors, §5g five-family block) |
+| 0x4edff8 | **0x11a8c4** | CACODETH.RAW | 1 ⟷ 1 (0x418982 ⟷ 0x2929d) | k7/caco death (§7j.30 ✓) |
+| 0x4edffc | **0x11a774** | SQUAWK.RAW | 1 ⟷ 1 (0x4152bd ⟷ 0x25bb5) | critter vocal (§7j.30 ✓) |
+
+GRUNT1-3 (0x4ee000/04/08 ⟷ 0x11a8b8/b4/b0 REVERSED, §5g) ride the
+same head-walk ordinal proof (last three stores of HEADLINE 3).
+Count corrections vs the §7j.30/D94 phrasing: none — the banknames
+"10 refs" for POWERUP = 9 readers + 1 write (the dump's ref counts
+include the register stores); every reader-only count was already
+1:1.
+
+**Engine/differ consequence:** NONE — docs-only. The SFX cells are
+presentation-tier (out of the hashed core, §7j.30/sec-9 note); the
+twin pins close the W1-name-census bookkeeping with zero watch-row or
+E-side changes. The §5g alias ledger is now complete for every cell
+named by the two bank walks (27 mission registers + 9 head-walk
+registers, minus the §5g-already-pinned 13).
 
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
