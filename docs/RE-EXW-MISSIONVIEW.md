@@ -284,16 +284,22 @@ clip: 0 <= sx < 0x23f && 0 <= sy < 0x23f && i32@+0x7c (alive) != 0
 visible+alive robot, in order (all enqueues pass `wx_px+0xb`,
 `wy_px+0xb`):
 
-1. **shield** (state u16@+0x0c ∈ {5,6}): bank DAT_0046af38 at
-   `sy - 0x48`, mode 0x12e, frame = clamp(10 − wobble/4, 0..9) with
-   wobble = i32@+0x90;
+1. **teleport beam** (state u16@+0x0c ∈ {5,6}): bank DAT_0046af38 =
+   `GAMEGFX\TELEPORT.BIN` (10 imgs) at `sy - 0x48`, mode 0x12e, frame =
+   clamp(10 − wobble/4, 0..9) with wobble = i32@+0x90. [CORRECTED
+   2026-08-23, §7j.48/D120: this draw was mislabeled "shield" — cell
+   0x46af38 is TELEPORT per the 7j.28/7j.30 corpus-string map, and the
+   0..9 clamp matches its 10 images; states 5/6 are the beam phases];
 2. **body** DANTE (unless hidden): bank `_DAT_004ede2c` =
    `GAMEGFX\DANTE.BIN` [LoadFile @0x41e02e, ArenaAlloc 85000], frame
    = u16@+0x12 (the walk anim phase), mode 300. Hidden when
    `state==2 && i32[0x4dcdd4 + i32@+0x84*0x24] > 0xf`,
    `state==5 && wobble > 0xf`, or `state==6`;
-3. **variant sprite** (i32@+0x88 != 0): bank DAT_0046af44, frame =
-   u16@+0x18, mode 300;
+3. **shield sprite** (i32@+0x88 != 0): bank DAT_0046af44 =
+   `GAMEGFX\SHIELD.BIN` (4 imgs), frame = u16@+0x18, mode 300.
+   [CORRECTED 2026-08-23, §7j.48/D120: was mislabeled "variant
+   sprite" — cell 0x46af44 is SHIELD; the 4 frames match spawn's
+   `u16@+0x18 := RandA()&3` and the post-loop +1 &3 shimmer cycle];
 4. **animated overlay** (u16@+0x16 != 0xFFFF): DANTE, frame =
    u16@+0x14 * 3 + g_frame_count%3 + 0x40;
 5. **always**: DANTE, frame = u16@+0x14 + 0x20, mode 300.
@@ -304,9 +310,19 @@ u16@+0x18 = RandA()&3, pos = tile*0x2000+0xF00, z = level*0x20−1 —
 so **a spawned robot draws exactly two sprites: DANTE[anim] and
 DANTE[0x20]** (u16@+0x14 stays 0). After the loop the low 2 bits of
 u16@+0x18 cycle +1 &3 (only observable through the +0x88-gated
-sprite). `_DAT_004edb88 != 0` additionally queues ROBNUMS
-(DAT_0046cdb0) name-plate digits at `sx + i32[0x4e44c8 + c] + 6*i`
-for name chars < 0x41 (multiplayer; not modeled). Platform
+sprite). `_DAT_004edb88 != 0` (any MP mode; SP never) additionally
+queues TINYFONT (DAT_0046cdb0) name-plate glyphs at
+`sx + u32[0x4e44c8 + id*4] + 6*i` for stored glyph bytes ≤ 0x40
+(the id-indexed CENTERING table, NOT per-char — corrected 2026-08-23).
+The full name-plate grammar + the SHIELD/TELEPORT/ROBNUMS staging
+story is DECODED 2026-08-23 (§7j.48/D120): all three banks are
+allocated + loaded at EVERY MissionShell head (FUN_0044771c →
+FUN_0041d954 alloc @0x447860 + FUN_0041df10 LoadFile @0x447b3f,
+straight-line, SP included — no mission/MP gate), ROBNUMS.BIN
+(0x46af48, 9 imgs) is loaded but has ZERO game readers — dead data,
+the plates draw TINYFONT glyphs — and the enqueue/flush pair has NO
+unstaged-skip anywhere (the Backlog "flush skips while unstaged"
+clause is retired). Platform
 (0x4eb638) and effects (0x4cf638, the FUN_00401e39 draw_IMG codec
 family) loops follow the same sx/sy form — DECODED 2026-08-21
 (7j.26), see §5e/§5f.
@@ -589,7 +605,12 @@ terrain pass overwrites everything the present window reads.
    the effects loop (0x4cf638 → DEBRIS.BIN particles via the
    FUN_00401e39 direct codec, §5e/§5f), and the codec itself (§5f).
    Remaining adjacent tail (context §5e): the DROPSHIP ring-record
-   PRODUCERS (pod-descent family) and the ROBNUMS name plates (§5d).
+   PRODUCERS (pod-descent family) — the name-plates half CLOSED
+   2026-08-23 (§7j.48/D120: TINYFONT glyphs, MP-gated draw, the
+   TELEPORT/SHIELD/ROBNUMS banks alloc+load at every MissionShell
+   head — SP included, no gate; ROBNUMS itself dead data; no
+   unstaged-skip in enqueue/flush); the DROPSHIP producers
+   remain as their own backlog item (7j.27 covered the descent tick).
 4. BIN u32[bank+0] directory header word / sprite count sanity.
     **RESOLVED 2026-08-21 (7j.26, corpus-verified)**: word0 is a
     **u16 image count** and the int32 directory starts IMMEDIATELY

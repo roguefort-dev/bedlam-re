@@ -4651,6 +4651,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | pickup probe latch | {z@0x4dc688, x@0x4dc68c, y@0x4dc690}: FOUR writer sites in get_z_pos (z / z+1 / z−2 empty-search / slope z+1), each gated on the probed DAT plane byte == 3, last-write-wins, no auto-clear; SOLE consumer = the robots() move-toward-target block: clear −1 (0x40bef2) → robot_move (0x40bf06) → test ≠ −1 (0x40bf0b) → mirror-word range test → DAT byte := 0 + mirror word := floor word + seen := 1 + {x,y,z} staged 0x4dc6ac/b0/b4 (MP-only FUN_00425647 tails) → FUN_0040eba0; corpus: ZERO pickup cells ZONEA/M1 (set 1), 601 ZONEB (set 2) + 149 ZONEF (set 6), zones C/D/E/G none | §7h.4 |
 | TOT mirror staging | init_tiles@00407e11 (MissionShell load): EVERY nonzero TOT plane word → mirror @0x4796bc+30·tile+2z (DAT byte UNCONDITIONAL); the DAT==0 gate is the SEEN flag only (byte @+0x10+z := 1) — the pickup/decoration words at DAT≠0 cells DO stage (corrects the §7j.16 gloss; FUN_00440a2d restamp = the incremental word+seen path) | §7h.4 |
 | TOT plane-6/7 semantics | CLOSED §7j.47/D119: planes 6/7 = ordinary z-levels 6/7 (tall-structure tops; per-level sprite ids, e.g. ZONEA/M1 (17,25) column [454,1354,1355,1356] at z=4..7); NO z≥6 gate in ANY consumer — the FUN_00403938 restamp z-stack loop runs z 0..7 (outer `cmp 8` @0x406863, chain @0x40695c; Block-1 restart draw @0x406882..0x406941 gates on word≠0 ALONE, no seen — so every nonzero plane word draws), the overlay scanner 0x408a49..0x408ade walks planes 1..7, the range consumer 0x42035c..0x4203a5 planes 0..7; corpus: 36/37 missions (only ZONEG/M1 zero; 8 016+2 882 words, 6 504 overlay / 2 792 standalone); value domain ≡ planes 1..5 (35..1868 vs 33..1868); the FORMATS §2 plane-value=POS-slot hypothesis REFUTED (9 217 live/1 681 empty .POS resolutions = coincidence; ZONEA's 1355/1356 hit empty slots; p7==p6+1 at only 83/9 296 cells) | §7j.47 |
+| §5d tail: robot plates + bank staging | CLOSED §7j.48/D120: §5d item-1 = TELEPORT.BIN (10 imgs, 0x46af38 — beam, not shield; clamp 0..9 fits), item-3 = SHIELD.BIN (4 imgs, 0x46af44 — RandA()&3 spawn + (+1)&3 shimmer); TELEPORT/SHIELD/ROBNUMS alloc (FUN_0041d954: 0x6d60/0x1b58/0xbb8) + LoadFile (FUN_0041df10) at EVERY MissionShell head (@0x447860/0x447b3f, straight-line, no gate — SP included); ROBNUMS.BIN (9 imgs) has ZERO game readers = dead data; MP name plates draw TINYFONT (0x46cdb0, 118 glyphs, ASCII−0x21) glyphs `sx + u32[0x4e44c8+id*4] + 6*i`, gate [0x4edb88]≠0 @0x403fb9 (SP never), filter g ≤ 0x40, centering table = 32−3·strlen per id (writer 0x447ce0..0x447d85, toupper + −0x21, raw names 0x4e43e0 9 B/slot); NO unstaged-skip in enqueue/flush (only early-outs: bx/by<0 + unknown-mode RET) — bank==0 never reaches the flush (loads precede the first frame) | §7j.48 |
 | map present | FUN_00401107 map mode: 480×480 from backbuffer base, stride 640; button chrome 0x8f/0x5f/0x5e @ (0x213,0x1b5) | §7e |
 | backbuffer | [0x4ede18] = ArenaAlloc(0x64000) = 640×640; overlay clears 0x4b000 (480 rows) | §7e |
 | order table | 7×0x0E groups @ 0x4de664+type*0x62; group word0/+0x36+8i (default probe), word1/+0x38+8i (gate) | §6c.6 |
@@ -7958,3 +7959,129 @@ the 2000-slot .POS count) is dead on three independent legs:
   z-bounded by their own families (not by the draw stack).
 - Differ/watch set: nothing new to watch — plane 6/7 words live inside
   the EXISTING typedb-mirror/TOT rows.
+
+## 7j.48. THE MISSIONVIEW §5d TAIL — the MP ROBNUMS name plates + the SHIELD/TELEPORT/ROBNUMS bank staging + the unstaged-flush question CLOSED (2026-08-23, worker 328b7651 claim 2, D120; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run; read-only corpus probes over game-data/BEDLAM/GAMEGFX bank headers; manifest clean before AND after; adopts + validates the interrupted predecessor WIP in docs/RE-EXW-MISSIONVIEW.md §5d)
+
+The §5d robot-entity enqueue items 1/3 carry TWO label corrections
+(cell names re-anchored to the 7j.28/7j.30 corpus-string census), and
+the Backlog tail (bank staging + unstaged-flush + full name-plate
+grammar) is decoded below. SP is affected by NONE of it (§7j.48/5).
+
+### 1. The label corrections (the draws themselves were already right)
+
+- **[0x46af38] = GAMEGFX\TELEPORT.BIN (10 imgs, corpus u16 count)** —
+  the §5d item-1 draw (state u16@+0x0c ∈ {5,6}, mode 0x12e, y =
+  sy−0x48, frame = clamp(10 − wobble/4, 0..9), wobble = i32@+0x90) is
+  the TELEPORT BEAM, not a "shield" (asm 0x403de6..0x403e71; bank
+  load `mov ebx,[0x46af38]` @0x403e62; the 0..9 clamp matches the
+  10-image bank exactly). The same bank serves the §5e platform
+  loops and the 7j.21 arrival-marker draw (sprite 0x12E width-clamped
+  by countdown).
+- **[0x46af44] = GAMEGFX\SHIELD.BIN (4 imgs)** — the §5d item-3 draw
+  (i32@+0x88 ≠ 0 → frame = u16@+0x18, mode 0x12c @0x403ef4..0x403f29)
+  is the SHIELD sprite, not a "variant sprite": the 4-image count
+  matches both the spawn initialization `u16@+0x18 := RandA()&3`
+  (FUN_0040cca0) and the post-loop shimmer `(+1)&3` (0x403cf7:
+  `mov ax,[esi+0x4c69fc]; inc eax; and al,3` — robot stride 0xa8,
+  +0x18 word). A "variant" would not shimmer on a 2-bit cycle.
+
+### 2. WHO STAGES the banks — alloc+load at MissionShell HEAD, unconditional
+
+Exactly ONE call site each, both on the straight-line head of
+MissionShell = FUN_0044771c (0x44771c..0x44874b; RE-EXW-SIM §1, 8street
+"game_level" — runs every mission, SP and MP alike):
+
+- 0x447860 → FUN_0041d954: the arena-allocator pass, a straight run
+  of ArenaAlloc(size)→cell stores. Bank buffer sizes: TELEPORT
+  0x6d60, NUMBERS 0xfa0, FLAGS 0x3a98, ROBNUMS 0xbb8, SHIELD 0x1b58
+  (= the DEBRIS size, [0x4eddb4]), DANTE 0x14c08 ([0x4ede2c]).
+- 0x447b3f → FUN_0041df10: the LoadFile pass — a straight run of
+  `FUN_0041cc7f(nameString, bankCell)` loads for the whole GAMEGFX
+  entity-bank set: DANTE@0x41df19, …, TELEPORT@0x41df99, NUMBERS
+  0x41dfa9, FLAGS 0x41dfb9, SHIELD@0x41dfe9, ROBNUMS@0x41dff9,
+  DIGITS 0x41e039, SMOKER 0x41e059 (string→cell map per 7j.30/D94).
+  TINYFONT's buffer [0x46cdb0] = ArenaAlloc(0x189c) @0x41d62f inside
+  FUN_0041d4e9 (called from the MissionShell family), loaded by its
+  own GAMEGFX site in the same pass family.
+
+**Verdict: NO mission-type gate, NO MP gate, NO boot-only subtlety —
+the three banks are allocated and loaded at EVERY MissionShell entry
+before the first entity loop can run.** A SP frame can never observe
+any of these cells == 0. (The 7j.30 "GAMEGFX load-always" phrasing is
+precise: load-always per mission.)
+
+### 3. ROBNUMS.BIN is DEAD DATA — the plates draw TINYFONT glyphs
+
+Full-binary census of the three cells:
+- [0x46af38] TELEPORT: readers 0x403e62 (robot teleport beam) +
+  0x4051fc/0x4056ae/0x405c11/0x405f3f (§5e platform/blast loops) +
+  0x4066d2 (7j.21 arrival marker) + 0x41df9e (its own load). LIVE.
+- [0x46af44] SHIELD: readers 0x403f1a (robot shield sprite) +
+  0x41dfee (its own load). LIVE.
+- [0x46af48] ROBNUMS: readers 0x41dffe ONLY — its own LoadFile site.
+  **ZERO game readers. ROBNUMS.BIN (9 imgs, corpus) is staged and
+  never drawn: dead data** (a left-over from a cut feature — the
+  bank name says the digits were meant to be robot-number plates).
+
+The actual name-plate font is **TINYFONT = [0x46cdb0]** (118 glyphs,
+corpus u16 count; a 0x21-based font — glyph index = ASCII − 0x21):
+readers 0x403c32 (the §5d plate enqueue), 0x408fe6/0x40907a
+(FUN_004089b1 map-overlay markers) and 0x423cd9/0x423cf7 (sidebar
+text family) — the same shared tiny-font draw.
+
+### 4. The full MP name-plate grammar
+
+Per visible+alive robot, AFTER the five sprite enqueues (asm
+0x403fb9..0x403c5d):
+
+- GATE: `cmp [0x4edb88],0; je skip` @0x403fb9 — the plate loop runs
+  only when the mode cell ≠ 0 (any MP/demo variant); SP NEVER draws
+  plates. (The ==2 arm at 0x403c62 is a DIFFERENT consumer: the MP
+  hot-rect record 0x4787c4 write for the selected robot — 7j.31.)
+- For i = 0.. while i < strlen(name_id): glyph byte g = name
+  storage `[0x4e4458 + id*9 + i]`; skip the glyph if g > 0x40 (the
+  `test/jl` arm @0x403c1b is dead — g is zero-extended); enqueue
+  TINYFONT frame = g at `x = sx + u32[0x4e44c8 + id*4] + 6*i`
+  (running x accumulates +6 per char @0x403bb6), same sy, mode 0x12c
+  (plain raw copy — no palette compose).
+- id = robot array index (the loop counter over the 0x4c69e4 array,
+  high half of the i32@+0x28 slot read @0x403bd7).
+- **0x4e44c8 is the id-indexed CENTERING table, NOT per-char**:
+  writer loop 0x447ce0..0x447d85 inside MissionShell:
+  memset(slot,0,9) @0x402965; copy raw name chars while source
+  `[0x4e43e0 + id*9 + i] >= 0x20` (max 8), storing
+  `toupper(c) − 0x21` (FUN_0044f067 = toupper, a..z → −0x20;
+  store @0x447cf7); then `u32[0x4e44c8+id*4] = 0x20 −
+  (strlen*6)>>1` = **32 − 3·strlen** (0x447d1b..0x447d45) — the
+  half-width centering offset so the plate centers on the robot.
+  So the stored table IS the glyph-index form (A..Z → 0x20..0x39,
+  0..9 → 0x0F..0x18, space → 0) and the ≤0x40 filter passes every
+  glyph the toupper grammar can produce (it only trims upper(c) >
+  0x61, i.e. punctuation TINYFONT lacks).
+- Raw names live at 0x4e43e0 (9 B/slot, [0x46cbe0] slots — writers
+  0x43c607/0x442b0b/0x4475fd/0x44853e = the name-entry/roster
+  family); the glyph table 0x4e4458 + centering 0x4e44c8 are rebuilt
+  from them at every MissionShell entry (loop gated only on the
+  roster count — built in SP too, harmlessly, since the DRAW is the
+  gated half).
+
+### 5. The unstaged-flush question — CLOSED BY NEVER-OBSERVABLE
+
+The Backlog clause "nodes enqueue, flush skips while unstaged" is
+RETIRED: there is NO unstaged-skip ANYWHERE in the pair.
+- Enqueue FUN_0040798e (0x40798e..): the ONLY early-outs are bx/by
+  < 0 (0x4079ed/0x4079f5); the bank pointer is stored into the node
+  (+4) with no zero test.
+- Flush FUN_0040179b (0x40179b..): mode dispatch first (0x130/0x12c/
+  0x12d/0x12e/0x12f, any other mode → RET @0x4017e0 — the ONLY
+  skip in the pair, mode-based not bank-based); every drawn mode
+  immediately derefs ESI = node.bank (`and eax,0xfff; … add esi;
+  mov eax,[esi]` @0x4017e1+) with NO null check.
+So an unstaged bank would fault/garbage-read, not skip — and per
+§7j.48/2 it can never happen in shipped play (the banks load before
+the first frame). **E-side consequence: the renderer needs no
+unstaged-skip logic; staging may stay lazy per bank, the seam is
+unobservable because bank==0 never reaches the flush in the
+original.** No new watch rows (the plate glyphs are MP-only; the SP
+chains never touch them; a future MP scenario would compare TINYFONT
+glyph rows through the existing sidebar-text family pins).
