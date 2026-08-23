@@ -3056,10 +3056,15 @@ FUN_00433980 full decompile) + `exw-exitfamily2.txt`
      @0x444aff/0x444b88; reset MissionShell 0x4478b3).
    - Machine 3: per-robot ESCAPE-POD bank @0x4e64c0 stride
      0x1C (one per robot, count DAT_0046ccbc), gated by
-     latch [0x46aed4+idx·4]==0 — the per-robot no-extract
-     latch (writers FUN_0040e230 = the SP death core (7g),
-     FUN_00449c94/0044a38a (MP), FUN_00408e99, GameMain
-     0x41c40d). Phase-1 landing fires the POD PAYOUT once:
+     latch [0x46aed4+idx·4]==0 — the per-robot CLAIMED/
+     no-extract latch (readers FUN_0040e230 = the SP death
+     core (7g), FUN_00449c94/0044a38a (MP), FUN_00408e99,
+     GameMain 0x41c40d = the sole writer, a boot memset —
+     D133 CORRECTION: the original "writers" list named the
+     reader functions; the EXW setter set is EMPTY, the EXD
+     twin 0xf929c is set :=1 only by the DOS MP lobby pick
+     FUN_0005bb71 — RE-EXD-MAP §5). Phase-1 landing fires
+     the POD PAYOUT once:
      robot state := 6, timer@+0x90 := 0x28, alive@+0x7C := 1,
      +0x78 := 100·word@+0x94+5000 (points), SFX
      _DAT_004edfe0, per-player FUN_004239ef(p,p) msg.
@@ -3625,7 +3630,8 @@ operand scan for 0x4c7226/0x4e66b8/0x4e66bc). All facts
    d@+8 := 0xB} — killer(owner≠victim): flag 1, score++ cap
    999; victim: score−− clamp 0, flag 0 (SP tail not decoded
    here; FUN_0040e230 is also a [0x46aed4+idx·4] no-extract
-   latch writer per §7j.19).
+   latch READER per §7j.19 — D133: the earlier "writer"
+   gloss is corrected, the EXW setter set is empty).
 8. **Trail allocator CLOSED (§7j.22 item 10 open point)**:
    `StoreScan` found the whole-program writer set of the
    +0x32 link. **FUN_00412a4a = the SMOKE-TRAIL SLOT
@@ -4143,13 +4149,23 @@ gloss "7×7 grid" is corrected to the true 5×7 tile grid.
      1+k·(2000−m·1000/27) SUB-TICKS ≈ 173..327 frames between
      successive pods, so pods overlap in the air.
 4. **The no-extract latch 0x46aed4 (machine-3 gate) census
-   completed** [verified objdump]: boot RESET = GameMain
-   @0x41c408 (memset 0x30 = 12 dwords) — NOT per-mission; set by
-   FUN_0040e230 (SP death core), FUN_00449c94/FUN_0044a38a (MP),
-   FUN_00408e99. **FUN_0040e230's MP respawn branch @0x40e7a1 is
-   itself gated by the latch (≠0 → skip respawn)** — the latch is
-   a per-robot "no more pods" flag: it freezes a mid-flight pod
-   record (the animator skips it) AND refuses the MP re-drop.
+   completed** [verified objdump; D133 CORRECTION of the original
+   writer claim]: boot RESET = GameMain @0x41c408 (memset 0x30 =
+   12 dwords) — NOT per-mission, and it is the ONLY writer: the
+   full literal-site census (9 sites = 8 cmp readers + the memset
+   pair; no memset/rep-movs span overlaps the array) proves the
+   EXW setter set is EMPTY — the four functions originally listed
+   as writers (FUN_0040e230, FUN_00449c94/FUN_0044a38a,
+   FUN_00408e99) are READERS. **FUN_0040e230's MP respawn branch
+   @0x40e7a1 is itself gated by the latch (≠0 → skip respawn)** —
+   the latch is a per-robot CLAIMED flag: it freezes a mid-flight
+   pod record (the animator skips it) AND refuses the MP re-drop.
+   The EXD twin 0xf929c (RE-EXD-MAP §5, D133) mirrors all 8
+   readers + the boot memset and adds the ONE setter the EXW
+   build lacks: the DOS MP lobby robot-pick FUN_0005bb71
+   (@0x5bba0 :=1) — on EXW every latch gate therefore takes the
+   ==0 path at runtime (pods extract everyone, MP respawn
+   unrestricted, cyclers see all robots as available).
 5. **The 7j.26 ring-grid gloss CORRECTED** [verified asm
    0x40707e..0x4071d5 + pods 0x406dc6..0x406ec5]: the tile grid is
    **7 COLUMNS × 5 ROWS of 0x40-px tiles** (448×320 px), not 7×7 —
@@ -4685,7 +4701,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
 | POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
 | exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, img-group d@+0x14 (7j.27: the animator's per-tick DROPSHIP.BIN frame selector), dwell d@+0x18 — RESET TO 0 BY FUN_00412a98 @0x412b60 on each POI rescue (multi-POI elevators), cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19; boot reset MissionShell 0x447a8d | §7j.17/§7j.18/§7j.19/§7j.27 |
-| escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012, per frame): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, img-group@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the no-extract latch: boot-clear GameMain 0x41c408, writers FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99 — the latch ALSO gates the MP respawn @0x40e7a1); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 (robot RELEASED) + msg. §7j.27 per-tick write map: phase 1 alt −0x20/(v>>2)·3 + img-group toggles 0↔1; phase 2 alt := (RandA&7)==0 jitter, exits dwell++>0x78, dropship dwell−−, pods ONE TICK then payout; phase 3 alt += (alt>>2)+1, x −= group·4, group ramps 2..5 then oscillates 4↔5, alt>0x200 → active 0 | §7j.19, §7j.27 |
+| escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012, per frame): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, img-group@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the CLAIMED/no-extract latch: boot-clear GameMain 0x41c408 = the sole EXW writer (memset; D133 — the original FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99 "writers" are readers; EXD twin 0xf929c adds the MP-lobby-pick setter) — the latch ALSO gates the MP respawn @0x40e7a1); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 (robot RELEASED) + msg. §7j.27 per-tick write map: phase 1 alt −0x20/(v>>2)·3 + img-group toggles 0↔1; phase 2 alt := (RandA&7)==0 jitter, exits dwell++>0x78, dropship dwell−−, pods ONE TICK then payout; phase 3 alt += (alt>>2)+1, x −= group·4, group ramps 2..5 then oscillates 4↔5, alt>0x200 → active 0 | §7j.19, §7j.27 |
 | dropship deployer | FUN_0041faf0: stamps 0x4e6610 {active 1, phase 1, img-group 0, alt 0x200, x beacon.x<<5, y beacon.y<<5} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2 (x/y words SURVIVE — renderer 0x4070c0 reads the always-0 z word 0x4eabb8 as a no-op sy nudge); caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon armer FUN_004247b5 [§7j.20]; boot reset MissionShell 0x447a7e | §7j.19, §7j.27 |
 | pod spawner | FUN_0041fb4b(idx): stamps 0x4e64c0+idx·0x1C {active 1, phase 1, img-group 0, alt 0x400, x/y = robot pos>>8 (Q13→Q5)}; caller FUN_0040b9f6 when countdown w@0x4c6a10+idx·0xA8 == 0 (msgs 9/10/0xB for the player's first 3 robots); the 0x4c6a10 producers [§7j.20]; bank reset = FUN_0040cca0 @0x40cd3d (memset 0x150 = 12 records, every mission spawn) | §7j.19, §7j.27 |
 | extraction-beacon armer | FUN_004247b5(EAX tx, EDX ty, EBX z, ECX idx): guard 0x4eabb0; 0x4eabb2 = 0x197 (0 if player-0 alive-count == 1); 0x4eabb0 = 1; 0x4eabb4/6/8 = tile trio (z dead store); robot.state = 3; spread-teleport FUN_004248c8; SFX 0x2A. Sole caller FUN_00433980 @0x433cfb = ~25 (zone, .PAD slot) extraction pads | §7j.20 |

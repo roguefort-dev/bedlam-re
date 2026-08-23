@@ -183,7 +183,7 @@ to docs/DIVERGENCES.md as a seed.
 | per-robot move-target words | 0x46cc30/0x46cc60 | **0xf75ec / 0xf761c** | spawn −1-init stores at both + the 0x30 gap twin (EXW 0x46cc60−0x46cc30 = 0x30 = EXD 0xf761c−0xf75ec) + all writers in the order monolith FUN_000448e7 (47 refs). EXTENT PINNED (W7-followup): per-robot u32 ×2 indexed by ABSOLUTE robot id over the CAP cell 0x11950c (tick loop `+= 4` per record; 0x11950c := 0x11958c SP / 0x119588 MP, ≤ 12); the fixed 0x60-B span at 0xf75ec covers x[12]+y[12] deterministically — FILLED (W7-followup2, D90): the dbx-plan row emits the 0x60 span and the differ splices the trio into the robot-bank fields | [verified] |
 | extraction beacon family | 0x4eabb0/b2/b4/b6/b8 | **0x119628/0x11962a/0x11962c/0x11962e/0x119630** | armer FUN_0003570e full decode (guard/timer 0x197/tile trio) + mission-loop countdown `(short)DAT_0011962a −−` with the digit draws and the all-state-3 → FUN_00030899 completion sweep | [verified] |
 | spread claims | 0x4eabba | **0x119632** | picker FUN_0003581b full decode: first-free u16 scan `[0x119632+i]`, bound = cap cell 0x11950c, marks 1, the 12-offset switch around beacon x/y — EXW FUN_004248c8 EXACT | [verified] |
-| no-extract latch | 0x46aed4 | TODO (gap) | animator twin not decoded this unit (FUN_0001f8c1 turned out to be the debrief/payout fn); anchor via the pod-ring animator when W2 needs it | |
+| no-extract latch | 0x46aed4+i·4 (12 u32, boot memset 0x30) | **0xf929c+i·4** | THE EXD TWIN CENSUS (D133, 2026-08-23, same substrate as D132: tools/exd-relod.py → ghidra-project/exd-text-objdump.txt): 12 .text sites, 8 of them ONE-FOR-ONE with the EXW 8-reader census. READERS ⟷ pairs: 0x19c71 ⟷ 0x408ef7 (FUN_00408e99 death-anim walk: ≠0 → image 0x65, ==0 → tables [0x82e5a]/[0x82e8a] via [idx·0xC+0x8b618]≠0 selector ⟷ EXW 0x456ce8/0x456d18 via 0x4ebaac); 0x1f4cf ⟷ 0x40e7a1 (death core: MP cell [0x1075d8]≠0 ∧ latch==0 → respawn re-init staging 0x107768/0x107764/0x107770 ⟷ EXW 0x4edb88/0x4ea8ec/f0/f8, else the SP death tail); 0x30c87 ⟷ 0x4200db (escape-pod animator: pod record [0x8d314+0x1C·idx] active ∧ latch==0 → phases 2/3 ⟷ EXW 0x4e64c0 bank); 0x5b1cc/0x5b34a/0x5b51c ⟷ 0x449dc8/0x449ee8/0x44a08c (MP cycler trio: cursor [0x107688] ≠ current [0x1075c0] ∧ latch==0 → switch FUN_0006209c(…, rec 0x9255c+[0x1075c0]·0x80) ⟷ EXW FUN_00449b60 + 0x4dd4a0); 0x5b7ea (`cmp edi(0),[latch]` — codegen swap) ⟷ 0x44a322 (cycler 4); 0x5b89c ⟷ 0x44a3d2 (MP endgame census: marks [0x8b744]+0x30 clear, count [0x10760c]++ ⟷ EXW 0x4eba30/0x4edb8c). BOOT-CLEAR ⟷ pair: GameMain memset(0xf929c, 0x30=12 dwords) @0x2cd41 ⟷ EXW (0x46aed4, 0x30) @0x41c412 — the 12-slot bank extent both sides, NOT per-mission. **WRITER ASYMMETRY (the D133 headline):** EXD has exactly ONE setter — FUN_0005bb71 @0x5bba0 `mov [edx·4+0xf929c],esi(1)` (the MP LOBBY ROBOT-PICK: [0x1195dc]:=idx, [0x1195bc]:=0x32, call FUN_000347a3(idx), alive@+0x7C:=0 @0x5bbb3 = [idx·0xA8+0xf6db0], memset(0x9255c+idx·0x80, 0x80), then the same latch==0 census cmp 2 + message 0x8720b; callers 0x5ba27 the lobby tally + 0x1b2bd) + the EXD-only lobby type-tally walk @0x5ba83 (16-dword bank 0x8b5d4, staging-rec type byte @+6, <0x10 gate). EXW has NO setter at all — census-complete: all 9 literal sites are the 8 readers + the boot memset, no memset/rep-movs span overlaps the array, and the four functions the §7j.19/§7j.27 rows named as "writers" (FUN_0040e230/00449c94/0044a38a/00408e99) are READERS (SIM rows corrected this unit). SEMANTICS CORRECTED: the latch is the per-robot CLAIMED/CONSUMED flag (lobby pick claims; claimed robots get no pods, no MP re-drop, no cycler switch) — NOT a death-core-written "no more pods" flag; on EXW every gate takes the ==0 path at runtime (writer set empty). By-products: the per-TYPE sibling 0x46ae94+type·4 (writers 0x40d01b/0x40d028/0x40ea61/0x40ea6a {1,reg,1,2}, readers ==1/==2, clear 0x447aa6 len 0x30) is a DIFFERENT array — do not confuse; §5f carries the ten D133 cascade aliases | [verified] |
 | tile word grid | 0x460dfa+2·tile | **0xfe37c+2·tile** | 0x7d4 store `[EAX*2+0xfe37c]` @0x33985 + 0x7d2/0x7d3 stores `[EBX+0xfe37c]` @0x33ea8/0x33ed4 + resolver CMPs + platform-ring empty-check reads | [verified] |
 | platform strength bank | 0x465daa+2·tile | **0xf93cc+2·tile** | platform ring FUN_000337f4 (EXW FUN_00422832 twin): empty-check `[0xf93cc+tile]==0` + strength store `:= unaff_CX` beside the 0x7d4 stamp + scorch+4 tail | [verified] |
 | type-DB mirror rows | 0x4796bc+30·tile | **0xac1e4+0x1E·tile** (z-word row+2z) | platform ring: `[0xac1e4 + tile·0x1E + z·2] == 0` z-word check with the EXW 0x1E-stride row shape + plane-B==1 DAT check via z-line table 0x107714 | [verified] |
@@ -285,6 +285,39 @@ ghidra-project/exd-text-objdump.txt; every row carries the EXW twin site):
 | shell-fall resolver FUN_00423e1c | **FUN_00034d89** | contains the cursor reader 0x34e25 + impact tail 0x34f7f + the 3×3 nine-blast patch (FUN_00035406) + per-record fall counters (⟷ §7j.54) | [verified] |
 | chase-camera cut FUN_004245c9 | **FUN_0003552e** | call site 0x34e69 with the shell x/z args (⟷ §7j.54/§7j.59.C.3) | [verified] |
 | portrait pass FUN_004072bf | **FUN_000180a1** | the §6c.6d twin containing the blink gate 0x186dc (function entry = nearest call target 0x180a1, already §8's hit_flash portrait pass) | [verified] |
+
+### 5f. Cascade/asset aliases pinned by the D133 no-extract-latch census (2026-08-23)
+
+All [verified] this unit from the relocated objdump (same substrate as
+§5e; every row carries the EXW twin site). The robot-bank base pin
+0xf6d34 is re-confirmed INDEPENDENTLY of the §5 robot-bank row's
+original anchor (the respawn staging reads [ebp+0xf6d34]/+8/+0xC at
+0x1f4f1..0x1f518 ⟷ EXW [ebp+0x4c69e4]/+8/+0xC at 0x40e7c3..0x40e7ea):
+
+| EXW | EXD | anchor (what the decode showed) | tag |
+|---|---|---|---|
+| MP-mode cell 0x4edb88 | **0x1075d8** | death-core gate `cmp [0x1075d8],0; je SP-tail` @0x1f4bf (⟷ 0x40e791 `cmp ds:0x4edb88,0; je 0x40ea77`) | [verified] |
+| current-robot cell 0x4edb90 | **0x1075c0** | the cycler trio's "current" operand + `0x9255c+[0x1075c0]·0x80` record pick (⟷ `0x4dd4a0+[0x4edb90]·0x80`); REFINES the D132 gloss "player-type [0x1075c0]" — it is the current-robot id, used as the player-type index in the chase gate | [verified] |
+| MP staging records 0x4dd4a0 (12×0x80) | **0x9255c** | record base of every cycler call + the lobby tally walk `edx := 0x9255c+idx·0x80` @0x5ba8c; EXW memset family 0x600 @0x449cb1/0x448f07/0x43d3e8/0x447a4c; type byte @rec+6 | [verified] |
+| MP marks array 0x4eba30 (0x30) | **0x8b744** | census head memset 0x30 + `[eax·4+0x8b744]:=1` for current @0x5b859..0x5b891 (⟷ 0x44a392..0x44a3bf) | [verified] |
+| MP endgame count cells 0x4edb8c / 0x4eba28 | **0x10760c / 0x107660** | the census `inc [0x10760c]` on latch==0 + the `count−1 vs [0x107660]` game-over compare @0x5b8a5/0x5b8c7 (⟷ 0x44a3dc/0x44a3e4) | [verified] |
+| cycler cursor 0x4eba00 | **0x107688** | the trio's wrap-around cursor (`idiv`-family walk) @0x5b1bf..0x5b1cc (⟷ 0x449db9..0x449dc8) | [verified] |
+| cycler word 0x4eba08 / result 0x4dc6e0 | **0x11a9a6 / 0x10e0c0** | the switch-call args + `mov ds:0x10e0c0,eax` result store @0x5b1fe (⟷ 0x449e14) | [verified] |
+| cycler msg gate 0x4edc45 | **0x894d5** | `cmp BYTE [0x894d5],0` before the message trio @0x5b19d (⟷ 0x449d97) | [verified] |
+| robot switch fn FUN_00449b60 | **FUN_0006209c** | the cycler callee (5-arg push shape identical) @0x5b1f6 (⟷ 0x449de6) | [verified] |
+| msg post pair 0x44d2ac/0x44d2da | **0x5ef05/0x5ef33** | string-then-count message posts @0x5b1b0/0x5b1ba (⟷ 0x449daa/0x449db4) | [verified] |
+| death-anim selector family 0x4ebaa0 (0xC stride: flag 0x4ebaac, idx 0x4ebab0) | **0x8b60c (flag 0x8b618, idx 0x8b61c)** | the FUN_00408e99 walk `cmp [idx·0xC+0x8b618],0 → [idx·4+0x82e8a] else [idx·4+0x82e5a]` @0x19c88..0x19ca6 (⟷ 0x408f0e..0x408f2c) | [verified] |
+| death-anim image tables 0x456ce8 / 0x456d18 | **0x82e5a / 0x82e8a** | same walk, the two `[idx·4+base]` lookups flanking the 0x65 literal | [verified] |
+| escape-pod bank 0x4e64c0 (0x1C stride) | **0x8d314** | animator gate `cmp [ebp+0x8d314],0` then latch then phase [ebp+0x8d318]∈{2,3} @0x30c77..0x30ca4 (⟷ 0x4200cf..0x4200f8) | [verified] |
+| respawn staging quad 0x4ea8ec/f0/f4/f8 | **0x107768 / 0x107764 / 0x10776c / 0x107770** | x>>8, y>>8, raw z, 0x20 stores at 0x1f4fa/0x1f50d/0x1f51e/0x1f518 (⟷ 0x40e7cc/0x40e7da/0x40e7ea-region/0x40e7ef; EXD emits z AFTER the 0x20 — codegen order swap only) | [verified] |
+| memset fn FUN_00402965 | **0x12206** | every (edi,ecx) clear pair incl. both latch boot-clears | [verified] |
+
+**EXW-side by-product census (the per-TYPE sibling 0x46ae94, stride 4,
+cleared 0x30 @0x447aa6 per-mission):** writers 0x40d01b :=1, 0x40d028
+:=ebp, 0x40ea61 :=edi(1), 0x40ea6a :=2 (the loadout jump-table cases,
+indexed by the TYPE word ≫16 of [rec+0x4c6a0c]); readers 0x41ee30/0x41f111
+(==1), 0x41f80a (==2). NOT the latch — recorded so the two per-robot-family
+arrays in 0x46ae94..0x46af04 are never conflated.
 
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
