@@ -34,6 +34,13 @@
 //!    PASS-WITH-NOTES); all-three-differ → EngineBug "wrong against
 //!    both oracles"; no tiebreak → EngineBug "provisional"; plus an
 //!    E-vs-O2 cross proving the pinned row compares CLEAN.
+//! 4. O2 TRANSCRIPT STITCH CHANNEL RULE (D139, W11-prep): the stitch
+//!    side of the D138 plan form — a fabricated O2 transcript of the
+//!    real S0 run stitches THROUGH the enforced `exw_addr` rule and
+//!    decodes channel-marked, while the one live-registry EXD-only row
+//!    (static-cursor-clamp, TS) appended to the anchor frame rejects
+//!    LOUD (`NoExwAddress`) — an O2 driver transcript must never carry
+//!    it silently.
 
 #[path = "../examples/parity_harness/canonical.rs"]
 mod canonical;
@@ -48,7 +55,7 @@ use diffharness::differ::{
 use diffharness::dump::{decode_dump, Channel, DumpHeader, FrameRecord};
 use diffharness::hash::sha256;
 use diffharness::registry;
-use diffharness::runner::stitch;
+use diffharness::runner::{stitch, Scenario, StitchError, Transcript};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM")
@@ -348,9 +355,10 @@ fn stitch_o1(scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
 }
 
 /// Stitch fabricated frames into dump bytes for ANY channel (the
-/// O1-address rule binds only O1; O2 and Engine accept every registry
-/// row the scenario tiers carry — the W11-prep tiebreak side needs
-/// both).
+/// address rules are per-channel, D139: O1 binds `exd_addr`, O2 binds
+/// `exw_addr` — every row the S1-class fabrications carry has both, so
+/// both guest channels enforce + pass; Engine carries no address rule,
+/// which the perturbed-E re-stitch lane needs).
 fn stitch_chan(channel: Channel, scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
     let scen = diffharness::runner::Scenario::parse(scen_src).unwrap();
     let header = DumpHeader::new(channel, sha256(b"exd-test"), scen.id.clone());
@@ -787,4 +795,97 @@ fn s1_o2_tiebreak_arbitration() {
         "provisional engine-bug: no O2 tiebreak dump supplied"
     );
     assert!(res.tiebreak.is_none());
+}
+
+// ---------------------------------------------------------------------
+// The O2 transcript stitch channel rule (D139, W11-prep 2026-08-24):
+// the stitch side of the D138 plan form — the exw_addr anti-ghost
+// mirror driven headless against the real corpus.
+// ---------------------------------------------------------------------
+
+#[test]
+fn s0_o2_transcript_stitch_channel_rule() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    let reg = registry();
+
+    // The real S0 run (T0+TS): light, content-pinned.
+    let src = fs::read_to_string(scen_path("S0")).unwrap();
+    let e_run = run_canonical(&src, &root).unwrap();
+    assert_eq!(
+        e_run.manifest.chain_digest, "dac1cfd17bc7ede3",
+        "the pinned E content (S0)"
+    );
+    let e_dump = decode_dump(&e_run.bytes).unwrap();
+
+    // Fabricate the O2 transcript (inv_frame channel form: every row
+    // identical to EXD except static-map-wh = the D138 8-byte ADJACENT
+    // span) and stitch it under the O2 header — this call now runs
+    // THROUGH the enforced exw_addr rule: every fabricated row must
+    // hold a live EXW canon cell.
+    let mut map_wh: Option<(u32, u32)> = None;
+    let mut fab_o2: Vec<FrameRecord> = Vec::new();
+    for ef in &e_dump.frames {
+        if let Some(b) = ef.watch("static-map-wh") {
+            map_wh = Some((
+                u32::from_le_bytes(b[..4].try_into().unwrap()),
+                u32::from_le_bytes(b[4..8].try_into().unwrap()),
+            ));
+        }
+        fab_o2.push(inv_frame(ef, map_wh, 2000, 0, Channel::O2ExwWine));
+    }
+    let o2_bytes = stitch_chan(Channel::O2ExwWine, &src, fab_o2.clone());
+    let o2_dump = decode_dump(&o2_bytes).unwrap();
+    assert_eq!(o2_dump.header.channel, Channel::O2ExwWine);
+    // The D138 form rode through untouched (w@+0x00/h@+0x04, 8 bytes —
+    // NOT the EXD 0x30 span): the differ's O2 normalizer parses it.
+    let smw = o2_dump.frames[0]
+        .watch("static-map-wh")
+        .expect("the anchor-frame TS row");
+    assert_eq!(smw.len(), 8);
+    assert_eq!(
+        u32::from_le_bytes(smw[..4].try_into().unwrap()),
+        map_wh.expect("S0 anchors the statics").0
+    );
+
+    // The LOUD rejection: the one live-registry EXD-only row
+    // (static-cursor-clamp, TS — empty exw_addr, the host-space cursor
+    // clamps) appended to the anchor frame refuses the stitch. An O2
+    // driver transcript must never carry it, and never silently.
+    let scen = Scenario::parse(&src).unwrap();
+    let header = DumpHeader::new(Channel::O2ExwWine, sha256(b"exw-test"), scen.id.clone());
+    let mut bad = fab_o2;
+    bad[0].push_watch("static-cursor-clamp", vec![0xf0u8, 0, 0, 0, 0x40, 1, 0, 0]);
+    match stitch(&scen, &Transcript { frames: bad }, &header, &reg) {
+        Err(StitchError::NoExwAddress { id, .. }) => assert_eq!(id, "static-cursor-clamp"),
+        other => panic!("expected NoExwAddress, got {other:?}"),
+    }
+
+    // The same row on the O1 channel stays LEGAL (it HAS an EXD cell —
+    // 0x1074ac/0x1074b0): the rules are per-channel mirrors. Re-
+    // fabricate through the O1 forms so the O1 stitcher sees its own
+    // channel shapes (static-map-wh 0x30 span), anchor frame only.
+    let mut o1_frames: Vec<FrameRecord> = Vec::new();
+    map_wh = None;
+    for ef in &e_dump.frames {
+        if let Some(b) = ef.watch("static-map-wh") {
+            map_wh = Some((
+                u32::from_le_bytes(b[..4].try_into().unwrap()),
+                u32::from_le_bytes(b[4..8].try_into().unwrap()),
+            ));
+        }
+        let mut f = inv_frame(ef, map_wh, 2000, 0, Channel::O1ExdDosboxX);
+        if ef.frame_no == e_dump.frames[0].frame_no {
+            f.push_watch("static-cursor-clamp", vec![0xf0u8, 0, 0, 0, 0x40, 1, 0, 0]);
+        }
+        o1_frames.push(f);
+    }
+    let o1_header = DumpHeader::new(Channel::O1ExdDosboxX, sha256(b"exd-test"), scen.id.clone());
+    assert!(
+        stitch(&scen, &Transcript { frames: o1_frames }, &o1_header, &reg).is_ok(),
+        "static-cursor-clamp carries an EXD cell — its O1 dump is legal"
+    );
 }
