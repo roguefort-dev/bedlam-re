@@ -4565,7 +4565,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
-| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); frame §7j.17 item 1 — state 1 wander / 2 sine-walk shooter (0x65) / 3 chase (0x67) / 4·5·6 mixed-AI (modes 0xB dormant·7 dying·6 ballistic→k6 debris+splash·9 seek·2 range) / 7 close-combat (0x69); presence byte mark [[0x4ea900+(y>>13)·4]+[0x46af4c]+(x>>13)] := 1 | §7j.17/§7j.18 |
+| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); kind table 0x412f18 {k1 0x414c96, k2 0x415216, k3 0x4145c1, k4 0x414079, k5/6 0x41367c shared, k7 0x412f52}; per-frame: presence w@+0x24==0 skip, fuse/hit-flash w@+0x7C decrement, kind dispatch, epilogue (presence mark byte 1, 8-corner z-settle, moved→trap re-probe); state 4 body: species w@+0x02 = SUBSTEPS/frame, modes {0xB dormant (countdown vs 0x454edc[d] → wake mode 9 + hp 0xC8 + species 6 + RandA&3 dir), 7 dying 0x28→0xB, 6 ballistic, 9 seek walk (re-picker 25% RandA&3 / 75% FUN_004181bd + pause 0x20..0x5F + 4-way steppers ±1 + FUN_00415490 per step), 2 range-attack (dist<0x1F4: countdown==4→re-seek else FUN_0040db9e(target,2,heading<<6,1,−1), substep-0 countdown++)}; state 5/6 body: 1/32 facing drift w@+0x72, modes {0xB dormant (BEAMIN at table−9, wake mode 8 + hp 0x96 + species 3 + FUN_0041ec1c(0xFF) heading), 0xA pause→8, 7 dying, 6 ballistic, 5 rise, 8 ENGAGE (gate [0x4dd410]≡0 SP; FUN_00417c00 nearest-alive octile-px; dist<0x60 ∧ leash (d+1)·0x40+0x258 ∧ >0x80 → 1/128 FUN_00421ed6 + aim+step)}; k1/k2/k3/k7 bodies §7j.17 (state 1 wander / 2 sine-walk shooter 0x65 / 3 chase 0x67 / 7 close-combat 0x69) | §7j.17/§7j.18/§7j.42 |
+| critter→robot ranged attack | FUN_0040db9e(robot, mult, seed, damage, param_5): damage word = dword[0x476fe4 + 0x30·param_5] (CORRECTED §7j.42/4: stride 0x30; param_5=−1 → 0x476FB4) → FUN_0040e230(robot, damage-seed=1, owner=the table dword); mult≠0 → robot w@+0x10 := 0xFFFF + FUN_0040c536(idx, cos(seed)·mult>>7, seed, sin(seed)·mult>>7) = the stun/knock applier (SP gate [0x4eaac0]==0, state∉{3,5}: w@+0x0E := seed, walk-probe-gated x/y += v, +0x10 := −1) | §7j.42 |
 | critter seek-acquisition dispatcher | FUN_00415490(idx): dword@+0x10 (dual-purpose: wander heading 0..255 / mode-9 seek direction 0..3) `cmp 3; ja FATAL` → table 0x415480; 4 directional forward-acquisition probes vs the robot bank 0x4c69e4/0xA8 (tight −4..+0xF ahead on the walk axis, |Δ|<0x18 crossing + z; case 3 reads robot y RAW — quirk); hit → target w@+0x7A, mode w@+0xC := 2, anim w@+0x56 := 0; >3 → "Buggered direction in MOFO" 0x457a3c fatal (fade-cancel 0x420100 + print 0x44d2ac + FATAL EXIT 0x44d2da); the mode-9 walk dispatches the same dword via table 0x412ef8 → steppers 0x417f2c/0x417fe8/0x4180c0/0x41813d (y−1/x+1/y+1/x−1), step-OK → move one unit + call FUN_00415490 | §7j.29 |
 | mission extension tags | DGROUP 0x457a57 ".NME" / 0x457a5c ".TRT" / 0x457a64 ".POS" / 0x457a69 ".BDG" — exactly one reference each (0x41648c/0x4170c3/0x41a55d/0x41a5d6 = the four CLOSED loaders §7j.18/§7j.15/§7j.25); 0x457a4c "MOFO\0" = dead tail of the fatal string 0x457a3c, ZERO refs, no ".MOFO" bytes in EXW or EXD, no *.MOFO corpus file — the ".MOFO loader" RETIRED | §7j.29 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
@@ -6528,10 +6529,37 @@ against that dump unless tagged.
    the family (`critters = 1`) and models them.
 6. Engine routing this unit (D114): the critter bank + the .NME
    staging host seam + the state-4/5 controller subset (the
-   corpus kinds — k1/k2/k3/k7 bodies stay E-gaps until a zone
+   corpus kinds — k1/l2/k3/k7 bodies stay E-gaps until a zone
    hosting them needs them) land in `bedlam-core::critter`;
    the damage lane lands as FUN_0040e230's existing
    `apply_damage` + the stun/knock half; the §7j.24 death
    handlers land beside them (bounty → score, debris → the
    destroy ring). SFX stays T4/E-gap (BEAMIN, the FUN_00421ed6
    juice, the death trios).
+7. **THE KIND-5/6 MODE-2/3/8 FIRE CYCLE** [verified — the
+   §7j.42/3 engage path completed]: mode 8 with dist in
+   [0x60, leash] → **TRANSITION, not attack** (0x413c20):
+   mode := 2, anim := 0, countdown := (RandA&0x1F)+0xA, aim
+   heading := angle(robot−critter) (octile-normalized atan2),
+   ATTACK-TARGET staged d@+0x2A/+0x2E/+0x32 := robot x/y/z;
+   dist beyond the leash or < 0x60 → substep skip (a FAR
+   critter is fully quiet beyond the entry gate draw).
+   MODE 2 (0x413d00): substep-0 → anim++; anim ≤ 1 → tail;
+   anim > 1 → anim := 0, FUN_0041286f free slot (50×0x22
+   bank); slot ≠ −1 → spawn **projectile type 0x68** at the
+   critter x/y (z+0x10)<<8, velocity = the octile-normalized
+   (dx·0x800/dist, dy·0x800/dist) + vz =
+   ((target_z+4)−(z+0x10))·0x10/denominator — a full 3-D aim
+   at the STAGED target; SFX BIOFIRE 0x4edff0 (no stream
+   draw); tail: countdown−−, == 0 ∨ slot −1 → the break roll
+   (d=0: RandA&7==0; d=1: RandA&0xF==0; d=2: always) → mode
+   := 3, anim := 2, countdown := 6, RandA&1 → heading ±0x40.
+   MODE 3 (0x413f06): 1/128 juice (RandA&0x7F==0 →
+   FUN_00421ed6 — the draw ALWAYS consumed), step
+   FUN_00415ff2(idx, heading), substep-0 → anim wrap 6
+   (FUN_0041642d), countdown−− → 0 → mode := 8, anim := 2.
+   So the engaged cycle is 8↔2↔3 and EVERY mode consumes its
+   documented draws; the 0x68 records are the first
+   enemy-produced rows on the ALIASED projectile-bank T2 row.
+   The kind-5/6 RESPAWN-delay table DAT_00454edc (DGROUP,
+   file-extract) = {1500, 900, 600} per difficulty.
