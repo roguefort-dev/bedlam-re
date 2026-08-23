@@ -6762,3 +6762,17 @@ ghidra-project/exw-text-objdump.txt.
    stage nothing. The ROBOT lane is aliased (robot bank
    hashed), the critter lane is aliased on S8 (bank live), the
    POI lane stays E-only.
+7. **LANDED 2026-08-23 (D115)**: the engine leg lives in
+   bedlam-core (commit cebc178 — `debris_tick`/`debris_physics`/
+   `debris_critter_lane` in destroy.rs, the MissionShell epilogue
+   slot in mission.rs per item 6's call order, the +0x18 anim
+   split on DebrisRecord; the POI lane documented, not landed) +
+   the re-baseline commit b2c89af (the five chain moves the
+   turn-on forces: S3/S4/S5C/S7/S8 — mines/grenades expire to
+   k12 mag-25 chunks so even non-destroy scenarios move; the
+   damage-lane assertions on corpus_s4/s7/s8 = the observability
+   pairing). The 7j.11/5 census task is CLOSED-BY-DISPROOF (item
+   1 — no param table exists); the "debris-stager ENGINE
+   widening" Backlog bullet's physics-class clause is DONE (the
+   k2/k8 scorch + k1/k20 ring clauses were already landed with
+   the 7j.11 stager — the bullet RETIRES).

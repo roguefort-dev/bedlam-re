@@ -1000,6 +1000,29 @@ differ come before any new scenario depth.
     re-asserted BYTE-IDENTICAL (the staging+arm key keeps the
     controller + the loader draws off the unarmed paths).
 
+    **DEBRIS-PHYSICS LANDED 2026-08-23 (D115, §7j.44)** — the
+    FUN_0040de9c family, the last Backlog producer gap: the tick
+    FUN_00420549 (delay/anim/free lifecycle + the phys gate, the
+    MissionShell epilogue slot) + the three collision walks
+    (robot lane via the FUN_0040db9e dispatcher; the
+    terrain-gated critter lane with the §7j.24 register-gloss
+    correction; the POI squash lane E-only) by d467471/cebc178.
+    RE-BASELINE (b2c89af): turning the pass on makes
+    physics-class chunks mutators on the aliased robot bank, so
+    FIVE chains move — S3 9a11efa03baafb64 (mine/grenade
+    expiries stage k12 mag-25/k3 chunks; the k11 artillery gate
+    stays phys-0), S4 35fa3a9234cbff37, S5C 786fd87565b67f4a,
+    S7 ecdce5472df6a324, S8 44d806b81bd1b1ff; S0/S1/S2/S5/S5B/S6
+    BYTE-IDENTICAL. The §7 table's landing notes above carry the
+    AT-LANDING chains — the gate tests are the pinning authority.
+    The debris-damage observability lives on corpus_s4 (the
+    knock-widened cascade + the freed-ring lifecycle), corpus_s7
+    (the standing gunner's chunk-field schedule), corpus_s8 (the
+    burst-window chips); the S5C case-3 consume order flips to
+    the gunner (heal value still exact — an O1 capture
+    arbitrates). The differ contract is unchanged (zero new
+    rows; the lanes surface through the aliased banks).
+
 ## 11. Risks
 
 - **Debugger surface uncertainty** ~~[pin-unverified] — the single biggest
