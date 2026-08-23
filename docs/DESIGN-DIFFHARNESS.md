@@ -184,7 +184,7 @@ they verify the loader, not the tick.
 |---|---|---|---|
 | robot bank | 0x4c69e4, count cell 0x46ccbc | count × 0xA8 raw (state+0x0C, hp+0x78, pod timer+0x2C = word @0x4c6a10+idx·0xA8, pos/facing/anim, order words +0x36..) | §8 rows "robot record base/stride/count", "pod-deploy countdown writers", "robot damage applier" [verified] |
 | selection triple | 0x46cbd4 / 0x46cbdc / 0x46cbd8 | u32 ×3 (selected idx / cursor / squad size) | §7 "sim hash must cover" [verified] |
-| blink-cursor selector | 0x4dc5d0 | u32 (0 or slot+1) | §7j.7 item 6 [verified] — the S1 hypothesis watch |
+| blink-cursor selector | 0x4dc5d0 | u32 (0 or endangered-slot+1) | §7j.59 census [verified] (was §7j.7 item 6); the S1 hypothesis watch — statically constant 0 on corpus paths |
 | per-player selected anchor | 0x4c71c4 | 4 × 0xC | §8 row "per-player selected anchor" [verified] |
 | order target | 0x4dd484 / 88 / 8c | i32 ×3 (x/y/z) | §8 row "click order target" [verified] |
 | per-robot move-target words | 0x46cc30 / 0x46cc60 | u16 arrays | §7, §7j.17 command-record row [verified] |
@@ -542,7 +542,7 @@ instances, 3 turrets).
 | destroy family end-to-end | §7j.25 (decoded, corpus-off) | S4 is its first live observation |
 | mid-flight draw blits | §7j.28 (decoded) | out of state-diff scope (T2); S3 watches the record data (§7 note) |
 | debris 2k start-delay | queue phrasing at da4bf20 (after §7j.7/7j.8, the +0x24 start-delay field discovery) | S1/S4 record every staged +0x24 value on real runs |
-| blink-cursor-from-spawn | §7j.7 item 6 (producer decoded; from-frame-0 behavior unobserved) | S1 watches 0x4dc5d0 from the first mission frame |
+| blink-cursor-from-spawn | §7j.7 item 6 → census-closed §7j.59/D131: producer = the idle-bombardment arm only; from-frame-0 behavior now statically decidable (constant 0 — no corpus scenario reaches the idle threshold) | S1 watches 0x4dc5d0 from the first mission frame; expect 0 throughout |
 | five-ring overlap last-write-wins | §7j.9, then §7j.10 declared it moot (fade ≤7 frames) | recorded as statically CLOSED; S4 takes the confirming byte-level read anyway (cost: one watch row) |
 | arm extraction via .PAD step-on, not a click | 7j.20 (queue note) | adopted as injection design (§5.4); S6 validates |
 | +0x18 armor-pad ring read semantics (raw byte ≠ 0 arms pads) | §7j.8 item 8 | already wired in-engine; S1/S4 regression-watch 0x4796d4 |

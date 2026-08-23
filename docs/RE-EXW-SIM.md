@@ -497,8 +497,10 @@ stay unwired (button map P2e; overlay machinery open).
    state mutation the engine does not model), draws the dither HP
    fill `FUN_00401ae6` under each portrait, and the active-robot
    blink cursor sprite `(g_frame_count & 3) + 0x51` @ (0x1F0/
-   0x222/0x254, 0xD) when the sprite-list field `0x4dc5d0` ∈
-   {1,2,3} (its producer is open). 0x4071E8 `FUN_0040807f` EVERY
+   0x222/0x254, 0xD) when the warning field `0x4dc5d0` ∈
+   {1,2,3} (PRODUCER CENSUS-CLOSED §7j.59: the bombardment-warning
+   squad-slot selector — value = the ENDANGERED robot's slot+1;
+   0 and >3 both draw nothing). 0x4071E8 `FUN_0040807f` EVERY
    FRAME — per-slot HP bar sprite `0x46 - min(hp*46/5000, ...)`
    (46 steps, hp = dword@+0x78 clamped ≤ 5000; hp ≤ 0 → 0x46) @
    (slot_x, 0x3C) and armor bar `0x8E - (armor*46)/2500` clamped
@@ -537,7 +539,9 @@ stay unwired (button map P2e; overlay machinery open).
    indices + ammo counts), HP/armor bars (needs +0x78/+0x2E sim
    fields), the score strip (needs `_DAT_004dd40c`/`DAT_0046ae70`
    sim state + NUMBERS.BIN), the deploy panel + blink cursor
-   (overlay family / 0x4dc5d0 producer open).
+   (overlay family; the 0x4dc5d0 producer is census-closed
+   §7j.59 — still not wired: it fires only on the idle-time
+   bombardment arm, which no scripted scenario reaches).
 
 ## 7. Per-tick mover state the sim hash must cover (P4 slice)
 
@@ -1386,7 +1390,13 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    tail's five calls (7g.6) therefore stage five debris + 30 scorch
    ring writes around the corpse.
 6. **`_DAT_004dc5d0` = the sidebar BLINK-CURSOR selector** [verified
-   all xrefs]: value = the SELECTED robot's SLOT + 1 (1..3).
+   all xrefs — the COMPLETE 7-site census + value grammar landed
+   later as §7j.59/D131, which CORRECTS the value gloss]: value =
+   the ENDANGERED robot's squad SLOT + 1 (1..3) — this item's
+   original "the SELECTED robot's SLOT + 1" gloss holds only in SP,
+   where the sole arming robot is necessarily the selected one
+   (§7j.54); in MP every idle robot arms and the write names the
+   tripped robot's own slot.
    Producers: the robots() per-robot walk 0x40c1ae..0x40c25e — when
    `idx == [0x46cbd4] + k` (k = 0..2, squad-window base 0x46cbd4)
    and squad size `0x46cbd8 > k`: posts the radio-warning PAIR
@@ -1408,7 +1418,10 @@ plus the 128-slot debris stager the 7g.6 death tail feeds. All items
    `edx = [0x4dc5d0]`; edx ∈ {1,2,3} → blink-cursor sprite
    `FUN_00401ca2((g_frame_count & 3) + 0x51, 1, x, 0xD)` from
    GENERAL.BIN (0x4edd7c) at x = 0x1F0 / 0x222 / 0x254 (slot k =
-   edx−1); any other value → nothing (0x4072b8 skip).
+   edx−1); any other value → nothing (0x4072b8 skip). [§7j.59
+   supersedes this item as the authoritative census: 5 writers +
+   2 readers, per-writer addresses, the {0,>3}-draw-nothing
+   dispatch, the effect-row disjointness pin, the lifecycle.]
 7. **FUN_00420549 = the debris tick** [verified whole; MissionShell
    epilogue @0x448076]: per active record: if `+0x24 (delay) != 0` →
    decrement, skip; else `+0x18 (seq) += 1`, read
@@ -9327,3 +9340,40 @@ Because FUN_00403938 skips its render body while the wipe runs (A.2), the backbu
 **E. The [0x4ea8f8] sibling — the MP death-position marker countdown** (8-site census): sole `≠0` producer 0x40e7ef := 0x20, in FUN_0040e230's MP branch (reached when [0x4edb88]≠0 ∧ extract-latch==0 ∧ dying == selected): posts the dying robot's position — [0x4ea8ec] := (rec+0x00)>>8, [0x4ea8f0] := (rec+0x04)>>8, [0x4ea8f4] := (rec+0x08) — then arms the 32-frame countdown. Sole reader/consumer: the FUN_00403938 head block 0x403974..0x4039a5 (runs only when the wipe is NOT active — the wipe gate 0x403952 precedes it): while ≠0, copies the trio into `[0x46ccdc]·12 + 0x4c71cc/0x4c71c4/0x4c71c8` — inside the §7j.56 DROPSHIP-ring 0x4c71b8 12-byte-stride bank region — and decrements (0x40399f). Exact rendering consumer of those cells not decoded (presentation-only, out of unit scope). Zero sites: the three click-select tandems (0x40d28c/0x40d317/0x40d39e), the auto-reselect cancel (0x448127), per-mission init (0x4478f1). Semantics: a ~32-frame hold of the dead selected robot's last position in the camera-anchor ring for the MP respawn HUD; cancelled by selecting another robot. The SP tail (0x40ea77) does NOT post it — SP death arms the iris instead. [Cross-ref, post-commit: the destination bank is ALREADY decoded — 0x4c71c4 = the §7j.20 ledger "per-player selected anchor" bank (4×0xC {x>>8, y>>8, z}) and its consumer is the §7j.54 chase-camera ring reader (SIM 0x40b8aa neighborhood, [0x4de654]≠0 loads the staged triple — SIM.md ~8901): the death post makes the camera system HOLD the dead robot's position instead of the live selected anchor. So the marker consumer is census-closed by §7j.20/§7j.54; no follow-up unit needed.]
 
 **F. Engine/differ consequence: NONE.** The wipe is presentation-only (render-path + screen-transition control flow): zero RNG draws, zero robot-bank bytes, no dump-surface cell. The fail-detector TIMING consequence (fail waits for the 12-frame wipe to finish) is the same D129 class — a MissionShell screen-transition gate outside the dump surface. E's death tail already conforms; no watch rows, no differ changes. Future E-side render-parity note only: the iris grammar (fill-0, centered v×v, (480<<16)/v Q16 shrink both axes, +40/frame, frozen source) is now fully specified for the presentation layer.
+
+## 7j.59. THE `_DAT_004dc5d0` BLINK-CURSOR CELL — CENSUS CLOSED: it is the BOMBARDMENT-WARNING squad-slot selector (value = the ENDANGERED robot's squad slot + 1 — the 2026-08-21 item-6 "SELECTED robot's slot" gloss corrected to an SP coincidence); exactly 7 .text sites (5 writers + 2 readers), all decoded; the {1,2,3} portrait gate = a literal 1/2/3 x-dispatch where 0 AND >3 both draw nothing; fully DISJOINT from the 0x4dc5d4 effect-row array (2026-08-23, worker 0329338f claim 2, D131; docs-only; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before AND after; registry_anchors green) [verified]
+
+**A. The mechanical census.** A whole-objdump grep (`.text` 0x401000..0x460000) finds EXACTLY 7 references to 0x4dc5d0 — the complete site set, no other addressing form exists (Watcom absolute statics; no lea / register-indirect site):
+
+| site | kind | code |
+|---|---|---|
+| 0x40c1d7 | WRITE 1 | `mov [0x4dc5d0],ebx` (ebx=1, arm strip k=0) |
+| 0x40c217 | WRITE 2 | `mov [0x4dc5d0],edi` (edi=2, arm strip k=1) |
+| 0x40c254 | WRITE 3 | `mov dword [0x4dc5d0],0x3` (arm strip k=2) |
+| 0x423fef | WRITE 0 | `mov [0x4dc5d0],ecx` (ecx=0, shell impact-completion tail) |
+| 0x447871 | WRITE 0 | `mov [0x4dc5d0],ecx` (ecx=0, MissionShell per-mission reset) |
+| 0x407428 | READ | the §6c.6d portrait-pass blink gate |
+| 0x423e91 | READ | the §7j.54 chase-camera record-0 impact gate |
+
+**B. The value grammar — {0,1,2,3} only, and what 1/2/3 ARE.** The three `:= k+1` writes are the UNROLLED per-slot strips of the robots() idle-arm tail (§7g.5/§7j.54), one per squad slot [0x40c1ae..0x40c25e, verified]:
+
+- k=0 @0x40c1ae..0x40c1d7: `idx == [0x46cbd4]` (NO size gate — slot 0 always exists) → posts the warning PAIR `FUN_004239ef(0xC, 0)` + `FUN_004239ef(0xF, 0)` (§7j.53 ids: DANGER—UNIT 1 TARGETTED / IMMINENT AERIAL BOMBARDMENT) → `[0x4dc5d0] := ebx = 1`.
+- k=1 @0x40c1dd..0x40c217: `idx == [0x46cbd4]+1` ∧ `[0x46cbd8] > 1` → posts `(0xD, 1)+(0xF, 1)` → `[0x4dc5d0] := edi = 2`.
+- k=2 @0x40c21d..0x40c254: `idx == [0x46cbd4]+2` ∧ `[0x46cbd8] > 2` → posts `(0xE, 2)+(0xF, 2)` → `[0x4dc5d0] := 3` (immediate).
+
+All three strips fall through the SHARED tail 0x40c25e..0x40c351: the robot's +0x70 idle counter := 0, `[0x4de658] := 0x80` (salvo cooldown latch), the 8-shell scatter into 0x4ea238 (§7j.54). So the written value = **the ENDANGERED robot's slot-within-the-local-squad + 1**. CORRECTION (landed in the 2026-08-21 amendment item 6 below, history preserved): its gloss "value = the SELECTED robot's SLOT + 1" holds only as an SP COINCIDENCE — in SP the sole robot whose idle counter arms is the selected one (§7j.54 gate `idx == [0x46cbd4]+[0x46cbdc]`), but in MP every idle robot arms, and the arm gate and the write gate are DIFFERENT comparisons: the write names the tripped robot's own slot.
+
+The `:= 0` pair:
+- 0x423fef — FUN_00423e1c's per-record impact-completion tail: after the 6 kind-6 debris + the 3×3 nine-blast patch (§7j.54), `xor ecx,ecx; xor edi,edi` → `[0x4dc5d0] := 0` + the record's valid word `[rec+8] := 0` (0x423fef/0x423ff5, rec 0 ⇒ 0x4ea240). ANY of the 8 shells that lands first clears the cursor.
+- 0x447871 — the MissionShell per-mission reset cascade (§7j.58's block: `xor ecx,ecx` @0x44785e, callee-saved across FUN_0041d954; the cursor store sits between the map-overlay 0x4edba0 and salvo-cooldown 0x4de658 zeroes it travels with).
+
+No writer ever stores any other value; the consumer's `>3` branch is dead-defensive.
+
+**C. The {1,2,3} gate semantics — pinned against the effect-row family.**
+1. The consumer @0x407420..0x407449 is a LITERAL 1/2/3 dispatch, not a bit test [verified]: `cmp edx,2; jb → (cmp edx,1; je) 0x407948` / `jbe 0x407962` / `cmp edx,3; je 0x407973` / `else jmp 0x4072b8`. Value 1/2/3 selects the portrait-strip x = 0x1F0/0x222/0x254 (squad slot edx−1); **0 AND >3 both draw NOTHING** (0x407449 / 0x407989 skips). Shared draw 0x407948..0x407958: `FUN_00401ca2((g_frame_count & 3) + 0x51, 1, x, 0xD)` from GENERAL.BIN ([0x4edd7c]) — the 4-frame blink animation. The §6c.6d text was right on the sprite; its "(its producer is open)" residue and the "sprite-list field" naming are now closed/corrected.
+2. 1/2/3 are NOT blink classes and NOT FLAGS.BIN effect ids: the effect-row family (10×16 B rows at 0x4dc5d4..0x4dc67c, ids 1..0xE at 0x4dc5e0+r·0x10, drawn as FLAGS.BIN sprite id−1) is a DISJOINT array 4 B ABOVE the scalar — no site reads or writes across the boundary (the FUN_00422038 allocator scans 0x4dc5e0+k·0x10 only). The cell is not part of any sprite/effect LIST; it is the warning-cursor scalar. The queue's "what 1/2/3 mean — blink classes?" resolves: they are 1-based squad-slot indices, exactly one cursor position.
+3. The second reader PROVES the index semantics arithmetically: FUN_00423e1c's record-0 impact block 0x423e7c..0x423ed5 (SP ∧ rec 0) computes the endangered robot's BANK INDEX `[0x46cbd4] + ([0x4dc5d0]−1)` ×0xA8 → record `+0x00 >> 16 == [0x4edb90]` (player-type) ∧ `[0x46cbdc]+1 ≠ [0x4dc5d0]` (endangered ≠ selected) → FUN_004245c9 chase-camera cut (§7j.54's gate, now site-exact).
+
+**D. Lifecycle.** 0 at mission entry (0x447871) → := endangered-slot+1 at the idle-threshold arm (with the DANGER/BOMBARDMENT warning pair, SFX, the salvo scatter) → 0 at the FIRST shell impact (0x423fef — the earliest shell lands ≈ arm+32..46 frames of start-delay + ~8 frames of fall) → re-armable only after the [0x4de658] cooldown ticks to 0 AND the idle counter re-thresholds. Ordering the robot resets the idle counter (§7j.54), so an actively-used squad never blinks.
+
+**E. Engine/differ consequence: NONE.** Both readers are SP-UI presentation (portrait blink, camera cut); zero sim-state reads, zero RNG draws. The DESIGN §5 S1 "blink-cursor-from-spawn" hypothesis is now decidable STATICALLY: the cell is 0 from spawn and stays 0 unless the idle threshold trips — no corpus scenario reaches it (§7j.54's idle table {400,300,200,5000} frames vs the scripted scenario horizons), so E's never-fabricating presentation is faithful and the S1 watch row should read constant 0 on both channels. The watches.toml layout "u32 (0 or slot+1)" stays accurate (the slot in question is the endangered one); the EXD twin remains the recorded W1 gap (RE-EXD-MAP §5) — the 7-site census above is the anchor template for it (the twin's portrait pass + arm tail are the two likely sites).
