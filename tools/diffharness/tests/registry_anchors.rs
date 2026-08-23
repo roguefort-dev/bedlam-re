@@ -198,9 +198,10 @@ fn registry_schema_invariants_hold() {
     // The still-tagged T0/T1 gaps must be present AND exd-empty
     // (difficulty + order-target were closed by the W5-followup census,
     // RE-EXD-MAP §5c — they now carry verified aliases; blink-cursor +
-    // selection triple were closed by the D132 EXD twin census,
-    // RE-EXD-MAP §5 — both now carry verified aliases too).
-    let gap_ids = ["sfx-master-gate", "no-extract-latch"];
+    // selection triple were closed by the D132 EXD twin census and
+    // no-extract-latch by the D133 twin census, RE-EXD-MAP §5 — all
+    // carry verified aliases now).
+    let gap_ids = ["sfx-master-gate"];
     for gid in gap_ids {
         match rows.iter().find(|w| w.id == gid) {
             Some(w) => {
@@ -227,6 +228,22 @@ fn registry_schema_invariants_hold() {
             }
         }
         None => failures.push("selection-triple row missing".into()),
+    }
+    // no-extract-latch: fully mapped since D133 — the twin 0xf929c
+    // count-driven span AND the census citation must be present.
+    match rows.iter().find(|w| w.id == "no-extract-latch") {
+        Some(w) => {
+            if w.exd_status != "verified" {
+                failures.push("no-extract-latch: must be verified since D133".into());
+            }
+            if !w.exd_addr.contains("0xf929c") {
+                failures.push("no-extract-latch: exd_addr must carry the D133 twin 0xf929c".into());
+            }
+            if !w.note.contains("D133") {
+                failures.push("no-extract-latch: note must cite the D133 twin census".into());
+            }
+        }
+        None => failures.push("no-extract-latch row missing".into()),
     }
 
     assert!(

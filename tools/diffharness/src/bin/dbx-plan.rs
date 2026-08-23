@@ -133,6 +133,9 @@ fn count_symbol(id: &str) -> &'static str {
         "robot-bank" => "robot_count",
         "trt-array" => "trt_count",
         "object-instances" => "obj_count",
+        // the latch is per-robot over the SAME robot count cell as
+        // the bank (D133: 0xf929c + i*4, count 0x11958c)
+        "no-extract-latch" => "robot_count",
         other => unreachable!("no count symbol for {other:?} (guard in resolve_row)"),
     }
 }
@@ -225,7 +228,9 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     // feed $symbols); grid rows derive their extent from map w/h.
     if row.tier == "T1" {
         if row.exd_addr.is_empty() {
-            return Ok(None); // explicit gap (blink-cursor/no-extract-latch)
+            return Ok(None); // explicit gap (sfx-master-gate only; the
+                             // blink-cursor/no-extract-latch gaps were closed by
+                             // D132/D133)
         }
         let cells = exd_cells(&row.exd_addr);
         let first = cells.first().copied().ok_or_else(|| {
@@ -270,6 +275,25 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                         addr: cells[0],
                         len_expr: format!("${sym}*{stride}"),
                     }),
+                })
+            }
+            // no-extract-latch twin 0xf929c (D133): per-robot u32
+            // CLAIMED flag over the robot count — a bare count-driven
+            // span like the bank (stride 4; the array itself is the
+            // fixed 12-slot 0x30 boot memset both sides, so the tail
+            // past count is always 0).
+            "no-extract-latch" => {
+                if cells.len() != 2 {
+                    return Err(die(format!(
+                        "row {id} exd_addr {:?} no longer carries base + count cell",
+                        row.exd_addr
+                    )));
+                }
+                let stride = extent_stride(&row.extent, id)?;
+                let sym = count_symbol(id);
+                plan(Form::CountExpr {
+                    addr: cells[0],
+                    len_expr: format!("${sym}*{stride}"),
                 })
             }
             // selection triple fully mapped since D132 (slot/base/size
@@ -1759,18 +1783,19 @@ mod tests {
         let scen = Scenario::parse(include_str!("../../scenarios/S1.scen")).unwrap();
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T1: 17 rows - 1 gap (no-extract-latch; order-target closed
-        // by the W5-followup, blink-cursor by D132) = 16 resolved (the
+        // T1: 17 rows - 1 gap (sfx-master-gate is T0; order-target
+        // closed by the W5-followup, blink-cursor by D132,
+        // no-extract-latch by D133) = 17 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
         // T0: 10 per-frame + TS: 9 anchor-only, same as S0.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 16, "T0 minus 1 gap + T1 resolved");
-        assert_eq!(anchor_count, 19 + 16, "T0 + TS + T1 rows");
+        assert_eq!(frame_count, 10 + 17, "T0 minus 1 gap + T1 resolved");
+        assert_eq!(anchor_count, 19 + 17, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            8,
-            "7 S0 deferrals + T1: 1 gap (move-target no longer deferred, blink-cursor resolved by D132)"
+            7,
+            "7 S0 deferrals (move-target, blink-cursor AND no-extract-latch resolved by D90/D132/D133)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -1806,10 +1831,10 @@ mod tests {
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
         // gaps never emit (order-target closed by the W5-followup and
         // now emits its verified 12-byte triple; blink-cursor resolved
-        // by D132 and emits its verified 4-byte cell)
+        // by D132 and no-extract-latch by D133, both emitting)
         for id in row_ids(&emitted.json) {
             assert!(
-                id != "no-extract-latch",
+                id != "sfx-master-gate",
                 "gap row {id:?} must never be emitted"
             );
         }
@@ -1818,6 +1843,11 @@ mod tests {
                 .json
                 .contains("{ \"id\": \"blink-cursor\", \"addr\": \"CS:0010E108\", \"len\": 4 }"),
             "blink-cursor must emit its verified twin cell (D132)"
+        );
+        assert!(
+            emitted.json
+                .contains("{ \"id\": \"no-extract-latch\", \"addr\": \"CS:000F929C\", \"len\": \"$robot_count*4\" }"),
+            "no-extract-latch must emit its verified count-driven span (D133)"
         );
         assert!(
             emitted
@@ -1851,11 +1881,11 @@ mod tests {
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
         // Same tier set as S1 -> the same row shape (19 anchor TS/T0 +
-        // 16 T1; 10 T0 + 16 T1 per-frame).
+        // 17 T1; 10 T0 + 17 T1 per-frame).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 16);
-        assert_eq!(anchor_count, 19 + 16);
+        assert_eq!(frame_count, 10 + 17);
+        assert_eq!(anchor_count, 19 + 17);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2017,13 +2047,13 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 16 + T2 2 per-frame; anchor adds TS 9.
+        // T0 10 + T1 17 + T2 2 per-frame; anchor adds TS 9.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 16 + 2);
+        assert_eq!(frame_count, 10 + 17 + 2);
         assert_eq!(anchor_count, frame_count + 9);
-        // deferred: the 8 S1-shape gaps + the 3 unaliased T2 rows
-        assert_eq!(emitted.deferred.len(), 11);
+        // deferred: the 7 S1-shape gaps + the 3 unaliased T2 rows
+        assert_eq!(emitted.deferred.len(), 10);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2060,11 +2090,11 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 16 per-frame (T3 adds none); anchor adds TS 9.
-        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 16);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 16 + 9);
-        // deferred: the 8 S1-shape gaps + ALL 14 T3 rows
-        assert_eq!(emitted.deferred.len(), 22);
+        // T0 10 + T1 17 per-frame (T3 adds none); anchor adds TS 9.
+        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 17);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 17 + 9);
+        // deferred: the 7 S1-shape gaps + ALL 14 T3 rows
+        assert_eq!(emitted.deferred.len(), 21);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),

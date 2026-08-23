@@ -9,10 +9,11 @@
 #               AND written)
 #   exw_addr    EXW (Win95) address expression — the canon of record
 #   exd_addr    EXD (DOS oracle) alias from RE-EXD-MAP §4/§5/§5b/§5c.
-#               EMPTY = explicit gap (SFX gate, no-extract latch) or a
+#               EMPTY = explicit gap (SFX gate only) or a
 #               not-yet-aliased tier (T2-T4; TI rows are aliased
 #               where their seam is pinned — §5c). Never guessed.
-#               (blink-cursor + selection triple were closed by D132.)
+#               (blink-cursor + selection triple were closed by
+#               D132; no-extract latch by D133.)
 #   indirect    true = EXD keeps the bank behind a pointer cell; read
 #               through it (RE-EXD-MAP §7 divergence seed #4).
 #   extent      watched byte extent (expression form)
@@ -264,14 +265,14 @@ anchor = "spread claims"
 [[watch]]
 id = "no-extract-latch"
 tier = "T1"
-exw_addr = "0x46aed4 + i*4"
-exd_addr = ""
-extent = "per-robot u32"
-layout = "no-extract latch array (also gates MP respawn)"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "escape-craft animator"
-note = "W1 gap: animator twin not decoded; the SIM row carries the full latch writer census (RE-EXD-MAP §5)."
+exw_addr = "0x46aed4 + i*4 (count cell 0x46ccbc)"
+exd_addr = "0xf929c + i*4 (count cell 0x11958c)"
+extent = "count*4"
+layout = "per-robot u32 CLAIMED/no-extract flag: boot memset 0x30 (12 slots, both sides); !=0 -> no escape pod, no MP re-drop, no cycler switch, death core takes the SP tail. D133: EXD-only setter (MP lobby pick FUN_0005bb71); EXW setter set empty — reads 0 on every SP path both channels"
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "no-extract latch"
+note = "D133 twin census (RE-EXD-MAP §5): 8 EXD readers one-for-one with the EXW census + the boot-clear pair; the EXD-only lobby-claim writer is the sole EXW/EXD asymmetry (never taken in SP)."
 
 [[watch]]
 id = "tile-word-grid"

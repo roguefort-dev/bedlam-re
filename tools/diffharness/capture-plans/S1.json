@@ -43,6 +43,7 @@
     { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
     { "id": "beacon-family", "addr": "CS:00119628", "len": 10 },
     { "id": "spread-claims", "addr": "CS:00119632", "len": 24 },
+    { "id": "no-extract-latch", "addr": "CS:000F929C", "len": "$robot_count*4" },
     { "id": "tile-word-grid", "addr": "CS:000FE37C", "len": "$map_w*$map_h*2" },
     { "id": "platform-strength", "addr": "CS:000F93CC", "len": "$map_w*$map_h*2" },
     { "id": "typedb-mirror-rows", "addr": "CS:000AC1E4", "len": "$map_w*$map_h*0x1E" },
@@ -80,6 +81,7 @@
     { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
     { "id": "beacon-family", "addr": "CS:00119628", "len": 10 },
     { "id": "spread-claims", "addr": "CS:00119632", "len": 24 },
+    { "id": "no-extract-latch", "addr": "CS:000F929C", "len": "$robot_count*4" },
     { "id": "tile-word-grid", "addr": "CS:000FE37C", "len": "$map_w*$map_h*2" },
     { "id": "platform-strength", "addr": "CS:000F93CC", "len": "$map_w*$map_h*2" },
     { "id": "typedb-mirror-rows", "addr": "CS:000AC1E4", "len": "$map_w*$map_h*0x1E" },
@@ -91,7 +93,6 @@
   ],
   "_deferred": [
     "sfx-master-gate (4)",
-    "no-extract-latch (per-robot u32)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
     "static-min-bank (bank-sized)",
