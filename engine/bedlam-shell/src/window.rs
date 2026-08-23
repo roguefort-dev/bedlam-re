@@ -24,7 +24,7 @@
 //! a fixed watermark - the ONLY producer. No audio device means
 //! the shell runs silent (stderr note), never fatal.
 //!
-//! EXIT CONTRACT (D48): after the loop ends (Escape, window close,
+//! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
 //! winit window is still alive (the lazy wgpu Global teardown
@@ -55,7 +55,7 @@ use crate::audio::{AudioDevice, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
-use crate::input::{map_mouse_button, map_winit_key, ShellInput, ShellKey};
+use crate::input::{map_mouse_button, map_winit_key, ShellInput};
 
 /// Shell-level failures (window/surface/GPU init + propagated game
 /// staging errors). The window loop cannot return through winit
@@ -90,7 +90,7 @@ pub struct WindowOptions {
     /// Presentation config (PARITY defaults if unchanged).
     pub present: PresentConfig,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
-    /// first resume, through the SAME exit path as Escape/Close
+    /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
     /// the shell binary wires it from `BEDLAM_WINDOW_EXIT_MS` so an
     /// unattended run can exercise the window teardown end to end.
@@ -115,7 +115,7 @@ impl WindowOptions {
     }
 }
 
-/// Open the window host and run until the window closes (or Escape).
+/// Open the window host and run until the window closes.
 /// Blocks on the winit event loop; `pollster` blocks again inside
 /// adapter/device setup. The caller owns the runtime gate.
 pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
@@ -404,13 +404,11 @@ impl ApplicationHandler for ShellApp {
             WindowEvent::RedrawRequested => self.present(),
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some((key, pressed)) = map_winit_key(&event) {
-                    if key == ShellKey::Escape && pressed {
-                        // Provisional D38 binding: Escape backs out of
-                        // the shell (the EXW Escape target is the
-                        // options screen - P2e input RE will pin it).
-                        event_loop.exit();
-                        return;
-                    }
+                    // Escape is a GAME key (operator 2026-08-23): it must
+                    // never close the window. It rides the input queue like
+                    // every other key; the EXW options-screen target will
+                    // consume it once P2e input RE pins the binding. Until
+                    // then it is an in-game no-op. Exit = window close only.
                     self.input.set_key(key, pressed);
                 }
             }
