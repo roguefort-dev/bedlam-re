@@ -2463,6 +2463,11 @@ against those dumps unless tagged.
      stamp becomes the visible structure sprite (frame 1);
      the animator then drives the mirror directly. The
      [0x4ede20] census: producer FUN_004170a6, loader
+     UPDATE (§7j.49, 2026-08-23): the mechanism stands, but
+     the screen context is BRIEF-ONLY — FUN_00440a2d runs
+     solely inside FUN_00440dc2 (the objective-minimap
+     snapshotter); the in-game full mirror build is
+     init_tiles (MISSIONVIEW §2), not this path.
      FUN_0041dc5a, restore FUN_0044661b (re-loads .TOT/
      .BIN/.DAT, tags @0x459795 — the "EDITOR\ZONE" restore
      path), materializer FUN_00440a2d, boot census
@@ -2548,7 +2553,8 @@ against those dumps unless tagged.
    FUN_00417e2f (the robot targeting/aim family — probe +
    0x46cbf8 readers), the order-target 0x4dd484 robot
    behaviour family, FUN_00440dc2 (the materializer's
-   caller — scroll restamp?), the 0x4787c4/0x47879c rect
+   caller — scroll restamp? RESOLVED §7j.49: the BRIEF
+   objective-minimap snapshotter, BRIEF-only), the 0x4787c4/0x47879c rect
    record (corner@+0/+4 vs center@+8/+0xC, z@+0x10,
    w@+0x14, type@+0x1C — [hypothesis] from the two views),
    FUN_0044661b's EDITOR\ZONE restore context, and the
@@ -3970,8 +3976,11 @@ render tail, closing the 7j.25 queue item:
    0x406a8c..0x406c73]: count + 3-dword records {dest row,
    tile-x, tile-y} blitted through FUN_00401471 (border tile
    FUN_00408030 outside the window, full LNK path inside);
-   writers = FUN_00440a2d (TOT-mirror materializer — so it IS
-   the scroll/camera restamp stager), FUN_0043d00b, FUN_0041d954.
+   writers = FUN_00440a2d (TOT-mirror materializer — UPDATE
+   §7j.49: BRIEF-screen only, the objective-minimap window
+   stager, never an in-game writer), FUN_0043d00b (the BRIEF
+   alloc), FUN_0041d954 (the mission arena/viewport-cache
+   install — the in-game list producer).
    Also noted: an open state-machine pass at 0x4c71f4 (states
    <0x13, splash/screen-effect sequences) between the platform
    and effects loops.
@@ -4589,7 +4598,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | platform anim tick | FUN_004238af (MissionShell @0x447fff): for active 0x4eb638 records d@+0x10++, wrap 0x10→4 (drawn smoke column 2..16 intro, 5..16 loop) | §7j.26 |
 | bounded random helper | FUN_0041ec59(n) = RandB()/(0x8000/n − 1) clamped n−1 — uniform-ish [0,n−1] on the 15-bit RandB | §7j.26 |
 | dropship ring banks | 0x4e64c0 (12 × 0x1C robot-indexed) + 0x4e6610..0x4e66b8 (6 × 0x1C standalone) {active d@+0, PHASE d@+4, x d@+8, y d@+0xC, alt d@+0x10, img-group d@+0x14, dwell d@+0x18}; consumer draws 7-COL × 5-ROW grids of 0x40 tiles (448×320 px — the 7j.26 "7×7" corrected §7j.27), img = group*0x23 + 7*row+col, bank [0x4edd64] = DROPSHIP.BIN (ArenaAlloc 0x25990; 210 = 6 groups × 35); ends at the trail bank 0x4e66b8; producers CLOSED §7j.27 (resets: FUN_0040cca0 @0x40cd3d pods 0x150 + MissionShell 0x447a7e/0x447a8d; spawners FUN_0041fa51/FUN_0041faf0/FUN_0041fb4b; animator FUN_0041fbb1; + the 0x412b60 exit-dwell reset) | §7j.26, §7j.27 |
-| terrain restamp list | [0x4ede24] ptr + [0x4ede28] count → 3-dword records {dest row (y·0x280 basis), tile-x, tile-y}; render-tail readers 0x4067a6/0x406b32 blit each via FUN_00401471 (border tile FUN_00408030 off-window, full LNK path in-window); writers FUN_00440a2d (= the TOT-mirror materializer = the scroll/camera restamp stager), FUN_0043d00b, FUN_0041d954 — resolves the backlog "7×7 screen-address table" hypothesis | §7j.26 |
+| terrain restamp list | [0x4ede24] ptr + [0x4ede28] count → 3-dword records {dest row (y·0x280 basis), tile-x, tile-y}; render-tail readers 0x4067a6/0x406b32 blit each via FUN_00401471 (border tile FUN_00408030 off-window, full LNK path in-window); CELL IS PER-SCREEN REUSE (§7j.49): BRIEF = 49×12 list (alloc 0x24c @0x43d0bd, writer FUN_00440a2d = the objective-minimap window stager, BRIEF-only) / mission = 1296×12 viewport cache (alloc 0x3cc0, writer FUN_0041d954) — resolves the backlog "7×7 screen-address table" hypothesis | §7j.26/§7j.49 |
 | NOP stub | FUN_00418a9f (0x418a9f..0x418aa6, empty): called by the k3 death handler + FUN_004197d4/00419943/00419c7c (+ jump from FUN_00419f62) — cut-feature hook | §7j.24 |
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
@@ -4620,7 +4629,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | TRT anim/fire machine | FUN_00417264 (MissionShell @0x44807b, every frame): states 1 idle→2 alert (frames 0..7→TOT word frame+1)→5/6/7/8 aim S/N/W/E (octant vs nearest robot FUN_00417c00 dist<0x81)→FUN_00417698 fire at frame top + 4-frame muzzle (words 0x17..0x1E); 3/4 = death/settle; FUN_00417210(idx,n) = mirror word n+1; FUN_00417652 = frame remap 0xF→7, 6→0xE | §7j.16 |
 | TRT fire routine | FUN_00417698: lane test |lateral|<0x28 px + direction + ≤2 levels vs robot bank 0x4c69e4/0xA8; arms fire_ctr@+0xC; odd ctr → FUN_0041286f free slot → projectile type 0x66 (damage (d+1)·300) @0x4cc654+slot·0x22 {x,y tile·0x2000+0xF00, z<<0xD, +0x16=0x14, unit vx/vy}; structures never move | §7j.16 |
 | map volume loader | FUN_0041dc5a (MissionShell @0x447b3a): ".TOT"→[0x4ede20] (u16 W,u16 H header + 8 planes W·H u16 → [0x4eddec]/[0x4eddf0]/[0x4eddf4]), ".DAT"→[0x4edd58] (same header, u8 planes, >0x7F sanitized→0), ".CGR"→[0x4edd60], ".BIN"→[0x4ede1c] (u16[bank+0] = the sprite COUNT → write-only cell [0x46cdb8], §7j.36), ".MIN"→[0x4edd9c], .LNG/.LNK→0x45cdda, ".PAD"→999×8B slots 0x4e44f8 stamping 0xFF; FUN_0044661b = the EDITOR\ZONE restore reload; FUN_0041dbed/FUN_0041cd90 = path/section opener (handle 0x4eba20) | §7j.16 |
-| TOT materializer | FUN_00440a2d (caller FUN_00440dc2): 7×7 tiles × 8 z: TOT word≠0 ∧ DAT byte==0 → mirror word@0x4796bc = word + seen@0x4796cc; bridges the .TOT volume into the runtime mirror (how TRT word-1 stamps become visible) | §7j.16 |
+| TOT materializer | FUN_00440a2d (sole caller FUN_00440dc2, §7j.49): 7×7 tiles × 8 z: TOT word≠0 ∧ DAT byte==0 → mirror word@0x4796bc = word + seen@0x4796cc; BRIEF-screen only (the objective-minimap window; the in-game full mirror build is init_tiles §MISSIONVIEW 2) | §7j.16/§7j.49 |
 | map-click pick | FUN_00419943 (caller FUN_00410644 ← MissionShell @0x448021): rect list 0x4787c4/{center@+8/+0xC, w@+0x14} count [0x46ccd8] (written by renderer FUN_00403938) with octile cost FUN_0041ebf8; else screen→iso ((p−0xF0)·[0x4ede54])/0x1E0 + TRT scan; ret 0=ground / k+1=rect / (idx+1)\|0x2000=structure; FUN_00418a9f = empty stub | §7j.16 |
 | click order target | {x,y,z} = 0x4dd484/0x4dd488/0x4dd48c written by FUN_00410644 (ground iso / rect / structure tile-center) AND by FUN_00409138 (command-record bit1, words@+7/+9/+0xB); readers FUN_00409138 ×6, FUN_0040af98 ×3, FUN_0040a56f/0xa7a1/0xace8/0xb615/0xa9ff ×2 each, FUN_00449c94 | §7j.16/§7j.17 |
 | scanner overlay | FUN_0041ec81 (MissionShell @0x48142): corner widget box 0x1EE..0x272×0xC3..0x147, grow [0x4edd68]→0x40, asset GAMEGFX\SCANNER.BIN; FUN_0041ee20(cx,cy) around the SELECTED robot ([0x46cbd4]+[0x46cbdc]): icons via FUN_00402572 (128×128 blitter→[0x4eddb8]) — 1/2 robots sel/rest, 4=0x4cffbc, 5/6 linked blink, 7/0xD tiles, 8=TRT, 9/0xA objects, 0xB arrivals, 0xC pads | §7j.16 |
@@ -4661,7 +4670,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | MRK word 3 | spawn z level (z = w3<<5 − 1) | 0x40d06d, 7c |
 | CGR/DB ptrs | DAT_004edd60 (CGR), DAT_004edd58 (DAT), 0x4796bc/cc (type DB 0x1E stride) | 0041e231, 00407e11 |
 | viewport cache | DAT_004ede24 36×36×12 B (screen off + tile deltas), count DAT_004ede28 | 00407e11, MISSIONVIEW §2 |
-| terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link; §7j.36 census: content readers = the terrain loop (0x40692e/0x4069f5/0x406a40/0x406b15) + the restamp drawer FUN_00440dc2 (0x440d1c/0x440d93, type-DB word → FUN_00401471 into the backbuffer) — pixel paths only | MISSIONVIEW §1/§3/§4, §7j.36 |
+| terrain bank | BIN→0x4ede1c (MISSION{A..G}.BIN sprites), LNK→0x45cdda = per-frame anim link; §7j.36 census: content readers = the terrain loop (0x40692e/0x4069f5/0x406a40/0x406b15) + the BRIEF minimap drawer FUN_00440c34 (0x440d1c/0x440d93, type-DB word → FUN_00401471 into the backbuffer; sole caller FUN_00440dc2 §7j.49) — pixel paths only | MISSIONVIEW §1/§3/§4, §7j.36/§7j.49 |
+| BRIEF objective bank | 24×14 B @0x4e9628: +0/+2 marker x/y, +4/+6 TOT row/col (snapshot window), +8 counter, +0xA render latch; staged by the BRIEF text parser (0x43e5b1..0x43e7b2); FUN_0043dc65 = per-objective panel + FUN_00440dc2 = the minimap snapshotter (7×7×8-z render → 2× downsample → 256×256 cache [0x46cbb0] alloc 0x10100, flag [0x4dc6c0], consumer blit FUN_00402a28 @0x43d9a2); BRIEF screen FUN_0043d00b (GameMain 0x41c4d5, ret 2 = launch) | §7j.49 |
 | BIN container grammar | u16[bank+0] = sprite COUNT (→ write-only cell 0x46cdb8, no .text reader; blits mask id&0xFFF); directory entry = bank+2+4·id, sprite = entry + u32[entry] SELF-relative (monotone, in-file, 11/11 banks incl. B6/D5/E6); record = u16 fmt@+0/dy@+2/dx@+4/gate@+6/rows@+8 + stream; FUN_00401471: fmt≥4 u8-RLE, 1..3 u16-RLE, 0 raw, gate==0 → RETURN, rows==0 → RETURN; FUN_0040167a reads gate but IGNORES it; FUN_0040179b = +2 head, gate skipped; all real terrain sprites fmt 7; MISSIONVIEW §4 "bank + u32[bank+4+id*4]" CORRECTED to the self-relative form | §7j.36 |
 | BIN 9-sprite scratch family + stamp | [0x4edd94] := u32[0x454b00+4·set] @0x4479b4 — bases {0x490,0x6ED,0x638,0x490,0x3A,0x3A,0x6ED}; records = 6-B stub {fmt=0,dy=64,dx=64} + 4096-B image (span 0x1006), image[0..3]=0 → gate/rows 0 → UNDRAWABLE forever (stamp never writes image[0..0x1F]); FUN_00401010 (0x401010/0x40108b, head of the PRESENT FUN_00401107, every present) downsamples the 480×480 viewport 5× and deshears (2:1) 9 tiles at image+0x20 row-stride 0x40 page-step 0x806 — but NO code ever draws them (LNK identity on all 63 ids ×7 zones; [0x4edd94]/0x454b00 sole readers = the stamp/boot); A/B/C/D TOTs reference all 9 ids (E/F/G none) and render NOTHING (gate-0 return) — VESTIGIAL | §7j.36 |
 | dither noise bank | 0x4e6ed8 (2048 B .bss ring, cursor 0x4ddb30), bytes {0,0xFF}, `RandB()&3==0` 25%; boot fill MissionShell 0x447b13, churn 15 B/frame 0x448147 | §7i |
@@ -5571,13 +5581,18 @@ question). All [verified] asm/DGROUP/corpus unless tagged.
         0x406b15 load ESI for the FUN_00401471/FUN_0040167a blits
         (MISSIONVIEW §3; 0x4069f5 is the 4th site, added to the §1
         census of three).
-     b. **FUN_00440dc2 = the scroll/camera RESTAMP DRAWER** —
-        0x440d1c/0x440d93: `FUN_00401471(EAX = u16[type-DB word @
+     b. **the BRIEF-minimap drawer** (UPDATE §7j.49 2026-08-23:
+        the sites 0x440d1c/0x440d93 belong to FUN_00440c34,
+        called ONLY by FUN_00440dc2 = the BRIEF objective-minimap
+        snapshotter; the earlier "scroll/camera RESTAMP DRAWER
+        FUN_00440dc2" gloss is corrected) —
+        `FUN_00401471(EAX = u16[type-DB word @
         0x4796bc+…], EBX = 0 remap, EDI = dest)` with the dest
         bounds-checked into the backbuffer window
-        ([0x4ede18] .. +0x5a000) — the draw side of the 7j.26
-        restamp stager FUN_00440a2d (renders a type-DB word back
-        into the backbuffer on scroll; pixel path only).
+        ([0x4ede18] .. +0x5a000) — the draw side of the
+        stager FUN_00440a2d (renders a type-DB word back
+        into the BRIEF screen's OWN backbuffer; pixel path
+        only, never the mission pass).
      c. **FUN_00401010 = the 9-sprite RADAR STAMP** (item 3) — the
         ONLY writer into bank content at runtime.
 2. **Container grammar — instruction-exact AND corpus-verified on
@@ -8085,3 +8100,129 @@ unobservable because bank==0 never reaches the flush in the
 original.** No new watch rows (the plate glyphs are MP-only; the SP
 chains never touch them; a future MP scenario would compare TINYFONT
 glyph rows through the existing sidebar-text family pins).
+
+## 7j.49. THE FUN_00440dc2 IDENTITY — CLOSED: the BRIEF-screen OBJECTIVE-MINIMAP SNAPSHOTTER (per-objective tile-window render + 2× downsample into a 256×256 cache); the whole FUN_00440a2d/FUN_00440c34 family is BRIEF-ONLY — the 7j.26 "scroll/camera restamp" in-game gloss is CORRECTED (2026-08-23, worker 21c18e9e claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run; read-only DGROUP string probes + a raw-dword pointer scan of BEDLAM.EXW; manifest clean before AND after)
+
+Closes the Backlog "REMAINS open slim: FUN_00440dc2's own identity"
+clause (the 7j.26 residue). All [verified] asm/corpus-string unless
+tagged.
+
+1. **Caller census — COMPLETE, closed by instruction + data scan.**
+   FUN_00440dc2 has EXACTLY ONE call site: 0x43dfb3, inside
+   FUN_0043dc65 (0x43dc65..0x43e183) = the per-OBJECTIVE brief panel
+   renderer (see item 3). A raw little-endian dword scan of the whole
+   EXW file for 0x00440dc2 (and 0x00440a2d, 0x00440c34) returns ZERO
+   hits — no jump-table/function-pointer references exist. The call
+   graph is a strict closed trio, each edge with exactly one site:
+   FUN_0043dc65 →(0x43dfb3)→ FUN_00440dc2 →(0x440de7)→ FUN_00440a2d
+   and →(0x440dec)→ FUN_00440c34. Nothing else invokes any of them.
+2. **The shared-epilogue tail-jumps DECODED** (kills the "jmp into
+   the caller" red flag that kept this open): 0x43c801 is a
+   MULTI-ENTRY shared epilogue gadget — `pop ebp; pop edi; pop esi;
+   pop edx; pop ecx; pop ebx; ret` (6-pop variant); entering at
+   0x43c802 skips the `pop ebp` (5-pop variant); 0x43f49e is the
+   5-pop variant inside FUN_0043f49b. FUN_00440dc2 (pushes
+   ebx,ecx,edx,esi,edi = 5 regs) RETURNS NORMALLY to 0x43dfb8 via
+   the 0x43c802 entry; FUN_00440c34 (6 pushes + 0x28 locals,
+   `add esp,0x28` @0x440dba) returns via 0x43c801; FUN_00440a2d
+   (5 pushes + 0x30 locals + 2 arg saves, `add esp,0x38` @0x440c2c)
+   returns via 0x43f49e. All three are ordinary call/return
+   functions; the many `jmp 0x43c801/0x43c802` sites across
+   0x43c8..0x4472 are other functions sharing the gadget (classic
+   Watcom -ox shared epilogue).
+3. **The screen context: FUN_0043d00b = the MISSION BRIEF screen**
+   (called from GameMain 0x41c4d5 after the zone/mission table walk
+   0x4decb2; returns 2 = "launch" → [0x46ae74] := mission). Its init
+   (0x43d00b..) allocates the screen's OWN buffers — notably
+   [0x46cbb0] := alloc(0x10100) (256×256 + 256 guard) @0x43d06b..7c,
+   [0x4ede18] := alloc(0x64000) backbuffer @0x43d0ae..b8, the
+   49×12 restamp list [0x4ede24] := alloc(0x24c) @0x43d0bd..c7,
+   [0x4edd58] DAT @0x43d0cc..d6 — and zeroes the objective bank
+   (0x150 B @0x4e9628 @0x43d3be..c8) + the cache flag [0x4dc6c0] := 0
+   @0x43d023. **[0x4ede18]/[0x4ede24] are per-screen cell reuses**:
+   the mission screen reallocates its own (0x64000 backbuffer via
+   FUN_0041dc5a install, 1296×12 viewport cache via FUN_0041d954) —
+   the two screens never share an allocation.
+4. **The objective record bank @0x4e9628 (24 × 14 B) grammar**
+   [verified writers 0x43e5b1/0x43e62c/0x43e6ac/0x43e71c/0x43e7b2]:
+   +0/+2 = marker map x/y (words), +4 = TOT ROW, +6 = TOT COL (the
+   snapshot window origin), +8 = a per-objective counter (FUN_0043f5b1
+   tick @0x43f5df), +0xA = render-current latch. Staged by the BRIEF
+   text parser from the stream cursor [0x46cbb8] (bounded by
+   [0x46cbb4]+0x13c68) via atoi FUN_0044effa; the 0x4e7ed8/0x4e8378
+   0x4a0-byte tables are its text staging. The panel name is built
+   from strings 0x4592b6 `OBJECTIVE_` + 0x4592c1 `%02i` with zone
+   [0x4edd8c]+0x40 and mission [0x4edd88]+0x30 (0x43dcf7..0x43dd7e).
+5. **FUN_0043dc65 = the objective panel renderer**: entry gate
+   word@[record+0xA] ≠ 0 → return (0x43dc79); else zero ALL 24 latch
+   words (0x43dc9c loop) then set its own := 1 (0x43dcc3) — so each
+   render INVALIDATES the other objectives' latches: per BRIEF frame,
+   the walk at 0x43d860 (records with +0/+2 ≠ 0 within ±7 of the map
+   camera [0x4eddc4]/[0x4eddc8]) re-renders every active objective in
+   index order, and non-selected ones also blit map markers + play a
+   reveal beep via FUN_0043a48e on the 0x4edfc8/0x4edfd8 voice cells.
+   After the snapshot (below) it clamps/places the label panel
+   (x ≤ 0x26c, y ≤ 0x140 — 0x43dfd7..0x43e01f).
+6. **FUN_00440dc2 body (EAX = record index) — the snapshotter:**
+   a. EAX := record word@+4 (TOT row), EDX := word@+6 (TOT col)
+      (dword reads sar 16 @0x440dce/0x440dd5).
+   b. `mov ecx,0x10000` @0x440de2 is NOT a stager argument (FUN_00440a2d
+      clobbers ECX at 0x440a43) — it is the PRE-SET ECX for the later
+      zero-fill (Watcom scheduling), surviving both calls because both
+      callees push/pop ECX.
+   c. call FUN_00440a2d(row, col): (i) stage the restamp list — up to
+      49 records {abs dest = [0x4ede18] + y·0x280 + x, tile-row,
+      tile-col} over the 7×7 iso walk from screen (0x100,0x100), kept
+      iff 0≤x<0x240 ∧ 0≤y<0x240 (0x440a37..0x440acd, count
+      [0x4ede28]); (ii) materialize TOT→mirror for the 7×7×8 window
+      at (row,col): mirror word@0x4796bc tile·0x1E+z·2, seen@0x4796cc
+      (word≠0 ∧ DAT byte==0) — the 7j.16 mechanism, screen context
+      corrected here; (iii) **ZERO the ENTIRE 0x64000 backbuffer**
+      (0x440c1c: FUN_00402965(0x64000, [0x4ede18])) — the clean slate
+      for the snapshot.
+   d. call FUN_00440c34 = the DRAWER (this function, not FUN_00440dc2,
+      owns the 7j.36-pinned sites 0x440d1c/0x440d93): walks the
+      restamp list; per record, per z ∈ 0..7: mirror word =
+      [0x4796bc + tile·0x1E + z·2]; z=0 draws on word≠0 (0x440ceb),
+      z≥1 needs seen ∧ word≠0 (0x440d5f/0x440d73); dest = record.dest
+      − z·0x5000 — each z level draws 0x5000 B = 32 pixel rows HIGHER
+      (the iso z-height step), bounds-checked into
+      [backbuffer, backbuffer+0x5a000) — then FUN_00401471(word,
+      bank=[0x4ede1c], EBX=0, EDI=dest).
+   e. zero 0x10000 B at [0x46cbb0] (FUN_00402965 with ECX from b).
+   f. **the 2× DOWNSAMPLE**: 256 rows × 256 bytes,
+      dest[r·256+c] = backbuffer[(64+2r)·0x280 + 64 + 2c] — source
+      base +0xa040 = pixel (64,64), row pitch 0x500 = 2·0x280, byte
+      stride 2 (0x440e02..0x440e34) — a plain 2× subsample (no
+      deshear) of the 512×512-pixel window into the packed cache.
+   g. [0x4dc6c0] := 1 @0x440e36 — the "minimap cached" flag (sole
+      other writer: the BRIEF-init reset 0x43d023).
+   h. return via the 5-pop gadget 0x43c802 → 0x43dfb8.
+7. **The consumer** (same frame, after the walk): 0x43d9a2 — if
+   [0x4dc6c0] ≠ 0: FUN_00402a28(EDI = panel buffer [esp+0x624]
+   (alloc'd @0x43d5cf), ESI = [0x46cbb0]) = the 256×256 TRANSPARENT
+   palette-remapped blit (source byte 0 → skip; else
+   [0x4edbfc]-LUT remap; dest pitch 0x280). Net effect: the panel
+   shows the snapshot of the LAST active objective rendered this
+   frame — consistent with the ±7 camera window normally holding the
+   current objective.
+8. **(c) mid-frame / terrain-pass ordering — CLOSED BY SCREEN
+   LIFECYCLE.** FUN_00440dc2 NEVER runs during the mission render
+   pass: FUN_00403938 is called only from the MissionShell region
+   (0x447c9b/0x448094); FUN_0043d00b never calls it. The BRIEF screen
+   owns a SEPARATE [0x4ede18] allocation, so the full-buffer zero in
+   FUN_00440a2d(iii) cannot wipe a mission frame, and the "can it run
+   mid-frame vs the terrain pass" question (MISSIONVIEW §1) is
+   answered: there is no in-game path at all. **7j.26 gloss
+   CORRECTED**: FUN_00440a2d is NOT the in-game scroll/camera
+   restamper — it is the BRIEF minimap window stager; in-game
+   scrolling is the 36×36 viewport-cache walk in FUN_00403938's
+   terrain loop, a different structure that merely REUSES the
+   [0x4ede24]/[0x4ede28] cells (BRIEF: 49×12 restamp list; mission:
+   1296×12 viewport cache). Same correction applies to the 7j.36
+   cluster-(b) gloss "scroll/camera RESTAMP DRAWER" (→ BRIEF minimap
+   drawer) and the §7j.16 lead "materializer caller — scroll
+   restamp?" (→ objective snapshotter).
+9. Engine consequence: NONE (docs-only — the BRIEF screen is outside
+   the P4 mission-diff scope; the cells 0x46cbb0/0x4dc6c0/0x4e9628
+   are BRIEF-lifecycle only). No new watch rows; no E-side work.

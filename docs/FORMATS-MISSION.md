@@ -95,7 +95,9 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
   volume behind [0x4ede20] (word/voxel, arena 0x27104 → max 100×100×8),
   reads the `u16 w, u16 h` header into the map dims ([0x4eddec]/[0x4eddf0],
   plane pitch w·h → [0x4eddf4]) and skips 4 bytes. FUN_00440a2d
-  (caller FUN_00440dc2) is the runtime consumer: it walks 7×7 tiles × 8
+  (sole caller FUN_00440dc2 = the BRIEF objective-minimap
+  snapshotter, EXW §7j.49 — BRIEF screen only, never the in-game
+  mission render) is the incremental runtime consumer: it walks 7×7 tiles × 8
   levels and copies every nonzero TOT word whose DAT byte is 0 into the
   TOT MIRROR (0x4796bc word@[row·0x1E]+2z) + seen flag 0x4796cc — i.e.
   **the .TOT file volume is the persistent word state; the mirror is the

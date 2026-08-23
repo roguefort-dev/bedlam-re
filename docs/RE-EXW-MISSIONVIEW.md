@@ -23,9 +23,14 @@ load_mission (7c)            init_tiles@00407e11         FUN_00403938 per frame
   0x4069f5 is the 4th load site]. UPDATE 2026-08-22 (§7j.36 — the
   full content-consumer census): the bank has exactly THREE reader
   clusters + the loaders — (a) the terrain loop (above), (b) the
-  scroll/camera RESTAMP DRAWER FUN_00440dc2 (0x440d1c/0x440d93:
-  type-DB word → FUN_00401471, EBX=0, dest bounds-checked into the
-  backbuffer window — the draw side of the FUN_00440a2d stager),
+  BRIEF-minimap drawer (UPDATE §7j.49 2026-08-23: the sites
+  0x440d1c/0x440d93 belong to FUN_00440c34, the draw half of
+  FUN_00440dc2 = the BRIEF objective-minimap SNAPSHOTTER — type-DB
+  word → FUN_00401471, EBX=0, dest bounds-checked into the
+  backbuffer window; BRIEF screen only, its OWN [0x4ede18]
+  allocation — never runs during the mission render pass, so the
+  §1/§7 overwrite-ordering question between it and the terrain pass
+  is closed by screen lifecycle: no shared buffer exists),
   and (c) FUN_00401010 = a 9-sprite RADAR STAMP that WRITES INTO
   the bank (5× downsample + 2:1 deshear of the 480×480 viewport at
   the camera, into scratch sprites u32[0x454b00+4·set]..+8 — a
@@ -454,7 +459,11 @@ through the full LNK/type-DB terrain path (continuing into the
 DAT_004796bc/LNK-image code). Writers per the 7j.16 census:
 FUN_00440a2d (the TOT-mirror materializer), FUN_0043d00b,
 FUN_0041d954 — so the materializer IS the scroll/camera
-restamp stager, confirming the backlog hypothesis. A separate
+restamp stager, confirming the backlog hypothesis (UPDATE
+§7j.49 2026-08-23: CORRECTED — the [0x4ede24] cell is a
+PER-SCREEN reuse; FUN_00440a2d stages the BRIEF objective-
+minimap list only; the in-game producer of the render-tail
+list is FUN_0041d954's viewport-cache install). A separate
 state-machine pass over 0x4c71f4 (states <0x13; the splash/
 screen-effect sequences) sits between the platform and effects
 loops — head-decoded §7j.27: it is the projectile mid-flight
