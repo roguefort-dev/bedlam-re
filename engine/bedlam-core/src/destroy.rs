@@ -56,7 +56,7 @@
 //! FUN_0040de9c, the at-zero extraction-arm tail of the objective
 //! notify (the S6 seam), and every SFX family (T4).
 
-use crate::mission::{MissionSim, DEBRIS_SCORCH_RING};
+use crate::mission::{dist_octagonal, MissionSim, DEBRIS_SCORCH_RING};
 
 /// The object type-table row cap (0x11A = 282 records, loader cap).
 pub const OBJECT_TYPE_SLOTS: usize = 282;
@@ -321,7 +321,7 @@ pub fn parse_trt(bytes: &[u8], linear: u32) -> Option<Vec<TerrainStructure>> {
 /// One widened debris-ring record (the 0x30-B 0x476fbc stride,
 /// §7j.5/§7j.11): the draw/tick gates + the per-kind physics
 /// config. The +0x10/+0x14 init words are staged per kind and
-/// consumed by the physics pass (E-gap) — carried for the T3 row.
+/// consumed by the draw pass (E-gap) — carried for the T3 row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DebrisRecord {
     pub active: bool,
@@ -332,18 +332,24 @@ pub struct DebrisRecord {
     pub init_a: i32,
     /// +0x14 init word.
     pub init_b: i32,
-    /// +0x18 the sequence counter (the LRU eviction key,
-    /// §7j.39/6).
+    /// +0x18 — DUAL (the engine splits it): `seq` keeps the
+    /// landed global staging counter (the LRU eviction key,
+    /// §7j.39/6), `anim` is the ORIGINAL +0x18 tick index
+    /// (0 at stage, ++ per non-delayed tick — the table-walk
+    /// cursor the tick frees on, §7j.44).
     pub seq: i32,
+    /// The +0x18 anim index proper (see `seq`).
+    pub anim: i32,
     /// +0x1C the kind argument verbatim (1..20; the draw layer
     /// choice reads it).
     pub kind: i32,
-    /// +0x20 the per-kind PHYSICS class (0 = none; 1/2/3/6 run
-    /// FUN_0040de9c — E-gap, the class is carried for the T3 row).
+    /// +0x20 the per-kind PHYSICS COUNTDOWN (0 = none; 1/2/3/6
+    /// seed it — the physics pass DECREMENTS it per frame and
+    /// the tick gates on != 0, §7j.44/1).
     pub phys: i32,
     /// +0x24 the start delay (frames).
     pub delay: i32,
-    /// +0x28 the caller param.
+    /// +0x28 the caller param (the damage lane's owner id).
     pub param: i32,
     /// The seq-table index (`+0x2C` pointer in the original).
     pub table: u8,
@@ -1435,6 +1441,7 @@ impl MissionSim {
             init_a: init,
             init_b: 0,
             seq: self.debris_seq,
+            anim: 0,
             kind,
             phys,
             delay,
@@ -1459,6 +1466,240 @@ impl MissionSim {
             let _gate = self.rand_a() & 1;
         }
         true
+    }
+
+    /// FUN_00420549 — the debris tick [§7j.7/7, verified whole;
+    /// §7j.44/6]: per ACTIVE record — `delay != 0` → decrement;
+    /// else `anim += 1` and the table walk: `table[anim] == −1`
+    /// frees the slot, else `phys != 0` runs the physics pass.
+    /// MissionShell epilogue @0x448076 — AFTER the robot phases,
+    /// BEFORE the armor-pad fade (see `advance_frame`). Newly
+    /// staged records landing in a not-yet-visited slot tick the
+    /// SAME frame (the original's ascending-index loop does too).
+    pub fn debris_tick(&mut self) {
+        for idx in 0..self.debris.len() {
+            if !self.debris[idx].active {
+                continue;
+            }
+            if self.debris[idx].delay != 0 {
+                self.debris[idx].delay -= 1;
+                continue;
+            }
+            self.debris[idx].anim += 1;
+            let anim = self.debris[idx].anim;
+            let (done, phys) = {
+                let r = &self.debris[idx];
+                let done = DEBRIS_SEQ_TABLES[r.table as usize]
+                    .get(anim.max(0) as usize)
+                    .is_none_or(|&v| v == -1);
+                (done, r.phys)
+            };
+            if done {
+                self.debris[idx].active = false;
+            } else if phys != 0 {
+                self.debris_physics(idx);
+            }
+        }
+    }
+
+    /// FUN_0040de9c — the per-frame debris physics + collision
+    /// pass [§7j.44, verified whole]. The +0x20 phys word is a
+    /// COUNTDOWN: this pass decrements it on exit; the params are
+    /// arithmetic in the CURRENT value (no table). Three walks in
+    /// order: robots (no gate), the terrain-gated critters, POIs
+    /// (E-only — no POI bank is staged engine-side; documented
+    /// §7j.44/5). NO RandA draws in this function.
+    fn debris_physics(&mut self, idx: usize) {
+        let (x_q5, y_q5, _z, kind, phys, param) = {
+            let r = &self.debris[idx];
+            (r.x, r.y, r.z, r.kind, r.phys, r.param)
+        };
+        // mag = kind==12 ? 25 : 2 (0x40dec6) — the damage BOTH
+        // hashed lanes apply; knock_mult/radius decay with phys.
+        let mag = if kind == 12 { 25 } else { 2 };
+        let knock_mult = phys.min(3);
+        let radius = (phys * 16 + 0x20).min(0x60);
+        let dx_q13 = x_q5 << 8;
+        let dy_q13 = y_q5 << 8;
+        // (1) THE ROBOT LANE [§7j.44/2]: ALIVE ∧ state != 2 ∧
+        // octile(Δ Q13)>>8 < 0x40 → FUN_0040db9e(idx,
+        // knock_mult, heading, mag, debris slot) = damage +
+        // facing −1 + the robot_move knock.
+        for ri in 0..self.robots.len() {
+            let (alive, state) = {
+                let r = &self.robots[ri];
+                (r.alive, r.state)
+            };
+            if !alive || state == 2 {
+                continue;
+            }
+            let (rx, ry) = {
+                let r = &self.robots[ri];
+                (r.pos_x, r.pos_y)
+            };
+            let ddx = rx - dx_q13;
+            let ddy = ry - dy_q13;
+            if dist_octagonal(ddx, ddy) >> 8 >= 0x40 {
+                continue;
+            }
+            let heading = self.angles.angle_byte(ddx, ddy);
+            let out = self.apply_damage(ri, mag, param);
+            // The death tail's five k5 debris (draws + scorch ran
+            // inside apply_damage; the staging is the caller's —
+            // 0x40e771 pushes delay 2k, param −1).
+            if out.died {
+                for d in out.debris.iter() {
+                    let _ = self.stage_debris(d.0, d.1, d.2, 5, d.3, -1);
+                }
+            }
+            if knock_mult != 0 {
+                self.robots[ri].facing = 0xFFFF;
+                let h = heading as i32;
+                let (vx, vy) = match (
+                    self.angles.sine_word(heading),
+                    self.angles.sine_word(((h - 0x40) & 0xFF) as u16),
+                ) {
+                    (Some(a), Some(b)) => (
+                        ((a as i16 as i32) * knock_mult) >> 7,
+                        ((b as i16 as i32) * knock_mult) >> 7,
+                    ),
+                    _ => (0, 0),
+                };
+                self.robot_move(ri, vx, vy, heading);
+            }
+        }
+        // (2) THE TERRAIN GATE [§7j.44/3] — gates ONLY the
+        // critter walk: 3-row plane-0 dword probe at tile
+        // (x>>5 −1, y>>5 −1) (both clamped ≥ 0), rows y−1..y+1,
+        // column x−1, four LINEAR bytes per row (no upper bound —
+        // the original reads linear memory). ANY nonzero byte →
+        // the critter walk; all zero → skip it.
+        let (w, _h) = self.terrain.size();
+        let tx = ((x_q5 >> 5) - 1).max(0);
+        let ty = ((y_q5 >> 5) - 1).max(0);
+        let base = ty as usize * w as usize + tx as usize;
+        let gate = (0..3).any(|row| {
+            let off = base + row * w as usize;
+            (0..4).any(|c| self.terrain.plane0_linear_byte(off + c) != 0)
+        });
+        if gate {
+            self.debris_critter_lane(dx_q13, dy_q13, radius, mag);
+        }
+        // (3) THE POI LANE runs ALWAYS in the original
+        // [§7j.44/5] — E-only here: no POI/personnel bank is
+        // staged (the §7j.18 .NME section-8 loader is unmodeled).
+        // (4) The countdown exit: dec [R+0x20] (0x40e20d).
+        self.debris[idx].phys -= 1;
+    }
+
+    /// The critter lane of FUN_0040de9c [§7j.44/4, verified
+    /// 0x40e03f..0x40e144]: presence ∧ mode ∉ {7,6,0xB}, the
+    /// per-kind getter scale (kinds 1/4 native Q5 → <<8), the
+    /// ±0x8000 pre-filters, octile>>8 < radius, then the §7j.24
+    /// crush dispatcher FUN_0040dce0(idx, falloff, heading, mag).
+    fn debris_critter_lane(&mut self, dx_q13: i32, dy_q13: i32, radius: i32, mag: i32) {
+        for ci in 0..self.critters.len() {
+            let (presence, mode, ckind) = {
+                let c = &self.critters[ci];
+                (c.presence, c.mode, c.kind)
+            };
+            if !presence || matches!(mode, 7 | 6 | 0xB) {
+                continue;
+            }
+            // FUN_004128ec getter (0x4128d0 table): kinds 1/4
+            // native Q5 (<<8 → Q13); kind 2 + kinds 3/5/6/7 x/y
+            // native Q13.
+            let (cnx, cny) = {
+                let c = &self.critters[ci];
+                if matches!(c.kind, 1 | 4) {
+                    (c.x << 8, c.y << 8)
+                } else {
+                    (c.x, c.y)
+                }
+            };
+            let ddx = cnx - dx_q13;
+            let ddy = cny - dy_q13;
+            if ddx.unsigned_abs() >= 0x8000 || ddy.unsigned_abs() >= 0x8000 {
+                continue;
+            }
+            let dist_px = dist_octagonal(ddx, ddy) >> 8;
+            if dist_px >= radius {
+                continue;
+            }
+            let falloff = ((radius - 1) - dist_px) >> 3;
+            // FUN_0040dce0 guards: kind ∉ {7,2} ∧ falloff > 2 ∧
+            // mag != 0 (always — mag ∈ {2,25}).
+            if matches!(ckind, 7 | 2) || falloff <= 2 {
+                continue;
+            }
+            let heading = self.angles.angle_byte(ddx, ddy);
+            // FUN_0040eb3c: if presence { hp -= mag } (the walk
+            // already gated presence).
+            self.critters[ci].hp = self.critters[ci].hp.wrapping_sub(mag as i16);
+            // The knock: pos + (sin·falloff>>8, cos·falloff>>8),
+            // stored per kind (FUN_00412998: kinds 1/4 take the
+            // args >>8; z untouched — the −1 z arg).
+            let h = heading as i32;
+            let (kx, ky) = match (
+                self.angles.sine_word(heading),
+                self.angles.sine_word(((h - 0x40) & 0xFF) as u16),
+            ) {
+                (Some(a), Some(b)) => (
+                    ((a as i16 as i32) * falloff) >> 8,
+                    ((b as i16 as i32) * falloff) >> 8,
+                ),
+                _ => (0, 0),
+            };
+            let nx_q13 = cnx + kx;
+            let ny_q13 = cny + ky;
+            // Move gate: kind 7 always, else the 8-corner walk
+            // probe FUN_0041e9a2 (modeled as the landed
+            // single-point floor_z approximation, ±3 — the
+            // §7j.44/4 class).
+            let moved = ckind == 7 || self.critter_crush_probe(ci, nx_q13 >> 8, ny_q13 >> 8);
+            if moved {
+                let c = &mut self.critters[ci];
+                if matches!(c.kind, 1 | 4) {
+                    c.x = nx_q13 >> 8;
+                    c.y = ny_q13 >> 8;
+                } else {
+                    c.x = nx_q13;
+                    c.y = ny_q13;
+                }
+            }
+            // hp ≤ 0 → attacker := −1 + the per-kind death
+            // dispatch (k4 weapon 0; k5/6 weapon 0x24 absorbed in
+            // modes {5,6}; k1/2/3/7 plain — no bank model).
+            if self.critters[ci].hp <= 0 {
+                self.critters[ci].attacker = -1;
+                let (wx, wy, wz, mode_now) = {
+                    let c = &self.critters[ci];
+                    (c.x, c.y, c.z, c.mode)
+                };
+                match ckind {
+                    4 => self.critter_death(ci, 4, 0, wx, wy, wz),
+                    5 | 6 if !matches!(mode_now, 5 | 6) => {
+                        self.critter_death(ci, ckind, 0x24, wx, wy, wz);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// The FUN_0041e9a2 critter walk-probe subset the crush lane
+    /// needs [§7j.44/4]: candidate Q5 bounds + the floor-z gate.
+    /// The original probes 8 corner offsets against the record's
+    /// corner-z words with |Δz| ≤ 4; the engine models the landed
+    /// S8 approximation (single point, ±3 — `critter_step_heading`).
+    fn critter_crush_probe(&mut self, ci: usize, x_q5: i32, y_q5: i32) -> bool {
+        let (w, h) = self.terrain.size();
+        if x_q5 < 0 || y_q5 < 0 || x_q5 >> 5 >= w || y_q5 >> 5 >= h {
+            return false;
+        }
+        let z = self.critters[ci].z;
+        let floor = self.terrain.floor_z(x_q5, y_q5, z);
+        (z - floor).abs() <= 3
     }
 
     /// FUN_0041bd78 — the water-z probe [§7j.10, verified]: clamp

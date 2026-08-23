@@ -1202,7 +1202,15 @@ impl MissionSim {
     /// (§7j.24/2): attacker ≠ −1 ∧ robots[attacker].kind ==
     /// player_type → score += 75 (k4) / 150 (k5/6) + strip_arm.
     /// The SFX trios are the T4 E-gap.
-    fn critter_death(&mut self, idx: usize, kind: u16, weapon: u16, wx: i32, wy: i32, wz: i32) {
+    pub(crate) fn critter_death(
+        &mut self,
+        idx: usize,
+        kind: u16,
+        weapon: u16,
+        wx: i32,
+        wy: i32,
+        wz: i32,
+    ) {
         {
             let c = &mut self.critters[idx];
             c.species = 1;
@@ -1264,5 +1272,170 @@ impl MissionSim {
     /// + the case-4 pickup).
     fn player_type_word(&self) -> u16 {
         self.player_type
+    }
+}
+
+#[cfg(test)]
+mod debris_physics_tests {
+    //! The critter lane of the FUN_0040de9c debris physics pass
+    //! (§7j.44/4) — module-internal so the bank can be pushed
+    //! directly.
+
+    use super::*;
+
+    fn sim_with_plane0(nonzero: bool) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        if nonzero {
+            // Nonzero volume at the probe block rows 4..6, col 4
+            // (the debris at tile (5,5) probes rows 4..6 at col 4).
+            for row in 4..7 {
+                planes[row * 32 + 4] = 3;
+            }
+        }
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, Vec::new()).unwrap();
+        let angles = crate::mission::AngleTable::from_thresholds(&[0u16; 64]).unwrap();
+        MissionSim::new(terrain, angles, 0xC0FFEE)
+    }
+
+    fn push_critter(sim: &mut MissionSim, kind: u16, mode: u16, hp: i16, x: i32, y: i32) {
+        let z = 0x1F;
+        sim.critters.push(CritterRecord {
+            kind,
+            species: 1,
+            attacker: 0,
+            hp,
+            mode,
+            anim: 0,
+            heading: 0,
+            presence: true,
+            target_x: 0,
+            target_y: 0,
+            target_z: 0,
+            impact_x: 0,
+            impact_y: 0,
+            x,
+            y,
+            z,
+            home_x: x,
+            home_y: y,
+            countdown: 0,
+            death_ctr: 0,
+            target_robot: -1,
+            fuse: 0,
+            facing: 0,
+        });
+    }
+
+    /// A k12 chunk (phys 6, radius 96) at tile (5,5) center.
+    fn stage_k12(sim: &mut MissionSim) {
+        assert!(sim.stage_debris(5 * 0x20 + 0x10, 5 * 0x20 + 0x10, 0x20, 12, 0, -1));
+    }
+
+    #[test]
+    fn terrain_gate_blocks_empty_ground() {
+        // ALL-zero volume planes: the critter walk never runs —
+        // no damage even point-blank (§7j.44/3).
+        let mut sim = sim_with_plane0(false);
+        push_critter(
+            &mut sim,
+            5,
+            0xA,
+            100,
+            (5 * 0x20 + 0x10) << 8,
+            (5 * 0x20 + 0x10) << 8,
+        );
+        stage_k12(&mut sim);
+        for _ in 0..6 {
+            sim.advance_frame();
+        }
+        assert_eq!(sim.critters()[0].hp, 100);
+    }
+
+    #[test]
+    fn crush_damage_mag_and_falloff_gate() {
+        // Gate open + point-blank: hp -= 25 per frame (kind 12),
+        // six frames. The knock is (0,0) under the zeroed sine
+        // table, and the move probe still gates the store.
+        let mut sim = sim_with_plane0(true);
+        let cx = (5 * 0x20 + 0x10 - 8) << 8;
+        let cy = (5 * 0x20 + 0x10) << 8;
+        push_critter(&mut sim, 5, 0xA, 500, cx, cy);
+        stage_k12(&mut sim);
+        for _ in 0..6 {
+            sim.advance_frame();
+        }
+        assert_eq!(sim.critters()[0].hp, 500 - 6 * 25);
+        // Falloff gate: at radius 96 the falloff ((96-1)-dist)>>3
+        // drops to 2 at dist 71 — no damage beyond that.
+        let mut far = sim_with_plane0(true);
+        push_critter(
+            &mut far,
+            5,
+            0xA,
+            100,
+            (5 * 0x20 + 0x10 - 72) << 8,
+            (5 * 0x20 + 0x10) << 8,
+        );
+        stage_k12(&mut far);
+        for _ in 0..6 {
+            far.advance_frame();
+        }
+        assert_eq!(far.critters()[0].hp, 100, "falloff <= 2 -> no crush");
+    }
+
+    #[test]
+    fn crush_mode_and_kind_gates() {
+        // Modes 7/6/0xB are skipped by the walk; kind 2/7 by the
+        // dispatcher.
+        for mode in [7u16, 6, 0xB] {
+            let mut sim = sim_with_plane0(true);
+            push_critter(
+                &mut sim,
+                5,
+                mode,
+                100,
+                (5 * 0x20 + 0x10 - 8) << 8,
+                (5 * 0x20 + 0x10) << 8,
+            );
+            stage_k12(&mut sim);
+            sim.advance_frame();
+            assert_eq!(sim.critters()[0].hp, 100, "mode {mode} skipped");
+        }
+        let mut sim = sim_with_plane0(true);
+        push_critter(
+            &mut sim,
+            2,
+            0xA,
+            100,
+            (5 * 0x20 + 0x10 - 8) << 8,
+            (5 * 0x20 + 0x10) << 8,
+        );
+        stage_k12(&mut sim);
+        sim.advance_frame();
+        assert_eq!(sim.critters()[0].hp, 100, "kind 2 guarded");
+    }
+
+    #[test]
+    fn crush_kill_dispatches_environment_death() {
+        // hp 10 point-blank: killed with attacker -1; the k5/6
+        // handler stamps mode 6 + species 1 + stages the k7 chunk.
+        let mut sim = sim_with_plane0(true);
+        push_critter(
+            &mut sim,
+            5,
+            0xA,
+            10,
+            (5 * 0x20 + 0x10 - 8) << 8,
+            (5 * 0x20 + 0x10) << 8,
+        );
+        stage_k12(&mut sim);
+        sim.advance_frame();
+        assert!(sim.critters()[0].hp <= 0);
+        assert_eq!(sim.critters()[0].attacker, -1);
+        assert_eq!(sim.critters()[0].mode, 6, "the death-dive stamp");
+        assert!(
+            sim.debris_bank().iter().any(|r| r.active && r.kind == 7),
+            "the death chunk staged"
+        );
     }
 }

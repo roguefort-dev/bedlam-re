@@ -373,6 +373,19 @@ impl Terrain {
         Some(self.dat[z as usize * n + y as usize * self.width as usize + x as usize])
     }
 
+    /// The plane-0 (volume) byte at a LINEAR offset — the debris
+    /// terrain-gate dword probe [§7j.44/3] reads four consecutive
+    /// plane bytes with NO row/column upper bound (the original
+    /// reads linear memory past the row end); past the plane it
+    /// reads as 0. The negative-side clamps are the caller's.
+    pub fn plane0_linear_byte(&self, off: usize) -> u8 {
+        let n = (self.width * self.height) as usize;
+        if off >= n {
+            return 0;
+        }
+        self.dat[off]
+    }
+
     /// FUN_00422e5e's slot scan [§7j.40/1]: the FIRST .PAD record
     /// (slot order = file record order) matching the tile and LEVEL
     /// (the robot's `z>>5`), or `None`. A hit implies the loader's
@@ -1711,6 +1724,17 @@ impl MissionSim {
                 self.critter_projectile_walker();
             }
         }
+        // The DEBRIS TICK (FUN_00420549, the MissionShell epilogue
+        // call 0x448076 — §7j.7/7, §7j.44): runs AFTER the robot
+        // phases + the enemy passes and BEFORE the armor-pad fade
+        // (FUN_00424051). The delays/anim/free lifecycle never
+        // hashes (the debris ring is the T3 surface); the physics
+        // pass mutates HASHED state only through the robot/critter
+        // damage lanes, which need a staged physics-class debris —
+        // none exists on the unarmed paths (the staging-key
+        // discipline: S0..S6/S8 stage none, S4/S7 stage the
+        // destroy-tail kinds).
+        self.debris_tick();
         // The mission-epilogue +0x18 fade [7j.10, verified
         // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue
         // chain right after the debris tick and decrements EVERY
@@ -1960,7 +1984,7 @@ impl MissionSim {
     /// bands) by probing single-axis strides; slide on that axis;
     /// blocked cardinal -> perpendicular axis mover keyed by the
     /// REQUESTED delta sign.
-    fn robot_move(&mut self, idx: usize, dx: i32, dy: i32, angle: u16) {
+    pub(crate) fn robot_move(&mut self, idx: usize, dx: i32, dy: i32, angle: u16) {
         if self.robots[idx].state == STATE_ORDERED || self.robots[idx].state == 5 {
             return;
         }

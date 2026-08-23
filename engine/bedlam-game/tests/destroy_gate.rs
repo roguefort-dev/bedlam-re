@@ -839,3 +839,113 @@ fn creep_tick_extends_the_bridge() {
         "the creep built a 199-strength tile within 8192 ticks"
     );
 }
+
+// ---------------------------------------------------------------------
+// The debris physics family (FUN_00420549 tick + FUN_0040de9c pass,
+// §7j.44) — the countdown semantics, the robot lane mag/knock/range
+// gates, and the death-tail staging.
+// ---------------------------------------------------------------------
+
+/// One robot at tile (5,5) + a staged debris at the given offset in
+/// Q5 px from that tile center.
+fn physics_sim(kind: i32, delay: i32, dx: i32, dy: i32) -> MissionSim {
+    let mut sim = synth_sim();
+    let _ = sim.spawn_robot((5, 5, 1));
+    let (x, y) = (5 * 0x20 + 0x10 + dx, 5 * 0x20 + 0x10 + dy);
+    assert!(sim.stage_debris(x, y, 0x20, kind, delay, -1));
+    sim
+}
+
+#[test]
+fn debris_tick_counts_down_delay_then_runs_and_frees() {
+    // A phys-0 kind (k7): delay 2 -> two decrements, then the anim
+    // walk frees the slot at the table terminator (the k7 table
+    // {17..23} has 7 sprite entries: the tick reads table[anim] for
+    // anim 1..7 then frees at table[7] == -1).
+    let mut sim = physics_sim(7, 2, 0, 0);
+    sim.advance_frame();
+    assert!(sim.debris_bank()[0].active, "delay 2 -> 1");
+    assert_eq!(sim.debris_bank()[0].delay, 1);
+    assert_eq!(sim.debris_bank()[0].anim, 0, "no anim while delayed");
+    sim.advance_frame();
+    assert!(sim.debris_bank()[0].active);
+    assert_eq!(sim.debris_bank()[0].delay, 0);
+    sim.advance_frame();
+    assert!(sim.debris_bank()[0].active);
+    assert_eq!(sim.debris_bank()[0].anim, 1, "first tick after delay");
+    for _ in 0..6 {
+        sim.advance_frame();
+    }
+    assert!(!sim.debris_bank()[0].active, "freed at the -1 terminator");
+}
+
+#[test]
+fn debris_robot_lane_mag25_and_countdown() {
+    // A k12 chunk 32 px west of the robot: mag 25 per physics
+    // frame, exactly 6 frames (the phys countdown), then silence.
+    let mut sim = physics_sim(12, 0, -32, 0);
+    for _ in 0..6 {
+        sim.advance_frame();
+    }
+    assert_eq!(sim.robots_mut()[0].hp, 5000 - 6 * 25);
+    assert_eq!(sim.debris_bank()[0].phys, 0, "the countdown hit 0");
+    sim.advance_frame();
+    sim.advance_frame();
+    assert_eq!(sim.robots_mut()[0].hp, 5000 - 6 * 25, "no damage at phys 0");
+}
+
+#[test]
+fn debris_robot_lane_range_gate_64px() {
+    // 96 px away (> 64): no damage ever. 63 px away: hit.
+    let mut far = physics_sim(12, 0, -96, 0);
+    for _ in 0..8 {
+        far.advance_frame();
+    }
+    assert_eq!(far.robots_mut()[0].hp, 5000);
+    let mut near = physics_sim(12, 0, -63, 0);
+    near.advance_frame();
+    assert_eq!(near.robots_mut()[0].hp, 5000 - 25);
+    // The knock writes: facing -1 + dir := heading (0x7F for a
+    // due-west delta under the zeroed threshold table).
+    assert_eq!(near.robots_mut()[0].facing, 0xFFFF);
+}
+
+#[test]
+fn debris_robot_lane_mag2_and_dead_skip() {
+    // A k9 chunk (phys 3): mag 2 per frame for 3 frames.
+    let mut sim = physics_sim(9, 0, -32, 0);
+    for _ in 0..3 {
+        sim.advance_frame();
+    }
+    assert_eq!(sim.robots_mut()[0].hp, 5000 - 3 * 2);
+    sim.advance_frame();
+    assert_eq!(sim.robots_mut()[0].hp, 5000 - 3 * 2);
+    // A dead (state 2) robot is skipped by the walk.
+    let mut sim2 = physics_sim(12, 0, -32, 0);
+    sim2.robots_mut()[0].state = 2;
+    for _ in 0..6 {
+        sim2.advance_frame();
+    }
+    assert_eq!(sim2.robots_mut()[0].hp, 5000);
+}
+
+#[test]
+fn debris_death_tail_stages_five_k5() {
+    // 10 hp robot under a k12: dies on the first physics frame;
+    // the death tail stages five k5 chunks (delays 2k = 0/2/4/6/8
+    // at staging) — but they land in slots AFTER the ticking k12,
+    // so the SAME tick pass decrements the four nonzero delays:
+    // the readback is 0/1/3/5/7 (the ascending-index same-frame
+    // semantics, §7j.44/6).
+    let mut sim = physics_sim(12, 0, -32, 0);
+    sim.robots_mut()[0].hp = 10;
+    sim.advance_frame();
+    assert!(!sim.robots_mut()[0].alive);
+    let k5: Vec<i32> = sim
+        .debris_bank()
+        .iter()
+        .filter(|r| r.active && r.kind == 5)
+        .map(|r| r.delay)
+        .collect();
+    assert_eq!(k5, vec![0, 1, 3, 5, 7], "the five death-tail chunks");
+}
