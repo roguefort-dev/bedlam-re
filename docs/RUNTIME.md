@@ -602,6 +602,47 @@ inject form). Row shape:
 - wine upgrade policy: same as DOSBox-X - the system wine version is part of
   the pin (record 11.15 here); host upgrades invalidate goldens, re-baseline.
 
+## W11 the O2 transcript emitter (D140, 2026-08-24 — `capgen-o2`; DESIGN §10-W11)
+
+`python3 tools/runtime/capgen-o2.py --plan <plan.json> --feed <feed> --out <t.dbxcap>`
+`python3 tools/runtime/capgen-o2.py --plan <plan.json> --synthesize-feed <feed>`
+
+- The headless producer of the O2 DBXCAP (the last headless-reachable
+  W11 piece; the ptrace DRIVER stays operator-gated Wine work).
+  Contract split: the driver services the D138 o2 plan (trigger hits
+  at trigger.site 0x425a03, process_vm_readv per plan row) and logs a
+  DBXFEED v1 read/write log; capgen-o2 interprets the plan (resolve
+  expressions, prefix sub-rows, $sym addrs, len exprs), validates the
+  feed against its own walk 1:1 — every read's addr+len, hit
+  numbering, inject arithmetic re-derived — and writes the DBXCAP v1
+  dbx-stitch --channel o2 consumes.
+- DBXFEED v1 grammar: `DBXFEED v1`, `kind synthetic|driver` (synthetic
+  feeds mark the transcript SYNTHETIC — anti-ghost), `hit <n>` blocks
+  (0 = optional boot position; 1 = the ANCHOR — where the feed starts
+  IS the driver's mission-load policy), `read <addr> <len> <hex>`,
+  `write <addr> <len> <hex>` (a block's inject entries precede its
+  watch reads, mirroring the O1 write-then-dump order).
+- Full inject-grammar validation: plain rows byte-exact; op:command
+  ring appends re-derived from the logged count-cell read
+  (base+count*stride, zero-extension, count bump); op:pad step-ons
+  mark-checked (active==1, x!=0xFFFF) with the xyz triple writes
+  validated. Frame numbering = capture frames (anchor = 1) on both
+  channels.
+- Frame-counter alignment: the frame-counter watch must advance +1 per
+  hit from the anchor; drift warns to stderr + a transcript comment
+  (a missed trigger hit would silently misalign frames).
+- `--synthesize-feed` = the reference mini-driver: deterministic
+  LCG bytes per (addr, hit) with consistent resolve statics + inject
+  arithmetic, exercising every feed form (the S3-o2 plan drives
+  op:command headless).
+- Smoke: `tools/runtime/capgen-o2-smoke.sh` (unattended-safe; no Wine,
+  no corpus read): dbx-plan --channel o2 byte-pins vs S1-o2.json →
+  synthesize → emit → dbx-stitch --channel o2 (manifest O2:EXW/Wine +
+  the 401-frame contract) → dbx-diff self-cross (decode +
+  normalize_o2_row intake) → the loud rejections (EXD-only row refuses
+  at stitch; truncated feed refuses at emit). Outputs under
+  runtime/harness-out/o2-smoke/ (gitignored).
+
 ## Explicitly NOT done here (follow-ups queued)
 
 1. Launching BEDLAM.EXW under the wine prefix - needs a desktop session and

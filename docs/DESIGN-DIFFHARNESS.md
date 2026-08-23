@@ -812,6 +812,47 @@ differ come before any new scenario depth.
     normalizer + tiebreak (differ), and the O2 stitch are all
     channel-complete — the ptrace driver itself is the only remaining
     W11 piece (operator-gated).
+    **O2 TRANSCRIPT EMITTER SKELETON LANDED 2026-08-24 (D140,
+    W11-prep):** `tools/runtime/capgen-o2.py` — the headless producer
+    of the O2 DBXCAP. Contract split (the skeleton's reason to exist):
+    the W11 ptrace DRIVER (operator-gated) services the plan — trigger
+    hits at `trigger.site`, `process_vm_readv` per watch row — and
+    logs a **DBXFEED v1** read/write log; `capgen-o2` is the pure
+    plan interpreter + transcript emitter that VALIDATES the feed
+    against the plan walk 1:1 (addr+len per read, hit numbering,
+    inject arithmetic re-derived) and writes the DBXCAP v1 the D139
+    stitcher consumes. Grammar: `DBXFEED v1` / `kind synthetic|driver`
+    / `hit <n>` (hit 0 = the optional boot position; hit 1 = the
+    ANCHOR — the driver's mission-load policy decides where the feed
+    starts, the plan never guesses) / `read <addr> <len> <hex>` /
+    `write <addr> <len> <hex>` (inject entries precede the frame's
+    watch reads in each block, mirroring the O1 write-then-dump
+    ordering). Inject coverage is the FULL plan grammar: plain
+    {frame,addr,bytes} writes, `op:command` ring appends (the emitter
+    re-derives base+count*stride from the logged count-cell read and
+    validates the zero-extension + count bump), and `op:pad` step-ons
+    (the 8-B slot record read is mark-checked, the xyz triple writes
+    validated) — frame numbering = capture frames, anchor = 1, on
+    BOTH channels (`compile_steps` pins "anchor-relative boundary
+    numbering = capture frame numbers"; the D138 comment's "Nth
+    trigger hit after the anchor" reads as: frame numbers count the
+    post-mission-load hit sequence, of which the anchor is #1).
+    A `--synthesize-feed` mode builds a deterministic SYNTHETIC feed
+    for any o2 plan — a reference mini-driver whose arithmetic
+    exercises every feed form, including inject ops (the S3-o2
+    compile path drives `op:command` end-to-end headless). The
+    frame-counter alignment check (counter value must advance +1 per
+    hit from the anchor) warns + records a transcript comment on
+    drift (a missed trigger hit would otherwise silently misalign
+    frames). The smoke (`tools/runtime/capgen-o2-smoke.sh`,
+    unattended-safe, no Wine, no corpus read) proves the chain:
+    dbx-plan --channel o2 byte-pins against the committed S1-o2.json →
+    synthesize → emit → `dbx-stitch --channel o2` (manifest O2:EXW/Wine,
+    frame contract) → `dbx-diff` decode + normalize_o2_row intake →
+    the loud rejections (a `static-cursor-clamp` row spliced into the
+    transcript refuses; a truncated feed refuses). Synthetic
+    transcripts carry the SYNTHETIC marker comment (anti-ghost: they
+    are never live captures; the s0-replay fixture precedent).
 12. **W12 — scenario depth S3–S8** as producer families land in-engine
     (each S3+ unit pairs the engine producer with its scenario).
     **S3-PREP LANDED 2026-08-22 (D102, §7j.37):** the E-side
