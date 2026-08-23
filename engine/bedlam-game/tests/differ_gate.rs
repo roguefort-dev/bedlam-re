@@ -22,6 +22,16 @@
 //! 2. DOUBLE-RUN (fabricated O1 vs perturbed copy): the DH-G1 verdict
 //!    shape — PASS with counter/RNG divergence budgeted, FAIL on any
 //!    other byte diff.
+//! 3. O2 TIEBREAK ARBITRATION (W11-prep): a fabricated O2 side (the
+//!    same `inv_frame` output stitched under Channel::O2ExwWine —
+//!    valid because `normalize_o2_row`'s alias list takes EXW guest
+//!    forms identical to EXD, `EXW_ROBOT_MAP == EXD_ROBOT_MAP`, and
+//!    static-map-wh normalizes to zero fields pending the W11 pin)
+//!    drives all four `compare_field` T1-exact lanes on a perturbed
+//!    `money`: O2-with-O1 → EngineBug "engine is the outlier";
+//!    O2-with-E → OriginalDivergence (verdict back to
+//!    PASS-WITH-NOTES); all-three-differ → EngineBug "wrong against
+//!    both oracles"; no tiebreak → EngineBug "provisional".
 
 #[path = "../examples/parity_harness/canonical.rs"]
 mod canonical;
@@ -30,7 +40,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use canonical::run_canonical;
-use diffharness::differ::{report_text, run_diff, Class, DiffConfig, Mode, Verdict};
+use diffharness::differ::{
+    report_text, run_diff, Class, DiffConfig, DiffResult, FieldVal, Finding, Mode, Verdict,
+};
 use diffharness::dump::{decode_dump, Channel, DumpHeader, FrameRecord};
 use diffharness::hash::sha256;
 use diffharness::registry;
@@ -304,8 +316,16 @@ fn inv_frame(
 
 /// Stitch fabricated O1 frames into dump bytes.
 fn stitch_o1(scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
+    stitch_chan(Channel::O1ExdDosboxX, scen_src, frames)
+}
+
+/// Stitch fabricated frames into dump bytes for ANY channel (the
+/// O1-address rule binds only O1; O2 and Engine accept every registry
+/// row the scenario tiers carry — the W11-prep tiebreak side needs
+/// both).
+fn stitch_chan(channel: Channel, scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
     let scen = diffharness::runner::Scenario::parse(scen_src).unwrap();
-    let header = DumpHeader::new(Channel::O1ExdDosboxX, sha256(b"exd-test"), scen.id.clone());
+    let header = DumpHeader::new(channel, sha256(b"exd-test"), scen.id.clone());
     stitch(
         &scen,
         &diffharness::runner::Transcript { frames },
@@ -314,6 +334,18 @@ fn stitch_o1(scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
     )
     .expect("fabricated transcript stitches")
     .bytes
+}
+
+/// Perturb the `money` watch by `delta` in every frame that carries it
+/// (S1 keeps it at the boot 4000, so small deltas cannot underflow).
+fn perturb_money(mut frames: Vec<FrameRecord>, delta: i64) -> Vec<FrameRecord> {
+    for f in frames.iter_mut() {
+        if let Some(w) = f.watches.iter_mut().find(|w| w.id == "money") {
+            let v = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
+            w.bytes = v.wrapping_add(delta as u32).to_le_bytes().to_vec();
+        }
+    }
+    frames
 }
 
 #[test]
@@ -549,4 +581,151 @@ fn s0_s1_cross_and_double_run() {
         assert_eq!(res.verdict, Verdict::Fail, "{id}");
         assert_eq!(res.first_divergence().unwrap().row, "money");
     }
+}
+
+// ---------------------------------------------------------------------
+// The O2 tiebreak fabrication (W11-prep, 2026-08-23): the differ's
+// four arbitration lanes driven headless (DESIGN sec 6 "Arbitration
+// lanes GATED").
+// ---------------------------------------------------------------------
+
+/// The aggregated `money.value` finding of a diff (exactly one
+/// expected — the fabrication introduces no other T1 diffs).
+fn money_finding(res: &DiffResult) -> &Finding {
+    res.findings
+        .iter()
+        .find(|f| f.row == "money" && f.field == "value")
+        .expect("the money.value finding")
+}
+
+#[test]
+fn s1_o2_tiebreak_arbitration() {
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    let reg = registry();
+
+    let src = fs::read_to_string(scen_path("S1")).unwrap();
+    let e_run = run_canonical(&src, &root).unwrap();
+    assert_eq!(
+        e_run.manifest.chain_digest, "a18cb11ac8e4314e",
+        "the pinned E content (S1)"
+    );
+    let e_dump = decode_dump(&e_run.bytes).unwrap();
+
+    // One fabrication serves both raw channels: every aliased row's
+    // EXW guest form IS the EXD form (normalize_o2_row delegates to
+    // normalize_o1_row), the robot map is the same table
+    // (EXW_ROBOT_MAP == EXD_ROBOT_MAP), and the O2 static-map-wh row
+    // ignores its bytes entirely (zero fields pending the W11 pin) —
+    // so inv_frame output stitches under either channel tag.
+    let mut map_wh: Option<(u32, u32)> = None;
+    let mut fab: Vec<FrameRecord> = Vec::new();
+    for ef in &e_dump.frames {
+        if let Some(b) = ef.watch("static-map-wh") {
+            map_wh = Some((
+                u32::from_le_bytes(b[..4].try_into().unwrap()),
+                u32::from_le_bytes(b[4..8].try_into().unwrap()),
+            ));
+        }
+        fab.push(inv_frame(ef, map_wh, 2000, 0));
+    }
+    let o1_bytes = stitch_chan(Channel::O1ExdDosboxX, &src, fab.clone());
+    let o2_bytes = stitch_chan(Channel::O2ExwWine, &src, fab.clone());
+
+    // Perturbed variants: O1 -7 (the wrong oracle reading), O2 -3
+    // (a third reading neither side holds), and an Engine re-stitch
+    // of the real E frames with money -7 (the engine-is-wrong case).
+    let o1_bad = stitch_chan(Channel::O1ExdDosboxX, &src, perturb_money(fab.clone(), -7));
+    let o2_bad = stitch_chan(Channel::O2ExwWine, &src, perturb_money(fab, -3));
+    let e_bad = stitch_chan(
+        Channel::Engine,
+        &src,
+        perturb_money(e_dump.frames.clone(), -7),
+    );
+
+    let cross = DiffConfig::new(Mode::CrossChannel);
+
+    // ---- baseline: a present tiebreak dump changes NOTHING while no
+    // T1 diff exists (the O2 side is only read at arbitration time) ----
+    let res = run_diff(&e_run.bytes, &o1_bytes, Some(&o2_bytes), &cross, &reg).unwrap();
+    assert_eq!(
+        res.verdict,
+        Verdict::PassWithNotes,
+        "baseline with idle tiebreak\n{}",
+        report_text(&res)
+    );
+    assert_eq!(res.count(Class::EngineBug), 0);
+    assert_eq!(res.count(Class::OriginalDivergence), 0);
+    assert_eq!(res.count(Class::Coverage), 1); // move-target-words only
+    assert!(res.findings.iter().all(|f| f.row != "money"));
+    let tb = res.tiebreak.as_ref().expect("the tiebreak fingerprint");
+    assert_eq!(tb.channel, "O2:EXW/Wine");
+    assert_eq!(tb.scenario, "S1");
+
+    // ---- lane (a): O2 sides with O1 against a perturbed E ----
+    let res = run_diff(&e_bad, &o1_bytes, Some(&o2_bytes), &cross, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::Fail);
+    assert_eq!(
+        res.count(Class::EngineBug),
+        1,
+        "money only\n{}",
+        report_text(&res)
+    );
+    let f = money_finding(&res);
+    assert_eq!(f.class, Class::EngineBug);
+    assert_eq!(
+        f.detail,
+        "O2/EXW canon agrees with O1: the engine (E) is the outlier"
+    );
+    assert_eq!(f.a, Some(FieldVal::Int(3993))); // E' = 4000-7
+    assert_eq!(f.b, Some(FieldVal::Int(4000))); // O1/O2 canon
+    assert_eq!(res.first_divergence().unwrap().row, "money");
+
+    // ---- lane (b): O2 sides with E against a perturbed O1 — the
+    // re-class BUDGETS the diff (verdict back to PASS-WITH-NOTES) ----
+    let res = run_diff(&e_run.bytes, &o1_bad, Some(&o2_bytes), &cross, &reg).unwrap();
+    assert_eq!(
+        res.verdict,
+        Verdict::PassWithNotes,
+        "original-divergence is budgeted\n{}",
+        report_text(&res)
+    );
+    assert_eq!(res.count(Class::EngineBug), 0);
+    assert_eq!(res.count(Class::OriginalDivergence), 1);
+    let f = money_finding(&res);
+    assert_eq!(f.class, Class::OriginalDivergence);
+    assert_eq!(
+        f.detail,
+        "O2/EXW canon agrees with E: EXD diverges from EXW (engine keeps EXW; log to docs/DIVERGENCES.md)"
+    );
+    assert_eq!(f.a, Some(FieldVal::Int(4000))); // E/O2 canon
+    assert_eq!(f.b, Some(FieldVal::Int(3993))); // O1' = 4000-7
+
+    // ---- lane (c): all three channels hold different readings ----
+    let res = run_diff(&e_run.bytes, &o1_bad, Some(&o2_bad), &cross, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::Fail);
+    assert_eq!(res.count(Class::EngineBug), 1);
+    let f = money_finding(&res);
+    assert_eq!(f.class, Class::EngineBug);
+    assert_eq!(
+        f.detail,
+        "all three channels differ (E wrong against both oracles)"
+    );
+    assert_eq!(f.a, Some(FieldVal::Int(4000))); // E
+    assert_eq!(f.b, Some(FieldVal::Int(3993))); // O1' (O2' = 3997 off-stage)
+
+    // ---- lane (d): no tiebreak dump supplied — provisional ----
+    let res = run_diff(&e_run.bytes, &o1_bad, None, &cross, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::Fail);
+    assert_eq!(res.count(Class::EngineBug), 1);
+    let f = money_finding(&res);
+    assert_eq!(f.class, Class::EngineBug);
+    assert_eq!(
+        f.detail,
+        "provisional engine-bug: no O2 tiebreak dump supplied"
+    );
+    assert!(res.tiebreak.is_none());
 }
