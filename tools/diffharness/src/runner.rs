@@ -1461,12 +1461,21 @@ mod tests {
             other => panic!("expected TierOutOfScenario, got {other:?}"),
         }
 
-        // T0 row with an explicit EXD gap (SFX master gate) on the O1 channel
+        // T0 row with an explicit EXD gap on the O1 channel. Since the
+        // D134 twin census the live registry has NO gap rows left, so
+        // the fixture fabricates one (sfx-master-gate with its twin
+        // blanked) — the stitcher must still refuse gap rows.
+        let mut gapped = r.clone();
+        for w in gapped.iter_mut() {
+            if w.id == "sfx-master-gate" {
+                w.exd_addr = String::new();
+            }
+        }
         let t = Transcript::parse(
             "DBXCAP v1\nframe 1\nwatch sfx-master-gate 00\nframe 2\nwatch frame-counter 00\n",
         )
         .unwrap();
-        match stitch(&s, &t, &hdr, &r) {
+        match stitch(&s, &t, &hdr, &gapped) {
             Err(StitchError::NoExdAddress { id, .. }) => assert_eq!(id, "sfx-master-gate"),
             other => panic!("expected NoExdAddress, got {other:?}"),
         }

@@ -198,10 +198,11 @@ fn registry_schema_invariants_hold() {
     // The still-tagged T0/T1 gaps must be present AND exd-empty
     // (difficulty + order-target were closed by the W5-followup census,
     // RE-EXD-MAP §5c — they now carry verified aliases; blink-cursor +
-    // selection triple were closed by the D132 EXD twin census and
-    // no-extract-latch by the D133 twin census, RE-EXD-MAP §5 — all
-    // carry verified aliases now).
-    let gap_ids = ["sfx-master-gate"];
+    // selection triple were closed by the D132 EXD twin census,
+    // no-extract-latch by the D133 twin census, and sfx-master-gate by
+    // the D134 twin census, RE-EXD-MAP §5/§5g — the W1 registry gap set
+    // is now EMPTY; no row may carry exd_status=gap).
+    let gap_ids: [&str; 0] = [];
     for gid in gap_ids {
         match rows.iter().find(|w| w.id == gid) {
             Some(w) => {
@@ -214,6 +215,31 @@ fn registry_schema_invariants_hold() {
             }
             None => failures.push(format!("tagged gap row {gid} missing")),
         }
+    }
+    // no row anywhere may still claim gap status (D134 emptied the set)
+    for w in &rows {
+        if w.exd_status == "gap" {
+            failures.push(format!(
+                "{}: exd_status=gap is retired — the W1 gap set is empty (D134)",
+                w.id
+            ));
+        }
+    }
+    // sfx-master-gate: fully mapped since D134 — the twin cell AND the
+    // census citation must be present.
+    match rows.iter().find(|w| w.id == "sfx-master-gate") {
+        Some(w) => {
+            if w.exd_status != "verified" {
+                failures.push("sfx-master-gate: must be verified since D134".into());
+            }
+            if !w.exd_addr.contains("0x10743c") {
+                failures.push("sfx-master-gate: exd_addr must carry the D134 twin 0x10743c".into());
+            }
+            if !w.note.contains("D134") {
+                failures.push("sfx-master-gate: note must cite the D134 twin census".into());
+            }
+        }
+        None => failures.push("sfx-master-gate row missing".into()),
     }
     // selection-triple: fully mapped since D132 — all three cells carry
     // aliases AND the label-swap correction must be cited in the note.

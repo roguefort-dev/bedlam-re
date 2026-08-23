@@ -160,13 +160,13 @@ note = "Same EXD cell as the mission row (one scalar where EXW has two — diver
 id = "sfx-master-gate"
 tier = "T0"
 exw_addr = "0x4ede58"
-exd_addr = ""
+exd_addr = "0x10743c"
 extent = "4"
 layout = "u32 (nonzero = SFX enabled); gates every SFX dispatch"
-exd_status = "gap"
-anchor_doc = "RE-EXW-SIM"
-anchor = "debris arrival SFX"
-note = "W1 gap: gate lives inside the EXD SFX dispatch twin; pin when a scenario needs it (RE-EXD-MAP §4)."
+exd_status = "verified"
+anchor_doc = "RE-EXD-MAP"
+anchor = "SFX master gate"
+note = "D134: the EXD twin census closed the gap — twin [0x10743c], 18-site census one-for-one vs the 19-site EXW set (arrival family five, music-sequencer trio, radio-warning consumer, driver-sync, play dispatcher, MissionShell volume keys; writers = the sound inits FUN_0004be7d CONFIG.BDL parse ⟷ FUN_0043a144 registry SOUND + probe — RE-EXD-MAP §5g)."
 
 # ------------------------------------------------- T1 the P4 slice (robots, orders, terrain)
 

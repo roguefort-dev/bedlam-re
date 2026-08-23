@@ -32,6 +32,7 @@
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
+    { "id": "sfx-master-gate", "addr": "CS:0010743C", "len": 4 },
     { "id": "static-type-table", "addr": "CS:00108428", "len": 21996 },
     { "id": "static-tot-volume", "addr": "CS:$tot_ptr", "len": "4+16*$map_w*$map_h" },
     { "id": "static-dat-volume", "addr": "CS:$dat_ptr", "len": "4+8*$map_w*$map_h" },
@@ -52,7 +53,8 @@
     { "id": "zone", "addr": "CS:00107500", "len": 4 },
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
-    { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 }
+    { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
+    { "id": "sfx-master-gate", "addr": "CS:0010743C", "len": 4 }
   ],
   "walk": [
     { "stop": 91, "addr": "CS:000894D5", "bytes": "01" },
@@ -68,7 +70,6 @@
     { "id": "walk-mission", "addr": "CS:00119610", "len": 4 }
   ],
   "_deferred": [
-    "sfx-master-gate (4)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
     "static-min-bank (bank-sized)",

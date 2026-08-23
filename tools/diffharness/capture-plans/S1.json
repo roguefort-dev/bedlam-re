@@ -35,6 +35,7 @@
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
+    { "id": "sfx-master-gate", "addr": "CS:0010743C", "len": 4 },
     { "id": "robot-bank", "addr": "CS:000F6D34", "len": "$robot_count*0xA8" },
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
     { "id": "blink-cursor", "addr": "CS:0010E108", "len": 4 },
@@ -73,6 +74,7 @@
     { "id": "mission", "addr": "CS:00119610", "len": 4 },
     { "id": "mode", "addr": "CS:001075D8", "len": 4 },
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
+    { "id": "sfx-master-gate", "addr": "CS:0010743C", "len": 4 },
     { "id": "robot-bank", "addr": "CS:000F6D34", "len": "$robot_count*0xA8" },
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
     { "id": "blink-cursor", "addr": "CS:0010E108", "len": 4 },
@@ -92,7 +94,6 @@
     { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" }
   ],
   "_deferred": [
-    "sfx-master-gate (4)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
     "static-min-bank (bank-sized)",

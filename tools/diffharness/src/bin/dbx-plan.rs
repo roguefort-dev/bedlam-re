@@ -205,7 +205,9 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     // --- T0: every verified row is a fixed 4-byte cell read.
     if row.tier == "T0" {
         if row.exd_addr.is_empty() {
-            return Ok(None); // explicit gap (difficulty / sfx gate): never dumped
+            return Ok(None); // defensive: a gap-status row (none remain —
+                             // difficulty closed by the W5-followup, the
+                             // sfx gate by the D134 twin census)
         }
         if row.extent != "4" || row.indirect {
             return Err(die(format!(
@@ -228,9 +230,9 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
     // feed $symbols); grid rows derive their extent from map w/h.
     if row.tier == "T1" {
         if row.exd_addr.is_empty() {
-            return Ok(None); // explicit gap (sfx-master-gate only; the
-                             // blink-cursor/no-extract-latch gaps were closed by
-                             // D132/D133)
+            return Ok(None); // defensive: a gap-status row (none remain —
+                             // the last W1 gap, sfx-master-gate, was closed
+                             // by the D134 twin census) would never dump
         }
         let cells = exd_cells(&row.exd_addr);
         let first = cells.first().copied().ok_or_else(|| {
@@ -1733,15 +1735,16 @@ mod tests {
         let scen = s0();
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0: 11 rows, 1 gap (sfx-master-gate; difficulty closed by the
-        // W5-followup) -> 10 per-frame. TS: 15 rows, 6 deferred -> 9
-        // anchor-only + T0 rides the anchor too: 10 + 9 = 19 anchor rows.
+        // T0: 11 rows, 0 gaps (difficulty closed by the W5-followup,
+        // sfx-master-gate by the D134 twin census) -> 11 per-frame.
+        // TS: 15 rows, 6 deferred -> 9 anchor-only + T0 rides the
+        // anchor too: 11 + 9 = 20 anchor rows.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10, "T0 rows minus the 1 gap");
-        assert_eq!(anchor_count, 19, "T0 + resolved TS rows");
-        // 6 TS extent gaps + the 1 explicit T0 EXD gap
-        assert_eq!(emitted.deferred.len(), 7);
+        assert_eq!(frame_count, 11, "all T0 rows (gap set empty since D134)");
+        assert_eq!(anchor_count, 20, "T0 + resolved TS rows");
+        // 6 TS extent gaps (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 6);
         // every emitted id is a real registry row of the scenario tiers
         for id in row_ids(&emitted.json) {
             let row = reg
@@ -1787,15 +1790,17 @@ mod tests {
         // closed by the W5-followup, blink-cursor by D132,
         // no-extract-latch by D133) = 17 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
-        // T0: 10 per-frame + TS: 9 anchor-only, same as S0.
+        // T0: 11 per-frame + TS: 9 anchor-only (gap set empty since
+        // D134: sfx-master-gate now emits like every other T0 row).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 17, "T0 minus 1 gap + T1 resolved");
-        assert_eq!(anchor_count, 19 + 17, "T0 + TS + T1 rows");
+        assert_eq!(frame_count, 11 + 17, "all T0 rows + T1 resolved");
+        assert_eq!(anchor_count, 20 + 17, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            7,
-            "7 S0 deferrals (move-target, blink-cursor AND no-extract-latch resolved by D90/D132/D133)"
+            6,
+            "6 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
+             sfx-master-gate resolved by D90/D132/D133/D134)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -1829,15 +1834,15 @@ mod tests {
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*2\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*0x1E\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
-        // gaps never emit (order-target closed by the W5-followup and
-        // now emits its verified 12-byte triple; blink-cursor resolved
-        // by D132 and no-extract-latch by D133, both emitting)
-        for id in row_ids(&emitted.json) {
-            assert!(
-                id != "sfx-master-gate",
-                "gap row {id:?} must never be emitted"
-            );
-        }
+        // the historical gaps all emit now (order-target closed by the
+        // W5-followup; blink-cursor by D132; no-extract-latch by D133;
+        // sfx-master-gate by D134 — the gap set is empty)
+        assert!(
+            emitted
+                .json
+                .contains("{ \"id\": \"sfx-master-gate\", \"addr\": \"CS:0010743C\", \"len\": 4 }"),
+            "sfx-master-gate must emit its verified twin cell (D134)"
+        );
         assert!(
             emitted
                 .json
@@ -1880,12 +1885,12 @@ mod tests {
         assert_eq!(scen.markers, vec![(18, 73, 1)], "the D91 staging key");
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // Same tier set as S1 -> the same row shape (19 anchor TS/T0 +
-        // 17 T1; 10 T0 + 17 T1 per-frame).
+        // Same tier set as S1 -> the same row shape (20 anchor TS/T0 +
+        // 17 T1; 11 T0 + 17 T1 per-frame — gap set empty since D134).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 17);
-        assert_eq!(anchor_count, 19 + 17);
+        assert_eq!(frame_count, 11 + 17);
+        assert_eq!(anchor_count, 20 + 17);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2047,13 +2052,14 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 17 + T2 2 per-frame; anchor adds TS 9.
+        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 9.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 17 + 2);
+        assert_eq!(frame_count, 11 + 17 + 2);
         assert_eq!(anchor_count, frame_count + 9);
-        // deferred: the 7 S1-shape gaps + the 3 unaliased T2 rows
-        assert_eq!(emitted.deferred.len(), 10);
+        // deferred: the 6 S1-shape TS gaps + the 3 unaliased T2 rows
+        // (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 9);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2090,11 +2096,12 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 17 per-frame (T3 adds none); anchor adds TS 9.
-        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 17);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 17 + 9);
-        // deferred: the 7 S1-shape gaps + ALL 14 T3 rows
-        assert_eq!(emitted.deferred.len(), 21);
+        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 9.
+        assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 9);
+        // deferred: the 6 S1-shape TS gaps + ALL 14 T3 rows
+        // (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 20);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),
