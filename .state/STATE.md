@@ -1,5 +1,40 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE [0x4dc5d0] BLINK-CURSOR PRODUCER
+    CENSUS unit COMPLETE (D131; docs-only, §7j.59, commit
+    64543b6, worker 0329338f claim 2; objdump-only from
+    ghidra-project/exw-text-objdump.txt, no Ghidra run, no
+    corpus read; manifest clean before AND after;
+    registry_anchors 2/2 green; PUSHED): [0x4dc5d0] = the
+    BOMBARDMENT-WARNING squad-slot selector. EXACTLY 7 .text
+    sites (whole-objdump grep): 5 writers — the three UNROLLED
+    idle-arm strips 0x40c1d7:=1/0x40c217:=2/0x40c254:=3
+    (each after its DANGER/BOMBARDMENT warning pair
+    FUN_004239ef(0xC+k,k)+(0xF,k); k=0 ungated, k=1/2 size-
+    gated [0x46cbd8]>k; shared tail +0x70:=0 +
+    [0x4de658]:=0x80 + the 8-shell scatter) + the shell
+    impact-completion clear 0x423fef (per-record tail, also
+    frees the record; FIRST impacting shell clears) + the
+    MissionShell per-mission reset 0x447871; 2 readers — the
+    §6c.6d portrait gate 0x407428 (LITERAL x-dispatch:
+    1/2/3→0x1F0/0x222/0x254 sprite (frame&3)+0x51 GENERAL.BIN
+    y=0xD; 0 AND >3 both draw NOTHING, >3 dead-defensive) +
+    the §7j.54 chase-camera gate 0x423e91 (arithmetically
+    indexes the bank [0x46cbd4]+(cursor−1)×0xA8 — PROOF the
+    value is a 1-based slot index). VALUE = the ENDANGERED
+    robot's squad slot+1 (item-6 "selected slot" gloss
+    corrected — SP coincidence only; MP writes the tripped
+    robot's own slot). DISJOINT from the 0x4dc5d4 effect-row
+    array (allocator scans 0x4dc5e0+k*0x10 only); §6c.6d
+    "sprite-list field" renamed. LIFECYCLE 0 → arm → first
+    impact → 0; ordering resets the idle counter. ENGINE
+    CONSEQUENCE NONE (SP-UI presentation, zero sim reads/RNG);
+    S1 blink-cursor-from-spawn now STATICALLY decidable =
+    constant 0 on every corpus scenario; DESIGN watch +
+    hypothesis rows annotated. Queued: item 2 = the EXD
+    blink-cursor twin census (§7j.59 as the anchor template;
+    closes the last sidebar-family W1 gap).
+
   - 2026-08-23 P4/RE THE [0x4ede34] DEATH-WIPE/TEMP-VIEWPORT
     CENSUS unit COMPLETE (D130; docs-only, §7j.58, commits
     0909683 + c67b007 + c9e3810, worker 27b33f6c claim 2;

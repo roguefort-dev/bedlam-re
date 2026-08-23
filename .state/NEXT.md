@@ -133,27 +133,41 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-  2. [P4/RE] THE [0x4dc5d0] BLINK/EFFECT-LIST PRODUCER CENSUS
-     (small; docs-only, unattended-safe; objdump from
-     ghidra-project/exw-text-objdump.txt): §6c.6d's portrait
-     pass gates the active-robot blink cursor on the
-     sprite-list field [0x4dc5d0] ∈ {1,2,3} — "its producer is
-     open" (SIM.md ~501/~540). Partial decodes exist: the §7j
-     amendment 2026-08-21 (the 0x4dc5d0 effect-row family —
-     [0x4dc5d0] itself is a SEPARATE variable 4 B below row
-     0's x, the 0x422038 slot allocator walks
-     [0x4dc5d0]+slot*0x10) + the §7j.54 bombardment blink
-     write + the per-mission zero 0x447871 (the §7j.58 reset
-     block). ASK: the complete 7-site writer census + value
-     grammar (what 1/2/3 mean — blink classes?), pin the
-     {1,2,3} gate semantics against the effect-row family.
-     Deliverables: census + ledger row (or amendment of the
-     2026-08-21 row) + D131; registry_anchors green; PUSH.
-     Pre-queue check (D118 discipline): the {1,2,3} producer
-     set is NOT census'd anywhere (grep: only the §6c.6d gate
-     + the amendment's separate-variable note + §7j.54's one
-     writer). (QUEUED 2026-08-23 by the 7j.58/D130 close,
-     worker 27b33f6c claim 2.)
+  2. [P4/RE] THE EXD BLINK-CURSOR TWIN CENSUS
+     (small-medium; docs+registry; unattended-safe). Close the
+     last sidebar-family W1 gap: the watches.toml `blink-cursor`
+     row (exw 0x4dc5d0) still has `exd_status = "gap"` +
+     RE-EXD-MAP §5 "TODO (gap)". The §7j.59/D131 7-site EXW
+     census is the ANCHOR TEMPLATE: locate the [0x4dc5d0] twin
+     in BEDLAM.EXD (candidate surfaces, in likelihood order:
+     the sidebar portrait-pass twin of FUN_004072bf inside the
+     EXD §7f.4-switch equivalent; the robots() idle-arm tail
+     twin near the 0xf6d34/FUN_0001c7dc robot family — the
+     warning-post pair + `:= slot+1` strips; the MissionShell
+     reset cascade twin in FUN_000596ed; the shell-resolver
+     twin of FUN_00423e1c). METHOD: generate an EXD .text
+     objdump first (objdump -b binary -m i386 over the EXD
+     object1 range 0x10000..0x72800 per the W1 map — follow the
+     exw-text-objdump.txt recipe; commit it as
+     ghidra-project/exd-text-objdump.txt for future units) OR a
+     bounded `analyzeHeadless -process BEDLAM.EXD -noanalysis`
+     probe pass (BEDLAM.EXD is ALREADY imported — never
+     re-import; check `pgrep -f analyzeHeadless` first).
+     DELIVERABLES: the twin address + writer/reader census vs
+     the §7j.59 template, the RE-EXD-MAP §5 row fill, the
+     watches.toml exd_addr fill if pinned (T1 rows carry
+     aliases; TI rows stay empty per the W2 emptiness rule),
+     registry_anchors 2/2 re-green, D132, PUSH. CAVEATS: a
+     game-data read → MANIFEST bracket before AND after any
+     corpus-touching command; the raw-binary objdump greps are
+     garbage-tolerant (verify hits against known twin cell
+     constants from RE-EXD-MAP §5, e.g. the squad base/per-
+     player cells). Pre-queue check (D118 discipline): grep
+     confirms no EXD blink-cursor twin work exists anywhere
+     (RE-EXD-MAP §5 row is TODO; the W2 note says "anchor via
+     the effect-row family when a scenario needs it").
+     (QUEUED 2026-08-23 by the §7j.59/D131 close, worker
+     0329338f claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -306,6 +320,46 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE [0x4dc5d0] BLINK/EFFECT-LIST PRODUCER
+  CENSUS unit COMPLETE (worker 0329338f claim 2, commit
+  64543b6, D131, §7j.59, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt, no Ghidra run, no
+  corpus read; MANIFEST clean before AND after;
+  registry_anchors 2/2 green; PUSHED). CLOSED with the verdict
+  set: (1) THE MECHANICAL CENSUS — exactly SEVEN .text
+  references to 0x4dc5d0 (whole-objdump grep, no other
+  addressing form): 5 writers (0x40c1d7 :=ebx=1, 0x40c217
+  :=edi=2, 0x40c254 :=3 imm, 0x423fef :=ecx=0, 0x447871
+  :=ecx=0) + 2 readers (0x407428 the §6c.6d portrait gate,
+  0x423e91 the §7j.54 chase-camera impact gate). (2) VALUE
+  GRAMMAR {0,1,2,3}: the three :=k+1 writes = the UNROLLED
+  per-slot strips of the robots() idle-arm tail (k=0 no size
+  gate → (0xC,0)+(0xF,0) → :=1; k=1 size>1 → (0xD,1)+(0xF,1)
+  → :=2; k=2 size>2 → (0xE,2)+(0xF,2) → :=3; shared salvo
+  tail +0x70:=0, [0x4de658]:=0x80, 8-shell scatter) — value =
+  the ENDANGERED robot's squad slot+1; the 2026-08-21 item-6
+  "SELECTED robot's SLOT" gloss CORRECTED (SP coincidence only
+  — in MP every idle robot arms; arm gate ≠ write gate).
+  (3) {1,2,3} GATE PINNED vs the effect-row family: the
+  consumer is a LITERAL x-dispatch (1→0x1F0/2→0x222/3→0x254,
+  sprite (frame&3)+0x51 GENERAL.BIN y=0xD; 0 AND >3 both draw
+  NOTHING — >3 dead-defensive); 1/2/3 are NOT blink classes /
+  FLAGS ids — the 10×16-B effect-row array 0x4dc5d4..0x4dc67c
+  is DISJOINT (allocator scans 0x4dc5e0+k*0x10 only; §6c.6d
+  "sprite-list field" renamed "warning field"); the impact-gate
+  reader PROVES index semantics arithmetically ([0x46cbd4]+
+  ([0x4dc5d0]−1)×0xA8 → player-type ∧ ≠selected → chase
+  camera). (4) LIFECYCLE: 0 at mission entry → :=slot+1 at
+  the idle arm → 0 at FIRST shell impact (≈ arm+40..54
+  frames) → re-arm after the 0x80 cooldown + fresh threshold;
+  ordering resets the idle counter. (5) ENGINE/DIFFER
+  CONSEQUENCE NONE (SP-UI presentation, zero sim reads/RNG);
+  the S1 blink-cursor-from-spawn hypothesis now STATICALLY
+  decidable — constant 0 on every corpus scenario; DESIGN
+  watch + hypothesis rows annotated. Deliverables: §7j.59
+  A–E + the amendment-item-6 correction/supersession + §6c.6d
+  gate/engine-seam fixes + D131. Queued: item 2 = the EXD
+  blink-cursor twin census.
 - 2026-08-23: P4/RE THE ROBOT +0x9C DEATH-FLAG READER CENSUS
   unit COMPLETE (worker 18039414 claim 2, commit 6a3abcd,
   D129, §7j.57, docs-only; objdump-only from
