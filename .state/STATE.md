@@ -1,5 +1,39 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE EXD SFX-MASTER-GATE TWIN CENSUS unit
+    COMPLETE — **W1 IS NOW FULLY CLOSED (registry gap set
+    EMPTY)** (D134; RE-notes commit 5178420 + impl commit d341c65,
+    both PUSHED, worker 2a9f1b9f claim 2; objdump-only from the
+    committed exd/exw listings + read-only game-data string
+    probes, no Ghidra run; MANIFEST.sha256 clean before AND
+    after; 93 diffharness tests + 13 canonical_dump_gate green,
+    fmt+clippy clean): the sfx-master-gate EXD twin = [0x10743c],
+    pinned by the BOOM-trio twin FUN_00032de9 @0x32df1 ⟷
+    FUN_00421e60 @0x421e68 (play twin FUN_0004c584 ⟷
+    FUN_0043a48e @0x32f95); EXW 19-site / EXD 18-site censuses
+    one-for-one (arrival family five, music-sequencer trio,
+    radio-warning consumer, driver-sync, play gates,
+    MissionShell volume keys). HEADLINE = the CONFIG DIVERGENCE:
+    EXW value = REGISTRY "SOUND" (boot 0x42530a, saver 0x4253f3;
+    init FUN_0043a144, sole caller GameMain) ⟷ EXD value = FILE
+    CONFIG.BDL (init FUN_0004be7d, callers boot 0x2cc70 + title
+    0x5b03f); both branch pairs write identical tandem cells
+    (sister gate 0x107444≡0x4ede5c, SPEECH 0x10766c≡0x4eb93c,
+    arena 0x119620≡0x46ae84, voice-table loop 0x8b938≡0x4eada8
+    instruction-exact). BY-PRODUCTS: the FUN_0004c121 bank-name
+    walk + the MissionShell-head GRUNT/BEAMIN/THROW/PEXPLODE/
+    BIOFIRE/CACODETH/SQUAWK walk + 19 §5g cascade aliases
+    (volume 0x1081f0≡0x4ddb2c, music gates 0x107578/0x107570,
+    drop-flag 0x1195f4≡0x46ae78, the six bank-cell
+    trios/quads). REGISTRY/PLANS: gap set EMPTIED with a hard
+    no-gap check; dbx-plan emits the T0 row everywhere; ALL 12
+    capture plans regenerated (S0/S0W included — deferred
+    7→6/10→9/21→20/24→23); E's W6 list untouched (sfx stays a
+    documented E-gap like no-extract-latch — the emission
+    decision queued). Queued: item 2 = the EXW bank-cell twin
+    cross-check (the §5g leftovers), item 3 = the E-gap emission
+    decision.
+
   - 2026-08-23 P4/RE THE EXD NO-EXTRACT-LATCH TWIN CENSUS unit
     COMPLETE (D133; RE-notes commit fe1d1d9 + impl commit
     85d7954, both PUSHED, worker 36c6f950 claim 2; objdump-only

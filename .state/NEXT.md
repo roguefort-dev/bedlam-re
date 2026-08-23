@@ -37,6 +37,14 @@ renumbered queue keeps every open item claimable by number).
    per-stop `# walk stop N walk-mode/zone/mission ...` transcript
    comments map menu transitions to stop indices; then rewrite the
    DRAFT stop counts in S0W.scen — pure data, no code).
+   NOTE D134 (2026-08-23): S0.json/S0W.json REGENERATED AGAIN (the
+   sfx-master-gate T0 row now emits — 20 anchor + 11 per-frame,
+   deferred 6) — re-stage before the session (dbx-plan
+   scenarios/S0.scen --out ...; the same for S0W). The session's
+   FINGERPRINT step should also record [0x10743c] (the EXD SFX
+   gate, expect 1 = sound on) — a sound-DISABLED capture machine
+   would dump 0 where E assumes the row (the D128 ACTIONPAN
+   pattern; RE-EXD-MAP §5g consequence note).
    OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
    `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
    the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
@@ -133,24 +141,48 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4/RE] THE EXD SFX-MASTER-GATE TWIN CENSUS
-      (small; docs+registry; unattended-safe). Last of the four
-      W1 schema gaps: the watches.toml `sfx-master-gate` row
-      (exw 0x4ede58 — the ≠0 gate in the §7j.52 BOOM/RICOCHT
-      arrival-SFX pair + the SFX dispatch family's master
-      enable). METHOD: EXW census first (grep '4ede58' in
-      exw-text-objdump.txt — writer/reader split + who sets it:
-      sound-config boot/loader?); then the EXD twin via the SFX
-      dispatch family — the committed §5 note already names the
-      EXD bank loader FUN_0004c121 (called from the EXD
-      MissionShell reset cascade @0x5982a, verified in the D132
-      reset window); find the gate cell read next to the EXD
-      SFX play twin (EXW FUN_0043a48e ⟷ EXD twin uncommitted —
-      find it via the DEADMAN1 .RAW name-string walk).
-      DELIVERABLES: twin + census, RE-EXD-MAP §5 row fill,
-      watches.toml fill, registry re-green, D134, PUSH. Same
-      caveats as item 2. (QUEUED 2026-08-23 by the D132 close,
-      worker c653b51a claim 2.)
+   2. [P4/RE] THE EXW BANK-CELL TWIN CROSS-CHECK — the D134
+      §5g leftovers (small; docs-only; unattended-safe). The D134
+      EXD bank-name walk pinned FUN_0004c121's handle cells
+      (BOOM/HURT/DEATH/RICOCHT/GRUNT/DEADMAN/PLASMA one-for-one
+      vs the §7j.30/D94 EXW cells) BUT left these EXD cells
+      UN-aliased on the EXW side: SQUISH2/3 (0x11a950/0x11a94c),
+      MISSILE1 (0x11a8e0), POWERUP (0x11a924), ELEV1/2
+      (0x11a8e8/0x11a91c), BEEP5 (0x11a92c/0x11a8ec),
+      TEXTBOX1 (0x11a8f8), MIDIGUN (0x11a954/0x11a958) + the
+      MissionShell-head walk cells (FUN_0004c384 flavor @0x59b79..
+      0x59c09: BEAMIN 0x11a900, THROW 0x11a90c, PEXPLODE 0x11a8bc,
+      BIOFIRE 0x11a8c0, CACODETH 0x11a8c4, SQUAWK 0x11a774).
+      METHOD: the EXW side of the D94 bank-name walk (the EXW
+      MissionShell-head loader twin) names the same .RAW files —
+      grep the EXW loader's name-string refs in
+      ghidra-project/exw-text-objdump.txt + DGROUP string reads
+      (read-only probes), match call-shape to the handle stores,
+      and pin the EXW twin cells for each. DELIVERABLES: the
+      alias table appended to RE-EXD-MAP §5g (or a §5g-bis), any
+      consumers worth a one-line census (SQUAWK/PEXPLODE etc.
+      probably live in the critter/weapon fire families — cite
+      the existing §7j sections, do NOT re-decode), D135, PUSH.
+      Same caveats as the D133/D134 cadence: objdump-only, no
+      Ghidra run, MANIFEST bracket every corpus-touching step.
+      (QUEUED 2026-08-23 by the D134 close, worker 2a9f1b9f
+      claim 2.)
+   3. [P4.2/W6-followup, DECISION-NEEDED] THE SFX-MASTER-GATE +
+      NO-EXTRACT-LATCH E-GAP EMISSION (small; design + impl;
+      unattended-safe AFTER a DECISIONS entry). Both rows are
+      documented E-gaps (DESIGN §6a E-gaps list, D133/D134
+      precedent: closing the EXD twin does NOT force E to emit).
+      If E emits them (sfx := constant 1 — the E engine's
+      sound-on assumption; no-extract := constant 0 — the SP
+      corpus construction), the canonical chains RE-BASELINE
+      deliberately (the pinned hashes in canonical_dump_gate.rs +
+      every corpus_*/chain reference). Decide: emit now (rows
+      ride every T0/T1 scenario on BOTH channels — cleanest for
+      the live S0 verdict) vs keep deferred until a live session
+      needs them. METHOD: a DECISIONS entry first, then
+      canonical.rs emit_frame + the canonical_dump_gate corpus
+      chains + the DESIGN §6a E-gaps list amendment.
+      (QUEUED 2026-08-23 by the D134 close.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -303,6 +335,55 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE EXD SFX-MASTER-GATE TWIN CENSUS unit
+  COMPLETE (worker 2a9f1b9f claim 2, commits 5178420 notes +
+  d341c65 impl + the D134 DECISIONS entry riding the impl commit;
+  docs+registry+plans; objdump-only from the committed exd/exw
+  listings + read-only string probes of game-data (vma↔fileoff
+  via the DEADMAN1 anchor); no Ghidra run, no corpus write;
+  MANIFEST.sha256 clean before AND after; 93 diffharness tests +
+  13 canonical_dump_gate green; fmt+clippy clean; PUSHED). THE W1
+  REGISTRY GAP SET IS NOW EMPTY — the last of the four W1 schema
+  gaps closed. CLOSED with the verdict set: (1) THE TWIN =
+  [0x10743c], pinned by the queue's own anchor — the EXD
+  BOOM-trio twin FUN_00032de9 (gate @0x32df1) is
+  shape-identical to EXW FUN_00421e60 (@0x421e68) incl. the
+  RandB idiv-3 dispatch + the shared play tail `call 0x4c584`
+  @0x32f95 = THE PLAY TWIN FUN_0004c584 ⟷ FUN_0043a48e. (2)
+  CENSUSES one-for-one (EXW 19 / EXD 18 literal sites): the
+  arrival-family FIVE (RICOCHT/BOOM/GRUNT — cells REVERSED vs
+  EXW —/DEATH/HURT), the music-sequencer TRIO, the radio-warning
+  consumer (0x34a8e ⟷ 0x423af7 — independently confirming
+  [0x10766c]≡SPEECH [0x4eb93c] + [0x107444]≡[0x4ede5c] via the
+  EXW arg-order), the driver-sync wait, the play dispatcher's
+  own gates (fail → [0x1195f4]:=1 ⟷ [0x46ae78]:=1), the
+  MissionShell volume-key pair (the EXACT ×0x147≫7 scale pinning
+  [0x1081f0]≡[0x4ddb2c]); EXD-only: the frame-tick music hook
+  0x12767. (3) THE WRITERS + CONFIG DIVERGENCE: EXW init
+  FUN_0043a144 (sole caller GameMain 0x41c33f) with the value
+  from the REGISTRY "SOUND" key (boot load 0x42530a, saver
+  0x4253f3) ⟷ EXD init FUN_0004be7d (callers boot 0x2cc70 +
+  title 0x5b03f) parsing the FILE CONFIG.BDL (install-dir buffer
+  0x9237c + the name strings 0x867ea/0x867f5/0x867f9) — the DOS
+  file-config vs Win32 registry port seam; both branch pairs
+  write the SAME tandem cells (sister gate, SPEECH, the 0xfe000
+  arena, the instruction-exact 16-entry voice-table fill loop
+  0x8b938 ⟷ 0x4eada8). (4) THE FUN_0004c121 BANK-NAME WALK
+  pinned (names past the "SOUND\SFX\" prefix; GRUNT rides the
+  MissionShell-head walk @0x59b79 with BEAMIN/THROW/PEXPLODE/
+  BIOFIRE/CACODETH/SQUAWK) + 19 §5g cascade aliases. (5)
+  REGISTRY/PLANS: watches.toml filled + registry_anchors gap set
+  EMPTIED (new hard no-gap check + D134 citation); dbx-plan emits
+  the row on every T0 scenario; the runner's NoExdAddress fixture
+  now fabricates a synthetic gap; ALL 12 capture plans
+  regenerated (S0/S0W INCLUDED — the row is T0; deferred counts
+  7→6/10→9/21→20/24→23); E's W6 row list untouched (the row
+  stays a documented E-gap, the D133 no-extract-latch precedent
+  — the emission decision queued as item 3). One S0
+  fingerprint-step companion recorded (a sound-DISABLED capture
+  machine dumps 0 — one dbgprobe read settles it). Queued:
+  item 2 = the EXW bank-cell twin cross-check (the §5g
+  leftovers), item 3 = the E-gap emission decision.
 - 2026-08-23: P4/RE THE EXD BLINK-CURSOR TWIN CENSUS unit
   COMPLETE (worker c653b51a claim 2 — adopted + re-validated +
   landed the interrupted 4fe7f1e9 WIP; substrate committed by it
