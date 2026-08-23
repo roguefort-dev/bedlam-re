@@ -123,23 +123,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE FUN_00419756 IDENTITY UNIT (small; docs-only,
-   unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt): decode FUN_00419756
-   (126 B, sole caller 0x4123ae inside FUN_00412010's state-0x66
-   TRT-bolt handler, §7j.50/6) — the CLASS-3 OCCUPANCY PROBE whose
-   nonzero return makes the bolt die via disburser without
-   damage. Determine what it tests (robot bank 0x4c69e4 octile?
-   critter bank 0x4cff98? TRT structures? a tile-word test?) and
-   whether the class-3 death is a "hit an actor but no robot
-   damage" leg (the §7j.50 note that 0x66 never damages robots
-   makes this the natural residual question: what DOES the bolt
-   interact with). Ledger row + D123; registry_anchors green;
-   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS,
-   RE-EXW-SIM (only the §7j.50 mention), the Done log, and
-   exw-functions.txt (1 caller) — genuinely open, zero prior
-   decode exists.
-3. [P4/RE] THE DEBRIS ARRIVAL-SFX PAIR UNIT (small; docs-only,
+2. [P4/RE] THE DEBRIS ARRIVAL-SFX PAIR UNIT (small; docs-only,
    unattended-safe; objdump from
    ghidra-project/exw-text-objdump.txt): close the 7j.11 item-4
    residue — FUN_00421e60 (118 B, 11 callers) + FUN_00421dec
@@ -153,7 +137,8 @@ renumbered queue keeps every open item claimable by number).
    PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS
    + RE-EXW-SIM — only the §7j.11 consumer-table rows exist, no
    body decode, no closure; the Backlog "Mission SFX tier" bullet
-   still lists the pair as open item 4.
+   still lists the pair as open item 4. (RENUMBERED from 3 by the
+   7j.51/D123 close, 2026-08-23.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -222,7 +207,8 @@ renumbered queue keeps every open item claimable by number).
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
   entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
   debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4
-  — PROMOTED to the Now queue as item 3, 2026-08-23).
+  — PROMOTED to the Now queue, 2026-08-23; Now item 2 after the
+  7j.51/D123 renumber).
   NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
@@ -289,6 +275,45 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE FUN_00419756 IDENTITY unit COMPLETE
+  (worker 9a23356a claim 2, commit 224188f, D123, docs-only;
+  objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra
+  run, no corpus read; MANIFEST.sha256 clean before AND after,
+  registry_anchors 2/2 green, PUSHED). CLOSED with the verdict set:
+  (1) THE IDENTITY — FUN_00419756(x,y,z Q13) = a first-alive
+  ROBOT-BANK OCCUPANCY BOX: walks 0x4c69e4/0xA8 (count [0x46ccbc],
+  ALIVE gate +0x7C≠0), returns 1 on the FIRST record with
+  |Δ(x>>8)|<0x10 ∧ |Δ(y>>8)|<0x10 ∧ |z@+8 raw − z>>8|<0x20 — of
+  the queue's four candidates ONLY the robot bank is right, and
+  it is a BOX not octile (no FUN_0041ebf8; presence predicate,
+  first-match-in-bank-order, not a nearest-scan); NOT critters,
+  NOT TRT structures, NOT tile words; sole caller 0x4123ae (no
+  jump-table refs). (2) THE SCALE MATCH — all three axes
+  normalize to Q5 (32/tile): thresholds = ±<0.5 tile lateral,
+  ±<1 z level; robot z@+8 is STORED Q5 (§3 +0x08) so the raw
+  compare is scale-matching, not a quirk; FUN_004197d4's robot
+  lane uses the IDENTICAL box (0x419856/76/93). (3) THE CLASS-3
+  VERDICT — CONFIRMED the "hit an actor but no robot damage"
+  leg, and stronger: NO damage query of ANY kind on the path
+  (FUN_004126dc disburser → kind-8 debris + state := 0; no
+  FUN_00419aff, no 0x41a894/0x41bc1c, no 0x40e230) — ALIVE
+  ROBOTS are a pure BLOCKER for the TRT bolt; its (d+1)·300
+  damage is EXCLUSIVELY the class-2 terrain contact (the §7j.50
+  residual closed: the bolt interacts with the squad as an
+  obstruction, never a target). Two §7j.50/6 gloss fixes landed
+  history-preserved: the probe takes all THREE args (z = the
+  record's unstepped z), and "vz≠0 → break" is really
+  skip-height-probe-only (substeps continue; the §7j.16 spawn vz
+  0x14 = a ~2-frame terrain-arming delay, occupancy tested every
+  substep); the write-back reverts the contact substep BEFORE
+  the class dispatch → class-3 debris spawns pre-contact. (4)
+  ENGINE CONSEQUENCE NONE today (T2-class bank, no watch rows);
+  the future E-side TRT fire routine must reproduce the blocker
+  box verbatim (else a death-POSITION divergence: bolts fly
+  through the squad) + the pre-contact debris position + zero
+  damage. Deliverables: §7j.51 + the ledger row "TRT-bolt
+  robot-occupancy probe" + D123. Queued: the debris arrival-SFX
+  pair unit (item 2, renumbered from 3).
 - 2026-08-23: P4/RE THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE unit
   COMPLETE (worker 6bb948aa claim 2, commit 897f524, D122,
   docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,

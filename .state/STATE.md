@@ -1,5 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE FUN_00419756 IDENTITY unit COMPLETE
+    (D123; docs-only, §7j.51, commit 224188f, worker 9a23356a
+    claim 2): the TRT-bolt class-3 probe = a first-alive
+    ROBOT-BANK OCCUPANCY BOX — walks 0x4c69e4/0xA8 (count
+    [0x46ccbc], ALIVE +0x7C≠0), first record with
+    |Δ(x>>8)|<0x10 ∧ |Δ(y>>8)|<0x10 ∧ |z@+8 raw − z>>8|<0x20
+    (all axes Q5-normalized: ±<0.5 tile lateral, ±<1 level z; a
+    BOX not octile; the FUN_004197d4 robot lane shares the
+    identical box; robot z@+8 stored Q5 makes the raw compare a
+    scale match). NOT critters/TRT structures/tile words; sole
+    caller 0x4123ae. THE CLASS-3 VERDICT: the "hit an actor but
+    no robot damage" leg CONFIRMED and stronger — NO damage
+    query of any kind on the path (disburser → kind-8 debris +
+    state := 0), so ALIVE ROBOTS are a pure BLOCKER for the 0x66
+    bolt; the (d+1)·300 damage is exclusively the class-2
+    terrain contact (the §7j.50 residual closed). Two §7j.50/6
+    gloss fixes: the probe takes all THREE args (z = the record's
+    unstepped z); "vz≠0 → break" = skip-height-probe-only
+    (substeps continue; spawn vz 0x14 = a ~2-frame terrain-arming
+    delay); the write-back reverts the contact substep BEFORE the
+    class dispatch → class-3 debris pre-contact. Engine
+    consequence NONE today (T2-class); the future E-side TRT fire
+    routine must reproduce the blocker box + pre-contact debris +
+    zero damage (death-position divergence otherwise). Verified:
+    registry_anchors 2/2 green, manifest clean, objdump-only (no
+    Ghidra run, no corpus read), PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    debris arrival-SFX pair FUN_00421e60/FUN_00421dec unit
+    (7j.11 item 4, renumbered from 3).
+    NEXT: the debris arrival-SFX pair unit (item 2).
+
   - 2026-08-23 P4/RE THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE unit
     COMPLETE (D122; docs-only, §7j.50, commits 897f524 + e5596c7,
     worker 6bb948aa claim 2): FUN_00419aff ELSE PATH DUMPED — no
