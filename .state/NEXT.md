@@ -123,28 +123,37 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
- 2. [P4/RE] THE FUN_004239ef SFX-MESSAGE DISPATCHER UNIT (small;
-   docs-only, unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt): decode the body of
-   FUN_004239ef — cited 17× across §7/§7g/§7j as the id-indexed
-   SFX-message dispatcher (select-ack pair 0xC+k/0xF @0x40c1ae..,
-   armer click 0x2A, robot msgs 9/10/0xB, damage/alarm 0x10/0x11/
-   0x12, weapon msgs 0x1C..0x21/0x22/0x23/0x24/0x26/0x27) but
-   NEVER body-decoded. Head already visible in the objdump: an
-   8-slot × 0x28-stride message queue @0x4eb954 keyed by id+1
-   (scan loop 0x423a0e), ids 0x19..0x1B special-cased (a clear
-   walk 0x423a39). Deliverables: the full slot grammar (+0..+0x28
-   fields incl. the 0x4eb974 tail word), the id→voice-cell /
-   bank-name map (anchor §7j.30 — name every id the 17 call
-   sites pass), the expiry/consume path (who drains the queue —
-   find the tick reader), and per-id corpus reachability. Ledger
-   row(s) + D125; registry_anchors green; PUSH. Pre-queue check
-   (D118 discipline): grep'd DECISIONS + RE-EXW-SIM — ZERO body
-   decode of FUN_004239ef exists (only consumer citations at 17
-   sites + the §7j.12 delayed-trigger row's passing mention);
-   the Backlog "Mission SFX tier" bullet still lists the
-   select-ack pair + armer click as open. (QUEUED 2026-08-23 by
-   the 7j.52/D124 close, worker a553aa84 claim 2.)
+ 2. [P4/RE] THE 0x4ea238 MARKER FAMILY + [0x4de658] CENSUS UNIT
+   (small; docs-only, unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt): decode what the §7g.5/
+   §7j.45 "8-jittered-marker scatter into 0x4ea238" actually IS —
+   the renderer reader 0x40671a (inside FUN_00403938's draw tail),
+   the record grammar (the §3 note says 10-byte records), the
+   MissionShell clear 0x447a56, and FUN_00423e1c's reads
+   (0x423e4c/ec3/f11/f81) — then arbitrate the D125 content note:
+   the announced pair is "DANGER - UNIT n TARGETTED FOR / IMMINENT
+   AERIAL BOMBARDMENT" in all six languages, so decide whether the
+   markers are targeting reticles (→ §7g.5's "reinforcement
+   ARRIVAL" gloss gets corrected) or arrival beacons. Also census
+   [0x4de658] (the 0x80 cooldown latch) writers/readers to close
+   its ledger row. Deliverables: marker grammar + draw census + the
+   §7g.5 arbitration; ledger row(s) + D126; registry_anchors green;
+   PUSH. Pre-queue check (D118 discipline): grep'd RE-EXW-SIM —
+   ZERO body decode of the 0x4ea238 family exists (only the §7g.5/
+   §7j.45 scatter mention + §3's passing "10-byte records" note);
+   0x4de658 has only the §7j.45 row. (QUEUED 2026-08-23 by the
+   7j.53/D125 close, worker d1578d5c claim 2.)
+ 3. [P4/RE] THE HEAT-MACHINE WARNING FAMILY UNIT (small; docs-only,
+   unattended-safe; objdump from ghidra-project/
+   exw-text-objdump.txt): decode the caller family of the
+   OVERHEATED/TEMPERATURE-CRITICAL posts (0x4101d7/0x41025e, ch
+   0/1/2 — §7j.53's only un-named producer family): the containing
+   function's counter/threshold logic, its relation to the §7j.45
+   scorch-lane/heat cells (w@+0x30/+0x32/+0x34/+0xA4), and corpus
+   reachability (no scenario exercises it today). Deliverables:
+   family decode + ledger row(s) + D127; registry_anchors green;
+   PUSH. Pre-queue check: ZERO decode exists (only §7j.53's
+   citation). (QUEUED 2026-08-23 by the 7j.53/D125 close.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -217,9 +226,14 @@ renumbered queue keeps every open item claimable by number).
   RICOCHT1..4 quad, RandB pick — item 4's "RandA" corrected,
   stage-time trigger, corpus reach = k5 only; the §7j.42
   FUN_00421ed6 [identity open] gloss closed in the same unit,
-  commit 2728351). The select-ack pair + armer click remain
-  open — PROMOTED as the FUN_004239ef dispatcher unit (Now
-  item 2, queued 2026-08-23 by the D124 close).
+  commit 2728351). The select-ack pair + armer click — CLOSED
+  2026-08-23 (§7j.53/D125, commit 38a8463: FUN_004239ef decoded
+  whole = the RADIO-WARNING poster, 4-channel queue 0x4eb954 +
+  consumer FUN_00423a85; the 53 ids = the LANGUAGE.*
+  [WARNINGS] lines, all 55 sites named; the "select-ack" pair is
+  the DANGER-TARGETTED/BOMBARDMENT warning; the armer click 0x2A
+  = "EVACUATION COMMENCED"; take A/B = RandA bit0; FORMATS §22 =
+  the LANGUAGE.* container grammar).
   NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
@@ -1846,3 +1860,47 @@ renumbered queue keeps every open item claimable by number).
   (FUN_00403938 weapon 0xC=5000 blast, owner −1). 7 new + 2
   rewritten ledger rows. Manifest verified. PUSHED 45329e9.
   Queued: 7j.24.
+
+- 2026-08-23: P4/RE THE FUN_004239ef SFX-MESSAGE DISPATCHER unit
+  COMPLETE (worker d1578d5c claim 2, commit 38a8463, D125,
+  docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,
+  no Ghidra run; read-only corpus probes: BEDLAM.EXW DGROUP
+  strings + all six LANGUAGE.* files, manifest clean before AND
+  after). CLOSED with the identity headline: FUN_004239ef(id,
+  channel) = the RADIO-WARNING poster — a 4-channel message
+  queue @0x4eb954 (stride 0x28: eight id+1 words +0..+0x1C,
+  insert idx +0x20 wrap 8, voice handle +0x24; per-id-per-
+  channel dedupe; ids 0x19..0x1B = channel FLUSH then post at
+  slot 0; whole queue + display ring MissionShell-zeroed).
+  Channels 0/1/2 = squad slots, 3 = system (drained FIRST).
+  Consumer FUN_00423a85 (MissionShell @0x447ff5, per frame,
+  channels 3→0, oldest-first, ONE message per channel per
+  frame): voice leg (text-only ids 0xF/0x29; gates
+  [0x4eb93c]/[0x4ede5c]/[0x4ede58]; still-playing poll 0x44c5ac
+  keeps the slot queued; take A/B = RandA bit0 off speech
+  record 0x4ee014+8·id, play 0x44c8c4 vol 0x7f00, handle
+  := ret+1) + consume leg (slot := 0, roll the 4×0x26 display
+  ring 0x4ea13c {text[0x20], reveal u16 +0x22, valid u16
+  +0x24}, stage text from 0x46c18c+id·0x30, typewriter render
+  tail, char tables 0x454c20/0x454b70). THE 53-ID MAP IS
+  CORPUS-NAMED: the text table loads at GameMain 0x41c2ff
+  from the [WARNINGS] section of LANGUAGE.* (name 0x457ac9;
+  sibling [MENU_ITEMS] 0x457abe → 0x46af5c, 64-of-96 loaded);
+  all six locales carry exactly 53 records; all 55 call sites
+  reconciled (0/1/2 ARRIVED, 3..8 heat, 9/0xA/0xB IMMINENT,
+  0xC..0xE+0xF DANGER-TARGETTED/BOMBARDMENT, 0x10..0x18 hits/
+  power, 0x19..0x1B TOAST=flush, 0x1C..0x21 weapons, 0x22
+  fence, 0x23/0x24 section, 0x25 "X" placeholder zero sites,
+  0x26/0x27/0x34 objectives, 0x28/0x29 CONGRATULATIONS,
+  0x2A EVACUATION, 0x2B..0x33 battery/damper/ammo).
+  CORRECTIONS: §7f.6 "select SFX" gloss (it is the warning
+  pair; the blink-cursor write = attention-draw) + §7j.37
+  "SFX ids, not text messages" (both speech AND text); §7g.5
+  content note recorded (announcement = targeting warning per
+  corpus; mechanism facts unchanged). FORMATS §22 = the
+  LANGUAGE.* container grammar. Deliverables: RE-EXW-SIM
+  §7j.53 + 2 ledger rows + 3 corrections; FORMATS §22; D125;
+  the Backlog Mission-SFX-tier bullet closed. registry_anchors
+  green; PUSHED. Queued: the 0x4ea238 marker family +
+  [0x4de658] census (item 2, arbitrates the §7g.5 tension) + the
+  heat-machine warning family (item 3).

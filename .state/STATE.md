@@ -1,5 +1,33 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE FUN_004239ef SFX-MESSAGE DISPATCHER unit
+    COMPLETE (D125; docs-only, §7j.53, commit 38a8463, worker
+    d1578d5c claim 2; objdump-only, no Ghidra run; read-only
+    corpus probes of BEDLAM.EXW DGROUP + the six LANGUAGE.*
+    files, manifest clean both sides): FUN_004239ef = the
+    RADIO-WARNING poster — 4-channel queue 0x4eb954 (stride
+    0x28: 8 id+1 words, insert idx wrap 8, voice handle +0x24;
+    dedupe; ids 0x19..0x1B flush their channel; ch 0/1/2 =
+    squad slots, 3 = system drained first); consumer
+    FUN_00423a85 (MissionShell 0x447ff5/frame): voice leg
+    (text-only 0xF/0x29, gates 0x4eb93c/0x4ede5c/0x4ede58,
+    A/B take = RandA bit0 off 0x4ee014+8·id, 0x44c8c4 vol
+    0x7f00, handle ret+1; still-playing poll keeps the slot)
+    + consume leg (roll 4×0x26 display ring 0x4ea13c, stage
+    0x46c18c+id·0x30 text, typewriter render tail). The 53-id
+    map is CORPUS-NAMED from the LANGUAGE.* [WARNINGS]
+    sections (all six locales, 53 records; GameMain loader
+    0x41c2ff; [MENU_ITEMS] sibling → 0x46af5c); all 55 call
+    sites reconciled. Corrections: §7f.6 "select SFX" gloss
+    (the 0xC+k/0xF pair = the DANGER-TARGETTED/BOMBARDMENT
+    warning), §7j.37 "SFX ids, not text messages" (both),
+    §7g.5 content note (announcement = targeting warning per
+    corpus; mechanism unchanged). FORMATS §22 = the LANGUAGE.*
+    container grammar. No engine consequence (the spoken
+    line's RandA draw joins T3/T4). Queued: the 0x4ea238
+    marker family + [0x4de658] census (arbitrates the §7g.5
+    tension) + the heat-machine warning family.
+
   - 2026-08-23 P4/RE THE DEBRIS ARRIVAL-SFX PAIR unit COMPLETE
     (D124; docs-only, §7j.52, commits 01d380b + 2728351, worker
     a553aa84 claim 2): FUN_00421e60 (118 B, 11 callers inside
