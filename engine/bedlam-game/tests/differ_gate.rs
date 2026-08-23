@@ -131,6 +131,10 @@ fn inv_frame(
             // it, the differ reports the E-only row as a coverage
             // finding, never fabricated.
             "dropship-frame" => continue,
+            // The W12-S8 critter-family rows: no EXD alias (the
+            // critter bank + the effect rows are unmapped) — E-only
+            // coverage findings, never fabricated on O1.
+            "critter-bank" | "effect-rows" => continue,
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -370,6 +374,15 @@ fn s0_s1_cross_and_double_run() {
         // the creep-grown mirror words parse back through the
         // compact-tile filter — zero field gaps.
         ("S7", 1361u64, "b41db389f3ad8947", 2u64 + 2),
+        // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
+        // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
+        // cycle — ALIASED, S3 pinned the T2 form; the critter bank
+        // itself + the effect rows are E-ONLY). No destroy staging:
+        // the debris/splash rows never ride. Exactly the 2 S1-class
+        // row-level findings + the critter-bank/effect-rows pair —
+        // zero field gaps (the 0x68 records fabricate through the
+        // same bare-span T2 form).
+        ("S8", 121u64, "b5ae3f8be91c7449", 2u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

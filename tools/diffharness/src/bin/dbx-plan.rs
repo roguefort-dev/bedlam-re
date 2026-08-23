@@ -1506,6 +1506,24 @@ fn emit_plan(scen: &Scenario, reg: &[diffharness::Watch]) -> Result<Emitted, Pla
                 .to_string(),
         );
     }
+    if scen.critters {
+        staging.push(
+            "    \"critters\": true,\n    \"critters_note\": \"E-side staging+arm key \
+             (D114, grammar v1.7): the mission's .NME staged through the \
+             FUN_00416458 spawn schedule (stage_critters — the §7j.18 grammar, \
+             difficulty-scaled) and the controller FUN_00412f34 ARMED (the \
+             MissionShell 0x447fe1 call). The ORIGINAL loads .NME natively at \
+             every mission load and runs the controller UNGATED — the loader's \
+             kind-4 heading draws + the controller's per-frame draws are \
+             CONSUMED on O1 on every scenario — so an unarmed E run's rng-state \
+             rows drift vs O1 (the budgeted channel class, like platforms). No \
+             inject rows: the run's own engage/fire/death traffic produces every \
+             state change; the critter bank + effect rows are E-ONLY coverage \
+             rows (no EXD alias), the 0x68 fire rides the ALIASED projectile \
+             bank\""
+                .to_string(),
+        );
+    }
     if !staging.is_empty() {
         j.push_str("  \"_e_staging\": {\n");
         j.push_str(&staging.join(",\n"));
@@ -2227,6 +2245,51 @@ mod tests {
         .unwrap();
         let committed = include_str!("../../capture-plans/S7.json");
         assert_eq!(emitted.json, committed, "capture-plans/S7.json is stale: regenerate with dbx-plan scenarios/S7.scen --out capture-plans/S7.json");
+    }
+
+    #[test]
+    fn s8_plan_compiles_the_critter_seam() {
+        // W12-S8 (§7j.42, D114): grammar v1.7 `critters = 1` stages
+        // the .NME + arms the controller on E — the staging+arm key,
+        // recorded in _e_staging as the RNG-stream equivalence (the
+        // ORIGINAL's loader heading draws + per-frame controller
+        // draws are consumed on O1 on every scenario). No inject
+        // rows beyond the run's own fire: ONE command record (the
+        // frame-1 artillery burst that produces the deaths); the
+        // critter bank + effect rows stay in _deferred (unaliased —
+        // the D109 rule: E-only coverage rows, never emitted on
+        // O1), and the 0x68 fire rides the ALIASED projectile bank.
+        let s8 = Scenario::parse(include_str!("../../scenarios/S8.scen")).unwrap();
+        assert!(s8.critters);
+        assert!(!s8.destroy && !s8.pickup && !s8.platforms);
+        assert_eq!(s8.markers, vec![(18, 13, 1)], "the gunner on the flat row");
+        let emitted = emit_plan(&s8, &registry()).unwrap();
+        assert!(emitted.json.contains("\"_e_staging\": {"));
+        assert!(emitted.json.contains("\"critters\": true"));
+        assert!(emitted
+            .json
+            .contains("the loader's kind-4 heading draws + the controller's per-frame draws"));
+        // ONE inject row: the frame-1 artillery command — the ring
+        // append, never a staging write.
+        assert_eq!(emitted.inject_count, 1);
+        for (_, addr, _) in &extract_injects(&emitted.json) {
+            assert_eq!(addr, "CS:0009255C", "the command ring append");
+        }
+        // The unaliased rows refuse: the critter bank + the effect
+        // rows + the rest of the T2/T3 E-only set stay deferred.
+        assert!(emitted.json.contains("critter-bank"));
+        assert!(emitted.json.contains("effect-rows"));
+    }
+
+    #[test]
+    fn s8_plan_matches_committed_artifact() {
+        let emitted = emit_plan(
+            &Scenario::parse(include_str!("../../scenarios/S8.scen")).unwrap(),
+            &registry(),
+        )
+        .unwrap();
+        let committed = include_str!("../../capture-plans/S8.json");
+        assert_eq!(emitted.json, committed, "capture-plans/S8.json is stale: regenerate with dbx-plan scenarios/S8.scen --out capture-plans/S8.json");
     }
 
     #[test]

@@ -4553,7 +4553,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | critter bounty gate | all six handlers: attacker w@+0x04 ≠ −1 ∧ robot[attacker].type w@+0x2A == [0x4edb90] → score [0x4dd40c] += 30/50/500/75/150/1000 (k1/k2/k3/k4/k5-6/k7) + DAT_0046ccf0 := 2 (score-strip refresh, = the §7j.6 pickup mechanism); env kills award nothing | §7j.24 |
 | debris-crush death dispatcher | FUN_0040dce0(idx, mag, heading, dmg), sole caller = the debris physics tick FUN_0040de9c @0x40e13b: guards w@+0x02 ∉ {7,2} ∧ mag > 2 ∧ dmg ≠ 0; damage FUN_0040eb3c; sin/cos·mag knock + move FUN_00412998 (kind 7 ∨ wall test FUN_0041e9a2); hp ≤ 0 → attacker := −1 + per-kind death dispatch (k4 weapon 0, k5/6 weapon 0x24 = full explosive drops, k5/6 state ∈ {5,6} absorbed) — the SECOND death dispatch site besides FUN_004190bc | §7j.24 |
 | critter-death SFX trio | FUN_00421f4c(x,y): [0x4ede58]≠0, RandB()%3 → banks 0x4edf88/0x4edf8c/0x4edf90 → FUN_0043a48e(bank,0,x,y,2); twin of the impact trio FUN_00421fc2 (0x4edf7c/80/84) | §7j.24 |
-| effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16 | §7j.24 |
+| effect-row spawner | FUN_0041a14f(x,y,z Q13,count): rows 0x4cec38 stride 0x20 via allocator FUN_0041a494 (ages every row w@+0, returns MAX-age — always-evict LRU, 80 rows); row {age 0, xyz d@+2/+6/+0xA, cos/sin d@+0xE/+0x12, d@+0x16 = (RandA&7)·0x10+0x80, id w@+0x1A = i (<8) else FUN_0041ec1c(5,0)+3, w@+0x1C/+0x1E 0}; callers: k4 death (8), k5/6 death (12), controller ballistic landing (0x18 — the k7 body only, §7j.43/2); FUN_0041a028 (§7j.23 knockback) is the parallel writer w/ different +0x16. LANDED (W12-S8/D114: the death-handler callers — the E-ONLY T3 `effect-rows` row) | §7j.24/§7j.43 |
 | robot-death blast bank | 0x4eb638, 32 × 0x14 {x d@+0, y d@+4, z-dword d@+8, age/claim d@+0xC, frame d@+0x10} — the MISSIONVIEW §5d/§5e "platform loop" bank; PRODUCER = FUN_0042382c(idx) from the FUN_0040e230 death tail: gate = 0x46af58 claim byte == 0 at the robot tile, slot = FUN_004238ea (first age 0 else MIN-age); anim tick FUN_004238af (frame ++ wrap 0x10→4); CONSUMER (7j.26) = enqueue pair SMOKER.BIN frame 0 mode 300 + frame d@+0x10+1 mode 0x12d (DARKPAL) at sy−0x20 | §7j.24, §7j.26 |
 | direct blit codec | FUN_00401e39(img, transp 0/≠0, x, y; ESI bank, EDI dest) — the shared draw_IMG consumer: .BIN = u16 count word0 + int32 dir at bank+2+4*img (offset rel. own slot; corpus-verified 24/24 DEBRIS, 160/160 DANTE), hdr {flags u16 (bit1 hotspot (yoff,xoff) s16×2, bit0 RLE), w, h; w/h==0 → instant skip}; RLE words bit15=skip(→zero-paint when opaque)/literal raw copy, bit14=EOL; dest EDI+y*0x280+x stride 0x280; NO palette modes (vs the §5 flush codec FUN_00401471); counts: DEBRIS 24, SMOKER 17, DROPSHIP 210 | §7j.26 |
 | effects mover | FUN_00419f62 (MissionShell @0x44813d): delay −− else x+=vx/y+=vy/z+=vz; kill +0x18:=0 iff x/y/z<0 ∨ x>>13≥[0x4eddec] ∨ y>>13≥[0x4eddf0] ∨ z>>13>0xB | §7j.26 |
@@ -4565,8 +4565,8 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | tile-0x62 trap pair | FUN_0040fe93 (robots() caller @0x40bc44) / FUN_0040ff92 (critter FUN_00412f34 @0x413fd7): type-DB byte 0x62 ∧ grid ≠ 0 → FUN_0041a894(damage 100, no score); destroyed → 5× k12 debris (±RandA jitter, delays 0/2/4/6/8). The 0x4c69e4 "160-B stride" was a census slip — TRUE stride 0xA8 (21·idx·8, §7j.25 item 7); anomaly CLOSED | §7j.13, §7j.25 |
 | weapon damage table | FUN_00419aff(EAX id) → EAX damage: 2→20, 3→30, 4→40, 5→75, 0xc→5000, 0xd→312, 0x1a→75, 0x24→400, 0x29→250, 0x65→(d+1)·50 [d=2→200], 0x66→(d+1)·300 [d=2→1200], 0x67/0x68→(d+1)·75 [d=2→300], else 1; 28 callers | §7j.15 |
 | difficulty scalar | dword 0x46cbf8, 0..2: cycled (d+1)%3 at NameEntryScreen, save-persisted, zone-7 temporarily forces 2 (GameMain); scales projectile damage 0x65..0x68 (7j.15) AND critter behavior (7j.17: respawn delay DAT_00454edc[d], 0x65 range 172/236/300, engage leash 640/704/768, point-blank fire rate 32/16/8 frames, attack-break 1/8·1/16·never; 12 objdump sites in FUN_00412f34) | §7j.15/§7j.17 |
-| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); kind table 0x412f18 {k1 0x414c96, k2 0x415216, k3 0x4145c1, k4 0x414079, k5/6 0x41367c shared, k7 0x412f52}; per-frame: presence w@+0x24==0 skip, fuse/hit-flash w@+0x7C decrement, kind dispatch, epilogue (presence mark byte 1, 8-corner z-settle, moved→trap re-probe); state 4 body: species w@+0x02 = SUBSTEPS/frame, modes {0xB dormant (countdown vs 0x454edc[d] → wake mode 9 + hp 0xC8 + species 6 + RandA&3 dir), 7 dying 0x28→0xB, 6 ballistic, 9 seek walk (re-picker 25% RandA&3 / 75% FUN_004181bd + pause 0x20..0x5F + 4-way steppers ±1 + FUN_00415490 per step), 2 range-attack (dist<0x1F4: countdown==4→re-seek else FUN_0040db9e(target,2,heading<<6,1,−1), substep-0 countdown++)}; state 5/6 body: 1/32 facing drift w@+0x72, modes {0xB dormant (BEAMIN at table−9, wake mode 8 + hp 0x96 + species 3 + FUN_0041ec1c(0xFF) heading), 0xA pause→8, 7 dying, 6 ballistic, 5 rise, 8 ENGAGE (gate [0x4dd410]≡0 SP; FUN_00417c00 nearest-alive octile-px; dist<0x60 ∧ leash (d+1)·0x40+0x258 ∧ >0x80 → 1/128 FUN_00421ed6 + aim+step)}; k1/k2/k3/k7 bodies §7j.17 (state 1 wander / 2 sine-walk shooter 0x65 / 3 chase 0x67 / 7 close-combat 0x69) | §7j.17/§7j.18/§7j.42 |
-| critter→robot ranged attack | FUN_0040db9e(robot, mult, seed, damage, param_5): damage word = dword[0x476fe4 + 0x30·param_5] (CORRECTED §7j.42/4: stride 0x30; param_5=−1 → 0x476FB4) → FUN_0040e230(robot, damage-seed=1, owner=the table dword); mult≠0 → robot w@+0x10 := 0xFFFF + FUN_0040c536(idx, cos(seed)·mult>>7, seed, sin(seed)·mult>>7) = the stun/knock applier (SP gate [0x4eaac0]==0, state∉{3,5}: w@+0x0E := seed, walk-probe-gated x/y += v, +0x10 := −1) | §7j.42 |
+| critter-actor controller | FUN_00412f34 (MissionShell @0x447fe1): bank 0x4cff98 stride 0x7E count DAT_0046cc2c (FUN_00416458 @0x41646d — the .NME loader, §7j.18); kind table 0x412f18 {k1 0x414c96, k2 0x415216, k3 0x4145c1, k4 0x414079, k5/6 0x41367c shared, k7 0x412f52}; per-frame: presence w@+0x24==0 skip, fuse/hit-flash w@+0x7C decrement, kind dispatch, epilogue (presence mark byte 1, 8-corner z-settle, moved→trap re-probe); state 4 body: species w@+0x02 = SUBSTEPS/frame, modes {0xB dormant (countdown vs 0x454edc[d] → wake mode 9 + hp 0xC8 + species 6 + RandA&3 dir), 7 dying 0x28→0xB, 6 ballistic, 9 seek walk (re-picker 25% RandA&3 / 75% FUN_004181bd + pause 0x20..0x5F + 4-way steppers ±1 + FUN_00415490 per step), 2 range-attack (dist<0x1F4: countdown==4→re-seek else FUN_0040db9e(target,2,heading<<6,1,−1), substep-0 countdown++)}; state 5/6 body: 1/32 facing drift w@+0x72, modes {0xB dormant (BEAMIN at table−9, wake mode 8 + hp 0x96 + species 3 + FUN_0041ec1c(0xFF) heading), 0xA pause→8, 7 dying, 6 ballistic, 5 rise, 8 ENGAGE (gate [0x4dd410]≡0 SP; FUN_00417c00 nearest-alive octile-px; dist<0x60 ∧ leash (d+1)·0x40+0x258 ∧ >0x80 → 1/128 FUN_00421ed6 + aim+step)}; k1/k2/k3/k7 bodies §7j.17 (state 1 wander / 2 sine-walk shooter 0x65 / 3 chase 0x67 / 7 close-combat 0x69). LANDED engine-side (bedlam-core::critter, W12-S8/D114: the k4/k56 subset; the §7j.42 band/roll glosses corrected by §7j.43 — the point-blank RETREAT band, the d=2 never-rolls break, the impact-aimed dives) | §7j.17/§7j.18/§7j.42/§7j.43 |
+| critter→robot ranged attack | FUN_0040db9e(robot, mult, seed, damage, param_5): damage word = dword[0x476fe4 + 0x30·param_5] (CORRECTED §7j.42/4: stride 0x30; param_5=−1 → 0x476FB4) → FUN_0040e230(robot, damage-seed=1, owner=the table dword); mult≠0 → robot w@+0x10 := 0xFFFF + FUN_0040c536(idx, cos(seed)·mult>>7, seed, sin(seed)·mult>>7) = the stun/knock applier (SP gate [0x4eaac0]==0, state∉{3,5}: w@+0x0E := seed, walk-probe-gated x/y += v, +0x10 := −1). LANDED (W12-S8/D114: apply_damage + the move_possible-gated knock, Q13 scale) | §7j.42/§7j.43 |
 | critter seek-acquisition dispatcher | FUN_00415490(idx): dword@+0x10 (dual-purpose: wander heading 0..255 / mode-9 seek direction 0..3) `cmp 3; ja FATAL` → table 0x415480; 4 directional forward-acquisition probes vs the robot bank 0x4c69e4/0xA8 (tight −4..+0xF ahead on the walk axis, |Δ|<0x18 crossing + z; case 3 reads robot y RAW — quirk); hit → target w@+0x7A, mode w@+0xC := 2, anim w@+0x56 := 0; >3 → "Buggered direction in MOFO" 0x457a3c fatal (fade-cancel 0x420100 + print 0x44d2ac + FATAL EXIT 0x44d2da); the mode-9 walk dispatches the same dword via table 0x412ef8 → steppers 0x417f2c/0x417fe8/0x4180c0/0x41813d (y−1/x+1/y+1/x−1), step-OK → move one unit + call FUN_00415490 | §7j.29 |
 | mission extension tags | DGROUP 0x457a57 ".NME" / 0x457a5c ".TRT" / 0x457a64 ".POS" / 0x457a69 ".BDG" — exactly one reference each (0x41648c/0x4170c3/0x41a55d/0x41a5d6 = the four CLOSED loaders §7j.18/§7j.15/§7j.25); 0x457a4c "MOFO\0" = dead tail of the fatal string 0x457a3c, ZERO refs, no ".MOFO" bytes in EXW or EXD, no *.MOFO corpus file — the ".MOFO loader" RETIRED | §7j.29 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
@@ -6563,3 +6563,98 @@ against that dump unless tagged.
    enemy-produced rows on the ALIASED projectile-bank T2 row.
    The kind-5/6 RESPAWN-delay table DAT_00454edc (DGROUP,
    file-extract) = {1500, 900, 600} per difficulty.
+
+## 7j.43. THE S8 ENGINE-LANDING ADDENDUM — the §7j.42 WIP corrections (asm re-verification during the W12-S8 engine leg) + the corpus-engagement findings (2026-08-23, worker 40dd9473 claim 2; objdump-only re-walks of 0x41367c..0x414596, no Ghidra run)
+
+The engine leg adopted the interrupted predecessor WIP against
+the committed §7j.42 notes and re-verified every mode body
+against the objdump. All facts [verified] against the same
+ghidra-project/exw-text-objdump.txt.
+
+1. **FIVE corrections to the §7j.42 glosses + the WIP** [each
+   asm-verified this unit]:
+   - **The kind-5/6 mode-2 break roll at d=2 NEVER fires**
+     (0x413e81: `cmp difficulty,1; jne 0x4139fd` — d≥2 jumps
+     straight to the substep burn, NO draw): the §7j.42/7
+     "(d=2: always)" gloss was inverted. d=2 breaks ONLY on
+     countdown==0 ∨ slot−1 — and the ±(FACING+0x40) strafe roll
+     (0x413ebf, one draw) runs on EVERY break path including
+     those (the strafe delta is facing+0x40, not the bare 0x40).
+   - **The kind-5/6 mode-6 dive aims AT THE IMPACT and steps the
+     REVERSED heading** (0x413793..0x413804: the angle of
+     (impact−critter), `lea edx,[eax+0x80]` into FUN_00415ff2,
+     the record's heading field keeps the AIM); the WIP aimed at
+     HOME and stepped forward. Mode 5 (rise) writes the at-impact
+     heading with NO step (0x413871..0x4138da) and its anim>1
+     flip RE-DISPATCHES engage the SAME substep (`jmp 0x4136fc`
+     at 0x41386c) — as does the dormant WAKE (0x413a93).
+   - **The kind-4 mode-6 leash reads IMPACT not home**
+     (0x41412c: `(x<<8)−impact_x` — Q13), the countdown decrement
+     is UNCONDITIONAL at substep 0 (not nested under the
+     leash-out), and the ONLY mode-7 transition is
+     countdown==0 (0x41424f) — the WIP's anim≥8 path was
+     invented. The dive speed multiplier is
+     max(countdown, 2) (0x4141a4: the dword@+0x54 sar-16 read).
+   - **The ENGAGE band geometry** [exact, 0x413ad1..0x413cfb]:
+     dist<0x60 → POINT-BLANK RETREAT (heading := aim+0x80+facing,
+     step, the substep-0 anim-6 wrap) — the §7j.42/3 "quiet
+     freeze" gloss was wrong; 0x60≤dist≤0x80 → the TRANSITION;
+     0x80<dist<leash → the juice draw (always consumed) +
+     heading := aim+FACING with NO +0x80 (the WIP added it);
+     ≥leash → quiet. The kind-4 WAKE also falls into the seek
+     tail the same substep (0x414421: `jmp 0x4142bd`) — the WIP
+     had this right.
+   - **The kind-4 walk-probe/staging scale**: the §7j.18 S4
+     loader stamps RAW px (= Q5) x/y — the staging z probe and
+     the stepper probes read floor_z(x, y, …) DIRECTLY (no >>8,
+     bounds x>>5), while the mixed kinds' Q13 coords shift. The
+     WIP applied the Q13 scale to both. Same for
+     FUN_004181bd's dominant-axis deltas (the asking critter's
+     OWN record — the WIP read critter[0] for everyone) and the
+     SIGNED sine-word reads (the table is i16; a u16 view loses
+     every negative step — the engine's homing-steering site has
+     the same unsigned read and is flagged for its own unit).
+2. **The mode-6 LANDING producers do NOT exist on the corpus
+   kind bodies** [verified — corrects §7j.17's "landing → 8× k6 +
+   5× splash + 0x18 rows" claim]: ZERO calls to FUN_0041a14f /
+   FUN_00424355 / FUN_00420608 / FUN_00421f4c in
+   0x413600..0x414600 (the k5/6 + k4 bodies); both corpus
+   mode-6→7 transitions (0x413815 kind-5, 0x41424f kind-4) write
+   ONLY the mode/counter. The 0x413244 0x18-row call sits in the
+   k7 body (0x412f52.. — corpus-dead). The §7j.17 expectation
+   applies to kinds the corpus never stages.
+3. **THE CORPUS ENGAGEMENT FINDINGS** (the S8 canonical run,
+   chain b5ae3f8be91c7449, D114):
+   - ZONEA/MISSION1 terrain: rows 5-10 and 13+ at x12..23 are
+     floor 31 EXCEPT a 95-plateau at (16..19, 11) + the (15,·)/
+     (20,·)/(12..15,12) 63-strips — a marker staged on the
+     plateau puts the artillery burst one z-level high and the
+     §7j.23 z-box (|Δz|<0x20) misses every critter. The S8
+     gunner stages at (18,13) — the flat row.
+   - The (18,·) pack APPROACHES under the juice draw and crosses
+     the transition band within frames (2-3 critters cycling
+     fire/chase); the burst's ring lists kill the approached
+     pack + the walked-in kind-4s (9 dead by f39: mode-6 dives,
+     mode-7 dying 0x28, mode-0xB dormancy — the d=0 respawn
+     table 1500 frames out).
+   - The bounty gate stays DARK on the corpus path: the blast is
+     a script kill (attacker −1), and robot-owned critter kills
+     need bullet records — whose inline spawns do not exist
+     (the S3-documented AI-order family E-gap). The gate is
+     pinned synthetically only.
+   - The kind-4 far quad at (3,6)/(2,7) z2 never moves (the
+     probes fail on the 63-wall band around them) — a faithful
+     blocked-path freeze, carried as seek-mode census weight.
+4. **Engine routing LANDED (D114)**: bedlam-core::critter — the
+   bank + the .NME staging host seam (the §7j.18 schedule, the
+   unmodeled kinds refused fail-loud) + the k4/k56 controller
+   subset + the FUN_0041a14f effect-row bank (the §7j.24/5 LRU
+   allocator, 3 draws/row + 1 per overflow id row) + the §7j.24
+   death handlers (the {0x24,0x29,0xC} weapon-gated debris +
+   rows) + the odd-pass FUN_004197d4 walker + the FUN_004190bc
+   applier at the bullet-substep and script-blast lanes. The
+   critter bank + effect rows are the E-ONLY T2/T3 coverage rows
+   (never in state_hash — the W6 split); the ALIASED
+   observables: the RNG stream, the robot bank, the projectile
+   bank (the 0x68s), the score bounty. Grammar v1.7
+   `critters = 1`; the S0..S7 chains byte-identical without it.
