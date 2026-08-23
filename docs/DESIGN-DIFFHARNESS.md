@@ -794,6 +794,24 @@ differ come before any new scenario depth.
     (4 apart), so the O2 capture form is the 8-byte span @0x4eddec
     (w@+0x00/h@+0x04) — see D137-CORRECTION. The driver itself stays
     operator-gated W11 work.
+    **O2 STITCH SUPPORT LANDED 2026-08-24 (D139, W11-prep):** the
+    stitch side of the D138 plan form — `runner::stitch` threads the
+    dump channel through the anti-ghost validation (O2 transcripts
+    validate every id against the registry's `exw_addr`, the mirror
+    of the O1 `exd_addr` rule; the one EXD-only row
+    `static-cursor-clamp` rejects LOUD, never silently — and the rules
+    are per-channel mirrors, never global: an EXD-gap T3 row with a
+    live EXW cell dumps fine on O2). `dbx-stitch --channel o2`
+    produces the O2 dump + manifest through the same
+    channel-agnostic stitch/encode/chain machinery (§3).
+    `differ_gate` (`s0_o2_transcript_stitch_channel_rule`) drives the
+    lane headless: the fabricated O2 transcript of the real S0 run
+    (D138 row forms) stitches through the enforced rule + decodes
+    channel-marked, the EXD-only row refuses, and the same row stays
+    legal on O1. With this, the O2 plan (dbx-plan), the O2 dump
+    normalizer + tiebreak (differ), and the O2 stitch are all
+    channel-complete — the ptrace driver itself is the only remaining
+    W11 piece (operator-gated).
 12. **W12 — scenario depth S3–S8** as producer families land in-engine
     (each S3+ unit pairs the engine producer with its scenario).
     **S3-PREP LANDED 2026-08-22 (D102, §7j.37):** the E-side

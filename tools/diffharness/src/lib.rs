@@ -13,6 +13,8 @@
 //! W4: the runner formats (`runner`) — scenario grammar v1 + the
 //! channel-agnostic DBXCAP capture transcript + the stitcher that
 //! produces the W3 dump + digest manifest (DESIGN-DIFFHARNESS §3/§10).
+//! The stitch validates transcript ids per CHANNEL since D139: O1
+//! binds the registry `exd_addr` cell, O2 the `exw_addr` mirror.
 //!
 //! The parser below understands only the TOML subset the registry uses:
 //! comments, `[[watch]]` table headers, and `key = "quoted string"` /

@@ -61,8 +61,14 @@
 //!
 //! Stitch validation (the anti-ghost guards): every transcript id must
 //! exist in the committed registry, its tier must be among the
-//! scenario's tiers, and — for the O1 channel — its `exd_addr` must be
-//! non-empty (EXW-only rows never enter an EXD dump; gaps stay explicit).
+//! scenario's tiers, and the CHANNEL-side registry address must be
+//! non-empty — `exd_addr` for O1 (EXW-only rows never enter an EXD
+//! dump) and `exw_addr` for O2 (EXD-only rows — e.g. static-cursor-
+//! clamp — never enter an EXW dump; they reject LOUD, never silently;
+//! D139). The rules are per-channel mirrors, never global: a T3 row
+//! with no EXD alias but a live EXW cell dumps fine on O2 (the EXW
+//! cell IS the canon there). Engine and O3 dumps carry no address rule
+//! (E fabricates from engine state; O3 is W10).
 
 use crate::dump::{self, Channel, DumpHeader, FrameRecord};
 use crate::hash::{hex_lower, sha256};
@@ -1001,6 +1007,13 @@ pub enum StitchError {
         id: String,
         status: String,
     },
+    /// O2 anti-ghost (D139): registry row has no EXW address (EXD-only
+    /// rows never enter an EXW/Wine dump; the `note` field carries the
+    /// registry's reason).
+    NoExwAddress {
+        id: String,
+        note: String,
+    },
     /// Transcript frame count != scenario frames + 1 (anchor included).
     FrameCountMismatch {
         expected: u64,
@@ -1025,6 +1038,12 @@ impl fmt::Display for StitchError {
                 f,
                 "watch {id:?} has no EXD address (exd_status {status:?}) — \
                  EXW-only/gap rows never enter an O1 dump"
+            ),
+            StitchError::NoExwAddress { id, note } => write!(
+                f,
+                "watch {id:?} has no EXW address (note {note:?}) — \
+                 EXD-only rows never enter an O2 dump (the EXW canon cell is \
+                 the registry's exw_addr)"
             ),
             StitchError::FrameCountMismatch { expected, actual } => write!(
                 f,
@@ -1128,10 +1147,24 @@ pub fn stitch(
                     scenario: scenario.id.clone(),
                 });
             }
+            // Channel-threaded anti-ghost rules (D139): each guest
+            // channel validates against its OWN registry address cell —
+            // O1 binds exd_addr, O2 binds exw_addr. Per-channel
+            // mirrors, never global: an EXD gap with a live EXW cell
+            // (the T3 effect rows, e.g. debris-stager) is refused on
+            // O1 yet legal on O2 (the EXW cell is the canon there and
+            // the O2 plan emits it, D138); the EXD-only rows (e.g.
+            // static-cursor-clamp) are the O2 mirror case.
             if header.channel == Channel::O1ExdDosboxX && row.exd_addr.is_empty() {
                 return Err(StitchError::NoExdAddress {
                     id: row.id.clone(),
                     status: row.exd_status.clone(),
+                });
+            }
+            if header.channel == Channel::O2ExwWine && row.exw_addr.is_empty() {
+                return Err(StitchError::NoExwAddress {
+                    id: row.id.clone(),
+                    note: row.note.clone(),
                 });
             }
         }
@@ -1499,6 +1532,100 @@ mod tests {
             stitch(&s, &t, &hdr, &r),
             Err(StitchError::UnknownWatch(_))
         ));
+    }
+
+    #[test]
+    fn stitch_o2_channel_rules() {
+        // D139: the O2 transcript channel — the address rule binds the
+        // registry's EXW canon cell (exw_addr), the mirror of the O1
+        // EXD rule. Four pins:
+        // (a) an O2 transcript in the D138 plan form (static-map-wh =
+        //     the 8-byte ADJACENT span, w@+0x00/h@+0x04 — NOT the EXD
+        //     0x30 span) stitches + decodes with the O2 channel marker
+        //     and the manifest names the channel;
+        // (b) the EXD-only row (static-cursor-clamp — empty exw_addr in
+        //     the LIVE registry) rejects LOUD on O2, no fabrication;
+        // (c) the rules are per-channel mirrors: a T3 row with NO EXD
+        //     alias but a live EXW cell (debris-stager, exw 0x476fbc)
+        //     is refused on O1 yet stitches CLEAN on O2;
+        // (d) the mirror does not over-fire: static-cursor-clamp HAS an
+        //     EXD cell — it stitches clean on O1 (its O1 dump is legal).
+        let s = Scenario::parse(SCEN).unwrap(); // T0 + TS
+        let r = reg();
+
+        // (a) the D138 O2 form end-to-end through the same
+        // stitch/encode/digest machinery (channel-agnostic, DESIGN §3):
+        // 25x75 map words as the adjacent-span pair.
+        let cap = "DBXCAP v1\n\
+                   frame 100\n\
+                   watch frame-counter 64000000\n\
+                   watch static-map-wh 190000004b000000\n\
+                   frame 101\n\
+                   watch frame-counter 65000000\n\
+                   frame 102 1\n\
+                   watch frame-counter 66000000\n\
+                   watch rng-state-a 4ee60200\n";
+        let t = Transcript::parse(cap).unwrap();
+        let hdr = DumpHeader::new(Channel::O2ExwWine, [0xab; 32], "S0");
+        let st = stitch(&s, &t, &hdr, &r).unwrap();
+        let dec = dump::decode_dump(&st.bytes).unwrap();
+        assert_eq!(dec.header.channel, Channel::O2ExwWine);
+        assert_eq!(st.manifest.channel, "O2:EXW/Wine");
+        // The 8-byte span rides through untouched — the differ's O2
+        // normalizer parses (w, h) from it (D137/D138).
+        assert_eq!(dec.frames[0].watch("static-map-wh").unwrap().len(), 8);
+
+        // (b) EXD-only row on O2: LOUD rejection.
+        let t = Transcript::parse(
+            "DBXCAP v1\nframe 1\nwatch static-cursor-clamp f014000040140000\n\
+             frame 2\nwatch frame-counter 00\n",
+        )
+        .unwrap();
+        match stitch(&s, &t, &hdr, &r) {
+            Err(StitchError::NoExwAddress { id, .. }) => assert_eq!(id, "static-cursor-clamp"),
+            other => panic!("expected NoExwAddress, got {other:?}"),
+        }
+
+        // (c) per-channel mirrors on the T3 EXD-gap row.
+        let s3 = Scenario::parse("scenario = S0T3\ntiers = T0,T3\nframes = 1\n").unwrap();
+        let cap = "DBXCAP v1\nframe 1\nwatch frame-counter 00\nwatch debris-stager 00\n\
+                   frame 2\nwatch frame-counter 00\n";
+        let t = Transcript::parse(cap).unwrap();
+        let o1 = stitch(
+            &s3,
+            &t,
+            &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0T3"),
+            &r,
+        );
+        assert!(
+            matches!(o1, Err(StitchError::NoExdAddress { .. })),
+            "the O1 rule still binds the EXD cell"
+        );
+        let o2 = stitch(
+            &s3,
+            &t,
+            &DumpHeader::new(Channel::O2ExwWine, [0; 32], "S0T3"),
+            &r,
+        );
+        assert!(
+            o2.is_ok(),
+            "an EXD gap with a live EXW cell dumps on O2: {o2:?}"
+        );
+
+        // (d) static-cursor-clamp stays legal on O1 (it HAS an EXD
+        // cell) — 3 frame records to match the frames+1 contract.
+        let t = Transcript::parse(
+            "DBXCAP v1\nframe 1\nwatch static-cursor-clamp f014000040140000\n\
+             frame 2\nwatch frame-counter 00\nframe 3\nwatch frame-counter 00\n",
+        )
+        .unwrap();
+        assert!(stitch(
+            &s,
+            &t,
+            &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0"),
+            &r
+        )
+        .is_ok());
     }
 
     #[test]
