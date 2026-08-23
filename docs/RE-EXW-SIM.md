@@ -6574,8 +6574,10 @@ against that dump unless tagged.
      (idx 0, 10,000,000) when none, asm 0x417c00..0x417c5c);
      dist < 0x60 (96 px) → 0x413b63: leash `(d+1)·0x40 + 0x258`
      (600/664/728) ∧ dist > 0x80 → 1/128 (RandA&0x7F==0)
-     FUN_00421ed6(x>>8, y>>8) [identity open — a juice/squawk
-     family], aim heading := angle(robot−critter)+0x80&0xFF →
+     FUN_00421ed6(x>>8, y>>8) [identity CLOSED by §7j.52/D124:
+     the GRUNT1/2/3 trio — RandB()%3, cells 0x4ee000/04/08,
+     priority 2, [0x4ede58]-gated; the §7j.42 "juice/squawk
+     family" guess right in kind], aim heading := angle(robot−critter)+0x80&0xFF →
      step; dist ≥ leash or ≤ 0x80 → 0x413c20 (the
      approach/retreat path — §7j.17 mode-3/10 family);
      dist ≥ 0x60 → aim + FUN_00415ff2 step toward (0x413aae
