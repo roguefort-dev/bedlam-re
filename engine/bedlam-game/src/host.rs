@@ -618,6 +618,13 @@ impl GameHost {
     }
 
     /// Whether a Title-scene movie owns the screen: one that is
+    /// The staged menu cursor (game space), for window-host absolute-
+    /// pointer steering; None when no menu is staged (mission aiming
+    /// stays relative and is never steered).
+    pub fn menu_cursor(&self) -> Option<(i32, i32)> {
+        self.menu.as_ref().map(|m| m.cursor())
+    }
+
     /// Cinematic skip router (operator 2026-08-23). One frame-level
     /// intent: Space/Enter (ADVANCE), Escape, or left-click while a
     /// cinematic holds the screen finishes it NOW, so the ordinary

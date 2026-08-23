@@ -43,8 +43,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bedlam_game::{GameConfig, GameError, GameHost, Scene};
-use bedlam_platform::scale::PresentConfig;
+use bedlam_platform::scale::{scale_rect, PresentConfig};
 use bedlam_platform::{ParityGpu, ParityPipeline};
+use bedlam_render::{CANON_H, CANON_W};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{ElementState, WindowEvent};
@@ -305,6 +306,34 @@ struct ShellApp {
     fatal: Option<ShellError>,
 }
 
+/// Map a window-space physical cursor position to canonical game
+/// space (640x480), inverting the presentation scale rect exactly.
+/// Bars clamp to the frame edge. None for a degenerate rect or the
+/// Fill mode (Fill crops the source - its inverse needs the uv rect
+/// and is out of scope; relative aiming is used there instead).
+fn cursor_to_game(
+    px: f64,
+    py: f64,
+    win_w: u32,
+    win_h: u32,
+    cfg: &PresentConfig,
+) -> Option<(i32, i32)> {
+    use bedlam_platform::scale::ScaleMode;
+    if cfg.scale == ScaleMode::Fill {
+        return None;
+    }
+    let r = scale_rect(cfg.scale, CANON_W, CANON_H, win_w, win_h);
+    if r.w == 0 || r.h == 0 {
+        return None;
+    }
+    let gx = ((px - r.x as f64) * f64::from(CANON_W) / r.w as f64).round() as i32;
+    let gy = ((py - r.y as f64) * f64::from(CANON_H) / r.h as f64).round() as i32;
+    Some((
+        gx.clamp(0, CANON_W as i32 - 1),
+        gy.clamp(0, CANON_H as i32 - 1),
+    ))
+}
+
 impl ShellApp {
     /// Stage the scene the host just entered. On staging failure the
     /// loop records the error and exits (a missing corpus asset is
@@ -326,9 +355,36 @@ impl ShellApp {
     /// MANY; each pump is the same fixed dt + an input snapshot).
     fn run_pumps(&mut self, pumps: u32) {
         for _ in 0..pumps {
-            let frame = self.input.tick();
+            let mut frame = self.input.tick();
+            // Absolute-pointer steering (operator 2026-08-23): the DOS
+            // menu integrates RELATIVE deltas, so the internal pointer
+            // drifts from the real cursor and clicks land on the wrong
+            // strip. While a menu is staged, replace the raw deltas with
+            // the steering delta to the REAL cursor mapped into game
+            // space; the menu still owns its position (parity path
+            // unchanged), it just tracks the window cursor exactly.
+            if let Some(target) = self.game_cursor_target() {
+                if let Some((mx, my)) = self.host.menu_cursor() {
+                    frame.mouse_dx = (target.0 - mx).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+                    frame.mouse_dy = (target.1 - my).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+                }
+            }
             self.host.pump_frame(SUBTICKS_PER_PUMP, &frame);
         }
+    }
+
+    /// The real cursor in game space, when the window knows both the
+    /// cursor position and the surface size.
+    fn game_cursor_target(&self) -> Option<(i32, i32)> {
+        let g = self.gfx.as_ref()?;
+        let pos = g.cursor?;
+        cursor_to_game(
+            pos.x,
+            pos.y,
+            g.surface_cfg.width,
+            g.surface_cfg.height,
+            &self.opts.present,
+        )
     }
 
     /// Upload + present the canonical frame (PARITY path, D20).
@@ -473,5 +529,49 @@ impl ApplicationHandler for ShellApp {
         if let Some(g) = self.gfx.as_ref() {
             g.window.request_redraw();
         }
+    }
+}
+
+#[cfg(test)]
+mod cursor_tests {
+    #![allow(unused_imports)]
+    use super::*;
+
+    #[test]
+    fn cursor_to_game_exact_rects() {
+        let cfg = PresentConfig::default(); // Integer + Nearest
+                                            // Exact 2x window: rect = 1280x960 at (0,0).
+        assert_eq!(
+            cursor_to_game(640.0, 480.0, 1280, 960, &cfg),
+            Some((320, 240))
+        );
+        assert_eq!(cursor_to_game(0.0, 0.0, 1280, 960, &cfg), Some((0, 0)));
+        // 1920x1080, Integer: sx=3, sy=2 -> s=2 -> rect 1280x960 at (320,60).
+        assert_eq!(cursor_to_game(320.0, 60.0, 1920, 1080, &cfg), Some((0, 0)));
+        assert_eq!(
+            cursor_to_game(960.0, 540.0, 1920, 1080, &cfg),
+            Some((320, 240))
+        );
+        // Bars clamp to the frame edge, never negative.
+        assert_eq!(cursor_to_game(0.0, 0.0, 1920, 1080, &cfg), Some((0, 0)));
+        assert_eq!(
+            cursor_to_game(1919.0, 1079.0, 1920, 1080, &cfg),
+            Some((639, 479))
+        );
+        // Degenerate: window smaller than the frame -> None.
+        assert_eq!(cursor_to_game(100.0, 100.0, 320, 200, &cfg), None);
+    }
+
+    #[test]
+    fn steering_delta_snaps_menu_cursor_to_target() {
+        let (mx, my) = (11, 22);
+        let target = (400, 300);
+        let dx = (target.0 - mx).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let dy = (target.1 - my).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let moved = (
+            (mx + i32::from(dx)).clamp(0, 639),
+            (my + i32::from(dy)).clamp(0, 479),
+        );
+        assert_eq!(moved, target);
     }
 }
