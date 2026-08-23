@@ -123,27 +123,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
- 2. [P4/RE] THE 0x4ea238 MARKER FAMILY + [0x4de658] CENSUS UNIT
-   (small; docs-only, unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt): decode what the §7g.5/
-   §7j.45 "8-jittered-marker scatter into 0x4ea238" actually IS —
-   the renderer reader 0x40671a (inside FUN_00403938's draw tail),
-   the record grammar (the §3 note says 10-byte records), the
-   MissionShell clear 0x447a56, and FUN_00423e1c's reads
-   (0x423e4c/ec3/f11/f81) — then arbitrate the D125 content note:
-   the announced pair is "DANGER - UNIT n TARGETTED FOR / IMMINENT
-   AERIAL BOMBARDMENT" in all six languages, so decide whether the
-   markers are targeting reticles (→ §7g.5's "reinforcement
-   ARRIVAL" gloss gets corrected) or arrival beacons. Also census
-   [0x4de658] (the 0x80 cooldown latch) writers/readers to close
-   its ledger row. Deliverables: marker grammar + draw census + the
-   §7g.5 arbitration; ledger row(s) + D126; registry_anchors green;
-   PUSH. Pre-queue check (D118 discipline): grep'd RE-EXW-SIM —
-   ZERO body decode of the 0x4ea238 family exists (only the §7g.5/
-   §7j.45 scatter mention + §3's passing "10-byte records" note);
-   0x4de658 has only the §7j.45 row. (QUEUED 2026-08-23 by the
-   7j.53/D125 close, worker d1578d5c claim 2.)
- 3. [P4/RE] THE HEAT-MACHINE WARNING FAMILY UNIT (small; docs-only,
+ 2. [P4/RE] THE HEAT-MACHINE WARNING FAMILY UNIT (small; docs-only,
    unattended-safe; objdump from ghidra-project/
    exw-text-objdump.txt): decode the caller family of the
    OVERHEATED/TEMPERATURE-CRITICAL posts (0x4101d7/0x41025e, ch
@@ -154,6 +134,24 @@ renumbered queue keeps every open item claimable by number).
    family decode + ledger row(s) + D127; registry_anchors green;
    PUSH. Pre-queue check: ZERO decode exists (only §7j.53's
    citation). (QUEUED 2026-08-23 by the 7j.53/D125 close.)
+
+  3. [P4/RE] THE [0x4edbd8] CAMERA-GATE CELL UNIT (small;
+    docs-only, unattended-safe; objdump from ghidra-project/
+    exw-text-objdump.txt): census the writers/readers of
+    [0x4edbd8] - the precondition that arms the §7j.54
+    chase-camera swap (FUN_00403938 0x4039b0: !=0 ∧ [0x4de654]!=0
+    -> the per-player anchor slot 0x4c71c4/c8/cc loads the staged
+    triple instead of the selected robot's pos) - pin WHAT
+    sets/clears it (game-state? mission phase? a config cell?)
+    and whether any other reader exists; while there, census
+    [0x4ede54] (the robots() 0x40b8aa recenter speed-factor
+    reader) if still un-decoded. Deliverables: census + ledger
+    row(s) + D128; registry_anchors green; PUSH. Pre-queue check
+    (D118 discipline): ZERO decode of 0x4edbd8 exists (grep -
+    only §7j.54's precondition mention, both hits this unit's
+    own text); 0x4ede54 appears only as a passing reader
+    citation. (QUEUED 2026-08-23 by the 7j.54/D126 close,
+    worker ed78ecdc claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -1904,3 +1902,47 @@ renumbered queue keeps every open item claimable by number).
   green; PUSHED. Queued: the 0x4ea238 marker family +
   [0x4de658] census (item 2, arbitrates the §7g.5 tension) + the
   heat-machine warning family (item 3).
+- 2026-08-23: P4/RE THE 0x4ea238 MARKER FAMILY + [0x4de658]
+  CENSUS unit COMPLETE (worker ed78ecdc claim 2, commit 51800a0,
+  D126, §7j.54, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus
+  read; MANIFEST clean before AND after; registry_anchors 2/2
+  green; PUSHED; ADOPTED + fully re-verified interrupted
+  same-item WIP found dirty in the worktree — its §7j.54
+  forward-references/ledger rows were staged but the section
+  itself was missing, and its 2-caller FUN_004245c9 census was
+  corrected to 4). CLOSED with the verdict set: (1) bank
+  0x4ea238 = 8 falling-SHELL records × 10 B {x, y (world-px
+  ground point), fall-z (0xFF, −0x20/frame), start-delay
+  (0x20+2i, −1/frame), valid} — §3's "10-byte records" note =
+  this bank; writer = the robots() idle arm 0x40c25e..0x40c351
+  (x = px + RandA&0x7F−0x3F one draw pre-gate, y = py−0x80+
+  i·0x20 deterministic fan straddling the robot, tile-bounds
+  drop); (2) resolver FUN_00423e1c (MissionShell 0x447ffa/frame;
+  NOT a "selection chaser" — gloss retired): head decs
+  [0x4de658]; fall until get_z_pos ≥ z, then SIX kind-6 debris
+  (3 RandA each) + NINE FUN_004244a1 5000-damage blasts over the
+  3×3 patch + blink-cursor clear; its record-0 impact block
+  (SP ∧ rec 0 ∧ cursor ≠ selected+1 ∧ cursor-robot player-type)
+  stages the chase-camera; (3) FUN_004245c9 = a 5-instruction
+  CHASE-CAMERA OVERRIDE STAGER (0x4de648/4c/50 + 0xF →
+  0x4de654; consumer FUN_00403938 0x4039b0..0x403a42 swaps the
+  0x4c71c4/c8/cc anchor slot for 15 frames; robots() 0x40b885
+  gates recenter; FULL caller census = FOUR: door stepper
+  0x422427, trigger expiry 0x422e55, artillery spotter
+  0x41173a, bombardment 0x423ed5) — the "wall-strip redraw"
+  gloss family (§7j.19/§7j.21/§7j.22 ×2 + door ledger row)
+  corrected in place; (4) [0x4de658] = the salvo COOLDOWN latch,
+  full census closed (arm 0x40c27f, gate 0x40c18b, dec
+  0x423e25..32, MissionShell clear 0x447877; 0x442ba7 = D89
+  loadout-mirror alias, not an access); (5) the D125
+  arbitration CLOSED: OFFENSIVE bombardment — the shells ARE
+  the bombardment (GENERAL.BIN 0x12C, 32 px/frame descent),
+  each impact a 9×5000-damage barrage centered ON the idle
+  robot (idle thresholds {400,300,200,5000} frames; ordering
+  resets +0x70); §7g.5 "reinforcement ARRIVAL" RETIRED (§7h
+  case-1 drop(+0x80)=1000 is the REAL reinforcement and
+  stands). No engine consequence (no corpus scenario reaches
+  the idle threshold; ≈27–29 RandA/impacting shell if ever
+  modeled). Queued: item 3 = the [0x4edbd8] camera-gate census
+  (this unit's residual precondition cell).

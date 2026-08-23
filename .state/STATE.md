@@ -1,5 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE 0x4ea238 MARKER FAMILY + [0x4de658]
+    CENSUS unit COMPLETE (D126; docs-only, §7j.54, commit
+    51800a0, worker ed78ecdc claim 2; objdump-only, no Ghidra
+    run, no corpus read, manifest clean both sides; ADOPTED +
+    re-verified interrupted same-item WIP): the "8-jittered-
+    marker scatter" = a FALLING-SHELL salvo — bank 0x4ea238,
+    8×10 B records {x, y world-px, fall-z 0xFF −0x20/frame,
+    start-delay 0x20+2i, valid}; writer = the robots() idle arm
+    0x40c25e..0x40c351 (1 RandA/shell, x-jitter ±0x3F only, y
+    fan py−0x80+i·0x20, tile-bounds drop); resolver
+    FUN_00423e1c (MissionShell 0x447ffa; the "selection
+    chaser" gloss RETIRED): fall → get_z_pos ≥ z → SIX kind-6
+    debris + NINE FUN_004244a1 5000-damage blasts (3×3 patch)
+    + cursor clear; renderer 0x4066e4..0x4067a6 (GENERAL.BIN
+    0x12C, 32 px/frame descent). SIBLING: FUN_004245c9 = the
+    15-frame CHASE-CAMERA OVERRIDE STAGER (0x4de648/4c/50 +
+    0xF→0x4de654; consumer FUN_00403938 0x4039b0..a42 swaps the
+    0x4c71c4/c8/cc anchor slot; 4 callers: door 0x422427,
+    trigger 0x422e55, artillery 0x41173a, bombardment
+    0x423ed5) — the "wall-strip redraw" gloss family corrected
+    in place. [0x4de658] = the salvo COOLDOWN latch, census
+    closed (arm 0x40c27f / gate 0x40c18b / dec 0x423e25..32 /
+    clear 0x447877; 0x442ba7 = D89 alias). D125 ARBITRATED:
+    OFFENSIVE bombardment centered ON the idle robot (SP:
+    selected robot only; thresholds {400,300,200,5000} frames;
+    ordering resets +0x70) — §7g.5 "reinforcement ARRIVAL"
+    RETIRED. No engine consequence (no corpus scenario reaches
+    the idle threshold). Queued: item 2 = heat-machine warning
+    family (D127); item 3 = the [0x4edbd8] camera-gate census
+    (D128).
+
   - 2026-08-23 P4/RE THE FUN_004239ef SFX-MESSAGE DISPATCHER unit
     COMPLETE (D125; docs-only, §7j.53, commit 38a8463, worker
     d1578d5c claim 2; objdump-only, no Ghidra run; read-only
