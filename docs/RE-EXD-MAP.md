@@ -562,7 +562,7 @@ registers, minus the §5g-already-pinned 13).
 | MIN bank ptr 0x4edd9c | ***0x107538** | ".MIN" load | [verified] |
 | LNK map 0x45cdda | **0x10336c** | mode-indexed ".MAP/.LNK" strings 0x862c2/0x862c7 load (mode cell 0x10768c) | [verified] |
 | PAD slots 0x4e44f8 | **0xf63c** (999×8, size imm 0x1f38) | ".PAD" load `FUN_0002e55a(…, &DAT_000862cc, …, 0x1f38)` | [verified] |
-| map w/h 0x4eddec/0x4eddf0 | **w 0x1074b8 / h 0x10748c** (w·h → 0x1074e4) | TOT header words → cells; every bounds check (platform ring, resolver). SPAN-FORM ASYMMETRY (§7j.60/D137): EXD pair 0x2c apart with h LOW (the O1 0x30 span: h@+0x00, w@+0x2c) vs EXW pair 0x24 apart with w LOW — the O2 capture form = the 0x28 span @0x4eddec, w@+0x00/h@+0x24 | [verified] |
+| map w/h 0x4eddec/0x4eddf0 | **w 0x1074b8 / h 0x10748c** (w·h → 0x1074e4) | TOT header words → cells; every bounds check (platform ring, resolver). SPAN-FORM ASYMMETRY (§7j.60/D137, arithmetic CORRECTED by D138): EXD pair 0x2c apart with h LOW (the O1 0x30 span: h@+0x00, w@+0x2c) vs EXW pair 4 apart — adjacent u32s with w LOW (w 0x4eddec, h 0x4eddf0, stride cell right after) — the O2 capture form = the 8-byte span @0x4eddec, w@+0x00/h@+0x04 (D137's "0x24 apart / 0x28 span / h@+0x24" was an arithmetic impossibility for these cells; corrected 2026-08-24) | [verified] |
 | tile-claim bank 0x46af58 | ***0x119564** (pointer cell) | platform ring claim check `… + DAT_00119564 == 0` | [verified] |
 | order table 0x4de664 (0x62 stride) | **0x91ee4** | spawn weapon/equipment copy `type·0x62` + the 0x2a/0x2b/0x2c extras switch @0x9240c (row 28) | [verified] |
 | player TYPE word 0x4edb90 | **0x1075c0** | spawn SP path `robot[0].type := DAT_001075c0` + mission-loop auto-switch `type == DAT_001075c0` | [verified] |
