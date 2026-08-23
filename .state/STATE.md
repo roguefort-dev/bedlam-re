@@ -1,5 +1,23 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE EXW BANK-CELL TWIN CROSS-CHECK unit
+    COMPLETE (D135; commit 115e240 PUSHED, worker 9a48b338 claim
+    2; docs-only, RE-EXD-MAP §5g-bis): all 17 §5g leftover
+    aliases pinned with 1:1 reader-count parity on every cell —
+    the two mission walks are store-for-store ORDINAL-IDENTICAL
+    (EXW FUN_0043a1d3 ⟷ EXD FUN_0004c121, 27 registers same
+    order; head walks EXW 0x447bb7.. ⟷ EXD 0x59b83.., 9 stores);
+    MIDIGUN dup consumer-less BOTH sides; BEEP5 cells paired BY
+    ORDINAL (briefing re-registration twins confirm); ELEV1/2 =
+    TRT structure move readers. Engine consequence NONE (SFX
+    cells presentation-tier, out of the hashed core); the §5g
+    alias ledger is COMPLETE for every bank-walk cell. Method:
+    D94's EXW walk independently re-verified (idioms in
+    exw-text-objdump.txt + 20 DGROUP strings re-read from
+    BEDLAM.EXW); objdump-only, no Ghidra run; MANIFEST clean
+    pre+post; registry_anchors 2/2 green. Queue now: item 1 =
+    [BLOCKED] S0 live session (operator), item 2 = the
+    sfx-master-gate + no-extract-latch E-GAP EMISSION decision.
   - 2026-08-23 P4/RE THE EXD SFX-MASTER-GATE TWIN CENSUS unit
     COMPLETE — **W1 IS NOW FULLY CLOSED (registry gap set
     EMPTY)** (D134; RE-notes commit 5178420 + impl commit d341c65,

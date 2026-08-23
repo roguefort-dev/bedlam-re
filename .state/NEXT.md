@@ -141,33 +141,7 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4/RE] THE EXW BANK-CELL TWIN CROSS-CHECK — the D134
-      §5g leftovers (small; docs-only; unattended-safe). The D134
-      EXD bank-name walk pinned FUN_0004c121's handle cells
-      (BOOM/HURT/DEATH/RICOCHT/GRUNT/DEADMAN/PLASMA one-for-one
-      vs the §7j.30/D94 EXW cells) BUT left these EXD cells
-      UN-aliased on the EXW side: SQUISH2/3 (0x11a950/0x11a94c),
-      MISSILE1 (0x11a8e0), POWERUP (0x11a924), ELEV1/2
-      (0x11a8e8/0x11a91c), BEEP5 (0x11a92c/0x11a8ec),
-      TEXTBOX1 (0x11a8f8), MIDIGUN (0x11a954/0x11a958) + the
-      MissionShell-head walk cells (FUN_0004c384 flavor @0x59b79..
-      0x59c09: BEAMIN 0x11a900, THROW 0x11a90c, PEXPLODE 0x11a8bc,
-      BIOFIRE 0x11a8c0, CACODETH 0x11a8c4, SQUAWK 0x11a774).
-      METHOD: the EXW side of the D94 bank-name walk (the EXW
-      MissionShell-head loader twin) names the same .RAW files —
-      grep the EXW loader's name-string refs in
-      ghidra-project/exw-text-objdump.txt + DGROUP string reads
-      (read-only probes), match call-shape to the handle stores,
-      and pin the EXW twin cells for each. DELIVERABLES: the
-      alias table appended to RE-EXD-MAP §5g (or a §5g-bis), any
-      consumers worth a one-line census (SQUAWK/PEXPLODE etc.
-      probably live in the critter/weapon fire families — cite
-      the existing §7j sections, do NOT re-decode), D135, PUSH.
-      Same caveats as the D133/D134 cadence: objdump-only, no
-      Ghidra run, MANIFEST bracket every corpus-touching step.
-      (QUEUED 2026-08-23 by the D134 close, worker 2a9f1b9f
-      claim 2.)
-   3. [P4.2/W6-followup, DECISION-NEEDED] THE SFX-MASTER-GATE +
+   2. [P4.2/W6-followup, DECISION-NEEDED] THE SFX-MASTER-GATE +
       NO-EXTRACT-LATCH E-GAP EMISSION (small; design + impl;
       unattended-safe AFTER a DECISIONS entry). Both rows are
       documented E-gaps (DESIGN §6a E-gaps list, D133/D134
@@ -2368,3 +2342,21 @@ renumbered queue keeps every open item claimable by number).
   menu-pointer fix) appeared mid-run at 20:28 — this unit's
   commits stage diffharness/docs paths only, zero overlap; the
   operator's work untouched.
+
+2. DONE (2026-08-23, worker 9a48b338 claim 2, commit 115e240):
+   P4/RE EXW BANK-CELL TWIN CROSS-CHECK — the D134 §5g leftovers
+   closed (RE-EXD-MAP §5g-bis + D135). The two mission walks are
+   store-for-store ORDINAL-IDENTICAL (EXW FUN_0043a1d3 ⟷ EXD
+   FUN_0004c121, 27 registers same order) and so are the
+   MissionShell-head walks (EXW 0x447bb7.. ⟷ EXD 0x59b83.., 9
+   stores). 17 aliases pinned with 1:1 reader-count parity on every
+   cell: MIDIGUN 0x4edf60→0x11a954 + dup 0x4edf70→0x11a958
+   (consumer-less BOTH sides), SQUISH2/3, POWERUP 9⟷9, MISSILE1,
+   ELEV1/2 (TRT structure move), BEEP5 #1/#2 paired BY ORDINAL
+   (briefing re-registration twins confirm), TEXTBOX1, BEAMIN 8⟷8,
+   THROW 5⟷5, BIOFIRE/PEXPLODE/CACODETH/SQUAWK 1⟷1 each. Docs-only,
+   engine consequence NONE; §5g ledger complete for every
+   bank-walk cell. D94 EXW walk re-verified independently (idioms
+   in exw-text-objdump.txt + 20 DGROUP strings re-read from
+   BEDLAM.EXW); objdump-only, no Ghidra run; MANIFEST clean
+   pre+post; registry_anchors 2/2 green; pushed.
