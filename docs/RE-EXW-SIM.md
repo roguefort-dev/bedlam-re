@@ -106,14 +106,21 @@ Fields pinned this pass (offsets from 0x4c69e4 + idx*0xA8):
 | +0x1A..+0x29 | 8×u16 | per-probe floor z cache (written by move_is_possible; +0x1A doubles as the climb-compare z: `dword@+0x18 >> 16`) | 0x4c69fe |
 | +0x2A | u16 | robot TYPE (indexes the 0x62-stride ORDER/stats table at 0x4de664; all player robots take the global word@0x4edb90) | via 0x4c6a0c>>16, 0x40cdf3 |
 | +0x2C | u16 | DROP-POD descent timer: ≠0 freezes the whole robot brain per sub-tick (FUN_0040b9f6); 0-hit → pod anim FUN_0041fb4b + msgs 9/10/0xB. Writers: spawn stagger `1+k·(2000−m·1000/27)` (FUN_0040cca0 @0x40d132), MP respawn 0x28 (FUN_0040e230 @0x40e89d) | 0x4c6a10, §7j.20 |
+| +0x30 | u16 | burn-damage accumulator: −0xA per phase-1 pass off-scorch (signed, clamp 0), paired with the FUN_004100b7 scorch lane [§7j.45] | 0x4c6a14 |
+| +0x32 | u16 | BURN cooldown: := 0x64 by FUN_004100b7 @0x4103e3 (gate ==0), dec 1/frame — scorched tiles re-burn every ~100 frames [§7j.45] | 0x4c6a16 |
+| +0x34 | u16 | ALARM cooldown: set by the FUN_0040e230 alarm path (with +0xA4), dec 1/frame; sidebar reads dword@+0x34 [§7j.45] | 0x4c6a18 |
 | +0x36/+0x38/+0x3A | u16×3 | per-order stats-group copy i (8-byte groups, i=0..6): word0 = group availability (spawn default probe), word1 = the sidebar order gate (copied twice) [§6c.6] | 0x4c6a1a/1c/1e, spawn 0x40cf05..0x40cf42 |
 | +0x6E | u16 | ORDER BITS (bit i = order i active; bits 0..6 toggled by keys 1..7 / the 7 sidebar order rows; spawn default = 1 << first available) | 0x4c6a52, §6c |
-| +0x70 | i32 | deploy-delay counter (vs table DAT_00454ee8[DAT_0046cbf8]) | 0x4c6a54 |
+| +0x70 | i32 | REINFORCEMENT/RESURRECT delay (§7j.45: ++ at phase 0 while state==0 vs table DAT_00454ee8[DAT_0046cbf8]; threshold ∧ zone ∉{1,7} ∧ [0x4de658]==0 ∧ SP → SFX 0xC/0xD/0xE + blink [0x4dc5d0] + [0x4de658]:=0x80 + the 8-marker scatter; cleared by the states-3/5 block + the arrival tail) | 0x4c6a54 |
 | +0x74 | i32 | stop distance for the active order (1000000 = go all the way) | 0x4c6a58 |
 | +0x78 | i32 | (label corrected 2026-08-21, §6c.7: this row had drifted +4 — alive is +0x7C) — | — |
 | +0x7C | i32 | alive flag (0 = slot free; sidebar select gate + armer's one-alive count) | 0x4c6a60 |
 | +0x80 | i32 | countdown (decrements when ≠0; gates phases 4/5: serviced iff > phase*32) | 0x4c6a64 |
+| +0x88 | i32 | SHIELD POINTS: −2/frame clamp 0 (phase-0 pre-pass); 0x20 per consumed charge / on state-3 (FUN_0040e230); 0x2710 while +0xA0 flash runs; renderer 0x403ef4 [§7j.45] | 0x4c6a6c |
+| +0x8C | i32 | SHIELD CHARGES: spawn seeds word@chassis_row+2 (the equipment-chassis 0x2A..0x2E jump table 0x40cc8c); a hit with charges≠0 ∧ shield==0 consumes one → shield 0x20 [§7j.45] | 0x4c6a70 |
 | +0x90 | i32 | dying countdown (states 5/6 → despawn/revive) | 0x4c6a74 |
+| +0xA0 | i32 | hit-flash/fade countdown (nonzero → shield := 10000 + the player-robot palette strobe ladder; −1/frame) [§7j.45] | 0x4c6a84 |
+| +0xA4 | i32 | ALARM COUNTER (§7g +3 on alarm; decays 1/frame phase-0 pre-pass — the D90 EXW-decay question CLOSED §7j.45) | 0x4c6a88 |
 
 Related globals [verified]: move-target arrays `DAT_0046cc30` (x) /
 `DAT_0046cc60` (y), Q5, -1 = none; robots available `DAT_0046cbd8`
@@ -168,17 +175,22 @@ at DAT_004ede24 (12 B entries: screen offset + tile deltas).
 
 Per phase call (6×/frame from MissionShell), for each robot record:
 
-- Timers decrement (fields +0x32/+0x34 (0x4c6a16/18), +0x9C (0x4c6a88),
-  +0x88 (0x4c6a6c -= 2), +0xA0 (0x4c6a84 dying/flash with FadeSetup
-  side effects — phase 0 block)).
+- Timers decrement (fields +0x32/+0x34 (0x4c6a16/18), +0xA4 (0x4c6a88 —
+  the "+0x9C" gloss was an offset erratum, corrected 2026-08-23 §7j.45:
+  +0x32 = BURN cooldown, +0x34 = ALARM cooldown, +0xA4 = alarm COUNTER,
+  all dec 1/frame in the phase-0 pre-pass), +0x88 (0x4c6a6c -= 2 = SHIELD
+  POINTS, with the 0x2710 flash-invuln + the +0x8C (0x4c6a70) charge
+  machine), +0xA0 (0x4c6a84 dying/flash with FadeSetup side effects —
+  phase 0 block, §7j.45).
 - Body gate: `state's +0x2C countdown == 0` AND
   `(phase < 4) || (phase*32 < field_7C)` — i.e. phases 0..3 always run;
   phases 4/5 only while field_7C > 128/160 [verified expression;
   interpretation: field_7C is a drop/animation countdown that buys the
   extra sub-ticks — hypothesis].
-- TOT tile-type specials: type 0x7d3 gates phase skips, 0x7d2 (phase 0)
-  triggers FUN_0040e230(robot, 0xF, -1) [verified reads via 0x4ea900 +
-  TOT mirror DAT_00460df8].
+- TOT tile-type specials: type 0x7d3 gates phase skips (CORRECTED §7j.45:
+  on a 0x7d3 tile the body runs only while phase ≤ (+0x80 == 0 ? 2 : 4)),
+  0x7d2 (phase 0) triggers FUN_0040e230(robot, 0xF, -1) [verified reads
+  via 0x4ea900 + TOT mirror DAT_00460df8].
 - Reinforcement ready: deploy-delay counter +0x70 vs
   DAT_00454ee8[DAT_0046cbf8] → slot SFX (0xC/0xD/0xE) + scatter of 8
   jittered markers into 0x4ea238 (10-byte records).
@@ -711,6 +723,12 @@ over the whole program.
    0x43c1xx region]), (c) the MULTIPLAYER lobby exchange FUN_00448ef1
    (5 writer sites 0x4491xx..0x449axx staging rows via the 0x4dd4a0
    0x80-stride per-player buffer). No loader ever bulk-copies the table.
+   [CORRECTED 2026-08-23 §7j.45/4: the group word map is +0 name_idx,
+   +2 ammo, +4 shop-artifact (unconsumed), +6 price, +8 category, +0xA
+   item_idx, +0xC owned — this item's "price, category, item_idx" sat
+   one slot low; and the shop exit adds a FOURTH writer family: the MP
+   sync mirrors every player's type-4 COMMAND record into
+   0x4de664+p·0x62.]
 3. **The player TYPE word@0x4edb90 = 0 for the whole single-player
    campaign** [verified]: GameMain writes `_DAT_004edb90 = 0` once at
    boot (0x41c34c, right after FUN_0043a144 — the bootattract decompile;
@@ -4648,6 +4666,15 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | MissionShell beacon block | 0x448291..0x448381: (sprite draw head, every-8th-frame gate); window decrement when nonzero; GATE dword@0x4e6610 ≠ 0 (dropship in flight) skips ALL; window == 0 → FUN_0041faf0; else ALL robots state-3-or-dead (w@+0xC / d@+0x7E scan, bound DAT_0046ccbc) → FUN_0041faf0 + window := 0; a beacon expiring mid-flight stays ARMED at window 0 | §7j.40 |
 | dropship deployer | FUN_0041faf0 [unconditional, full body]: dropship@0x4e6610 := {active 1, phase 1, x = beacon_x·0x20, y = beacon_y·0x20, alt 0x200, group 0, dwell 0}; word@0x4eabb0 := 0 + word@0x4eabb2 := 0 (the flag/window pair ONLY — the tile words 0x4eabb4/6 SURVIVE; the claims 0x4eabba are never cleared anywhere); sole caller the beacon block above (2 sites 0x44832f/0x448375) | §7j.27, §7j.40 |
 | extraction sweep | FUN_0041fbb1 machine-2 phase-1 landing tail: every robot alive ∧ state ∈ {3,4} → state := 5, timer@0x90 := 0x28 (outside the 31-leaf pin — E-gap), stop_dist@+0x74 := 10000000, [0x4dc680]++ (extracted), SFX 0x4edfe0 (presentation); phase-2 dwell 10 → phase 3; phase-3 alt > 0x200 → active := 0 ∧ [0x4dc67c] := 1 (complete); phase-2 jitter alt := (RandA()&7)==0 = a SHARED-STREAM draw | §7j.19, §7j.27, §7j.40 |
+| SHOP screen | FUN_00440e45 (GameMain call #2, §7d.4 flow; 0x440e45..0x4437e5): entry money floor [0x46ae70] := max(·,100); loads GAMEGFX\{DARKPALS.PAL,WEAPICON.BIN,CONLITE.BIN,SHOPFONT.BIN,SHOPLITE.BIN} + BEEP1/4/7/5 SFX cells + "SOUND\MIDI\SHOP"; SMK "GAMEGFX\SHOP.SMK" intro gated [0x46cca4]≠0 (else GAMEGFX\SHOPPAL.PAL); the buy/sell/auto-loadout/confirm state machine over the weapon table 0x4de664 (group layout +0 name, +2 ammo, +4 artifact, +6 price, +8 category, +0xA item, +0xC owned) + chassis table 0x4deafc (2 rows × 0xE, same layout, +2 = shield charges for equipment ids 0x2A..0x2E); exit ret 0 (abort [0x4edb50] → ret 1) | §7j.45 |
+| SHOP catalog | 9 category blocks @0x4ea288 stride 0xA0 (staged by FUN_0044395b from immediates): header +0x00 x0/+0x04 y0/+0x10 yoff/+0x14 count/+0x18 colw/+0x1C rowh; items stride 0x10 first at cat+0x20: name@+0x20 (FUN_00420260 idx), price@+0x24, pack-ammo@+0x28, avail@+0x2C; cat 0 = NEEDLERS (2/3/4, 100/250/400, 300/400/500), cat 1 = PLASMA (9/A/B, 500/700/900, ammo 1), cat 8 = CHASSIS @0x4ea788 (ids 0x2A..0x2E, 0x2D/0x2E mutex — FUN_00443870; free-slot/dedup finders FUN_00443870/FUN_004437ea) | §7j.45 |
+| SHOP MP sync | exit: FUN_00449c94(4, 0x4e43e0) appends the type-4 SHOP-LOADOUT COMMAND record (63 B staging struct 0x4e43e0 = 7×9, consumed MissionShell 0x44853e + save 0x4475fd); then the player walk p < [0x46cbe0]: 7 (name,ammo) word pairs from record 0x4dd4a0+p·0x80 (+1 byte skip) → 0x4de664+p·0x62+g·0xE{,+2} — the per-player loadout mirror (D89's 0x46cbe0 count bounds it) | §7j.45 |
+| SHOP lockout array | 0x46cd48..0x46cd80 = 16 dwords; := 1 at shop entry when [0x4edb88]==2 (MP) ∨ [0x4edd8c]==7 (final zone); value 2 = transient (exit normalize: cols 0x46cd48/5c/70+i for i∈{0,4,8,0xC} == 2 → 1) | §7j.45 |
+| SHOP category rank table | dword[0x456c7c + 4·cat] — the auto-loadout bubble-sort key over the 7 weapon groups (swap via 3× FUN_00402aaa through scratch 0x4dec4c) | §7j.45 |
+| reinforcement pending gate | [0x4de658] (the dword 0xC below the weapon table base): := 0x80 by the robots() +0x70 threshold arm (the reinforcement arrival: SFX 0xC/0xD/0xE + blink [0x4dc5d0] + the 8-marker scatter); gates the next arm | §7j.45 |
+| robot shield-charge machine | d@robot+0x88 shield points (−2/frame clamp 0; 0x20 per charge/state-3; 0x2710 while +0xA0 flash) + d@+0x8C charges (spawn = word@chassis_row+2 via the 0x40cc8c 5-slot jump table, chassis ids 0x2A..0x2E; hit consume FUN_0040e230 @0x40e2a4) | §7j.45 |
+| scorch-lane timers | w@+0x32 burn cooldown := 0x64 (FUN_004100b7 @0x4103e3, gate ==0 @0x41036e), dec 1/frame (phase-0 pre-pass); w@+0x30 accumulator −0xA/phase-1 off-scorch; alarm w@+0x34 cooldown + d@+0xA4 counter (dec 1/frame — D90's question closed) | §7j.45 |
+| robot state-1 producer | THE ONLY writer of state 1 = FUN_00409138 COMMAND bit0 @0x40a37b (:= 1 + stop := 0xF4240) — no patrol semantics; SP never produces state 1 (full census §7j.45 Part B/4) | §7j.45 |
 
 ## 7j.31. The HOT-RECT CLICK-TARGET RECORD — one 0x20-stride array; writer census + both reader families (2026-08-22, worker aa62f5ed claim 2; objdump-only from ghidra-project/exw-text-objdump.txt, no Ghidra run)
 
@@ -6222,11 +6249,25 @@ below is [verified] against the objdump unless tagged.
    loads, y-line/z-base tables, ≥0x80 sweep, PAD 0xFF marks) + markers →
    robots (MRK word 3 = spawn z level). Engine seam: the P4 corpus gate
    builds Terrain from raw DAT+PAD+CGR bytes with these rules.
-2. FUN_00440e45 (10661 B, GameMain call #2) identity — not the gameplay
-   loop [verified negative]; likely the inter-mission shell (shop/map
-   room) [hypothesis].
-3. Phase semantics of robots()' extra passes (fields 0x4c6a16/18/88/8c)
-   and the state 1 producers (patrol?).
+2. ~~FUN_00440e45 (10661 B, GameMain call #2) identity~~ — CLOSED 2026-08-23
+   §7j.45 Part A: THE SHOP SCREEN, fully decoded (assets/SMK/SFX/music,
+   the money floor ≥100, the MP/zone-7 16-dword lockout array
+   0x46cd48..0x46cd80, the 9-category catalog @0x4ea288 with immediate
+   data, the auto-loadout/sell/buy-stage/confirm state machine, the
+   weapon/chassis group layouts, and the MP loadout sync via the type-4
+   COMMAND record bounded by [0x46cbe0] — the hypothesis confirmed;
+   no map-room code lives here).
+3. ~~Phase semantics of robots()' extra passes (fields 0x4c6a16/18/88/8c)
+   and the state 1 producers (patrol?)~~ — CLOSED 2026-08-23 §7j.45
+   Part B: the phase-0 pre-pass timer decays pinned (+0x32 BURN cooldown
+   :=100 by FUN_004100b7; +0x34 ALARM cooldown; +0xA4 alarm counter DOES
+   decay 1/frame — the D90 question closed; +0x88 shield −2/frame with
+   the 10000 flash-invuln and the +0x8C CHARGE machine sourced from the
+   equipment-chassis row word+2; +0x70 = the reinforcement delay with the
+   [0x4de658] pending gate); phases 4/5 gate re-verified; the 0x7d3
+   countdown-dependent phase bound CORRECTED; state 1 has EXACTLY ONE
+   producer — the FUN_00409138 COMMAND bit0 arm (no patrol semantics;
+   SP never produces it).
 4. ~~Sidebar order buttons beyond selection~~ — DECODED 2026-08-21,
    §6c: order keys 1..7 + the 7-row click strip (gate word +0x38+8k,
    bits word +0x6E, redraw countdown DAT_0046ccec consumed by the
@@ -6776,3 +6817,216 @@ ghidra-project/exw-text-objdump.txt.
    widening" Backlog bullet's physics-class clause is DONE (the
    k2/k8 scorch + k1/k20 ring clauses were already landed with
    the 7j.11 stager — the bullet RETIRES).
+
+## 7j.45. THE FUN_00440e45 SHOP DECODE (§9 item 2 CLOSED) + the robots() extra-phase/state-1 semantics (§9 item 3 CLOSED) (2026-08-23, worker c607288e claim 2; objdump-only from ghidra-project/exw-text-objdump.txt 0x440e45..0x4437e5 + the helper bodies 0x4437ea/0x443870/0x44395b + FUN_0040b9f6 0x40b9f6..0x40c536 + FUN_0040e230 0x40e270..0x40e2b0 + FUN_004100b7 0x41036e..0x4103e3 + FUN_00409138 0x40a37b; DGROUP strings re-read read-only from BEDLAM.EXW, delta 0x401A00; no Ghidra run, no corpus write)
+
+PART A — **FUN_00440e45 = THE SHOP SCREEN, fully decoded** [verified
+instruction-exact]. The §7d/RE-EXW-MUSIC identification is CONFIRMED and the
+"inter-mission shell (shop/map room)" hypothesis RESOLVED to SHOP-ONLY (no
+map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
+
+1. **Entry sequence 0x440e45..0x441251** [verified]:
+   - ArenaAlloc (FUN_0041db89, EAX=size) ×5: 0x4b500 = the 640×480 shop
+     screen buffer; 0x30d40 = WEAPICON.BIN dest; 0x1770 = CONLITE.BIN dest;
+     0x14ff0 = SHOPFONT.BIN dest (alloc arg carries ecx=0xe10 too — the
+     scratch-bank size); 0x2f4d60 = SHOPLITE.BIN dest. .bss scratch memset-0
+     (FUN_00402965): 0x4e8818(0xe10), 0x4e7ed8(0x4a0), 0x4e8378(0x5a0),
+     0x4ea288(0x150) — the last is the CATALOG bank cleared before the stager.
+   - Loads via FUN_0041cc7f(eax=name@DGROUP, edx=dest): "GAMEGFX\DARKPALS.PAL"
+     @0x459498 → palette cell 0x4edc00, "GAMEGFX\WEAPICON.BIN" @0x4594ad,
+     "GAMEGFX\CONLITE.BIN" @0x4594c2, "GAMEGFX\SHOPFONT.BIN" @0x4594d6,
+     "GAMEGFX\SHOPLITE.BIN" @0x4594eb — the §7d bank list lands EXACTLY.
+   - SFX registers via FUN_0043a39c: BEEP1→0x4edfc8, BEEP4→0x4edfcc,
+     BEEP7→0x4edfd4, BEEP5→0x4edfd8 (the shop's MENU-set; 7j.30 per-screen
+     cell reuse confirmed). Music: FUN_00403642("SOUND\MIDI\SHOP" @0x459550,
+     3). Palette: FUN_0041cbf0([0x4edbf8], 0xa).
+   - **SMK intro** [0x46cca4 ≠ 0 gate — NEW pin = the "play animations"
+     config flag]: eax = FUN_0041ce69("GAMEGFX\SHOP.SMK" @0x459560); eax==0 →
+     FUN_00420100 + print "ERROR: COULD NOT OPEN SHOP SMACK\n" @0x459571 +
+     FATAL EXIT (FUN_00444d2da(1)). Frame loop 0x4410b4..0x441142: i <
+     [smk+0xc] (frame count) ∧ [0x4edb50]==0; audio track gate [smk+0x68] →
+     FUN_00402aaa(0x300, smk+0x6c) + FUN_004258d0; decode FUN_0045304a /
+     advance FUN_00453044 / present pair / frame-timer wait FUN_00453038;
+     close FUN_0045303e + FUN_00425851. [0x46cca4]==0 → skip the SMK and load
+     "GAMEGFX\SHOPPAL.PAL" @0x459593 into [0x4edbf8] instead.
+   - Backdrop: FUN_00401e39(img 0, transp 1, 0,0; ESI=SHOPLITE, EDI=screen).
+   - **MONEY FLOOR: `if ([0x46ae70] < 0x64) [0x46ae70] := 0x64`** @0x4411a0 —
+     shop entry guarantees money ≥ 100 (a NEW state fact for the campaign
+     model; D51 fresh-campaign 4000 unaffected).
+   - **MP/zone-7 LOCKOUT: if ([0x4edb88]==2 || [0x4edd8c]==7) → the 16
+     consecutive dwords 0x46cd48..0x46cd80 := 1** @0x4411e1..0x441251 —
+     NEW pin: the category-lockout flag array (value 2 = transient, see the
+     exit normalize below). MP mode 2 OR the zone-7 (final) mission locks
+     all 16 columns.
+   - call FUN_0044395b = the CATALOG STAGER (see 2).
+2. **The catalog grammar** [verified, FUN_0044395b 0x44395b..]: 9 category
+   blocks @0x4ea288, stride 0xA0. Header: +0x00 x0, +0x04 y0, +0x10 yoff,
+     +0x14 item-count, +0x18 col-width, +0x1C row-height. Items (stride 0x10,
+     first at cat+0x20): name-word@+0x20 (a FUN_00420260 name index), price
+     @+0x24, pack-ammo @+0x28, available @+0x2C. Cat 0 = NEEDLER CANNON
+     #1/#2/#3 (names 2/3/4; prices 100/250/400; ammo 300/400/500) — a table
+     of immediates, fully regenerable from the same range. Category 8 =
+     the CHASSIS block (base 0x4ea788): the 5 equipment chassis ids
+     0x2A..0x2E (AUTO SHIELDING / BATTERY PACK / THERMAL DAMPER / SCANNER
+     LEVEL 2/3, §7d.5), whose +2 word = the SHIELD-CHARGE count (Part B).
+     0x2D/0x2E are a MUTEX pair (FUN_00443870 refuses owning both).
+3. **The interaction loop** 0x441257..0x4437b6 [verified; input via the
+   shared mouse cells 0x4eddc4/0x4eddc8 + click latch 0x4eddcc + the
+   debounce local, polled inside the draw/present family]:
+   - locals: [esp+0x3a0] = selected-item name idx (−1 none), [esp+0x3ac]
+     category, [esp+0x3b0] item idx, [esp+0x3a4] staged SPEND, [esp+0x3a8]
+     staged AMMO, [esp+0x3b8] page, [esp+0x39c] debounce.
+   - **AUTO-LOADOUT button** (rect 0x1e2..0x20d × 0x189..0x19a, highlight
+     img 2): (a) SELL-ALL — walk the 7 weapon groups (0x4de664+type·0x62,
+     stride 0xE): every owned group refunds money += word@+6 (the PRICE)
+     and zeroes {+0, +2, +6, +0xC}; then the 2 chassis rows (0x4deafc +
+     type·0x1C, stride 0xE) likewise; (b) BEEP4; (c) if money ≥ 0x960
+     (2400) ∧ a chassis is staged ([0x4ea7f4] ≠ 0) buy one via
+     FUN_00443870(4); (d) n = FUN_0041ec59(5)+3 (3..7) random purchases:
+     cat = rnd(9), item = rnd(count), gate [item+0x2C] ≠ 0, ≤50 tries each;
+     category 8 → the chassis writer, else FUN_004437ea free slot; each buy
+     writes the group and decrements money; then an ammo TOP-UP pass over
+     all owned groups (money < price → mark, else ammo += pack, money −=
+     price) and a bubble SORT of the 7 groups by dword[0x456c7c + 4·cat]
+     (NEW pin: the 9-entry category-RANK table; 3× FUN_00402aaa swap
+     through scratch 0x4dec4c).
+   - **SELL**: click a loadout row — weapon rows x∈[0x217,0x27c],
+     y∈[0x154,0x19b], row = (my−0x154)/0xA clamp ≤6 (0x441acf); chassis
+     rows x∈[0x220,0x27c], y∈[0x1a0,0x1b3], row clamp ≤1 (0x441e4c).
+     Owned gate word@+0 ≠ 0 → BEEP7 + money += word@+6 + zero
+     {+0,+2,+6,+0xC} + [0x4dc6a8] := 0 + select the item + redraw its
+     category panel (FUN_00401e39 img = cat+1 over SHOPLITE) + the icon
+     grid (FUN_00402a56, cat geometry fields) + names (FUN_0042014e /
+     FUN_00420260 name switch ×2 = item + weapon-name strings) + text
+     draws (FUN_0043e183, fmt 0x4595a7 '%03i/%03i' = the stock readout).
+   - **BUY**: catalog item click (hover row from the marker walk) selects
+     {name, price, pack-ammo, item} (debounce 3, BEEP4 on new selection;
+     unavailable [item+0x2C]==0 → deselect). The **+** button
+     (x∈[0x271,0x27a] × y∈[0x13c,0x14d]) accumulates spend += price ∧
+     ammo += pack while spend+price ≤ money (BEEP5, debounce 8, the
+     name/cash redraws, fmt 0x4595c0 'CASH: %i %s: %i'); the **−** button
+     (x∈[0x1e1,0x1ea]) reverses both (floor 0). The **CONFIRM** button
+     (x∈[0x1e2,0x20d] × y∈[0x154,0x165], highlight img 0) commits:
+     weapon → slot = FUN_004437ea(item, cat) (pass 1 = DEDUP: an owned
+     name → −1; pass 2 = first word@+0==0 free slot, else −1); on slot ≥ 0
+     write the group {+0 name, +2 staged ammo, +4 := 0, +6 staged spend,
+     +8 category, +0xA item, +0xC := 1} and money −= spend; chassis →
+     slot = FUN_00443870(item) (same-name → that slot; the 0x2D/0x2E
+     mutex; else first free of 2); write {+0 name, +2 staged ammo, +4 := 0,
+     +6 staged spend, +8 := 8, +0xA item} (+0xC untouched). [The
+     AUTO-LOADOUT writer differs only at +4: it stores the robot TYPE
+     there — a live-register artifact; the shop never reads +4 —
+     shop-internal, unconsumed.]
+   - **DONE button** (x∈[0x238,0x267] × y∈[0x1be,0x1d8], highlight img 5,
+     gated [0x4dc694] ≠ 0 — the enable flag written by the icon-grid
+     drawer FUN_00440287 @0x44029d/0x4402e5): requires a FREE weapon
+     group (else stays); SP → the exit sequence; MP → draw the two
+     waiting boxes (FUN_0043c87c over 0x46b49c/0x46b4cc, y 0xbe/0xdc)
+     then the same exit + the MP sync (5).
+4. **Weapon-table writer census refined vs §7d.2** [verified]: the group
+   7-word layout is +0 name_idx, +2 ammo, +4 (shop artifact, unconsumed),
+   +6 price, +8 category, +0xA item_idx, +0xC owned — §7d's
+   "ammo, price, category, item_idx" word map was off by one slot (its
+   price/category/item_idx sit at +6/+8/+0xA). The chassis table
+   0x4deafc + type·0x1C carries TWO 0xE rows with the same layout; its
+   +2 word = the SHIELD-CHARGE count for equipment chassis (Part B) and
+   its +6 = the refund price.
+5. **Exit + the MP SHOP SYNC** [verified, 0x442ae2..0x442c3e]: fade-out
+   (memset the palette 0x302, FUN_0041cbf0(pal, 0xa)), FUN_0041fa3f(0),
+   FUN_0041d714(0x90); **FUN_00449c94(4, 0x4e43e0)** — appends the
+   type-4 SHOP-LOADOUT COMMAND record (the 63-B = 7×9 staging struct at
+   0x4e43e0, consumed by MissionShell 0x44853e + the save path 0x4475fd;
+   callee-fills from the current table [inferred from call order]); then
+   **the player walk bounded by [0x46cbe0]** (the COMMAND-record count /
+   MP robot-count override, D89 — the queue's "0x46cbe0 command-count
+   read = MP shop sync" hypothesis CONFIRMED): for each player p <
+   [0x46cbe0], read the 7 (name, ammo) word pairs from the 0x80-stride
+   record at 0x4dd4a0 + p·0x80 (first byte skipped) and write them into
+   THAT player's table row 0x4de664 + p·0x62 (+g·0xE / +g·0xE+2) — every
+   player's loadout is exchanged through the COMMAND ring and mirrored
+   per-type. Then the lockout normalize: for i ∈ {0,4,8,0xC}, the three
+   columns 0x46cd48+i / 0x46cd5c+i / 0x46cd70+i == 2 → 1; input flush;
+   ret 0. The ABORT path ([0x4edb50] ≠ 0, set by ESC in the input layer)
+   → flush + ret 1 (= GameMain's quit outcome, GAMETHREAD case 2).
+
+PART B — **the robots() extra-phase + timer-field semantics + the state-1
+producers** (§9 item 3) [verified]:
+1. **Phase-0 PRE-PASS** (FUN_0040b9f6 head, `test eax,eax; jne` — runs
+   once per frame for phase 0, over ALL robots): w@+0x32 ≠ 0 → −1;
+   w@+0x34 ≠ 0 → −1; d@+0xA4 ≠ 0 → −1; d@+0x88 ≠ 0 → −2 clamp 0; and the
+   **flash block**: while d@+0xA0 ≠ 0 → **d@+0x88 := 0x2710 (10000 — the
+   hit-flash INVULNERABILITY shield)** + d@+0xA0−−, and when the robot's
+   type word@+0x2A == [0x4edb90] (the player's own robot) the palette
+   ladder runs: +0xA0 was 0xC8 → FUN_0041cbf0(0x4de13c, 5), was 0xC4 →
+   FUN_0041cbf0(0x4dde38, 0xF), then the alternating-value ladder
+   ({0..2},{5,6},{8,9},{0xE..0x12},{0x1A..0x1F},{0x22..0x27},
+   {0x2A..0x30}) → FUN_004258d0([0x4edbf8]) — the strobing damage-flash
+   the §7i dither family draws under.
+2. **Field identities pinned** (completing §3):
+   - **+0x32 (0x4c6a16) = the BURN/SCORCH cooldown**: producer
+     FUN_004100b7 @0x4103e3 (`[idx·0x15·8 + 0x4c6a16] := 0x64`, gated
+     [+0x32]==0 @0x41036e) — each scorch-lane hit (robots phase 1:
+     byte@0x4796d4+tile·0x1E ≠ 0 → FUN_004100b7(idx, 0x14)) sets 100;
+     decays 1/frame in the pre-pass ⇒ scorched tiles re-burn every ~100
+     frames. The OFF-scorch branch decays w@+0x30 by 0xA (signed, clamp
+     0) — +0x30 is the burn-damage accumulator paired with the lane.
+   - **+0x34 (0x4c6a18) = the ALARM cooldown**: producer FUN_0040e230
+     @0x40e386 (the §7g alarm SFX path sets it with the counter); decays
+     1/frame; readers = the sidebar draw FUN_00408403 (dword@+0x34 =
+     {alarm, order-group-word0}) ×2 + FUN_0040aa71.
+   - **d@+0x88 (0x4c6a6c) = SHIELD POINTS, full machine**: −2/frame
+     (pre-pass, clamp 0); 0x20 (32) per consumed charge or on state-3
+     (FUN_0040e230 @0x40e27a); **0x2710 while the +0xA0 flash runs**;
+     renderer reader 0x403ef4 (the shield glow).
+   - **d@+0x8C (0x4c6a70) = SHIELD CHARGES**: producer = spawn
+     FUN_0040cca0 @0x40cfbd — word@chassis_row+2 via the 5-slot jump
+     table 0x40cc8c gated on the chassis NAME word ∈ 0x2A..0x2E (the
+     five EQUIPMENT chassis, §7d.5) — i.e. the chassis "+2" word IS the
+     charge count the shop stages as "ammo"; consumer = FUN_0040e230
+     @0x40e2a4 (hit ∧ charges ≠ 0 ∧ shield == 0 → charge−− ∧ shield :=
+     0x20); the MP respawn re-stages it (0x40e837 region). The §7g
+     "gate d@+0x8C==0 ∨ d@+0x88≠0" gloss resolves to exactly this
+     charge-consume test.
+   - **d@+0xA4 (0x4c6a88) = the alarm COUNTER** (§7g's += 3 applier):
+     decays 1/frame in the pre-pass — the D90 question ("EXW 7g.1
+     documents no decay") is CLOSED: EXW DOES decay it, once per frame,
+     phase 0 only. (The queue's "0x4c6a8c" tail has ZERO sites — the
+     intended pair was +0x88/+0x8C.)
+   - **d@+0x70 (0x4c6a54) = the REINFORCEMENT/RESURRECT delay** (§3/§5's
+     deploy-delay, now with the full arm/disarm): cleared at 0x40c003
+     (the states-3/5 block) and 0x40c271; incremented at 0x40c16e gated
+     state==0 ∧ phase==0 vs dword[0x454ee8 + 4·[0x46cbf8]] (the
+     difficulty-scaled delay table); at threshold ∧ zone ∉ {1,7} ∧
+     **[0x4de658] == 0** ∧ mode ≠ 2 → the reinforcement ARRIVAL: SFX
+     0xC/0xD/0xE per squad slot (FUN_004239ef) + blink-cursor
+     [0x4dc5d0] := slot+1 + **[0x4de658] := 0x80** + the 8-jittered-
+     marker scatter into 0x4ea238. NEW pin: **[0x4de658]** = the
+     pending-reinforcement gate (the dword 0xC below the weapon-table
+     base 0x4de664; 0x80 while an arrival is staged) — its other reader
+     is the arrival marker family.
+3. **Extra-phase semantics (phases 4/5)**: the §5 gate expression is
+   re-verified exact — body runs only while +0x80 (the drop_countdown,
+   D90's raw +0x80) > phase·0x20 (128/160) — and +0x80 decrements every
+   sub-tick when ≠ 0 (0x40bcb2). The tile-0x7d3 gate is CORRECTED: on a
+   0x7d3 tile the body runs only while phase ≤ (+0x80 == 0 ? 2 : 4)
+   (0x40bc00..0x40bc17) — §5's flat "0x7d3 gates phase skips" missed the
+   countdown-dependent bound.
+4. **The state-1 producers — COMPLETE word-write census of +0x0C**
+   (0x4c69f0): 0x40a37b (FUN_00409138 COMMAND bit0: := 1 + stop :=
+   0xF4240 — the ONLY state-1 writer), 0x40bd0f (:= 0, state-6 expiry),
+   0x40be52 (:= 3, arrive 4→3), 0x40be80 (:= 0, arrive 1→0), 0x40c0a2
+   (:= 4, the beacon/order consumption), 0x40c587 (robot_move freeze :=
+   0), 0x40e858 (FUN_0040e230 MP respawn), 0x41fdbd (extraction sweep :=
+   5), 0x41ff67 (pod landing := 6), 0x4203f4 (elevator-ride completion :=
+   0), 0x424853 (beacon armer := 3), 0x433a31+ ×6 (elevator rides := 2).
+   **There is NO patrol semantics**: state 1 = the COMMAND-ARMED move
+   (a network-select record auto-arming move-to-target) — in SP nothing
+   produces it, which is why the S6 walk needed the COMMAND-inject seam
+   (D112) and why E models it only through `command` records.
+
+Engine consequence: NONE this unit (docs-only). The P4 slice already
+models the command-bit0 arm (S6) and the shield family host-side; the NEW
+facts for any future shop/mission-boundary engine work are the money
+floor, the catalog grammar + immediate data range, the lockout array, the
+MP loadout sync via the type-4 COMMAND record, and the +0x8C charge
+machine's chassis-row source.

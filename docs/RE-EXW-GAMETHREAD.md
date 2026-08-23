@@ -182,7 +182,7 @@ LAB_0041c454:                                     // ===== EPISODE LOOP =====
       }
       _DAT_004eb934 = _DAT_004dd40c;              // checkpoint level context
       _DAT_004eb938 = DAT_0046ae70;
-      DAT_0046ae74 = FUN_00440e45(DAT_0046ae70, ...);  // [inferred: zone/level manager]
+      DAT_0046ae74 = FUN_00440e45(DAT_0046ae70, ...);  // [RESOLVED 2026-08-23 §7j.45: the SHOP screen; ret 1 = abort/quit]
       if (DAT_0046ae74) goto zone_done;
       DAT_0046ae8c = clamp((_DAT_004edd8c - 2)*5 + _DAT_004edd88 - 1, 1, 26);
                                                    // linear mission number, 1..26
@@ -354,7 +354,9 @@ engine/bedlam-assets/tests/font_gate.rs):
   D37 section), not the sim/render step; that read is its exit-loop
   fade-done condition. The sim/render body question (D15) moves wholly
   to FUN_00440e45 (gameplay, runs after the briefing returns 1).
-- **FUN_00440e45** - zone/level manager returning quit status [inferred].
+- **FUN_00440e45** - [RESOLVED 2026-08-23, RE-EXW-SIM §7j.45: THE SHOP
+  screen (buy/sell/auto-loadout + the MP loadout sync), NOT the gameplay
+  loop; returns 0 = continue / 1 = abort-quit].
 - **FUN_00448ef1** reads divider 004edbc8 four times (0044936b/004493eb/
   004495ae/00449797) - another rate consumer, candidate render/anim pacer
   [hypothesis].
