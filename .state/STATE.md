@@ -1,5 +1,32 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE MISSIONVIEW §5d TAIL COMPLETE (D120;
+    docs-only, §7j.48, commit dd8d5e2, worker 328b7651 claim 2;
+    adopted + validated the interrupted predecessor WIP in
+    RE-EXW-MISSIONVIEW.md §5d): §5d item-1 = TELEPORT.BIN beam
+    (10 imgs, 0x46af38 — not "shield"; clamp 0..9 fits), item-3 =
+    SHIELD.BIN (4 imgs, 0x46af44 — not "variant"; RandA()&3 spawn
+    + (+1)&3 shimmer); TELEPORT/SHIELD/ROBNUMS alloc (FUN_0041d954
+    @0x447860: 0x6d60/0x1b58/0xbb8) + LoadFile (FUN_0041df10
+    @0x447b3f) at EVERY MissionShell head — SP included, NO gate;
+    ROBNUMS.BIN = DEAD DATA (sole reader = its own load site
+    0x41dffe); the MP name plates draw TINYFONT (0x46cdb0, 118
+    glyphs, ASCII−0x21) at `sx + u32[0x4e44c8+id*4] + 6·i`, gate
+    [0x4edb88]≠0 @0x403fb9 (SP never), filter g ≤ 0x40, centering
+    table = 32−3·strlen per id (writer 0x447ce0..0x447d85: toupper
+    + c−0x21 from raw names 0x4e43e0); the Backlog "unstaged-flush"
+    clause RETIRED — no bank-zero skip anywhere in enqueue/flush
+    (an unstaged bank would FAULT; can never occur) so E needs no
+    unstaged-skip logic. Verified: registry_anchors 2/2 green,
+    manifest clean before AND after the read-only GAMEGFX header
+    probes (TELEPORT/SHIELD/ROBNUMS/TINYFONT = 10/4/9/118),
+    objdump-only (no Ghidra run), no corpus write, PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    FUN_00440dc2 identity unit (the scroll/camera restamp drawer's
+    own frame: caller census + frame flow; pre-queue grep per D118
+    — drawer half pinned, caller census unpinned).
+    NEXT: the FUN_00440dc2 identity unit (item 2).
+
   - 2026-08-23 P4/RE THE TOT PLANE-6/7 SEMANTICS COMPLETE (D119;
     docs-only, §7j.47, commit dc6f5bf, worker f29066bd claim 2):
     planes 6/7 of the .TOT word stack are ORDINARY z-levels 6/7

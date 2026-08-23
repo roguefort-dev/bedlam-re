@@ -123,31 +123,25 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE MISSIONVIEW §5d TAIL unit — ROBNUMS NAME PLATES +
-   SHIELD/VARIANT BANK STAGING (small; docs-only, unattended-safe;
-   objdump from ghidra-project/exw-text-objdump.txt + read-only
-   corpus probes if needed): the §5d robot entity enqueue is decoded
-   (§5d items 1-5: shield state 5/6 → DAT_0046af38 frame
-   clamp(10−wobble/4, 0..9) @sy−0x48 mode 0x12E; variant sprite
-   i32@+0x88≠0 → DAT_0046af44 frame u16@+0x18; the MP ROBNUMS
-   name-plate digits `sx + i32[0x4e44c8+c] + 6·i` for name chars
-   < 0x41, DAT_0046cdb0), but the BACKLOG TAIL is not: (a) WHO
-   STAGES the banks — the SHIELD (0x46af38)/variant (0x46af44)/
-   ROBNUMS (0x46af48) cells' loaders (are they GAMEGFX load-always
-   or mission/MP-gated? the 7j.30/§7d bank-name walk names them;
-   pin the LoadFile sites + gates); (b) the UNSTAGED-FLUSH
-   semantics — what FUN_0040179b/the enqueue do when the cell is 0
-   (nodes still enqueue? flush skips? is the SP game ever unstaged?
-   — the E-side render seam question behind the Backlog clause
-   "nodes enqueue, flush skips while unstaged"); (c) the full MP
-   name-plate grammar (the 0x4e44c8 digit-offset table + char
-   filter < 0x41 + the ROBNUMS bank's digit frames; SP = never?);
-   (d) MISSIONVIEW §5d tail note + ledger row + D120;
-   registry_anchors green; manifest brackets any corpus probe;
-   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS +
-   RE-EXW-SIM + the Done log for "5d tail"/"name plate"/"flush
-   skips"/"unstaged" — ZERO prior closure (only the Backlog bullet
-   + the §5d/§7d decodes the tail builds on).
+2. [P4/RE] THE FUN_00440dc2 IDENTITY unit — THE SCROLL/CAMERA
+   RESTAMP DRAWER'S OWN FRAME (small; docs-only, unattended-safe;
+   objdump from ghidra-project/exw-text-objdump.txt): the drawer
+   half is pinned (7j.16/§7j.26/ledger: 0x440d1c/0x440d93 type-DB
+   word → FUN_00401471 into the backbuffer; reads the backbuffer
+   [0x4ede18] @0x440e02) but the Backlog "REMAINS open slim"
+   clause wants the function's OWN identity: (a) the CALLER census
+   (who invokes FUN_00440dc2 — the scroll/camera restamp stager
+   FUN_00440a2d is its callee, not caller; pin every caller +
+   gates); (b) the full frame flow (what it reads besides the
+   backbuffer @0x440e02, what it writes, when it fires relative to
+   the FUN_00403938 render pass); (c) whether it can run mid-frame
+   (the terrain-pass overwrite ordering question §1 flags) or is a
+   scroll-edge-only path; (d) close the Backlog slim clause +
+   ledger row update + D121; registry_anchors green; PUSH. Pre-queue
+   check (the D118 discipline): grep'd DECISIONS + RE-EXW-SIM +
+   MISSIONVIEW + the Done log for "440dc2" — partial pins exist
+   (the drawer half + the 0x440e02 backbuffer read) but the caller
+   census + frame-flow closure is unpinned; no prior closure found.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -237,11 +231,11 @@ renumbered queue keeps every open item claimable by number).
   ramps); +0x18 producer (7j.8/7j.9 - FUN_00422287, reader raw,
   ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
-  Shield/Variant bank staging (nodes enqueue, flush skips while
-  unstaged) — PROMOTED to the Now queue 2026-08-23 (item 2, the
-  D119 close-out; pre-queue grep per D118 found ZERO prior
-  closure). (The debris physics/collision FUN_0040de9c clause
-  CLOSED 2026-08-23, D115/§7j.44.)
+  Shield/Variant bank staging — CLOSED 2026-08-23 (§7j.48/D120,
+  commit dd8d5e2: TELEPORT/SHIELD label corrections, banks
+  alloc+load at every MissionShell head — SP included, ROBNUMS =
+  dead data, TINYFONT plates MP-gated, unstaged-flush clause
+  RETIRED — no bank-zero skip exists anywhere in enqueue/flush).
 - RE-EXW-SIM sec 9 open items 2-3: CLOSED 2026-08-23 (§7j.45/D116,
   commit 47357ca — the FUN_00440e45 SHOP identity + the robots()
   extra-phase/state-1 producers; the promotion note superseded).
@@ -277,6 +271,41 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE MISSIONVIEW §5d TAIL unit COMPLETE (worker
+  328b7651 claim 2, commit dd8d5e2, D120, docs-only; objdump-only
+  from ghidra-project/exw-text-objdump.txt, no Ghidra run;
+  ADOPTED + VALIDATED the interrupted predecessor WIP in
+  RE-EXW-MISSIONVIEW.md §5d — every claim re-verified at the asm
+  level before landing; read-only corpus probes on
+  game-data/BEDLAM/GAMEGFX TELEPORT/SHIELD/ROBNUMS/TINYFONT
+  headers: 10/4/9/118 imgs; MANIFEST.sha256 clean before AND
+  after; registry_anchors 2/2 green). CLOSED with the verdict
+  set: (1) §5d label CORRECTIONS — 0x46af38 = TELEPORT.BIN (10
+  imgs; the state-5/6 draw is the BEAM: mode 0x12e, sy−0x48,
+  clamp(10−wobble/4,0..9) @0x403de6..0x403e71), 0x46af44 =
+  SHIELD.BIN (4 imgs; the +0x88-gated draw @0x403ef4..0x403f29 =
+  the shield, RandA()&3 spawn + (+1)&3 shimmer @0x403cf7);
+  (2) STAGING — alloc FUN_0041d954 @0x447860 (TELEPORT 0x6d60 /
+  NUMBERS 0xfa0 / FLAGS 0x3a98 / ROBNUMS 0xbb8 / SHIELD 0x1b58) +
+  LoadFile FUN_0041df10 @0x447b3f (TELEPORT@0x41df99, SHIELD
+  @0x41dfe9, ROBNUMS@0x41dff9), both single-site on the
+  straight-line MissionShell (FUN_0044771c) head — EVERY mission,
+  SP included, NO gate; (3) ROBNUMS.BIN = DEAD DATA (sole reader
+  = its own load site 0x41dffe; the plates draw TINYFONT
+  0x46cdb0, 118 glyphs, ASCII−0x21, shared with map markers +
+  sidebar text); (4) NAME-PLATE GRAMMAR — gate [0x4edb88]≠0
+  @0x403fb9 (SP never; the ==2 arm @0x403c62 is the 7j.31 MP
+  hot-rect, a different consumer), glyph g = [0x4e4458+id*9+i],
+  skip g > 0x40 (jl arm dead), x = sx + u32[0x4e44c8+id*4] + 6·i,
+  mode 0x12c; 0x4e44c8 = id-indexed CENTERING = 32−3·strlen
+  (writer 0x447ce0..0x447d85: memset, toupper(FUN_0044f067)-copy
+  from raw 0x4e43e0 storing c−0x21); (5) UNSTAGED-FLUSH RETIRED —
+  no bank-zero skip in FUN_0040798e (only bx/by<0) or FUN_0040179b
+  (only the unknown-mode RET @0x4017e0; drawn modes deref the bank
+  unchecked) — an unstaged bank would FAULT, and per (2) can never
+  occur; E needs no unstaged-skip logic (lazy staging is
+  unobservable). Ledger row + §5d/§8 notes updated. PUSHED dd8d5e2.
+  Queued: the FUN_00440dc2 identity unit (item 2).
 - 2026-08-23: P4/RE THE TOT PLANE-6/7 SEMANTICS unit COMPLETE (worker
    f29066bd claim 2, commit dc6f5bf, D119, docs-only; objdump-only from
    ghidra-project/exw-text-objdump.txt, no Ghidra run; read-only corpus
