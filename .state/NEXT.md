@@ -123,26 +123,37 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE UNIT (small;
-   docs-only, unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt): close the 7j.18 low-
-   priority residue "projectile type 0x69 vs the FUN_00419aff
-   damage table — NOT folded (would need the damage-table
-   else-path dump)". Decode FUN_00419aff fully (the per-weapon
-   damage resolver used by every critter/robot hit applier,
-   7j.23): the table base + stride + the ELSE path when the
-   weapon id is not a table row — then answer whether the
-   per-level BEAM column projectile 0x69 (7j.16 line: "0x69
-   the per-level BEAM column 0x34-strip"; turret fire path
-   arms it with damage (d+1)·300 as type 0x66 — check which
-   family 0x69 belongs to and what damage a 0x69-source hit
-   applies) resolves through the table or the else path;
-   ledger row + D122; registry_anchors green; PUSH. Pre-queue
-   check (the D118 discipline): grep'd DECISIONS (line ~2303
-   "projectile 0x69 vs damage table" = the 7j.18 open note),
-   RE-EXW-SIM (7j.18 "NOT folded ... stays open, low
-   priority"), and the Done log — genuinely open, no closure
-   exists.
+2. [P4/RE] THE FUN_00419756 IDENTITY UNIT (small; docs-only,
+   unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt): decode FUN_00419756
+   (126 B, sole caller 0x4123ae inside FUN_00412010's state-0x66
+   TRT-bolt handler, §7j.50/6) — the CLASS-3 OCCUPANCY PROBE whose
+   nonzero return makes the bolt die via disburser without
+   damage. Determine what it tests (robot bank 0x4c69e4 octile?
+   critter bank 0x4cff98? TRT structures? a tile-word test?) and
+   whether the class-3 death is a "hit an actor but no robot
+   damage" leg (the §7j.50 note that 0x66 never damages robots
+   makes this the natural residual question: what DOES the bolt
+   interact with). Ledger row + D123; registry_anchors green;
+   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS,
+   RE-EXW-SIM (only the §7j.50 mention), the Done log, and
+   exw-functions.txt (1 caller) — genuinely open, zero prior
+   decode exists.
+3. [P4/RE] THE DEBRIS ARRIVAL-SFX PAIR UNIT (small; docs-only,
+   unattended-safe; objdump from
+   ghidra-project/exw-text-objdump.txt): close the 7j.11 item-4
+   residue — FUN_00421e60 (118 B, 11 callers) + FUN_00421dec
+   (116 B, 2 callers), the per-ring arrival SFX consumers named
+   in the §7j.11 table (k20 tail / center-write legs). Decode
+   both bodies: which FUN_0043a48e voice cells / bank names they
+   play (the §7j.30 bank→name map is the anchor — name every
+   cell), the trigger condition inside each caller family, and
+   whether any caller is corpus-reachable (the §7j.11 table's
+   producer rows). Ledger rows + D124; registry_anchors green;
+   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS
+   + RE-EXW-SIM — only the §7j.11 consumer-table rows exist, no
+   body decode, no closure; the Backlog "Mission SFX tier" bullet
+   still lists the pair as open item 4.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -165,8 +176,10 @@ renumbered queue keeps every open item claimable by number).
   death-handler family. CLOSED by 7j.25: the destroy-tail
   effect-entry map + the 160-vs-0xA8 stride anomaly + the
   .POS/.BDG loaders + the .BDG grammar (FORMATS §12/§16).
-  OPEN small: projectile type 0x69 vs the FUN_00419aff
-  damage table (7j.17/7j.18 — low priority).
+  CLOSED 2026-08-23 by 7j.50/D122: projectile type 0x69 vs the
+  FUN_00419aff damage table (else path dumped — inline jump tree,
+  no memory table; the beam re-keys to literal 0x65, terrain-only,
+  never robots; no caller ever passes 0x69).
 - CLOSED 2026-08-23 by 7j.46/D117: the per-zone FUN_00433980 case
   table (all zones/modes + the ride-record bank grammar + the 21
   beacon slots + the zone-F/G EXIT pairs + zone E verified negative)
@@ -208,7 +221,8 @@ renumbered queue keeps every open item claimable by number).
   202 durable assignments, zero unnamed cells) + the order SFX 0x2A armer click + the
   damage/alarm SFX families (7g.1) + the pickup SFX 0x43a48e
   entries (7h.2) + the select-ack SFX pair 0xC+k/0xF (7j.6) + the
-  debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4).
+  debris arrival-SFX pair FUN_00421e60/FUN_00421dec (7j.11 item 4
+  — PROMOTED to the Now queue as item 3, 2026-08-23).
   NOTE 7j.17 pinned new FUN_0043a48e banks: _DAT_004edf94/
   _DAT_004edfe4/_DAT_004edfac (robot fire) and
   _DAT_004edffc/_DAT_004edff0/_DAT_004edfa8 (critters/POI).
@@ -275,6 +289,46 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE PROJECTILE-TYPE-0x69 DAMAGE-TABLE unit
+  COMPLETE (worker 6bb948aa claim 2, commit 897f524, D122,
+  docs-only; objdump-only from ghidra-project/exw-text-objdump.txt,
+  no Ghidra run, no corpus read; MANIFEST.sha256 clean,
+  registry_anchors 2/2 green, PUSHED). CLOSED with the verdict set:
+  (1) FUN_00419aff ELSE PATH DUMPED — NO memory table (inline
+  binary jump tree; else = default eax=1 via 4 fall-through stubs
+  0x419b57/0x419c2c/0x419c50/0x419c5e + the Watcom CROSS-FUNCTION
+  SHARED-EPILOGUE gadget 0x418aa1 reached by 5 arms: 2 carrying
+  the default 1 [w<2, 0x1B..0x23], 3 carrying the d≠2 products
+  50·(d+1)/300·(d+1)/75·(d+1) — the §7j.17 key table re-verified
+  instruction-exact incl. the ≥0x69 final else). (2) THE 0x69
+  VERDICT: the per-level BEAM column is a 0x4cc654-bank STATE
+  (producer = the k7 close-combat leg @0x4135a2 behind the
+  d-indexed 32/16/8-frame fire gates, {z=6, TTL 0x18, +0x1A=0});
+  its impact handler NEVER queries the table at its own id — it
+  passes the LITERAL 0x65 (0x41215a) → 50/100/200 by d,
+  TERRAIN-ONLY via FUN_0041a894; the probe counter OSCILLATES
+  (k := min(k+1,7) top, k−− on contact 0x4120e9) so a blocked
+  level re-damages EVERY FRAME (debris K0x14 + RandA±7 + SFX per
+  contact) until the TTL-0x18 silent death; NEVER robots. No
+  caller anywhere passes 0x69 (29-site census); the 7j.16 "else 1"
+  guess CORRECTED. (3) The "(d+1)·300 as type 0x66" hypothesis
+  REFUTED for 0x69 — that key is the TRT-bolt state 0x66 ALONE
+  (producer FUN_00417698 @0x417a5c `[eax*2+0x4cc654]`; guided
+  stepper ≤10 substeps, contact classes 1/2/3, class-2 terrain
+  damage key 0x66 + 0x41bc1c) and 0x66 ALSO never damages robots
+  (FUN_004197d4 admits 0x65/0x67/0x68 only — own-state keys for
+  0x67/0x68 via the [+0x4cc652]>>16 trick, literal 0x65 for the
+  0x65 state). (4) COMPLETE 25-site state-word census: 4 readers +
+  12 zero-writes + exactly FIVE producers (k2 0x65 @0x41540e / TRT
+  0x66 @0x417a5c / k3 0x67 @0x414b79 / k5-6 0x68 @0x413def / k7
+  0x69 @0x4135a2); tick dispatch = jump table 0x411ffc on
+  state−0x65 ∈ 0..4; FUN_004126dc's 0x69 arm = silent
+  shared-epilogue return (defensive). Deliverables: §7j.50 + 3
+  rewritten ledger rows (projectile tick / weapon damage table /
+  disburser) + the §7j.14 self-type gloss corrected + §7j.16/§7j.28
+  pointers + the 7j.18 residue CLOSED (3 sites). Queued: the
+  FUN_00419756 identity unit (item 2) + the debris arrival-SFX
+  pair unit (item 3).
 - 2026-08-23: P4/RE THE FUN_00440dc2 IDENTITY unit COMPLETE (worker
   21c18e9e claim 2, D121/§7j.49, docs-only; objdump-only from
   ghidra-project/exw-text-objdump.txt, no Ghidra run; read-only
