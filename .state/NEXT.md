@@ -123,21 +123,19 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE RE-EXW-SIM §9 ITEMS 2-3 REMAINDER unit (medium;
-   objdump-only from ghidra-project/exw-text-objdump.txt,
-   docs-only, unattended-safe): (a) the FUN_00440e45 full decode
-   (10661 B, GameMain call #2 — §9 item 2; the inter-mission
-   shell hypothesis to verify: 7d's WEAPICON/CONLITE/SHOPFONT/
-   SHOPLITE + SHOP.SMK + the weapon-table writer family + its
-   0x46cbe0 command-count read = MP shop sync; anchor every state
-   word its writers touch into the §3 ledger with §7j.45
-   provenance); (b) the robots() extra-phase semantics (fields
-   0x4c6a16/18/88/8c) + the state-1 producers (patrol? — §9
-   item 3; the S6 walk showed state 1 = move-target, the
-   producers of the AMR still un-decoded). Deliverables:
-   §7j.45 + ledger rows + §9 items 2-3 refresh + D116;
-   registry_anchors green; manifest brackets any corpus probe;
-   PUSH.
+2. [P4/RE] THE FUN_00433980 CASE TABLE + FUN_00424a6f MESSAGE TABLE unit
+   (medium; objdump-only from ghidra-project/exw-text-objdump.txt +
+   read-only DGROUP string probes, docs-only, unattended-safe): (a) the
+   per-zone pad-trigger dispatcher case table (~28 pad ids x 7 zones,
+   beyond the 7j.19 head decode + 7j.20's ~25 (zone,slot) extraction
+   pairs + 7j.21's elevator census - the full per-zone switch, pinning
+   every case's pad slots + actions for the S6/live-message
+   expectations); (b) FUN_00424a6f (strings 0x458ca7..., latch
+   0x4eb5f8) = the mission MESSAGE string walk (ids <-> text + the
+   latch/timer semantics feeding msgs 9/10/0xB/0x1C..0x21/0x26-0x29 the
+   decoded producers already cite). Deliverables: 7j.46 + ledger rows +
+   the Backlog bullet retired + D117; registry_anchors green; manifest
+   brackets any corpus probe; PUSH.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -159,12 +157,9 @@ renumbered queue keeps every open item claimable by number).
   .POS/.BDG loaders + the .BDG grammar (FORMATS §12/§16).
   OPEN small: projectile type 0x69 vs the FUN_00419aff
   damage table (7j.17/7j.18 — low priority).
-- The per-zone FUN_00433980 case table (≈28 pad ids × 7 zones,
-  beyond the §7j.19 head decode; §7j.20 item 2 gives the ~25
-  extraction-pad (zone,slot) pairs and §7j.21 the record
-  high-water marks + the record↔pad arm mapping task) + the
-  FUN_00424a6f message string table — mechanical, decode per
-  zone only when P4.2 needs it.
+- PROMOTED to the Now queue 2026-08-23 (D116 close-out): the
+  per-zone FUN_00433980 case table + the FUN_00424a6f message
+  string table — now item 2 (docs-only, unattended-safe).
 - The 0x4787c4/0x47879c hot-rect record — CLOSED 2026-08-22
   (§7j.31/D95): ONE 0x20-stride array base 0x4787bc, grammar +
   7-writer census + octile picker + class dispatcher landed; SP
@@ -267,6 +262,40 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE RE-EXW-SIM §9 ITEMS 2-3 REMAINDER unit
+   COMPLETE (worker c607288e claim 2, commit 47357ca, D116; docs-only;
+   objdump-only + read-only DGROUP string probes, no Ghidra run, no
+   corpus write — manifest clean before AND after; registry_anchors
+   2/2 green; PUSHED). §9 item 2 CLOSED by §7j.45 Part A: FUN_00440e45
+   = THE SHOP, instruction-exact — the §7d asset list lands exactly
+   (WEAPICON/CONLITE/SHOPFONT/SHOPLITE + DARKPALS/SHOPPAL + SHOP.SMK
+   gated by the NEW animations pin [0x46cca4] + SOUND\MIDI\SHOP), the
+   MONEY FLOOR (>=100 at entry), the MP/zone-7 16-dword LOCKOUT array
+   0x46cd48..80, the 9-category CATALOG grammar @0x4ea288
+   (immediate-staged; cat 8 = the equipment chassis 0x2A..0x2E with the
+   0x2D/0x2E mutex), the full buy/sell/auto-loadout/confirm machine,
+   the WEAPON-GROUP LAYOUT CORRECTION (+6 price/+8 category/+0xA item —
+   §7d sat one slot low), and the MP SHOP SYNC CONFIRMED: the exit
+   appends the type-4 COMMAND record (FUN_00449c94(4, 0x4e43e0), the
+   63-B staging struct MissionShell/save consume) then walks players
+   p < [0x46cbe0] mirroring each record's 7 (name,ammo) pairs into
+   0x4de664+p*0x62 (a FOURTH weapon-table writer family). §9 item 3
+   CLOSED by §7j.45 Part B: the phase-0 pre-pass timer decays (+0x32
+   BURN cooldown :=100 via the FUN_004100b7 scorch lane; +0x34 ALARM
+   cooldown; +0xA4 alarm counter DOES decay 1/frame — the D90 question
+   closed; the queue's "0x4c6a8c" = zero sites, the intended pair
+   +0x88/+0x8C), the SHIELD machine (+0x88 points: -2/frame, 0x20 per
+   charge/state-3, 0x2710 INVULN during the +0xA0 flash + the player
+   palette strobe; +0x8C CHARGES sourced from the equipment-chassis
+   row word+2 via the 0x40cc8c jump table), +0x70 = the REINFORCEMENT
+   delay with the NEW pending gate [0x4de658] (:=0x80 at the arm), the
+   0x7d3 tile gate CORRECTED (countdown-dependent phase bound), and
+   the STATE-1 CENSUS: exactly ONE producer — FUN_00409138's COMMAND
+   bit0 arm (0x40a37b); NO patrol semantics (SP never produces state
+   1 — why S6 needed the inject seam). Deliverables: §7j.45 + 10
+   ledger/§3 rows + §5/§7d corrections + GAMETHREAD gloss
+   retirements + D116. Queued: the FUN_00433980 case table +
+   FUN_00424a6f message table unit (item 2).
 - 2026-08-23: P4.2/debris-physics THE FUN_0040de9c FAMILY unit
    COMPLETE (D115; the §7j.44 RE decode d467471 + the engine leg
    cebc178 landed by predecessor a5ef2370 claim 2, which died at
