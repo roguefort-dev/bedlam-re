@@ -631,16 +631,33 @@ inject form). Row shape:
 - Frame-counter alignment: the frame-counter watch must advance +1 per
   hit from the anchor; drift warns to stderr + a transcript comment
   (a missed trigger hit would silently misalign frames).
+- **D140 FINDING — the frame-1 row set is the DEDUPED anchor union:**
+  on every committed plan the per-frame rows are a SUBSET of
+  anchor_watches (the anchor list IS the frame-1 union; TS statics + a
+  full T0 sweep ride frame 1). A literal `anchor_watches + watches`
+  concatenation emits DUPLICATE ids and the stitcher's
+  `canonicalize_frame` rejects `DuplicateWatchId` (dump.rs) — capgen-o2
+  dedupes keep-first. The SAME landmine exists in the O1 dbx-capgen
+  frame-1 path (`dump_rows(frame, anchor_watches + watches ...)`) —
+  every live O1 session would fail at `diff stitch` until it is fixed
+  (queued as its own small unit; the dbgprobe gates never hit it
+  because the probe plans carry no anchor_watches).
 - `--synthesize-feed` = the reference mini-driver: deterministic
   LCG bytes per (addr, hit) with consistent resolve statics + inject
   arithmetic, exercising every feed form (the S3-o2 plan drives
   op:command headless).
-- Smoke: `tools/runtime/capgen-o2-smoke.sh` (unattended-safe; no Wine,
-  no corpus read): dbx-plan --channel o2 byte-pins vs S1-o2.json →
-  synthesize → emit → dbx-stitch --channel o2 (manifest O2:EXW/Wine +
-  the 401-frame contract) → dbx-diff self-cross (decode +
-  normalize_o2_row intake) → the loud rejections (EXD-only row refuses
-  at stitch; truncated feed refuses at emit). Outputs under
+- Smoke VERIFIED GREEN 2026-08-24 (unattended; no Wine, no corpus
+  read, MANIFEST clean pre+post): `tools/runtime/capgen-o2-smoke.sh` —
+  (a) dbx-plan --channel o2 byte-pins vs S1-o2.json; (b) the full
+  401-frame S1-o2 chain: synthesize → emit → dbx-stitch --channel o2
+  against the real S1 scenario (20.5 MB dump, chain
+  b436fa77642c94fc, manifest channel O2:EXW/Wine, frame_count 401) →
+  dbx-diff self-cross PASS 0 findings (decode + normalize_o2_row
+  intake); (c) the EXD-only row spliced into the transcript refuses
+  (NoExwAddress); (d) a feed truncated at hit 401 refuses at emit;
+  (e) S3-o2 compiles its 8 command injects on EXW cells and the chain
+  runs end-to-end (frame 1 flag set, stitched, chain
+  52f6044c2033cb34); (f) re-emission is byte-identical. Outputs under
   runtime/harness-out/o2-smoke/ (gitignored).
 
 ## Explicitly NOT done here (follow-ups queued)
