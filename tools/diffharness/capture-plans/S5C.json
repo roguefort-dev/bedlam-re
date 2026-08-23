@@ -55,6 +55,7 @@
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
     { "id": "robot-bank", "addr": "CS:000F6D34", "len": "$robot_count*0xA8" },
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
+    { "id": "blink-cursor", "addr": "CS:0010E108", "len": 4 },
     { "id": "per-player-selected", "addr": "CS:000971A4", "len": 48 },
     { "id": "order-target", "addr": "CS:0010E0A4", "len": 12 },
     { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
@@ -91,6 +92,7 @@
     { "id": "linear-mission-m", "addr": "CS:00119610", "len": 4 },
     { "id": "robot-bank", "addr": "CS:000F6D34", "len": "$robot_count*0xA8" },
     { "id": "selection-triple", "addr": "CS:0011954C", "len": 4 },
+    { "id": "blink-cursor", "addr": "CS:0010E108", "len": 4 },
     { "id": "per-player-selected", "addr": "CS:000971A4", "len": 48 },
     { "id": "order-target", "addr": "CS:0010E0A4", "len": 12 },
     { "id": "move-target-words", "addr": "CS:000F75EC", "len": 96 },
@@ -113,7 +115,6 @@
   ],
   "_deferred": [
     "sfx-master-gate (4)",
-    "blink-cursor (4)",
     "no-extract-latch (per-robot u32)",
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",

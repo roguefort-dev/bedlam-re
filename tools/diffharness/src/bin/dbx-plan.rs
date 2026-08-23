@@ -272,10 +272,19 @@ fn resolve_row(row: &diffharness::Watch) -> Result<Option<RowPlan>, PlanError> {
                     }),
                 })
             }
-            // partial alias: EXD covers the selected-idx cell only
-            // (registry note; RE-EXD-MAP sec 5) — dump the 4 verified
-            // bytes, never a fabricated 12-byte triple.
+            // selection triple fully mapped since D132 (slot/base/size
+            // cells 0x11954c/0x11955c/0x11958c) — but the EXD cells are
+            // NOT contiguous, so the plan still dumps the canonical 4-B
+            // D83 form = cells[0] = the SELECTED-SLOT cell (the differ's
+            // u32 row); base/size ride the bank rows' count cells.
             "selection-triple" => plan(Form::Fixed {
+                addr: first,
+                len: 4,
+            }),
+            // blink-cursor twin 0x10e108 (D132): plain 4-B u32 scalar —
+            // the S1 blink-cursor-from-spawn hypothesis watch (expected
+            // constant 0 on corpus paths, §7j.59.E).
+            "blink-cursor" => plan(Form::Fixed {
                 addr: first,
                 len: 4,
             }),
@@ -1750,18 +1759,18 @@ mod tests {
         let scen = Scenario::parse(include_str!("../../scenarios/S1.scen")).unwrap();
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T1: 17 rows - 2 gaps (blink-cursor/no-extract-latch;
-        // order-target closed by the W5-followup) = 15 resolved (the
+        // T1: 17 rows - 1 gap (no-extract-latch; order-target closed
+        // by the W5-followup, blink-cursor by D132) = 16 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
         // T0: 10 per-frame + TS: 9 anchor-only, same as S0.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 15, "T0 minus 1 gap + T1 resolved");
-        assert_eq!(anchor_count, 19 + 15, "T0 + TS + T1 rows");
+        assert_eq!(frame_count, 10 + 16, "T0 minus 1 gap + T1 resolved");
+        assert_eq!(anchor_count, 19 + 16, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            9,
-            "7 S0 deferrals + T1: 2 gaps (move-target no longer deferred)"
+            8,
+            "7 S0 deferrals + T1: 1 gap (move-target no longer deferred, blink-cursor resolved by D132)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -1796,13 +1805,20 @@ mod tests {
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h*0x1E\""));
         assert!(emitted.json.contains("\"len\": \"$map_w*$map_h\""));
         // gaps never emit (order-target closed by the W5-followup and
-        // now emits its verified 12-byte triple)
+        // now emits its verified 12-byte triple; blink-cursor resolved
+        // by D132 and emits its verified 4-byte cell)
         for id in row_ids(&emitted.json) {
             assert!(
-                id != "blink-cursor" && id != "no-extract-latch",
+                id != "no-extract-latch",
                 "gap row {id:?} must never be emitted"
             );
         }
+        assert!(
+            emitted
+                .json
+                .contains("{ \"id\": \"blink-cursor\", \"addr\": \"CS:0010E108\", \"len\": 4 }"),
+            "blink-cursor must emit its verified twin cell (D132)"
+        );
         assert!(
             emitted
                 .json
@@ -1835,11 +1851,11 @@ mod tests {
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
         // Same tier set as S1 -> the same row shape (19 anchor TS/T0 +
-        // 15 T1; 10 T0 + 15 T1 per-frame).
+        // 16 T1; 10 T0 + 16 T1 per-frame).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 15);
-        assert_eq!(anchor_count, 19 + 15);
+        assert_eq!(frame_count, 10 + 16);
+        assert_eq!(anchor_count, 19 + 16);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2001,13 +2017,13 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 15 + T2 2 per-frame; anchor adds TS 9.
+        // T0 10 + T1 16 + T2 2 per-frame; anchor adds TS 9.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 10 + 15 + 2);
+        assert_eq!(frame_count, 10 + 16 + 2);
         assert_eq!(anchor_count, frame_count + 9);
-        // deferred: the 9 S1-shape gaps + the 3 unaliased T2 rows
-        assert_eq!(emitted.deferred.len(), 12);
+        // deferred: the 8 S1-shape gaps + the 3 unaliased T2 rows
+        assert_eq!(emitted.deferred.len(), 11);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2044,11 +2060,11 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 10 + T1 15 per-frame (T3 adds none); anchor adds TS 9.
-        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 15);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 15 + 9);
-        // deferred: the 9 S1-shape gaps + ALL 14 T3 rows
-        assert_eq!(emitted.deferred.len(), 23);
+        // T0 10 + T1 16 per-frame (T3 adds none); anchor adds TS 9.
+        assert_eq!(count_rows(&emitted.json, "watches"), 10 + 16);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 10 + 16 + 9);
+        // deferred: the 8 S1-shape gaps + ALL 14 T3 rows
+        assert_eq!(emitted.deferred.len(), 22);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),

@@ -197,8 +197,10 @@ fn registry_schema_invariants_hold() {
     }
     // The still-tagged T0/T1 gaps must be present AND exd-empty
     // (difficulty + order-target were closed by the W5-followup census,
-    // RE-EXD-MAP §5c — they now carry verified aliases).
-    let gap_ids = ["sfx-master-gate", "blink-cursor", "no-extract-latch"];
+    // RE-EXD-MAP §5c — they now carry verified aliases; blink-cursor +
+    // selection triple were closed by the D132 EXD twin census,
+    // RE-EXD-MAP §5 — both now carry verified aliases too).
+    let gap_ids = ["sfx-master-gate", "no-extract-latch"];
     for gid in gap_ids {
         match rows.iter().find(|w| w.id == gid) {
             Some(w) => {
@@ -212,13 +214,16 @@ fn registry_schema_invariants_hold() {
             None => failures.push(format!("tagged gap row {gid} missing")),
         }
     }
-    // selection cursor/squad is the sixth tagged gap (partial fill allowed
-    // for the selected-idx cell, but the gap must be documented).
+    // selection-triple: fully mapped since D132 — all three cells carry
+    // aliases AND the label-swap correction must be cited in the note.
     match rows.iter().find(|w| w.id == "selection-triple") {
         Some(w) => {
-            if !w.note.contains("gap") {
+            if w.exd_status != "verified" {
+                failures.push("selection-triple: must be verified since D132".into());
+            }
+            if !w.note.contains("D132") {
                 failures
-                    .push("selection-triple: cursor/squad gap must be documented in note".into());
+                    .push("selection-triple: note must cite the D132 label-swap correction".into());
             }
         }
         None => failures.push("selection-triple row missing".into()),

@@ -9,10 +9,10 @@
 #               AND written)
 #   exw_addr    EXW (Win95) address expression — the canon of record
 #   exd_addr    EXD (DOS oracle) alias from RE-EXD-MAP §4/§5/§5b/§5c.
-#               EMPTY = explicit gap (SFX gate, blink-cursor,
-#               no-extract latch, selection cursor/squad) or a
+#               EMPTY = explicit gap (SFX gate, no-extract latch) or a
 #               not-yet-aliased tier (T2-T4; TI rows are aliased
 #               where their seam is pinned — §5c). Never guessed.
+#               (blink-cursor + selection triple were closed by D132.)
 #   indirect    true = EXD keeps the bank behind a pointer cell; read
 #               through it (RE-EXD-MAP §7 divergence seed #4).
 #   extent      watched byte extent (expression form)
@@ -184,25 +184,25 @@ anchor = "robot bank"
 id = "selection-triple"
 tier = "T1"
 exw_addr = "0x46cbd4 / 0x46cbdc / 0x46cbd8"
-exd_addr = "0x11954c"
+exd_addr = "0x11954c / 0x11955c / 0x11958c"
 extent = "12"
-layout = "u32 x3 {selected idx / cursor / squad size}"
+layout = "u32 x3 {selected slot / squad base / squad size}"
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "selection triple"
-note = "EXD alias covers the selected-idx cell only; cursor/squad cells are an explicit W1 gap (RE-EXD-MAP §5)."
+note = "D132 label-swap correction: the EXW twin of EXD 0x11954c is 0x46cbdc (selected slot — auto-switch/cmd-builder cell), NOT 0x46cbd4; 0x11955c = 0x46cbd4 (squad base), 0x11958c = 0x46cbd8 (per the W8-prep count-mapping). All three cells mapped (RE-EXD-MAP §5)."
 
 [[watch]]
 id = "blink-cursor"
 tier = "T1"
 exw_addr = "0x4dc5d0"
-exd_addr = ""
+exd_addr = "0x10e108"
 extent = "4"
 layout = "u32 (0 or slot+1) — the S1 blink-cursor-from-spawn hypothesis watch"
-exd_status = "gap"
+exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "blink-cursor selector"
-note = "W1 gap: producer twin not located; anchor via the effect-row family when a scenario needs it (RE-EXD-MAP §5)."
+note = "D132: the EXD twin census closed the gap — exactly 7 .text sites mirroring the §7j.59/D131 EXW census one-for-one (arm strips 0x1cef1/0x1cf2c/0x1cf72, impact-clear 0x34f7f, MissionShell reset 0x59842, portrait gate 0x186dc, chase gate 0x34e25); value grammar + gates + idle table {400,300,200,5000} byte-identical (RE-EXD-MAP §5)."
 
 [[watch]]
 id = "per-player-selected"
