@@ -133,41 +133,60 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-  2. [P4/RE] THE EXD BLINK-CURSOR TWIN CENSUS
-     (small-medium; docs+registry; unattended-safe). Close the
-     last sidebar-family W1 gap: the watches.toml `blink-cursor`
-     row (exw 0x4dc5d0) still has `exd_status = "gap"` +
-     RE-EXD-MAP §5 "TODO (gap)". The §7j.59/D131 7-site EXW
-     census is the ANCHOR TEMPLATE: locate the [0x4dc5d0] twin
-     in BEDLAM.EXD (candidate surfaces, in likelihood order:
-     the sidebar portrait-pass twin of FUN_004072bf inside the
-     EXD §7f.4-switch equivalent; the robots() idle-arm tail
-     twin near the 0xf6d34/FUN_0001c7dc robot family — the
-     warning-post pair + `:= slot+1` strips; the MissionShell
-     reset cascade twin in FUN_000596ed; the shell-resolver
-     twin of FUN_00423e1c). METHOD: generate an EXD .text
-     objdump first (objdump -b binary -m i386 over the EXD
-     object1 range 0x10000..0x72800 per the W1 map — follow the
-     exw-text-objdump.txt recipe; commit it as
-     ghidra-project/exd-text-objdump.txt for future units) OR a
-     bounded `analyzeHeadless -process BEDLAM.EXD -noanalysis`
-     probe pass (BEDLAM.EXD is ALREADY imported — never
-     re-import; check `pgrep -f analyzeHeadless` first).
-     DELIVERABLES: the twin address + writer/reader census vs
-     the §7j.59 template, the RE-EXD-MAP §5 row fill, the
-     watches.toml exd_addr fill if pinned (T1 rows carry
-     aliases; TI rows stay empty per the W2 emptiness rule),
-     registry_anchors 2/2 re-green, D132, PUSH. CAVEATS: a
-     game-data read → MANIFEST bracket before AND after any
-     corpus-touching command; the raw-binary objdump greps are
-     garbage-tolerant (verify hits against known twin cell
-     constants from RE-EXD-MAP §5, e.g. the squad base/per-
-     player cells). Pre-queue check (D118 discipline): grep
-     confirms no EXD blink-cursor twin work exists anywhere
-     (RE-EXD-MAP §5 row is TODO; the W2 note says "anchor via
-     the effect-row family when a scenario needs it").
-     (QUEUED 2026-08-23 by the §7j.59/D131 close, worker
-     0329338f claim 2.)
+   2. [P4/RE] THE EXD NO-EXTRACT-LATCH TWIN CENSUS
+      (small-medium; docs+registry; unattended-safe). Close W1
+      schema gap #2 (blink-cursor + selection-triple were closed
+      by D132): the watches.toml `no-extract-latch` row (exw
+      0x46aed4, per-robot u32 array idx*4) still has
+      exd_status = "gap" + RE-EXD-MAP §5 "TODO (gap)". THE D132
+      METHOD IS THE TEMPLATE — the substrate is the COMMITTED
+      tools/exd-relod.py relocation objdump (regenerate:
+      python3 tools/exd-relod.py game-data/BEDLAM/BEDLAM.EXD
+      /tmp/opencode/exd-image.bin
+      ghidra-project/exd-text-objdump.txt — the artifact stays
+      LOCAL per the /ghidra-project/ gitignore convention; it
+      already exists from the D132 run). METHOD: (a) EXW side
+      first — census 0x46aed4 in ghidra-project/exw-text-
+      objdump.txt (grep '46aed4'; committed facts to reconcile:
+      the MP respawn gate read [idx*4+0x46aed4]≠0 → death-flag
+      path §7j.57; the SP no-extract tail 0x40eac0 area; WHO
+      SETS the latch — the §5 note says anchor via the POD-RING
+      animator; FUN_0041f8c1 is NOT it, that is the debrief/
+      payout fn); (b) EXD twin — grep the exd-text-objdump for
+      the per-robot indexed array near the robot-bank family
+      (bank 0xf6d34, the 0x1195xx cells; candidates: the
+      spawn-staging zero-fill family, the MP-respawn twin of
+      the 0x40ea59/0x40eac0 pair, the extraction animator),
+      verify hits against known twin constants (stride 4,
+      per-robot, cap-bounded). DELIVERABLES: twin base +
+      writer/reader census, RE-EXD-MAP §5 row fill,
+      watches.toml exd_addr (T1 row alias), registry_anchors
+      re-green, D133, PUSH. CAVEATS: MANIFEST bracket before
+      AND after any corpus-touching command (the relod
+      regeneration reads game-data); raw-binary greps are
+      garbage-tolerant — verify against constants; D118
+      pre-queue check performed 2026-08-23 (RE-EXD-MAP §5 row
+      TODO, watches.toml empty).
+      (QUEUED 2026-08-23 by the D132 blink-cursor twin close,
+      worker c653b51a claim 2.)
+   3. [P4/RE] THE EXD SFX-MASTER-GATE TWIN CENSUS
+      (small; docs+registry; unattended-safe). Last of the four
+      W1 schema gaps: the watches.toml `sfx-master-gate` row
+      (exw 0x4ede58 — the ≠0 gate in the §7j.52 BOOM/RICOCHT
+      arrival-SFX pair + the SFX dispatch family's master
+      enable). METHOD: EXW census first (grep '4ede58' in
+      exw-text-objdump.txt — writer/reader split + who sets it:
+      sound-config boot/loader?); then the EXD twin via the SFX
+      dispatch family — the committed §5 note already names the
+      EXD bank loader FUN_0004c121 (called from the EXD
+      MissionShell reset cascade @0x5982a, verified in the D132
+      reset window); find the gate cell read next to the EXD
+      SFX play twin (EXW FUN_0043a48e ⟷ EXD twin uncommitted —
+      find it via the DEADMAN1 .RAW name-string walk).
+      DELIVERABLES: twin + census, RE-EXD-MAP §5 row fill,
+      watches.toml fill, registry re-green, D134, PUSH. Same
+      caveats as item 2. (QUEUED 2026-08-23 by the D132 close,
+      worker c653b51a claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -320,6 +339,60 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE EXD BLINK-CURSOR TWIN CENSUS unit
+  COMPLETE (worker c653b51a claim 2 — adopted + re-validated +
+  landed the interrupted 4fe7f1e9 WIP; substrate committed by it
+  as tools/exd-relod.py 8f641d3; docs+registry commit f9986b0,
+  D132, RE-EXD-MAP §5/§5e + §7j.59.E addendum; objdump-only from
+  the committed-tool relocation listing, no Ghidra run (the
+  pgrep hits were this worker's own prompt string), no corpus
+  write; MANIFEST.sha256 clean before AND after;
+  registry_anchors 2/2 green; dbx-plan 31/31 incl. the
+  committed-artifact reproduction; fmt+clippy clean; PUSHED).
+  CLOSED with the verdict set: (1) THE TWIN = [0x0010e108],
+  EXACTLY 7 .text sites one-for-one with the §7j.59/D131 EXW
+  census — writers: the three idle-arm strips 0x1cef1 :=ecx(1) /
+  0x1cf2c :=2 imm / 0x1cf72 :=ecx(3) (⟷ 0x40c1d7/0x40c217/
+  0x40c254; posts (0xC,0)+(0xF,·,1)/(0xD,1)/(0xE,2) via the
+  warning-post twin FUN_00034972 ≡ FUN_004239ef; size gates
+  [0x11958c]>1/>2; the imm-vs-ecx split is a codegen swap,
+  k=1 imm on EXD vs k=2 imm on EXW) + the impact-completion
+  clear 0x34f7f :=ebx(0) (⟷ 0x423fef, in the shell-resolver
+  FUN_00034d89 ≡ FUN_00423e1c after the 3×3 nine-blast
+  FUN_00035406 loops) + the MissionShell reset 0x59842 :=ecx(0)
+  (⟷ 0x447871, between map-overlay [0x1075bc] and salvo latch
+  [0x1081fc]); readers: the portrait blink gate 0x186dc (⟷
+  0x407428, inside FUN_000180a1 ≡ FUN_004072bf — identical
+  (frame[0x1195f0]&3)+0x51 sprite, literal 1/2/3 x-dispatch
+  0x1F0/0x222/0x254, y=0xD, bank [0x1074fc] ≡ [0x4edd7c],
+  draw FUN_000111fa ≡ FUN_00401ca2, 0 AND >3 draw nothing) + the
+  chase-camera gate 0x34e25 (⟷ 0x423e91 — identical
+  ([base]+[cursor]−1)·0xA8 → kind@+0x2A (dword@+0x28 sar16)
+  == player-type [0x1075c0] ∧ ≠selected → cut FUN_0003552e ≡
+  FUN_004245c9). Idle table 0x8105c {400,300,200,5000} +
+  respawn {1500,900,600} BYTE-IDENTICAL to EXW 0x454ee8/0x81050.
+  (2) THE SELECTION-TRIPLE LABEL-SWAP CORRECTION: EXD 0x11954c
+  ≡ EXW 0x46cbdc (SELECTED SLOT — auto-switch 0x5a117/0x5a124 ⟷
+  0x448109/0x448111), EXD 0x11955c ≡ EXW 0x46cbd4 (SQUAD BASE —
+  arm-strip compare 0x1cecc, chase read order 0x34e20→0x34e30 ⟷
+  0x423e8c→0x423e9c, global index 0x5a871 ⟷ 0x4480c1); 0x11958c
+  ≡ 0x46cbd8 per W8-prep; ALL THREE cells mapped, gap CLOSED.
+  (3) TEN §5e ALIASES: salvo latch 0x1081fc; 8-shell bank
+  0x8f0b4 with the grammar pinned BOTH sides {x w@+0, y w@+2,
+  fall w@+4 seed 0xFF, start-delay w@+6, valid w@+8} (scatter
+  0x1d00e..0x1d038 ⟷ 0x40c323..0x40c348, last two stores
+  swapped codegen order; the 0x8f0b2/0x4ea236 sites = the
+  dword@base−2≫16 x-read idiom — LANDING-RUN correction of the
+  first draft's 0x8f0b2/+2/+4 convention, re-verified
+  instruction-exact); map-overlay 0x1075bc; zoom 0x107448;
+  idle table 0x8105c; GENERAL.BIN ptr 0x1074fc; + the four
+  function twins. (4) watches.toml blink-cursor exd_addr filled
+  + gap closed, selection-triple re-aliased; dbx-plan emits the
+  4-B cell; S1..S8/S5B/S5C capture-plans regenerated; registry
+  gap set = {sfx-master-gate, no-extract-latch} only. Engine
+  consequence NONE. Queued: item 2 = the EXD no-extract-latch
+  twin census, item 3 = the EXD SFX-master-gate twin census.
+  NEXT: item 2.
 - 2026-08-23: P4/RE THE [0x4dc5d0] BLINK/EFFECT-LIST PRODUCER
   CENSUS unit COMPLETE (worker 0329338f claim 2, commit
   64543b6, D131, §7j.59, docs-only; objdump-only from

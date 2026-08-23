@@ -1,5 +1,43 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE EXD BLINK-CURSOR TWIN CENSUS unit
+    COMPLETE (D132; docs+registry, commit f9986b0, worker
+    c653b51a claim 2 — adopted + re-validated at HEAD the
+    interrupted 4fe7f1e9 WIP, substrate committed as
+    tools/exd-relod.py 8f641d3; objdump-only from the
+    committed-tool relocation listing, no Ghidra run, no corpus
+    write; MANIFEST.sha256 clean before AND after;
+    registry_anchors 2/2 green, dbx-plan 31/31, fmt+clippy
+    clean; PUSHED): the blink-cursor EXD twin = [0x10e108],
+    EXACTLY 7 .text sites one-for-one with the §7j.59/D131 EXW
+    census — writers: the three idle-arm strips 0x1cef1/:=
+    0x1cf2c/:=0x1cf72 (⟷ 0x40c1d7/0x40c217/0x40c254, warning
+    posts via FUN_00034972 ≡ FUN_004239ef, size gates
+    [0x11958c]>1/>2) + the impact clear 0x34f7f (⟷ 0x423fef,
+    in the shell-resolver FUN_00034d89 ≡ FUN_00423e1c) + the
+    MissionShell reset 0x59842 (⟷ 0x447871); readers: the
+    portrait gate 0x186dc (⟷ 0x407428, in FUN_000180a1 ≡
+    FUN_004072bf — identical (frame&3)+0x51 sprite + literal
+    1/2/3 x-dispatch 0x1F0/0x222/0x254, y=0xD, 0 AND >3 draw
+    nothing) + the chase gate 0x34e25 (⟷ 0x423e91 — identical
+    ([base]+[cursor]−1)·0xA8 kind-vs-player-type arithmetic);
+    idle table 0x8105c {400,300,200,5000} byte-identical.
+    BY-PRODUCTS: the SELECTION-TRIPLE LABEL-SWAP correction
+    (0x11954c ≡ 0x46cbdc selected slot / 0x11955c ≡ 0x46cbd4
+    squad base / 0x11958c ≡ 0x46cbd8 size — all three cells
+    mapped, W1 gap closed) + TEN §5e cascade/asset aliases
+    (salvo latch 0x1081fc; 8-shell bank 0x8f0b4 with the
+    record grammar pinned BOTH sides {x@+0,y@+2,fall@+4,
+    start@+6,valid@+8} — landing-run correction of the first
+    draft's 0x8f0b2 convention; map-overlay 0x1075bc; zoom
+    0x107448; idle table 0x8105c; GENERAL.BIN ptr 0x1074fc;
+    + the FUN_00034972/00034d89/0003552e/000180a1 twins).
+    watches.toml filled, dbx-plan emits the 4-B cell,
+    capture-plans S1..S8/S5B/S5C regenerated; the registry
+    gap set is now {sfx-master-gate, no-extract-latch} only.
+    Engine consequence NONE. Queued: item 2 = the EXD
+    no-extract-latch twin census, item 3 = the EXD
+    SFX-master-gate twin census.
   - 2026-08-23 P4/RE THE [0x4dc5d0] BLINK-CURSOR PRODUCER
     CENSUS unit COMPLETE (D131; docs-only, §7j.59, commit
     64543b6, worker 0329338f claim 2; objdump-only from
