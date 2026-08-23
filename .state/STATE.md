@@ -1,5 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE ROBOT +0x9C DEATH-FLAG READER CENSUS
+    unit COMPLETE (D129; docs-only, §7j.57, commit 6a3abcd,
+    worker 18039414 claim 2; objdump-only from
+    ghidra-project/exw-text-objdump.txt, no Ghidra run, no
+    corpus read; manifest clean; registry_anchors 2/2 green;
+    PUSHED): BOTH PRODUCERS PINNED = 1 (SP tail 0x40eac0
+    edx=1; MP respawn tail 0x40e82a edi=1 — the queue
+    "MP-respawn reset" was a MISNOMER: the respawn re-init
+    does NOT clear +0x9C, the MP slot stays death-flagged,
+    harmless because the sole reader is SP-only). SOLE READER
+    = the SP SQUAD-WIPE FAIL DETECTOR FUN_0044764c (sole
+    caller MissionShell 0x44870d gated [0x4dc67c]==0 =
+    extraction incomplete): walks squad [0x46cbd4]..+
+    [0x46cbd8]−1, first +0x9C==0 → alive ret 0; all dead ∧
+    [0x4ede34]==0x1E0 (death wipe at terminal 480) → fail
+    sequence → MissionShell ret 3 (fail/debrief; ret 2 =
+    launch) — +0x9C = the MISSION-FAIL liveness oracle,
+    distinct from +0x7C alive / +0x78 hp. LIFECYCLE CLOSED:
+    no zero-writer exists; the clear = the mission-staging
+    WHOLE-BANK ZERO-FILL FUN_00402965(ecx=0x7E0, edi=0x4c69e4)
+    @0x40cd38 (0x7E0 = 12·0xA8 — NEW FACT: the bank is 12
+    slots; the only immediate-load of 0x4c69e4 in the binary;
+    no save-load bulk copy). §7j.55 SIDEBAR QUESTION ANSWERED
+    NO ([0x46ccec] = a flash-countdown, sole reader 0x407205;
+    the sidebar pass never reads +0x9C). ENGINE CONSEQUENCE
+    NONE (E conforms: death_flag := 1 SP subset + fresh
+    per-mission records; already a T1 robot-bank differ field
+    leaf). Queued: item 2 = the [0x4ede34] temp-viewport
+    census (renumbered from 3, fed with this unit producer/
+    consumer facts).
+
   - 2026-08-23 P4/RE THE [0x4edbd8] CAMERA-GATE CELL + [0x4ede54]
     ZOOM CELL unit COMPLETE (D128; docs-only, §7j.56, commit
     d80fd8b, worker 21e88d3b claim 2; objdump-only + read-only

@@ -133,42 +133,38 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-  2. [P4/RE] THE ROBOT +0x9C DEATH-FLAG READER CENSUS UNIT
-     (small; docs-only, unattended-safe; objdump from
-     ghidra-project/exw-text-objdump.txt): §7j.45 item 6 left
-     "+0x9C = 1 (readers not yet census'd)" open. Pre-queue
-     census (D118 discipline, performed 2026-08-23): exactly
-     THREE text sites for 0x4c6a80 — the two known producers
-     (MP-respawn reset 0x40e82a `mov [ebp+0x4c6a80],edi` — pin
-     the edi value; SP-death write 0x40eac0 := 1) and ONE
-     reader: `cmp DWORD [eax+0x4c6a80],0` @0x447697 inside
-     MissionShell — decode what that reader gates (likely the
-     dead-robot per-frame handling; check whether the §7j.55
-     heat-family [0x46ccec] sidebar row pass consumes it), pin
-     both producer values, close the §3 +0x9C row (E's
-     death_flag field gloss). Deliverables: census + §3/ledger
-     row + D129; registry_anchors green; PUSH. (QUEUED 2026-08-23
-     by the 7j.55/D127 close, worker 19d79ca9 claim 2.)
-
-  3. [P4/RE] THE [0x4ede34] TEMP-VIEWPORT CENSUS UNIT (small;
+  2. [P4/RE] THE [0x4ede34] TEMP-VIEWPORT CENSUS UNIT (small;
      docs-only, unattended-safe; objdump from
      ghidra-project/exw-text-objdump.txt): the §7j.56/B zoom
-     census left [0x4ede34]'s IDENTITY open (9 sites; the
+     census left [0x4ede34] IDENTITY open (9 sites; the
      FUN_00401107 second gate ≠0 → the temp viewport v :=
      480−min([0x4ede34],479) save/restore path): decode the
      producers 0x40d286/0x40d311/0x40d398 (the FUN_0040d2xx
-     family — same neighborhood as the recenter head's
-     0x40d197 call) + `:=1` @0x40ea8b (MP-respawn region —
-     likely a screen wipe) + the MissionShell frame cluster
+     family — same neighborhood as the recenter head 0x40d197
+     call) + `:=1` @0x40ea8b (MP-respawn region — likely a
+     screen wipe) + the MissionShell frame cluster
      0x4480af/0x4480d6/0x448121 (after the 0x44809e read) +
      the 0x4476a2 `cmp 0x1E0` test + the 0x403952 gate; pin
      the value grammar and WHAT the temp render shows (a
      cinema/wipe effect?). Deliverables: census + ledger row +
      D130; registry_anchors green; PUSH. Pre-queue check
      (D118 discipline): zero decode of 0x4ede34 exists (grep —
-     only §7j.56/B's census pointer + the §7e map-present
-     row's passing mention). (QUEUED 2026-08-23 by the
-     7j.56/D128 close, worker 21e88d3b claim 2.)
+     only §7j.56/B census pointer + the §7e map-present row
+     passing mention). FED BY §7j.57/D129 (2026-08-23, commit
+     6a3abcd): the `:=1` @0x40ea8b is the SELECTED-robot
+     SP-death write inside FUN_0040e230 (idx ==
+     [0x46cbd4]+[0x46cbdc]); the 0x4476a2 `cmp 0x1E0` reader =
+     the SP SQUAD-WIPE FAIL DETECTOR wipe-complete conjunct
+     (FUN_0044764c — the fail fires only at the terminal 480
+     value; per-mission zero 0x44787d + click-select zero
+     0x40d286 already census'd there) — so the cell counts
+     toward 0x1E0 after a death: pin WHO/WHAT increments it
+     (the MissionShell frame cluster is the prime candidate)
+     and what the FUN_00401107 v := 480−min(cell,479) path
+     renders while it runs. (QUEUED 2026-08-23 by the
+     7j.56/D128 close, worker 21e88d3b claim 2; note added
+     2026-08-23 by the 7j.57/D129 close, worker 18039414
+     claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -321,6 +317,54 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE ROBOT +0x9C DEATH-FLAG READER CENSUS
+  unit COMPLETE (worker 18039414 claim 2, commit 6a3abcd,
+  D129, §7j.57, docs-only; objdump-only from
+  ghidra-project/exw-text-objdump.txt, no Ghidra run, no
+  corpus read; MANIFEST.sha256 clean, registry_anchors 2/2
+  green; PUSHED). CLOSED with the verdict set: (1) BOTH
+  PRODUCERS PINNED = 1 — the SP/other tail 0x40eac0 (edx := 1
+  @0x40eab4; reached when SP [0x4edb88]==0 ∨ no-extract latch
+  [idx*4+0x46aed4]≠0) and the MP respawn tail 0x40e82a (edi
+  := 1 @0x40e807; MP ∧ latch==0) — the queue "MP-respawn
+  reset" phrasing was a MISNOMER, corrected in place: the
+  respawn re-init does NOT clear +0x9C, the respawned MP slot
+  STAYS death-flagged (harmless — the sole reader is
+  SP-only). (2) THE SOLE READER = the SP SQUAD-WIPE FAIL
+  DETECTOR FUN_0044764c..0x44770a (decoded whole; sole caller
+  MissionShell 0x44870d gated [0x4dc67c]==0 = extraction NOT
+  complete — a wiped squad post-extraction never fails): MP →
+  ret 0; walks squad [0x46cbd4]..+[0x46cbd8]−1, FIRST +0x9C==0
+  → ret 0; all dead ∧ [0x4ede34]==0x1E0 (death wipe at
+  terminal 480) → FUN_0042391d + FUN_00425a03 (+cond
+  FUN_0042595a) + FUN_00425bf5 + the [0x46cca4]-gated anim
+  string 0x459852 → ret 1 → MissionShell ret 3 (the
+  fail/debrief transition; ret 2 = launch). +0x9C = the
+  MISSION-FAIL liveness oracle, DISTINCT from +0x7C alive /
+  +0x78 hp (both re-staged by MP respawn, this never). (3)
+  LIFECYCLE CLOSED — no literal zero-writer exists; the clear
+  is the mission-staging WHOLE-BANK ZERO-FILL: FUN_0040cca2
+  @0x40cd29..38 — ecx := 0x7E0; edi := 0x4c69e4; FUN_0041cd42
+  (file rewind [0x4eba20]; edi/ecx callee-saved) then
+  FUN_00402965 (the §7j.21 memset-0) zeroes 0x7E0 = 12·0xA8 =
+  the WHOLE 12-SLOT BANK (NEW FACT: the robot bank is 12
+  slots); the ONLY immediate-load of 0x4c69e4 in the binary —
+  no save-load bulk copy touches the bank; every mission entry
+  starts flag-clean. (4) THE §7j.55 SIDEBAR QUESTION ANSWERED
+  NO — the heat-family sidebar row pass never reads +0x9C
+  ([0x46ccec] sole reader 0x407205: it is a FLASH-COUNTDOWN in
+  the [0x46ccf0]/[0x46ccf8] timer family, ≠0 → dec →
+  FUN_00408403; writers death :=3 / cook-off :=2 /
+  click-select :=2); the "dead-robot per-frame handling"
+  hypothesis retired. ENGINE CONSEQUENCE NONE — E already
+  conforms (death_flag := 1 SP subset + fresh per-mission
+  records ≡ the zero-fill; death_flag already a +0x9C U16
+  field leaf of the T1 robot-bank differ row). Deliverables:
+  §7j.57 + the §3 +0x9C row + 2 ledger rows (squad-wipe fail
+  detector, robot-bank zero-fill) + the §7j.45 item-6 closure
+  + D129. Queued: item 2 = the [0x4ede34] temp-viewport
+  census (renumbered, fed with this unit's producer/consumer
+  facts). NEXT: item 2.
 - 2026-08-23: P4/RE THE [0x4edbd8] CAMERA-GATE CELL + [0x4ede54]
   ZOOM CELL unit COMPLETE (worker 21e88d3b claim 2, commit
   d80fd8b, D128, §7j.56, docs-only; objdump-only from
