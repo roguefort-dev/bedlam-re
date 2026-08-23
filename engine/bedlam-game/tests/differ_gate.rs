@@ -330,14 +330,14 @@ fn s0_s1_cross_and_double_run() {
         // Re-pinned at the W12-S4-prep landing (D104, §7j.39/9) —
         // the artillery burst-pair application draws the shared
         // stream (was 49193732e6dbc546).
-        ("S3", 133u64, "e29f76f5585401e1", 2u64),
+        ("S3", 133u64, "9a11efa03baafb64", 2u64),
         // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
         // the guest banks and parse back through the destroy
         // normalizers — the T1 destroy rows join the exact-exact
         // set, the debris/splash T3 rows are E-only (no EXD alias
         // yet — 2 more row-level coverage findings, documented
         // never fabricated).
-        ("S4", 49u64, "2ddd15ea50c8a14d", 2u64 + 2),
+        ("S4", 49u64, "35fa3a9234cbff37", 2u64 + 2),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
         // the debris/splash rows never ride — exactly the 2 S1-class
@@ -354,7 +354,7 @@ fn s0_s1_cross_and_double_run() {
         // findings. The destroy-chain cascade the burst rings
         // detonate rides the SAME aliased T1 rows (the compact-tile
         // filter + the destroy normalizers) — zero field gaps.
-        ("S5C", 55u64, "e0999fcb3455d3ef", 2u64),
+        ("S5C", 55u64, "786fd87565b67f4a", 2u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
         // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
         // alias), so exactly the 2 S1-class findings + 1 more. The
@@ -373,7 +373,7 @@ fn s0_s1_cross_and_double_run() {
         // normalizers define (both channels carry the same form);
         // the creep-grown mirror words parse back through the
         // compact-tile filter — zero field gaps.
-        ("S7", 1361u64, "b41db389f3ad8947", 2u64 + 2),
+        ("S7", 1361u64, "ecdce5472df6a324", 2u64 + 2),
         // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
         // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
         // cycle — ALIASED, S3 pinned the T2 form; the critter bank
@@ -382,7 +382,7 @@ fn s0_s1_cross_and_double_run() {
         // row-level findings + the critter-bank/effect-rows pair —
         // zero field gaps (the 0x68 records fabricate through the
         // same bare-span T2 form).
-        ("S8", 121u64, "b5ae3f8be91c7449", 2u64 + 2),
+        ("S8", 121u64, "44d806b81bd1b1ff", 2u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

@@ -568,7 +568,7 @@ fn corpus_s3_command_fire() {
     // moved from 49193732e6dbc546 BEFORE any O1 S3 capture exists
     // (the D103 dbx-plan T2-tier unit precedes any live S3).
     assert_eq!(
-        run.manifest.chain_digest, "e29f76f5585401e1",
+        run.manifest.chain_digest, "9a11efa03baafb64",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s3, &root).expect("S3 canonical re-run");
@@ -1071,7 +1071,7 @@ fn corpus_s4_destroy_family() {
     let run = run_canonical(&s4, &root).expect("S4 canonical run");
     assert_eq!(run.manifest.frame_count, 49);
     assert_eq!(
-        run.manifest.chain_digest, "2ddd15ea50c8a14d",
+        run.manifest.chain_digest, "35fa3a9234cbff37",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s4, &root).expect("S4 canonical re-run");
@@ -1153,10 +1153,13 @@ fn corpus_s4_destroy_family() {
     assert_eq!(u16::from_le_bytes(m0[6..8].try_into().unwrap()), 0x316);
 
     // --- frames 15..26: the SURVIVOR leg (pure multi-hit subtract) ----
-    // Robot 1's two grenade volleys land 5 hits of 75 on the slot-2
-    // id-18 structure (hp 1800): 1800 -> 1425, monotone, NEVER
-    // destroyed, no restore on its tiles, no score, and its grid
-    // word (3) stays stamped.
+    // Robot 1's two grenade volleys land hits of 75 on the slot-2
+    // id-18 structure (hp 1800). Debris-physics re-baseline (D115,
+    // §7j.44): the trap-leg debris knocks robot 1 px-level before
+    // the volleys, so 3 of the old 5 blast boxes now reach the
+    // footprint — 1800 -> 1575, monotone, NEVER destroyed, no
+    // restore on its tiles, no score, and its grid word (3) stays
+    // stamped.
     let mut last = 1800;
     for f in dump.frames.iter().take(27) {
         let hp = objects_of(f.watch("object-instances").unwrap())
@@ -1168,7 +1171,7 @@ fn corpus_s4_destroy_family() {
         assert_eq!(hp % 75, 0, "every hit is exactly the 0x1A damage 75");
         last = hp;
     }
-    assert_eq!(last, 1425, "1800 - 5*75");
+    assert_eq!(last, 1575, "1800 - 3*75 (the knock-shifted volleys)");
     let objs48 = objects_of(dump.frames[48].watch("object-instances").unwrap());
     let surv = objs48.iter().find(|o| o.slot == 2).unwrap();
     assert!(!surv.destroyed);
@@ -1207,16 +1210,24 @@ fn corpus_s4_destroy_family() {
     );
     assert_eq!(rubble[4 + 3], 1, "seen := 1");
     let rb32 = robots_of(f32.watch("robot-bank").unwrap());
-    assert_eq!(rb32[2].i32(56), 1256, "robot 2 takes 12 blast hits");
+    assert_eq!(
+        rb32[2].i32(56),
+        1254,
+        "12 blast hits + one mag-2 debris chip (D115)"
+    );
 
     // --- frames 35..38: the CHAIN-WALK cascade ------------------------
     // Pair-ring 4 script-blasts (14,29) at frame 35: the perimeter
-    // walks cascade the whole chainable cluster in ONE frame —
-    // (14,29) both slots + (13,29) + the (12,30)/(13,30) id-61 pair
-    // + (12,29) + (11,29) — then the ring-6 frame destroys (16,40)
-    // and (9,27) at 38. Tail: 12 destroyed, score 605, both banks
-    // SATURATED (the 128-slot debris LRU + the 250-slot splash
-    // max-age eviction both exercised).
+    // walks cascade the chainable cluster in ONE frame — the
+    // debris-physics re-baseline (D115, §7j.44) knock-shifted
+    // robot 1's volleys, so the burst boxes also reach slots
+    // 79/89/90 (ELEVEN same-frame destroys) — then the ring-6
+    // frame destroys (16,40) and (9,27) at 38. Tail: 15 destroyed,
+    // score 605, the splash bank SATURATED (250 max-age
+    // eviction exercised) and the debris ring at 60 live records
+    // — the tick now FREES finished chunks (the old never-free
+    // saturation at 128 is gone; the lifecycle is the §7j.44
+    // observable).
     let f35 = &dump.frames[35];
     let objs35 = objects_of(f35.watch("object-instances").unwrap());
     let destroyed35: Vec<u16> = objs35
@@ -1226,8 +1237,8 @@ fn corpus_s4_destroy_family() {
         .collect();
     assert_eq!(
         destroyed35,
-        vec![78, 97, 98, 100, 101, 102, 103, 207],
-        "the trap + the seven-object same-frame cascade"
+        vec![78, 79, 89, 90, 97, 98, 100, 101, 102, 103, 207],
+        "the trap + the ten-object same-frame cascade"
     );
     let objs_t = objects_of(dump.frames[48].watch("object-instances").unwrap());
     let destroyed_t: Vec<u16> = objs_t
@@ -1237,8 +1248,8 @@ fn corpus_s4_destroy_family() {
         .collect();
     assert_eq!(
         destroyed_t,
-        vec![78, 97, 98, 99, 100, 101, 102, 103, 106, 171, 172, 207],
-        "12 destroyed at the tail (the trap + the cascade + rings 5/6)"
+        vec![78, 79, 89, 90, 97, 98, 99, 100, 101, 102, 103, 106, 171, 172, 207],
+        "15 destroyed at the tail (the trap + the widened cascade + rings 5/6)"
     );
     assert_eq!(
         u32::from_le_bytes(
@@ -1251,21 +1262,22 @@ fn corpus_s4_destroy_family() {
     );
     assert_eq!(
         debris_of(dump.frames[48].watch("debris-stager").unwrap()).len(),
-        128
+        60,
+        "the tick frees finished chunks (the §7j.44 lifecycle)"
     );
     assert_eq!(
         splashes_of(dump.frames[48].watch("splash-records").unwrap()).len(),
         250
     );
-    // The restores accumulated in the mirror row (17 changed tiles:
-    // the trap + the rubble + the cascade footprints).
+    // The restores accumulated in the mirror row (20 changed tiles:
+    // the trap + the rubble + the widened cascade footprints).
     assert_eq!(
         u32::from_le_bytes(
             dump.frames[48].watch("typedb-mirror-rows").unwrap()[0..4]
                 .try_into()
                 .unwrap()
         ),
-        17
+        20
     );
 
     // --- the staging seam gates ---------------------------------------
@@ -1274,7 +1286,7 @@ fn corpus_s4_destroy_family() {
     // a malformed corpus file — pinned by the destroy_gate parser
     // rows. Here: the destroy-less S0 shape carries NO destroy rows
     // (the S0/S1/S2/S3 pinned chains in this file are the
-    // no-inject invariant; S3 stays e29f76f5585401e1).
+    // no-inject invariant; S3 re-pinned 9a11efa03baafb64 by the debris-physics unit, D115).
     let s0 = fs::read_to_string(scen_path("S0")).unwrap();
     let run0 = run_canonical(&s0, &root).unwrap();
     let dump0 = decode_dump(&run0.bytes).unwrap();
@@ -1606,7 +1618,7 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     let run = run_canonical(&s5c, &root).expect("S5C canonical run");
     assert_eq!(run.manifest.frame_count, 55);
     assert_eq!(
-        run.manifest.chain_digest, "e0999fcb3455d3ef",
+        run.manifest.chain_digest, "786fd87565b67f4a",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5c, &root).expect("S5C canonical re-run");
@@ -1662,7 +1674,10 @@ fn corpus_s5c_pickup_case_3_predamaged() {
         (5000, 1256, 1256),
         "the burst box spends walker+gunner 3744 at frame 32"
     );
-    assert_eq!(hp(36, 1), 4376, "the 0xB outer ring spends the clicker 624");
+    // Debris-physics re-baseline (D115, §7j.44): the burst's
+    // spread chunks add three mag-2 debris hits around the burst
+    // frames (one at 35, two at 36) — the clicker ends 6 lower.
+    assert_eq!(hp(36, 1), 4370, "624 ring + 3x2 debris chips");
     // The order arms at frame 37 (after the burst windows close).
     assert_eq!((state(37, 1), state(37, 2), state(37, 3)), (3, 4, 4));
     // The consume schedule: five case-4 cells + the case-3 cell.
@@ -1672,23 +1687,30 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     assert_eq!(m(46, t78), (0x48F, 1), "case 4 at frame 46");
     assert_eq!(m(41, t769), (0x48F, 1), "the (76,9) side cell at frame 41");
     // THE HEADLINE: case 3 at (76,10) fires at frame 41 and the
-    // walker's hp body is VALUE-VISIBLE — the exact +2500, unclamped
-    // (the S5B observability gap closed). Same frame as the consume,
-    // same frame as the (76,9) side draw (the diagonal probe reach).
+    // healed robot's hp body is VALUE-VISIBLE — the exact +2500,
+    // unclamped (the S5B observability gap closed). DEBRIS-PHYSICS
+    // RE-BASELINE (D115, §7j.44): the burst-spread chunks chip
+    // BOTH stacked robots (1256 → 1246 by f36) and the knock
+    // nudges their px paths, so the case-3 consume order FLIPS —
+    // the GUNNER (r3) probes the cell first (f41, 1246 → 3746)
+    // and the WALKER (r2) becomes the unhealed negative control
+    // (case 3 is single-use). The heal value stays the exact
+    // +2500 unclamped — the scenario's purpose is intact; an O1
+    // capture arbitrates the consume-order flip.
     assert_eq!(m(40, t76), (0x7b, 0), "not yet consumed at frame 40");
     assert_eq!(m(41, t76), (0x48F, 1), "CASE 3 at frame 41");
-    assert_eq!(hp(40, 2), 1256);
-    assert_eq!(
-        hp(41, 2),
-        3756,
-        "case 3 heals the pre-damaged walker the exact +2500, unclamped"
-    );
+    assert_eq!(hp(40, 2), 1246);
     assert_eq!(
         hp(41, 3),
-        1256,
-        "the gunner (one robot behind, case 3 already consumed) never heals"
+        3746,
+        "case 3 heals the pre-damaged gunner the exact +2500, unclamped"
     );
-    assert_eq!(hp(54, 3), 1256, "gunner hp through the tail");
+    assert_eq!(
+        hp(41, 2),
+        1246,
+        "the walker (one probe behind, case 3 already consumed) never heals"
+    );
+    assert_eq!(hp(54, 3), 3746, "gunner hp through the tail");
     assert_eq!(
         money(41),
         4150,
@@ -1869,7 +1891,7 @@ fn corpus_s7_platform_dynamics() {
     let run = run_canonical(&s7, &root).expect("S7 canonical run");
     assert_eq!(run.manifest.frame_count, 1361);
     assert_eq!(
-        run.manifest.chain_digest, "b41db389f3ad8947",
+        run.manifest.chain_digest, "ecdce5472df6a324",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s7, &root).expect("S7 canonical re-run");
@@ -1943,6 +1965,23 @@ fn corpus_s7_platform_dynamics() {
         vec![],
         "no platforms before the burst (the trigger object stands)"
     );
+    // THE DEBRIS-DAMAGE LANE (D115, §7j.44): the f32 destroy's
+    // chunk field (five k12 mag-25 + the five-effect/TRT/k6 mag-2
+    // spreads, phys-6 countdowns after their delays) rolls over
+    // the gunner STANDING at (3,57) — 19 hp-change frames
+    // f32..f50, waxing/waning with the countdowns, then static
+    // through the creep tail (the last event f50).
+    let hp = |f: usize| -> i32 {
+        let bank = dump.frames[f].watch("robot-bank").unwrap();
+        robots_of(bank)[1].i32(56)
+    };
+    assert_eq!(hp(31), 5000);
+    assert_eq!(hp(32), 4996, "the first physics frame (two mag-2 chunks)");
+    assert_eq!(hp(33), 4940, "the k12 delays land (4x25 + chips)");
+    assert_eq!(hp(37), 4541, "the chunk-field peak window");
+    assert_eq!(hp(50), 3752, "the last event (1248 total debris spend)");
+    assert_eq!(hp(60), 3752, "static through the tail");
+    assert_eq!(hp(1360), 3752, "static at the last frame");
     assert_eq!(
         field(32),
         vec![(2, 56, 300), (3, 56, 300), (2, 57, 300), (2, 58, 300)],
@@ -2080,11 +2119,27 @@ fn corpus_s8_critter_engagement() {
     assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
     // Chain pin (the fingerprint discipline, D28: moves only on a
     // deliberate engine/dump change, re-baselined loudly).
-    assert_eq!(run.manifest.chain_digest, "b5ae3f8be91c7449");
+    assert_eq!(run.manifest.chain_digest, "44d806b81bd1b1ff");
 
     let dump = decode_dump(&run.bytes).expect("S8 dump verifies");
     assert_eq!(dump.header.scenario, "S8");
     let frames = &dump.frames;
+
+    // THE DEBRIS-DAMAGE LANE (D115, §7j.44): the burst windows'
+    // spread chunks (mag-2, phys-6 countdowns) add small chips to
+    // the gunner's damage schedule — one −2 on the frames AFTER
+    // each 0x68 hit pair (f9/f11/f16/f18/f27/f29/f34/f36), the
+    // −77s = the 75-lane + one chip, f32/33 the burst lanes with
+    // the chips riding. Pinned end state: 3041 by f36, static
+    // after the windows close.
+    let hp8 = |f: usize| -> i32 {
+        let bank = frames[f].watch("robot-bank").unwrap();
+        robots_of(bank)[1].i32(56)
+    };
+    assert_eq!(hp8(7), 5000);
+    assert_eq!(hp8(8), 4923, "75 + one mag-2 chip");
+    assert_eq!(hp8(9), 4921, "a lone chip rides the burst window");
+    assert_eq!(hp8(36), 3041, "the last chip (1959 total spend)");
 
     // The staging: 16 critters (6 kind-5 + 10 kind-4, §7j.42/5),
     // the mode split {8: 6, 9: 10} at the anchor.
