@@ -23,15 +23,16 @@
 //!    shape — PASS with counter/RNG divergence budgeted, FAIL on any
 //!    other byte diff.
 //! 3. O2 TIEBREAK ARBITRATION (W11-prep): a fabricated O2 side (the
-//!    same `inv_frame` output stitched under Channel::O2ExwWine —
-//!    valid because `normalize_o2_row`'s alias list takes EXW guest
-//!    forms identical to EXD, `EXW_ROBOT_MAP == EXD_ROBOT_MAP`, and
-//!    static-map-wh normalizes to zero fields pending the W11 pin)
-//!    drives all four `compare_field` T1-exact lanes on a perturbed
+//!    `inv_frame` output stitched under Channel::O2ExwWine — valid
+//!    because `normalize_o2_row`'s alias list takes EXW guest forms
+//!    identical to EXD, `EXW_ROBOT_MAP == EXD_ROBOT_MAP`, and
+//!    static-map-wh fabricates the D137-pinned EXW 0x28 span) drives
+//!    all four `compare_field` T1-exact lanes on a perturbed
 //!    `money`: O2-with-O1 → EngineBug "engine is the outlier";
 //!    O2-with-E → OriginalDivergence (verdict back to
 //!    PASS-WITH-NOTES); all-three-differ → EngineBug "wrong against
-//!    both oracles"; no tiebreak → EngineBug "provisional".
+//!    both oracles"; no tiebreak → EngineBug "provisional"; plus an
+//!    E-vs-O2 cross proving the pinned row compares CLEAN.
 
 #[path = "../examples/parity_harness/canonical.rs"]
 mod canonical;
@@ -118,14 +119,19 @@ fn inv_robot_bank(canon: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Fabricate the O1-side frame for one E canonical frame.
+/// Fabricate the guest-channel frame for one E canonical frame.
 /// `menu_frames` offsets the frame-counter (the never-resetting O1
 /// counter carries the menu walk); `rng_wander` perturbs the RNG words.
+/// `chan` selects the guest raw form of the channel-split rows —
+/// static-map-wh (D137/§7j.60): the EXD cells are 0x2c apart with h
+/// LOW (the O1 0x30 span) while the EXW cells are 0x24 apart with w
+/// LOW (the O2 0x28 span, w@+0x00/h@+0x24).
 fn inv_frame(
     e: &FrameRecord,
     map_wh: Option<(u32, u32)>,
     menu_frames: u32,
     rng_wander: u32,
+    chan: Channel,
 ) -> FrameRecord {
     let mut f = FrameRecord::new(e.frame_no, e.injection_applied);
     for w in &e.watches {
@@ -300,10 +306,29 @@ fn inv_frame(
             "static-map-wh" => {
                 let wv = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
                 let hv = u32::from_le_bytes(w.bytes[4..8].try_into().unwrap());
-                let mut span = vec![0u8; 0x30];
-                span[0x00..0x04].copy_from_slice(&hv.to_le_bytes());
-                span[0x2c..0x30].copy_from_slice(&wv.to_le_bytes());
-                span
+                match chan {
+                    // O1: the EXD 0x30 span (h@+0x00 low cell 0x10748c,
+                    // w@+0x2c high cell 0x1074b8).
+                    Channel::O1ExdDosboxX => {
+                        let mut span = vec![0u8; 0x30];
+                        span[0x00..0x04].copy_from_slice(&hv.to_le_bytes());
+                        span[0x2c..0x30].copy_from_slice(&wv.to_le_bytes());
+                        span
+                    }
+                    // O2 (D137/§7j.60): the EXW 0x28 span — cells 0x24
+                    // apart with w LOW (0x4eddec) / h HIGH (0x4eddf0).
+                    Channel::O2ExwWine => {
+                        let mut span = vec![0u8; 0x28];
+                        span[0x00..0x04].copy_from_slice(&wv.to_le_bytes());
+                        span[0x24..0x28].copy_from_slice(&hv.to_le_bytes());
+                        span
+                    }
+                    // inv_frame fabricates GUEST channels only; the
+                    // Engine re-stitch passes the real E frames.
+                    Channel::Engine | Channel::O3Street => {
+                        unreachable!("inv_frame fabricates guest channels only")
+                    }
+                }
             }
             // identity rows (scalars, selection-triple, order-target,
             // per-player, spread-claims).
@@ -454,7 +479,7 @@ fn s0_s1_cross_and_double_run() {
                     u32::from_le_bytes(b[4..8].try_into().unwrap()),
                 ));
             }
-            o1_frames.push(inv_frame(ef, map_wh, 2000, 0));
+            o1_frames.push(inv_frame(ef, map_wh, 2000, 0, Channel::O1ExdDosboxX));
         }
         let o1_bytes = stitch_o1(&src, o1_frames);
 
@@ -537,7 +562,7 @@ fn s0_s1_cross_and_double_run() {
         let o1_frames_b: Vec<FrameRecord> = e_dump
             .frames
             .iter()
-            .map(|ef| inv_frame(ef, map_wh, 2003, 0x1357_1357))
+            .map(|ef| inv_frame(ef, map_wh, 2003, 0x1357_1357, Channel::O1ExdDosboxX))
             .collect();
         let o1_bytes_b = stitch_o1(&src, o1_frames_b);
         let res = run_diff(
@@ -561,7 +586,7 @@ fn s0_s1_cross_and_double_run() {
         let mut bad: Vec<FrameRecord> = e_dump
             .frames
             .iter()
-            .map(|ef| inv_frame(ef, map_wh, 2000, 0))
+            .map(|ef| inv_frame(ef, map_wh, 2000, 0, Channel::O1ExdDosboxX))
             .collect();
         for f in bad.iter_mut() {
             if let Some(w) = f.watches.iter_mut().find(|w| w.id == "money") {
@@ -615,14 +640,16 @@ fn s1_o2_tiebreak_arbitration() {
     );
     let e_dump = decode_dump(&e_run.bytes).unwrap();
 
-    // One fabrication serves both raw channels: every aliased row's
-    // EXW guest form IS the EXD form (normalize_o2_row delegates to
-    // normalize_o1_row), the robot map is the same table
-    // (EXW_ROBOT_MAP == EXD_ROBOT_MAP), and the O2 static-map-wh row
-    // ignores its bytes entirely (zero fields pending the W11 pin) —
-    // so inv_frame output stitches under either channel tag.
+    // The fabrications are CHANNEL-SPLIT since the D137 pin: every
+    // aliased row's EXW guest form IS the EXD form
+    // (normalize_o2_row delegates to normalize_o1_row) and the robot
+    // map is the same table (EXW_ROBOT_MAP == EXD_ROBOT_MAP) — but
+    // static-map-wh is NOT (EXW cells 0x24 apart w LOW vs the EXD
+    // 0x2c h LOW), so the O1 and O2 dumps stitch from their own
+    // inv_frame channel forms.
     let mut map_wh: Option<(u32, u32)> = None;
-    let mut fab: Vec<FrameRecord> = Vec::new();
+    let mut fab_o1: Vec<FrameRecord> = Vec::new();
+    let mut fab_o2: Vec<FrameRecord> = Vec::new();
     for ef in &e_dump.frames {
         if let Some(b) = ef.watch("static-map-wh") {
             map_wh = Some((
@@ -630,16 +657,21 @@ fn s1_o2_tiebreak_arbitration() {
                 u32::from_le_bytes(b[4..8].try_into().unwrap()),
             ));
         }
-        fab.push(inv_frame(ef, map_wh, 2000, 0));
+        fab_o1.push(inv_frame(ef, map_wh, 2000, 0, Channel::O1ExdDosboxX));
+        fab_o2.push(inv_frame(ef, map_wh, 2000, 0, Channel::O2ExwWine));
     }
-    let o1_bytes = stitch_chan(Channel::O1ExdDosboxX, &src, fab.clone());
-    let o2_bytes = stitch_chan(Channel::O2ExwWine, &src, fab.clone());
+    let o1_bytes = stitch_chan(Channel::O1ExdDosboxX, &src, fab_o1.clone());
+    let o2_bytes = stitch_chan(Channel::O2ExwWine, &src, fab_o2.clone());
 
     // Perturbed variants: O1 -7 (the wrong oracle reading), O2 -3
     // (a third reading neither side holds), and an Engine re-stitch
     // of the real E frames with money -7 (the engine-is-wrong case).
-    let o1_bad = stitch_chan(Channel::O1ExdDosboxX, &src, perturb_money(fab.clone(), -7));
-    let o2_bad = stitch_chan(Channel::O2ExwWine, &src, perturb_money(fab, -3));
+    let o1_bad = stitch_chan(
+        Channel::O1ExdDosboxX,
+        &src,
+        perturb_money(fab_o1.clone(), -7),
+    );
+    let o2_bad = stitch_chan(Channel::O2ExwWine, &src, perturb_money(fab_o2, -3));
     let e_bad = stitch_chan(
         Channel::Engine,
         &src,
@@ -647,6 +679,30 @@ fn s1_o2_tiebreak_arbitration() {
     );
 
     let cross = DiffConfig::new(Mode::CrossChannel);
+
+    // ---- the D137 flip: E vs the fabricated O2 DIRECTLY — the
+    // static-map-wh row now parses through the real O2 normalizer
+    // (the 0x28 EXW span) and must COMPARE CLEAN (pre-pin, the
+    // zero-field arm rendered it as 2 field-level coverage gaps).
+    // The verdict shape mirrors the E-vs-O1 cross exactly: coverage
+    // = move-target-words only, the +2000 counter is the one T2
+    // note, zero EngineBug/Structural. ----
+    let res = run_diff(&e_run.bytes, &o2_bytes, None, &cross, &reg).unwrap();
+    assert_eq!(
+        res.verdict,
+        Verdict::PassWithNotes,
+        "E vs O2 with the D137-pinned static-map-wh form\n{}",
+        report_text(&res)
+    );
+    assert_eq!(res.count(Class::EngineBug), 0);
+    assert_eq!(res.count(Class::Structural), 0);
+    assert_eq!(res.count(Class::Coverage), 1); // move-target-words only
+    assert_eq!(res.count(Class::T2Reported), 1);
+    assert!(
+        res.findings.iter().all(|f| f.row != "static-map-wh"),
+        "static-map-wh compares clean through the O2 normalizer\n{}",
+        report_text(&res)
+    );
 
     // ---- baseline: a present tiebreak dump changes NOTHING while no
     // T1 diff exists (the O2 side is only read at arbitration time) ----

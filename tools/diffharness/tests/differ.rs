@@ -245,6 +245,35 @@ fn o1_row_forms() {
 }
 
 #[test]
+fn o2_row_forms() {
+    // static-map-wh (D137/§7j.60): the W11-pinned O2 capture form —
+    // the EXW cells are 0x24 apart with w LOW (0x4eddec base, h at
+    // 0x4eddf0): a 0x28 span, w@+0x00, h@+0x24. NOT the EXD 0x30
+    // span (0x2c apart, h LOW) the O1 arm parses.
+    let mut span = vec![0u8; 0x28];
+    span[0x00..0x04].copy_from_slice(&25u32.to_le_bytes());
+    span[0x24..0x28].copy_from_slice(&75u32.to_le_bytes());
+    let f = frame(0, vec![WatchRecord::new("static-map-wh", span.clone())]);
+    let rows = normalize_frame(&f, Channel::O2ExwWine, &reg()).unwrap();
+    let get = |n: &str| rows[0].field(n).cloned();
+    assert_eq!(get("w"), Some(FieldVal::Int(25)));
+    assert_eq!(get("h"), Some(FieldVal::Int(75)));
+
+    // The O1 form (0x30 span) must be REJECTED on the O2 channel —
+    // the field order is reversed vs address order and a mispinned
+    // span can never silently mis-parse.
+    let mut o1_style = vec![0u8; 0x30];
+    o1_style[0x00..0x04].copy_from_slice(&75u32.to_le_bytes());
+    o1_style[0x2c..0x30].copy_from_slice(&25u32.to_le_bytes());
+    let f = frame(0, vec![WatchRecord::new("static-map-wh", o1_style)]);
+    assert!(normalize_frame(&f, Channel::O2ExwWine, &reg()).is_err());
+
+    // And the O2 form is rejected on O1 (symmetric guard).
+    let f = frame(0, vec![WatchRecord::new("static-map-wh", span)]);
+    assert!(normalize_frame(&f, Channel::O1ExdDosboxX, &reg()).is_err());
+}
+
+#[test]
 fn o1_move_target_splice_into_robot_bank() {
     // The D90 form: a 0x60 span whose slots carry the per-robot x/y
     // u32 pairs by ABSOLUTE id (-1 = none). Robot 0 holds a Q5 target
@@ -674,6 +703,22 @@ fn o1_frame(no: u64, money: u32) -> FrameRecord {
     f
 }
 
+/// The O2-side fabrication (the inverse of the O2 normalizer): the
+/// EXW map w/h cells are 0x24 apart with w LOW (0x4eddec/h
+/// 0x4eddf0, D137/§7j.60) — a 0x28 span, w@+0x00/h@+0x24, NOT the
+/// EXD 0x30 span of `o1_frame`.
+fn o2_frame(no: u64, money: u32) -> FrameRecord {
+    let mut f = o1_frame(no, money);
+    if no == 0 {
+        let mut span = vec![0u8; 0x28];
+        span[0x00..0x04].copy_from_slice(&25u32.to_le_bytes());
+        span[0x24..0x28].copy_from_slice(&75u32.to_le_bytes());
+        f.watches.retain(|w| w.id != "static-map-wh");
+        f.push_watch("static-map-wh", span);
+    }
+    f
+}
+
 fn cross_pair(money_e: u32, money_o1: u32) -> (Vec<u8>, Vec<u8>) {
     let e = dump_bytes(
         SCEN_T0TS,
@@ -730,7 +775,7 @@ fn cross_channel_engine_bug_then_o2_arbitration() {
     // O2 agrees with O1 (EXD == EXW canon; E is the outlier).
     let o2 = dump_bytes(
         SCEN_T0TS,
-        vec![o1_frame(0, 2999), o1_frame(1, 2999), o1_frame(2, 2999)],
+        vec![o2_frame(0, 2999), o2_frame(1, 2999), o2_frame(2, 2999)],
         Channel::O2ExwWine,
     );
     let res = run_diff(
@@ -750,7 +795,7 @@ fn cross_channel_engine_bug_then_o2_arbitration() {
     // divergence, a NOTE not a failure.
     let o2 = dump_bytes(
         SCEN_T0TS,
-        vec![o1_frame(0, 3000), o1_frame(1, 3000), o1_frame(2, 3000)],
+        vec![o2_frame(0, 3000), o2_frame(1, 3000), o2_frame(2, 3000)],
         Channel::O2ExwWine,
     );
     let res = run_diff(

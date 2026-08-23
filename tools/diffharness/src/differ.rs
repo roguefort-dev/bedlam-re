@@ -1603,14 +1603,24 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "typedb-fade-byte"
         | "armor-pad-reads" => normalize_o1_row(id, no, b),
         "robot-bank" => robot_row_from_map(id, no, b, EXW_ROBOT_MAP),
-        // The EXW w/h cells are not the EXD 0x2c span — the O2 capture
-        // form is W11's pin; until then the row normalizes to ZERO
-        // fields (a per-field coverage finding, not a hard error and
-        // never a guessed parse).
-        "static-map-wh" => Ok(NormRow {
-            id: id.to_string(),
-            fields: Vec::new(),
-        }),
+        // The W11 pin (D137, §7j.60): the EXW w/h cells are 0x24 apart
+        // with w LOW (0x4eddec) and h HIGH (0x4eddf0) — the port
+        // reversed the field order vs the EXD pair (0x2c apart, h
+        // LOW), so the O2 capture form is NOT the O1 0x30 span. The
+        // capgen dumps ONE contiguous 0x28 span @0x4eddec covering
+        // exactly the two cells: w @+0x00, h @+0x24 (the product cell
+        // 0x4eddf4 is excluded, exactly like the EXD span excludes
+        // 0x1074e4).
+        "static-map-wh" => {
+            need(id, no, b, "0x24+4 span", 0x24 + 4)?;
+            Ok(NormRow {
+                id: id.to_string(),
+                fields: vec![
+                    ("w".to_string(), FieldVal::Int(u32le(b) as i128)),
+                    ("h".to_string(), FieldVal::Int(u32le(&b[0x24..]) as i128)),
+                ],
+            })
+        }
         // move-target-words never reaches here — the normalize_frame
         // pre-pass consumes it into the robot-bank splice (D90).
         _ => Ok(NormRow {
