@@ -123,19 +123,18 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE FUN_00433980 CASE TABLE + FUN_00424a6f MESSAGE TABLE unit
-   (medium; objdump-only from ghidra-project/exw-text-objdump.txt +
-   read-only DGROUP string probes, docs-only, unattended-safe): (a) the
-   per-zone pad-trigger dispatcher case table (~28 pad ids x 7 zones,
-   beyond the 7j.19 head decode + 7j.20's ~25 (zone,slot) extraction
-   pairs + 7j.21's elevator census - the full per-zone switch, pinning
-   every case's pad slots + actions for the S6/live-message
-   expectations); (b) FUN_00424a6f (strings 0x458ca7..., latch
-   0x4eb5f8) = the mission MESSAGE string walk (ids <-> text + the
-   latch/timer semantics feeding msgs 9/10/0xB/0x1C..0x21/0x26-0x29 the
-   decoded producers already cite). Deliverables: 7j.46 + ledger rows +
-   the Backlog bullet retired + D117; registry_anchors green; manifest
-   brackets any corpus probe; PUSH.
+2. [P4/RE] THE .BDG TEMPLATE-BANK ↔ RESTORE-WORD MAPPING unit
+   (small-medium; objdump-only from ghidra-project/exw-text-objdump.txt
+   + read-only corpus probes, docs-only, unattended-safe): 7j.25 pinned
+   the destroy-tail restore words @+0x46/+0x4A = TOT-mirror/seen+DAT
+   bank feeds; the @+0x3E/+0x42 template-bank readers are STILL OPEN
+   (which template bank feeds which restore word — the four 16·W·H
+   template slots of the .BDG/.BLD grammar, FORMATS §17/§97-D97).
+   Deliverables: the reader-side anchor census (every 0x3E/0x42
+   displacement site in the destroy family + the template-bank
+   consumers), the plane↔word mapping table, FORMATS §17 + §2 notes,
+   ledger rows, D118; registry_anchors green; manifest brackets any
+   corpus probe; PUSH.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -157,9 +156,12 @@ renumbered queue keeps every open item claimable by number).
   .POS/.BDG loaders + the .BDG grammar (FORMATS §12/§16).
   OPEN small: projectile type 0x69 vs the FUN_00419aff
   damage table (7j.17/7j.18 — low priority).
-- PROMOTED to the Now queue 2026-08-23 (D116 close-out): the
-  per-zone FUN_00433980 case table + the FUN_00424a6f message
-  string table — now item 2 (docs-only, unattended-safe).
+- CLOSED 2026-08-23 by 7j.46/D117: the per-zone FUN_00433980 case
+  table (all zones/modes + the ride-record bank grammar + the 21
+  beacon slots + the zone-F/G EXIT pairs + zone E verified negative)
+  and the FUN_00424a6f message system (the LANGUAGE.* section walk,
+  the 15 BOOT_CAMP ids, the latch/timer semantics) — the promoted
+  item 2 completed (commit fcf97c3).
 - The 0x4787c4/0x47879c hot-rect record — CLOSED 2026-08-22
   (§7j.31/D95): ONE 0x20-stride array base 0x4787bc, grammar +
   7-writer census + octile picker + class dispatcher landed; SP
@@ -262,6 +264,38 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE FUN_00433980 CASE TABLE + FUN_00424a6f
+   MESSAGE TABLE unit COMPLETE (worker 0c2df9b4 claim 2, commit
+   fcf97c3, D117; docs-only; clean objdump windows on the read-only
+   binary — the flat exw-text-objdump MISPARSES the 0x43301c..0x433963
+   table farm, so targeted `objdump -d/-s --start/--stop-address`
+   re-disassembly + a static Watcom-cascade walker were used; no
+   Ghidra run, no corpus write — manifest clean before AND after;
+   registry_anchors 2/2 green; PUSHED). §7j.46 landed with: (a) the
+   FULL per-zone case table as §8-bis (every zone A..G × SP/H2H ×
+   mission × .PAD slot → action; the zone table @0x433964; mode
+   [0x4edb88] / mission [0x4edd88] gates; mission tables B 0x4331d0,
+   D 0x433650, F 0x433950); (b) the RIDE-RECORD BANK grammar — the
+   7j.19/7j.21 "dword tables 0x4dcdbc..0x4dd330" = one 0x24-stride
+   bank {+0/+4 dest tile, +0x18 latch :=10, +0x1C rider gate}, 16
+   records, y-stamp shared tail 0x43475f, +0x84 arrival-plat 0..0xE;
+   (c) the action census — 21 SP BEACON slots, DOOR rects 0..0x25,
+   zone-F/G DOOR+FUN_0041fa51 EXIT pairs (the "sole case 0x1B" gloss
+   retired), zone E VERIFIED NEGATIVE (overlay restage only, no
+   probe/cases; 5-pop-thunk quirk recorded); (d) FUN_00424a6f = the
+   ZONE-A-M1-ONLY message shower (sole caller 0x433d07): SP-only,
+   show-once latch 0x4eb5f8+2·id, name = BOOT_CAMP_%03i sections of
+   the LANGUAGE.{ENG..DCH} blob [0x46cbb4] (FUN_00424679 section
+   finder; LANGUAGE.ENG = 421 sections; the 15 BOOT_CAMP ids = the
+   zone-A M1 message slots exactly); (e) the timer semantics —
+   [0x4eaac0] := 0xFDE8, ticker/drawer FUN_00425010 (MissionShell
+   0x448381) decrements, the FUN_00409138 COMMAND sites
+   0x40a2bc/0x40a396 DISMISS (≥8/44 frames), 0x40c570 gates the
+   state-0 write while showing; the producers' "msgs 9/10/0xB/..."
+   clarified as FUN_004239ef SFX ids, not text. Ledger: the
+   pad-trigger dispatcher row rewritten + 2 new rows (zone-A message
+   shower, ride-record bank). Queued: the .BDG template-bank ↔
+   restore-word mapping unit (item 2).
 - 2026-08-23: P4/RE THE RE-EXW-SIM §9 ITEMS 2-3 REMAINDER unit
    COMPLETE (worker c607288e claim 2, commit 47357ca, D116; docs-only;
    objdump-only + read-only DGROUP string probes, no Ghidra run, no

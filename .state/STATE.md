@@ -1,5 +1,22 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE FUN_00433980 CASE TABLE + FUN_00424a6f
+    MESSAGE SYSTEM COMPLETE (D117; docs-only, §7j.46, commit fcf97c3,
+    worker 0c2df9b4 claim 2): the 7j.19 item-6 residual CLOSED — the
+    full per-zone pad-trigger case table (all zones A..G × SP/H2H ×
+    missions × .PAD slots → rides/doors/beacons/exits/messages,
+    committed as §7j.46 8-bis), the ride-record bank grammar
+    (0x4dcdbc stride 0x24, 16 gates), the 21 SP beacon slots, the
+    zone-F/G DOOR+EXIT pairs, zone E verified negative, and the
+    message system decoded end-to-end (FUN_00424a6f = zone-A-M1-only,
+    BOOT_CAMP_%03i sections of the LANGUAGE.* file blob, show-once
+    latch 0x4eb5f8+2·id, timer 0x4eaac0/FUN_00425010 ticker + the
+    COMMAND-dismissal semantics). The S6/live-message expectations
+    are now fully pinned. Verified: registry_anchors 2/2 green,
+    manifest clean both sides, PUSHED. Queue: 1 = [BLOCKED] S0 live
+    session (operator), 2 = the .BDG template-bank ↔ restore-word
+    mapping unit. NEXT: the .BDG mapping unit (item 2).
+
   - 2026-08-23 P4.2/debris-physics COMPLETE (D115; the §7j.44 RE
     decode d467471 + the engine leg cebc178 landed by predecessor
     a5ef2370 which died at session end mid-re-baseline; the
