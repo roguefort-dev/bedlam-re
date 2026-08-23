@@ -1,5 +1,34 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4.2/W12-S8 COMPLETE (D114; the §7j.42 decode by
+    f9af5743 + the engine leg 8786c9e + the differ/plan/docs legs
+    ebf1d0b by 40dd9473, which died after pushing but before the
+    queue rewrite; continuation worker b22cba4a claim 2 re-verified
+    green + completed the queue leg): bedlam-core::critter landed —
+    the 0x4cff98 bank + the .NME staging seam, the k4 seek steppers
+    + the k5/6 mixed-AI body (FIVE asm-verified §7j.43 corrections
+    over the WIP), the 0x68 fire cycle, the odd-pass damage walker,
+    the §7j.24 death handlers + the 80-row LRU effect bank, the
+    bounty gate (dark on the corpus path — script kills carry
+    attacker −1). Grammar v1.7 `critters = 1` (staging+arm; the
+    loader/controller RNG draws = the budgeted E-side stream gap on
+    unarmed scenarios, the D113 pattern). S8.scen = the ZONEA/M1
+    critter engagement (the corpus zone hosts 16: the (18,9)-row
+    kind-5 pack + 10 kind-4s; the gunner at the (18,13) FLAT row —
+    a plateau marker puts the burst one z-level high and misses;
+    2-3 critters run the fire cycle, 9 dead by f39, 80-row effect
+    turnover, dormancy tail). 121 records, chain b5ae3f8be91c7449 +
+    double-run byte-identical; corpus_s8 + differ_gate S8 row
+    (cross PASS-WITH-NOTES, 2 S1-class + the critter/effect E-only
+    pair, zero gaps) + capture-plans/S8.json byte-pinned.
+    RE-VERIFIED this run: canonical_dump_gate 13/13 (S0..S7
+    byte-identical + S8), differ_gate green, dbx-plan 31/31,
+    workspace 54 suites green, fmt+clippy clean (3 S8-test lints
+    fixed), manifest clean both sides, PUSHED. THE W12 SERIES
+    (S3..S8) IS COMPLETE. Queue: 1 = [BLOCKED] S0 live session
+    (operator), 2 = the FUN_0040de9c debris-physics/collision
+    family unit. NEXT: debris-physics (item 2).
+
   - 2026-08-23 P4.2/W12-S7 COMPLETE (D113; the §7j.41 decode
     984a078 + the engine platform-dynamics family ea2f259 + the
     scenario leg b9cbcf3 by predecessor 56d80c42 claim 2, which

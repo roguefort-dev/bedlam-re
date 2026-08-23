@@ -2143,7 +2143,8 @@ fn corpus_s8_critter_engagement() {
     let mut flashed = 0usize;
     for f in frames.iter().take(31) {
         if let Some(rb) = f.watch("robot-bank") {
-            let o = 4 + 1 * 0x54 + 0x2E;
+            let (rec, stride) = (1usize, 0x54usize);
+            let o = 4 + rec * stride + 0x2E;
             if u16::from_le_bytes([rb[o], rb[o + 1]]) > 0 {
                 flashed += 1;
             }
@@ -2187,8 +2188,8 @@ fn corpus_s8_critter_engagement() {
     // 1500 frames out).
     let b110 = frames[110].watch("critter-bank").expect("critter row f110");
     let m110 = critter_modes(b110);
-    assert!(m110.get(&7).is_none(), "the dying window closed by f110");
-    assert!(m110.get(&6).is_none(), "the dives completed by f110");
+    assert!(!m110.contains_key(&7), "the dying window closed by f110");
+    assert!(!m110.contains_key(&6), "the dives completed by f110");
     let b119 = frames[120].watch("critter-bank").expect("critter row f119");
     let m119 = critter_modes(b119);
     let dormant = m119.get(&0xB).copied().unwrap_or(0);

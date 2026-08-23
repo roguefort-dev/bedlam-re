@@ -123,24 +123,25 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4.2/W12-S8] THE E-SIDE CRITTER-ENGAGEMENT PRODUCER unit
-   (medium; DESIGN §7 S8 row + §10-W12): the critter family is
-   decoded but NOT engine-modeled — the mode dispatchers (the
-   §7j.29 mode-9 SEEK target-acquisition whole + the 4-way
-   steppers + the wander/dormant modes), the aggro/state machine
-   per difficulty, the §7j.24 death handlers (bounty gate + the
-   death debris/splash staging), and the critter→robot damage lane
-   (§7j.23). Land the producers engine-side (bedlam-core — the
-   critter bank is a T2 UNALIASED row: it stays an E-only coverage
-   finding on the differ, per the D109 rule; watch what IS aliased
-   — robot-bank + T0/T1 rows carry the observable), then S8.scen
-   (a walk into critter aggro ranges on the corpus zone that hosts
-   them — census which zone/mission first; expect the T0/T1/TS
-   tier set unless an EXD alias exists) + the canonical gate rows
-   + dbx-plan compile. Chain pin + S0..S7 byte-identical re-assert
-   + differ_gate row. RE-READ §7j.17 (the critter/POI census) +
-   §7j.23/§7j.24 + the DESIGN §7 S8 row first; the critter
-   fire-anchored SFX families (7j.17 pins) stay T4/E-gaps.
+2. [P4.2/debris-physics] THE FUN_0040de9c DEBRIS PHYSICS/COLLISION
+   FAMILY unit (medium; §7j.7 item 7 head decode + the Backlog
+   "debris-stager ENGINE widening" bullet + MISSIONVIEW §5d tail):
+   the per-frame physics pass behind the effect-row +0x20 classes
+   {1,2,3,6} — decode the WHOLE of FUN_0040de9c (movement model per
+   class; the 0x454510 physics-param dword table census §7j.11/5;
+   the 3 octile reads per §7j.16; the ALIVE-robot Q13 position
+   compares = the moving-chunk DAMAGE lane [ALIASED — robot bank];
+   the critter+POI count collision reads), land it engine-side in
+   bedlam-core (the debris rows now turn over on the corpus path —
+   S7 destroys + S8 critter deaths), then the observability
+   pairing: census FIRST which debris kinds carry physics classes
+   on the S7/S8 paths; if debris damage lands in-scenario, extend
+   the corpus_s7/corpus_s8 assertions; if not, an S-variant arms a
+   physics-class burst into the robot lane; the critter-POI
+   collision side stays E-only unless an EXD alias exists. Chain
+   pins: S0..S8 byte-identical re-assert (the physics pass must
+   stay OFF the unarmed paths — the staging-key discipline). RE-READ
+   §7j.7 item 7 + §7j.11 items 4-5 + §7j.16 first.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -278,6 +279,36 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4.2/W12-S8 THE E-SIDE CRITTER-ENGAGEMENT PRODUCER
+   unit COMPLETE (D114; the §7j.42 RE decode b3e78cb+05f0d95 by
+   predecessor f9af5743 claim 2; the engine leg 8786c9e + the
+   differ/plan/docs legs ebf1d0b by predecessor 40dd9473 claim 2,
+   which died at session end AFTER pushing but BEFORE the queue
+   rewrite; continuation worker b22cba4a claim 2 adopted the
+   pushed state, INDEPENDENTLY re-verified green, and completed
+   the queue leg): bedlam-core::critter (the 0x4cff98 bank + the
+   .NME staging host seam with fail-loud kind refusal, the k4
+   seek steppers + the k5/6 mixed-AI body per the FIVE §7j.43
+   corrections, the mode-2 0x68 fire cycle with the 3-D aim, the
+   odd-pass FUN_004197d4 walker + FUN_004190bc applier, the §7j.24
+   death handlers + the 80-row LRU effect bank, the bounty gate),
+   grammar v1.7 `critters = 1` (staging+arm; the loader/controller
+   RNG draws = the budgeted E-side stream gap on unarmed
+   scenarios), S8.scen (T0/T1/T2/T3/TS, 121 records, chain
+   b5ae3f8be91c7449, double-run byte-identical; the (18,13)
+   FLAT-row engage instrument + the 9-death burst window),
+   corpus_s8_critter_engagement + differ_gate S8 row (cross
+   PASS-WITH-NOTES, exactly the 2 S1-class + the critter/effect
+   E-only pair, zero field gaps) + capture-plans/S8.json
+   byte-pinned (36 anchor + 27 per-frame, 26 deferred unaliased
+   rows, 1 command inject). THIS RUN RE-VERIFIED: canonical_dump_
+   gate 13/13 (S0..S7 byte-identical + S8 pinned), differ_gate
+   green, dbx-plan 31/31 (both S8 plan tests), workspace 54
+   suites green, fmt clean, clippy clean — 3 leftover lints in
+   the S8 canonical test fixed (identity op + 2× get().is_none()
+   → contains_key), manifest clean before AND after. THE W12
+   SERIES (S3..S8) IS COMPLETE — the queue successor is the
+   FUN_0040de9c debris-physics family (item 2).
 - 2026-08-23: P4.2/W12-S7 THE PLATFORM-DYNAMICS PRODUCER unit
    COMPLETE (D113; the §7j.41 RE decode 984a078 + the engine leg
    ea2f259 + the scenario leg b9cbcf3 landed by predecessor worker
