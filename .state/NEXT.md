@@ -123,32 +123,31 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-2. [P4/RE] THE TOT PLANE-6/7 SEMANTICS unit (small-medium;
-   docs-only, unattended-safe; objdump from
-   ghidra-project/exw-text-objdump.txt + read-only corpus probes):
-   FORMATS §2 leaves plane 6/7 open — TOT plane-6/7 values ≤1868
-   (< the 2000-slot POS count; 8016 + 2882 nonzero cells globally;
-   ZONEA/M1 has exactly ONE, tile 642 = (x=17,y=25) with 1355/1356
-   adjacent), the naive "plane value = POS slot" read is REFUTED
-   (POS[1355]/[1356] are empty in ZONEA/M1), and §7j.16 pinned the
-   materializer FUN_00440a2d copies ALL 8 planes' nonzero words
-   into the mirror. Deliverables: (a) the RENDERER VERDICT — do
-   plane-6/7 mirror words ever DRAW (walk the 0x4796bc consumers
-   of the draw/occlusion family 0x406xxx for any plane/z ≥6 gate
-   or z-pass skip; §7j.32's readers 0x406891/0x4068ec/0x406907/
-   0x406a0e/0x406a1a are the entry points); (b) the corpus
-   census — which missions carry plane-6/7 words, and whether
-   those tiles are ALSO nonzero at planes 0..5 (pure overlay vs
-   standalone) + the value domain vs the 0..5 planes; (c) the
-   ~2000-entry target-table hypothesis resolved OR formally
-   recorded [open] with the refutation evidence; (d) FORMATS §2
-   note + ledger row + D119; registry_anchors green; manifest
-   brackets any corpus probe; PUSH. Pre-queue check (the D118
-   discipline): grep'd DECISIONS + RE-EXW-SIM + the Done log for
-   "plane 6/7"/"plane-6/7" — ZERO prior closure (only this
-   Backlog bullet). NOTE the D118 word-unit header addressing for
-   any TOT-plane probe (the §2 planes start at BYTE 4 = WORD 2;
-   plane-major w·h stride, y·w+x within plane).
+2. [P4/RE] THE MISSIONVIEW §5d TAIL unit — ROBNUMS NAME PLATES +
+   SHIELD/VARIANT BANK STAGING (small; docs-only, unattended-safe;
+   objdump from ghidra-project/exw-text-objdump.txt + read-only
+   corpus probes if needed): the §5d robot entity enqueue is decoded
+   (§5d items 1-5: shield state 5/6 → DAT_0046af38 frame
+   clamp(10−wobble/4, 0..9) @sy−0x48 mode 0x12E; variant sprite
+   i32@+0x88≠0 → DAT_0046af44 frame u16@+0x18; the MP ROBNUMS
+   name-plate digits `sx + i32[0x4e44c8+c] + 6·i` for name chars
+   < 0x41, DAT_0046cdb0), but the BACKLOG TAIL is not: (a) WHO
+   STAGES the banks — the SHIELD (0x46af38)/variant (0x46af44)/
+   ROBNUMS (0x46af48) cells' loaders (are they GAMEGFX load-always
+   or mission/MP-gated? the 7j.30/§7d bank-name walk names them;
+   pin the LoadFile sites + gates); (b) the UNSTAGED-FLUSH
+   semantics — what FUN_0040179b/the enqueue do when the cell is 0
+   (nodes still enqueue? flush skips? is the SP game ever unstaged?
+   — the E-side render seam question behind the Backlog clause
+   "nodes enqueue, flush skips while unstaged"); (c) the full MP
+   name-plate grammar (the 0x4e44c8 digit-offset table + char
+   filter < 0x41 + the ROBNUMS bank's digit frames; SP = never?);
+   (d) MISSIONVIEW §5d tail note + ledger row + D120;
+   registry_anchors green; manifest brackets any corpus probe;
+   PUSH. Pre-queue check (the D118 discipline): grep'd DECISIONS +
+   RE-EXW-SIM + the Done log for "5d tail"/"name plate"/"flush
+   skips"/"unstaged" — ZERO prior closure (only the Backlog bullet
+   + the §5d/§7d decodes the tail builds on).
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -239,11 +238,13 @@ renumbered queue keeps every open item claimable by number).
   ring landed D57).
 - MISSIONVIEW sec 5d tail notes: ROBNUMS name plates,
   Shield/Variant bank staging (nodes enqueue, flush skips while
-  unstaged). (The debris physics/collision FUN_0040de9c clause
+  unstaged) — PROMOTED to the Now queue 2026-08-23 (item 2, the
+  D119 close-out; pre-queue grep per D118 found ZERO prior
+  closure). (The debris physics/collision FUN_0040de9c clause
   CLOSED 2026-08-23, D115/§7j.44.)
-- RE-EXW-SIM sec 9 open items 2-3: PROMOTED to the Now queue
-  (item 2, 2026-08-23). The FUN_00440e45 identity + robots()
-  extra-phase/state-1 producers.
+- RE-EXW-SIM sec 9 open items 2-3: CLOSED 2026-08-23 (§7j.45/D116,
+  commit 47357ca — the FUN_00440e45 SHOP identity + the robots()
+  extra-phase/state-1 producers; the promotion note superseded).
 - P4.2 differential harness (budgeted ~2 weeks, PLAN sec 6 P4.2):
   DESIGN DOC LANDED 2026-08-22 (docs/DESIGN-DIFFHARNESS.md, D77, commit
   7bc2c9d) — oracle topology (O1 EXD/DOSBox-X primary instrument, O2
@@ -265,15 +266,10 @@ renumbered queue keeps every open item claimable by number).
   destroy family is now fully decoded end-to-end (resolver →
   restore → 5-effect loop → chain walks), ready for the harness.
 - TOT semantics follow-up: FORMATS sec 2 plane 6/7 (the ~2000-slot
-  POS linkage) — PROMOTED to the Now queue 2026-08-23 (item 2,
-  the D118 close-out): KNOWN-staged (word mirror at record words
-  6/7) but the drawer treats them as ordinary stack levels - check
-  whether plane 6/7 words ever draw on shipped maps (ZONEA tile
-  642 is the only cell) before touching FORMATS. NOTE 7j.16: the
-  .TOT volume->mirror materializer FUN_00440a2d copies ALL 8
-  planes' nonzero words — the plane semantics now have their
-  runtime reader; re-check the mirror-word consumers (0x4796bc)
-  for plane-specific behavior.
+  POS linkage) — CLOSED 2026-08-23 (§7j.47/D119, commit dc6f5bf):
+  planes 6/7 = ordinary z-levels of the word stack (tall-structure
+  tops; they DRAW ungated — no z≥6 gate in any consumer), the
+  POS-slot linkage REFUTED, FORMATS §2 closed.
 - OPERATOR NOTE (carried): MANIFEST-2.sha256 at the repo root mismatches
   470 files - it documents a different tree snapshot (its BEDLAM.LOG
   entry is the sha256 of an EMPTY file). Re-anchor or delete it. It was
@@ -281,6 +277,37 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-23: P4/RE THE TOT PLANE-6/7 SEMANTICS unit COMPLETE (worker
+   f29066bd claim 2, commit dc6f5bf, D119, docs-only; objdump-only from
+   ghidra-project/exw-text-objdump.txt, no Ghidra run; read-only corpus
+   probes over game-data TOT/DAT/POS in /tmp/opencode — manifest clean
+   before AND after). CLOSED with the verdict triple: (a) RENDERER —
+   plane-6/7 mirror words DO draw, NO z≥6 gate in ANY consumer family:
+   the FUN_00403938 restamp z-stack loop 0x4067cf..0x406c73 runs z 0..7
+   (outer `cmp 8` @0x406863, chain @0x40695c) with the Block-1 restart
+   draw @0x406882..0x406941 gated on word≠0 ALONE (no seen — seen only
+   short-circuits the contiguous Block-2 chain; the cursor k resets to 0
+   per record @0x406c00/08); init_tiles stages all 8 planes (`cmp 8`
+   @0x407fce); the overlay scanner 0x408a49..0x408ade walks planes 1..7
+   and the range consumer 0x42035c..0x4203a5 planes 0..7; (b) CENSUS —
+   36/37 missions (only ZONEG/M1 zero), 8 016+2 882 words in 9 296
+   cells (6 504 overlay on planes 0..5 / 2 792 standalone), value
+   domain IDENTICAL to planes 1..5 (35..1868 vs 33..1868), DAT bytes
+   overwhelmingly 1 (~93% seen=1 at load); the words are per-level
+   sprite ids of TALL STRUCTURES (ZONEA/M1 (17,25) = the one zone-A
+   cell: column [454,1354,1355,1356] at z=4..7 — the "1355/1356
+   adjacent integers" are the z-6/z-7 sprite ids; ZONEB ramps 1866/
+   1867/1868 + 1755→1753 + 1153..1161 sequential runs); (c) the
+   ~2000-entry target-table hypothesis REFUTED (planes 1..5 reach 1868
+   too — the nearness is the word grammar; .POS resolutions 9 217 live/
+   1 681 empty = coincidence, ZONEA's pair hits EMPTY slots; p7==p6+1
+   at only 83/9 296). Deliverables: RE-EXW-SIM §7j.47 + the ledger row
+   "TOT plane-6/7 semantics" + FORMATS §2 planes-6/7 paragraph CLOSED +
+   §12 cross-ref + the cross-file LIKELY row → REFUTED + D119. Engine
+   consequence NONE (E already stages every nonzero plane word per
+   D107; no new watch rows). registry_anchors 2/2 green. Queued: the
+   MISSIONVIEW §5d tail unit (item 2 — ROBNUMS name plates + Shield/
+   Variant bank staging; pre-queue grep performed per D118).
 - 2026-08-23: P4/RE QUEUE HYGIENE #3 — THE .BDG TEMPLATE-BANK ↔
   RESTORE-WORD MAPPING item REMOVED AS ALREADY-CLOSED (D96/§7j.32,
   2026-08-22, commits 4210f55 + f554bee; worker e26508a9 claim 2,

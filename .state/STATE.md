@@ -1,5 +1,28 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE TOT PLANE-6/7 SEMANTICS COMPLETE (D119;
+    docs-only, §7j.47, commit dc6f5bf, worker f29066bd claim 2):
+    planes 6/7 of the .TOT word stack are ORDINARY z-levels 6/7
+    (tall-structure tops, per-level sprite ids — ZONEA/M1 (17,25)
+    = [454,1354,1355,1356] at z=4..7); they STAGE and DRAW like
+    every other plane (NO z≥6 gate in any consumer: the
+    FUN_00403938 restamp z-stack loop runs z 0..7 with a word-only
+    restart gate at 0x406891 — every nonzero plane word draws;
+    init_tiles stages all 8 planes; the overlay scanner + range
+    consumer equally unbounded). Corpus: 36/37 missions, 8 016+
+    2 882 words, domain ≡ planes 1..5 (35..1868). The FORMATS §2
+    "~2000-entry target-table" hypothesis REFUTED (POS resolutions
+    9 217 live/1 681 empty = coincidence; planes 1..5 reach 1868
+    too; the words draw as sprite ids). Engine consequence NONE
+    (E already stages every nonzero plane word per D107). Verified:
+    registry_anchors 2/2 green, manifest clean before AND after
+    the read-only corpus probes (TOT/DAT/POS × 37 missions),
+    objdump-only (no Ghidra run), no corpus write, PUSHED.
+    Queue: 1 = [BLOCKED] S0 live session (operator-gated), 2 = the
+    MISSIONVIEW §5d tail unit (ROBNUMS name plates + Shield/Variant
+    bank staging; pre-queue grep performed per the D118 discipline).
+    NEXT: the §5d tail unit (item 2).
+
   - 2026-08-23 P4/RE QUEUE HYGIENE #3 (D118; docs-only, worker
     e26508a9 claim 2): the queued ".BDG template-bank ↔
     restore-word mapping" item REMOVED AS ALREADY-CLOSED — it was
