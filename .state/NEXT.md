@@ -133,38 +133,27 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-  2. [P4/RE] THE [0x4ede34] TEMP-VIEWPORT CENSUS UNIT (small;
-     docs-only, unattended-safe; objdump from
-     ghidra-project/exw-text-objdump.txt): the §7j.56/B zoom
-     census left [0x4ede34] IDENTITY open (9 sites; the
-     FUN_00401107 second gate ≠0 → the temp viewport v :=
-     480−min([0x4ede34],479) save/restore path): decode the
-     producers 0x40d286/0x40d311/0x40d398 (the FUN_0040d2xx
-     family — same neighborhood as the recenter head 0x40d197
-     call) + `:=1` @0x40ea8b (MP-respawn region — likely a
-     screen wipe) + the MissionShell frame cluster
-     0x4480af/0x4480d6/0x448121 (after the 0x44809e read) +
-     the 0x4476a2 `cmp 0x1E0` test + the 0x403952 gate; pin
-     the value grammar and WHAT the temp render shows (a
-     cinema/wipe effect?). Deliverables: census + ledger row +
-     D130; registry_anchors green; PUSH. Pre-queue check
-     (D118 discipline): zero decode of 0x4ede34 exists (grep —
-     only §7j.56/B census pointer + the §7e map-present row
-     passing mention). FED BY §7j.57/D129 (2026-08-23, commit
-     6a3abcd): the `:=1` @0x40ea8b is the SELECTED-robot
-     SP-death write inside FUN_0040e230 (idx ==
-     [0x46cbd4]+[0x46cbdc]); the 0x4476a2 `cmp 0x1E0` reader =
-     the SP SQUAD-WIPE FAIL DETECTOR wipe-complete conjunct
-     (FUN_0044764c — the fail fires only at the terminal 480
-     value; per-mission zero 0x44787d + click-select zero
-     0x40d286 already census'd there) — so the cell counts
-     toward 0x1E0 after a death: pin WHO/WHAT increments it
-     (the MissionShell frame cluster is the prime candidate)
-     and what the FUN_00401107 v := 480−min(cell,479) path
-     renders while it runs. (QUEUED 2026-08-23 by the
-     7j.56/D128 close, worker 21e88d3b claim 2; note added
-     2026-08-23 by the 7j.57/D129 close, worker 18039414
-     claim 2.)
+  2. [P4/RE] THE [0x4dc5d0] BLINK/EFFECT-LIST PRODUCER CENSUS
+     (small; docs-only, unattended-safe; objdump from
+     ghidra-project/exw-text-objdump.txt): §6c.6d's portrait
+     pass gates the active-robot blink cursor on the
+     sprite-list field [0x4dc5d0] ∈ {1,2,3} — "its producer is
+     open" (SIM.md ~501/~540). Partial decodes exist: the §7j
+     amendment 2026-08-21 (the 0x4dc5d0 effect-row family —
+     [0x4dc5d0] itself is a SEPARATE variable 4 B below row
+     0's x, the 0x422038 slot allocator walks
+     [0x4dc5d0]+slot*0x10) + the §7j.54 bombardment blink
+     write + the per-mission zero 0x447871 (the §7j.58 reset
+     block). ASK: the complete 7-site writer census + value
+     grammar (what 1/2/3 mean — blink classes?), pin the
+     {1,2,3} gate semantics against the effect-row family.
+     Deliverables: census + ledger row (or amendment of the
+     2026-08-21 row) + D131; registry_anchors green; PUSH.
+     Pre-queue check (D118 discipline): the {1,2,3} producer
+     set is NOT census'd anywhere (grep: only the §6c.6d gate
+     + the amendment's separate-variable note + §7j.54's one
+     writer). (QUEUED 2026-08-23 by the 7j.58/D130 close,
+     worker 27b33f6c claim 2.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -2125,3 +2114,47 @@ renumbered queue keeps every open item claimable by number).
   the idle threshold; ≈27–29 RandA/impacting shell if ever
   modeled). Queued: item 3 = the [0x4edbd8] camera-gate census
   (this unit's residual precondition cell).
+- 2026-08-23: P4/RE THE [0x4ede34] TEMP-VIEWPORT/DEATH-WIPE
+  CENSUS unit COMPLETE (worker 27b33f6c claim 2, commits
+  0909683 + c67b007 + c9e3810, D130, §7j.58, docs-only;
+  objdump-only from ghidra-project/exw-text-objdump.txt, no
+  Ghidra run, no corpus read; MANIFEST.sha256 clean before AND
+  after, registry_anchors 2/2 green; PUSHED). VERDICT:
+  [0x4ede34] = the CLOSING-IRIS death-wipe cell. (1) VALUE
+  GRAMMAR: 0 inactive; :=1 ARM at selected-robot SP death
+  (sole 0x40ea8b, FUN_0040e230 SP tail, MP NEVER arms — MP
+  posts the sibling marker latch + respawns); +=0x28/frame
+  (sole writer, MissionShell frame cluster 0x4480af after the
+  present call); terminal :=0x1E0 @0x4480d6 when ≥480; :=0
+  cancels = the 3 click-select strips 0x40d286/0x40d311/
+  0x40d398 (selecting an ALIVE squadmate aborts the iris) +
+  the auto-reselect xor-of-equals 0x448121 + the per-mission
+  0x44787d. (2) THE QUEUE ASK (who increments): the frame
+  cluster; at terminal it runs the AUTO-RESELECT PASS — walk
+  squad slots, gate ALIVE ∧ TYPE(+0x2A)==[0x4edb90] (player
+  type) ∧ ≠ selected → [0x46cbdc] := slot (LAST match wins),
+  flash :=3, cell :=0; NO eligible mate → parks at 480 =
+  exactly the D129 fail-detector conjunct (SP "no cancel" ⟺
+  squad wiped; the two conjuncts are one event observed
+  twice). (3) WHAT THE TEMP RENDER SHOWS: FUN_00401107 temp
+  path = fill-0 full-screen + centered v×v SHRINK of the
+  FROZEN world frame (v := 480−min(cell,479); row routine
+  0x401430 = inverse twin of the normal zoom's 0x4013e8
+  stretch; FUN_00403938 head 0x403952 SKIPS its render body
+  during the wipe → the backbuffer holds the last pre-death
+  frame) — a 13-frame closing iris 479×479 → 1×1, user zoom
+  save/restored. (4) SIBLING [0x4ea8f8] DECODED = the MP
+  death-position marker countdown (:=0x20 @0x40e7ef with the
+  dying x/y/z posted to [0x4ea8ec/f0/f4]; FUN_00403938 head
+  copies the trio into the §7j.20 selected-anchor ring
+  0x4c71c4 4×0xC — consumer = the §7j.54 chase camera, the
+  camera HOLDS the dead robot's position — and decs; zeroed
+  in tandem at every cancel). (5) ONE CORRECTION: §6c.6e's
+  auto-reselect flash "ebx(2)" → 3 (ebx := 3 @0x4480de);
+  §7j.56/B's "FUN_00401107 gates 0x401119/0x403952" — 0x403952
+  is FUN_00403938's gate. ENGINE/DIFFER: NONE (presentation-
+  only; recorded for future E render parity). Deliverables:
+  §7j.58 A–F, 2 ledger rows, §7j.56/B pointer closed,
+  §6c.2/§6c.6e corrections, MISSIONVIEW zoom-path precision
+  note, D130. Queued: item 2 = the [0x4dc5d0] blink/effect-
+  list producer census (this unit's neighbor open producer).

@@ -1,5 +1,38 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-23 P4/RE THE [0x4ede34] DEATH-WIPE/TEMP-VIEWPORT
+    CENSUS unit COMPLETE (D130; docs-only, §7j.58, commits
+    0909683 + c67b007 + c9e3810, worker 27b33f6c claim 2;
+    objdump-only from ghidra-project/exw-text-objdump.txt, no
+    Ghidra run, no corpus read; manifest clean before AND
+    after; registry_anchors 2/2 green; PUSHED): [0x4ede34] =
+    the CLOSING-IRIS death-wipe cell. VALUE GRAMMAR: 0
+    inactive; :=1 ARM at selected-robot SP death (sole
+    0x40ea8b; MP NEVER arms — posts the sibling marker latch
+    instead); +=0x28/frame (sole writer, MissionShell frame
+    cluster 0x4480af); terminal :=0x1E0 @0x4480d6 + the
+    AUTO-RESELECT pass (last ALIVE player-type squad slot →
+    select it, flash :=3, cancel via xor-of-equals 0x448121;
+    no eligible mate → parks at 480 = the D129 fail-detector
+    conjunct — SP "no cancel" ⟺ squad wiped); cancels = 3
+    click-select strips + per-mission 0x44787d. THE TEMP
+    RENDER = fill-0 full-screen + centered v×v SHRINK of the
+    FROZEN world frame (v := 480−min(cell,479); row routine
+    0x401430 = inverse twin of the normal zoom's 0x4013e8;
+    FUN_00403938 head 0x403952 skips its render body during
+    the wipe) — a 13-frame closing iris 479×479→1×1, user
+    zoom save/restored. SIBLING [0x4ea8f8] = the MP
+    death-position marker countdown (:=0x20 @0x40e7ef, dying
+    x/y/z → the §7j.20 selected-anchor ring 0x4c71c4 —
+    consumer = the §7j.54 chase camera; decs in the
+    FUN_00403938 head; zeroed in tandem at every cancel).
+    CORRECTIONS: §6c.6e flash "ebx(2)" → 3; §7j.56/B
+    0x403952 belongs to FUN_00403938. ENGINE CONSEQUENCE
+    NONE (presentation-only; iris grammar recorded for future
+    E render parity). Queued: item 2 = the [0x4dc5d0]
+    blink/effect-list producer census (the §6c.6d open
+    producer, fed with this unit's reset-block facts).
+
   - 2026-08-23 P4/RE THE ROBOT +0x9C DEATH-FLAG READER CENSUS
     unit COMPLETE (D129; docs-only, §7j.57, commit 6a3abcd,
     worker 18039414 claim 2; objdump-only from
