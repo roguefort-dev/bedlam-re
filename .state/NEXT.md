@@ -146,30 +146,30 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W11-prep, SMALL] THE CAPGEN O2 TRANSCRIPT EMITTER SKELETON —
-   the runtime-side producer of the O2 DBXCAP the stitcher now
-   consumes (the last headless-reachable W11 piece after D139 made
-   dbx-plan/differ/dbx-stitch all channel-complete). CONTEXT: tools/
-   runtime/dbx-capgen.py emits the O1 DBXCAP from the DOSBox-X
-   debugger log; an O2 capture is produced by the W11 host ptrace
-   driver (DESIGN §10-W11, operator-gated: Wine + ptrace +
-   process_vm_readv). The headless piece: the TRANSCRIPT side of the
-   D138 plan form — a small `capgen-o2` (or a --channel o2 mode of
-   dbx-capgen) that takes the o2 capture-plan.json + a dump feed
-   (per-trigger-hit watch reads; for the headless skeleton a
-   synthetic/file feed) and emits the DBXCAP v1 lines the D139
-   dbx-stitch validates (flat plan row order, the 8-byte map-wh
-   span, anchor-frame TS rows, per-frame T0/T1 rows, injection
-   flags) — proving the plan->driver->transcript->stitch->differ
-   chain end-to-end headless before any Wine session. METHOD: read
-   the S1-o2.json plan form, emit the transcript, dbx-stitch
-   --channel o2, decode; NO live Wine/ptrace (the driver itself
-   stays operator-gated W11 work — the skeleton's feed is
-   synthetic, clearly marked). fmt + clippy (or flake8/py syntax
-   check for the python side); manifest bracket any corpus read.
-   (QUEUED 2026-08-24 by the dbx-stitch O2 unit, commits 1cc53b4 +
-   ab0738b/D139 — the plan + differ + stitch are all
-   channel-complete; this closes the headless loop.)
+   2. [P4.2/D140-followup, SMALL] THE O1 DBX-CAPGEN FRAME-1 DEDUPE
+   FIX — the D140(2) landmine: on every committed plan the
+   per-frame rows are a SUBSET of anchor_watches (the anchor list
+   IS the frame-1 row set), and dbx-capgen.py's frame-1 path
+   (`dump_rows(frame, anchor_watches + watches if frame == 1 else
+   watches)`) concatenates BOTH lists — a live O1 session would
+   emit DUPLICATE watch ids at frame 1 and `diff stitch` rejects
+   the transcript (canonicalize_frame DuplicateWatchId, dump.rs;
+   provenance: derived from the 13 committed plans' id sets + the
+   dump.rs rule during the D140 smoke build; capgen-o2 already
+   dedupes keep-first — mirror THAT exact semantics).
+   METHOD: dedupe keep-first in dbx-capgen's frame-1 row list;
+   verify headless WITHOUT a game: (a) a small python check that
+   the patched frame-1 row list over all 13 committed plans has
+   unique ids == the anchor list (the same subset property
+   capgen-o2 proved); (b) the dbgprobe gate still green (probe
+   plans carry no anchor_watches — unaffected); (c) do NOT build
+   new O1 machinery beyond the fix. py syntax check; no Rust
+   change expected. Manifest bracket any corpus read (none
+   expected).
+   (QUEUED 2026-08-24 by the capgen-o2 emitter unit, commits
+   dba16f3 + 0d45531/D140 — the fix must land BEFORE the operator
+   S0 live session, else its first `diff stitch` fails on
+   duplicates.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -322,6 +322,52 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W11-prep THE CAPGEN-O2 TRANSCRIPT EMITTER
+  SKELETON unit COMPLETE (worker 3b207215 claim 2, commits dba16f3
+  notes + 0d45531 impl, both PUSHED; D140). (a) THE CONTRACT SPLIT
+  + DBXFEED v1: the future W11 ptrace driver (operator-gated)
+  services the D138 o2 plan (trigger hits @0x425a03 +
+  process_vm_readv per row) and logs a DBXFEED v1 read/write log
+  (hit blocks; hit 0 = optional boot position; hit 1 = the ANCHOR —
+  where the feed starts IS the driver's mission-load policy);
+  tools/runtime/capgen-o2.py is the pure plan interpreter +
+  transcript emitter validating the feed against ONE shared
+  plan_walk 1:1 — every read's addr+len, hit numbering (= capture
+  frames, anchor = 1, resolving the D138 comment's loose wording),
+  and the FULL inject arithmetic re-derived (plain /
+  op:command ring appends from the logged count read / op:pad
+  step-ons with the D86 mark check). --synthesize-feed is the
+  reference mini-driver (deterministic LCG bytes per (addr,hit),
+  consistent resolve statics + prefix counts + the +1-per-hit frame
+  counter) — generator and checker can never diverge. SYNTHETIC
+  feeds mark the transcript (anti-ghost); frame-counter drift warns
+  + records a transcript comment. (b) HEADLINE FINDING (D140(2)):
+  on EVERY committed plan the per-frame rows are a SUBSET of
+  anchor_watches — the anchor list IS the frame-1 row set; a
+  literal anchor+watches concatenation emits DUPLICATE ids and the
+  stitcher's canonicalize_frame rejects DuplicateWatchId. capgen-o2
+  dedupes keep-first; the SAME landmine sits in the O1 dbx-capgen
+  frame-1 path (queued as the new item 2 — every live O1 session
+  would fail at `diff stitch`; the dbgprobe gates never see it, the
+  Rust fabrication lanes build from E frames whose ids are unique
+  by construction). (c) SMOKE ALL GREEN
+  (tools/runtime/capgen-o2-smoke.sh; unattended-safe: no Wine, no
+  ptrace, no game, no corpus read; MANIFEST clean pre+post):
+  dbx-plan --channel o2 byte-pins S1-o2.json; the FULL 401-frame
+  S1-o2 chain synthesize → emit → dbx-stitch --channel o2 against
+  the REAL S1 scenario (20.5 MB dump, chain b436fa77642c94fc,
+  manifest O2:EXW/Wine, frame_count 401) → dbx-diff self-cross
+  PASS 0 findings (decode + normalize_o2_row intake); the EXD-only
+  row (static-cursor-clamp) spliced into the transcript REFUSES at
+  the CLI (NoExwAddress); a feed truncated at hit 401 refuses at
+  emit; S3-o2 compiles its 8 op:command injects on EXW cells and
+  the chain runs end-to-end (frame-1 injected flag, chain
+  52f6044c2033cb34); emitter determinism byte-identical. THE
+  HEADLESS O2 LOOP IS COMPLETE (plan → driver-feed → transcript →
+  stitch → differ); only operator-gated W11 work remains (the
+  ptrace driver + the S0 live session). diffharness 82 tests
+  green, fmt+clippy clean, no Ghidra run, no corpus write. Queued:
+  item 2 = the O1 dbx-capgen frame-1 dedupe fix.
 - 2026-08-24: P4.2/W11-prep THE DBX-STITCH O2 TRANSCRIPT CHANNEL
   SUPPORT unit COMPLETE (worker 74bae49c claim 2, commits 1cc53b4 +
   ab0738b, both PUSHED; D139). (a) THE CHANNEL-THREADED ANTI-GHOST

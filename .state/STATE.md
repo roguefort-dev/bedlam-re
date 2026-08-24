@@ -1,5 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W11-prep THE CAPGEN-O2 TRANSCRIPT EMITTER
+    SKELETON unit COMPLETE (worker 3b207215 claim 2, commits dba16f3
+    notes + 0d45531 impl, both PUSHED; D140):
+    tools/runtime/capgen-o2.py — the headless producer of the O2
+    DBXCAP from the D138 o2 plan + a DBXFEED v1 driver log (the W11
+    ptrace driver's observable contract: hit blocks / reads / inject
+    writes; hit 1 = the anchor, frame N == hit N). ONE plan_walk
+    drives both the validator (addr+len pairing, inject arithmetic
+    re-derived for all three op forms, prefix-row concatenation) and
+    --synthesize-feed (the reference mini-driver). HEADLINE FINDING
+    (D140(2)): every committed plan's per-frame rows are a SUBSET of
+    anchor_watches — the anchor list IS the frame-1 row set, and a
+    literal anchor+watches concatenation emits DUPLICATE ids the
+    stitcher rejects (DuplicateWatchId); capgen-o2 dedupes keep-first
+    and THE SAME LANDMINE SITS IN THE O1 dbx-capgen frame-1 path
+    (queued as the new item 2 — every live O1 session would fail at
+    `diff stitch` until it dedupes; the dbgprobe gates never see it,
+    the probe plans carry no anchor_watches). SMOKE ALL GREEN
+    (tools/runtime/capgen-o2-smoke.sh, unattended-safe, no Wine/no
+    corpus read, MANIFEST clean pre+post): dbx-plan o2 byte-pin; the
+    full 401-frame S1-o2 chain synthesize→emit→dbx-stitch --channel
+    o2 (20.5 MB dump, chain b436fa77642c94fc)→dbx-diff self-cross
+    PASS (decode + normalize_o2_row); the EXD-only row refusal at the
+    CLI; a truncated feed refusing at emit; S3-o2's 8 op:command
+    injects end-to-end (chain 52f6044c2033cb34); determinism.
+    diffharness 82 tests, fmt+clippy clean, no Ghidra run. THE
+    HEADLESS O2 LOOP IS COMPLETE end-to-end (plan -> driver-feed ->
+    transcript -> stitch -> differ); the only remaining W11 pieces
+    are OPERATOR-GATED (the Wine ptrace driver + the S0 live session,
+    item 1 [BLOCKED]-on-operator). Queue: item 2 = the O1 dbx-capgen
+    frame-1 dedupe fix (the D140(2) landmine).
   - 2026-08-24 P4.2/W11-prep THE DBX-STITCH O2 TRANSCRIPT CHANNEL
     SUPPORT unit COMPLETE (worker 74bae49c claim 2, commits 1cc53b4
     + ab0738b, both PUSHED; D139): runner::stitch threads the dump
