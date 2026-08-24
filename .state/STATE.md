@@ -1,5 +1,28 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/D140-followup THE O1 DBX-CAPGEN FRAME-1 DEDUPE
+    FIX unit COMPLETE (worker 9f4a1111 claim 2, commit c65d1e8,
+    PUSHED; D141): dbx-capgen.py frame 1 now dumps the DEDUPED
+    anchor union keep-first (module-level dedupe_frame1_rows(),
+    the exact capgen-o2 semantics) — closing the D140(2) landmine
+    where every live O1 session would have emitted DUPLICATE watch
+    ids at frame 1 and failed `diff stitch` (canonicalize_frame
+    DuplicateWatchId). Verified headless by the committed
+    capgen-frame1-dedupe-check.py (imports the real shipped
+    function; all 13 committed plans: unique ids, frame-1 == the
+    anchor list in order, landmine expression absent; the raw
+    concat would have duplicated 11-30 ids per plan) + ALL dbgprobe
+    probes re-green (the probe plans' anchor/per-frame id sets are
+    DISJOINT — why the gates never tripped it pre-fix); py_compile;
+    no Rust change; MANIFEST clean. THE S0 LIVE SESSION (item 1,
+    operator-gated) HAS NO REMAINING PREP — its first `diff
+    stitch` is now safe. WITH THIS, THE UNATTENDED P4.2 HARNESS
+    BUILD ORDER IS COMPLETE: W1-W9 + W12 landed, the W11 headless
+    loop (plan -> driver-feed -> transcript -> stitch -> differ)
+    complete per D138-D140, the O1 channel deduped; only
+    operator-gated pieces remain (item 1 S0 live + the W11 ptrace
+    driver). Queue: item 2 = the W10-prep O3 8street comparator
+    feasibility note (docs-only; the last unstarted W item).
   - 2026-08-24 P4.2/W11-prep THE CAPGEN-O2 TRANSCRIPT EMITTER
     SKELETON unit COMPLETE (worker 3b207215 claim 2, commits dba16f3
     notes + 0d45531 impl, both PUSHED; D140):

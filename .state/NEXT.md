@@ -45,6 +45,11 @@ renumbered queue keeps every open item claimable by number).
    gate, expect 1 = sound on) — a sound-DISABLED capture machine
    would dump 0 where E assumes the row (the D128 ACTIONPAN
    pattern; RE-EXD-MAP §5g consequence note).
+   NOTE D141 (2026-08-24): the O1 frame-1 dedupe landmine is FIXED
+   (commit c65d1e8) — capgen frame 1 now emits the deduped anchor
+   union, so the session's first `diff stitch` no longer risks the
+   DuplicateWatchId rejection. No plan bytes changed — the existing
+   re-stage notes (D134) still apply, nothing further to prep.
    OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
    `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
    the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
@@ -146,30 +151,30 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/D140-followup, SMALL] THE O1 DBX-CAPGEN FRAME-1 DEDUPE
-   FIX — the D140(2) landmine: on every committed plan the
-   per-frame rows are a SUBSET of anchor_watches (the anchor list
-   IS the frame-1 row set), and dbx-capgen.py's frame-1 path
-   (`dump_rows(frame, anchor_watches + watches if frame == 1 else
-   watches)`) concatenates BOTH lists — a live O1 session would
-   emit DUPLICATE watch ids at frame 1 and `diff stitch` rejects
-   the transcript (canonicalize_frame DuplicateWatchId, dump.rs;
-   provenance: derived from the 13 committed plans' id sets + the
-   dump.rs rule during the D140 smoke build; capgen-o2 already
-   dedupes keep-first — mirror THAT exact semantics).
-   METHOD: dedupe keep-first in dbx-capgen's frame-1 row list;
-   verify headless WITHOUT a game: (a) a small python check that
-   the patched frame-1 row list over all 13 committed plans has
-   unique ids == the anchor list (the same subset property
-   capgen-o2 proved); (b) the dbgprobe gate still green (probe
-   plans carry no anchor_watches — unaffected); (c) do NOT build
-   new O1 machinery beyond the fix. py syntax check; no Rust
-   change expected. Manifest bracket any corpus read (none
-   expected).
-   (QUEUED 2026-08-24 by the capgen-o2 emitter unit, commits
-   dba16f3 + 0d45531/D140 — the fix must land BEFORE the operator
-   S0 live session, else its first `diff stitch` fails on
-   duplicates.)
+   2. [P4.2/W10-prep, DOCS-ONLY] THE O3 8STREET COMPARATOR FEASIBILITY
+   NOTE — the last unstarted W item (DESIGN §10: "Rebuild 8street at
+   the pinned commit with state-dump hooks emitting the W3 schema
+   (test-only comparator; no code enters this repo)"). The harness
+   build order is otherwise COMPLETE unattended-side (W1-W9 + W12
+   landed; W11's headless loop complete per D140; the D141 O1 dedupe
+   fix closed the last landmine; only operator-gated work remains:
+   item 1 + the W11 ptrace driver). METHOD: read the 8street clones
+   at ~/Documents/bedlam-refs (NAVIGATION REFERENCES ONLY per
+   AGENTS — facts must be re-anchored to EXW/EXD addresses in spec
+   docs, never copied) + D77 §4's O3 contract + the W3 schema
+   (dump.rs) and write the §10-W10 landing note: the pinned commit +
+   build toolchain, the hook family needed (frame-tail dump points
+   mapped to 8street code sites -> the re-anchoring policy per row
+   tier), the O3 channel's differ intake status (channel 3 already
+   thread through dump.rs/stitch per W3), what artifacts live where
+   ("no code enters this repo" — build outputs stay under
+   runtime/ or outside, fingerprints only in git), and whether the
+   rebuild itself needs operator gates (build env, licenses). No
+   engine/Rust change; MANIFEST bracket any clone read (clones are
+   OUTSIDE game-data/ — no manifest entries; just record sha256s of
+   the pinned commit in the note).
+   (QUEUED 2026-08-24 by the D141 O1 dedupe-fix unit, commit c65d1e8
+   — the unattended P4.2 queue was otherwise empty.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -322,6 +327,36 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/D140-followup THE O1 DBX-CAPGEN FRAME-1 DEDUPE
+  FIX unit COMPLETE (worker 9f4a1111 claim 2, commit c65d1e8,
+  PUSHED; D141). The D140(2) landmine closed BEFORE the operator S0
+  live session: dbx-capgen.py's frame-1 path concatenated
+  anchor_watches + watches literally, but on every committed plan
+  the per-frame rows are a SUBSET of anchor_watches, so every live
+  O1 session would emit DUPLICATE watch ids at frame 1 and `diff
+  stitch` rejects the transcript (canonicalize_frame
+  DuplicateWatchId, dump.rs). FIX: frame 1 now dumps the DEDUPED
+  union keep-first via the new module-level dedupe_frame1_rows()
+  (the exact capgen-o2 semantics); the transcript summary line
+  reports the deduped count; the module docstring updated. VERIFIED
+  headless (no game, no corpus read, MANIFEST clean): (a) the
+  committed check tools/runtime/capgen-frame1-dedupe-check.py
+  imports the REAL shipped function (never a copy) and proves over
+  all 13 committed plans: unique frame-1 ids, frame-1 == the anchor
+  list in anchor order, every per-frame id rides the anchor set,
+  the landmine expression absent from the source (the raw concat
+  would have duplicated 11-30 ids per plan = every per-frame row);
+  (b) ALL dbgprobe probes re-GREEN through the changed path (gate,
+  flow, inject, walk, pad both legs) — the probe plans DO carry
+  anchor_watches but their anchor/per-frame id sets are DISJOINT
+  (zero overlap, checked — the D140 "probe plans carry no
+  anchor_watches" gloss corrected in RUNTIME.md), which is why the
+  gates never tripped it pre-fix; (c) py_compile clean. No Rust
+  change. Docs: RUNTIME.md D140 finding note closed out + DECISIONS
+  D141. No plan bytes changed — no re-stage needed beyond D134.
+  Queued: item 2 = the W10-prep O3 comparator feasibility note
+  (the unattended P4.2 queue was otherwise empty; only operator-
+  gated work remains).
 - 2026-08-24: P4.2/W11-prep THE CAPGEN-O2 TRANSCRIPT EMITTER
   SKELETON unit COMPLETE (worker 3b207215 claim 2, commits dba16f3
   notes + 0d45531 impl, both PUSHED; D140). (a) THE CONTRACT SPLIT
