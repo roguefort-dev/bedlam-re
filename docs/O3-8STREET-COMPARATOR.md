@@ -175,7 +175,7 @@ recorded in the fork, not here).
 |---|---|---|
 | W3 schema channel 3 | **LANDED** — dump.rs `Channel::O3Street` encode/decode + chain (D78; channel round-trip test) | none |
 | stitch (`runner::stitch`) | **LANDED 2026-08-24 (W10-impl-a, commit f584eab, D143)** — the O3 address rule = the O2 MIRROR (validate ids against `exw_addr`: the reconstruction rebuilds EXW state, so the EXD-only row static-cursor-clamp rejects LOUD on O3 exactly as on O2; EXD-gap rows with live EXW cells stay legal there) + `dbx-stitch --channel o3` | none (the differ-side intake below is the remaining piece) |
-| differ normalizer | `Channel::O3Street => Err(UnsupportedChannel)` (differ.rs ~1018) | the **O3 field map** = the O2 map modulo the §6 seam set (same EXW cells, same layouts); plus the seam ledger so known-divergent rows are classified `o3-seam`, not findings — **SPEC §5a below** (impl = W10-impl-b) |
+| differ normalizer | **LANDED 2026-08-24 (W10-impl-b, D144)** — the O3 field map = the O2 map verbatim (`normalize_o3_row` delegates) + the §5a seam ledger (`Class::O3Seam`, report-only) driving the compare-time classification | none — W10 in-repo work is COMPLETE (only the operator-gated rebuild remains) |
 | scenarios/plans | committed for O1/O2 (`capture-plans/*.json`) | none — reuse as-is (O3 rows are O2-form; the stitch gate fabricates them through the same `inv_frame` O2 arm) |
 
 Both in-repo pieces are bounded single units (no engine change, diffharness
@@ -237,6 +237,19 @@ reason verbatim, row/field coverage asymmetry on a seam row classifies the
 same way (never `coverage` noise), and the row is **excluded from tiebreak
 arbitration** — an OPTIONS.BDL-fed vote is not canon evidence, so a seam row
 never produces EngineBug/OriginalDivergence while O3 participates.
+
+**LANDED 2026-08-24 (W10-impl-b, D144; spec commit 7d28bc2):** the gates —
+(a) a fabricated O3 transcript of the REAL S0 run (chain `dac1cfd17bc7ede3`
+through `inv_frame`'s O3Street arm) self-crosses PASS with ZERO findings;
+(b) a seeded `sfx-master-gate` divergence on one side reports exactly one
+`o3-seam` finding (reason verbatim, verdict PASS-WITH-NOTES, zero
+EngineBug/Structural); (c) the same perturbation on `money` still FAILs
+EngineBug — the ledger is selective, never a blanket suppressor; (d) a
+synthetic registry row on the ACTIONPAN cell 0x4edbd8 seam-classifies through
+the `exw_addr` cell matcher end-to-end (future config rows are caught
+automatically); (e) the same seeded pair under O2 headers produces a plain
+EngineBug FAIL — the seam class binds the O3 channel only, exactly like the
+per-channel stitch address rules (D139/D142).
 
 ## 6. What O3 can and cannot arbitrate (deviation consequences)
 
@@ -305,12 +318,9 @@ record; 8street is never a porting source (PLAN §0/§1, AGENTS).
 1. **In-repo, unattended-safe, small:** (a) `dbx-stitch --channel o3` + the
    O3 anti-ghost rule (`exw_addr`-mirror) — **LANDED 2026-08-24, commit
    f584eab (D143)**; (b) the differ O3 field map + `o3-seam`
-   classification — the one remaining in-repo unit. Two bounded
-   diffharness units; each lands with its own gate test (fabricated O3
-   transcript → stitch → self-cross, the D140 smoke pattern — the
-   landed (a) gate asserts stitch + decode + chain + determinism and
-   the documented differ rejection; the self-cross unlocks when (b)
-   lands the normalizer).
+   classification — **LANDED 2026-08-24 (W10-impl-b, D144, spec §5a)**.
+   Both gates landed (the D140 smoke pattern: fabricated O3 transcript →
+   stitch → self-cross).
 2. **Outside the repo, operator-gated:** the toolchain install (sudo +
    network) + the fork + the hook patch + the first build. The pinned sites
    (§4), the row-resolution cases (§3), and the seam ledger (§6) are the

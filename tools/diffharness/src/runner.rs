@@ -1659,11 +1659,12 @@ mod tests {
         //     (the EXW cell is the canon there too);
         // (d) determinism: re-stitching the same transcript is
         //     byte-identical (dump + chain);
-        // (e) the differ intake gap is DOCUMENTED, not papered over:
-        //     normalize_dump on the O3 dump still refuses
-        //     UnsupportedChannel — the O3 field map is the queued
-        //     W10-impl-b unit (D142 §5), so dbx-diff on O3 stays
-        //     loud-rejecting until it lands.
+        // (e) the differ intake LANDED (W10-impl-b, D144): the O3
+        //     field map = the O2 map verbatim — the dump normalizes
+        //     through the O2 table; the D142 §6 seam classification
+        //     (o3-seam) is exercised end-to-end by the differ_gate
+        //     corpus lane (self-cross PASS 0 findings; a seeded seam
+        //     row reports o3-seam, never a channel finding).
         let s = Scenario::parse(SCEN).unwrap(); // T0 + TS
         let r = reg();
 
@@ -1749,16 +1750,17 @@ mod tests {
         assert_eq!(st.bytes, st2.bytes, "re-stitch is byte-identical");
         assert_eq!(st.manifest.chain_digest, st2.manifest.chain_digest);
 
-        // (e) the D142 §5 differ gap, asserted as the documented
-        // state: the O3 dump still refuses at the differ (no
-        // normalization table yet — W10-impl-b lands the field map).
+        // (e) the differ intake LANDED (W10-impl-b, D144): the O3
+        // field map = the O2 map verbatim, so the O3 dump normalizes
+        // (rows parse through the O2 table) — the O3Street channel no
+        // longer rejects, and the O3 seam classification is exercised
+        // end-to-end by the differ_gate corpus lane (self-cross PASS
+        // 0 findings; a seeded seam row reports o3-seam).
         let dump = dump::decode_dump(&st.bytes).unwrap();
-        assert!(matches!(
-            crate::differ::normalize_dump(&dump, &r),
-            Err(crate::differ::NormalizeError::UnsupportedChannel(
-                Channel::O3Street
-            ))
-        ));
+        let norm = crate::differ::normalize_dump(&dump, &r).unwrap();
+        assert_eq!(norm.len(), dump.frames.len());
+        assert!(norm[0].row("frame-counter").is_some());
+        assert!(norm[0].row("static-map-wh").is_some());
     }
 
     #[test]

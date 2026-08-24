@@ -974,7 +974,7 @@ pub fn normalize_frame(
                 rows.push(normalize_engine_row(&w.id, no, &w.bytes)?);
             }
         }
-        Channel::O1ExdDosboxX | Channel::O2ExwWine => {
+        Channel::O1ExdDosboxX | Channel::O2ExwWine | Channel::O3Street => {
             // Cross-row splice (D90): the raw move-target span is
             // indexed by ABSOLUTE robot id and bounded by the SAME
             // frame's robot-bank count (RE-EXD-MAP §5) — parse it
@@ -991,10 +991,21 @@ pub fn normalize_frame(
                 if w.id == "move-target-words" {
                     continue; // consumed by the splice below
                 }
-                let mut row = if channel == Channel::O1ExdDosboxX {
-                    normalize_o1_row(&w.id, no, &w.bytes)?
-                } else {
-                    normalize_o2_row(&w.id, no, &w.bytes)?
+                let mut row = match channel {
+                    Channel::O1ExdDosboxX => normalize_o1_row(&w.id, no, &w.bytes)?,
+                    Channel::O2ExwWine => normalize_o2_row(&w.id, no, &w.bytes)?,
+                    // The O3 field map (D142 §5, W10-impl-b): the
+                    // reconstruction rebuilds EXW state — same cells,
+                    // same layouts — so the O3 raw rows are O2-form
+                    // and normalize through the O2 table verbatim.
+                    // The §6 seam set is a COMPARE-time classification
+                    // (Class::O3Seam), never a normalization
+                    // difference: seam rows normalize identically so a
+                    // clean capture still compares clean.
+                    Channel::O3Street => normalize_o3_row(&w.id, no, &w.bytes)?,
+                    // normalize_frame never runs for the Engine
+                    // channel's rows through this arm.
+                    Channel::Engine => unreachable!("guest-channel arm"),
                 };
                 if w.id == "robot-bank" {
                     saw_robot_bank = true;
@@ -1014,9 +1025,6 @@ pub fn normalize_frame(
                     want: "the robot-bank row in the same frame (the span's robot bound)".into(),
                 });
             }
-        }
-        Channel::O3Street => {
-            return Err(NormalizeError::UnsupportedChannel(channel));
         }
     }
     Ok(rows)
@@ -1631,6 +1639,17 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
     }
 }
 
+/// The O3 field map (D142 §5, W10-impl-b; spec O3-8STREET §5a): the
+/// 8street reconstruction rebuilds EXW state — same cells, same layouts
+/// — so the O3 raw rows are O2-form and normalize through the O2 table
+/// VERBATIM. The D142 §6 seam set is NOT a normalization difference
+/// (seam rows normalize identically so a clean capture compares clean);
+/// it is a compare-time classification — `o3_seam_reason` +
+/// `Class::O3Seam` in `run_diff`/`compare_field`.
+fn normalize_o3_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    normalize_o2_row(id, no, b)
+}
+
 // ---------------------------------------------------------------------
 // Comparison
 // ---------------------------------------------------------------------
@@ -1662,6 +1681,13 @@ pub enum Class {
     AcceptedT3,
     /// Report-only tolerant diff (T2 fields beyond the quantum).
     T2Reported,
+    /// O3 8street expected-divergence row (D142 §6, W10-impl-b): the
+    /// reconstruction feeds the cell from a DIFFERENT source than
+    /// EXW/EXD canon (OPTIONS.BDL vs the registry, always-on speech,
+    /// ...), so the row diverges BY CONSTRUCTION whenever an O3 side
+    /// participates. Report-only — never a channel finding, never
+    /// tiebreak evidence (an OPTIONS.BDL-fed vote is not canon).
+    O3Seam,
 }
 
 impl Class {
@@ -1674,6 +1700,7 @@ impl Class {
             Class::WatchArtifact => "watch-artifact",
             Class::AcceptedT3 => "accepted-T3",
             Class::T2Reported => "T2-reported",
+            Class::O3Seam => "o3-seam",
         }
     }
 }
@@ -1686,6 +1713,98 @@ impl Class {
             Class::Structural | Class::EngineBug | Class::WatchArtifact
         )
     }
+}
+
+// ---------------------------------------------------------------------
+// The O3 seam ledger (D142 §6, W10-impl-b — spec: O3-8STREET §5a)
+// ---------------------------------------------------------------------
+
+/// The O3 seam ledger, row-id matcher: live registry rows whose 8street
+/// cell is fed from a different source than EXW/EXD canon. They diverge
+/// BY CONSTRUCTION on O3 and classify `o3-seam` (report-only), never as
+/// channel findings.
+const O3_SEAM_ROWS: &[(&str, &str)] = &[(
+    "sfx-master-gate",
+    "8street feeds sound_enable from SAVES/OPTIONS.BDL (options.cpp:125-246) \
+     where EXW reads the HKCU registry (D128) and EXD parses CONFIG.BDL \
+     (D134); E dumps constant 1 (D136)",
+)];
+
+/// The O3 seam ledger, EXW base-cell matcher: the whole registry-config
+/// family (cells pinned by RE-EXW-TITLEMENU §7j.56/D128) — 8street reads
+/// SAVES/OPTIONS.BDL + auto-detects language/misc from file existence
+/// where EXW reads HKCU\Software\Mirage\Bedlam\1.00. Matching a row's
+/// `exw_addr` BASE CELL catches rows added later, before any dedicated
+/// id joins O3_SEAM_ROWS. Deliberately ABSENT (O3-8STREET §5a): the
+/// volume cell 0x4ddb2c (a trigger — scancode — deviation, not a feed
+/// deviation: arrow-key drift on a live O3 capture is a genuine
+/// finding, never a seam) and CDDA (behavior, no canon watch cell).
+const O3_SEAM_CELLS: &[(&str, &str)] = &[
+    (
+        "0x4ede58",
+        "SOUND gate cell: OPTIONS.BDL `sound` field vs the registry SOUND \
+         value (the sfx-master-gate row's cell)",
+    ),
+    (
+        "0x4ede5c",
+        "SOUND sister gate cell: one OPTIONS.BDL `sound` value feeds both \
+         cells where EXW loads the registry value (D134)",
+    ),
+    (
+        "0x4eb93c",
+        "SPEECH cell: forced ALWAYS-ON on 8street (options.cpp:211-215, \
+         RESEARCH-8STREET §5) vs the registry/CONFIG.BDL value",
+    ),
+    (
+        "0x4edbd8",
+        "ACTIONPAN cell: OPTIONS.BDL `actionpan` field (auto-created \
+         default file) vs the registry value (D128)",
+    ),
+    (
+        "0x46cca4",
+        "CINEMATICS cell: OPTIONS.BDL-derived / file-existence \
+         auto-detect vs the registry value (D128)",
+    ),
+    (
+        "0x4eba1c",
+        "LANGUAGE cell: SDL-locale auto-detect (options.cpp:125-202) vs \
+         the registry value (D128)",
+    ),
+    (
+        "0x4e444c",
+        "DEFAULTNAME cell: OPTIONS.BDL playername[8] in SAVES/ vs the \
+         registry name (D128)",
+    ),
+];
+
+/// Does `exw_addr` anchor a row on the seam cell `cell`? The registry
+/// expressions are `"<base> + ..."`, `"<base>"`, or `"<a> / <b>"` (two
+/// cells) — match the BASE form: the expression's first cell, exactly.
+fn exw_addr_on_cell(exw_addr: &str, cell: &str) -> bool {
+    let first = exw_addr
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .split('+')
+        .next()
+        .unwrap_or("")
+        .trim();
+    first.eq_ignore_ascii_case(cell)
+}
+
+/// The O3 seam lookup (D142 §6): `Some(reason)` = the row is
+/// never-comparable on O3 (classify `o3-seam`, exclude from tiebreak
+/// arbitration). Matched by row id first, then the registry row's EXW
+/// base cell.
+pub fn o3_seam_reason(id: &str, exw_addr: &str) -> Option<&'static str> {
+    if let Some((_, reason)) = O3_SEAM_ROWS.iter().find(|(rid, _)| *rid == id) {
+        return Some(reason);
+    }
+    O3_SEAM_CELLS
+        .iter()
+        .find(|(cell, _)| exw_addr_on_cell(exw_addr, cell))
+        .map(|(_, reason)| *reason)
 }
 
 /// The per-field comparison class for a (row, field) pair.
@@ -1924,6 +2043,28 @@ pub fn run_diff(
 
     let mut coverage_rows: BTreeMap<String, (u64, u64, String)> = BTreeMap::new(); // row -> (frames a-only, frames b-only, note)
 
+    // The O3 seam classification (D142 §6, W10-impl-b): when ANY side
+    // of the compare is the 8street channel, ledger rows (fed from
+    // different sources than EXW/EXD canon) diverge BY CONSTRUCTION —
+    // they report `o3-seam` (notes, never channel findings) and are
+    // excluded from tiebreak arbitration (an OPTIONS.BDL-fed vote is
+    // not canon evidence).
+    let o3_involved = matches!(a.header.channel, Channel::O3Street)
+        || matches!(b.header.channel, Channel::O3Street)
+        || t.as_ref()
+            .is_some_and(|t| matches!(t.header.channel, Channel::O3Street));
+    let seam_of = |id: &str| -> Option<&'static str> {
+        if !o3_involved {
+            return None;
+        }
+        let exw = reg
+            .iter()
+            .find(|r| r.id == id)
+            .map(|r| r.exw_addr.as_str())
+            .unwrap_or("");
+        o3_seam_reason(id, exw)
+    };
+
     for (fa, fb) in &pairs {
         // Injection flags must match (same schedule).
         if fa.injection_applied != fb.injection_applied {
@@ -1968,6 +2109,7 @@ pub fn run_diff(
                     // rows carry ~170k fields per frame and a linear
                     // union scan + per-name lookup is quadratic.
                     let tier = tier_of(id);
+                    let seam = seam_of(id);
                     let mut b_first: std::collections::HashMap<&str, &FieldVal> =
                         std::collections::HashMap::with_capacity(rb.fields.len());
                     for (n, v) in &rb.fields {
@@ -2003,6 +2145,7 @@ pub fn run_diff(
                                     id,
                                     name,
                                     &tier,
+                                    seam,
                                     fa.frame_no,
                                     va,
                                     vb,
@@ -2033,13 +2176,24 @@ pub fn run_diff(
     }
 
     // Coverage findings (deduped per row/field, with frame counts).
+    // Seam rows (D142 §6) classify `o3-seam` instead of `coverage`
+    // when an O3 side participates: a registry-config row carried by
+    // one side only is the expected registry-vs-OPTIONS.BDL seam, not
+    // coverage noise.
     for (key, (a_only, b_only, _)) in &coverage_rows {
         let (row, field) = match key.split_once('.') {
             Some((r, f)) => (r.to_string(), f.to_string()),
             None => (key.clone(), "(row)".to_string()),
         };
+        let (class, detail) = match seam_of(&row) {
+            Some(reason) => (Class::O3Seam, format!("o3-seam (D142 sec 6): {reason}")),
+            None => (
+                Class::Coverage,
+                "coverage: frames carried by one side only".into(),
+            ),
+        };
         findings.push(Finding {
-            class: Class::Coverage,
+            class,
             row,
             field,
             first_frame: 0,
@@ -2054,7 +2208,7 @@ pub fn run_diff(
             } else {
                 None
             },
-            detail: "coverage: frames carried by one side only".into(),
+            detail,
         });
     }
     findings.extend(agg.into_values());
@@ -2178,11 +2332,17 @@ pub fn normalize_dump(dump: &Dump, reg: &[Watch]) -> Result<Vec<NormFrame>, Norm
 }
 
 /// Field comparison + O2 arbitration for one (frame, row, field).
+/// `seam` = the D142 §6 O3 seam reason when an O3 side participates
+/// AND the row is on the ledger: the row never compares as a channel
+/// finding (equality stays silent; divergence is the by-construction
+/// OPTIONS.BDL/registry/always-on difference, reported `o3-seam`) and
+/// never arbitrates (the seam vote is not canon evidence).
 #[allow(clippy::too_many_arguments)]
 fn compare_field(
     id: &str,
     name: &str,
     tier: &str,
+    seam: Option<&'static str>,
     frame_no: u64,
     va: &FieldVal,
     vb: &FieldVal,
@@ -2193,6 +2353,25 @@ fn compare_field(
 ) {
     let class = field_class(id, name, tier);
     let equal = va == vb;
+    if let Some(reason) = seam {
+        // The O3 seam (D142 §6, W10-impl-b): report-only. This branch
+        // precedes every ordinary class — a seam row can never yield
+        // Structural/EngineBug/T2 notes while O3 participates, and the
+        // tiebreak value is deliberately never consulted.
+        if !equal {
+            push(Finding {
+                class: Class::O3Seam,
+                row: id.into(),
+                field: name.into(),
+                first_frame: frame_no,
+                frames: 1,
+                a: Some(va.clone()),
+                b: Some(vb.clone()),
+                detail: format!("o3-seam (D142 sec 6): {reason}"),
+            });
+        }
+        return;
+    }
     match class {
         Class::AcceptedT3 => {
             // Never bit-compared. Presence asymmetry is coverage;
@@ -2272,10 +2451,11 @@ fn compare_field(
                 detail: detail.into(),
             });
         }
-        Class::OriginalDivergence | Class::WatchArtifact | Class::Coverage => {
+        Class::OriginalDivergence | Class::WatchArtifact | Class::Coverage | Class::O3Seam => {
             // Never assigned by field comparison (coverage asymmetry
             // never reaches a value compare; the other two are
-            // caller-triage labels).
+            // caller-triage labels; O3Seam is assigned only by the
+            // seam branch above).
         }
     }
 }

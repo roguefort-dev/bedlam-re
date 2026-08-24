@@ -800,16 +800,26 @@ differ come before any new scenario depth.
     intake gaps (dbx-stitch --channel o3 + the O3 anti-ghost rule LANDED
     2026-08-24 as W10-impl-a, commit f584eab/D143 — the O3 rule is the
     O2 mirror: ids validate against `exw_addr`, the EXD-only row rejects
-    loud; the O3 field map + o3-seam classification remain the ONE
-    in-repo bounded unit), the never-comparable
+    loud; the O3 field map + o3-seam classification LANDED 2026-08-24
+    as W10-impl-b/D144), the never-comparable
     o3-seam classes (config/registry-writer rows, volume-key scancode
     swap, OPTIONS.BDL-backed cells), and the artifact/hygiene split
     (fork outside the repo; outputs runtime-only; O3 runs against a
     STAGED corpus copy — the reconstruction writes SAVES/+BEDLAM.LOG).
     VERDICT: feasible; the rebuild is operator-gated and parked until a
-    three-way tiebreak is actually wanted; the in-repo diffharness
-    units may land any time (the stitch unit HAS; the differ field map
-    is the remaining one).
+    three-way tiebreak is actually wanted.
+    **THE DIFFER O3 FIELD MAP LANDED 2026-08-24 (W10-impl-b, D144; spec
+    commit 7d28bc2):** `normalize_o3_row` = the O2 map verbatim + the
+    O3-8STREET §5a seam ledger (row-id + exw_addr-cell matchers over
+    the D128 registry-config family cells) classifying `Class::O3Seam`
+    — report-only, excluded from tiebreak arbitration, binding the O3
+    channel only. Gates: the real-S0 fabricated O3 self-cross PASS 0
+    findings; a seeded seam row → exactly one o3-seam finding; the
+    same seed on `money` still FAILs EngineBug (selectivity, never a
+    blanket suppressor); a synthetic ACTIONPAN row proves the cell
+    matcher end-to-end; the O2-headers control proves the class never
+    fires without an O3 side. W10 IN-REPO WORK IS COMPLETE — only the
+    operator-gated rebuild + live captures remain.
 11. **W11 — Wine/EXW spot-check channel (O2).** Host ptrace driver:
     frame-tail breakpoint at the EXW site + process_vm_readv bulk reads of
     the same registry rows; used to arbitrate every `original-divergence`

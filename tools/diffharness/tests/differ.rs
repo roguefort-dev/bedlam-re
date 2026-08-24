@@ -1059,3 +1059,59 @@ fn t2_projectile_row_maps_the_seven_fields_plus_tail() {
     assert_eq!(rows_e[0].field("p[3].tail_ctr"), Some(&FieldVal::Int(3)));
     assert_eq!(rows_e[0].field("p[3].tail_cdn"), Some(&FieldVal::Int(12)));
 }
+
+#[test]
+fn o3_field_map_and_seam_ledger() {
+    // W10-impl-b (D144, D142 §5/§6): the O3 field map = the O2 map
+    // verbatim, and the seam ledger's two matchers (row id + the
+    // registry row's exw_addr base cell, the D128 §7j.56 config
+    // family). Fast crate-level pins; the end-to-end gates (self-cross
+    // PASS 0 findings, seeded seam row, O2-headers control) live in
+    // bedlam-game's differ_gate corpus lane.
+    let r = reg();
+
+    // The field map: an O3 frame normalizes to the SAME rows as the
+    // identical O2 frame (channel-marked only).
+    let mk = |ch: Channel| {
+        let mut f = FrameRecord::new(7, true);
+        f.push_watch("frame-counter", 42u32.to_le_bytes().to_vec());
+        f.push_watch("static-map-wh", {
+            let mut b = vec![0u8; 8];
+            b[0..4].copy_from_slice(&0x19u32.to_le_bytes());
+            b[4..8].copy_from_slice(&0x4bu32.to_le_bytes());
+            b
+        });
+        f.push_watch("sfx-master-gate", 1u32.to_le_bytes().to_vec());
+        normalize_frame(&f, ch, &r).unwrap()
+    };
+    assert_eq!(mk(Channel::O3Street), mk(Channel::O2ExwWine));
+
+    // The row-id matcher: the live ledger row.
+    assert!(diffharness::differ::o3_seam_reason("sfx-master-gate", "0x4ede58").is_some());
+    // Non-rows stay non-seam.
+    assert!(diffharness::differ::o3_seam_reason("money", "0x46ae70").is_none());
+    assert!(diffharness::differ::o3_seam_reason("robot-bank", "0x4c69e4 + i*0xA8").is_none());
+
+    // The cell matcher: every D128 config-family cell, in every
+    // registry expression form (bare, base+extent, "a / b" pairs).
+    for cell in [
+        "0x4ede58", "0x4ede5c", "0x4eb93c", "0x4edbd8", "0x46cca4", "0x4eba1c", "0x4e444c",
+    ] {
+        assert!(
+            diffharness::differ::o3_seam_reason("any-future-id", cell).is_some(),
+            "cell {cell} seam-matches"
+        );
+        assert!(
+            diffharness::differ::o3_seam_reason("any-future-id", &format!("{cell} + 4")).is_some(),
+            "base+extent form of {cell} seam-matches"
+        );
+    }
+    assert!(diffharness::differ::o3_seam_reason("any-future-id", "0x4edbd8 / 0x4edbd8").is_some());
+    // The deliberate omissions (O3-8STREET §5a): the volume cell and a
+    // near-miss address are NOT seams.
+    assert!(diffharness::differ::o3_seam_reason("volume", "0x4ddb2c").is_none());
+    assert!(diffharness::differ::o3_seam_reason("x", "0x4edbd9").is_none());
+    // Case-insensitive hex, no partial match.
+    assert!(diffharness::differ::o3_seam_reason("x", "0x4EDBD8").is_some());
+    assert!(diffharness::differ::o3_seam_reason("x", "").is_none());
+}

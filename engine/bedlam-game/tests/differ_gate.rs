@@ -974,21 +974,159 @@ fn s0_o3_transcript_stitch_channel_rule() {
     // never carry it, and never silently (the D139 pattern).
     let scen = Scenario::parse(&src).unwrap();
     let header = DumpHeader::new(Channel::O3Street, sha256(b"o3-test"), scen.id.clone());
-    let mut bad = fab_o3;
+    let mut bad = fab_o3.clone();
     bad[0].push_watch("static-cursor-clamp", vec![0xf0u8, 0, 0, 0, 0x40, 1, 0, 0]);
     match stitch(&scen, &Transcript { frames: bad }, &header, &reg) {
         Err(StitchError::NoExwAddress { id, .. }) => assert_eq!(id, "static-cursor-clamp"),
         other => panic!("expected NoExwAddress, got {other:?}"),
     }
 
-    // The documented D142 §5 gap, asserted as the current state: the
-    // differ still refuses the O3 dump (no normalization table — the
-    // W10-impl-b field map lands it). Loud rejection, never a silent
-    // channel finding.
-    assert!(matches!(
-        diffharness::differ::normalize_dump(&o3_dump, &reg),
-        Err(diffharness::differ::NormalizeError::UnsupportedChannel(
-            Channel::O3Street
-        ))
-    ));
+    // ---- W10-impl-b (D144): the O3 field map + the seam ledger ----
+
+    // The differ no longer rejects the O3 channel: the field map is
+    // the O2 map verbatim (same EXW cells, same layouts).
+    let norm = diffharness::differ::normalize_dump(&o3_dump, &reg).unwrap();
+    assert_eq!(norm.len(), o3_dump.frames.len());
+
+    // 1. SELF-CROSS: the fabricated O3 transcript against itself —
+    //    PASS with ZERO findings (every row equal, including the seam
+    //    row sfx-master-gate: equality is silence).
+    let cfg = DiffConfig::new(Mode::CrossChannel);
+    let res = run_diff(&o3_bytes, &o3_bytes, None, &cfg, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::Pass);
+    assert!(
+        res.findings.is_empty(),
+        "self-cross findings: {:?}",
+        res.findings
+    );
+
+    // 2. SEEDED SEAM ROW: perturb sfx-master-gate (the live ledger
+    //    row — E dumps constant 1; a real O3 run dumps the
+    //    OPTIONS.BDL value) on ONE side only. The divergence reports
+    //    `o3-seam` — report-only, never a channel finding — and the
+    //    verdict stays PASS-WITH-NOTES, not FAIL.
+    let seeded = {
+        let mut f = fab_o3.clone();
+        for fr in f.iter_mut() {
+            if let Some(w) = fr.watches.iter_mut().find(|w| w.id == "sfx-master-gate") {
+                w.bytes = 0u32.to_le_bytes().to_vec();
+            }
+        }
+        f
+    };
+    let seeded_bytes = stitch_chan(Channel::O3Street, &src, seeded.clone());
+    let res = run_diff(&o3_bytes, &seeded_bytes, None, &cfg, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::PassWithNotes);
+    let seam_findings: Vec<&Finding> = res
+        .findings
+        .iter()
+        .filter(|f| f.class == Class::O3Seam)
+        .collect();
+    assert_eq!(
+        seam_findings.len(),
+        1,
+        "exactly one seam finding: {:?}",
+        res.findings
+    );
+    assert_eq!(seam_findings[0].row, "sfx-master-gate");
+    assert_eq!(seam_findings[0].field, "value");
+    assert!(
+        seam_findings[0].detail.contains("OPTIONS.BDL"),
+        "the ledger reason rides verbatim: {}",
+        seam_findings[0].detail
+    );
+    assert_eq!(
+        res.count(Class::EngineBug),
+        0,
+        "a seam row is never a channel finding"
+    );
+    assert_eq!(res.count(Class::Structural), 0);
+
+    // 3. NON-SEAM CONTROL: the SAME perturbation on `money` (not on
+    //    the ledger) still classifies EngineBug and FAILS — the seam
+    //    classifier is selective, never a blanket suppressor.
+    let money_seeded = perturb_money(fab_o3.clone(), 7);
+    let money_bytes = stitch_chan(Channel::O3Street, &src, money_seeded);
+    let res = run_diff(&o3_bytes, &money_bytes, None, &cfg, &reg).unwrap();
+    assert_eq!(res.verdict, Verdict::Fail);
+    assert_eq!(res.count(Class::EngineBug), 1);
+    assert_eq!(res.count(Class::O3Seam), 0);
+
+    // 4. THE CELL MATCHER end-to-end: a synthetic registry row on the
+    //    ACTIONPAN cell 0x4edbd8 (the D128 config family — no live row
+    //    today) seam-classifies through the exw_addr matcher, proving
+    //    future config rows are caught automatically. The synthetic
+    //    row rides the TS tier (S0's tier set) and a live exw_addr, so
+    //    the stitch's O3 address rule passes it.
+    let actionpan_row = diffharness::Watch {
+        id: "static-actionpan-config".into(),
+        tier: "TS".into(),
+        exw_addr: "0x4edbd8".into(),
+        exd_addr: String::new(),
+        indirect: false,
+        extent: "4".into(),
+        layout: "u32 config flag (synthetic — the D144 cell-matcher gate)".into(),
+        exd_status: "unmapped".into(),
+        anchor_doc: "O3-8STREET-COMPARATOR".into(),
+        anchor: "The differ O3 seam ledger".into(),
+        note: "synthetic W10-impl-b gate row (D144)".into(),
+    };
+    let mut reg_x = registry();
+    reg_x.push(actionpan_row);
+    let mut ap_frames = fab_o3.clone();
+    for (i, fr) in ap_frames.iter_mut().enumerate() {
+        fr.push_watch("static-actionpan-config", (i as u32).to_le_bytes().to_vec());
+    }
+    let mut ap_seeded = ap_frames.clone();
+    for fr in ap_seeded.iter_mut() {
+        if let Some(w) = fr
+            .watches
+            .iter_mut()
+            .find(|w| w.id == "static-actionpan-config")
+        {
+            w.bytes = 0x1234u32.to_le_bytes().to_vec();
+        }
+    }
+    let ap_a = stitch(&scen, &Transcript { frames: ap_frames }, &header, &reg_x).unwrap();
+    let ap_b = stitch(&scen, &Transcript { frames: ap_seeded }, &header, &reg_x).unwrap();
+    let res = run_diff(&ap_a.bytes, &ap_b.bytes, None, &cfg, &reg_x).unwrap();
+    assert_eq!(res.verdict, Verdict::PassWithNotes);
+    let seam: Vec<&Finding> = res
+        .findings
+        .iter()
+        .filter(|f| f.class == Class::O3Seam)
+        .collect();
+    assert_eq!(
+        seam.len(),
+        1,
+        "the synthetic ACTIONPAN row seam-classifies: {:?}",
+        res.findings
+    );
+    assert_eq!(seam[0].row, "static-actionpan-config");
+
+    // 5. NO-O3 CONTROL: the SAME seeded seam transcript pair compared
+    //    as O2-vs-O2 (no O3 side) is a plain EngineBug FAIL — the
+    //    seam classification binds the O3 channel only, exactly like
+    //    the per-channel stitch address rules. (The fabricated rows
+    //    are O2-form by construction — D142 §5 — so the same frames
+    //    stitch under an O2 header unchanged.)
+    let o2_hdr = DumpHeader::new(Channel::O2ExwWine, sha256(b"o3-test"), scen.id.clone());
+    let o2_a = stitch(
+        &scen,
+        &Transcript {
+            frames: fab_o3.clone(),
+        },
+        &o2_hdr,
+        &reg,
+    )
+    .unwrap();
+    let o2_b = stitch(&scen, &Transcript { frames: seeded }, &o2_hdr, &reg).unwrap();
+    let res = run_diff(&o2_a.bytes, &o2_b.bytes, None, &cfg, &reg).unwrap();
+    assert_eq!(res.count(Class::O3Seam), 0, "no O3 side, no seam class");
+    assert_eq!(
+        res.count(Class::EngineBug),
+        1,
+        "on O2 the divergence is an ordinary T0 finding"
+    );
+    assert_eq!(res.verdict, Verdict::Fail);
 }
