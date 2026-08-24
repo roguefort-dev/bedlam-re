@@ -224,9 +224,25 @@ if [ "$ncl" -ge "$cur_conc" ]; then
 fi
 
 # free queue item numbers = Now-section entries not claimed
+maybe_idle_notify() {
+  # Operator UX (2026-08-24): the loop drained its queue at 03:03 and
+  # stood down silently for 3h - nobody told the operator the next
+  # step is theirs. Edge-triggered ONCE per idle episode; cleared at
+  # the next spawn. Production-only (hermetic runs set
+  # SYSTEMD_RUN_OVERRIDE).
+  [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ] || return 0
+  [ -f "$STATE/idle-notified" ] && return 0
+  : > "$STATE/idle-notified"
+  echo "$(date -Is) idle: no spawnable work remains - OPERATOR ATTENTION REQUIRED (see .state/NEXT.md head and docs/RUNTIME.md)" >> "$STATE/nudge.log"
+  if [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
+    "$NOTIFY_SEND" -u critical "bedlam-re loop idle" "No unattended work remains - the queue is waiting on the operator. See .state/NEXT.md item 1 and docs/RUNTIME.md (S0 live session checklist)." 2>/dev/null || true
+  fi
+}
+
 free_items=$("$SCRIPT_DIR/nudge-free-items.py" "$STATE/NEXT.md" "$CLAIMS")
 if [ -z "$free_items" ]; then
   echo "$(date -Is) no unattended Now items are available - standing down" >> "$STATE/nudge.log"
+  maybe_idle_notify
   exit 0
 fi
 
@@ -251,6 +267,7 @@ if [ -z "$chosen" ]; then
     echo "$(date -Is) all free items are cooling down after failures - standing down" >> "$STATE/nudge.log"
   else
     echo "$(date -Is) no unattended Now items are available - standing down" >> "$STATE/nudge.log"
+  maybe_idle_notify
   fi
   exit 0
 fi
@@ -269,6 +286,7 @@ done
 date +%s > "$STATE/last-spawn-ts"
 echo "reserved $(date -Is)" > "$CLAIMS/$item-$slotid.claim"
 echo "$(date -Is) spawning agent for queue item $item as unit $unit_name ($((ncl+1))/$cur_conc slots)" >> "$STATE/nudge.log"
+rm -f "$STATE/idle-notified"
 
 # Worker owns the API call and reports its exact per-run result back to the
 # adaptive controller under the same flock. The explicit unit name makes the
