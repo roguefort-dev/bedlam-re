@@ -9,18 +9,22 @@
 //! Usage:
 //! ```text
 //! dbx-stitch <scenario.scen> <capture.dbxcap> --build <binary> [--out-dir DIR]
-//!            [--pin k=v ...] [--build-sha256 <64hex>] [--channel o1|o2]
+//!            [--pin k=v ...] [--build-sha256 <64hex>] [--channel o1|o2|o3]
 //! ```
 //! Outputs (under `--out-dir`, default: alongside the transcript):
 //! `<scenario>.bdld` (the dump; asset-derived, runtime/-only per D77)
 //! and `<scenario>.manifest.json` (the committed fingerprint form).
 //! The manifest is also printed to stdout.
 //!
-//! Channels (D139): `o1` (default) = an EXD/DOSBox-X capture — every
-//! transcript id validates against the registry `exd_addr` rule;
-//! `o2` = an EXW/Wine spot-check capture (W11) — ids validate against
-//! `exw_addr` instead (the EXD-only rows reject loud), and the build
-//! identity should be the watched EXW binary.
+//! Channels (D139; O3 by D142): `o1` (default) = an EXD/DOSBox-X
+//! capture — every transcript id validates against the registry
+//! `exd_addr` rule; `o2` = an EXW/Wine spot-check capture (W11) — ids
+//! validate against `exw_addr` instead (the EXD-only rows reject
+//! loud), and the build identity should be the watched EXW binary;
+//! `o3` = an instrumented 8street capture (W10) — ids validate
+//! against `exw_addr` TOO (the O2 mirror: the reconstruction rebuilds
+//! EXW state, so rows with no EXW canon cell reject loud there as
+//! well), and the build identity is the 8street build.
 
 use diffharness::dump::{Channel, DumpHeader};
 use diffharness::hash::{hex_lower, sha256};
@@ -38,7 +42,7 @@ fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let scen_path = match args.next() {
         Some(p) => PathBuf::from(p),
-        None => return die("usage: dbx-stitch <scenario.scen> <capture.dbxcap> --build <binary> [--out-dir DIR] [--pin k=v] [--build-sha256 <hex>] [--channel o1|o2]"),
+        None => return die("usage: dbx-stitch <scenario.scen> <capture.dbxcap> --build <binary> [--out-dir DIR] [--pin k=v] [--build-sha256 <hex>] [--channel o1|o2|o3]"),
     };
     let cap_path = match args.next() {
         Some(p) => PathBuf::from(p),
@@ -70,8 +74,11 @@ fn main() -> ExitCode {
             "--channel" => match args.next().as_deref() {
                 Some("o1") => channel = Channel::O1ExdDosboxX,
                 Some("o2") => channel = Channel::O2ExwWine,
-                Some(other) => return die(&format!("--channel expects o1 or o2, got {other:?}")),
-                None => return die("--channel expects o1 or o2"),
+                Some("o3") => channel = Channel::O3Street,
+                Some(other) => {
+                    return die(&format!("--channel expects o1, o2 or o3, got {other:?}"))
+                }
+                None => return die("--channel expects o1, o2 or o3"),
             },
             other => return die(&format!("unknown argument {other:?}")),
         }

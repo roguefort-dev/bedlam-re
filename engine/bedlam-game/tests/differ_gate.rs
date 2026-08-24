@@ -326,8 +326,11 @@ fn inv_frame(
                     }
                     // O2 (D137/§7j.60, corrected by D138): the EXW
                     // 8-byte span — ADJACENT cells with w LOW
-                    // (0x4eddec) / h HIGH (0x4eddf0, 4 apart).
-                    Channel::O2ExwWine => {
+                    // (0x4eddec) / h HIGH (0x4eddf0, 4 apart). O3
+                    // (D142) takes the SAME form: the 8street
+                    // reconstruction rebuilds EXW state — same cells,
+                    // same layouts — so its raw rows are O2-form.
+                    Channel::O2ExwWine | Channel::O3Street => {
                         let mut span = vec![0u8; 8];
                         span[0x00..0x04].copy_from_slice(&wv.to_le_bytes());
                         span[0x04..0x08].copy_from_slice(&hv.to_le_bytes());
@@ -335,7 +338,7 @@ fn inv_frame(
                     }
                     // inv_frame fabricates GUEST channels only; the
                     // Engine re-stitch passes the real E frames.
-                    Channel::Engine | Channel::O3Street => {
+                    Channel::Engine => {
                         unreachable!("inv_frame fabricates guest channels only")
                     }
                 }
@@ -355,11 +358,23 @@ fn stitch_o1(scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
 }
 
 /// Stitch fabricated frames into dump bytes for ANY channel (the
-/// address rules are per-channel, D139: O1 binds `exd_addr`, O2 binds
-/// `exw_addr` — every row the S1-class fabrications carry has both, so
-/// both guest channels enforce + pass; Engine carries no address rule,
-/// which the perturbed-E re-stitch lane needs).
+/// address rules are per-channel, D139/D142: O1 binds `exd_addr`, O2
+/// and O3 bind `exw_addr` — every row the S1-class fabrications
+/// carries has both, so all guest channels enforce + pass; Engine
+/// carries no address rule, which the perturbed-E re-stitch lane
+/// needs).
 fn stitch_chan(channel: Channel, scen_src: &str, frames: Vec<FrameRecord>) -> Vec<u8> {
+    stitch_full(channel, scen_src, frames).bytes
+}
+
+/// Stitch fabricated frames and return the FULL result (bytes +
+/// manifest) — the manifest-carrying lanes (channel name, chain
+/// digest determinism) need it.
+fn stitch_full(
+    channel: Channel,
+    scen_src: &str,
+    frames: Vec<FrameRecord>,
+) -> diffharness::runner::Stitched {
     let scen = diffharness::runner::Scenario::parse(scen_src).unwrap();
     let header = DumpHeader::new(channel, sha256(b"exd-test"), scen.id.clone());
     stitch(
@@ -369,7 +384,6 @@ fn stitch_chan(channel: Channel, scen_src: &str, frames: Vec<FrameRecord>) -> Ve
         &registry(),
     )
     .expect("fabricated transcript stitches")
-    .bytes
 }
 
 /// Perturb the `money` watch by `delta` in every frame that carries it
@@ -888,4 +902,93 @@ fn s0_o2_transcript_stitch_channel_rule() {
         stitch(&scen, &Transcript { frames: o1_frames }, &o1_header, &reg).is_ok(),
         "static-cursor-clamp carries an EXD cell — its O1 dump is legal"
     );
+}
+
+#[test]
+fn s0_o3_transcript_stitch_channel_rule() {
+    // D142 (W10-impl-a): the stitch side of the O3 channel — the
+    // address rule is the O2 MIRROR (bind `exw_addr`): the 8street
+    // reconstruction rebuilds EXW state, so the fabricated O3 rows are
+    // O2-form (static-map-wh = the EXW 8-byte ADJACENT span) and every
+    // row must hold a live EXW canon cell. The differ O3 rejection is
+    // the documented D142 §5 gap until W10-impl-b lands the O3 field
+    // map — asserted here as the current state, never papered over.
+    if !corpus_present() {
+        eprintln!("skip: game-data corpus absent (CI)");
+        return;
+    }
+    let root = root();
+    let reg = registry();
+
+    // The real S0 run (T0+TS): light, content-pinned.
+    let src = fs::read_to_string(scen_path("S0")).unwrap();
+    let e_run = run_canonical(&src, &root).unwrap();
+    assert_eq!(
+        e_run.manifest.chain_digest, "dac1cfd17bc7ede3",
+        "the pinned E content (S0)"
+    );
+    let e_dump = decode_dump(&e_run.bytes).unwrap();
+
+    // Fabricate the O3 transcript (inv_frame O3 form = the O2 form:
+    // same EXW cells, same layouts) and stitch it under the O3 header
+    // — through the enforced exw_addr rule.
+    let mut map_wh: Option<(u32, u32)> = None;
+    let mut fab_o3: Vec<FrameRecord> = Vec::new();
+    for ef in &e_dump.frames {
+        if let Some(b) = ef.watch("static-map-wh") {
+            map_wh = Some((
+                u32::from_le_bytes(b[..4].try_into().unwrap()),
+                u32::from_le_bytes(b[4..8].try_into().unwrap()),
+            ));
+        }
+        fab_o3.push(inv_frame(ef, map_wh, 2000, 0, Channel::O3Street));
+    }
+    let o3_bytes = stitch_chan(Channel::O3Street, &src, fab_o3.clone());
+    let o3_dump = decode_dump(&o3_bytes).unwrap();
+    assert_eq!(o3_dump.header.channel, Channel::O3Street);
+    assert_eq!(o3_dump.header.channel.code(), 3);
+    // The EXW-form static-map-wh rode through untouched (w@+0x00 /
+    // h@+0x04, 8 bytes — the layout the reconstruction's cells form).
+    let smw = o3_dump.frames[0]
+        .watch("static-map-wh")
+        .expect("the anchor-frame TS row");
+    assert_eq!(smw.len(), 8);
+    assert_eq!(
+        u32::from_le_bytes(smw[..4].try_into().unwrap()),
+        map_wh.expect("S0 anchors the statics").0
+    );
+
+    // Determinism: re-stitch the same fabricated frames -> identical
+    // bytes + chain (the dump digest is the committed fingerprint
+    // form a live O3 run will be pinned by).
+    let again = stitch_chan(Channel::O3Street, &src, fab_o3.clone());
+    assert_eq!(o3_bytes, again, "O3 re-stitch is byte-identical");
+    let m1 = stitch_full(Channel::O3Street, &src, fab_o3.clone()).manifest;
+    let m2 = stitch_full(Channel::O3Street, &src, fab_o3.clone()).manifest;
+    assert_eq!(m1.chain_digest, m2.chain_digest);
+    assert_eq!(m1.channel, "O3:8street");
+
+    // The LOUD rejection: the one live-registry EXD-only row
+    // (static-cursor-clamp, TS — empty exw_addr) appended to the
+    // anchor frame refuses the stitch. An O3 hook transcript must
+    // never carry it, and never silently (the D139 pattern).
+    let scen = Scenario::parse(&src).unwrap();
+    let header = DumpHeader::new(Channel::O3Street, sha256(b"o3-test"), scen.id.clone());
+    let mut bad = fab_o3;
+    bad[0].push_watch("static-cursor-clamp", vec![0xf0u8, 0, 0, 0, 0x40, 1, 0, 0]);
+    match stitch(&scen, &Transcript { frames: bad }, &header, &reg) {
+        Err(StitchError::NoExwAddress { id, .. }) => assert_eq!(id, "static-cursor-clamp"),
+        other => panic!("expected NoExwAddress, got {other:?}"),
+    }
+
+    // The documented D142 §5 gap, asserted as the current state: the
+    // differ still refuses the O3 dump (no normalization table — the
+    // W10-impl-b field map lands it). Loud rejection, never a silent
+    // channel finding.
+    assert!(matches!(
+        diffharness::differ::normalize_dump(&o3_dump, &reg),
+        Err(diffharness::differ::NormalizeError::UnsupportedChannel(
+            Channel::O3Street
+        ))
+    ));
 }

@@ -65,10 +65,13 @@
 //! non-empty — `exd_addr` for O1 (EXW-only rows never enter an EXD
 //! dump) and `exw_addr` for O2 (EXD-only rows — e.g. static-cursor-
 //! clamp — never enter an EXW dump; they reject LOUD, never silently;
-//! D139). The rules are per-channel mirrors, never global: a T3 row
-//! with no EXD alias but a live EXW cell dumps fine on O2 (the EXW
-//! cell IS the canon there). Engine and O3 dumps carry no address rule
-//! (E fabricates from engine state; O3 is W10).
+//! D139). O3 binds `exw_addr` TOO — the O2 mirror, because the
+//! 8street reconstruction rebuilds EXW state (D142: same EXW cells,
+//! same layouts; the EXD-only row rejects LOUD there as well). The
+//! rules are per-channel mirrors, never global: a T3 row with no EXD
+//! alias but a live EXW cell dumps fine on O2/O3 (the EXW cell IS the
+//! canon there). Engine dumps carry no address rule (E fabricates
+//! from engine state).
 
 use crate::dump::{self, Channel, DumpHeader, FrameRecord};
 use crate::hash::{hex_lower, sha256};
@@ -1007,9 +1010,10 @@ pub enum StitchError {
         id: String,
         status: String,
     },
-    /// O2 anti-ghost (D139): registry row has no EXW address (EXD-only
-    /// rows never enter an EXW/Wine dump; the `note` field carries the
-    /// registry's reason).
+    /// O2/O3 anti-ghost (D139; O3 = the O2 mirror, D142): registry row
+    /// has no EXW address (EXD-only rows never enter an EXW/Wine or
+    /// 8street dump — the reconstruction rebuilds EXW state; the
+    /// `note` field carries the registry's reason).
     NoExwAddress {
         id: String,
         note: String,
@@ -1042,8 +1046,8 @@ impl fmt::Display for StitchError {
             StitchError::NoExwAddress { id, note } => write!(
                 f,
                 "watch {id:?} has no EXW address (note {note:?}) — \
-                 EXD-only rows never enter an O2 dump (the EXW canon cell is \
-                 the registry's exw_addr)"
+                 EXD-only rows never enter an O2/O3 dump (the EXW canon \
+                 cell is the registry's exw_addr)"
             ),
             StitchError::FrameCountMismatch { expected, actual } => write!(
                 f,
@@ -1133,7 +1137,8 @@ pub fn stitch(
     header: &DumpHeader,
     reg: &[Watch],
 ) -> Result<Stitched, StitchError> {
-    // Per-id checks: registry membership, scenario tier, O1 address rule.
+    // Per-id checks: registry membership, scenario tier, the
+    // channel-threaded address rules (below).
     for frame in &transcript.frames {
         for w in &frame.watches {
             let row = reg
@@ -1147,21 +1152,27 @@ pub fn stitch(
                     scenario: scenario.id.clone(),
                 });
             }
-            // Channel-threaded anti-ghost rules (D139): each guest
-            // channel validates against its OWN registry address cell —
-            // O1 binds exd_addr, O2 binds exw_addr. Per-channel
-            // mirrors, never global: an EXD gap with a live EXW cell
-            // (the T3 effect rows, e.g. debris-stager) is refused on
-            // O1 yet legal on O2 (the EXW cell is the canon there and
-            // the O2 plan emits it, D138); the EXD-only rows (e.g.
-            // static-cursor-clamp) are the O2 mirror case.
+            // Channel-threaded anti-ghost rules (D139; O3 by D142):
+            // each guest channel validates against its OWN registry
+            // address cell — O1 binds exd_addr, O2 binds exw_addr, and
+            // O3 binds exw_addr TOO (the O2 mirror: the 8street
+            // reconstruction rebuilds EXW state, so a row with no EXW
+            // canon cell can never appear in an O3 dump either).
+            // Per-channel mirrors, never global: an EXD gap with a
+            // live EXW cell (the T3 effect rows, e.g. debris-stager)
+            // is refused on O1 yet legal on O2/O3 (the EXW cell is
+            // the canon there and the O2 plan emits it, D138); the
+            // EXD-only rows (e.g. static-cursor-clamp) are the
+            // O2/O3 mirror case.
             if header.channel == Channel::O1ExdDosboxX && row.exd_addr.is_empty() {
                 return Err(StitchError::NoExdAddress {
                     id: row.id.clone(),
                     status: row.exd_status.clone(),
                 });
             }
-            if header.channel == Channel::O2ExwWine && row.exw_addr.is_empty() {
+            if matches!(header.channel, Channel::O2ExwWine | Channel::O3Street)
+                && row.exw_addr.is_empty()
+            {
                 return Err(StitchError::NoExwAddress {
                     id: row.id.clone(),
                     note: row.note.clone(),
@@ -1626,6 +1637,128 @@ mod tests {
             &r
         )
         .is_ok());
+    }
+
+    #[test]
+    fn stitch_o3_channel_rules() {
+        // D142 (W10-impl-a): the O3 transcript channel — the address
+        // rule is the O2 MIRROR (bind `exw_addr`): the 8street
+        // reconstruction rebuilds EXW state (same cells, same
+        // layouts), so a row with no EXW canon cell can never appear
+        // in an O3 dump. Five pins:
+        // (a) an O3 transcript in the O2 raw form (static-map-wh =
+        //     the 8-byte ADJACENT span — the EXW layout O3 rebuilds)
+        //     stitches + decodes channel-marked Channel::O3Street and
+        //     the manifest names the channel;
+        // (b) the EXD-only row (static-cursor-clamp — empty exw_addr
+        //     in the LIVE registry) rejects LOUD on O3, no
+        //     fabrication;
+        // (c) the rules stay per-channel mirrors: a T3 row with NO
+        //     EXD alias but a live EXW cell (debris-stager, exw
+        //     0x476fbc) is refused on O1 yet stitches CLEAN on O3
+        //     (the EXW cell is the canon there too);
+        // (d) determinism: re-stitching the same transcript is
+        //     byte-identical (dump + chain);
+        // (e) the differ intake gap is DOCUMENTED, not papered over:
+        //     normalize_dump on the O3 dump still refuses
+        //     UnsupportedChannel — the O3 field map is the queued
+        //     W10-impl-b unit (D142 §5), so dbx-diff on O3 stays
+        //     loud-rejecting until it lands.
+        let s = Scenario::parse(SCEN).unwrap(); // T0 + TS
+        let r = reg();
+
+        // (a) the O3 form end-to-end (O2-shaped rows: EXW cells,
+        // EXW layouts) through the channel-agnostic
+        // stitch/encode/digest machinery (DESIGN §3).
+        let cap = "DBXCAP v1\n\
+                   frame 100\n\
+                   watch frame-counter 64000000\n\
+                   watch static-map-wh 190000004b000000\n\
+                   frame 101\n\
+                   watch frame-counter 65000000\n\
+                   frame 102 1\n\
+                   watch frame-counter 66000000\n\
+                   watch rng-state-a 4ee60200\n";
+        let t = Transcript::parse(cap).unwrap();
+        let hdr = DumpHeader::new(Channel::O3Street, [0xab; 32], "S0");
+        let st = stitch(&s, &t, &hdr, &r).unwrap();
+        let dec = dump::decode_dump(&st.bytes).unwrap();
+        assert_eq!(dec.header.channel, Channel::O3Street);
+        assert_eq!(dec.header.channel.code(), 3);
+        assert_eq!(st.manifest.channel, "O3:8street");
+        // The 8-byte EXW span rides through untouched (the O3 rows
+        // are O2-form by construction — the reconstruction's cells).
+        assert_eq!(dec.frames[0].watch("static-map-wh").unwrap().len(), 8);
+
+        // (b) EXD-only row on O3: LOUD rejection, the O2 mirror.
+        let t = Transcript::parse(
+            "DBXCAP v1\nframe 1\nwatch static-cursor-clamp f014000040140000\n\
+             frame 2\nwatch frame-counter 00\n",
+        )
+        .unwrap();
+        match stitch(&s, &t, &hdr, &r) {
+            Err(StitchError::NoExwAddress { id, .. }) => assert_eq!(id, "static-cursor-clamp"),
+            other => panic!("expected NoExwAddress, got {other:?}"),
+        }
+
+        // (c) per-channel mirrors on the T3 EXD-gap row: refused on
+        // O1, clean on O3 (the EXW cell is the canon there too).
+        let s3 = Scenario::parse("scenario = S0T3\ntiers = T0,T3\nframes = 1\n").unwrap();
+        let cap = "DBXCAP v1\nframe 1\nwatch frame-counter 00\nwatch debris-stager 00\n\
+                   frame 2\nwatch frame-counter 00\n";
+        let t = Transcript::parse(cap).unwrap();
+        let o1 = stitch(
+            &s3,
+            &t,
+            &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0T3"),
+            &r,
+        );
+        assert!(
+            matches!(o1, Err(StitchError::NoExdAddress { .. })),
+            "the O1 rule still binds the EXD cell"
+        );
+        let o3 = stitch(
+            &s3,
+            &t,
+            &DumpHeader::new(Channel::O3Street, [0; 32], "S0T3"),
+            &r,
+        );
+        assert!(
+            o3.is_ok(),
+            "an EXD gap with a live EXW cell dumps on O3: {o3:?}"
+        );
+
+        // (d) determinism: same transcript, same header -> identical
+        // dump bytes + chain.
+        let cap2 = "DBXCAP v1\n\
+                    frame 100\n\
+                    watch frame-counter 64000000\n\
+                    watch static-map-wh 190000004b000000\n\
+                    frame 101\n\
+                    watch frame-counter 65000000\n\
+                    frame 102 1\n\
+                    watch frame-counter 66000000\n\
+                    watch rng-state-a 4ee60200\n";
+        let st2 = stitch(
+            &s,
+            &Transcript::parse(cap2).unwrap(),
+            &DumpHeader::new(Channel::O3Street, [0xab; 32], "S0"),
+            &r,
+        )
+        .unwrap();
+        assert_eq!(st.bytes, st2.bytes, "re-stitch is byte-identical");
+        assert_eq!(st.manifest.chain_digest, st2.manifest.chain_digest);
+
+        // (e) the D142 §5 differ gap, asserted as the documented
+        // state: the O3 dump still refuses at the differ (no
+        // normalization table yet — W10-impl-b lands the field map).
+        let dump = dump::decode_dump(&st.bytes).unwrap();
+        assert!(matches!(
+            crate::differ::normalize_dump(&dump, &r),
+            Err(crate::differ::NormalizeError::UnsupportedChannel(
+                Channel::O3Street
+            ))
+        ));
     }
 
     #[test]
