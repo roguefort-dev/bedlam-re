@@ -780,6 +780,32 @@ differ come before any new scenario depth.
 10. **W10 — 8street instrumented comparator (O3).** Rebuild 8street at the
     pinned commit with state-dump hooks emitting the W3 schema (test-only
     comparator; no code enters this repo).
+    **FEASIBILITY NOTE 2026-08-24 (D142, W10-prep):** the landing study is
+    docs/O3-8STREET-COMPARATOR.md — the pinned clone + digests
+    (8street/Bedlam @ a8622e6, tree f9df7045, bedlam.asm/bedlam_data.inc
+    sha256s recorded), the build toolchain + operator gates (the FIRST
+    build needs sudo + network: JWasm + i686 SDL2/SDL_mixer; compile.sh
+    alone is unattended-safe after), the memory-layout reality (all cells
+    resolve by SYMBOL NAME; the bedlam_data.inc DRIFT LEDGER — 8 filler
+    defects, exact only up to 0x4DC6D0 — with the cross-validation table
+    re-anchoring 8street semantic symbols to registry EXW cells:
+    current_money≡money, difficulty≡difficulty, robots_available≡the D89
+    per-player cell, game_mode≡mode, zone/zone_level≡zone/mission,
+    rnd_seed1/2≡rng-state-a/b, sound_enable≡sfx-master-gate,
+    mission_square≡static-tot-volume), the hook family (H1 frame tail =
+    the game_level wait site [ASM] loc_448730:99697 ≡ EXW 0x425a03; H2
+    anchor = loop-head first entry loc_447E6A:98943; H3 the D77 §3 inject
+    seams through the three resolution cases; H4 the hook emits DBXCAP v1
+    directly, reusing stitch→encode→chain→differ unchanged), the differ
+    intake gaps (dbx-stitch --channel o3 + the O3 anti-ghost rule + the
+    O3 field map remain in-repo bounded units), the never-comparable
+    o3-seam classes (config/registry-writer rows, volume-key scancode
+    swap, OPTIONS.BDL-backed cells), and the artifact/hygiene split
+    (fork outside the repo; outputs runtime-only; O3 runs against a
+    STAGED corpus copy — the reconstruction writes SAVES/+BEDLAM.LOG).
+    VERDICT: feasible; the rebuild is operator-gated and parked until a
+    three-way tiebreak is actually wanted; the two in-repo diffharness
+    units may land any time.
 11. **W11 — Wine/EXW spot-check channel (O2).** Host ptrace driver:
     frame-tail breakpoint at the EXW site + process_vm_readv bulk reads of
     the same registry rows; used to arbitrate every `original-divergence`
