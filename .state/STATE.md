@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W10-prep THE O3 8STREET COMPARATOR FEASIBILITY
+    unit COMPLETE (worker 5ae99a92 claim 2, commit 5740555, PUSHED;
+    D142): docs/O3-8STREET-COMPARATOR.md is the W10 landing
+    contract — pinned clone + digests (8street/Bedlam @ a8622e6; NO
+    top-level license -> local test-only), toolchain + operator
+    gates (first build sudo/network; compile.sh unattended after; O3
+    runs a STAGED corpus copy — the reconstruction writes SAVES/ +
+    BEDLAM.LOG), the memory-layout reality (symbol-name resolution
+    ONLY; the bedlam_data.inc 8-defect DRIFT LEDGER, exact below
+    0x4DC6D0; cross-validated: current_money/difficulty/
+    robots_available land delta-0 on registry cells, zone/rng/sfx
+    land at exactly the ledger's -208), the hook family (H1 tail
+    loc_448730 == EXW 0x425a03; H2 anchor loc_447E6A; H3 seams via
+    three resolution cases; H4 hook emits DBXCAP v1 directly —
+    stitch/encode/chain/differ reused), the o3-seam classes, and
+    the work split. W10 status: FEASIBLE; two in-repo diffharness
+    units remain (stitch --channel o3 + the O3 field map, queued
+    items 2+3); the rebuild itself operator-gated + PARKED until a
+    three-way tiebreak is wanted. ALL W ITEMS now have a disposition:
+    W1-W9 + W12 landed, W11 headless-complete (ptrace driver
+    operator-gated), W10 feasibility landed + impl queued. The
+    unattended P4.2 remainder after items 2+3 is EMPTY; item 1 (the
+    operator S0 live session) + the W11/W10 operator pieces carry
+    the rest. Docs only; MANIFEST clean pre+post.
   - 2026-08-24 P4.2/D140-followup THE O1 DBX-CAPGEN FRAME-1 DEDUPE
     FIX unit COMPLETE (worker 9f4a1111 claim 2, commit c65d1e8,
     PUSHED; D141): dbx-capgen.py frame 1 now dumps the DEDUPED

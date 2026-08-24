@@ -151,30 +151,42 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W10-prep, DOCS-ONLY] THE O3 8STREET COMPARATOR FEASIBILITY
-   NOTE — the last unstarted W item (DESIGN §10: "Rebuild 8street at
-   the pinned commit with state-dump hooks emitting the W3 schema
-   (test-only comparator; no code enters this repo)"). The harness
-   build order is otherwise COMPLETE unattended-side (W1-W9 + W12
-   landed; W11's headless loop complete per D140; the D141 O1 dedupe
-   fix closed the last landmine; only operator-gated work remains:
-   item 1 + the W11 ptrace driver). METHOD: read the 8street clones
-   at ~/Documents/bedlam-refs (NAVIGATION REFERENCES ONLY per
-   AGENTS — facts must be re-anchored to EXW/EXD addresses in spec
-   docs, never copied) + D77 §4's O3 contract + the W3 schema
-   (dump.rs) and write the §10-W10 landing note: the pinned commit +
-   build toolchain, the hook family needed (frame-tail dump points
-   mapped to 8street code sites -> the re-anchoring policy per row
-   tier), the O3 channel's differ intake status (channel 3 already
-   thread through dump.rs/stitch per W3), what artifacts live where
-   ("no code enters this repo" — build outputs stay under
-   runtime/ or outside, fingerprints only in git), and whether the
-   rebuild itself needs operator gates (build env, licenses). No
-   engine/Rust change; MANIFEST bracket any clone read (clones are
-   OUTSIDE game-data/ — no manifest entries; just record sha256s of
-   the pinned commit in the note).
-   (QUEUED 2026-08-24 by the D141 O1 dedupe-fix unit, commit c65d1e8
-   — the unattended P4.2 queue was otherwise empty.)
+   2. [P4.2/W10-impl-a, SMALL] DBX-STITCH --CHANNEL O3 + THE O3
+   ANTI-GHOST RULE (the first of the two in-repo units left by the
+   D142 feasibility note — docs/O3-8STREET-COMPARATOR.md §5/§8).
+   METHOD: runner.rs stitch currently defines the transcript-id
+   address rule for O1 (exd_addr) and O2 (exw_addr) only ("Engine
+   and O3 dumps carry no address rule …; O3 is W10"); add the O3
+   rule = the O2 MIRROR (8street reconstructs EXW — validate every
+   transcript id against the registry exw_addr; the one EXD-only
+   row static-cursor-clamp rejects LOUD, the D139 pattern) +
+   `dbx-stitch --channel o3` (the CLI accepts o1|o2 only today).
+   GATE: a fabricated O3 transcript of the real S0/S1 run stitches
+   through the enforced rule, decodes channel-marked (Channel::
+   O3Street = 3), self-crosses clean via dbx-diff ONLY AFTER unit 3
+   lands the normalizer (until then the gate asserts the stitch +
+   decode + chain; the differ O3 rejection is the known D142 §5
+   gap); the EXD-only row refuses loud; determinism byte-identical
+   re-stitch. No engine change; diffharness crate only; cargo fmt +
+   clippy + tests green; MANIFEST bracket any corpus read.
+   3. [P4.2/W10-impl-b, SMALL] THE DIFFER O3 FIELD MAP + O3-SEAM
+   CLASSIFICATION (the second in-repo unit from D142 §5/§8;
+   depends on unit 2 for stitchable O3 dumps). METHOD: differ.rs
+   normalize currently rejects Channel::O3Street (UnsupportedChannel
+   ~line 1018); add the O3 row map = the O2 map modulo the D142 §6
+   seam set (same EXW cells, same layouts — the O2 normalizer is the
+   template) + classify the never-comparable rows (registry-backed
+   config TS family incl. ACTIONPAN 0x4edbd8, sfx-master-gate fed by
+   OPTIONS.BDL, the volume-key scancode pair, speech-always-on,
+   CDDA) as `o3-seam` findings, never channel findings (the
+   _e_staging seam pattern). GATE: the unit-2 fabricated O3
+   transcript self-crosses PASS 0 findings; a seeded seam row
+   reports o3-seam; an EXD-only row still refuses at stitch. No
+   engine change; cargo fmt + clippy + tests green.
+   (QUEUED 2026-08-24 by the W10-prep feasibility unit, commit
+   5740555 — D142: the rebuild itself is operator-gated + parked
+   until a three-way tiebreak is wanted; these two units are the
+   only unattended-safe W10 remainder.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -327,6 +339,39 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W10-prep THE O3 8STREET COMPARATOR FEASIBILITY
+  unit COMPLETE (worker 5ae99a92 claim 2, commit 5740555, PUSHED;
+  D142; docs/O3-8STREET-COMPARATOR.md + DESIGN-DIFFHARNESS §10-W10
+  addendum + DECISIONS D142). The landing study for the last
+  unstarted W item: pinned rebuild target (8street/Bedlam @
+  a8622e6, tree f9df7045, bedlam.asm/.inc sha256s; NO top-level
+  license -> local test-only, nothing enters this repo); build
+  toolchain (clang -m32 + JWasm + vendored libsmacker + i686
+  SDL2/SDL_mixer >=2.0.12; their CI recipe proves reproducibility);
+  FIRST build operator-gated (sudo + network), compile.sh alone
+  unattended after; O3 runs against a STAGED corpus copy (the
+  reconstruction WRITES SAVES/ + BEDLAM.LOG — game-data/ never its
+  working folder). HEADLINE RE: 8street resolves every cell by
+  SYMBOL NAME (never address arithmetic); bedlam_data.inc is a
+  sequential mirror of EXW .data(0x454000)/.bss(0x45B000..0x4EFB60)
+  with an 8-transition DRIFT LEDGER (first defect: seven anonymous
+  dd where IDA names imply four at 0x4DC6CC..E0; exact only below
+  0x4DC6D0); CROSS-VALIDATED — simulated emission positions of the
+  semantic symbols re-anchor onto independently-pinned registry
+  cells (current_money==money, difficulty, robots_available==the
+  D89 per-player cell all delta-0; game_mode==mode; zone/zone_level,
+  rnd_seed1/2==rng-state-a/b, sound_enable==sfx-master-gate all
+  landing at EXACTLY the ledger's -208). Hook family: H1 frame tail
+  = game_level wait loc_448730:99697 (== EXW 0x425a03), H2 anchor =
+  loop-head first entry loc_447E6A:98943, H3 the D77 §3 seams via
+  three row-resolution cases (named symbol / anonymous-filler label
+  via the ledger / C++-shell externs; frame-counter 0x46ae68 is DEAD
+  in 8street — the hook numbers frames, an equivalence seam), H4 the
+  hook emits DBXCAP v1 DIRECTLY so stitch->encode->chain->differ are
+  reused unchanged. Remaining W10 work split: two in-repo units
+  (queued as items 2+3) + the operator-gated rebuild (parked until a
+  three-way tiebreak is wanted). Docs only; MANIFEST clean before
+  AND after the clone reads.
 - 2026-08-24: P4.2/D140-followup THE O1 DBX-CAPGEN FRAME-1 DEDUPE
   FIX unit COMPLETE (worker 9f4a1111 claim 2, commit c65d1e8,
   PUSHED; D141). The D140(2) landmine closed BEFORE the operator S0
