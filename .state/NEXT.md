@@ -151,42 +151,27 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W10-impl-a, SMALL] DBX-STITCH --CHANNEL O3 + THE O3
-   ANTI-GHOST RULE (the first of the two in-repo units left by the
-   D142 feasibility note — docs/O3-8STREET-COMPARATOR.md §5/§8).
-   METHOD: runner.rs stitch currently defines the transcript-id
-   address rule for O1 (exd_addr) and O2 (exw_addr) only ("Engine
-   and O3 dumps carry no address rule …; O3 is W10"); add the O3
-   rule = the O2 MIRROR (8street reconstructs EXW — validate every
-   transcript id against the registry exw_addr; the one EXD-only
-   row static-cursor-clamp rejects LOUD, the D139 pattern) +
-   `dbx-stitch --channel o3` (the CLI accepts o1|o2 only today).
-   GATE: a fabricated O3 transcript of the real S0/S1 run stitches
-   through the enforced rule, decodes channel-marked (Channel::
-   O3Street = 3), self-crosses clean via dbx-diff ONLY AFTER unit 3
-   lands the normalizer (until then the gate asserts the stitch +
-   decode + chain; the differ O3 rejection is the known D142 §5
-   gap); the EXD-only row refuses loud; determinism byte-identical
-   re-stitch. No engine change; diffharness crate only; cargo fmt +
-   clippy + tests green; MANIFEST bracket any corpus read.
-   3. [P4.2/W10-impl-b, SMALL] THE DIFFER O3 FIELD MAP + O3-SEAM
-   CLASSIFICATION (the second in-repo unit from D142 §5/§8;
-   depends on unit 2 for stitchable O3 dumps). METHOD: differ.rs
-   normalize currently rejects Channel::O3Street (UnsupportedChannel
-   ~line 1018); add the O3 row map = the O2 map modulo the D142 §6
-   seam set (same EXW cells, same layouts — the O2 normalizer is the
-   template) + classify the never-comparable rows (registry-backed
-   config TS family incl. ACTIONPAN 0x4edbd8, sfx-master-gate fed by
-   OPTIONS.BDL, the volume-key scancode pair, speech-always-on,
-   CDDA) as `o3-seam` findings, never channel findings (the
-   _e_staging seam pattern). GATE: the unit-2 fabricated O3
-   transcript self-crosses PASS 0 findings; a seeded seam row
-   reports o3-seam; an EXD-only row still refuses at stitch. No
-   engine change; cargo fmt + clippy + tests green.
+   2. [P4.2/W10-impl-b, SMALL] THE DIFFER O3 FIELD MAP + O3-SEAM
+   CLASSIFICATION (the second in-repo unit from D142 §5/§8; the
+   stitch prerequisite LANDED as W10-impl-a, commits f584eab +
+   4b27761, D143 — the differ_gate lane
+   s0_o3_transcript_stitch_channel_rule + inv_frame's O3Street arm
+   are the ready-made transcript source for this unit's self-cross
+   gate). METHOD: differ.rs normalize currently rejects
+   Channel::O3Street (UnsupportedChannel ~line 1018); add the O3 row
+   map = the O2 map modulo the D142 §6 seam set (same EXW cells,
+   same layouts — the O2 normalizer is the template) + classify the
+   never-comparable rows (registry-backed config TS family incl.
+   ACTIONPAN 0x4edbd8, sfx-master-gate fed by OPTIONS.BDL, the
+   volume-key scancode pair, speech-always-on, CDDA) as `o3-seam`
+   findings, never channel findings (the _e_staging seam pattern).
+   GATE: a fabricated O3 transcript self-crosses PASS 0 findings; a
+   seeded seam row reports o3-seam; an EXD-only row still refuses at
+   stitch. No engine change; cargo fmt + clippy + tests green.
    (QUEUED 2026-08-24 by the W10-prep feasibility unit, commit
    5740555 — D142: the rebuild itself is operator-gated + parked
-   until a three-way tiebreak is wanted; these two units are the
-   only unattended-safe W10 remainder.)
+   until a three-way tiebreak is wanted; this unit is the LAST
+   unattended-safe W10 remainder.)
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -339,6 +324,38 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W10-impl-a DBX-STITCH --CHANNEL O3 + THE O3
+  ANTI-GHOST RULE unit COMPLETE (worker a42f254c claim 2, commits
+  f584eab impl + 4b27761 docs, both PUSHED; D143). The stitch side
+  of the D142 O3 intake closed: runner::stitch binds the O3 channel
+  to the registry exw_addr cell — the O2 MIRROR (the 8street
+  reconstruction rebuilds EXW state, so a row with no EXW canon cell
+  can never appear in an O3 dump): the one live-registry EXD-only
+  row (static-cursor-clamp, TS) rejects LOUD on O3 exactly as on O2
+  (StitchError::NoExwAddress, the D139 pattern), EXD-gap rows with
+  live EXW cells (debris-stager T3) stay LEGAL there (per-channel
+  mirrors; the O1 exd_addr rule untouched); dbx-stitch accepts
+  --channel o3 (o1 default + O1/O2 behavior byte-identical; manifest
+  names "O3:8street"; Channel::O3Street encode/decode was already
+  channel-complete since D78). GATES: new runner unit
+  stitch_o3_channel_rules (O2-form transcript stitches + decodes
+  channel-marked code 3; EXD-only row refuses loud; the mirror both
+  ways on debris-stager; determinism byte-identical re-stitch; the
+  differ UnsupportedChannel rejection ASSERTED as the documented
+  D142 §5 gap until W10-impl-b) + new differ_gate lane
+  s0_o3_transcript_stitch_channel_rule (the REAL S0 E run, chain
+  dac1cfd17bc7ede3, fabricated through inv_frame's new O3Street arm
+  — O3 raw forms = the O2 forms — stitched THROUGH the enforced
+  rule, byte-identical re-stitch + chain; the EXD-only row refuses
+  at stitch) + CLI smoke (o3 manifest/dump + determinism, ghost-row
+  refusal, o4 error). Docs: O3-8STREET-COMPARATOR §5/§8 + DESIGN
+  §10-W10 amended + DECISIONS D143. No engine change (test-file
+  fabrication lane only); no registry/plan changes. VERIFIED:
+  diffharness full suite green, bedlam-game 191 green (differ_gate 4
+  lanes, canonical_dump_gate 13, corpus read), fmt + clippy clean,
+  MANIFEST clean before AND after the corpus runs, no Ghidra run.
+  Queued: item 2 = the differ O3 field map + o3-seam classification
+  (the LAST unattended-safe W10 remainder).
 - 2026-08-24: P4.2/W10-prep THE O3 8STREET COMPARATOR FEASIBILITY
   unit COMPLETE (worker 5ae99a92 claim 2, commit 5740555, PUSHED;
   D142; docs/O3-8STREET-COMPARATOR.md + DESIGN-DIFFHARNESS §10-W10

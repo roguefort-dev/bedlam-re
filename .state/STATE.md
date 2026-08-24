@@ -1,5 +1,31 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W10-impl-a DBX-STITCH --CHANNEL O3 + THE O3
+    ANTI-GHOST RULE unit COMPLETE (worker a42f254c claim 2, commits
+    f584eab impl + 4b27761 docs, both PUSHED; D143): runner::stitch
+    binds the O3 channel to the registry exw_addr cell — the O2
+    MIRROR (the 8street reconstruction rebuilds EXW state; the
+    EXD-only row static-cursor-clamp rejects LOUD on O3 as on O2,
+    EXD-gap rows with live EXW cells stay legal there, the O1 rule
+    untouched) + dbx-stitch --channel o3 (o1 default + O1/O2
+    byte-identical; manifest "O3:8street"). Gates: runner unit
+    stitch_o3_channel_rules + differ_gate lane
+    s0_o3_transcript_stitch_channel_rule (the REAL S0 E run
+    dac1cfd17bc7ede3 fabricated O2-form via inv_frame's new
+    O3Street arm, stitched through the enforced rule, byte-identical
+    re-stitch; the differ UnsupportedChannel rejection asserted as
+    the documented D142 §5 gap) + CLI smoke. W10 status: the STITCH
+    intake LANDED; ONE in-repo unit remains (the differ O3 field
+    map + o3-seam classification, queued item 2); the rebuild itself
+    operator-gated + PARKED until a three-way tiebreak is wanted.
+    ALL W ITEMS have a disposition: W1-W9 + W12 landed, W11
+    headless-complete (ptrace driver operator-gated), W10 stitch
+    landed + differ map queued. The unattended P4.2 remainder after
+    item 2 is EMPTY; item 1 (the operator S0 live session) + the
+    W11/W10 operator pieces carry the rest. No engine change; no
+    registry/plan change; diffharness full suite + bedlam-game 191
+    green, fmt+clippy clean, MANIFEST clean pre+post (corpus read),
+    no Ghidra run.
   - 2026-08-24 P4.2/W10-prep THE O3 8STREET COMPARATOR FEASIBILITY
     unit COMPLETE (worker 5ae99a92 claim 2, commit 5740555, PUSHED;
     D142): docs/O3-8STREET-COMPARATOR.md is the W10 landing
