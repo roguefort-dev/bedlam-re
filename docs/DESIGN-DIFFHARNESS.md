@@ -797,15 +797,19 @@ differ come before any new scenario depth.
     anchor = loop-head first entry loc_447E6A:98943; H3 the D77 §3 inject
     seams through the three resolution cases; H4 the hook emits DBXCAP v1
     directly, reusing stitch→encode→chain→differ unchanged), the differ
-    intake gaps (dbx-stitch --channel o3 + the O3 anti-ghost rule + the
-    O3 field map remain in-repo bounded units), the never-comparable
+    intake gaps (dbx-stitch --channel o3 + the O3 anti-ghost rule LANDED
+    2026-08-24 as W10-impl-a, commit f584eab/D143 — the O3 rule is the
+    O2 mirror: ids validate against `exw_addr`, the EXD-only row rejects
+    loud; the O3 field map + o3-seam classification remain the ONE
+    in-repo bounded unit), the never-comparable
     o3-seam classes (config/registry-writer rows, volume-key scancode
     swap, OPTIONS.BDL-backed cells), and the artifact/hygiene split
     (fork outside the repo; outputs runtime-only; O3 runs against a
     STAGED corpus copy — the reconstruction writes SAVES/+BEDLAM.LOG).
     VERDICT: feasible; the rebuild is operator-gated and parked until a
-    three-way tiebreak is actually wanted; the two in-repo diffharness
-    units may land any time.
+    three-way tiebreak is actually wanted; the in-repo diffharness
+    units may land any time (the stitch unit HAS; the differ field map
+    is the remaining one).
 11. **W11 — Wine/EXW spot-check channel (O2).** Host ptrace driver:
     frame-tail breakpoint at the EXW site + process_vm_readv bulk reads of
     the same registry rows; used to arbitrate every `original-divergence`

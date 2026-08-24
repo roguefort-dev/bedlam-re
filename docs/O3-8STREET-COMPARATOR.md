@@ -174,9 +174,9 @@ recorded in the fork, not here).
 | Piece | Status today | W10 gap |
 |---|---|---|
 | W3 schema channel 3 | **LANDED** — dump.rs `Channel::O3Street` encode/decode + chain (D78; channel round-trip test) | none |
-| stitch (`runner::stitch`) | channel-agnostic core; anti-ghost address rule defined for O1 (`exd_addr`) and O2 (`exw_addr`) only — "Engine and O3 dumps carry no address rule (…; O3 is W10)" (runner.rs header) | add the **O3 rule = validate ids against `exw_addr`** (8street reconstructs EXW, so the O2 mirror applies — EXD-only rows reject loud) + `dbx-stitch --channel o3` (CLI currently accepts `o1|o2` only) |
+| stitch (`runner::stitch`) | **LANDED 2026-08-24 (W10-impl-a, commit f584eab, D143)** — the O3 address rule = the O2 MIRROR (validate ids against `exw_addr`: the reconstruction rebuilds EXW state, so the EXD-only row static-cursor-clamp rejects LOUD on O3 exactly as on O2; EXD-gap rows with live EXW cells stay legal there) + `dbx-stitch --channel o3` | none (the differ-side intake below is the remaining piece) |
 | differ normalizer | `Channel::O3Street => Err(UnsupportedChannel)` (differ.rs ~1018) | the **O3 field map** = the O2 map modulo the §6 seam set (same EXW cells, same layouts); plus the seam ledger so known-divergent rows are classified `o3-seam`, not findings |
-| scenarios/plans | committed for O1/O2 (`capture-plans/*.json`) | none — reuse as-is |
+| scenarios/plans | committed for O1/O2 (`capture-plans/*.json`) | none — reuse as-is (O3 rows are O2-form; the stitch gate fabricates them through the same `inv_frame` O2 arm) |
 
 Both in-repo pieces are bounded single units (no engine change, diffharness
 crate only) and unattended-safe.
@@ -246,10 +246,14 @@ record; 8street is never a porting source (PLAN §0/§1, AGENTS).
 **FEASIBLE, with the rebuild itself operator-gated.** Decomposition:
 
 1. **In-repo, unattended-safe, small:** (a) `dbx-stitch --channel o3` + the
-   O3 anti-ghost rule (`exw_addr`-mirror); (b) the differ O3 field map +
-   `o3-seam` classification. Two bounded diffharness units; each lands with
-   its own gate test (fabricated O3 transcript → stitch → self-cross, the
-   D140 smoke pattern).
+   O3 anti-ghost rule (`exw_addr`-mirror) — **LANDED 2026-08-24, commit
+   f584eab (D143)**; (b) the differ O3 field map + `o3-seam`
+   classification — the one remaining in-repo unit. Two bounded
+   diffharness units; each lands with its own gate test (fabricated O3
+   transcript → stitch → self-cross, the D140 smoke pattern — the
+   landed (a) gate asserts stitch + decode + chain + determinism and
+   the documented differ rejection; the self-cross unlocks when (b)
+   lands the normalizer).
 2. **Outside the repo, operator-gated:** the toolchain install (sudo +
    network) + the fork + the hook patch + the first build. The pinned sites
    (§4), the row-resolution cases (§3), and the seam ledger (§6) are the
