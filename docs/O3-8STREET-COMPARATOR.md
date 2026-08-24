@@ -175,11 +175,68 @@ recorded in the fork, not here).
 |---|---|---|
 | W3 schema channel 3 | **LANDED** — dump.rs `Channel::O3Street` encode/decode + chain (D78; channel round-trip test) | none |
 | stitch (`runner::stitch`) | **LANDED 2026-08-24 (W10-impl-a, commit f584eab, D143)** — the O3 address rule = the O2 MIRROR (validate ids against `exw_addr`: the reconstruction rebuilds EXW state, so the EXD-only row static-cursor-clamp rejects LOUD on O3 exactly as on O2; EXD-gap rows with live EXW cells stay legal there) + `dbx-stitch --channel o3` | none (the differ-side intake below is the remaining piece) |
-| differ normalizer | `Channel::O3Street => Err(UnsupportedChannel)` (differ.rs ~1018) | the **O3 field map** = the O2 map modulo the §6 seam set (same EXW cells, same layouts); plus the seam ledger so known-divergent rows are classified `o3-seam`, not findings |
+| differ normalizer | `Channel::O3Street => Err(UnsupportedChannel)` (differ.rs ~1018) | the **O3 field map** = the O2 map modulo the §6 seam set (same EXW cells, same layouts); plus the seam ledger so known-divergent rows are classified `o3-seam`, not findings — **SPEC §5a below** (impl = W10-impl-b) |
 | scenarios/plans | committed for O1/O2 (`capture-plans/*.json`) | none — reuse as-is (O3 rows are O2-form; the stitch gate fabricates them through the same `inv_frame` O2 arm) |
 
 Both in-repo pieces are bounded single units (no engine change, diffharness
 crate only) and unattended-safe.
+
+### 5a. The differ O3 seam ledger (the W10-impl-b spec; cells [verified] in-repo)
+
+The O3 field map is the O2 map verbatim — the reconstruction rebuilds EXW
+state (same cells, same layouts, §3), so `normalize_o3_row` delegates to
+`normalize_o2_row` with NO normalization differences. The §6 seam set is a
+**compare-time classification**, never a normalization difference: seam rows
+normalize identically so a clean capture still compares clean (equality is
+silence; the D142 §5 "never findings" clause applies to *divergence*, which
+reports class `o3-seam` — report-only, non-failing, like `coverage`).
+
+The seam classifier matches on TWO registry keys, so rows added later are
+caught automatically:
+
+1. **Row id** (the live rows): `sfx-master-gate` — 8street feeds
+   `sound_enable` from `SAVES/OPTIONS.BDL` ([CPP] `options.cpp:125–246`)
+   where EXW reads the HKCU registry (D128) and EXD parses `CONFIG.BDL`
+   (D134); E dumps constant 1 (D136).
+2. **The registry row's `exw_addr` base cell** (the whole registry-config
+   family, cells pinned by RE-EXW-TITLEMENU §7j.56/D128):
+
+   | EXW cell | config key | 8street feed (deviation) |
+   |---|---|---|
+   | `0x4ede58` | SOUND (the sfx gate cell the live row rides) | `OPTIONS.BDL` `sound` field |
+   | `0x4ede5c` | SOUND sister gate | `OPTIONS.BDL` (the 41-B struct has no separate sister — one `sound` value feeds both cells) |
+   | `0x4eb93c` | SPEECH | **always on** — "OPTION.BDL does not contain speechs then is always on" ([CPP] `options.cpp:211–215`, RESEARCH-8STREET §5) |
+   | `0x4edbd8` | ACTIONPAN | `OPTIONS.BDL` `actionpan` field + auto-created default file |
+   | `0x46cca4` | CINEMATICS | `OPTIONS.BDL`-derived / file-existence auto-detect |
+   | `0x4eba1c` | LANGUAGE | **SDL-locale auto-detect** (en/de/es/fr/it/nl; [CPP] `options.cpp:125–202`) vs the registry value |
+   | `0x4e444c` | DEFAULTNAME (8 B) | `OPTIONS.BDL` `playername[8]` in `SAVES/` vs the registry name |
+
+   A registry row anchored (base cell) on any of these is a seam row on O3
+   even before a dedicated id is added to matcher 1.
+
+**Two §6 deviation classes deliberately carry NO classifier entry** (recorded
+here so the omission is a decision, not an oversight):
+
+- **The volume-key scancode pair** (0xC8/0xD0 → 0x48/0x50, [ASM] 98948/
+  98990): a *trigger* deviation, not a *feed* deviation — the volume cell
+  0x4ddb2c itself is written by the same handler with the same `×0x147≫7`
+  math on both sides (D134), and captures drive input through injected
+  COMMAND records (D77 §3), never raw keys. No row exists today and the
+  volume cell must NOT be seam-classified: an arrow-key drift on a live O3
+  capture would be a genuine finding to triage, not an expected seam.
+- **CDDA-disabled** (music silent; all `cd_audio_*` calls commented,
+  RESEARCH-8STREET §5): a behavior deviation with no EXW canon watch cell
+  pinned — it surfaces as exactly the three-way disagreement O3 exists to
+  localize, never as a row class.
+
+Semantics of the classification (implemented in `differ.rs`): when ANY side
+of a compare (A, B, or the tiebreak T) is `Channel::O3Street` and a compared
+row matches the ledger, value divergence pushes a `Class::O3Seam` finding
+(`o3-seam`, non-failing — verdict PASS-WITH-NOTES at worst) with the ledger
+reason verbatim, row/field coverage asymmetry on a seam row classifies the
+same way (never `coverage` noise), and the row is **excluded from tiebreak
+arbitration** — an OPTIONS.BDL-fed vote is not canon evidence, so a seam row
+never produces EngineBug/OriginalDivergence while O3 participates.
 
 ## 6. What O3 can and cannot arbitrate (deviation consequences)
 
