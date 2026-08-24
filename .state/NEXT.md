@@ -151,27 +151,17 @@ renumbered queue keeps every open item claimable by number).
    heavy transcript; the case-1 drop_countdown=1000 side effect
    (phases 4/5 re-open for the walker) is canonical robot-bank
    state, not a finding.
-   2. [P4.2/W10-impl-b, SMALL] THE DIFFER O3 FIELD MAP + O3-SEAM
-   CLASSIFICATION (the second in-repo unit from D142 §5/§8; the
-   stitch prerequisite LANDED as W10-impl-a, commits f584eab +
-   4b27761, D143 — the differ_gate lane
-   s0_o3_transcript_stitch_channel_rule + inv_frame's O3Street arm
-   are the ready-made transcript source for this unit's self-cross
-   gate). METHOD: differ.rs normalize currently rejects
-   Channel::O3Street (UnsupportedChannel ~line 1018); add the O3 row
-   map = the O2 map modulo the D142 §6 seam set (same EXW cells,
-   same layouts — the O2 normalizer is the template) + classify the
-   never-comparable rows (registry-backed config TS family incl.
-   ACTIONPAN 0x4edbd8, sfx-master-gate fed by OPTIONS.BDL, the
-   volume-key scancode pair, speech-always-on, CDDA) as `o3-seam`
-   findings, never channel findings (the _e_staging seam pattern).
-   GATE: a fabricated O3 transcript self-crosses PASS 0 findings; a
-   seeded seam row reports o3-seam; an EXD-only row still refuses at
-   stitch. No engine change; cargo fmt + clippy + tests green.
-   (QUEUED 2026-08-24 by the W10-prep feasibility unit, commit
-   5740555 — D142: the rebuild itself is operator-gated + parked
-   until a three-way tiebreak is wanted; this unit is the LAST
-   unattended-safe W10 remainder.)
+
+   NOTE D144 (2026-08-24): the LAST unattended-safe P4.2 unit has
+   LANDED (the differ O3 field map + o3-seam classification, commit
+   55d2dc6, spec 7d28bc2) — the unattended queue is now EMPTY except
+   this interactive-remainder item; the W10/W11 operator pieces
+   (the 8street rebuild + O3 captures; the W11 ptrace driver) remain
+   parked until wanted. An eventual live O3 capture diffs through
+   `dbx-diff` unchanged: the differ takes the O3 channel now, and
+   the D128 config-family rows classify `o3-seam` (notes) instead of
+   channel findings — any tiebreak lane of this session never
+   regresses on registry-backed config rows.
 
 ## Backlog (not yet started)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
@@ -324,6 +314,42 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-24: P4.2/W10-impl-b THE DIFFER O3 FIELD MAP + O3-SEAM
+  CLASSIFICATION unit COMPLETE (worker 59d0e7d5 claim 2, commits
+  7d28bc2 spec + 55d2dc6 impl, both PUSHED; D144; spec =
+  O3-8STREET-COMPARATOR §5a + DESIGN §10-W10 amendment). The LAST
+  in-repo W10 unit — W10 in-repo work is COMPLETE. (1) normalize_o3_row
+  = normalize_o2_row VERBATIM (the reconstruction rebuilds EXW state,
+  same cells/layouts, D142 §3); the UnsupportedChannel rejection is
+  gone; the D90 splice + lone-span guard apply on O3 identically.
+  (2) Class::O3Seam (name o3-seam, NON-failing) via TWO matchers:
+  row-id (sfx-master-gate: OPTIONS.BDL vs HKCU registry D128 vs
+  CONFIG.BDL D134 vs E-constant-1 D136) + the registry row's exw_addr
+  BASE CELL (the whole D128 §7j.56 config family: 0x4ede58/0x4ede5c
+  SOUND, 0x4eb93c SPEECH always-on, 0x4edbd8 ACTIONPAN, 0x46cca4
+  CINEMATICS, 0x4eba1c LANGUAGE, 0x4e444c DEFAULTNAME) — future
+  config rows are caught automatically. Equality silent; divergence
+  reports the ledger reason verbatim; coverage asymmetry on seam rows
+  classifies o3-seam too; seam rows EXCLUDED from tiebreak arbitration.
+  The volume-key pair (0xC8/D0→0x48/0x50) + CDDA documented as
+  deliberate NO-classifier omissions (trigger/behavior deviations,
+  never seams — a live O3 arrow-key drift is a genuine finding).
+  (3) GATES: differ_gate O3 lane extended — real-S0 fabricated self-
+  cross PASS 0 findings; seeded sfx-master-gate → exactly one o3-seam
+  (PASS-WITH-NOTES, zero EngineBug/Structural); the same seed on money
+  FAILs EngineBug (selectivity); a synthetic ACTIONPAN registry row
+  seam-classifies via the cell matcher end-to-end through the real O3
+  stitch rule; the same pair under O2 headers → plain EngineBug FAIL
+  (the class binds the O3 channel only). New fast crate unit
+  o3_field_map_and_seam_ledger (O3==O2 normalization identity + every
+  matcher form); runner stitch_o3_channel_rules (e) flipped to the
+  landed state. No engine change; no registry change (synthetic row
+  test-local); no plan artifacts. VERIFIED: diffharness 96 green,
+  differ_gate corpus 4/4 green (201s), fmt+clippy clean (workspace,
+  all targets), MANIFEST.sha256 clean before AND after the corpus
+  run, no Ghidra run. Queued: NOTHING — the unattended P4.2 queue is
+  empty; item 1 (the operator S0 live session) + the W10/W11 operator
+  pieces carry the rest.
 - 2026-08-24: P4.2/W10-impl-a DBX-STITCH --CHANNEL O3 + THE O3
   ANTI-GHOST RULE unit COMPLETE (worker a42f254c claim 2, commits
   f584eab impl + 4b27761 docs, both PUSHED; D143). The stitch side

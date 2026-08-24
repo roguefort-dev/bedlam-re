@@ -1,5 +1,35 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-24 P4.2/W10-impl-b THE DIFFER O3 FIELD MAP + O3-SEAM
+    CLASSIFICATION unit COMPLETE (worker 59d0e7d5 claim 2, commits
+    7d28bc2 spec + 55d2dc6 impl, both PUSHED; D144): normalize_o3_row
+    = the O2 map verbatim (same EXW cells, same layouts — the
+    reconstruction rebuilds EXW state, D142 §3); the differ
+    UnsupportedChannel rejection is GONE; Class::O3Seam (report-only,
+    never-failing) classifies the D142 §6 never-comparable rows via
+    TWO matchers — row id (sfx-master-gate, fed from OPTIONS.BDL vs
+    registry/CONFIG.BDL/E-constant-1) and the registry row's exw_addr
+    BASE CELL (the whole D128 §7j.56 config family incl. ACTIONPAN
+    0x4edbd8, SPEECH 0x4eb93c always-on, LANGUAGE 0x4eba1c, so future
+    config rows are caught automatically); equality stays silent,
+    divergence reports the ledger reason verbatim, coverage asymmetry
+    on seam rows classifies o3-seam too, and seam rows are EXCLUDED
+    from tiebreak arbitration; the volume-key pair + CDDA documented
+    as deliberate no-classifier omissions (trigger/behavior
+    deviations, never seams). Gates: the differ_gate O3 corpus lane
+    extended (real-S0 fabricated self-cross PASS 0 findings; seeded
+    seam row -> exactly one o3-seam; the same seed on money FAILs
+    EngineBug = selectivity; synthetic ACTIONPAN row via the cell
+    matcher end-to-end; O2-headers control = the class binds O3 only)
+    + new fast crate unit o3_field_map_and_seam_ledger + the runner
+    (e) pin flipped. VERIFIED: diffharness 96 green, differ_gate
+    corpus 4/4 green, fmt+clippy clean, MANIFEST clean pre+post, no
+    Ghidra run. W10 IN-REPO WORK IS COMPLETE: W1-W10 + W12 landed,
+    W11 headless-complete — the ONLY remaining P4.2 work is
+    OPERATOR-GATED (item 1: the S0/S1 live sessions; the W11 ptrace
+    driver; the 8street rebuild + O3 captures, parked until a
+    three-way tiebreak is wanted). The unattended queue is EMPTY
+    except item 1's [BLOCKED] interactive remainder.
   - 2026-08-24 P4.2/W10-impl-a DBX-STITCH --CHANNEL O3 + THE O3
     ANTI-GHOST RULE unit COMPLETE (worker a42f254c claim 2, commits
     f584eab impl + 4b27761 docs, both PUSHED; D143): runner::stitch
