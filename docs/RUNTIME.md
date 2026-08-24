@@ -637,11 +637,15 @@ inject form). Row shape:
   full T0 sweep ride frame 1). A literal `anchor_watches + watches`
   concatenation emits DUPLICATE ids and the stitcher's
   `canonicalize_frame` rejects `DuplicateWatchId` (dump.rs) — capgen-o2
-  dedupes keep-first. The SAME landmine exists in the O1 dbx-capgen
+  dedupes keep-first. The SAME landmine existed in the O1 dbx-capgen
   frame-1 path (`dump_rows(frame, anchor_watches + watches ...)`) —
-  every live O1 session would fail at `diff stitch` until it is fixed
-  (queued as its own small unit; the dbgprobe gates never hit it
-  because the probe plans carry no anchor_watches).
+  FIXED 2026-08-24 (D141): frame 1 now dumps the deduped union
+  keep-first via `dedupe_frame1_rows` (the exact capgen-o2 semantics),
+  verified headless by `tools/runtime/capgen-frame1-dedupe-check.py`
+  (all 13 committed plans: unique ids, frame-1 == the anchor list in
+  anchor order, the landmine expression absent from the source). The
+  dbgprobe gates never tripped it because the probe plans' anchor and
+  per-frame id sets are DISJOINT (zero overlap, checked).
 - `--synthesize-feed` = the reference mini-driver: deterministic
   LCG bytes per (addr, hit) with consistent resolve statics + inject
   arithmetic, exercising every feed form (the S3-o2 plan drives

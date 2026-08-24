@@ -90,8 +90,12 @@ runs from the staged conf's autoexec. Keys:
       x==0xFFFF terminates), fails loud unless active==1 and
       x!=0xFFFF, then writes {x,y,z} as three i32-LE words to the
       target triple (the order-target seam).
-  anchor_watches / watches      frame 1 dumps anchor_watches+watches
-      (TS statics ride the anchor frame), frames 2+ dump watches.
+  anchor_watches / watches      frame 1 dumps the DEDUPED union
+      anchor_watches+watches keep-first by id (the anchor list IS the
+      frame-1 row set — the per-frame rows are a subset of
+      anchor_watches; a literal concatenation would duplicate ids and
+      the stitcher rejects DuplicateWatchId, D140), frames 2+ dump
+      watches.
       addr "SEG:<expr>" offsets and len may be arithmetic over $names
       (e.g. "CS:$tot_ptr", "4+16*$map_w*$map_h"). A watch may carry a
       "prefix" {addr, len} sub-row (D109): the prefix cell is dumped
@@ -699,6 +703,24 @@ def run_walk(sess, dblog, plan, args, dumps, notes):
     return run_arm(sess, dblog, plan)
 
 
+def dedupe_frame1_rows(anchor_watches, watches):
+    """The frame-1 row list: the deduped union keep-first by id.
+
+    D140(2): on every committed plan the per-frame rows are a SUBSET of
+    anchor_watches (the anchor list IS the frame-1 row set), so a
+    literal anchor_watches+watches concatenation emits DUPLICATE ids and
+    `diff stitch` rejects the transcript (canonicalize_frame
+    DuplicateWatchId, dump.rs). Mirrors the capgen-o2 semantics exactly.
+    """
+    rows, seen = [], set()
+    for w in anchor_watches + watches:
+        if w["id"] in seen:
+            continue
+        seen.add(w["id"])
+        rows.append(w)
+    return rows
+
+
 def run_capture(args):
     with open(args.plan) as f:
         plan = json.load(f)
@@ -864,6 +886,11 @@ def run_capture(args):
                 rows.append((w["id"], data))
             return rows
 
+        # D140(2): frame 1 dumps the deduped anchor union keep-first —
+        # see dedupe_frame1_rows (a literal concatenation duplicates
+        # ids; `diff stitch` rejects DuplicateWatchId).
+        frame1_rows = dedupe_frame1_rows(anchor_watches, watches)
+
         for frame in range(1, frames_total + 1):
             # v1 keeps frame 1 at the parked pre-boot halt (the probe
             # shape); v2 RUNWATCHes into every frame incl. 1 — the first
@@ -887,7 +914,7 @@ def run_capture(args):
             for row in inject_by_frame.get(frame, []):
                 apply_inject(sess, dblog, args, dumps, row, symbols)
                 injected = True
-            rows = dump_rows(frame, anchor_watches + watches if frame == 1 else watches)
+            rows = dump_rows(frame, frame1_rows if frame == 1 else watches)
             frames.append((frame, rows, injected))
 
         if args.probe:
@@ -920,7 +947,7 @@ def run_capture(args):
             f.write(f"frame {frame} 1\n" if injected else f"frame {frame}\n")
             for wid, data in rows:
                 f.write(f"watch {wid} {data.hex()}\n")
-    print(f"capgen: wrote {args.out} ({frames_total} frames, {len(watches) + len(anchor_watches)} watches/frame-1, {len(watches)}/frame-n)")
+    print(f"capgen: wrote {args.out} ({frames_total} frames, {len(frame1_rows)} watches/frame-1 (deduped anchor union), {len(watches)}/frame-n)")
 
 
 def main():
