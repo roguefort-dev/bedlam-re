@@ -5,165 +5,54 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [BLOCKED] [P4.2/DH-G0-live] S0 LIVE SESSION —
-   INTERACTIVE-ONLY REMAINDER (operator/desktop; ALL machinery landed +
-   headless-verified by the fa49e9cf unattended prep, commits f659db5 +
-   d5550a3 + ee2f0d4, D81 — follow docs/RUNTIME.md "S0 LIVE SESSION
-   CHECKLIST" step by step).
-   BLOCK REASON (recorded once 2026-08-22 by unattended worker
-   e63e5ff4, claim 1): steps (b)-(e) are operator-desktop-gated —
-   FORCE_DIFF_RUN=1 `diff capture` opens the live game window where a
-   human must walk the title menu to ZONEA/MISSION1 (twice, fresh
-   boots) and the cycles calibration needs ears on live audio
-   dropouts; docs/RUNTIME.md "Explicitly NOT done here" item 2 bars
-   unattended runs from launching desktop game sessions (the
-   refused-unattended gate exists for exactly this). Unattended-safe
-   step (a) was RE-VERIFIED GREEN by that worker this run: dbgprobe
-   gate + dbgprobe flow both pass, staged
-   runtime/harness-out/diff/S0/capture-plan.json is byte-identical to
-   the committed capture-plans/S0.json, staged corpus + run.conf
-   intact, MANIFEST.sha256 clean before AND after. NOTE D83
-   (2026-08-22): S0.json was REGENERATED (difficulty row now dumps;
-   19 anchor + 10 per-frame) — re-stage before the session (the
-   fa49e9cf byte-identical check predates this; regenerate +
-   re-diff `diff stage`). NOTE D84 (2026-08-22): S0.json regenerated
-   AGAIN (resolve_at=anchor — resolve now reads the loader statics at
-   the ANCHOR stop, mission start, not the arm stop; the S0 checklist
-   step-1 text is amended in RUNTIME.md) — re-stage again before the
-   session (dbx-plan scenarios/S0.scen --out ...). The operator
-   session is TURNKEY — start at checklist step 1, no prep left.
-   D84 BONUS HOOK: the same session can calibrate the committed S0W
-   scripted walk (`diff capture scenarios/S0W.scen` once — its
-   per-stop `# walk stop N walk-mode/zone/mission ...` transcript
-   comments map menu transitions to stop indices; then rewrite the
-   DRAFT stop counts in S0W.scen — pure data, no code).
-   NOTE D134 (2026-08-23): S0.json/S0W.json REGENERATED AGAIN (the
-   sfx-master-gate T0 row now emits — 20 anchor + 11 per-frame,
-   deferred 6) — re-stage before the session (dbx-plan
-   scenarios/S0.scen --out ...; the same for S0W). The session's
-   FINGERPRINT step should also record [0x10743c] (the EXD SFX
-   gate, expect 1 = sound on) — a sound-DISABLED capture machine
-   would dump 0 where E assumes the row (the D128 ACTIONPAN
-   pattern; RE-EXD-MAP §5g consequence note).
-   NOTE D141 (2026-08-24): the O1 frame-1 dedupe landmine is FIXED
-   (commit c65d1e8) — capgen frame 1 now emits the deduped anchor
-   union, so the session's first `diff stitch` no longer risks the
-   DuplicateWatchId rejection. No plan bytes changed — the existing
-   re-stage notes (D134) still apply, nothing further to prep.
-   OPERATOR STEPS: (b) FORCE_DIFF_RUN=1
-   `diff capture` — walk the title menu to ZONEA/MISSION1; capgen does
-   the boot trap → flat-CS guard (SELINFO base==0, loader-stub stops
-   retry) → BP CS:0005A6EB arm (the ack echoes the selector = the
-   per-run pin) → resolve w/h + TOT/DAT/claim pointers (AT THE ANCHOR
-   STOP per D84) → 3-record capture (the INT3-at-entry proof step is
-   SUPERSEDED — CS-register addressing needs no selector); (c) `diff
-   stitch` × 2 runs; (d) DH-G1 verdict = identical chains MODULO the
-   frame-counter/RNG blob bytes (no counter reset exists — 14 INC
-   sites incl. menus; T2/T3 classes per DESIGN §6; any OTHER byte
-   diff = a channel finding, record + stop); (e) cycles=fixed 60000
-   listen calibration (audio-live plan env variant). Record
-   fingerprints (chain/dump sha256, selector pin, w/h, pointers) in
-   RUNTIME.md; DECISIONS if a pin changed. NOTE the 6 deferred TS rows
-   (cgr/bin/min/lnk/order-table/yline — extent formulas unpinned) are
-   consciously OUT of the first golden; adding them later is additive
-   (re-baseline chains deliberately). Manifest checks bracket
-   corpus-touching steps. NOTE (D85 completion): the E-side S0/S1
-   counterparts now exist — `parity_harness --canonical --scenario
-   tools/diffharness/scenarios/{S0,S1}.scen --out ...` — chains pinned
-   in tests/canonical_dump_gate.rs (SUPERSEDED 2026-08-23 by the
-   D136 re-baseline, commit cfc6b4c — E now emits sfx-master-gate
-   (T0, constant 1) + no-extract-latch (T1, count-prefixed zeros):
-   the CURRENT pins are dac1cfd17bc7ede3 / a18cb11ac8e4314e; the
-   O1 capture side already dumps both rows per D133/D134, so the
-   live S0/S1 verdicts compare BOTH rows clean);
-   the live session's O1 chains compare against THOSE with the
-   LANDED W7 differ (D87, `dbx-diff` -- cross-channel mode handles
-   the counter/RNG classes + the coverage findings automatically;
-   RUNTIME.md 'W7 the differ'). NOTE D88 (2026-08-22): the differ's
-   robot maps now carry the FULL 31-leaf pin (S1 coverage = the 2
-   E-only rows + the target trio per robot) + drop_countdown reads
-   raw +0x80 (the phase-gate word; the +0x2C pod timer is not
-   canonical, E never emits it). Expect the alarm_ctr decay question
-   (EXD decrements it per phase-0 pass, EXW 7g.1 documents no decay)
-   to surface as the first candidate finding if any damage happens
-   in-scenario. NOTE D90 (2026-08-22): the target trio is now
-   SOURCED — the live S1 plan carries the move-target 0x60 span and
-   the differ splices it into the robot-bank row (S1 coverage = the 2
-   E-only rows ONLY, blink-cursor + move-target-words; zero robot
-   field gaps). Re-stage the S1 plan for any S1 capture the same way
-   as S0 (dbx-plan scenarios/S1.scen --out ...). NOTE D91
-   (2026-08-22): S2 now exists for any order→walk live capture —
-   re-stage its plan the same way (dbx-plan scenarios/S2.scen --out
-   ...) and read the plan's `_e_staging` field first: the live O1
-   banks the MRK squad ONLY, so the robot-count diff vs E is the
-   recorded scenario seam, never a finding (the original's in-game
-   arm needs the click path — the bare 0x10e0a4 triple write does
-   not move robots; DESIGN §6a's seam-approximation note stands
-   until a live session refines it). NOTE D103 (2026-08-22): S3
-   exists E-side (chain 49193732e6dbc546, the canonical_dump_gate
-   corpus_s3_command_fire row); the `loadout` seam
-   auto-records in `_e_staging` (the O1 side arms robots by
-   playing the session — the weapon-slot/ammo diff is the
-   scenario seam, never a finding). NOTE D109 (2026-08-22): the
-   dbx-plan T2/T3 tier unit LANDED — S3 (T2) and S4 (T0/T1/T3)
-   plans compile (capture-plans/S3+S4.json committed; the two
-   weapon banks emit as FULL spans, every unaliased T2/T3 row
-   documented in _deferred, never emitted on O1); re-stage them
-   the same way as S0/S1 (dbx-plan scenarios/S3.scen --out ...).
-   D109 ALSO changed the committed S1/S2/S5/S5B plans (the
-   trt/object rows now carry the count-prefix sub-row + the
-   object FULL 2000*0x14 bank; capgen dumps the prefix first) —
-   re-stage ANY plan after pulling D109; S0/S0W bytes untouched.
-   NOTE D113 (2026-08-23): S7 exists (chain b41db389f3ad8947,
-   the canonical_dump_gate corpus_s7_platform_dynamics row;
-   capture-plans/S7.json committed + byte-pinned, 5 command
-   injects — re-stage the same way: dbx-plan scenarios/S7.scen
-   --out ...). The `platforms = 1` arm key is an EQUIVALENCE on
-   the live side (the original runs the creep tick natively — no
-   O1 staging row), BUT expect the §7j.41/4 per-frame RandA
-   gate-draw as a channel finding on EVERY live capture: the
-   original consumes one RNG draw per frame for the creep gate
-   even unarmed, so any live O1 run's rng-state rows drift vs
-   E's (S0..S6) — the budgeted RNG class, never a structural
-   diff; a live S7 runs the tick on both channels (equivalence,
-   no drift beyond the ordinary budget).
-   NOTE D128 (2026-08-23): the §7j.54 chase-camera pans are
-   gated by [0x4edbd8] = the ACTIONPAN REGISTRY flag
-   (HKCU\Software\Mirage\Bedlam\1.00) with DEFAULT 1 = ON —
-   the FINGERPRINT step of this session should record
-   [0x4edbd8] (plus the five sibling config cells SOUND/
-   SPEECH/CINEMATICS/LANGUAGE/DEFAULTNAME) once: a stale
-   registry 0 on the capture machine would silently disable
-   pans on the original while E models them (regedit query or
-   one dbgprobe read at the anchor stop; a one-frame additive
-   watch row is the remedy if it ever bites).
-   NOTE D108 (2026-08-22): S5/S5B
-   exist E-side (chains a4659f25d453b6a1 / 93e976587a98d2a1, the
-   canonical_dump_gate corpus_s5* + differ_gate rows; dbx-plan
-   compiles BOTH at tiers T0/T1/TS — capture-plans/S5+S5B.json
-   committed). A live S5/S5B capture boots ZONEB — the operator
-   walks the campaign to zone B (or a save) and the plan's
-   _e_staging.zone_note records the seam: the session's own
-   linear/mission counters (0x46ae8c etc.) are the live-capture
-   seam, never a finding; the zone cell (0x4edd8c/0x107500 = 2)
-   canonicalizes via the D108 cell−1 normalizer; the typedb-mirror
-   row is ~300 KB/frame on O1 (the REAL ZONEB surface) — expect a
-   heavy transcript; the case-1 drop_countdown=1000 side effect
-   (phases 4/5 re-open for the walker) is canonical robot-bank
-   state, not a finding.
-
-   NOTE D144 (2026-08-24): the LAST unattended-safe P4.2 unit has
-   LANDED (the differ O3 field map + o3-seam classification, commit
-   55d2dc6, spec 7d28bc2) — the unattended queue is now EMPTY except
-   this interactive-remainder item; the W10/W11 operator pieces
-   (the 8street rebuild + O3 captures; the W11 ptrace driver) remain
-   parked until wanted. An eventual live O3 capture diffs through
-   `dbx-diff` unchanged: the differ takes the O3 channel now, and
-   the D128 config-family rows classify `o3-seam` (notes) instead of
-   channel findings — any tiebreak lane of this session never
-   regresses on registry-backed config rows.
+1. [P4/static-parity/S0-07] retained PAD-slot bank oracle — first
+   statically pin the exact EXW/EXD staged 999x8 `{active,x,y,z}`
+   semantics, including terminator and tail handling. Then build an
+   independent all-37-mission raw `.PAD` -> staged-bank oracle and
+   compare it byte/field-exact against the Rust target or a test-only
+   representation. Do not reuse production parsers/loaders/helpers or
+   inverse generators; pin corpus identities, bracket corpus reads with
+   `MANIFEST.sha256`, and prove sensitivity with a temporary mutation.
+   If Rust retains no PAD bank, document that semantic gap and add only
+   the smallest justified internal/test seam rather than fabricating
+   parity. DONE when the exact `static-pad-slots` row is independently
+   covered, or one concrete code/model gap is queued; tests/review/commit.
 
 ## Backlog (not yet started)
+- S0 static-parity closure baseline: strict independent coverage is
+  6/27 rows from commits bd91c10, 56918c5, and 390acb9. The 21-row
+  remainder is fully assigned: S0-07 (1), S0-08 (1), S0-09 (1),
+  S0-10 (1), S0-11 (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15
+  (1), S0-16 (1), and S0-17 (1).
+- [P4/static-parity/S0-08] independently cover `static-yline-zbase`,
+  including exact staged extents and boundary entries.
+- [P4/static-parity/S0-09] independently cover the `.BDG`
+  `static-type-table` staged representation.
+- [P4/static-parity/S0-10] independently cover the retained `.MIN` bank
+  row `static-min-bank`.
+- [P4/static-parity/S0-11] independently cover `static-claim-bank`
+  initialization.
+- [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
+  config rows explicitly: `score`, `money`, `difficulty`, `zone`,
+  `mission`, `mode`, `linear-mission-m`, and `sfx-master-gate`.
+- [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
+  and `static-dither-noise` initialization/evolution without treating
+  Rust determinism as the oracle.
+- [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter` ordering
+  and classify dynamic-only row placement separately from static closure.
+- [P4/static-parity/S0-15] `static-order-table` — independently
+  reconstruct fresh-session/loadout/order-table post-init state and
+  compare it against the Rust target. Do not fold this row invisibly
+  into the generic T0 campaign/config unit.
+- [P4/static-parity/S0-16] `static-player-type` — independently pin the
+  original fresh-SP value and writer semantics, then compare them with
+  Rust construction. MP/config variants are explicitly excluded from
+  this slice and require a later named task before any MP closure claim.
+- [P4/static-parity/S0-17] `static-cursor-clamp` — statically verify the
+  EXD-only 240x320 clamp maxima constants/formula and compare them with
+  the DOS/classic-input adapter. If no such target exists, explicitly
+  classify the row as hardware/input-profile-only rather than semantic
+  engine state; never silently count it as parity-covered.
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
   the E side (projectile/critter banks, effects/debris rings) as
   their producer families land in-engine (S3+ pairing per §10-W12);
@@ -314,6 +203,11 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4.2/DH-G0-live S0 LIVE SESSION RETIRED AS A T1
+  SEMANTIC PREREQUISITE (D145). Independent deterministic static
+  oracles are now the default. Operator capture was NOT completed and
+  remains optional for channel/address, hardware, timing, or perceptual
+  qualification; it no longer blocks semantic parity work.
 - 2026-08-24: P4.2/W10-impl-b THE DIFFER O3 FIELD MAP + O3-SEAM
   CLASSIFICATION unit COMPLETE (worker 59d0e7d5 claim 2, commits
   7d28bc2 spec + 55d2dc6 impl, both PUSHED; D144; spec =

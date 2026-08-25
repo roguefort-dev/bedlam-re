@@ -23,10 +23,14 @@ facts + 8street prior work). MANIFEST.sha256 = integrity manifest of game-data/.
 |---|---|
 | Which build is the game? | BEDLAM.EXW (Win95/DirectX) is canonical for logic, assets, behavior. It is the primary RE target and the richest asset set (all .SMK movies + all languages — per 8street README). |
 | DOS build (EXD) role | Canon for hardware-coupled behavior only: HMI audio init rates, VESA/palette quirks, PIT timing, frame-lock constants. Every EXW↔EXD divergence discovered goes into a standing docs/DIVERGENCES.md table (behavior, addresses) so ambiguity becomes lookup, not archaeology. |
-| Goldens source | Reference captures come from the canonical build under a pinned Wine prefix; DOSBox-X/-staging (pinned version + config) covers DOS-canonical behavior and is the fallback where Wine DDraw fails. |
+| Goldens source | For statically testable T1 semantics, goldens are canonical output bytes/fields produced from deterministic input/state bytes by an independently reconstructed EXW/EXD logic oracle, then compared byte/field-exact against Rust; exact corpus identities must be pinned. Pinned Wine/DOSBox captures remain for irreducible hardware/timing/perceptual behavior, unresolved semantics, and one-time channel/address qualification, but are not the default or a blocking prerequisite for static behavior. |
 | 8street/Bedlam role | Navigation + hypothesis generation only — NOT a behavior oracle. It is a known-deviant build (44.1kHz mixer vs original 11kHz, unspecified bug fixes, crash fixes — from its own README). Its deviations list seeds docs/DIVERGENCES.md. Its crash-fix list is a lead list, never triage truth. Pin the exact commit hash we consult. |
 | 8street instrumented build | Allowed as a test-only comparator: recompile it with state-dump hooks to emit ground-truth state at tick boundaries for differential testing (see Testing). Does not change the not-a-porting-source rule. |
 | Tiebreak order | EXW disassembly > black-box observation of EXW > EXD (for its canon categories) > 8street (hints only). |
+
+Static EXW disassembly remains canon. Black-box/live capture is reserved for behavior
+that cannot be reduced to a deterministic static test, unresolved semantics, and
+one-time channel/address qualification; it is not the default proof path.
 
 ## 0b. Parity budget (~99% target, ~95% floor)
 
@@ -36,14 +40,21 @@ of the experience).
 
 | Tier | Contents | Bar |
 |---|---|---|
-| T1 exact | Asset formats; game rules; weapons/damage/economy/AI-behavior data and tables; mission logic/flow; UI flow | Implemented exactly (semantics verified vs RE + 8street); defects are bugs |
+| T1 exact | Asset formats; game rules; weapons/damage/economy/AI-behavior data and tables; mission logic/flow; UI flow | Implemented exactly; default proof is deterministic input/state bytes → independently reconstructed EXW/EXD logic oracle → canonical output bytes/fields, compared byte/field-exact against Rust |
 | T2 perceptual | Rendering, palette, audio mix, timing feel, input latency | Perceptual thresholds + owner feel sign-off; no pixel/tick equality required |
 | T3 free divergence | Exact RNG streams (recover mechanics + distributions, not the bit stream); internal numeric representation (integer math for OUR determinism, not to mirror Watcom rounding); frame-exact AI micro-reactions; spawn tick ordering; every catalogued bug fix and modernization feature | Only statistical/observational equivalence; these ARE the 1-5% |
 
 Consequences:
-- Differential harness role changes from all-zone tick-parity gate to (a) divergence
-  meter, (b) structural-error catcher on the slice + targeted spots, (c) regression
-  tripwire. Tick-level completeness across all 37 zones is no longer required.
+- The independent oracle must not reuse the production parser, loader, normalizer, or
+  inverse generator. Tests must pin exact corpus identities, use the full corpus where
+  applicable, and prove sensitivity by temporarily mutating exactly one side: either
+  the oracle expectation or the Rust output, never a shared corpus input. The
+  differential test must fail under that mutation, after which the mutation is reverted.
+- The differential harness remains useful for dynamic seams and divergence as (a) a
+  divergence meter, (b) a structural-error catcher on the slice + targeted spots, and
+  (c) a regression tripwire. A static differential test may supersede a semantic-ledger
+  row when it provides stronger whole-corpus evidence. Tick-level completeness across
+  all 37 zones is no longer required.
 - The original-behavior catalog scopes down to observable gameplay behavior only
   (what players can notice), not internal quirks.
 - The classic-mode toggle set shrinks to feel-contested items only (timing lock,

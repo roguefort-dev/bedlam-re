@@ -1,5 +1,14 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D145 STRATEGY TRANSITION: independent deterministic
+    static oracles are now the default proof for T1 semantics. Commits
+    bd91c10, 56918c5, and 390acb9 closed `static-map-wh`,
+    `static-dat-volume`, `static-cgr-volume`, `static-tot-volume`,
+    `static-bin-terrain`, and `static-lnk-map`; strict S0 independent
+    coverage is 6/27 rows. Live capture is optional/nonblocking for
+    channel/address, hardware, timing, and perceptual qualification.
+    Next slice: retained PAD-slot bank (`static-pad-slots`). The
+    responsive-capture WIP remains uncommitted and preserved.
   - 2026-08-24 P4.2/W10-impl-b THE DIFFER O3 FIELD MAP + O3-SEAM
     CLASSIFICATION unit COMPLETE (worker 59d0e7d5 claim 2, commits
     7d28bc2 spec + 55d2dc6 impl, both PUSHED; D144): normalize_o3_row
@@ -3360,4 +3369,3 @@
   it would have caught were caught by the restored suite: immediate
   one-shot free + event-on-exact-boundary ordering). Next P3: bedlam-game
   scene-FSM skeleton (LAST charter crate).
-
