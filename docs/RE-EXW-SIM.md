@@ -9919,3 +9919,111 @@ and the emitted row + the TRT hp tier selector read the derived cell (the
 §7j.64/D formula from the CURRENT mission_slot()). The oracle's three
 loud gap assertions flipped to equality pins; every canonical chain
 re-baselined deliberately (see D154 for the digest table).
+
+## 7j.65. THE RNG PAIR + THE DITHER-NOISE BANK — initialization/evolution decoded whole (rng-state-a 0x4ede48, rng-state-b 0x4ede4c, static-dither-noise 0x4e6ed8 + cursor 0x4ddb30) (2026-08-25, worker 77b1c512 claim 1, D155, the P4/static-parity/S0-13 unit; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before AND after) [verified]
+
+Whole-objdump write-form census per cell (every `0x4ede48/0x4ede4a/
+0x4ede4c/0x4ede4e`, `0x4ddb30`, `0x4e6ed8` displacement) + instruction
+decodes of both step functions and all six producer loops. All items
+[verified] against the asm.
+
+**A. The step functions — RandA @0x402975 and RandB @0x4029b6 are the
+SAME 0x41-byte algorithm on two independent dword states** (A halves
+0x4ede48/0x4ede4a, B halves 0x4ede4c/0x4ede4e — lo stored at the cell,
+hi at cell+2):
+
+```
+402975  movzx eax, WORD [cell+2]     ; ax = hi(S)
+40297c  movzx ebx, WORD [cell]       ; bx = lo(S)
+402983  mov   esi, eax               ; si = hi(S)   (saved)
+402985  mov   edi, ebx               ; di = lo(S)   (saved)
+402987  mov   dl, ah                 ; -- byte shuffle: the 40-bit
+402989  mov   ah, al                 ;    chain dl:ax:bx := S << 8
+40298b  mov   al, bh                 ;    dl=hi15..8, ax=hi7..0|lo15..8,
+40298d  mov   bh, bl                 ;    bx=(lo7..0)<<8
+40298f  xor   bl, bl                 ; bl=0 (and CF := 0)
+402991  rcr   dl, 1                  ; -- 40-bit rotate-right-1 through
+402993  rcr   ax, 1                  ;    CF across dl:ax:bx
+402996  rcr   bx, 1
+402999  add   bx, di                 ; + lo(S)
+40299c  adc   ax, si                 ; + hi(S) + carry
+40299f  add   bx, 0x62e9             ; + 0x62E9
+4029a4  adc   ax, 0x3619             ; + 0x3619 + carry
+4029a8  mov   WORD [cell], bx        ; new lo
+4029af  mov   WORD [cell+2], ax      ; new hi
+4029b5  ret                          ; eax = new hi (u16)
+```
+
+Closed form: the shuffle puts S in the top 32 bits of the 40-bit chain
+(dl:ax:bx = S<<8, low 8 bits zero); the three rcrs rotate the chain
+right exactly 1 (incoming CF = 0 from the xor; outgoing bit 0 = 0), so
+the chain holds **S<<7** and its low 32 bits — everything the add chain
+reads — are `(S<<7) & 0xFFFFFFFF`, while the top byte dl' = S>>25 is
+**DISCARDED** (never read again). With the 16-bit add/adc pairs
+performing plain 32-bit addition:
+
+  **S' = ((S << 7) + S + 0x361962E9) mod 2^32**
+
+— a SHIFT-7, not a wrap rotate: the 8street gloss "ror33ish" and the
+RE-EXW-MUSIC "carry-mixed" prose are retired by this decode (their
+carry-chain description matches the instruction sequence but the
+wrapped bits go nowhere; per the 8street policy this is re-anchored to
+the EXW instructions above). **Return value: eax = the NEW HIGH WORD**
+(u16 — movzx zeroed eax's top at entry and every later op is 16-bit);
+consumers mask the return (`test al,3`, `and eax,0x1ff`), i.e. they
+read bits of the new hi word. First values, both seeds: A 123456 →
+923,559,209 (0x370C6529) → 4,082,654,354 (0xF3585C92) → …; B 234567 →
+937,892,528 (0x37E71AB0) → 1,636,685,209 (0x618DD599) → … (the S0-13
+oracle pins the first eight states of each chain as literals).
+
+**B. The seed plants — the COMPLETE writer census** (every writer of
+the two dword cells in .text; nothing but these six instructions):
+
+| site | form | semantics |
+|---|---|---|
+| 0x41c0cd `mov [0x4ede4c],edi` + 0x41c0d3 `mov [0x4ede48],eax` | GameMain boot block (edi=0x39447 set 0x41c0a8, eax=0x1e240 set 0x41c0ad) | BOOT plants BOTH: A := 123456, B := 234567 (the block directly precedes the §7j.64/A boot head) |
+| 0x447728 `mov DWORD [0x4ede48],0x1e240` | MissionShell FUN_0044771c — the FIRST body instruction after the 0x658-byte stack frame | PER-MISSION reseed of **A ONLY** — B is carried across missions within a session (never reseeded post-boot) |
+| 0x4029a8/0x4029af, 0x4029e9/0x4029f0 | the step functions' own lo/hi stores | the evolution |
+
+**C. The dither-noise bank 0x4e6ed8 (0x800 B) + cursor 0x4ddb30 — the
+COMPLETE writer census** (every displacement site; the blit only READS):
+
+- cursor: staging clear **0x4478f7** `mov [0x4ddb30],ecx` — ecx = 0
+  (xor'd at 0x44785e, the ~40-resets staging block, SIM §1) → **cursor
+  := 0 at every MissionShell entry**; churn advance stores 0x448164 /
+  wrap-store 0x448178. No other writer or reader.
+- bank: the fill's two store arms 0x447b17 (0xFF) / 0x447b32 (0x00) and
+  the churn's 0x448150 (0xFF) / 0x44818d (0x00). Nothing else writes.
+- **boot fill 0x447b13..0x447b3a** (decoded): `xor ebp,ebp`; loop for
+  i in 0..0x800: `call RandB` (0x447b27); `test al,3`; ==0 →
+  `bank[i] = 0xFF` else `bank[i] = 0`; `inc ebp; cmp 0x800; jge exit`.
+  **Exactly 2048 draws — one per byte — and the cursor is untouched.**
+- **per-frame churn 0x448147..0x448195** (decoded): loop k in 0..15:
+  `ecx = cursor; inc ecx; cursor = ecx; if (ecx >= 0x800 || ecx < 0
+  signed) cursor = 0` (store-then-normalize); `call RandB` (0x44817d);
+  `test al,3`; `bank[cursor] = 0xFF/0x00` (both arms RE-READ the
+  normalized cursor). **15 draws/frame, advance-then-draw-then-write.**
+  Full-ring refresh period ceil(0x800/15) = 137 frames. The `< 0`
+  signed arm is dead defensive code (cursor only ever 0..0x7FF).
+- **the blit (§7i/1) re-verified unchanged**: reads only — per row,
+  `src_off + 2·width − 0x800 ≥ 0` → `src_off = RandB() & 0x1ff`
+  (0x401b22..0x401b39 / the mode-0 twin 0x401b90..0x401ba7), i.e. the
+  reseed draw is a READ-OFFSET pick, never a bank write.
+
+**D. The call census** (direct `e8` rel32 only): **158 RandA sites,
+27 RandB sites** in .text. The dither family's RandB draws: the fill
+(0x447b27), the churn (0x44817d), the per-blit seeds
+(FUN_0041ec59@0x41ec61 — the §7i/3 `(RandB()&0x7fff)/15` clamp ≤
+0x7f5, called from the FUN_004072bf portrait pass with eax=0x7f6 at
+0x4072fb/0x4073bb/…), the intra-row reseeds (0x401b26, 0x401b94). The
+per-frame interleave order stays §7i/4: terrain edges → dither
+seeds/reseeds → churn; the fill's 2048 draws precede frame 0.
+
+**E. The three rows' S0-13 verdicts** (original-side closure; the E
+side is the charter T3 statistical stand-in — D155):
+
+| row | original init | original evolution | E side |
+|---|---|---|---|
+| rng-state-a | boot 123456 (0x41c0d3) + per-mission reseed 123456 (0x447728) | S' = ((S<<7)+S+0x361962E9) mod 2^32 per RandA draw | PCG32 stand-in, draw-count-compared only (AcceptedT3) — never bit-compared |
+| rng-state-b | boot 234567 (0x41c0cd), never reseeded | same step function | same stand-in class |
+| static-dither-noise | cursor 0 + 2048 RandB draws at MissionShell staging (§C) | 15 RandB draws/frame at the epilogue; bank ∈ {0x00,0xFF}, `RandB()&3==0 → 0xFF` | presentation-half (D17): the bank never enters the dump/hash; the row is O1-side coverage |
