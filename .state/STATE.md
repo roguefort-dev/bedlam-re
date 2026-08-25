@@ -1,5 +1,56 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D158 S0-15a COMPLETE (worker cb67f182 claim 2, commit
+    ced80e6, PUSHED): the dbx-plan `static-order-table` extent hop
+    (infra, the S0-12a precedent). The deferred arm resolves to the
+    D157-pinned 0x498 span as Form::Fixed at the DIRECT .bss
+    addresses (EXW 0x4de664 / EXD 0x91ee4; indirect flag dies
+    loudly), extent string "0x498 (12x0x62 rows)" guarded exactly;
+    all 13 capture-plan artifacts regenerated (2-line deltas each);
+    count asserts re-pinned (s0/s0w 22/4, s1 22+17/4, s1-o2 38/5,
+    s2 22+17, s3 +11/7, s4 +11/18) + both channel-form span asserts.
+    NOT a strict-coverage row: strict S0 stays 23/27 static + 2/27
+    dynamic-only (2 static rows remain: S0-16 static-player-type,
+    S0-17 static-cursor-clamp). Verified on the exact committed
+    content (scratch crate, staged via hash-object/update-index) AND
+    the live worktree: diffharness 101/101 green both ways, fmt +
+    clippy clean, MANIFEST clean pre+post. The unrelated O1-boot WIP
+    preserved untouched (worktree residue = exactly its boot_trap
+    deltas). Next head: S0-16.
+
+  - 2026-08-25 D157 S0-15 COMPLETE (worker af39f59b claim 1, commits
+    1df84f0 + bf8179d, PUSHED): the `static-order-table` TS row
+    independently covered ORIGINAL-side. RE-EXW-SIM §7j.67: geometry
+    pinned from BOTH ends (12 rows × 0x62 = 0x498 — the boot memset
+    immediate @0x41c3d6/EXD 0x2cd0f + the successor chassis base; EXW
+    tables adjacent, EXD carries a 0x90-B path buffer at 0x9237c);
+    the writer census closed at SIX families with TWO GameMain
+    families §7d.2 missed (the episode-reset memset 0x41ca06 + the
+    post-mission loadout RECAPTURE 0x41ca2e — pool robot ammo by
+    type, idiv squad size, the xor-remainder quirk) and §7d.2(c)
+    CORRECTED (the MP lobby FUN_00448ef1 READS the table into the
+    0x4dd4a0 staging, never writes it); five reader families
+    ordinal-identical EXW⟷EXD (spawn copy + default order bits, MP
+    respawn, shop, the SAVED.BDL writer FUN_0044693a, MP lobby); the
+    0x4de660/62 forms = the save-restore loop carry (+0xA/+0xC), not
+    a pre-base header. Fresh-session image = all-zero 0x498 AND a
+    fixed point of the writer cycle. Oracle
+    static_order_table_differential.rs (8 tests): transcription +
+    both-direction sensitivity (order-bits latch, save word map,
+    recapture idiv, MP mirror) + the corpus-gated E half (the row
+    ABSENT on every canonical frame + the 94-B robot-record guard on
+    the S1 T1 lane). Classification: ORIGINAL-side closure under the
+    charter no-fabricated-parity class (D149/D155 precedent) —
+    host-session loadout, no E model, no consumer fields; the
+    dbx-plan extent hop queued as S0-15a. watches.toml layout amended
+    plan-neutrally (zero plan bytes moved); DESIGN §6a E-gap note +
+    RE-EXD-MAP row re-pinned. Workspace release green (29 suites 0
+    failed incl. canonical_dump_gate 13 + differ_gate 4), fmt/clippy
+    clean, MANIFEST clean pre+post. The unrelated O1-boot WIP
+    preserved untouched. Strict S0 coverage 23/27 static + 2/27
+    dynamic-only; 2 static rows remain (S0-16 static-player-type,
+    S0-17 static-cursor-clamp). Next head: S0-16.
+
   - 2026-08-25 D156 S0-14 COMPLETE (worker 9c711d0c claim 1, commits
     a335220 + 4e0af96, PUSHED): the s0-trigger/frame-counter ordering
     RESOLVED + the DYNAMIC-ONLY placement class. RE-EXW-SIM §7j.66:

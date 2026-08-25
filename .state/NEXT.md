@@ -5,17 +5,81 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-15] the `static-order-table` TS row (order
-   table EXD 0x91ee4 / EXW twin): whole-writer/reader census +
-   independent static-oracle coverage (the S0-07..S0-14 pattern), or
-   a loud named gap if a seam stays unmodeled. NOTE: the worktree
-   carries interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry +
-   dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + the capture-plan
-   boot_trap deltas, owner ≠ current worker): inspect, preserve,
-   adopt per AGENTS shared-worktree rules; stage explicit task paths
-   only.
+1. [P4/static-parity/S0-16] `static-player-type` — independently pin
+   the original fresh-SP value and writer semantics (EXW 0x4edb90 /
+   EXD 0x1075c0; the §7d.3 boot writer 0x41c34c + the MP lobby
+   writers), then compare them with Rust construction (the §7j.67/A
+   12-type domain + the spawn-copy consumer family are now pinned
+   next door). MP/config variants are explicitly excluded from this
+   slice and require a later named task before any MP closure claim.
+   NOTE: the worktree carries interrupted O1-boot WIP (dbx-plan.rs
+   boot_trap/entry + dbx-capgen.py + dosbox-harness.sh + RUNTIME.md +
+   the capture-plan boot_trap deltas, owner ≠ current worker):
+   inspect, preserve, adopt per AGENTS shared-worktree rules; stage
+   explicit task paths only.
 
 ## Done
+1. DONE (2026-08-25, worker cb67f182 claim 2, commit ced80e6,
+   PUSHED): P4/static-parity/S0-15a the dbx-plan `static-order-table`
+   extent hop (infra, the S0-12a precedent, D158). The deferred arm
+   resolves to the D157-pinned 0x498 span as Form::Fixed at the
+   DIRECT .bss addresses (EXW 0x4de664 / EXD 0x91ee4 — an indirect
+   flag now dies loudly; the min-bank PtrCell form deliberately does
+   NOT apply), guarding the exact extent string "0x498 (12x0x62
+   rows)". watches.toml extent string moved; ALL 13 capture-plan
+   artifacts regenerated (each delta exactly 2 lines: anchor row
+   added + _deferred entry dropped); count asserts re-pinned (s0/s0w
+   22/4, s1 22+17/4, s1-o2 38/5, s2 22+17, s3 +11/7, s4 +11/18) +
+   both channel-form span asserts (CS:00091EE4 / 0x004DE664, len
+   1176). NOT a strict-coverage row: static-order-table stays
+   original-side-only (D157); strict S0 stays 23/27 static + 2/27
+   dynamic-only. Verified BOTH on the exact committed content
+   (scratch crate = HEAD + only this unit's hunks, staged via
+   hash-object/update-index) and on the live worktree: diffharness
+   101/101 green both ways, fmt + clippy clean, MANIFEST clean
+   pre+post, no corpus read, no Ghidra run. The unrelated O1-boot
+   WIP preserved untouched (the worktree residue is exactly its
+   boot_trap deltas). Remaining deferred TS arms: cgr-volume,
+   bin-terrain (bank-sized), lnk-map (map-sized), yline-zbase
+   (table-sized) + the T2/T3 unaliased sets.
+1. DONE (2026-08-25, worker af39f59b claim 1, commits 1df84f0 +
+    bf8179d, PUSHED): P4/static-parity/S0-15 the `static-order-table`
+    TS row independently covered ORIGINAL-side (D157, RE-EXW-SIM
+    §7j.67). (a) RE first (1df84f0): geometry pinned from BOTH ends —
+    12 rows × 0x62 = 0x498 (the boot memset immediate ecx=0x498
+    @0x41c3d6/EXD 0x2cd0f + the successor chassis base; EXW tables
+    ADJACENT, EXD carries a 0x90-B path buffer at 0x9237c — a channel
+    layout divergence); the writer census closed at SIX families with
+    TWO GameMain families §7d.2 missed (the episode-reset memset
+    0x41ca06 + the post-mission loadout RECAPTURE 0x41ca2e: pool
+    robot ammo by type, idiv squad size, the xor-remainder quirk) and
+    §7d.2(c) CORRECTED (the MP lobby FUN_00448ef1 READS word@+0/+2
+    into the 0x4dd4a0 staging — never writes the table); readers five
+    families ordinal-identical EXW⟷EXD (spawn copy + default order
+    bits, MP respawn, shop, the SAVED.BDL writer FUN_0044693a, MP
+    lobby); the 0x4de660/62 pre-base displacements = the save-restore
+    loop carry (+0xA/+0xC), not a header; the 0x442ba7 0x4de658 form
+    = the MP mirror's +0xE carry to the group +2 word. Fresh-session
+    image = all-zero 0x498 AND a fixed point of the writer cycle.
+    (b) Oracle (bf8179d): static_order_table_differential.rs, 8 tests
+    — geometry pins, the boot image, the spawn-copy + order-bits
+    transcription with both sensitivity directions, the 49-word save
+    round-trip (+0xA byte-exact), the recapture idiv + zero-fixed-
+    point, the MP mirror/lobby round-trip, the census pins, and the
+    corpus-gated E half (row ABSENT on every canonical frame + the
+    94-B robot-record structural guard on the S1 T1 lane). (c) The
+    classification (D157): ORIGINAL-side closure under the charter
+    no-fabricated-parity class — host-session loadout, no E model, no
+    consumer fields; the dbx-plan extent hop (Form::Fixed 0x498
+    fixed span) queued as its own unit. watches.toml layout amended
+    plan-neutrally (extent string unchanged — zero plan bytes moved);
+    DESIGN §6a E-gap note + RE-EXD-MAP row re-pinned. Verified:
+    bedlam-game + bedlam-core release suites green (29 ok / 0 failed,
+    incl. canonical_dump_gate 13 + differ_gate 4 corpus lanes),
+    diffharness green, fmt + clippy clean, MANIFEST clean before AND
+    after. The unrelated O1-boot WIP preserved untouched (unit staged
+    only its own paths). Strict S0 coverage 23/27 static + 2/27
+    dynamic-only. Queued: S0-16 as item 1.
 1. DONE (2026-08-25, worker 9c711d0c claim 1, commits a335220 +
    4e0af96, PUSHED): P4/static-parity/S0-14 the s0-trigger/
    frame-counter ordering RESOLVED + the DYNAMIC-ONLY placement class
@@ -216,7 +280,8 @@ renumbered queue keeps every open item claimable by number).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  22/27 rows (D155) — the 11 TS rows from bd91c10, 56918c5, 390acb9,
+  23/27 rows static + 2/27 dynamic-only (D157) — the 11 TS rows from
+  bd91c10, 56918c5, 390acb9,
   cd70efe, 920aec2, fcb8fb2, cec30a7, 2646ce8, 76a14c6 + the eight
   T0 campaign/config rows from ea745fd (S0-12, closed both sides by
   the D154 seam) + the three RNG/dither rows from dc6c99d (S0-13,
@@ -233,10 +298,6 @@ renumbered queue keeps every open item claimable by number).
   second oracle).
 - [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter` ordering
   and classify dynamic-only row placement separately from static closure.
-- [P4/static-parity/S0-15] `static-order-table` — independently
-  reconstruct fresh-session/loadout/order-table post-init state and
-  compare it against the Rust target. Do not fold this row invisibly
-  into the generic T0 campaign/config unit.
 - [P4/static-parity/S0-16] `static-player-type` — independently pin the
   original fresh-SP value and writer semantics, then compare them with
   Rust construction. MP/config variants are explicitly excluded from
