@@ -5,26 +5,62 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4.2/P2e-input/S0-17-followup] `scene-cursor-repin` — land the
-   D160-named P2e package for the GAME-LAYER cursor models: menu.rs
-   (MenuScene::tick) + mission.rs (MissionScene::tick) still clamp
-   [0,639]x[0,479] from (0,0) (annotated CLAMP DIVERGENCE comments,
-   D160/RE-EXD-MAP §5h). Re-pin BOTH to the twin-verified constants
-   (clamp 9..=631 / 9..=463, boot center (320,240) — import
-   bedlam_core::frame::{CURSOR_*}) + audit the affected hit-strips
-   (menu hit-strip bounds 0xdc < x < ... / y < 0x1d6 are all inside
-   the box — verify) and the mission click-seam targets (click_at
-   lands are target-driven — verify no test aims outside the box).
-   Re-pin the cursor unit tests (menu cursor_integrates_deltas_
-   and_clamps 639/479/(0,0) → 631/463/(9,9)-or-center). NO canonical
-   chain may move (canonical runs feed InputFrame::default(); the
-   differ_gate corpus lanes prove it). NOTE: the worktree carries
-   interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py
-   + dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
-   deltas, owner ≠ current worker): inspect, preserve, adopt per
-   AGENTS shared-worktree rules; stage explicit task paths only.
+1. [P4.2/S0-registry-tail] `ts-extent-arms` — pin the four DEFERRED
+   TS watch extents the S0-15a unit left open with explicit
+   unpinned-extent reasons (see its Done entry): cgr-volume
+   (bank-sized), bin-terrain (bank-sized), lnk-map (map-sized),
+   yline-zbase (table-sized). For each: read the extent off the
+   verified load path in the objdump (ghidra-project/
+   exw-text-objdump.txt / exd-probe dumps; no Ghidra import),
+   cross-check the bank dims against the corpus files (READ-ONLY +
+   MANIFEST check), pin the dbx-plan Form, regenerate the affected
+   capture plans, byte-pin the committed artifacts, and re-assert
+   the registry_anchors + plan-pinning tests. Zero canonical-chain
+   movement expected (plan-only). NOTE: the worktree still carries
+   the interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry +
+   dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + capture-plan
+   boot_trap deltas, owner ≠ current worker): inspect, preserve,
+   adopt per AGENTS shared-worktree rules; stage explicit task
+   paths only — dbx-plan.rs + the capture plans OVERLAP that WIP,
+   so coordinate: keep its boot_trap deltas intact in the emitted
+   plans.
+2. [P4.2/W-survey] `t2t3-alias-census` — the T2/T3 watch rows with
+   exd_status gaps (projectiles/critters/effects/debris families):
+   a bounded objdump-only census producing the EXD↔EXW alias table
+   per row (anchor every claim to ledger rows; RE-notes-first
+   commit before any registry/watches edit). Feed: docs/
+   DESIGN-DIFFHARNESS.md §4, tools/diffharness/watches.toml T2/T3
+   sections, docs/RE-EXW-SIM §7j ledger.
 
 ## Done
+1. DONE (2026-08-26, worker 80491508 claim 1, commit a0aa9e5,
+   PUSHED): P4.2/P2e-input `scene-cursor-repin` — the D160-named
+   P2e package LANDED: the game-layer cursor models re-pinned to
+   the twin-verified constants. TitleMenu (menu.rs) + MissionScene
+   (mission.rs) now import bedlam_core::frame::{CURSOR_*} — both
+   boot at the GameInit center (320,240) and clamp into the
+   original [9,631]x[9,463] box on every integrate (the two CLAMP
+   DIVERGENCE annotations replaced by the faithful pin; the
+   constants ARE the classic-input adapter's own box, D160).
+   AUDITS VERIFIED: (a) the menu hit-strip (0xdc,0x1a4)x(top,0x1d6)
+   sits inside the box — x (220,420) well inside; top ≥ 302 > 9;
+   the 0x1d6 (470) bottom is EXCLUSIVE while the cursor max y is
+   463, and at y=463 the row index (463−302)/0x18 = 6 = the LAST
+   row of a count-7 strip, so NO strip row is lost to the clamp
+   (documented at the STRIP_* consts); (b) the mission click-seam
+   targets all inside the box (the x>=0x1E0 sidebar gate 480 <=
+   631; every scripted test target <= (630,453)) — the gate test's
+   five absolute-from-(0,0) aim deltas converted to a shared
+   target-driven aim() helper; the menu cursor unit test re-pinned
+   (boot-center assert + 631/463/(9,9)). NO canonical chain moved
+   (canonical runs feed InputFrame::default(); the cursor is D17
+   presentation state) — canonical_dump_gate 13/13 + differ_gate
+   4/4 corpus lanes re-asserted the pins; workspace release tests
+   733/0, fmt+clippy clean, MANIFEST clean (no corpus read, no
+   Ghidra run). D160 addendum (4) in DECISIONS.md + DESIGN-GAME
+   PER-FRAME row updated. The unrelated O1-boot WIP preserved
+   untouched (unit staged only its own five paths). Queued:
+   ts-extent-arms (item 1) + t2t3-alias-census (item 2).
 1. DONE (2026-08-26, worker 6027a7bf claim 1, commits b7751cb +
     b0ad293, PUSHED): P4/static-parity/S0-17 `static-cursor-clamp`
     DECODED + RECLASSIFIED hardware/input-profile-only (D160,

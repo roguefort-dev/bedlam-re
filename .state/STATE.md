@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D160-followup `scene-cursor-repin` COMPLETE (worker
+    80491508 claim 1, commit a0aa9e5, PUSHED): the D160-named P2e
+    package landed — the GAME-LAYER cursor models now carry the
+    twin-verified constants. TitleMenu (menu.rs) + MissionScene
+    (mission.rs) import bedlam_core::frame::{CURSOR_*}: boot at the
+    GameInit center (320,240), clamp [9,631]x[9,463] every
+    integrate (both CLAMP DIVERGENCE annotations replaced). Audits
+    verified + documented: the menu hit-strip loses NO row to the
+    box (0x1d6=470 exclusive bottom; y=463 → row index 6 = the last
+    row of a count-7 strip); every mission click-seam target is
+    inside the box (sidebar gate 480 ≤ 631); the gate test's five
+    absolute-from-(0,0) aims converted to a shared target-driven
+    aim() helper; the menu cursor unit test re-pinned. NO canonical
+    chain moved — canonical_dump_gate 13/13 + differ_gate 4/4
+    re-asserted; workspace release tests 733/0; fmt+clippy clean;
+    MANIFEST clean pre+post (no corpus read, no Ghidra run). D160
+    addendum (4) in DECISIONS.md; DESIGN-GAME PER-FRAME row fixed.
+    The interrupted O1-boot WIP (dbx-plan/capgen/RUNTIME/capture
+    plans, owner ≠ this worker) inspected, preserved untouched, and
+    still reserved for its owner. With this, the D160 cursor thread
+    is closed END-TO-END (RE + adapter + game-layer + audits). Next
+    head: ts-extent-arms (the four deferred TS extents) then the
+    T2/T3 alias census.
+
   - 2026-08-26 D160 S0-17 COMPLETE — THE S0 REGISTRY FULLY
     DISPOSITIONED (worker 6027a7bf claim 1, commits b7751cb + b0ad293,
     both PUSHED): the `static-cursor-clamp` row DECODED + RECLASSIFIED
