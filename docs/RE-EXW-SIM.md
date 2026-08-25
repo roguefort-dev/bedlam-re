@@ -9775,6 +9775,21 @@ modeled gates, emit it in the canonical TS row — the S0-12..S0-17 slices
 stay untouched. No fabricated parity: the rect constants are file-free
 hardcode, so the seam is fully deterministic.
 
+**F-bis. SEAM LANDED (S0-11b, D151, 2026-08-25):** the gap above is
+CLOSED. `bedlam-core/src/claim_rects.rs` = the promoted rect farm
+(byte-identical to the oracle's transcription copy, pinned by test);
+`MissionSim::stage_claim_bank(zone_set, mission)` = the §7j.63/C
+initializer transcription, called at EVERY `GameHost::load_mission`
+(the original's unconditional 0x447b85 call — no scenario key);
+`stage_splash` + `platform_tile_build` read the byte in the gate
+order above; the canonical `static-claim-bank` TS row emits the raw
+arena image (DESIGN §6a). The "three modeled readers" phrase in F is
+corrected: the death-blast smoke producer (FUN_0042382c) is
+host-seamed presentation (§7j.24) — no sim gate exists for it.
+Corpus reachability answered NO (tested): no staged S0..S8 scenario
+stages on a claimed tile; the canonical chains moved via the TS row
+only. Oracle parity closed both sides (37/37 missions).
+
 The all-37-mission independent oracle (test/core, S0-11) transcribes the
 rect store farm for zones 1..7 from the objdump (register-tracked, each zone
 case's gates hand-read), rebuilds line[] per mission TOT header, computes

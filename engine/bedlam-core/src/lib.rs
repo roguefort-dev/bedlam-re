@@ -35,6 +35,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod claim_rects;
 pub mod critter;
 pub mod destroy;
 pub mod frame;

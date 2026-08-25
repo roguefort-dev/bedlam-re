@@ -24,23 +24,28 @@
 //! 3. `line[y] = y * map_w` — the row-start table 0x4ea900, with the
 //!    map w/h from each mission's TOT header (read independently here).
 //!
-//! Actual side: NONE — a documented GAP, not parity. bedlam-core models
-//! the claim byte as a hardcoded 0 in the three staged gates
-//! (`stage_splash`, `platform_tile_build`, the death-blast smoke
-//! producer) under the disproven "host-staged zeros / D82 order-marker
-//! writers" note (§7j.63/F corrects both halves: the bank is stamped at
-//! mission load by deterministic hardcoded data, and no order-marker
-//! writer exists). The original REFUSES those stagings on claimed tiles
-//! where the Rust engine allows them. The concrete seam is queued
-//! (stage the bank from the pinned rect tables, read it in the three
-//! gates, emit the canonical TS row); it is deliberately NOT landed
-//! here — that would re-baseline every canonical chain pin and belongs
-//! to its own unit. No fabricated parity: this gate pins the ORIGINAL
-//! image exactly and records the Rust absence as the row's status.
+//! Actual side: LANDED (S0-11b, the staging seam) —
+//! [`bedlam_core::mission::MissionSim::stage_claim_bank`] stages the
+//! bank at every mission load (host `load_mission`), the two modeled
+//! reader gates (`stage_splash`, `platform_tile_build`) read it
+//! (§7j.63), and the canonical `static-claim-bank` TS row emits the
+//! image (DESIGN §6a). The third §7j.63 reader — the FUN_0042382c
+//! death-blast smoke producer — is HOST-SEAMED presentation
+//! (§7j.24), so no sim gate exists for it. This oracle now pins BOTH
+//! sides: the expected image (the independent transcription below,
+//! unchanged) vs the staged `claim_bank()` per corpus mission
+//! (`claim_staging_matches_the_independent_image`), plus the
+//! promoted data module pinned byte-identical to this test's own
+//! transcription copy (`promoted_rect_farm_is_byte_identical`).
+//! The gates' refusal behavior on claimed tiles is proven in
+//! bedlam-core's `claim_seam_tests` (destroy.rs).
 //!
 //! Scope: valid shipped corpus only (SP fresh sessions). The H2H
 //! (mode==2) filler legs are out of scope for the S0 row. No production
-//! parser, loader, or terrain helper is reused on the expected side.
+//! parser, loader, or terrain helper is reused on the expected side
+//! (the actual side builds a synthetic all-zero terrain of the TOT
+//! dims — the claim initializer reads only `terrain.size()`, and the
+//! DAT/TOT dim agreement is the static_loader_differential's own pin).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -378,6 +383,50 @@ fn with_rects_modified(
     move |zone, mission, w, h| {
         let mutated: Vec<_> = RECTS.iter().map(|&r| mutate(r)).collect();
         image_from_table(&mutated, zone, mission, w, h)
+    }
+}
+
+/// The S0-11b seam's data module (crate::claim_rects) must stay
+/// byte-identical to this test's own transcription copy — the
+/// anti-drift pin between the production table and the oracle.
+#[test]
+fn promoted_rect_farm_is_byte_identical() {
+    assert_eq!(RECTS, bedlam_core::claim_rects::RECTS);
+}
+
+/// The ACTUAL side (S0-11b): the engine's staged claim bank equals
+/// the independent transcription for every shipped mission — the
+/// row's parity closed both sides.
+#[test]
+fn claim_staging_matches_the_independent_image() {
+    let Some(missions) = shipped_missions() else {
+        return;
+    };
+    for m in &missions {
+        let tot = fs::read(&m.tot).unwrap_or_else(|e| panic!("read {}: {e}", m.tot.display()));
+        let map_w = u16::from_le_bytes([tot[0], tot[1]]);
+        let map_h = u16::from_le_bytes([tot[2], tot[3]]);
+        let expected = original_claim_image(m.zone_index, m.mission, map_w, map_h);
+
+        let n = map_w as usize * map_h as usize;
+        let terrain = bedlam_core::mission::Terrain::from_parts(
+            map_w as i32,
+            map_h as i32,
+            vec![0u8; 8 * n],
+            Vec::new(),
+        )
+        .expect("synthetic terrain of the TOT dims");
+        let angles =
+            bedlam_core::mission::AngleTable::from_thresholds(&[0u16; 64]).expect("thresholds");
+        let mut sim = bedlam_core::mission::MissionSim::new(terrain, angles, 0);
+        sim.stage_claim_bank(u32::from(m.zone_index), u32::from(m.mission));
+        assert_eq!(
+            sim.claim_bank(),
+            &expected[..],
+            "staged image for ZONE{}/M{}",
+            m.zone_letter,
+            m.mission
+        );
     }
 }
 

@@ -773,6 +773,18 @@ pub struct MissionSim {
     /// [`MissionSim::set_armor_pads`].
     /// Derived mission data — hashed only through its armor effect.
     armor_pads: Vec<u8>,
+    /// The tile-claim bank — the 0x2710 arena at [0x46af58] (EXD
+    /// twin cell 0x119564), staged at EVERY mission load by
+    /// FUN_004254e1 [§7j.63]: a whole-bank memset-0 then the stamp
+    /// of the ACTIVE PREFIX of the 45-record door-rect list from
+    /// the hardcoded per-(zone,mission) rect farm (crate::
+    /// claim_rects). Deterministic and input-free — no RNG draws,
+    /// no hashed fields; the readers are the §7j.63 gates
+    /// (`stage_splash`, `platform_tile_build`, the death-blast
+    /// smoke producer — that last host-seamed, §7j.24) and the
+    /// canonical `static-claim-bank` TS row. Empty = unstaged
+    /// (the reader gates then read 0, the pre-S0-11b behavior).
+    pub(crate) claim_bank: Vec<u8>,
     /// The player TYPE word ([0x4edb90]): 0 in all SP games
     /// (GameMain 0x41c34c) — gates the alarm trip + case-4 pickup.
     pub(crate) player_type: u16,
@@ -911,6 +923,7 @@ impl MissionSim {
             rng: Pcg32::new(seed, STREAM_MISSION),
             frame: 0,
             armor_pads: Vec::new(),
+            claim_bank: Vec::new(),
             player_type: 0,
             commands: Vec::new(),
             weapon_bank: vec![WeaponRecord::default(); WEAPON_BANK_SLOTS],
@@ -1106,6 +1119,85 @@ impl MissionSim {
     /// whatever lands fades within `value` frames (7j.10).
     pub fn armor_pad_byte(&self, tile: usize) -> u8 {
         self.armor_pads.get(tile).copied().unwrap_or(0)
+    }
+
+    /// FUN_004254e1 — the tile-claim bank INITIALIZER [§7j.63/C,
+    /// verified 0x4254e1..0x425567; EXD twin 0x3657e]: memset-0 the
+    /// whole 0x2710 arena, then walk the 45-record door-rect bank
+    /// (staged from the hardcoded per-(zone,mission) farm —
+    /// [`crate::claim_rects::RECTS`], the FUN_0042c4a0 store blocks)
+    /// stopping at the first `state == 0` record, stamping
+    /// `claim[line[y0+row] + x0 + col] = 1` with `line[y] = y*map_w`
+    /// (the 0x4ea900 row-start table; map_w from the mission terrain,
+    /// DAT_004eddec — the same dims the TOT header carries). Runs at
+    /// EVERY MissionShell mission load (0x447b85, unconditional in
+    /// SP — the mode==2 Head2Head filler legs are out of model).
+    /// `zone_set` is the 1-based terrain set ([0x4edd8c]), `mission`
+    /// the within-zone mission number ([0x4edd88]).
+    ///
+    /// The original has NO bounds checks (§7j.63/C); the shipped
+    /// corpus is proven in-bounds by the S0-11 oracle, so the
+    /// in-arena guard below is unreachable on real data and only
+    /// keeps synthetic input from panicking (charter: no UB).
+    pub fn stage_claim_bank(&mut self, zone_set: u32, mission: u32) {
+        /// The arena allocation: 0x2710 B, the 7th per-mission bump
+        /// block (0x41d9cd..0x41d9d7).
+        const BANK_LEN: usize = 0x2710;
+        /// The door-rect list: 45 records of stride 0x10
+        /// (0x4dcae8..0x4dcdb8).
+        const RECT_COUNT: usize = 45;
+
+        let (w, _h) = self.terrain.size();
+        let map_w = w.max(0) as usize;
+        // The rect bank after the 0x447b7b whole-bank memset-0 +
+        // FUN_0042c4a0: only the (zone, mission) case's records are
+        // written; records past the last written one stay inactive.
+        let mut rects = vec![[0u16; 5]; RECT_COUNT];
+        let mut written = [false; RECT_COUNT];
+        for &(z, m, rec, state, x0, y0, rw, rh) in crate::claim_rects::RECTS {
+            if u32::from(z) != zone_set || u32::from(m) != mission {
+                continue;
+            }
+            let r = &mut rects[rec as usize];
+            r[0] = state;
+            r[1] = x0;
+            r[2] = y0;
+            r[3] = rw;
+            r[4] = rh;
+            written[rec as usize] = true;
+        }
+        let high = written.iter().position(|x| !x).unwrap_or(RECT_COUNT);
+
+        self.claim_bank = vec![0u8; BANK_LEN];
+        for rect in &rects[..high] {
+            if rect[0] == 0 {
+                break; // the ACTIVE-PREFIX rule (§7j.63/C)
+            }
+            for row in 0..rect[4] as usize {
+                for col in 0..rect[3] as usize {
+                    let y = rect[2] as usize + row;
+                    let x = rect[1] as usize + col;
+                    let tile = y * map_w + x;
+                    if tile < BANK_LEN {
+                        self.claim_bank[tile] = 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The staged claim bank (empty = unstaged — the pre-S0-11b
+    /// reader-gate behavior; the canonical TS row emits whatever is
+    /// staged, `run_canonical` missions always carry the full
+    /// 0x2710 image).
+    pub fn claim_bank(&self) -> &[u8] {
+        &self.claim_bank
+    }
+
+    /// The claim byte for a linear tile (the §7j.63 reader gates):
+    /// 0 when unstaged/out-of-bank.
+    pub(crate) fn claim_byte(&self, tile: usize) -> u8 {
+        self.claim_bank.get(tile).copied().unwrap_or(0)
     }
 
     /// FUN_00422287 [RE-EXW-SIM 7j.9, verified 0x422287..0x4222cd]:

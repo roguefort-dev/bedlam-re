@@ -481,8 +481,8 @@ impl GameHost {
         robots_override: Option<usize>,
         staged_markers: &[(i32, i32, i32)],
     ) -> Result<(), GameError> {
-        let (zone, _) = self.mission_slot();
-        let mission = MissionScene::stage(
+        let (zone, mission_no) = self.mission_slot();
+        let mut mission = MissionScene::stage(
             tot,
             dat,
             pad,
@@ -505,6 +505,16 @@ impl GameHost {
             robots_override,
             staged_markers,
         )?;
+        // The tile-claim bank (S0-11b, §7j.63): the original stages
+        // it at EVERY MissionShell mission load (the 0x447b85
+        // FUN_004254e1 call — deterministic hardcoded data, no RNG
+        // draws, no hashed fields), so E stages it right here at
+        // load — not a scenario key. [0x4edd8c] is the 1-based
+        // terrain set (zone_index + 1, D99); [0x4edd88] the
+        // within-zone mission number.
+        mission
+            .sim_mut()
+            .stage_claim_bank((zone + 1) as u32, mission_no as u32);
         self.mission = Some(mission);
         Ok(())
     }

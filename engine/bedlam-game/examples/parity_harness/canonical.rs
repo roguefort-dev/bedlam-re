@@ -129,6 +129,12 @@ pub struct TickState<'a> {
     pub armor_pads: &'a [u8],
     /// TS statics ride the anchor frame only.
     pub map_wh: Option<(u32, u32)>,
+    /// The staged tile-claim bank (S0-11b, §7j.63) — the
+    /// `static-claim-bank` TS row's source, anchor frame only like
+    /// every TS static. Empty slice = unstaged (never on
+    /// `run_canonical` paths — `load_mission` stages the full
+    /// 0x2710 image; hand-built fixtures choose their own).
+    pub claim_bank: &'a [u8],
     /// The T2 watch surfaces (W12-S3): the two projectile banks,
     /// emitted WHOLE per frame — never in `state_hash` (the W6
     /// split: watched bank rows are their own dump blobs).
@@ -643,6 +649,13 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         wh.extend_from_slice(&w.to_le_bytes());
         wh.extend_from_slice(&h.to_le_bytes());
         f.push_watch("static-map-wh", wh);
+        // The tile-claim bank (S0-11b, §7j.63): the raw arena image
+        // at mission load — the SAME fixed 10000-B span the O1 plan
+        // dumps through the 0x119564 pointer cell (indirect,
+        // extent 10000) and O2 through 0x46af58, so no count
+        // prefix, no field map: byte passthrough on every channel
+        // (the D136 static-map-wh fixed-extent precedent).
+        f.push_watch("static-claim-bank", st.claim_bank.to_vec());
     }
     f
 }
@@ -1360,6 +1373,7 @@ fn tick_state<'a>(
         order_target: seam_target,
         armor_pads: sim.armor_pads(),
         map_wh,
+        claim_bank: sim.claim_bank(),
         weapon_bank: sim.weapon_bank(),
         enemy_bank: sim.enemy_bank(),
         critter: critter.then_some(CritterView {

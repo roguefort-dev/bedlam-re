@@ -427,6 +427,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 | no-extract-latch | u32 count + count u32 (all zero) | **(D136)** count = the robot-bank count (`robots().len()`); the latch is MP-lobby-claimed ONLY (D133) — never set on any SP path, so E's SP corpus construction is the all-zero bank (the guest boot-memset twin). The O1/O2 raw side is the bare `$robot_count*4` span — the normalizers prepend `len/4`; the count field is STRUCTURAL like every count word, so the robot-count scenario seams (D91/D103/D108 `_e_staging`) surface here exactly as on robot-bank.count |
 | typedb-fade-byte, armor-pad-reads | u32 len + len bytes (the engine bank is lazily materialized; len 0 ≡ all-zero w·h — the ZONEA corpus until a death) | `armor_pads()` (the +0x18 byte family, 7g.3/7j.9) |
 | static-map-wh (TS, anchor frame only) | u32 w, u32 h | terrain/view size |
+| static-claim-bank (TS, anchor frame only) | the RAW 10000-B arena image — no count prefix, no field map (**S0-11b/D151**) | `MissionSim::claim_bank()` — staged at EVERY `load_mission` by `stage_claim_bank` (the §7j.63 door-rect stamp; the original's unconditional 0x447b85 initializer). The O1 plan dumps the same fixed span through the 0x119564 pointer cell, O2 through 0x46af58 → byte passthrough on all three channels (the static-map-wh fixed-extent precedent) |
 
 **E-gaps (rows the E side does not emit in W6):** variant-flag-bytes
 (T1); mortar-trail-bank + poi-bank (T2); the unmodeled T3 banks
@@ -444,7 +445,14 @@ still named the destroy-family five (tile-word-grid,
 platform-strength, typedb-mirror-rows, object-instances, trt-array)
 and "all T2/T3" as gaps although W12-S3/S4/S6/S8 landed their
 emitters (gated on the scenario staging keys — `destroy = 1` / T2
-tiers / `pad` steps / `critters = 1`).
+tiers / `pad` steps / `critters = 1`). **AMENDED 2026-08-25
+(S0-11b/D151):** `static-claim-bank` LEAVES the "every TS row except
+static-map-wh" clause — E emits it now (the table row above; staged
+at every `load_mission`, the §7j.63 door-rect stamp). The per-frame
+T3 `tile-claims` row REMAINS a gap (the TS row carries the load image;
+the original's bank is mission-static — no writer after the
+initializer — so the two rows are content-identical by construction
+and the T3 row stays deferred with the other T3 banks).
 
 **Frame model (E):** one MissionShell-equivalent frame = one
 `pump_frame(dt=4)` = `MissionScene::tick` (six phases + epilogue) +

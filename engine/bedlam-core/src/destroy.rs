@@ -1731,10 +1731,9 @@ impl MissionSim {
     /// FUN_00424355 — the splash STAGER [§7j.10, §7j.14/5]:
     /// in-bounds + z clamp ≤ 7 + DAT volume(z) == 0 + z-word(z) ==
     /// 0 + the tile-claim byte == 0 (§7j.63: the claim bank is the
-    /// DOOR-RECT tile claim map, stamped at mission load by the
-    /// hardcoded rect farm — Rust does not stage it yet, so the gate
-    /// reads 0 by construction [documented gap, seam queued]; the old
-    /// "D82 order-marker writers" attribution was disproven);
+    /// DOOR-RECT tile claim map, staged at mission load by
+    /// [`MissionSim::stage_claim_bank`] — an unstaged bank reads 0
+    /// and lets the stage through, the pre-S0-11b behavior);
     /// allocation first age==0 slot else max-age eviction (the evicted
     /// record is flushed through the z-structure clear). NO RNG draws.
     pub fn stage_splash(&mut self, x: i32, y: i32, z: i32, delay: u16) -> bool {
@@ -1748,6 +1747,9 @@ impl MissionSim {
             return false;
         }
         if self.mirror_word(tile, z as usize) != 0 {
+            return false;
+        }
+        if self.claim_byte(tile) != 0 {
             return false;
         }
         // Allocation: first free, else max-age evict + flush.
@@ -1891,8 +1893,8 @@ impl MissionSim {
     /// original's instruction order [§7j.41/2, verified
     /// 0x4228ce..0x422a3c]: bounds; BOTH bank words 0; the
     /// tile-claim arena byte 0 (§7j.63: the door-rect claim map,
-    /// staged at mission load from the hardcoded rect farm — not
-    /// staged in Rust yet [documented gap, seam queued]); no LIVE robot in
+    /// staged at mission load by
+    /// [`MissionSim::stage_claim_bank`]); no LIVE robot in
     /// the candidate's (tx,ty)..(tx+1,ty+1) quadrant block (the
     /// robot scan over the whole bank, tile =
     /// (q5 − 0xC)>>5); z ≥ 1; the mirror z-word at the build
@@ -1914,10 +1916,13 @@ impl MissionSim {
             return false;
         }
         // The tile-claim byte (0x46af58 arena): §7j.63 — the bank is
-        // the DOOR-RECT tile claim map, stamped at mission load from
-        // the hardcoded rect farm (deterministic, input-free); Rust
-        // does not stage it yet, so the gate reads 0 by construction
-        // [documented gap, seam queued].
+        // the DOOR-RECT tile claim map, staged at mission load from
+        // the hardcoded rect farm
+        // ([`MissionSim::stage_claim_bank`]); an unstaged bank reads
+        // 0 and the gate passes, the pre-S0-11b behavior.
+        if self.claim_byte(tile) != 0 {
+            return false;
+        }
         for r in &self.robots {
             if !r.alive {
                 continue;
@@ -2258,5 +2263,93 @@ mod s7_tests {
         let before = s.rand_a_state();
         s.advance_frame();
         assert_ne!(s.rand_a_state(), before, "armed: the gate draw ran");
+    }
+}
+
+#[cfg(test)]
+mod claim_seam_tests {
+    //! The S0-11b staging seam (§7j.63): the claim bank staged at
+    //! mission load REFUSES the two modeled reader gates on claimed
+    //! tiles where an unstaged (pre-seam) sim allows them — the
+    //! original's own behavior on every mission with a rect case.
+    //! The third §7j.63 reader (the FUN_0042382c death-blast smoke
+    //! producer) is HOST-SEAMED presentation (bedlam-game
+    //! apply_damage — §7j.24), so no sim gate exists for it; the
+    //! corpus-image parity of the staged bank itself is proven by
+    //! the static_claim_bank_differential oracle (the actual-side
+    //! test added by this seam).
+
+    use super::MissionSim;
+    use crate::destroy::ObjectTypeTable;
+    use crate::mission::{AngleTable, Terrain};
+
+    /// A 25×75 ZONEA sim with platform substrate under both the
+    /// claimed tile (2,51) — rec 0 of the pinned rect farm — and
+    /// the unclaimed control (15,20): plane-1 volume 1 (the
+    /// plane-B anchor), plane 2 empty, mirror banks empty. The
+    /// claim bank is staged per `staged` (ZONEA/M1 vs never).
+    fn sim(staged: bool) -> MissionSim {
+        let (w, h) = (25i32, 75i32);
+        let n = (w * h) as usize;
+        let mut planes = vec![0u8; 8 * n];
+        // Platform substrate (plane-B anchor, volume 1) under the
+        // claimed tile (2,51) AND the unclaimed control (15,20).
+        for &(tx, ty) in &[(2usize, 51usize), (15, 20)] {
+            planes[1 * n + ty * w as usize + tx] = 1;
+        }
+        let terrain = Terrain::from_parts(w, h, planes, Vec::new()).expect("terrain");
+        let angles = AngleTable::from_thresholds(&[0u16; 64]).expect("thresholds");
+        let mut s = MissionSim::new(terrain, angles, 0x1234_5678);
+        // Empty destroy corpora — stages the grids + zone set 1.
+        let mut pos = vec![0xFFu8; 16 * 2000];
+        for slot in 0..2000 {
+            pos[slot * 16 + 12..slot * 16 + 16].copy_from_slice(&(-1i32).to_le_bytes());
+        }
+        assert!(s.stage_destroy_family(&ObjectTypeTable::default(), &pos, &[0u8, 0], 1, 0));
+        if staged {
+            s.stage_claim_bank(1, 1);
+        }
+        s
+    }
+
+    #[test]
+    fn staged_claim_refuses_both_reader_gates() {
+        // Pre-seam (unstaged): both gates pass on (2,51).
+        let mut a = sim(false);
+        assert!(a.stage_splash(2, 51, 0, 0), "unstaged: splash passes");
+        assert!(
+            a.platform_tile_build(2, 51, 2, 300),
+            "unstaged: build passes"
+        );
+
+        // Staged ZONEA/M1: (2,51) is rec 0's tile — both gates
+        // REFUSE (the §7j.63/F behavior the original always had).
+        let mut b = sim(true);
+        assert_eq!(b.claim_bank().len(), 0x2710);
+        assert_eq!(b.claim_bank().iter().filter(|&&v| v != 0).count(), 59);
+        assert_eq!(b.claim_bank()[51 * 25 + 2], 1);
+        assert!(!b.stage_splash(2, 51, 0, 0), "claimed tile: splash refused");
+        assert!(
+            !b.platform_tile_build(2, 51, 2, 300),
+            "claimed tile: build refused"
+        );
+
+        // The refusal is the CLAIM byte alone: the unclaimed control
+        // tile passes both on the SAME staged sim.
+        assert!(
+            b.stage_splash(15, 20, 0, 0),
+            "unclaimed control: splash passes"
+        );
+        assert!(
+            b.platform_tile_build(15, 20, 2, 300),
+            "unclaimed control: build passes"
+        );
+
+        // Re-staging an all-zero (zone, mission) — zone 1 stages
+        // mission 1 ONLY (the case gate) — clears the image and both
+        // gates pass again on the previously refused tile.
+        b.stage_claim_bank(1, 2);
+        assert!(b.claim_bank().iter().all(|&v| v == 0), "A/M2: no rect case");
+        assert!(b.stage_splash(2, 51, 0, 0), "re-staged zero: splash passes");
     }
 }

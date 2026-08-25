@@ -4391,3 +4391,74 @@ and belongs to its own bounded unit; no fabricated parity in the
 meantime). Strict S0 independent coverage is now **11/27 rows** (the
 D149 ten + `static-claim-bank`); 16 rows remain. (worker eeafac37
 claim 1)
+
+## D151 — 2026-08-25: P4/static-parity/S0-11b — the claim-bank staging seam LANDED (row `static-claim-bank` closed BOTH sides; every canonical chain re-baselined)
+
+**(1) The seam.** `static-claim-bank` leaves the D150 gap set: the
+rect farm promoted from the oracle's `tests/data/claim_rects.rs` into
+`bedlam-core/src/claim_rects.rs` (byte-identical, pinned by a new
+oracle test), `MissionSim::stage_claim_bank(zone_set, mission)` =
+the §7j.63/C initializer transcription (memset-0 the 0x2710 arena +
+stamp the ACTIVE PREFIX of the 45-rect door-rect list via
+`line[y] = y*map_w`, `map_w` from `terrain.size()` — the DAT dims the
+TOT header agrees with, static_loader_differential's own pin; the
+in-arena guard is charter-only, unreachable on shipped data), staged
+at EVERY `GameHost::load_mission` — NOT a scenario key, matching the
+original's unconditional 0x447b85 call (deterministic, input-free,
+no RNG draws, no hashed fields — `state_hash` untouched by design).
+
+**(2) The reader gates.** `stage_splash` + `platform_tile_build` read
+`claim_byte(tile)` in the §7j.63 gate order (after the mirror word /
+object-grid checks); an UNSTAGED bank reads 0 — the pre-seam behavior
+every hand-built sim keeps. The §7j.63/F "three modeled readers"
+phrasing is corrected by this unit: the THIRD reader (the FUN_0042382c
+death-blast smoke producer) is HOST-SEAMED presentation (§7j.24,
+bedlam-game `apply_damage`) — no sim gate exists for it and none is
+fabricated. Gate proof: `claim_seam_tests` (destroy.rs) pins the
+refusal on rec-0's ZONEA/M1 tile (2,51) with an unstaged-pass control,
+an unclaimed-tile control on the SAME staged sim, and the A/M2
+all-zero re-stage clearing the refusal.
+
+**(3) Parity closed BOTH sides.** The oracle gains the actual side:
+`claim_staging_matches_the_independent_image` runs the engine staging
+over a synthetic terrain of every shipped mission's TOT dims and
+asserts `claim_bank() ==` the independent transcription (37/37), plus
+`promoted_rect_farm_is_byte_identical` (the production table vs the
+oracle's own copy). Row `static-claim-bank` is now strict-coverage
+CLOSED — the first S0 static row closed both sides rather than
+original-side only. Strict S0 independent coverage stays 11/27 rows
+(the row was already counted by D150; this closes its Rust half).
+
+**(4) The canonical TS row.** `emit_frame` emits `static-claim-bank`
+on the anchor frame (TS) as the RAW arena image — no count prefix, no
+field map: the O1 plan dumps the same fixed 10000-B span through the
+0x119564 pointer cell and O2 through 0x46af58, so all three channels
+ride the differ's byte-passthrough arm and compare clean with ZERO
+differ changes (the static-map-wh fixed-extent precedent; the row
+fabricates identity through the differ_gate catch-all).
+
+**(5) The re-baseline (deliberate, the D136 precedent).** Every
+canonical chain pin moved via the new row: fixture digest
+c0268bf499a505c1→1335f953d7da3c82, synthetic 6517d1c0b7169446→
+9e5efdc3fff70d88, S0 dac1cfd17bc7ede3→b9b57b68e95f482a, S1
+a18cb11ac8e4314e→da833e535f833dcc, S2 d6649ce272ad6d96→
+43110d921137da19, S3 f4f5b4351e976ed5→fdd9fae3de7a3ef9, S4
+63ab5ac7679f6de7→f35b5e45b26891ea, S5 8a718339e0702fd6→
+744950e2d3753d04, S5B b72f57e0b8e7042b→28bfea820bfb05ac, S5C
+de5b80a6177aecdd→be8cf733f1d078c2, S6 c27bff339929339d→
+80066717ee97b67f, S7 b0db22840310e82a→9b81586f58687994, S8
+29fa2f400a10974b→acced68c68c14fa6. LIVE-SESSION COMPARISONS PIN
+AGAINST THESE from this commit.
+
+**(6) Corpus reachability ANSWERED (tested, not assumed).** The task
+asked whether any staged corpus scenario stages on a claimed tile
+(chains moving via gate behavior vs the row alone): NO — every
+timeline assertion in canonical_dump_gate (S4's 3×3 splash ring at
+(12..14,14..16) + the 250-splash saturation, S7's five builds + 20 k7
+debris + the 22 creep tiles across (3..9,53..57), S6/S8's events)
+passed UNCHANGED against the now-staged bank, so no staged
+splash/platform-tile/death-blast lands on a claimed ZONEA/M1 or
+ZONEB/M1 tile in S0..S8 and the chains moved ONLY via the TS row.
+The refusal semantics remain proven by the unit gate test (future
+scenarios staging on claimed tiles will diverge from O1 exactly as
+the original does). (worker ab778f23 claim 1)
