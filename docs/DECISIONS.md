@@ -4245,3 +4245,59 @@ file outright. Verified: bedlam-core suite green, fmt + clippy clean,
 MANIFEST.sha256 clean before AND after the corpus reads, no Ghidra
 run. Strict S0 independent coverage is now **8/27 rows** (the D146
 seven + `static-yline-zbase`); 19 rows remain. (worker 2b25b994 claim 1)
+
+## D148 — 2026-08-25: P4/static-parity/S0-09 — the .BDG type-table row `static-type-table` independently covered (strict S0 coverage 9/27)
+
+THREE decisions recorded. (1) **THE STAGING SEMANTICS ARE NOW FULLY
+PINNED + ONE FORMATS ERRATUM** (instruction-level re-verification of
+the EXW loader leg FUN_0041a4f8 @0x41a5d6..0x41a7ef + the EXD twin
+FUN_0002adb4, committed as RE-EXW-SIM §7j.61 + FORMATS §16/§17
+amendments + the RE-EXD-MAP row re-pin): the WHOLE 282×0x4E = 0x55EC-B
+table at 0x4dedf2 AND 0x9C40 B of the bank arena are memset-0 before
+every load (no cross-mission stale tail — the D146 finding repeated
+one bank further); the raw control word is STAGED at row+0 BEFORE the
+==1 test (0 on all 2527 corpus empty rows); empty rows leave +2..+0x4E
+memset-0 including the four bank pointer slots; count@+0x12 = the
+NONZERO-SELECTOR count computed on ACTIVE rows only (census
+{0:554, 1:3755, 2:1304, 3:884, 4:506, 5:904} — 554 active rows carry
+0, it is not a presence flag); the four banks are read into CONSECUTIVE
+arena slots in DISK ORDER (cursor += 2·W·H·D per read) so the §7j.32
+current/under interleave lives ONLY in the row pointer slots; the bank
+byte count is recomputed from the STAGED W/H/D. Displacement census:
+0x4dee04 (count) has exactly ONE .text site = the loader store —
+**write-only state**; +0x3E/+0x42 stores only (dead editor payload,
+§7j.32 confirmed); +0x46/+0x4A read by the destroy restore
+(0x41ab59/72/8a); selectors 0x4dee08 = the loader count loop + the
+destroy-tail cases. **FORMATS §16's "max (3,3,3)" footprint claim was
+WRONG: 113 distinct tuples, W/H ≤ 10, D ≤ 8, max (10,10,5) = 500
+cells at ZONEF/M1 #184**; hp domain reaches −1 (signed on disk);
+chain domain {0,1}. (2) **THE ORACLE** (commit fcb8fb2,
+`static_type_table_differential.rs`): an independent bytes-only
+transcription of the loop (no production parser/loader/destroy helper
+reused) compared FIELD-EXACT against the Rust target's retained bank —
+`ObjectTypeTable::from_bdg_bytes` (staged verbatim into
+MissionSim::object_types by stage_destroy_family) — across all 37
+missions: classification, W/H/D/hp/chain/type, all five effect
+entries, and the four banks under the §7j.32 disk→slot mapping, plus
+the arena layout (consecutive slots, per-mission span 6728..27288 <
+0x9C40). The two write-only surfaces are deliberately NOT retained and
+NO seam is fabricated: the count word is pinned through the derivation
+identity (the original's count == the nonzero-selector count of the
+RETAINED effects) and the control word through the corpus-pinned 0/1
+classification. (3) **SENSITIVITY PROVEN BY TEMPORARY IN-MEMORY
+MUTATION**: bank-byte / hp-byte / selector-value bumps each move
+exactly the staged field in BOTH sides (agreement under mutation +
+detection against the clean side; ZONEA/M1 rec-0's four bank words
+53/1189/2/0 are pairwise distinct so no slot permutation can absorb a
+bank bump, and 7904/7907 rows have non-identical banks); a 1→2
+selector bump keeps the derived count 1 (presence-only identity); a
+control flip 1→0 desyncs the grammar (oracle EOF-exact precondition +
+target None); a 0→1 empty-row flip record-shorts the file — the oracle
+rejects while the target ACCEPTS an EOF-short walk (a documented,
+corpus-unreachable divergence from the original's memset-padding
+bounded loop, still caught by the differential's row-extent check);
+trailing bytes are rejected by the target, stricter than the original.
+Verified: bedlam-core suite green (10 test binaries), fmt + clippy
+clean, MANIFEST.sha256 clean before AND after the corpus reads, no
+Ghidra run. Strict S0 independent coverage is now **9/27 rows** (the
+D147 eight + `static-type-table`); 18 rows remain. (worker e473f5db claim 1)
