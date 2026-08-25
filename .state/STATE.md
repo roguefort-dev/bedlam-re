@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D162 `t2t3-alias-census` COMPLETE (worker 03cc1ea3
+    claim 1, commits 507da25 + 30f5f56, both PUSHED): the LAST
+    EXD-ALIAS CLASS CLOSED — all 17 `unmapped` T2/T3 watch rows
+    carry dual-anchored EXD aliases (RE-EXD-MAP §5i, objdump-only,
+    no Ghidra run): the boot-clear cluster is ordinal-identical both
+    channels (19 memset pairs) + an accessor twin per row. Headline
+    pins: critter 0x10e81c+count 0x1194dc, poi 0x971d4+0x119580,
+    arrival-rides 0x10da48, objective-slots 0x8c182+phase 0x1194cc,
+    tile-claims *(0x119564) both-channels-indirect, + 12 more
+    (§5i table). Divergence-seed #5 recorded (EXW bank contiguity
+    does NOT survive in EXD). Impl: registry verified + W1
+    exd-emptiness rule retired; dbx-plan deliberate forms
+    (CountExpr critter/poi, PtrCell claim3_ptr, per-channel escape
+    span); ALL 13 plans ZERO deferred rows (except S1-o2's 1 EXD-only
+    row); S3 33 / S4,S6,S7 42 / S8 47 per-frame rows. Differ
+    unchanged by design; the four subset-form extraction arms
+    (critter 74-of-0x7E, effect-rows 28-of-0x20, debris, splash) are
+    the queued follow-up. Verified both ways (D161 scratch-crate
+    technique — the O1-boot WIP's dbx-plan/plan deltas preserved in
+    the worktree); diffharness 101/101 both ways, differ_gate 4/4,
+    canonical_dump_gate 13/13, fmt+clippy clean, MANIFEST clean.
+    The watch registry is now FULLY alias-complete (T0/T1/TS/T2/T3/
+    TI; T4 stays address-free by nature — hook sites, not banks).
+
   - 2026-08-26 D161 `ts-extent-arms` COMPLETE (worker d093c3ef
     claim 1, commits 2b8d745 + d2017f9, both PUSHED): the LAST FOUR
     deferred dbx-plan TS extents resolved — the plan-side tail of the

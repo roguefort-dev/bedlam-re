@@ -5,15 +5,69 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4.2/W-survey] `t2t3-alias-census` — the T2/T3 watch rows with
-   exd_status gaps (projectiles/critters/effects/debris families):
-   a bounded objdump-only census producing the EXD↔EXW alias table
-   per row (anchor every claim to ledger rows; RE-notes-first
-   commit before any registry/watches edit). Feed: docs/
-   DESIGN-DIFFHARNESS.md §4, tools/diffharness/watches.toml T2/T3
-   sections, docs/RE-EXW-SIM §7j ledger.
+1. [P4.2/W-followup] `t2t3-differ-arms` — the D162-named follow-up:
+   the differ's O1 extraction arms for the four subset-form rows E
+   emits (critter-bank 74-of-0x7E, effect-rows 28-of-0x20,
+   debris-stager, splash-records — the D87 field-map class):
+   O1 normalizers that walk the GUEST full spans and project E's
+   modeled subset, inv_frame fabrication flips (the differ_gate
+   E-only `continue` arms drop), expect_coverage re-derivation for
+   every affected scenario lane, and the differ.rs "E-only" comment
+   corrections riding. Verify: differ_gate all lanes + diffharness
+   + canonical_dump_gate green, fmt+clippy, MANIFEST. Feed:
+   D162/§5i (docs/DECISIONS.md tail), tools/diffharness/src/differ.rs
+   normalize_o1_row, engine/bedlam-game/tests/differ_gate.rs inv_frame.
+   NOTE (shared worktree): the O1-boot WIP still holds dbx-plan.rs +
+   capture-plans deltas (boot_trap) + capgen/harness/docs — stage
+   explicit paths only, preserve via the D161 scratch-crate technique
+   if dbx-plan overlaps.
 
 ## Done
+1. DONE (2026-08-26, worker 03cc1ea3 claim 1, commits 507da25 +
+   30f5f56, both PUSHED): P4.2/W-survey `t2t3-alias-census` — THE
+   LAST EXD-ALIAS CLASS CLOSED (D162, RE-EXD-MAP §5i). All 17
+   `unmapped` T2/T3 rows now carry DUAL-ANCHORED EXD aliases,
+   objdump-only (exw/exd-text-objdump.txt; no Ghidra run; no corpus
+   read; MANIFEST clean pre+post). METHOD: the MissionShell
+   boot-clear cluster is ordinal-identical both channels (19 memset
+   pairs EXW 0x4479c5.. ⟷ EXD 0x59994.., memset twin
+   FUN_00402965⟷FUN_00012206) + an independent accessor twin per row
+   (loader/tick/walker/allocator/resolver). PINS: mortar-trail
+   0x91574, critter 0x10e81c + count 0x1194dc, poi 0x971d4 + count
+   0x119580, debris-stager 0x93064, effect-rows 0x9d534, rising
+   0xa1684, blast 0x8c284, splash 0x107774, arrival-rides 0x10da48
+   (tick twin instruction-exact), door-rects 0x92c64, trigger-timers
+   0x91d94, pod-ring 0x8d314 (THIRD independent pin — §5f lobby),
+   exit-ring 0x108138, dropship 0x1081c4, objective-slots 0x8c182 +
+   phase 0x1194cc (resolver twin FUN_00448b80⟷FUN_0005aba3),
+   escape-counters 0x107674/0x107680 (literal-anchored head-walk),
+   tile-claims *(0x119564) (reset twin FUN_004254e1⟷FUN_0003657e —
+   BOTH channels indirect; re-confirms the TS row). DIVERGENCE-SEED
+   #5 recorded: EXW's pod→dropship→exit→trail contiguity does NOT
+   survive in EXD. Bonus twins: memset, .NME/.POS loaders, claim
+   reset, objective resolver, SFX poster, kill-collateral, row-stride
+   table 0x4ea900⟷0x8b78c (3 sites), + 9 more cells. IMPL (30f5f56):
+   registry verified fills + the W1 exd-emptiness rule retired
+   (T4-only emptiness remains — hooks are call sites); dbx-plan
+   count symbols critter_count/poi_count + deliberate forms
+   (CountExpr, objective 6-slot fixed, escape per-channel span 16/8,
+   tile-claims the second PtrCell claim3_ptr); generic T2/T3 arm
+   dies loud on multi-cell rows; ALL 13 plans regenerated both
+   channels — ZERO deferred rows except S1-o2 (1 = EXD-only
+   cursor-clamp); tests re-pinned (T2 5-row set, s4_t3_rows_now_
+   emitted with 5 anti-ghost address pins, s3 33/s8 47 per-frame).
+   The differ needs NO change (E-gap rows = coverage findings by
+   design) — the four subset-form extraction arms are the queued
+   follow-up (item 1). VERIFIED BOTH WAYS (D161 scratch-crate
+   technique): scratch = HEAD + this unit's 16 dbx-plan hunks (101
+   diffharness tests green, fmt+clippy clean, untouched-scenario
+   plans byte-identical to HEAD) AND the stacked worktree 101/101
+   green; differ_gate 4/4 + canonical_dump_gate 13/13; the O1-boot
+   WIP's 4 dbx-plan hunks + plan deltas left intact in the worktree.
+   DESIGN §4 T2/T3 tables carry the EXD column; the S6/S8 "no EXD
+   alias" claims amended (alias-complete; E-only is a differ-
+   coverage state only); D162 recorded.
+
 1. DONE (2026-08-26, worker d093c3ef claim 1, commits 2b8d745 +
    d2017f9, both PUSHED): P4.2/S0-registry-tail `ts-extent-arms` —
    the LAST FOUR deferred dbx-plan TS extents RESOLVED (D161,
