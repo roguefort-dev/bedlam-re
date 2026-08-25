@@ -14,7 +14,10 @@ CLOSED the no-extract-latch gap (twin [0xf929c], §5/§5f). D134
 D135 (2026-08-23) closed the §5g leftovers — the EXW bank-cell twins
 for the 17 un-aliased walk cells (§5g-bis; ordinal-identical walks,
 1:1 reader parity, dup quirks twin too).
-T2-T4 aliasing stays later per the W1 ticket.
+D162 (2026-08-26) closed the T2/T3 class — all 17 `unmapped` T2/T3
+watch rows now carry dual-anchored EXD aliases (§5i). T4 (event
+capture) is breakpoint-hook-based, not memory-bank-based — no
+addresses to alias.
 Purpose: the DESIGN-DIFFHARNESS.md W1 deliverable — the `exd_addr` fills
 for the harness watch rows.
 
@@ -648,6 +651,77 @@ pending P2e"). The row's addresses/extent/tier stay unchanged (its
 mouseless scripted capture; the EXW cells stay deliberately unnamed in
 exw_addr so the row remains the D139/D143 EXD-only anti-ghost
 vehicle).
+
+### 5i. The T2/T3 alias census (D162, 2026-08-26, [verified] objdump-only)
+
+The W1 ticket's last open class: the 17 T2/T3 watch rows left
+`unmapped`. Every one now carries an EXD alias, each DUAL-ANCHORED
+(two independent disasm pieces; W1 rule). Method — objdump-only, no
+Ghidra run: (a) the MissionShell BOOT-CLEAR CLUSTER is
+ordinal-identical both channels (EXW 0x4479c5..0x447ae2 ⟷ EXD
+0x59994..0x59ab1: 19 `mov ecx,len; mov edi,base; call memset`
+pairs, sizes 0x57800/0x1800/0xa0/0x27d8/0x98/0x9c4/0xa0/0xa00/0x960/
+0x600/0x50/0x100/0x22/0x1c/0x8c/0x30/0x40/0x280/0x90/0xc0 — the
+memset twins are FUN_00402965 ⟷ FUN_00012206); (b) each bank is then
+confirmed by an ACCESSOR TWIN (loader/tick/walker/allocator/
+resolver, instruction-for-instruction). Sources:
+ghidra-project/exw-text-objdump.txt + exd-text-objdump.txt (both
+committed artifacts).
+
+| registry row | EXW | EXD | anchors (dual) |
+|---|---|---|---|
+| mortar-trail-bank | 0x4e66b8 (20×0x68) | **0x91574** | allocator twin EXW FUN_00412a4a @0x412a4a ⟷ EXD 0x23494 (cmp [eax+base],0 / add 0x68 / bound 0x820 / ret −1, byte-shape exact) + writer twin EXW 0x40aaef..0x40ab44 ⟷ EXD 0x1b886..0x1b8d4 (call allocator → active:=1 → 8-slot ring-zero triple loop 0xC steps to +0x60; the weapon-link write [edx+0x4c7226] ⟷ [esi+0x98106] = weapon base +0x32 both sides cross-checks the KNOWN 0x4c71f4⟷0x980d4 pin) |
+| critter-bank | 0x4cff98, count 0x46cc2c (count×0x7E) | **0x10e81c**, count **0x1194dc** | .NME loader twin FUN_00416458 @0x416461 ⟷ FUN_00026dc1 @0x26dca (clear 0xac44 = 350×0x7E + `mov ds:<count>,0` ordinal-exact) + record walk `[ds:0x1194dc]*0x7E + 0x10e81c` writes @0x26e64..0x26e75 |
+| poi-bank | 0x4dabdc, count 0x46cbf0 (count×0x1E) | **0x971d4**, count **0x119580** | same loader head (clear 0xf00 ⟷ 0xf00) + section-8 twin EXW 0x416f6e (`mov ds:0x46cbf0,0`) ⟷ EXD 0x278b0 (`mov ds:0x119580,0`), record writes `[i*0x1e + 0x971d4]` @0x27965 |
+| debris-stager | 0x476fbc (128×0x30) | **0x93064** | clear 0x1800 (cluster pair #1: 0x4479ca ⟷ 0x59999) + tick twin EXW 0x42059a..0x420594 ⟷ EXD 0x314a8..0x31506 (stride 0x30, 128 slots, `movsx eax,WORD [ecx+eax*2]; cmp −1` seq walk; +0x18 frame-ctr / +0x20 physics / +0x24 delay / +0x2C seq-table fields instruction-exact; the kill call FUN_0040de9c ⟷ FUN_0001ebbe) |
+| effect-rows | 0x4cec38 (80×0x20) | **0x9d534** | clear 0xa00 (0x447a24 ⟷ 0x599f3) + reader-census shape/order 1:1 (age `inc WORD [eax+base]` EXW 0x41a4ab ⟷ EXD 0x2ad64; id stores 0x41a0d9/0x41a1ce ⟷ 0x2a9b8/0x2aa9f) |
+| rising-debris | 0x4cf638 (80×0x1E) | **0xa1684** | clear 0x960 (0x447a33 ⟷ 0x59a02) + mover twin trio read/read/write EXW 0x406caa/0x419f75/0x419f8f ⟷ EXD 0x17a97/0x2a875/0x2a88f |
+| blast-bank | 0x4eb638 (32×0x14) | **0x8c284** | clear 0x280 (0x447aba ⟷ 0x59a89) + THREE refs shape/order 1:1 (draw read [esi+base] 0x403ffb⟷0x14e16; tick/producer write [eax*4+base] 0x423876⟷0x347ed — inside the FUN_0042382c/0x4238af family) |
+| splash-records | 0x4e9778 (250×0xA) | **0x107774** | clear 0x9c4 (0x447a06 ⟷ 0x599d5) + tick twin EXW 0x4240a5 ⟷ EXD 0x35032 (frame-counter bit gate `test BYTE ds:0x46ae68,1` ⟷ `ds:0x1195f0,1`; delay word @+4; row-stride table `[eax*4+0x4ea900]` ⟷ `[eax*4+0x8b78c]`; ×0x1E POI conversion) |
+| arrival-rides | 0x4dcdb8 (45×0x24) | **0x10da48** | tick twin EXW 0x420405..0x42047d ⟷ EXD 0x312ae..0x31328 (stride 0x24, bound 0x654, countdown +0x1C with the ==0xA SFX case, marker words +0x8/+0xC ≪5, robot slot +0x20, teleport writes robot bank [slot*0xa8+base]) — 41 EXD refs total |
+| door-rects | 0x4dcae8 (45×0x10) | **0x92c64** | .POS-loader clear 0x2d0 (EXW 0x447b6c via FUN_0041a4f8 ⟷ EXD 0x59b38 via FUN_0002adb4) + the tile-claim reset's stamp walk (below) reads [ebp+0x92c64] w@+0 / xy dwords@+2/+4 / wh@+0x6/+8, 0x10 stride to 0x2d0 |
+| trigger-timers | 0x4ea828 (32×0x18) | **0x91d94** | clear 0xc0 (0x447ad8 ⟷ 0x59aa7) + tick twin FUN_00422cc2 ⟷ EXD 0x33bae-family (walk refs [eax+0x91d94], [eax*2+0x91d94]) |
+| pod-ring | 0x4e64c0 (12×0x1C) | **0x8d314** | spawn-init twin EXW 0x40cd3d ⟷ EXD 0x1da6a (memset 0x150 + the zone gate `cmp 3..7` + the per-player count write 0x46cbd8 ⟷ 0x11958c — the D89 pair) + spawner write [eax*4+base] EXW 0x41fb5b (FUN_0041fb4b) ⟷ EXD 0x30904; also the §5f lobby-census pin 0x8d314 (third, independent) |
+| exit-ring | 0x4e662c (5×0x1C) | **0x108138** | clear 0x8c (0x447a8d ⟷ 0x59a5c) + THREE gate sites shape/order 1:1 (EXW 0x406f1f⟷0x17cfa, 0x412b94⟷0x23677 = the exit-dwell reset gate, 0x417c90⟷0x28599 = the nearest-scan gate) |
+| dropship-frame | 0x4e6610 (1×0x1C) | **0x1081c4** | clear 0x1c (0x447a7e ⟷ 0x59a4d) + reader sites shape/order 1:1 (EXW 0x40707e⟷0x17e68, deployer write 0x41fb04⟷0x308ad, 0x41fd03⟷0x30aaa); NOTE 0x1081c4 = exits 0x108138 + 0x8c — the EXW exits→dropship adjacency survives in EXD |
+| objective-slots | 0x4eaaee, phase 0x46cd00 (6×0x20) | **0x8c182**, phase **0x1194cc** | resolver twin FUN_00448b80 @0x448b80 ⟷ FUN_0005aba3 @0x5aba3 (head gates `cmp ds:<mode>,2` ⟷ `ds:0x1075d8,2` + `cmp ds:<zone>,7` ⟷ `ds:0x107500,7`; kill-stats `[ds:0x46cbf4+type*0x14]` ⟷ `[ds:0x119584+type*0x14]`); slot fields: type dword@+4 ([eax+0x4eaaf2] ⟷ [esi+0x8c186]), quota dword@+0x1C ([edx+0x4eab0a] ⟷ [edi+0x8c19e]), rescue-5000 cmp 0x1388 both, phase store 0x448c7d ⟷ 0x5ac9e, escape-count read (below), msgs call FUN_004239ef(0x29,ch 3) ⟷ FUN_00034972(0x29,3) |
+| escape-counters | 0x4eba0c / 0x4eba10 | **0x107674 / 0x107680** | MissionShell-head store walk (EXW 0x447865..0x447939 ⟷ EXD 0x59842..0x59908) bracketed by two literal anchors: the esi=0x32 pair (0x4dc5cc/0x4dc5c8 ⟷ 0x10e12c/0x10e130) BEFORE and the edx=−1 store (0x46cd10 ⟷ 0x1194c0) + the 5-store ecx run AFTER — 0x4eba10⟷0x107680 and 0x4eba0c⟷0x107674 sit inside; second anchor: the resolver's escape read 0x448ce1 ⟷ 0x5acf6 |
+| tile-claims | *(0x46af58) (10000 B) | ***(0x119564)** | reset twin FUN_004254e1 @0x4254e1 ⟷ FUN_0003657e @0x3657e (memset 0x2710 through the pointer cell — BOTH channels indirect; door-rect stamps [ebp+base] +0x10-stride/0x2d0 walk; row-stride table [ebx*4+0x4ea900] ⟷ [ebx*4+0x8b78c]); re-confirms the §5f-era TS `static-claim-bank` pin 0x119564 independently |
+
+**Layout divergence (divergence-seed #5 family):** EXD does NOT keep
+the EXW pod-ring→dropship→exit-ring→trail-bank contiguity (EXW
+0x4e64c0..0x4e6ee8 one block; EXD 0x8d314 / 0x1081c4 / 0x108138 /
+0x91574 four separate regions) — EXW-relative adjacency is NEVER
+evidence in EXD; every base above is accessor-pinned.
+
+**Bonus function/cell twins pinned on the way** ([verified], single
+run unless noted): memset FUN_00402965⟷FUN_00012206 (19 sites);
+.NME loader FUN_00416458⟷FUN_00026dc1; .POS loader
+FUN_0041a4f8⟷FUN_0002adb4; tile-claim reset FUN_004254e1⟷FUN_0003657e;
+objective resolver FUN_00448b80⟷FUN_0005aba3; SFX poster
+FUN_004239ef⟷FUN_00034972 (also 0x448c78⟷0x5ac99); kill-collateral
+FUN_0040de9c⟷FUN_0001ebbe; row-stride table 0x4ea900⟷0x8b78c
+(3 independent sites: splash tick, claim reset, resolver mirror
+wipe); SFX bank cell 0x4edfe0⟷0x11a900 (string walk + arrival tick);
+death-iris cell 0x4ede34⟷0x10746c (head-walk store #5; the §7j.58
+family — EXD reader 0x59673 `cmp 0x1e0`); radio-warning queue
+0x4eb954⟷0x8b6a4 (0xa0 clear, the §7j.53 bank); falling-shell bank
+0x4ea238⟷0x8f0b4 (0x50 clear, the §7j.54 bank); display ring
+0x4ea13c⟷0x8f104 (0x98 clear, the §7j.53 consumer ring); terrain
+volume pointer 0x4ede18⟷0x10745c (0x57800 clear).
+
+**Coverage consequences (registry + differ):** the registry fills
+flip the 17 rows from `unmapped` to `verified`; dbx-plan emits them
+(fixed spans via the existing generic arm; critter/poi as
+count-driven CountExpr rows over the new 0x1194dc/0x119580 count
+cells; tile-claims as the second PtrCell row over 0x119564). The
+differ needs NO new arms for the E-gap rows (O1-only rows surface as
+coverage findings by design); the subset-form rows E DOES emit
+(critter-bank 74-of-0x7E, effect-rows 28-of-0x20, debris-stager,
+splash-records) still need O1 extraction arms + inv_frame
+fabrication (the D87 field-map class) — a FOLLOW-UP unit, tracked as
+the next queue item. The DESIGN S6/S8 "E-only (no EXD alias)" notes
+are amended in place.
 
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 

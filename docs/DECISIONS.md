@@ -5131,3 +5131,37 @@ coverage unchanged (24/27 static + 2/27 dynamic-only + 1/27
 hardware/input-profile-only — the registry was already fully
 dispositioned; this closes the plan-side tails). (worker d093c3ef
 claim 1)
+
+## D162 — 2026-08-26: P4.2/W-survey `t2t3-alias-census` — the LAST EXD-alias class closed: all 17 `unmapped` T2/T3 watch rows carry dual-anchored EXD aliases (RE-EXD-MAP §5i); registry `verified`, plans emit them; the differ subset-form extraction arms are the named follow-up
+
+(1) **METHOD (objdump-only, no Ghidra run):** the MissionShell
+boot-clear cluster is ordinal-identical both channels (19 memset
+pairs, EXW 0x4479c5.. ⟷ EXD 0x59994.., memset twin
+FUN_00402965⟷FUN_00012206) and every one of the 17 rows is then
+confirmed by an independent accessor twin (loader/tick/walker/
+allocator/resolver, instruction-for-instruction) — the W1 dual-anchor
+rule holds for every row. Headline pins: mortar-trail 0x91574,
+critter 0x10e81c + count 0x1194dc, poi 0x971d4 + count 0x119580,
+debris-stager 0x93064, effect-rows 0x9d534, rising-debris 0xa1684,
+blast 0x8c284, splash 0x107774, arrival-rides 0x10da48, door-rects
+0x92c64, trigger-timers 0x91d94, pod-ring 0x8d314 (third independent
+pin — the §5f lobby census), exit-ring 0x108138, dropship 0x1081c4,
+objective-slots 0x8c182 + phase 0x1194cc, escape-counters
+0x107674/0x107680, tile-claims *(0x119564) (re-confirming the TS row
+independently). **Divergence-seed #5 warning recorded:** EXW's
+pod→dropship→exit→trail contiguity does NOT survive in EXD —
+EXW-relative adjacency is never evidence. (2) **SCOPE SPLIT:** the
+registry fills + dbx-plan emission forms land NOW (fixed spans via
+the generic arm; critter/poi as CountExpr rows over the new count
+cells with resolve symbols critter_count/poi_count; tile-claims as
+the second PtrCell row; escape-counters as a per-channel span — the
+EXD pair sits 0xC apart while EXW is adjacent); the differ needs
+NOTHING for E-gap rows (O1-only rows surface as coverage findings by
+design), but the four subset-form rows E emits (critter-bank
+74-of-0x7E, effect-rows 28-of-0x20, debris-stager, splash-records)
+need O1 extraction arms + inv_frame fabrication — the D87 field-map
+class, queued as the next unit (their differ.rs "E-only" comments
+ride that unit too). (3) The DESIGN §4 T2/T3 tables carry the EXD
+column; the S6/S8 "no EXD alias" claims amended in place (the rows
+are alias-complete; E-only remains a DIFFER-coverage state only).
+(worker 03cc1ea3 claim 1)
