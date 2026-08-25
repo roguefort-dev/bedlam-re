@@ -1,5 +1,34 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D151 S0-11b COMPLETE (worker ab778f23 claim 1, commit
+    7760294, PUSHED): the claim-bank STAGING SEAM landed —
+    `static-claim-bank` closed BOTH sides (the first S0 static row so
+    closed; strict S0 coverage stays 11/27, the Rust half now real).
+    `bedlam-core/src/claim_rects.rs` = the promoted 368-row rect farm
+    (pinned byte-identical to the oracle's own copy);
+    `MissionSim::stage_claim_bank` = the §7j.63/C initializer
+    transcription, staged at EVERY `GameHost::load_mission` (no
+    scenario key, no RNG draws, state_hash untouched);
+    `stage_splash`/`platform_tile_build` read the byte (the third
+    §7j.63 reader — the death-blast smoke producer — is host-seamed
+    presentation, no gate fabricated); the oracle's new actual-side
+    test is 37/37 missions byte-identical; the canonical
+    `static-claim-bank` TS row emits the raw 10000-B image
+    (passthrough all channels — the differ untouched, differ_gate
+    coverage pins unchanged); ALL canonical chains re-baselined
+    (S0 b9b57b68e95f482a, S1 da833e535f833dcc, S2 43110d921137da19,
+    S3 fdd9fae3de7a3ef9, S4 f35b5e45b26891ea, S5 744950e2d3753d04,
+    S5B 28bfea820bfb05ac, S5C be8cf733f1d078c2, S6 80066717ee97b67f,
+    S7 9b81586f58687994, S8 acced68c68c14fa6 — live O1 comparisons
+    pin against these from 7760294); corpus reachability answered NO
+    by the unchanged timeline asserts (chains moved via the row
+    only). Next head: S0-12a (dbx-plan min-bank PtrCell 0x7530
+    extent; the dbx-plan O1-boot WIP in the worktree is ANOTHER
+    session's in-flight work — preserve it, stage only the extent
+    hunks). The responsive-capture WIP (diffharness capture-plans +
+    dbx-capgen tests + dbx-plan O1-boot hunks) remains uncommitted
+    and preserved.
+
   - 2026-08-25 D150 S0-11 COMPLETE (worker eeafac37 claim 1, commits
     2646ce8 docs + 76a14c6 test): the tile-claim bank row
     `static-claim-bank` is independently covered ORIGINAL-SIDE with a

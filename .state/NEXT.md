@@ -5,30 +5,7 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-11b] LAND THE CLAIM-BANK STAGING SEAM in Rust
-   (the D150 queued gap): stage the 0x2710 tile-claim bank in
-   MissionSim at mission load from the pinned rect farm
-   (engine/bedlam-core/tests/data/claim_rects.rs is the transcription
-   source — promote it to a `bedlam-core` data module), read it in the
-   three modeled gates (`stage_splash`, `platform_tile_build`, the
-   death-blast smoke producer) instead of the hardcoded 0, and emit
-   the canonical `static-claim-bank` TS row in the E harness
-   (parity_harness/canonical.rs; the row is currently NOT emitted —
-   DESIGN §6a). This MOVES E-SIDE CANONICAL STATE: every canonical
-   chain pin re-baselines (S0..S8 + synthetic + frame digests per the
-   D136 re-baselining precedent) and the canonical_dump_gate asserts
-   need the new row added (the D82 grammar fixture in
-   canonical_dump_gate.rs carries the zone/mission seams). Prove the
-   gate effect: on a claimed ZONEA/M1 tile the original REFUSES the
-   splash/platform-tile/death-blast where Rust previously allowed (the
-   corpus S0 scenarios must be checked for reachability — if no staged
-   scenario stages on a claimed tile, the chains move ONLY via the new
-   TS row, not via gate behavior). Verify: full workspace tests +
-   fmt + clippy, manifest bracketed, dbx-plan regeneration if the
-   watches row changes (it should NOT — the row already carries
-   extent 10000/indirect). DONE when the three gates read the staged
-   bank, the TS row emits, and all gates/chains are re-pinned green.
-2. [P4/static-parity/S0-12a] dbx-plan `static-min-bank` extent
+1. [P4/static-parity/S0-12a] dbx-plan `static-min-bank` extent
    resolution: now that the bank extent is pinned (ArenaAlloc 0x7530,
    RE-EXW-SIM §7j.62/D149), resolve the deferred dbx-plan arm to
    `Form::PtrCell { cell, len_expr: "0x7530" }` and update the
@@ -37,6 +14,45 @@ renumbered queue keeps every open item claimable by number).
    O1-boot WIP (capture-plan JSON boot_trap/entry) — coordinate with
    that work's owner state per AGENTS shared-worktree rules; stage only
    the arm + watches.toml extent hunk, never the O1 hunks.
+
+## Done
+1. DONE (2026-08-25, worker ab778f23 claim 1, commit 7760294,
+   PUSHED): P4/static-parity/S0-11b THE CLAIM-BANK STAGING SEAM —
+   `static-claim-bank` closed BOTH sides (D151). (a) The rect farm
+   promoted tests/data→`bedlam-core/src/claim_rects.rs` (byte-identical,
+   pinned by the new `promoted_rect_farm_is_byte_identical` oracle
+   test); `MissionSim::stage_claim_bank(zone_set, mission)` = the
+   §7j.63/C initializer transcription (memset-0 + the ACTIVE-PREFIX
+   door-rect stamp, line[y]=y·map_w from terrain.size()), called at
+   EVERY `GameHost::load_mission` (the unconditional 0x447b85 call —
+   no scenario key, no RNG draws, state_hash untouched). (b) Reader
+   gates: `stage_splash` + `platform_tile_build` read the byte in the
+   §7j.63 gate order; the THIRD §7j.63/F reader (the FUN_0042382c
+   death-blast smoke producer) is HOST-SEAMED presentation (§7j.24) —
+   no sim gate fabricated (the F phrase corrected, §7j.63/F-bis);
+   `claim_seam_tests` pins the refusal on rec-0's (2,51) tile + the
+   unstaged/unclaimed/A-M2 controls. (c) Oracle parity BOTH sides:
+   `claim_staging_matches_the_independent_image` 37/37 shipped
+   missions byte-identical (synthetic terrain of the TOT dims). (d)
+   The canonical `static-claim-bank` TS row emits the RAW 10000-B
+   image, anchor frame only — byte passthrough on all channels, ZERO
+   differ changes, differ_gate coverage pins pass UNCHANGED. (e) ALL
+   canonical chains re-baselined deliberately (fixture
+   1335f953d7da3c82, synthetic 9e5efdc3fff70d88, S0 b9b57b68e95f482a,
+   S1 da833e535f833dcc, S2 43110d921137da19, S3 fdd9fae3de7a3ef9,
+   S4 f35b5e45b26891ea, S5 744950e2d3753d04, S5B 28bfea820bfb05ac,
+   S5C be8cf733f1d078c2, S6 80066717ee97b67f, S7 9b81586f58687994,
+   S8 acced68c68c14fa6 — live-session O1 comparisons pin against
+   these from 7760294). (f) Corpus reachability ANSWERED by the
+   UNCHANGED timeline asserts (S4 splash ring, S7 builds/k7/creep,
+   S6/S8 events): no staged S0..S8 scenario lands on a claimed tile —
+   the chains moved via the TS row ONLY. Strict S0 coverage stays
+   11/27 (the row was counted by D150; this closes its Rust half —
+   the FIRST S0 static row closed both sides). Workspace green
+   (bedlam-core 239 + bedlam-game 41 + differ_gate 4/4 corpus 672s +
+   full-workspace run; the 4 remaining clippy test warnings pre-exist
+   at HEAD); fmt clean; MANIFEST clean. Queued: S0-12a dbx-plan
+   min-bank extent (item 1).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
@@ -224,6 +240,22 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-11b COMPLETE (worker ab778f23
+  claim 1, commit 7760294, D151). The D150-queued claim-bank staging
+  seam LANDED — `static-claim-bank` closed BOTH sides (the FIRST S0
+  static row so closed). Rect farm promoted to
+  `bedlam-core/src/claim_rects.rs` (pinned byte-identical to the
+  oracle copy); `MissionSim::stage_claim_bank` = the §7j.63/C
+  initializer transcription, run at EVERY `load_mission`;
+  `stage_splash`/`platform_tile_build` read the byte (the third
+  §7j.63 reader is host-seamed presentation — no gate fabricated);
+  oracle actual-side test 37/37 missions byte-identical; the
+  canonical TS row emits the raw 10000-B image (passthrough all
+  channels, differ untouched); ALL canonical chains re-baselined
+  (S0 b9b57b68e95f482a .. S8 acced68c68c14fa6 — live O1 comparisons
+  pin against these from 7760294); corpus reachability answered NO
+  (no staged S0..S8 scenario lands on a claimed tile — chains moved
+  via the row only, proven by the unchanged timeline asserts).
 - 2026-08-25: P4/static-parity/S0-11 COMPLETE (worker eeafac37 claim 1,
   commits 2646ce8 docs + 76a14c6 test; D150). The `static-claim-bank`
   row independently covered ORIGINAL-SIDE with a CONCRETE Rust staging
