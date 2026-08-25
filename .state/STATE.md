@@ -1,5 +1,41 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D160 S0-17 COMPLETE — THE S0 REGISTRY FULLY
+    DISPOSITIONED (worker 6027a7bf claim 1, commits b7751cb + b0ad293,
+    both PUSHED): the `static-cursor-clamp` row DECODED + RECLASSIFIED
+    **hardware/input-profile-only** (a third disposition class beside
+    static-closed and dynamic-only). Final S0 ledger: 24/27 static +
+    2/27 dynamic-only (D156) + 1/27 hardware/input-profile-only
+    (D160). RE-EXD-MAP §5h: the row's gloss DISPROVEN on all three
+    counts — the cells are the LIVE hardware-cursor POSITION pair
+    (Y@0x1074ac, X@0x1074b0 — the EXW g_cursor_x/y 0x4eddc4/8 twins,
+    identity locked by the mickey axes + the identical-literal
+    hotspot twins); 0xf0/0x140 are the GameInit boot-CENTER literals
+    (X=320,Y=240, instruction-exact twins in the RNG-seed sandwich);
+    the space is 640x480 BOTH channels (EXD VESA 0x101); the REAL
+    clamp box [9,631]x[9,463] = the EXW ScrollUpdate box VERBATIM
+    (EXD poll 0x12615..0x12659, INT 33h AX=3/AX=B integrate-then-
+    clamp; the 9 = the 24x24 sprite hotspot offset −9). Writer census
+    4 stores / 2 fns, no memset span; 119 sites bucketed (82
+    hit-tests, ~33 reads, the 100Hz ISR family with the drag anchors
+    + the X≥480 sidebar gate; 9 poll callers). The DOS/classic-input
+    adapter RE-PINNED (b0ad293): bedlam-core FrameState clamps
+    9..=631/9..=463 + boots at the center (320,240), consts pub;
+    InputFrame's delta model IS the INT-33h mickey model. Oracle
+    static_cursor_clamp_differential.rs (8 tests, sensitivity both
+    directions). watches.toml row re-pinned PLAN-NEUTRAL (committed-
+    artifact pins prove zero plan bytes moved); the row stays
+    EXD-address-only BY CHOICE (the D139/D143 anti-ghost vehicle).
+    menu.rs/mission.rs scene cursors annotated (their [0,639]-from-
+    (0,0) clamps are the named P2e package — QUEUED as the new item
+    1 `scene-cursor-repin`). NO canonical chain moved (the cursor is
+    not canonical state). Workspace release tests 733/0 green
+    (canonical_dump_gate 13 + differ_gate 4 corpus lanes + registry
+    anchors), fmt + clippy clean on touched files, MANIFEST clean
+    pre+post (no corpus read, no Ghidra run). The unrelated O1-boot
+    WIP preserved untouched (unit staged only its own paths). Next
+    head: scene-cursor-repin (the D160 follow-up).
+
   - 2026-08-26 D159 S0-16 COMPLETE (worker 89591972 claim 1, commits
     f5b6c1e + 5538fd9, both PUSHED): the `static-player-type` row
     closed BOTH SIDES through the canonical anchor seam (the D154

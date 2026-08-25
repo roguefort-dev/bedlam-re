@@ -5,22 +5,65 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-17] `static-cursor-clamp` — statically
-   verify the EXD-only 240x320 clamp maxima constants/formula
-   (EXD 0x1074ac x-max 0xf0 / 0x1074b0 y-max 0x140 per the
-   watches.toml row + RE-EXD-MAP "cursor clamp (INPUT)" entry)
-   and compare them with the DOS/classic-input adapter. If no such
-   target exists, explicitly classify the row as hardware/
-   input-profile-only rather than semantic engine state; never
-   silently count it as parity-covered. NOTE: the row is the sole
-   EXD-only registry row (empty exw_addr — the D139 O2/O3
-   anti-ghost refusal case). NOTE: the worktree carries interrupted
-   O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py +
-   dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
+1. [P4.2/P2e-input/S0-17-followup] `scene-cursor-repin` — land the
+   D160-named P2e package for the GAME-LAYER cursor models: menu.rs
+   (MenuScene::tick) + mission.rs (MissionScene::tick) still clamp
+   [0,639]x[0,479] from (0,0) (annotated CLAMP DIVERGENCE comments,
+   D160/RE-EXD-MAP §5h). Re-pin BOTH to the twin-verified constants
+   (clamp 9..=631 / 9..=463, boot center (320,240) — import
+   bedlam_core::frame::{CURSOR_*}) + audit the affected hit-strips
+   (menu hit-strip bounds 0xdc < x < ... / y < 0x1d6 are all inside
+   the box — verify) and the mission click-seam targets (click_at
+   lands are target-driven — verify no test aims outside the box).
+   Re-pin the cursor unit tests (menu cursor_integrates_deltas_
+   and_clamps 639/479/(0,0) → 631/463/(9,9)-or-center). NO canonical
+   chain may move (canonical runs feed InputFrame::default(); the
+   differ_gate corpus lanes prove it). NOTE: the worktree carries
+   interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py
+   + dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
    deltas, owner ≠ current worker): inspect, preserve, adopt per
    AGENTS shared-worktree rules; stage explicit task paths only.
 
 ## Done
+1. DONE (2026-08-26, worker 6027a7bf claim 1, commits b7751cb +
+    b0ad293, PUSHED): P4/static-parity/S0-17 `static-cursor-clamp`
+    DECODED + RECLASSIFIED hardware/input-profile-only (D160,
+    RE-EXD-MAP §5h) — THE LAST S0 ROW; the 27-row registry is now
+    FULLY DISPOSITIONED: 24/27 static + 2/27 dynamic-only + 1/27
+    hardware/input-profile-only. (a) RE first (b7751cb): the row's
+    gloss DISPROVEN on all three counts — the cells 0x1074ac/0x1074b0
+    are the LIVE hardware-cursor POSITION pair (Y/X), the EXW
+    g_cursor_x/y 0x4eddc4/8 twins (identity locked by the INT-33h
+    mickey axes + the identical-literal hotspot twins 0x1ee/0x271/
+    0xc3/0x146 @EXD 0x2f6d9 ⟷ EXW 0x41ec9d); 0xf0/0x140 are the
+    GameInit boot-CENTER literals (X=320,Y=240, instruction-exact
+    twins in the RNG-seed boot sandwich); the space is 640x480 BOTH
+    channels (EXD VESA 0x101 @0x1259a + the x640 sprite stride); the
+    REAL clamp box [9,631]x[9,463] lives in the poll handler
+    0x12615..0x12659 (INT 33h AX=3/AX=B integrate-then-clamp) = the
+    EXW ScrollUpdate 0x425b2e..0x425b84 box VERBATIM (the 9 = the
+    24x24 sprite hotspot offset −9). Writer census closed 4 stores /
+    2 fns (no memset span); 119 sites bucketed (82 hit-tests, ~33
+    reads, the 100Hz ISR family: poll gates, redraw-on-move, drag
+    anchors, the X≥480 sidebar sprite gate; 9 poll callers). (b)
+    Oracle + seam (b0ad293): static_cursor_clamp_differential.rs 8
+    tests (boot-center pins both channels, box literal pins, space/
+    hotspot pins, the instruction-faithful poll transcription with
+    every edge, the adapter-equality walk, sensitivity BOTH
+    directions, the D17 guarantee) + the DOS/classic-input adapter
+    RE-PINNED: bedlam-core FrameState clamps 9..=631/9..=463 and
+    boots at the center (320,240) — the InputFrame delta model IS the
+    INT-33h mickey model; consts pub with pinned addresses. watches
+    .toml row re-pinned plan-neutral (layout/note/anchor only; the
+    diffharness committed-artifact pins prove zero plan bytes moved);
+    menu.rs/mission.rs scene cursors annotated (the P2e package
+    queued as the new item 1). The row stays EXD-address-only BY
+    CHOICE (the D139/D143 anti-ghost vehicle). Verified: workspace
+    release tests 733/0 green (canonical_dump_gate 13 + differ_gate 4
+    corpus lanes + registry anchors), fmt + clippy clean on touched
+    files, MANIFEST clean before AND after (no corpus read, no Ghidra
+    run). NO canonical chain moved. The unrelated O1-boot WIP
+    preserved untouched (unit staged only its own paths).
 1. DONE (2026-08-26, worker 89591972 claim 1, commits f5b6c1e +
     5538fd9, PUSHED): P4/static-parity/S0-16 `static-player-type`
     closed BOTH SIDES through the canonical anchor seam (D159,
@@ -313,18 +356,19 @@ renumbered queue keeps every open item claimable by number).
    min-bank extent (item 1).
 
 ## Backlog (not yet started)
-- S0 static-parity closure baseline: strict independent coverage is
-  24/27 rows static + 2/27 dynamic-only (D159) — the 11 TS rows from
+- S0 static-parity closure COMPLETE (2026-08-26, D160): the 27-row
+  registry is FULLY DISPOSITIONED — 24/27 static-closed + 2/27
+  dynamic-only (D156) + 1/27 hardware/input-profile-only (D160, the
+  cursor row — never counted as static parity). The 11 TS rows from
   bd91c10, 56918c5, 390acb9,
   cd70efe, 920aec2, fcb8fb2, cec30a7, 2646ce8, 76a14c6 + the eight
-  T0 campaign/config rows from ea745fd (S0-12, closed both sides by
-  the D154 seam) + the three RNG/dither rows from dc6c99d (S0-13,
-  closed original-side under the charter T3 class — D155) + the
-  order-table row from bf8179d (S0-15, closed original-side — D157)
-  + the player-type row from 5538fd9 (S0-16, closed BOTH sides
-  through the canonical anchor seam — D159). The
-  27-row registry: tier-S0 s0-trigger + 11 T0 + 15 TS; the remainder
-  (1 static row) is S0-17 (cursor-clamp, the new Now item 1).
+  T0 campaign/config rows from ea745fd (closed both sides by the
+  D154 seam) + the three RNG/dither rows from dc6c99d (closed
+  original-side, T3 class — D155) + the order-table row from bf8179d
+  (closed original-side — D157) + the player-type row from 5538fd9
+  (closed BOTH sides through the canonical anchor seam — D159) +
+  the cursor row from b0ad293 (decoded + classified
+  hardware/input-profile-only — D160).
   `static-min-bank` (S0-10) is
   CLOSED original-side only: Rust retention deliberately none —
   presentation-half D17; the display-phase producer stays queued,
