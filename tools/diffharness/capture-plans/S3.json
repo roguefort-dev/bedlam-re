@@ -36,7 +36,9 @@
     { "name": "min_ptr", "addr": "CS:00107538", "len": 4 },
     { "name": "claim_ptr", "addr": "CS:00119564", "len": 4 },
     { "name": "robot_count", "addr": "CS:0011958C", "len": 4 },
-    { "name": "trt_count", "addr": "CS:0011949C", "len": 4 }
+    { "name": "trt_count", "addr": "CS:0011949C", "len": 4 },
+    { "name": "critter_count", "addr": "CS:001194DC", "len": 4 },
+    { "name": "poi_count", "addr": "CS:00119580", "len": 4 }
   ],
   "anchor_watches": [
     { "id": "frame-counter", "addr": "CS:001195F0", "len": 4 },
@@ -84,7 +86,10 @@
     { "id": "static-dither-noise", "addr": "CS:0008DED4", "len": 2048 },
     { "id": "static-cursor-clamp", "addr": "CS:001074AC", "len": 8 },
     { "id": "weapon-anim-bank", "addr": "CS:000980D4", "len": 21600 },
-    { "id": "projectile-bank", "addr": "CS:0010E174", "len": 1700 }
+    { "id": "projectile-bank", "addr": "CS:0010E174", "len": 1700 },
+    { "id": "mortar-trail-bank", "addr": "CS:00091574", "len": 2080 },
+    { "id": "critter-bank", "addr": "CS:0010E81C", "len": "$critter_count*0x7E" },
+    { "id": "poi-bank", "addr": "CS:000971D4", "len": "$poi_count*0x1E" }
   ],
   "watches": [
     { "id": "frame-counter", "addr": "CS:001195F0", "len": 4 },
@@ -116,7 +121,10 @@
     { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20", "prefix": { "addr": "CS:0011949C", "len": 4 } },
     { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" },
     { "id": "weapon-anim-bank", "addr": "CS:000980D4", "len": 21600 },
-    { "id": "projectile-bank", "addr": "CS:0010E174", "len": 1700 }
+    { "id": "projectile-bank", "addr": "CS:0010E174", "len": 1700 },
+    { "id": "mortar-trail-bank", "addr": "CS:00091574", "len": 2080 },
+    { "id": "critter-bank", "addr": "CS:0010E81C", "len": "$critter_count*0x7E" },
+    { "id": "poi-bank", "addr": "CS:000971D4", "len": "$poi_count*0x1E" }
   ],
   "inject": [
     { "frame": 1, "op": "command", "base": "CS:0009255C", "stride": 128, "count_cell": "CS:00119588", "bytes": "01000000000200e0022009000000" },
@@ -129,8 +137,5 @@
     { "frame": 45, "op": "command", "base": "CS:0009255C", "stride": 128, "count_cell": "CS:00119588", "bytes": "01010000000200a0022009000000" }
   ],
   "_deferred": [
-    "mortar-trail-bank (20*0x68)",
-    "critter-bank (count*0x7E)",
-    "poi-bank (count*0x1E)"
   ]
 }

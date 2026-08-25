@@ -24,6 +24,7 @@
     { "name": "bin_ptr", "addr": "CS:00107434", "len": 4 },
     { "name": "min_ptr", "addr": "CS:00107538", "len": 4 },
     { "name": "claim_ptr", "addr": "CS:00119564", "len": 4 },
+    { "name": "claim3_ptr", "addr": "CS:00119564", "len": 4 },
     { "name": "robot_count", "addr": "CS:0011958C", "len": 4 },
     { "name": "trt_count", "addr": "CS:0011949C", "len": 4 }
   ],
@@ -71,7 +72,21 @@
     { "id": "static-yline-zbase", "addr": "CS:0008B78C", "len": "4*$map_h" },
     { "id": "static-yline-zbase#zbase", "addr": "CS:00107718", "len": 32 },
     { "id": "static-dither-noise", "addr": "CS:0008DED4", "len": 2048 },
-    { "id": "static-cursor-clamp", "addr": "CS:001074AC", "len": 8 }
+    { "id": "static-cursor-clamp", "addr": "CS:001074AC", "len": 8 },
+    { "id": "debris-stager", "addr": "CS:00093064", "len": 6144 },
+    { "id": "effect-rows", "addr": "CS:0009D534", "len": 2560 },
+    { "id": "rising-debris", "addr": "CS:000A1684", "len": 2400 },
+    { "id": "blast-bank", "addr": "CS:0008C284", "len": 640 },
+    { "id": "splash-records", "addr": "CS:00107774", "len": 2500 },
+    { "id": "arrival-rides", "addr": "CS:0010DA48", "len": 1620 },
+    { "id": "door-rects", "addr": "CS:00092C64", "len": 720 },
+    { "id": "trigger-timers", "addr": "CS:00091D94", "len": 768 },
+    { "id": "pod-ring", "addr": "CS:0008D314", "len": 336 },
+    { "id": "exit-ring", "addr": "CS:00108138", "len": 140 },
+    { "id": "dropship-frame", "addr": "CS:001081C4", "len": 28 },
+    { "id": "objective-slots", "addr": "CS:0008C182", "len": 192 },
+    { "id": "escape-counters", "addr": "CS:00107674", "len": 16 },
+    { "id": "tile-claims", "addr": "CS:$claim3_ptr", "len": "10000" }
   ],
   "watches": [
     { "id": "frame-counter", "addr": "CS:001195F0", "len": 4 },
@@ -101,7 +116,21 @@
     { "id": "variant-flag-bytes", "addr": "CS:000AC1FD", "len": "(2*$map_w*$map_h)+1" },
     { "id": "object-instances", "addr": "CS:$obj_ptr", "len": "2000*0x14", "prefix": { "addr": "CS:00119554", "len": 4 } },
     { "id": "trt-array", "addr": "CS:00095264", "len": "$trt_count*0x20", "prefix": { "addr": "CS:0011949C", "len": 4 } },
-    { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" }
+    { "id": "armor-pad-reads", "addr": "CS:000AC1FC", "len": "$map_w*$map_h" },
+    { "id": "debris-stager", "addr": "CS:00093064", "len": 6144 },
+    { "id": "effect-rows", "addr": "CS:0009D534", "len": 2560 },
+    { "id": "rising-debris", "addr": "CS:000A1684", "len": 2400 },
+    { "id": "blast-bank", "addr": "CS:0008C284", "len": 640 },
+    { "id": "splash-records", "addr": "CS:00107774", "len": 2500 },
+    { "id": "arrival-rides", "addr": "CS:0010DA48", "len": 1620 },
+    { "id": "door-rects", "addr": "CS:00092C64", "len": 720 },
+    { "id": "trigger-timers", "addr": "CS:00091D94", "len": 768 },
+    { "id": "pod-ring", "addr": "CS:0008D314", "len": 336 },
+    { "id": "exit-ring", "addr": "CS:00108138", "len": 140 },
+    { "id": "dropship-frame", "addr": "CS:001081C4", "len": 28 },
+    { "id": "objective-slots", "addr": "CS:0008C182", "len": 192 },
+    { "id": "escape-counters", "addr": "CS:00107674", "len": 16 },
+    { "id": "tile-claims", "addr": "CS:$claim3_ptr", "len": "10000" }
   ],
   "inject": [
     { "frame": 1, "op": "pad", "bank": "CS:0000F63C", "slot": 18, "target": ["CS:0010E0A4", "CS:0010E0A8", "CS:0010E0AC"] },
@@ -109,19 +138,5 @@
     { "frame": 9, "op": "command", "base": "CS:0009255C", "stride": 128, "count_cell": "CS:00119588", "bytes": "0100000000010060026008000000" }
   ],
   "_deferred": [
-    "debris-stager (128*0x30)",
-    "effect-rows (80*0x20)",
-    "rising-debris (80*0x1E)",
-    "blast-bank (32*0x14)",
-    "splash-records (250*0xA)",
-    "arrival-rides (45*0x24)",
-    "door-rects (45*0x10)",
-    "trigger-timers (32*0x18)",
-    "pod-ring (12*0x1C)",
-    "exit-ring (5*0x1C)",
-    "dropship-frame (1*0x1C)",
-    "objective-slots (6*0x20)",
-    "escape-counters (8)",
-    "tile-claims (10000)"
   ]
 }

@@ -15,7 +15,8 @@
 //! W12-S3/S4 widening, D109). T2/T3 rows WITHOUT an EXD alias stay
 //! explicit coverage gaps (deferred, never emitted — the differ's
 //! coverage discipline); the aliased rows compile to their full fixed
-//! bank spans.
+//! bank spans (the D162 §5i census filled all 17 — count-driven rows
+//! ride CountExpr, tile-claims rides the second PtrCell).
 //!
 //! Channels (`--channel o1|o2`, D138): `o1` (default) = the EXD/DOSBox
 //! form every committed plan pins — addresses are the registry rows'
@@ -197,6 +198,9 @@ fn count_symbol(id: &str) -> &'static str {
         // the latch is per-robot over the SAME robot count cell as
         // the bank (D133: 0xf929c + i*4, count 0x11958c)
         "no-extract-latch" => "robot_count",
+        // the D162 T2 census rows (§5i): the .NME loader count cells
+        "critter-bank" => "critter_count",
+        "poi-bank" => "poi_count",
         other => unreachable!("no count symbol for {other:?} (guard in resolve_row)"),
     }
 }
@@ -258,11 +262,11 @@ fn grid(id: &str, addr: u64, extent: &str, per_tile: &str) -> Result<Option<RowP
 fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>, PlanError> {
     let id = row.id.as_str();
     // The channel gate: a row whose CHANNEL-side address is a gap
-    // never emits on that channel (on O2: the EXD-only rows). Note the
-    // EXD-unmapped T2/T3 coverage rows stay deferred on BOTH channels
-    // below — the differ's O2 arms cover exactly the aliased set, so
-    // widening the O2 emission set is a deliberate W11-era decision,
-    // never a silent side effect of the address swap.
+    // never emits on that channel (on O2: the EXD-only rows). Since
+    // D162 (§5i) the T2/T3 alias set is COMPLETE — the census rows
+    // emit on BOTH channels registry-driven (the differ normalizers
+    // passthrough-compare the raw spans; the subset-form extraction
+    // arms are the named follow-up), so no W11-era allowlist exists.
     if ch.src(row).is_empty() {
         return Ok(None);
     }
@@ -603,13 +607,15 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
         };
     }
 
-    // --- T2/T3 (the D109 tier widening): unaliased rows (no EXD
-    // twin yet) are explicit coverage gaps — never dumped on O1 (the
-    // differ's coverage discipline: they surface as E-only rows in
-    // cross-channel reports, never silence). The two aliased T2 banks
-    // are FULL fixed spans: the differ's O1 normalizers require the
-    // whole bank with NO count cell (the guest free-slot walk is the
-    // bound — RE-EXD-MAP sec 5c).
+    // --- T2/T3 (the D109 tier widening; D162 §5i closed the alias
+    // set): unaliased rows (none today) are explicit coverage gaps —
+    // never dumped on O1 (the differ's coverage discipline: they
+    // surface as E-only rows in cross-channel reports, never
+    // silence). The aliased fixed-span banks are FULL spans (the
+    // differ's O1 normalizers require the whole bank with NO count
+    // cell — the guest free-slot walk is the bound, RE-EXD-MAP
+    // sec 5c); the count-driven/indirect rows carry deliberate
+    // forms below (CountExpr / PtrCell / per-channel Span).
     if row.tier == "T2" || row.tier == "T3" {
         if row.exd_addr.is_empty() {
             return Ok(None); // E-only coverage row (debris/splash/mortar/...)
@@ -664,16 +670,145 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
                 }
                 plan(Form::Fixed { addr: first, len })
             }
+            // The D162 count-driven T2 rows (§5i): the .NME loader
+            // twins pin base + count cell on BOTH channels (critter
+            // 0x10e81c/0x1194dc ⟷ 0x4cff98/0x46cc2c; poi
+            // 0x971d4/0x119580 ⟷ 0x4dabdc/0x46cbf0). The counts are
+            // mission-load statics (loader-written once), so the
+            // anchor-resolved count bounds a stable span — the
+            // robot-bank CountExpr grammar verbatim.
+            "critter-bank" | "poi-bank" => {
+                if row.indirect || cells.len() != 2 {
+                    return Err(die(format!(
+                        "row {id} changed shape (indirect {}, addr {:?}): \
+                         the D162 census rows carry base + count cell",
+                        row.indirect,
+                        ch.src(row)
+                    )));
+                }
+                let stride = extent_stride(&row.extent, id)?;
+                let sym = count_symbol(id);
+                plan(Form::CountExpr {
+                    addr: cells[0],
+                    len_expr: format!("${sym}*{stride}"),
+                })
+            }
+            // The D162 objective row (§5i): fixed 6-slot span at the
+            // base cell; the resolver PHASE cell (cells[1]) rides the
+            // registry layout note, never the dump span.
+            "objective-slots" => {
+                if row.indirect || cells.len() != 2 {
+                    return Err(die(format!(
+                        "row objective-slots changed shape (indirect {}, addr {:?}): \
+                         expected base + resolver-phase cell",
+                        row.indirect,
+                        ch.src(row)
+                    )));
+                }
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row objective-slots extent {:?} stopped parsing: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                if len != 6 * 0x20 {
+                    return Err(die(format!(
+                        "row objective-slots extent is {len:#x}, not the pinned \
+                         6-slot 0xC0 span: update dbx-plan"
+                    )));
+                }
+                plan(Form::Fixed { addr: first, len })
+            }
+            // The D162 escape pair (§5i): per-channel spans — the EXW
+            // cells are ADJACENT (8 B), the EXD pair sits 0xC apart so
+            // the O1 span is 16 B (count@+0, timer@+0xC; the +8 dword
+            // is foreign, never read — registry layout note).
+            "escape-counters" => {
+                if row.indirect || cells.len() != 2 {
+                    return Err(die(format!(
+                        "row escape-counters changed shape (indirect {}, addr {:?}): \
+                         expected the counter pair",
+                        row.indirect,
+                        ch.src(row)
+                    )));
+                }
+                let (base, len) = match ch {
+                    Channel::O1 => {
+                        if cells[1] != cells[0] + 0xC {
+                            return Err(die(format!(
+                                "escape-counters exd geometry changed: expected \
+                                 the pair 0xC apart, got {:#x}/{:#x}",
+                                cells[0], cells[1]
+                            )));
+                        }
+                        (cells[0], 16u64)
+                    }
+                    Channel::O2 => {
+                        if cells[1] != cells[0] + 4 {
+                            return Err(die(format!(
+                                "escape-counters exw geometry changed: expected \
+                                 the adjacent pair, got {:#x}/{:#x}",
+                                cells[0], cells[1]
+                            )));
+                        }
+                        (cells[0], 8u64)
+                    }
+                };
+                plan(Form::Span {
+                    base,
+                    len,
+                    cells: cells.clone(),
+                })
+            }
+            // The D162 tile-claims row (§5i): the second PtrCell row —
+            // BOTH channels keep the arena behind a pointer cell
+            // (EXW 0x46af58 / EXD 0x119564; the static-claim-bank TS
+            // row's grammar verbatim, per-frame instead of one-shot).
+            "tile-claims" => {
+                if !row.indirect || cells.len() != 1 {
+                    return Err(die(format!(
+                        "row tile-claims changed shape (indirect {}, addr {:?}): \
+                         expected the single pointer cell",
+                        row.indirect,
+                        ch.src(row)
+                    )));
+                }
+                let Some(len) = parse_extent(&row.extent) else {
+                    return Err(die(format!(
+                        "row tile-claims extent {:?} stopped parsing: update dbx-plan",
+                        row.extent
+                    )));
+                };
+                if len != 10000 {
+                    return Err(die(format!(
+                        "row tile-claims extent is {len}, not the pinned \
+                         0x2710 arena: update dbx-plan"
+                    )));
+                }
+                plan(Form::PtrCell {
+                    cell: first,
+                    len_expr: format!("{len}"),
+                })
+            }
             other => {
-                // A future aliased T2/T3 row: fixed span only, and
-                // NEVER a guessed address — an indirect row (pointer
-                // cell) or a count-driven extent needs its own
-                // deliberate form, so both die loudly here.
+                // The generic aliased T2/T3 path (the twelve D162
+                // fixed-span rows): fixed span only, NEVER a guessed
+                // address — an indirect row (pointer cell), a
+                // count-driven extent, or a multi-cell row needs its
+                // own deliberate form above, so all die loudly here.
                 if row.indirect {
                     return Err(die(format!(
                         "aliased {} row {other:?} is indirect — add an explicit \
                          PtrCell form in dbx-plan, never the generic fixed span",
                         row.tier
+                    )));
+                }
+                if cells.len() != 1 {
+                    return Err(die(format!(
+                        "aliased {} row {other:?} carries {} cells — a multi-cell \
+                         row needs a deliberate form, never cells-first truncation",
+                        row.tier,
+                        cells.len()
                     )));
                 }
                 let Some(len) = parse_extent(&row.extent) else {
@@ -1619,6 +1754,9 @@ fn watch_row_json(p: &RowPlan, ch: Channel) -> String {
                 "static-cgr-volume" => "cgr_ptr",
                 "static-bin-terrain" => "bin_ptr",
                 "object-instances" => "obj_ptr",
+                // the D162 per-frame tile-claims row (§5i): same cell
+                // as the TS row, its own symbol (per-row maps)
+                "tile-claims" => "claim3_ptr",
                 _ => unreachable!("emit_plan gates the PtrCell ids"),
             };
             format!(
@@ -1696,8 +1834,9 @@ fn emit_plan_channel(
     for t in &scen.tiers {
         if !SUPPORTED_TIERS.contains(&t.as_str()) {
             return Err(die(format!(
-                "scenario {} tier {t:?} is not compilable yet: T2+ watches have \
-                 no EXD aliases yet (dbx-plan supports {:?})",
+                "scenario {} tier {t:?} is not compilable (dbx-plan supports {:?}; \
+                 the T2/T3 alias set is complete since D162 — a new tier needs \
+                 its own forms)",
                 scen.id, SUPPORTED_TIERS
             )));
         }
@@ -1868,6 +2007,7 @@ fn emit_plan_channel(
                 "static-cgr-volume" => "cgr_ptr",
                 "static-bin-terrain" => "bin_ptr",
                 "object-instances" => "obj_ptr",
+                "tile-claims" => "claim3_ptr",
                 other => {
                     return Err(die(format!(
                         "PtrCell row {other:?} has no resolve symbol in dbx-plan"
@@ -1918,6 +2058,29 @@ fn emit_plan_channel(
                     ))
                 })?
             }
+            // the D162 census count cells (§5i): the .NME loader twins
+            "critter_count" | "poi_count" => {
+                let row_id = if name == "critter_count" {
+                    "critter-bank"
+                } else {
+                    "poi-bank"
+                };
+                let row = reg
+                    .iter()
+                    .find(|r| r.id == row_id)
+                    .ok_or_else(|| die(format!("symbol ${name} has no source registry row")))?;
+                exd_cells(ch.src(row)).get(1).copied().ok_or_else(|| {
+                    die(format!(
+                        "row {} {} lost its count cell",
+                        row.id,
+                        if ch == Channel::O1 {
+                            "exd_addr"
+                        } else {
+                            "exw_addr"
+                        }
+                    ))
+                })?
+            }
             other => {
                 return Err(die(format!(
                     "len expression references unknown symbol ${other}"
@@ -1944,7 +2107,7 @@ fn emit_plan_channel(
         }
         Channel::O2 => {
             j.push_str(&format!(
-                "  \"_comment\": \"{} O2 spot-check capture plan (W11-prep, D138; GENERATED by dbx-plan --channel o2 from watches.toml - do not hand-edit, regenerate). Channel form (DESIGN section 2 O2 + section 10 W11): every addr is the registry row EXW canon address (0x-prefixed flat linear), read DIRECTLY by the host ptrace driver - zero address translation. trigger.site = the s0-trigger EXW row (the frame-tail PresentEnd breakpoint site; the first hit after mission load is the anchor frame), trigger.frame_counter = the EXW g_frame_count cell (frame alignment). resolve rows are read at the anchor hit (resolve_at=anchor - the loader statics are mission-load values). static-map-wh rides the D137/D138 O2 form: ONE 8-byte span at 0x004EDDEC with w at +0x00 / h at +0x04 (the EXW cells are ADJACENT u32s with w LOW - NOT the EXD 0x30 span, h LOW 0x2c apart; D137 0x24-apart arithmetic corrected by D138). selection-triple dumps the SELECTED-SLOT cell 0x0046CBDC (the EXW list is FIELD-ordered base/selected/size but selected is the highest address - the D132 pairing). Deferred rows: the EXD-unmapped T2/T3 coverage rows stay deferred on BOTH channels (the differ O2 arms cover exactly the aliased set; widening the O2 row set is a W11 decision), plus any row whose EXW address is a registry gap (the EXD-only rows - static-cursor-clamp; never fabricated). inject/boot_writes rows carry EXW seam cells with frame = the Nth trigger hit after the anchor; injection on O2 is driver policy (DESIGN section 10 W11 names process_vm_readv observation - the rows are data for a writing driver). Walk-phase keystore scenarios are REFUSED on o2 (the BPLM stop-indexed menu walk is DOSBox/O1 machinery, D84). TS statics ride the anchor frame; T0 rows every frame. The tiebreak verdict this plan feeds: dbx-diff cross-channel with the O2 dump as the arbiter.\",\n",
+                "  \"_comment\": \"{} O2 spot-check capture plan (W11-prep, D138; GENERATED by dbx-plan --channel o2 from watches.toml - do not hand-edit, regenerate). Channel form (DESIGN section 2 O2 + section 10 W11): every addr is the registry row EXW canon address (0x-prefixed flat linear), read DIRECTLY by the host ptrace driver - zero address translation. trigger.site = the s0-trigger EXW row (the frame-tail PresentEnd breakpoint site; the first hit after mission load is the anchor frame), trigger.frame_counter = the EXW g_frame_count cell (frame alignment). resolve rows are read at the anchor hit (resolve_at=anchor - the loader statics are mission-load values). static-map-wh rides the D137/D138 O2 form: ONE 8-byte span at 0x004EDDEC with w at +0x00 / h at +0x04 (the EXW cells are ADJACENT u32s with w LOW - NOT the EXD 0x30 span, h LOW 0x2c apart; D137 0x24-apart arithmetic corrected by D138). selection-triple dumps the SELECTED-SLOT cell 0x0046CBDC (the EXW list is FIELD-ordered base/selected/size but selected is the highest address - the D132 pairing). Deferred rows: any row whose EXW address is a registry gap (the EXD-only rows - static-cursor-clamp; never fabricated) — the T2/T3 set is fully aliased since D162 (RE-EXD-MAP sec 5i) and emits registry-driven. inject/boot_writes rows carry EXW seam cells with frame = the Nth trigger hit after the anchor; injection on O2 is driver policy (DESIGN section 10 W11 names process_vm_readv observation - the rows are data for a writing driver). Walk-phase keystore scenarios are REFUSED on o2 (the BPLM stop-indexed menu walk is DOSBox/O1 machinery, D84). TS statics ride the anchor frame; T0 rows every frame. The tiebreak verdict this plan feeds: dbx-diff cross-channel with the O2 dump as the arbiter.\",\n",
                 scen.id
             ));
             j.push_str("  \"channel\": \"o2\",\n");
@@ -2089,8 +2252,10 @@ fn emit_plan_channel(
              CONSUMED on O1 on every scenario — so an unarmed E run's rng-state \
              rows drift vs O1 (the budgeted channel class, like platforms). No \
              inject rows: the run's own engage/fire/death traffic produces every \
-             state change; the critter bank + effect rows are E-ONLY coverage \
-             rows (no EXD alias), the 0x68 fire rides the ALIASED projectile \
+             state change; the critter bank + effect rows are EXD-ALIASED since \
+             D162 (RE-EXD-MAP sec 5i: 0x10e81c + count 0x1194dc / 0x9d534) — \
+             their cross-channel FIELD compare awaits the differ extraction \
+             arms (the named follow-up), the 0x68 fire rides the ALIASED projectile \
              bank\""
                 .to_string(),
         );
@@ -2831,13 +2996,14 @@ mod tests {
     }
 
     #[test]
-    fn t2_tiers_compile_the_two_aliased_banks_only() {
-        // D109: the T2 tier compiles — but ONLY the two aliased banks
+    fn t2_tiers_compile_the_full_alias_set() {
+        // D109: the T2 tier compiles — the two W12-S3 banks
         // (weapon-anim 0x980d4 / projectile 0x10e174, RE-EXD-MAP
-        // sec 5c) emit, as the FULL fixed spans the differ's O1
-        // normalizers require (no count cell on the guest); the three
-        // unaliased T2 rows stay refused (deferred, never emitted —
-        // the differ's coverage discipline).
+        // sec 5c) emit as the FULL fixed spans the differ's O1
+        // normalizers require (no count cell on the guest); D162
+        // (§5i) added the three census rows — mortar-trail the full
+        // 0x830 span, critter/poi the count-driven CountExpr forms
+        // over the .NME loader count cells.
         let src = "scenario = X\ntiers = T2\nframes = 1\n";
         let scen = Scenario::parse(src).unwrap();
         let reg = registry();
@@ -2848,22 +3014,20 @@ mod tests {
         assert!(emitted
             .json
             .contains("{ \"id\": \"projectile-bank\", \"addr\": \"CS:0010E174\", \"len\": 1700 }"));
-        for gap in ["mortar-trail-bank", "critter-bank", "poi-bank"] {
-            assert!(
-                emitted.deferred.iter().any(|d| d.starts_with(gap)),
-                "unaliased T2 row {gap} must be deferred: {:?}",
-                emitted.deferred
-            );
-        }
-        for id in row_ids(&emitted.json) {
-            assert!(
-                !matches!(
-                    id.as_str(),
-                    "mortar-trail-bank" | "critter-bank" | "poi-bank"
-                ),
-                "unaliased T2 row {id:?} must never be emitted"
-            );
-        }
+        assert!(emitted.json.contains(
+            "{ \"id\": \"mortar-trail-bank\", \"addr\": \"CS:00091574\", \"len\": 2080 }"
+        ));
+        assert!(emitted.json.contains(
+            "\"id\": \"critter-bank\", \"addr\": \"CS:0010E81C\", \"len\": \"$critter_count*0x7E\""
+        ));
+        assert!(emitted.json.contains(
+            "\"id\": \"poi-bank\", \"addr\": \"CS:000971D4\", \"len\": \"$poi_count*0x1E\""
+        ));
+        // the count cells ride the resolve rows (loader statics —
+        // read at the anchor like every resolve cell)
+        assert!(emitted.json.contains("critter_count"));
+        assert!(emitted.json.contains("poi_count"));
+        assert_eq!(emitted.deferred.len(), 0);
     }
 
     #[test]
@@ -2877,15 +3041,20 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 + T2 2 per-frame; anchor adds the 16 TS spans
+        // T0 11 + T1 17 + T2 5 per-frame (all five T2 rows aliased —
+        // D162/§5i: weapon, projectile, mortar-trail + the two
+        // count-driven .NME rows); anchor adds the 16 TS spans
         // (15 resolved rows + the yline #zbase companion, 7j.69/D161).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
-        assert_eq!(frame_count, 11 + 17 + 2);
+        assert_eq!(frame_count, 11 + 17 + 5);
         assert_eq!(anchor_count, frame_count + 16);
-        // deferred: the TS gap set is EMPTY since 7j.69/D161 — the
-        // 3 unaliased T2 rows remain
-        assert_eq!(emitted.deferred.len(), 3);
+        // deferred: EMPTY since D162 (the TS gap set closed at
+        // 7j.69/D161, the T2 set at §5i)
+        assert_eq!(emitted.deferred.len(), 0);
+        // the count-driven census rows carry their resolve symbols
+        assert!(emitted.json.contains("\"len\": \"$critter_count*0x7E\""));
+        assert!(emitted.json.contains("\"len\": \"$poi_count*0x1E\""));
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2911,39 +3080,54 @@ mod tests {
     }
 
     #[test]
-    fn s4_t3_rows_stay_refused() {
-        // D109: S4 (the W12-S4 destroy scenario) compiles at
-        // T0,T1,T3,TS — the T3 tier contributes ZERO O1 rows (no T3
-        // row has an EXD alias yet): every T3 row is deferred and
-        // documented, never emitted. The debris-stager/splash-records
-        // pair the scenario's E-side rows ride stays E-only — the
-        // differ's coverage findings, never fabricated.
+    fn s4_t3_rows_now_emitted() {
+        // D109 refused the T3 tier (no alias yet); D162 (§5i) closed
+        // the set — S4 (the W12-S4 destroy scenario, T0,T1,T3,TS)
+        // now EMITS all 14 T3 rows with their census-pinned EXD
+        // addresses (anti-ghost: a stale address fails the build).
+        // The debris-stager/splash-records rows the scenario's E-side
+        // records ride are O1-dumpable now; their cross-channel
+        // FIELD compare still awaits the differ extraction arms (the
+        // named follow-up — the differ treats the raw O1 rows as
+        // coverage until then).
         let scen = Scenario::parse(include_str!("../../scenarios/S4.scen")).unwrap();
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds the 16
-        // TS spans (15 resolved rows + the yline #zbase companion,
+        // T0 11 + T1 17 + T3 14 per-frame; anchor adds the 16 TS
+        // spans (15 resolved rows + the yline #zbase companion,
         // 7j.69/D161).
-        assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 16);
-        // deferred: the TS gap set is EMPTY since 7j.69/D161 — ALL
-        // 14 T3 rows remain
-        assert_eq!(emitted.deferred.len(), 14);
-        for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
+        assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17 + 14);
+        assert_eq!(
+            count_rows(&emitted.json, "anchor_watches"),
+            11 + 17 + 14 + 16
+        );
+        // deferred: EMPTY since D162
+        assert_eq!(emitted.deferred.len(), 0);
+        // the census pins ride the plan verbatim (a representative
+        // fixed span, the count-free full banks)
+        for (id, addr, len) in [
+            ("debris-stager", "CS:00093064", 128 * 0x30),
+            ("effect-rows", "CS:0009D534", 80 * 0x20),
+            ("splash-records", "CS:00107774", 250 * 0xA),
+            ("door-rects", "CS:00092C64", 45 * 0x10),
+            ("arrival-rides", "CS:0010DA48", 45 * 0x24),
+        ] {
+            let want = format!("{{ \"id\": \"{id}\", \"addr\": \"{addr}\", \"len\": {len} }}");
             assert!(
-                emitted.deferred.iter().any(|d| d == gap),
-                "T3 coverage gap {gap:?} must be documented: {:?}",
-                emitted.deferred
+                emitted.json.contains(&want),
+                "T3 row {id} must carry its D162 pin {addr}/{len:#x}"
             );
         }
+        // the per-frame tile-claims row reads through the pointer
+        // cell (the second PtrCell row — its own resolve symbol)
+        assert!(emitted.json.contains("CS:$claim3_ptr"));
+        // every emitted T3 row exists in the registry (no ghosts)
         for id in row_ids(&emitted.json) {
-            // a `#name` suffix strips to its parent row (7j.69/D161)
             let base = id.split('#').next().unwrap_or(&id);
-            let row = reg.iter().find(|r| r.id == base).expect("registry row");
-            assert_ne!(
-                row.tier, "T3",
-                "unaliased T3 row {id:?} must never be emitted on O1"
+            assert!(
+                reg.iter().any(|r| r.id == base),
+                "emitted row {id:?} has no registry row"
             );
         }
     }
@@ -3138,10 +3322,10 @@ mod tests {
         // ORIGINAL's loader heading draws + per-frame controller
         // draws are consumed on O1 on every scenario). No inject
         // rows beyond the run's own fire: ONE command record (the
-        // frame-1 artillery burst that produces the deaths); the
-        // critter bank + effect rows stay in _deferred (unaliased —
-        // the D109 rule: E-only coverage rows, never emitted on
-        // O1), and the 0x68 fire rides the ALIASED projectile bank.
+        // frame-1 artillery burst that produces the deaths); since
+        // D162 (§5i) the critter bank + effect rows carry EXD aliases
+        // and emit (critter-bank count-driven, effect-rows the full
+        // span), and the 0x68 fire rides the ALIASED projectile bank.
         let s8 = Scenario::parse(include_str!("../../scenarios/S8.scen")).unwrap();
         assert!(s8.critters);
         assert!(!s8.destroy && !s8.pickup && !s8.platforms);
@@ -3158,10 +3342,14 @@ mod tests {
         for (_, addr, _) in &extract_injects(&emitted.json) {
             assert_eq!(addr, "CS:0009255C", "the command ring append");
         }
-        // The unaliased rows refuse: the critter bank + the effect
-        // rows + the rest of the T2/T3 E-only set stay deferred.
-        assert!(emitted.json.contains("critter-bank"));
-        assert!(emitted.json.contains("effect-rows"));
+        // D162 (§5i): the critter bank + the effect rows are ALIASED
+        // and emitted now (critter count-driven over the loader count
+        // cell; effect rows the full 0xA00 span) — the cross-channel
+        // FIELD compare still awaits the differ extraction arms (the
+        // named follow-up).
+        assert!(emitted.json.contains("\"id\": \"critter-bank\""));
+        assert!(emitted.json.contains("\"len\": \"$critter_count*0x7E\""));
+        assert!(emitted.json.contains("\"id\": \"effect-rows\""));
     }
 
     #[test]

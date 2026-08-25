@@ -176,8 +176,11 @@ pub struct Scenario {
     /// S0..S7 chains stay byte-identical (the loader's kind-4
     /// heading draws + the controller's per-frame draws on
     /// unarmed paths are the recorded E-side stream gap,
-    /// §7j.42/5). The critter bank is the E-ONLY T2 coverage row;
-    /// the ALIASED observables are the RNG stream, the robot bank
+    /// §7j.42/5). The critter bank was the E-only T2 coverage row
+    /// until D162 pinned its EXD alias (0x10e81c + count 0x1194dc,
+    /// RE-EXD-MAP §5i) — the cross-channel field compare now awaits
+    /// only the differ extraction arm; the ALIASED observables are
+    /// the RNG stream, the robot bank
     /// (the damage/stun lanes), the projectile bank (0x68 fire),
     /// the debris/effect-row stagings, and the score bounty.
     pub critters: bool,
@@ -1597,7 +1600,10 @@ mod tests {
             other => panic!("expected NoExwAddress, got {other:?}"),
         }
 
-        // (c) per-channel mirrors on the T3 EXD-gap row.
+        // (c) per-channel mirrors on the T3 row: D162 (§5i) filled the
+        // alias — debris-stager stitches clean on BOTH channels now.
+        // The rule itself stays covered by the fabricated-gap registry
+        // in stitch_o3_channel_rules (c').
         let s3 = Scenario::parse("scenario = S0T3\ntiers = T0,T3\nframes = 1\n").unwrap();
         let cap = "DBXCAP v1\nframe 1\nwatch frame-counter 00\nwatch debris-stager 00\n\
                    frame 2\nwatch frame-counter 00\n";
@@ -1608,10 +1614,7 @@ mod tests {
             &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0T3"),
             &r,
         );
-        assert!(
-            matches!(o1, Err(StitchError::NoExdAddress { .. })),
-            "the O1 rule still binds the EXD cell"
-        );
+        assert!(o1.is_ok(), "the D162 alias stitches clean on O1: {o1:?}");
         let o2 = stitch(
             &s3,
             &t,
@@ -1702,8 +1705,13 @@ mod tests {
             other => panic!("expected NoExwAddress, got {other:?}"),
         }
 
-        // (c) per-channel mirrors on the T3 EXD-gap row: refused on
-        // O1, clean on O3 (the EXW cell is the canon there too).
+        // (c) per-channel mirrors on a T3 row: since D162 (§5i) the
+        // census rows carry BOTH cells — debris-stager (exw 0x476fbc /
+        // exd 0x93064) stitches clean on O1 AND O3. The NoExdAddress
+        // rule itself has NO live registry row anymore (the alias set
+        // is complete) — it stays covered by the fabricated-gap
+        // registry below (anti-fabrication: tests only, never the
+        // committed registry).
         let s3 = Scenario::parse("scenario = S0T3\ntiers = T0,T3\nframes = 1\n").unwrap();
         let cap = "DBXCAP v1\nframe 1\nwatch frame-counter 00\nwatch debris-stager 00\n\
                    frame 2\nwatch frame-counter 00\n";
@@ -1714,10 +1722,7 @@ mod tests {
             &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0T3"),
             &r,
         );
-        assert!(
-            matches!(o1, Err(StitchError::NoExdAddress { .. })),
-            "the O1 rule still binds the EXD cell"
-        );
+        assert!(o1.is_ok(), "the D162 alias stitches clean on O1: {o1:?}");
         let o3 = stitch(
             &s3,
             &t,
@@ -1728,6 +1733,37 @@ mod tests {
             o3.is_ok(),
             "an EXD gap with a live EXW cell dumps on O3: {o3:?}"
         );
+        // (c') the rule still bites: a fabricated EXD-gap T3 row is
+        // refused on O1 (the committed set is complete — D162 — so
+        // the vehicle is a test-only registry + a matching
+        // transcript).
+        let mut fab = r.clone();
+        fab.push(Watch {
+            id: "t3-fab-gap".into(),
+            tier: "T3".into(),
+            exw_addr: "0x476fbc".into(),
+            exd_addr: String::new(),
+            indirect: false,
+            extent: "1".into(),
+            layout: "fabricated gap row (tests only)".into(),
+            exd_status: "unmapped".into(),
+            anchor_doc: "RE-EXW-SIM".into(),
+            anchor: "debris kinds".into(),
+            note: String::new(),
+        });
+        let capf = "DBXCAP v1\nframe 1\nwatch frame-counter 00\nwatch t3-fab-gap 00\n\
+                    frame 2\nwatch frame-counter 00\n";
+        let tf = Transcript::parse(capf).unwrap();
+        let o1f = stitch(
+            &s3,
+            &tf,
+            &DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0T3"),
+            &fab,
+        );
+        match o1f {
+            Err(StitchError::NoExdAddress { id, .. }) => assert_eq!(id, "t3-fab-gap"),
+            other => panic!("the O1 rule still binds the EXD cell: {other:?}"),
+        }
 
         // (d) determinism: same transcript, same header -> identical
         // dump bytes + chain.

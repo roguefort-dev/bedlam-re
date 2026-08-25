@@ -140,14 +140,15 @@ fn registry_schema_invariants_hold() {
             }
             _ => {}
         }
-        // W1 scope rule: T2-T4 rows stay EXD-empty until their aliasing
-        // unit (W5-followup legitimately filled the TI seams — §5c;
-        // W12-S3 legitimately filled the two weapon-fire banks —
-        // RE-EXD-MAP §5c pins 0x980d4 / 0x10e174).
-        let aliased_t2 = matches!(id.as_str(), "weapon-anim-bank" | "projectile-bank");
-        if ["T2", "T3", "T4"].contains(&tier.as_str()) && has_exd && !aliased_t2 {
+        // W1 scope rule, AMENDED by D162 (the §5i census): T2/T3 rows
+        // may carry EXD aliases (all 17 census rows landed `verified`;
+        // W5-followup filled the TI seams — §5c; W12-S3 filled the two
+        // weapon-fire banks — RE-EXD-MAP §5c pins 0x980d4 / 0x10e174).
+        // T4 (event capture) is breakpoint-hook-based — no addresses.
+        if tier == "T4" && has_exd {
             failures.push(format!(
-                "{id}: tier {tier} must stay exd-empty until its aliasing unit"
+                "{id}: tier T4 (event capture) must stay exd-empty — \
+                 hooks are call sites, not memory banks"
             ));
         }
         // indirect = EXD pointer cell: meaningless without an EXD alias
