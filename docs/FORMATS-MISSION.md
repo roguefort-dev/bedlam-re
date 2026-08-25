@@ -316,20 +316,21 @@ What RE must confirm: everything beyond the layout.
   distribution of FUN_0041ec1c scatter returns (jitter ranges), and the
   semantic of the marker word w0 (always 1; loader never reads it).
 
-## 10. PAD — up to 999 pad (elevator/teleporter) records + 0xFF fill
+## 10. PAD — 999 pad (elevator/teleporter) record slots
 
 - **Size:** exactly 5994 = 6 × 999 for all 37 files. VERIFIED
-- **Layout (VERIFIED):** `N × 6-byte records (3 × u16)`, then 0xFF fill to the
-  end; the first 0xFF marks the end and the rest is all 0xFF (checked: fill is
-  pure). Record = `(x, y, type)`.
+- **Layout (VERIFIED):** 999 × 6-byte slots (3 × u16). Record = `(x, y, type)`.
+  The loader stops at the first record whose `x == 0xFFFF`; bytes after that
+  terminator are not semantically consumed and need not be uniform fill.
+  Shipped `ZONEB/MISSION3.PAD` contains an ignored orphan record after its
+  terminator.
   - ZONEA/MISSION1.PAD: 114 records; first bytes
     `05 00 3D 00 00 00 05 00 35 00 01 00 …` = (5,61,0), (5,53,1), (10,46,1)…
   - Record counts across missions: 2 … 114. type tally: 0×310, 1×173, 2×51,
     3×50, 4×62, 5×47, 6×8 (7 pad types).
 - **Meaning (CONFIRMED storage, EXW RE 2026-08-21 — docs/RE-EXW-SIM.md
   §7c.5):** after loading, the engine writes `DAT[plane=type][y·w+x] = 0xFF`
-  for every record (the EXW write is unchecked; shipped type values are
-  0..6 and the arena covers them).
+  for every loaded record (shipped type values are 0..6).
   get_from_dat_file reads 0xFF back as tile type 1 — a CGR slot-0
   0x1F-height deck block at level `kind`. So **`type` is the z LEVEL the
   pad materialises its tile at**, matching the TXT "lowers section two
@@ -541,26 +542,30 @@ What RE must confirm: everything beyond the layout.
   non-empty count exceeds the name-scan count by 1 (one
   empty/short name). Details §7j.33.
 
-## 18. CGR — sprite bank: u16 count + u32 offset directory (hypothesis CONFIRMED)
+## 18. CGR — sprite bank: u16 count + self-relative u32 offset directory
 
 - **Size:** exactly 132354 B for **all 44 files**. VERIFIED
-- **Directory layout — VERIFIED 44/44 (100 % fit):**
-  - `u16 count = 128` (@0x0000: `80 00`),
-  - followed by 128 × u32 offsets @0x0002…0x0201; first offset = **512**
-    (= 2 + 128×4 — data begins exactly after the directory),
-  - offsets are monotonically increasing, last offset = 130814, and
-    130814 ≤ 132354 — the final sprite runs to EOF.
-- **Sprites:** sizes 1026–1540 B. Sprite 0 (@512) begins
-  `01 00 00 00 20 00 20 00 …` = u32(1), u16(32), u16(32) → **32×32** tiles.
+- **Directory layout — VERIFIED 44/44 (100 % fit):** LE `u16 count = 128`
+  occupies bytes 0..1 (`80 00`). Directory entry `s` begins at `2 + 4·s`;
+  its LE u32 offset is relative to that entry, not to the start of the file.
+  The first stored offset, 512, therefore places record 0 at absolute byte 514,
+  immediately after the directory. The last stored offset, 130814, is in the
+  entry at byte 510, placing the final record at byte 131324; its 1030 bytes
+  end exactly at EOF 132354.
+- **Runtime-selected record layout (VERIFIED, seven shipped
+  `ZONE?/MISSION?.CGR` files):** every record is exactly 1030 bytes: a 6-byte
+  header `u16(0), u16 width=32, u16 height=32`
+  (`00 00 20 00 20 00`), then 1024 raw row-major bytes, with no tail padding.
+  Successive stored offsets differ by 1026 because each successive directory
+  entry's base advances by 4 bytes while absolute record starts advance by
+  1030. This record-layout claim does not generalize to numbered/editor CGRs.
 - **Pixel codec — RESOLVED by EXW RE (2026-08-21, docs/RE-EXW-SIM.md §7c.6):
   there is NO codec.** get_z_pos@0041e231 reads the height byte directly:
   `CGR[2 + 4·(type−1) + dir[type−1] + 6 + (sy<<5) + sx]` — a 6-byte sprite
-  header then the RAW 1024-byte 32×32 **height map** (the walkability
+  header then the RAW 1024-byte row-major 32×32 **height map** (the walkability
   floor field; slot 0 = type 1 is 0x1F everywhere, slot 36 = type 37 reads
-  0x01 at row starts). The 1026-B sprite size = 6 + 1024 exactly; larger
-  sizes pad (the single 1540-B tail sprite per file). The `01 00 00 00
-  20 00 20 00` header is the u32(1) + 32×32 dims the render side also
-  consumes (P4 render slice input).
+  0x01 at row starts). The six-byte `{0,32,32}` header is also consumed by
+  the render side (P4 render slice input).
 - **Contents:** 36 of 44 files are byte-identical; the 7 zone-level CGRs plus
   ZONEE/MISSION4.CGR differ **only in pixel data** — the 128-entry directory is
   identical in every file. VERIFIED
@@ -636,7 +641,7 @@ Notable **negative** results (things that did NOT fit):
 | LNG | 16384 (7 zone files) | third permutation table, same space | layout VERIFIED; meaning HYPOTHESIS | everything |
 | MRK | 192 = 12×16 B | spawn markers: (flag, x, y, z-level) — record i spawns robot i | layout VERIFIED; spawn VERIFIED (EXW 7c) | word-3=0 / flag consumers |
 | NME | 16–1492 B | critter/personnel placements: 8 fixed sections (10/10/8/8/10/8/6/8 B), §9 | VERIFIED (loader-anchored, EXW 7j.18) | scatter jitter ranges; w0 marker |
-| PAD | 5994 = N×6 B + 0xFF fill (N≤999) | pads: (x, y, z-level) — loader writes DAT[type][y][x]=0xFF | layout + write VERIFIED (EXW 7c) | interactive trigger path |
+| PAD | 5994 = 999×6 B slots; x=0xFFFF terminates | pads: (x, y, z-level) — loader writes DAT[type][y][x]=0xFF | layout + write VERIFIED (EXW 7c) | interactive trigger path |
 | PAL | 770 = 2 + 256×3 (40 files, all identical) | 6-bit VGA palette | VERIFIED | leading 2 bytes |
 | POS | 32000 = 2000×16 B | object placements (x, y, kind 0–5, BDG-type index); empty = all-FF | layout VERIFIED; index → BDG row VERIFIED (EXW 7j.25/7j.33) | kind semantics tail |
 | PTH | 2 (`00 00`) everywhere | u16 count=0 path list | content VERIFIED; layout LIKELY | record format |
@@ -644,7 +649,7 @@ Notable **negative** results (things that did NOT fit):
 | TXT | 409×33, 1649×4 (CRLF ASCII) | designer notes: score codes; pad reference | VERIFIED; EDITOR-ONLY (§0.2) | — |
 | BDG | 17100–43644, 282 recs/file | the destructible-object spec library (loader-parsed) | GRAMMAR VERIFIED (EXW 7j.25/7j.32) | — |
 | BLD | 29964–96430 (+6 zone files, A≡F, B≡G) | EDITOR-SOURCE object library (names + template banks); NEVER loaded at runtime | GRAMMAR VERIFIED (§17, EXW 7j.33) — editor-only | head flags; variable tails; zone-level (no BDG sibling) |
-| CGR | 132354 (44 files) | height-map bank: u16 128 + 128×u32 dir + 6 B hdr + raw 1024 B 32×32 maps | directory VERIFIED; codec RESOLVED (raw, EXW 7c) | render-side header use |
+| CGR | 132354 (44 files) | self-relative u32 directory; runtime-selected 7: 6 B hdr + raw 1024 B 32×32 maps | directory VERIFIED; codec RESOLVED (raw, EXW 7c) | render-side header use |
 
 ---
 
