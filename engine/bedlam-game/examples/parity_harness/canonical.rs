@@ -142,6 +142,10 @@ pub struct TickState<'a> {
     /// `run_canonical` paths — `load_mission` stages the full
     /// 0x2710 image; hand-built fixtures choose their own).
     pub claim_bank: &'a [u8],
+    /// The player TYPE word [0x4edb90] (§7j.68/D159) — the
+    /// `static-player-type` TS row's source, anchor frame only.
+    /// 0 on every canonical path (SP; the sim has no setter).
+    pub player_type: u16,
     /// The T2 watch surfaces (W12-S3): the two projectile banks,
     /// emitted WHOLE per frame — never in `state_hash` (the W6
     /// split: watched bank rows are their own dump blobs).
@@ -663,6 +667,15 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         // prefix, no field map: byte passthrough on every channel
         // (the D136 static-map-wh fixed-extent precedent).
         f.push_watch("static-claim-bank", st.claim_bank.to_vec());
+        // The player TYPE word (S0-16, §7j.68/D159): the raw u16 LE
+        // of the sim cell — the SAME 2 bytes the O1 plan dumps at
+        // CS:001075C0 and O2 at 0x004EDB90 (fresh-SP 00 00, pinned
+        // both channels), so byte passthrough on every channel (the
+        // D136 static-map-wh precedent; the cell is dword-written
+        // but word-consumed — extent 2 is the consumed word).
+        let mut pt = Vec::with_capacity(2);
+        pt.extend_from_slice(&st.player_type.to_le_bytes());
+        f.push_watch("static-player-type", pt);
     }
     f
 }
@@ -1415,6 +1428,7 @@ fn tick_state<'a>(
         armor_pads: sim.armor_pads(),
         map_wh,
         claim_bank: sim.claim_bank(),
+        player_type: sim.player_type(),
         weapon_bank: sim.weapon_bank(),
         enemy_bank: sim.enemy_bank(),
         critter: critter.then_some(CritterView {

@@ -1194,6 +1194,17 @@ impl MissionSim {
         &self.claim_bank
     }
 
+    /// The player TYPE word [0x4edb90] (§7j.68/D159): 0 for the
+    /// whole SP campaign — the census's only SP-path writer is the
+    /// GameMain boot store (0x41c34c / EXD 0x2cc84), the save
+    /// family never restores the cell, and the MP lobby/sync
+    /// writers are gated off in SP. No setter exists by design:
+    /// the constant IS the faithful SP model. Gates the alarm
+    /// trip, the critter bounty, and the case-4 pickup seam.
+    pub fn player_type(&self) -> u16 {
+        self.player_type
+    }
+
     /// The claim byte for a linear tile (the §7j.63 reader gates):
     /// 0 when unstaged/out-of-bank.
     pub(crate) fn claim_byte(&self, tile: usize) -> u8 {
