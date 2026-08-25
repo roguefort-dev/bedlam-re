@@ -5,26 +5,7 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4.2/S0-registry-tail] `ts-extent-arms` — pin the four DEFERRED
-   TS watch extents the S0-15a unit left open with explicit
-   unpinned-extent reasons (see its Done entry): cgr-volume
-   (bank-sized), bin-terrain (bank-sized), lnk-map (map-sized),
-   yline-zbase (table-sized). For each: read the extent off the
-   verified load path in the objdump (ghidra-project/
-   exw-text-objdump.txt / exd-probe dumps; no Ghidra import),
-   cross-check the bank dims against the corpus files (READ-ONLY +
-   MANIFEST check), pin the dbx-plan Form, regenerate the affected
-   capture plans, byte-pin the committed artifacts, and re-assert
-   the registry_anchors + plan-pinning tests. Zero canonical-chain
-   movement expected (plan-only). NOTE: the worktree still carries
-   the interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry +
-   dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + capture-plan
-   boot_trap deltas, owner ≠ current worker): inspect, preserve,
-   adopt per AGENTS shared-worktree rules; stage explicit task
-   paths only — dbx-plan.rs + the capture plans OVERLAP that WIP,
-   so coordinate: keep its boot_trap deltas intact in the emitted
-   plans.
-2. [P4.2/W-survey] `t2t3-alias-census` — the T2/T3 watch rows with
+1. [P4.2/W-survey] `t2t3-alias-census` — the T2/T3 watch rows with
    exd_status gaps (projectiles/critters/effects/debris families):
    a bounded objdump-only census producing the EXD↔EXW alias table
    per row (anchor every claim to ledger rows; RE-notes-first
@@ -33,6 +14,67 @@ renumbered queue keeps every open item claimable by number).
    sections, docs/RE-EXW-SIM §7j ledger.
 
 ## Done
+1. DONE (2026-08-26, worker d093c3ef claim 1, commits 2b8d745 +
+   d2017f9, both PUSHED): P4.2/S0-registry-tail `ts-extent-arms` —
+   the LAST FOUR deferred dbx-plan TS extents RESOLVED (D161,
+   RE-EXW-SIM §7j.69). RE first (2b8d745): every extent read off
+   the verified load path BOTH channels + corpus cross-check.
+   (a) cgr-volume: arena 0x20788 documented (EXW 0x41d95f / EXD
+   0x2e288, ArenaAlloc no-zeroing) but the PLAN PIN is the UNIFORM
+   132354-B file image 0x20562 (u16 count 128 + 512-B self-relative
+   directory + 128×1030-B records — all 44 shipped .CGR exactly
+   that, FORMATS §18; the MIN/D152 arena choice was forced by
+   varying files, the CGR corpus is uniform so the file image is
+   the tighter pin AND keeps the passthrough compare free of the
+   646-B stale tail). (b) bin-terrain: the BOOT-PASS arena 0x258960
+   (EXW 0x41d666 / EXD 0x2e098 — NOT in FUN_0041d954; the successor
+   instruction loads GENERAL.BIN into the sibling bank 0x4edd7c);
+   zone BINs 2041594..2443943 all fit; GAMEGFX/SHOPLITE.BIN
+   (3081801) is a DIFFERENT bank family — not a counterexample;
+   stale tail never read (directory-relative readers, §7j.36).
+   (c) lnk-map: Fixed 0x4000 at the DIRECT .bss targets (EXW
+   0x45cdda / EXD 0x10336c — the whole-file read behind the
+   language gates 0x4eba1c/0x10768c, NO bound anywhere); all 44
+   .LNK + 7 .LNG exactly 16384 B; the "(0x8000)" gloss in §7c.2/
+   MISSIONVIEW §1 RETIRED (no loader immediate exists). (d)
+   yline-zbase: TWO SPANS — the tables are non-contiguous with a
+   channel-DIFFERENT gap (EXW 0x1cc apart / EXD ~0x7c000 apart), so
+   no single span mirrors the layout: the registry id keeps the
+   y-line table (CountExpr 4*$map_h, the D147 h-dwords pin
+   re-verified on the EXD loops 0x2e713..0x2e74b first-hand) and
+   the z-base plane table rides the DERIVED id
+   `static-yline-zbase#zbase` (Fixed 32; capgen keep-first dedupe
+   never drops it — distinct ids; differ static-* passthrough
+   compares each byte-exact). Impl (d2017f9): the four deferred
+   arms replaced by pinned forms guarding the exact extent strings
+   (watches.toml moved off bank-sized/map-sized/table-sized); new
+   resolve symbols cgr_ptr/bin_ptr in BOTH PtrCell maps; the
+   companion_span() emit-loop extension (# suffix gate: TS-only
+   today, loud on any non-TS multi-table row); ALL 13 artifacts
+   regenerated BOTH channels — S0/S0W/S1/S2/S5/S5B/S5C reach ZERO
+   deferred rows (S3 3 = unaliased T2; S4/S6/S7 14 = T3; S8 17;
+   S1-o2 1 = the EXD-only cursor-clamp); anchor counts +5 per
+   TS-bearing scenario; count asserts re-pinned (s0 27/0, s1
+   27+17/0, o2 43/1, s2 27+17, s3 frame+16/3, s4 11+17+16/14) +
+   new span asserts on both channels + row_ids strips the #
+   suffix. RE-EXD-MAP §5 rows re-pinned with the extent
+   provenance; D161 recorded. SHARED-WORKTREE OVERLAP (the S0-15a
+   precedent): dbx-plan.rs + the capture plans overlap the
+   interrupted O1-boot WIP — committed content verified in a
+   SCRATCH CRATE = HEAD + only this unit's 16 dbx-plan hunks (the
+   WIP's 4 boot_trap/BPLM/boot_note hunks extracted out of the
+   patch by hunk census), staged via hash-object/update-index; the
+   WIP deltas remain INTACT in the worktree (git diff HEAD after
+   the commit = WIP-only again; worktree plans carry both change
+   sets, boot_trap preserved in the emitted plans). Verified:
+   diffharness 101/101 green BOTH on the exact committed content
+   (scratch crate, incl. registry_anchors against the real docs)
+   AND on the live stacked worktree; fmt + clippy clean both ways;
+   MANIFEST clean before AND after (read-only corpus size census);
+   no Ghidra run. Zero canonical-chain movement (plan-only, the
+   D152 class). Strict S0 coverage unchanged (the 27-row registry
+   was fully dispositioned at D160; this closes the plan-side
+   tails). Queued: t2t3-alias-census stays the head.
 1. DONE (2026-08-26, worker 80491508 claim 1, commit a0aa9e5,
    PUSHED): P4.2/P2e-input `scene-cursor-repin` — the D160-named
    P2e package LANDED: the game-layer cursor models re-pinned to

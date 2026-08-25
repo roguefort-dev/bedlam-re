@@ -1,5 +1,32 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D161 `ts-extent-arms` COMPLETE (worker d093c3ef
+    claim 1, commits 2b8d745 + d2017f9, both PUSHED): the LAST FOUR
+    deferred dbx-plan TS extents resolved — the plan-side tail of the
+    S0 registry. cgr-volume -> PtrCell 0x20562 (the UNIFORM 132354-B
+    file image, 44/44 corpus — deliberately NOT the 0x20788 arena);
+    bin-terrain -> PtrCell 0x258960 (the BOOT-PASS arena, EXW
+    0x41d666/EXD 0x2e098, the MIN/D152 class; SHOPLITE.BIN excluded
+    as a different bank family); lnk-map -> Fixed 0x4000 at the
+    DIRECT .bss targets (u16[8192]; all 44 .LNK + 7 .LNG exactly
+    16384 B; the "(0x8000)" gloss RETIRED — no loader immediate);
+    yline-zbase -> TWO spans (channel-different table gaps): the
+    registry id keeps y-line 4*$map_h + the derived id
+    static-yline-zbase#zbase (32 B, the 8-dword z-base table).
+    New resolve symbols cgr_ptr/bin_ptr; all 13 artifacts regenerated
+    BOTH channels — S0/S0W/S1/S2/S5/S5B/S5C reach ZERO deferred rows;
+    count asserts re-pinned + span asserts added both channels; RE
+    first (7j.69) + RE-EXD-MAP rows re-pinned + D161. The
+    shared-worktree overlap handled the S0-15a way: committed content
+    verified in a scratch crate = HEAD + only this unit's 16
+    dbx-plan hunks (the O1-boot WIP's 4 boot_trap hunks extracted
+    out), staged via hash-object — the WIP deltas remain INTACT in
+    the worktree (git diff HEAD after = WIP-only again). diffharness
+    101/101 green BOTH ways; fmt+clippy clean both; MANIFEST clean
+    pre+post (read-only corpus size census, no Ghidra run). Zero
+    canonical-chain movement (plan-only, the D152 class). Next head:
+    t2t3-alias-census.
+
   - 2026-08-26 D160-followup `scene-cursor-repin` COMPLETE (worker
     80491508 claim 1, commit a0aa9e5, PUSHED): the D160-named P2e
     package landed — the GAME-LAYER cursor models now carry the
