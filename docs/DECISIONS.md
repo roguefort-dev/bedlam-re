@@ -4651,3 +4651,65 @@ MANIFEST.sha256 clean before AND after. The unrelated O1-boot WIP
 RUNTIME.md + capture-plan deltas) preserved untouched. Strict S0
 coverage stays 19/27 (this unit closes the Rust/E half of rows the
 D153 oracle already counted). (worker 52f0a9f0 claim 1)
+
+## D155 — 2026-08-25: P4/static-parity/S0-13 — the RNG pair + dither-noise rows (`rng-state-a`, `rng-state-b`, `static-dither-noise`) independently covered ORIGINAL-side; E stays the charter T3 statistical stand-in (strict S0 coverage 22/27)
+
+**(1) RE first (b2e522c).** RE-EXW-SIM §7j.65: RandA/RandB
+(0x402975/0x4029b6) are the SAME 0x41-byte step on two dword states —
+the byte shuffle builds the 40-bit chain dl:ax:bx = S<<8, the three
+rcr's rotate it right 1, and **dl' = S>>25 is discarded**, so the
+closed form is **S' = ((S<<7)+S+0x361962E9) mod 2^32** — a SHIFT-7,
+not a wrap rotate (the 8street "ror33ish" gloss retired, re-anchored
+to the EXW instructions per policy); the return value is the NEW HIGH
+WORD (u16; consumers mask it). Seed-plant write census COMPLETE: boot
+plants BOTH (0x41c0cd B=234567 / 0x41c0d3 A=123456); MissionShell
+reseeds **A ONLY** (0x447728, first body instruction) — B is carried
+across missions within a session. Dither bank/cursor census COMPLETE:
+cursor := 0 per mission (0x4478f7, ecx of the staging block); fill =
+exactly 2048 RandB draws (0x447b13..0x447b3a, cursor untouched);
+churn = 15 draws/frame advance-then-draw-then-write (0x448147..0x448195,
+wrap ≥ 0x800 → 0; the signed < 0 arm is dead defensive code); the blit
+(§7i/1 re-verified) only READS — its `RandB()&0x1ff` reseed is a
+read-offset pick, never a bank write. Call census: 158 direct RandA /
+27 direct RandB sites.
+
+**(2) Oracle (dc6c99d).** `bedlam-game/tests/static_rng_differential.rs`
+(the S0-12 canonical-harness home): the instruction-faithful step
+transcription (shuffle + rcr chain with the discard) cross-proven
+against the closed form over 128 walked states + edges; first-eight
+state literals both chains (A 123456 → 0x370C6529 → …, B 234567 →
+0x37E71AB0 → …); the A-only reseed vs boot-only B; the fill (first-16
+bytes, 526/2048 white census, post-fill state 0xA564DC47); the churn
+frame (cursors 1..=15 pair table, post-frame state 0xF52E04EE, the
+137-frame refresh identity); the blit reseed offsets + per-blit seed
+formula literals. **Sensitivity proven both directions in-memory**:
+a one-ulp add-tail mutation fails the cross-proof; a plausible-wrong
+shuffle fails five literal pins.
+
+**(3) The E-side classification — Rust determinism is NOT the oracle.**
+The three rows close ORIGINAL-side; the E half pins the charter-T3
+seam facts and nothing else: the `seed=0x1e240` canonical pin (the
+stand-ins carry the original's per-mission A-reseed constant; the
+original's boot-only B has no E mirror — the shared mission stream
+re-arms per mission, a documented statistical divergence never
+bit-compared), 8-byte row presence, stream liveness (the differ's
+draw-count signal), and `static-dither-noise` DELIBERATELY ABSENT on
+E (presentation-half D17 — the bank never enters the dump/hash; the
+row is O1-side coverage; fabricating an emission would be fake parity,
+the D149 static-min-bank precedent). No bit comparison with the
+transcribed chains exists or is claimed.
+
+**(4) Coverage bookkeeping.** THREE strict S0 rows counted: strict S0
+independent coverage is now **22/27 rows** (the D154-era 19 +
+rng-state-a + rng-state-b + static-dither-noise); 5 rows remain
+(S0-14 s0-trigger/frame-counter, S0-15 static-order-table, S0-16
+static-player-type, S0-17 static-cursor-clamp — 4 items — plus the
+s0-trigger tier-S0 row those unit notes name). watches.toml layout
+notes corrected to the §7j.65 facts (plan-neutral — layout strings
+never feed the capture plans; no plan bytes moved, the capture-plan
+deltas in the tree are the unrelated O1-boot WIP preserved untouched).
+DESIGN-DIFFHARNESS § RNG-states row re-anchored to §7j.65. Verified:
+workspace release tests green (bedlam-game incl. the new 7-oracle +
+canonical_dump_gate 13 + differ_gate 4 corpus lanes, diffharness,
+bedlam-core), fmt + clippy clean, MANIFEST.sha256 clean before AND
+after. (worker 77b1c512 claim 1)

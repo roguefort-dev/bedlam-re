@@ -5,15 +5,46 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
-   and `static-dither-noise` initialization/evolution without treating
-   Rust determinism as the oracle. NOTE: the worktree carries
-   interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py
-   + dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
-   deltas, owner ≠ current worker): inspect, preserve, adopt per
-   AGENTS shared-worktree rules; stage explicit task paths only.
+1. [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter`
+   ordering and classify dynamic-only row placement separately from
+   static closure. NOTE: the worktree carries interrupted O1-boot WIP
+   (dbx-plan.rs boot_trap/entry + dbx-capgen.py + dosbox-harness.sh +
+   RUNTIME.md + the capture-plan boot_trap deltas, owner ≠ current
+   worker): inspect, preserve, adopt per AGENTS shared-worktree rules;
+   stage explicit task paths only.
 
 ## Done
+1. DONE (2026-08-25, worker 77b1c512 claim 1, commits b2e522c +
+   dc6c99d, PUSHED): P4/static-parity/S0-13 the RNG pair +
+   dither-noise rows independently covered (D155, RE-EXW-SIM §7j.65).
+   (a) RE first (b2e522c): RandA/RandB @0x402975/0x4029b6 decoded
+   whole — the 40-bit dl:ax:bx shuffle+rcr chain with the S>>25
+   DISCARD gives the closed form S' = ((S<<7)+S+0x361962E9) mod 2^32
+   (shift-7, NOT a wrap rotate — the 8street "ror33ish" gloss
+   retired/re-anchored); return = the NEW HI word (u16). Complete
+   writer censuses: boot plants BOTH seeds (0x41c0cd B=234567 /
+   0x41c0d3 A=123456), MissionShell reseeds A ONLY (0x447728); dither
+   cursor := 0 per mission (0x4478f7), fill = exactly 2048 RandB
+   draws (0x447b13..3a), churn = 15 draws/frame advance-then-draw
+   (0x448147..95), blit reads only; call census 158 A / 27 B direct.
+   (b) Oracle (dc6c99d): bedlam-game/tests/static_rng_differential.rs
+   — the instruction-faithful step cross-proven against the closed
+   form (128 states + edges), first-eight literals both chains, the
+   A-only reseed seam, the fill/churn/blit-seed literal tables (post-
+   fill B 0xA564DC47, 526/2048 white, churn frame → 0xF52E04EE);
+   sensitivity proven BOTH directions in-memory (one-ulp add-tail →
+   cross-proof fails; wrong shuffle → 5 literal pins fail). (c) E-side
+   CLASSIFICATION, not Rust-determinism-as-oracle: the canonical
+   seed=0x1e240 stand-in pin, 8-byte row presence + liveness, and
+   static-dither-noise DELIBERATELY absent on E (D17 presentation
+   half, the D149 no-fabricated-parity precedent) — the rows close
+   ORIGINAL-side under the charter T3 never-bit-compared class.
+   watches.toml layout notes corrected plan-neutral; DESIGN-
+   DIFFHARNESS RNG row re-anchored. Strict S0 coverage 22/27 (5 rows
+   remain: S0-14..S0-17 + the s0-trigger tier row). Verified:
+   workspace release tests green, fmt + clippy clean, MANIFEST clean
+   pre+post; the unrelated O1-boot WIP untouched. Queued: S0-14 as
+   item 1.
 1. DONE (2026-08-25, worker 52f0a9f0 claim 1, commit 0e7d245,
    PUSHED): P4/static-parity/S0-12b the fresh-session campaign/config
    seam LANDED (D154) — the three D153 gaps closed BOTH sides. (a)
@@ -139,12 +170,13 @@ renumbered queue keeps every open item claimable by number).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  19/27 rows (D153) — the 11 TS rows from bd91c10, 56918c5, 390acb9,
+  22/27 rows (D155) — the 11 TS rows from bd91c10, 56918c5, 390acb9,
   cd70efe, 920aec2, fcb8fb2, cec30a7, 2646ce8, 76a14c6 + the eight
-  T0 campaign/config rows from ea745fd (S0-12). The 27-row registry
-  re-audit CLOSED the predecessor's off-by-one: 27 = tier-S0
-  s0-trigger + 11 T0 + 15 TS; the remainder (8 rows) is assigned
-  across S0-13..S0-17 (3+2+1+1+1). `static-min-bank` (S0-10) is
+  T0 campaign/config rows from ea745fd (S0-12, closed both sides by
+  the D154 seam) + the three RNG/dither rows from dc6c99d (S0-13,
+  closed original-side under the charter T3 class — D155). The
+  27-row registry: tier-S0 s0-trigger + 11 T0 + 15 TS; the remainder
+  (5 rows) is S0-14..S0-17 + the s0-trigger tier row. `static-min-bank` (S0-10) is
   CLOSED original-side only: Rust retention deliberately none —
   presentation-half D17; the display-phase producer stays queued,
   not covered (D149); its dbx-plan extent infra hop landed separately

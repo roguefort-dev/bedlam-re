@@ -171,7 +171,7 @@ they verify the loader, not the tick.
 | watch | address (EXW) | layout | ledger anchor |
 |---|---|---|---|
 | frame counter | 0x46ae68 | u32 | RE-EXW-PACER names; SIM §1 loop tail [verified] |
-| RNG states A/B | 0x4ede48 / 0x4ede4c | u32 ×2 (seeds 123456/234567, A reseeded per mission; LCG add-tail 0x62E9/0x3619) | RE-EXW-GAMETHREAD globals table; SIM §1; §7j.11 item 4 [verified] |
+| RNG states A/B | 0x4ede48 / 0x4ede4c | u32 ×2 (seeds 123456/234567; A reseeded per mission, B boot-only; step S'=((S<<7)+S+0x361962E9) mod 2^32, return = new hi word) | RE-EXW-GAMETHREAD globals table; SIM §1; §7j.11 item 4; §7j.65 [verified] |
 | score / money | 0x4dd40c / 0x46ae70 | u32 ×2 | SIM §7f sidebar (score strip) [verified] |
 | difficulty | 0x46cbf8 | u32 (0..2) | §8 row "difficulty scalar" [verified] |
 | zone / mission / mode | 0x4edd8c / 0x4edd88 / 0x4edb88 | u32 ×3 | §7j.21 elevator stager row; §8 rows [verified] |

@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D155 S0-13 COMPLETE (worker 77b1c512 claim 1, commits
+    b2e522c + dc6c99d, PUSHED): the RNG pair + dither-noise rows
+    independently covered. RE-EXW-SIM §7j.65: RandA/RandB decoded
+    whole — the 40-bit shuffle+rcr chain DISCARDS S>>25, closed form
+    S' = ((S<<7)+S+0x361962E9) mod 2^32, return = the new hi word;
+    boot plants BOTH seeds (A 123456 / B 234567), MissionShell
+    reseeds A ONLY (0x447728); dither cursor := 0 per mission, fill
+    = 2048 RandB draws, churn = 15 draws/frame advance-then-draw,
+    blit reads only; 158/27 direct call census. Oracle
+    static_rng_differential.rs (bedlam-game): instruction-faithful
+    transcription cross-proven vs the closed form + literal tables
+    (chains/fill/churn/blit-seeds), sensitivity proven both
+    directions; E half = the charter T3 classification (seed=0x1e240
+    stand-in pin, row presence + liveness, static-dither-noise
+    DELIBERATELY absent on E — D17/D149 no-fabricated-parity) — Rust
+    determinism never the oracle. watches.toml layout notes corrected
+    plan-neutral; DESIGN RNG row re-anchored. Workspace release green
+    (bedlam-game 7-new-oracle + canonical_dump_gate 13 + differ_gate
+    4, diffharness, bedlam-core), fmt/clippy/MANIFEST clean. The
+    unrelated O1-boot WIP preserved untouched. Strict S0 coverage
+    22/27. Next head: S0-14 (s0-trigger/frame-counter ordering).
+
   - 2026-08-25 D154 S0-12b COMPLETE (worker 52f0a9f0 claim 1, commit
     0e7d245, PUSHED): the fresh-session campaign/config seam LANDED —
     the three D153 gaps (difficulty/money/linear-mission-m) closed
