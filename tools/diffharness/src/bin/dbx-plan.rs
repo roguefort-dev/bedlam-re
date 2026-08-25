@@ -900,26 +900,116 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
                 len_expr: "0x7530".into(),
             })
         }
-        // Deferred: extent formulas not yet pinned to RE facts.
-        "static-cgr-volume" | "static-bin-terrain" => {
-            if row.extent != "bank-sized" {
+        // Pinned: the CGR height bank is the UNIFORM 132354-B file
+        // image (7j.69/D161) — u16 count 128 + 512-B self-relative
+        // directory + 128 x 1030-B records, every shipped .CGR exactly
+        // that (FORMATS sec 18, VERIFIED 44/44). The 0x20788 arena is
+        // documented but deliberately NOT the extent (unlike the MIN
+        // bank, the CGR corpus is uniform, so the tightest pin is the
+        // file image — and it keeps the passthrough compare free of
+        // the 646-B stale arena tail).
+        "static-cgr-volume" => {
+            if !row.indirect {
+                return Err(die("static-cgr-volume lost its indirect flag".into()));
+            }
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                die(format!(
+                    "static-cgr-volume has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
+                ))
+            })?;
+            if row.extent != "0x20562 (132354 B file image)" {
                 return Err(die(format!(
-                    "row {id} extent {:?} changed from bank-sized: if the bank \
-                     size is now pinned, resolve it in dbx-plan instead of deferring",
+                    "static-cgr-volume extent {:?} changed from the pinned uniform \
+                     132354-B file image (7j.69/D161): update dbx-plan if the pinned \
+                     image size moved",
                     row.extent
                 )));
             }
-            Ok(None)
+            plan(Form::PtrCell {
+                cell,
+                len_expr: "0x20562".into(),
+            })
         }
-        "static-lnk-map" => {
-            if row.extent != "map-sized" {
+        // Pinned: the BIN sprite bank extent is the 0x258960 BOOT-PASS
+        // arena (7j.69/D161) — the EXW alloc 0x41d666 sits in the early
+        // boot family (successor instruction loads GENERAL.BIN into the
+        // SIBLING bank 0x4edd7c), NOT in FUN_0041d954; EXD twin 0x2e098.
+        // The MIN-bank situation exactly (D149/D152): the shipped sizes
+        // vary (2041594..2443943) and no outside cell carries the byte
+        // length (the count word lives inside the bank at +0), so the
+        // ARENA is the pin; the stale tail is proven never read (all
+        // content readers reach sprites through the self-relative
+        // directory, 7j.36).
+        "static-bin-terrain" => {
+            if !row.indirect {
+                return Err(die("static-bin-terrain lost its indirect flag".into()));
+            }
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                die(format!(
+                    "static-bin-terrain has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
+                ))
+            })?;
+            if row.extent != "0x258960 (2460000 B arena)" {
                 return Err(die(format!(
-                    "static-lnk-map extent {:?} changed from map-sized: resolve \
-                     it in dbx-plan if the in-memory size is now pinned",
+                    "static-bin-terrain extent {:?} changed from the pinned 0x258960 \
+                     boot-pass arena (7j.69/D161): update dbx-plan if the pinned \
+                     arena size moved",
                     row.extent
                 )));
             }
-            Ok(None)
+            plan(Form::PtrCell {
+                cell,
+                len_expr: "0x258960".into(),
+            })
+        }
+        // Pinned: the LNK/LNG link table is the u16[8192] image loaded
+        // DIRECTLY at the fixed .bss address (7j.69/D161) — EXW
+        // 0x45cdda / EXD 0x10336c, whole-file reads behind the language
+        // gates (0x4eba1c / 0x10768c) with no bound anywhere in the
+        // loader; all 44 .LNK + 7 .LNG are exactly 16384 B. The old
+        // "(0x8000)" gloss had no loader immediate and retires. NOT
+        // pointer-indirect: the load target IS the .bss span (the
+        // order-table Form::Fixed precedent, D157/D158).
+        "static-lnk-map" => {
+            if row.indirect {
+                return Err(die(
+                    "static-lnk-map became indirect — it is a DIRECT .bss span \
+                     (7j.69/D161): re-pin the form if the load target moved"
+                        .into(),
+                ));
+            }
+            let addr = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                die(format!(
+                    "static-lnk-map has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
+                ))
+            })?;
+            if row.extent != "0x4000 (8192 u16)" {
+                return Err(die(format!(
+                    "static-lnk-map extent {:?} changed from the pinned u16[8192] \
+                     = 0x4000 table (7j.69/D161): update dbx-plan if the pinned \
+                     table size moved",
+                    row.extent
+                )));
+            }
+            plan(Form::Fixed { addr, len: 0x4000 })
         }
         // Pinned: the order/weapon table is a DIRECT .bss fixed span —
         // 12 rows x 0x62 = 0x498 (RE-EXW-SIM sec 7j.67 / D157), pinned
@@ -959,20 +1049,97 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
             }
             plan(Form::Fixed { addr, len: 0x498 })
         }
+        // Pinned: the y-line row table is h dwords = 4*$map_h (7j.69,
+        // re-verifying the S0-08/D147 loops first-hand: the EXD bound
+        // is h<<2 under `jl` @0x2e727 — h entries, NOT h+1). The
+        // registry row's SECOND table (the z-base plane table, 8
+        // dwords) is NON-CONTIGUOUS with this one and the inter-table
+        // gap DIFFERS per channel (EXW 0x1cc apart; EXD ~0x7c000
+        // apart) — no single span mirrors the layout, so the row
+        // emits TWO spans: this one under the registry id, the z-base
+        // under the derived id `static-yline-zbase#zbase` (see
+        // companion_span).
         "static-yline-zbase" => {
-            if row.extent != "table-sized" {
+            let cells = exd_cells(ch.src(row));
+            if cells.len() != 2 {
                 return Err(die(format!(
-                    "static-yline-zbase extent {:?} changed: resolve the table \
-                     sizes in dbx-plan if now pinned",
+                    "static-yline-zbase {} no longer has exactly 2 cells",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    }
+                )));
+            }
+            if row.extent != "4*$map_h (h dwords) + 0x20 (8 dwords)" {
+                return Err(die(format!(
+                    "static-yline-zbase extent {:?} changed from the pinned two-span \
+                     form 4*h + 8 dwords (7j.69/D161): update dbx-plan if the pinned \
+                     table geometry moved",
                     row.extent
                 )));
             }
-            Ok(None)
+            // [derived-pinned] cell[0] is the y-line table on BOTH
+            // channels (EXW 0x4ea900 / EXD 0x8b78c — the registry
+            // slash order; the geometry assert catches a swap).
+            let (yline, zbase) = (cells[0], cells[1]);
+            match ch {
+                Channel::O1 => {
+                    if yline != 0x8b78c || zbase != 0x107718 {
+                        return Err(die(format!(
+                            "static-yline-zbase exd_addr cells moved: expected \
+                             y-line 0x8b78c / z-base 0x107718 (7j.69), got \
+                             {yline:#x}/{zbase:#x}"
+                        )));
+                    }
+                }
+                Channel::O2 => {
+                    if yline != 0x4ea900 || zbase != 0x4eaacc {
+                        return Err(die(format!(
+                            "static-yline-zbase exw_addr cells moved: expected \
+                             y-line 0x4ea900 / z-base 0x4eaacc (7j.69), got \
+                             {yline:#x}/{zbase:#x}"
+                        )));
+                    }
+                }
+            }
+            plan(Form::CountExpr {
+                addr: yline,
+                len_expr: "4*$map_h".into(),
+            })
         }
         other => Err(die(format!(
             "registry row {other:?} (tier {}) has no dbx-plan resolution form",
             row.tier
         ))),
+    }
+}
+
+/// The DERIVED second span of a multi-table row (7j.69/D161): a row
+/// whose tables are non-contiguous AND differently-laid-out per
+/// channel emits one span per table — the registry id keeps the
+/// row's first table, the companion rides `<id>#<name>`. capgen's
+/// keep-first dedupe never drops it (distinct ids) and the differ's
+/// static-* passthrough compares each span byte-exact. None for
+/// every single-span row.
+fn companion_span(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>, PlanError> {
+    match row.id.as_str() {
+        // The z-base plane table: exactly 8 dwords (the loop eax =
+        // 4,8,..,0x20 under `jne` @0x2e748/D147 — the store base
+        // +0x107714/+0x4eaac8 is the adjacent pre-incremented
+        // screen-scale cell, never a table entry). resolve_row
+        // already asserted the cell pair per channel.
+        "static-yline-zbase" => {
+            let zbase = exd_cells(ch.src(row))[1];
+            Ok(Some(RowPlan {
+                id: "static-yline-zbase#zbase".into(),
+                form: Form::Fixed {
+                    addr: zbase,
+                    len: 32,
+                },
+            }))
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1449,6 +1616,8 @@ fn watch_row_json(p: &RowPlan, ch: Channel) -> String {
                 "static-dat-volume" => "dat_ptr",
                 "static-claim-bank" => "claim_ptr",
                 "static-min-bank" => "min_ptr",
+                "static-cgr-volume" => "cgr_ptr",
+                "static-bin-terrain" => "bin_ptr",
                 "object-instances" => "obj_ptr",
                 _ => unreachable!("emit_plan gates the PtrCell ids"),
             };
@@ -1625,6 +1794,20 @@ fn emit_plan_channel(
                     anchor.push(p.clone());
                     per_frame.push(p);
                 }
+                // The multi-table rows contribute their derived second
+                // span (anchor-riding like every TS static; a
+                // non-TS multi-table row would need the same treatment
+                // in per_frame — none exists today, so gate loudly).
+                if let Some(c) = companion_span(row, ch)? {
+                    if row.tier != "TS" {
+                        return Err(die(format!(
+                            "row {} needs a per-frame companion span — extend \
+                             the emit loop for tier {}",
+                            row.id, row.tier
+                        )));
+                    }
+                    anchor.push(c);
+                }
             }
             None => deferred.push(format!("{} ({})", row.id, row.extent)),
         }
@@ -1682,6 +1865,8 @@ fn emit_plan_channel(
                 "static-dat-volume" => "dat_ptr",
                 "static-claim-bank" => "claim_ptr",
                 "static-min-bank" => "min_ptr",
+                "static-cgr-volume" => "cgr_ptr",
+                "static-bin-terrain" => "bin_ptr",
                 "object-instances" => "obj_ptr",
                 other => {
                     return Err(die(format!(
@@ -2126,21 +2311,29 @@ mod tests {
         let emitted = emit_plan(&scen, &reg).unwrap();
         // T0: 11 rows, 0 gaps (difficulty closed by the W5-followup,
         // sfx-master-gate by the D134 twin census) -> 11 per-frame.
-        // TS: 15 rows, 4 deferred (min-bank pinned 0x7530 by
-        // 7j.62/D149; order-table pinned 0x498 by 7j.67/D157/S0-15a)
-        // -> 11 anchor-only + T0 rides the anchor too:
-        // 11 + 11 = 22 anchor rows.
+        // TS: 15 rows, 0 deferred (min-bank 0x7530 by 7j.62/D149;
+        // order-table 0x498 by 7j.67/D157/S0-15a; cgr/bin/lnk/yline
+        // by 7j.69/D161 — the yline row emits TWO spans, its registry
+        // id + the #zbase companion) -> 11 + 11 + 5 = 27 anchor rows.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11, "all T0 rows (gap set empty since D134)");
-        assert_eq!(anchor_count, 22, "T0 + resolved TS rows");
-        // 4 TS extent gaps (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 4);
-        // every emitted id is a real registry row of the scenario tiers
+        assert_eq!(
+            anchor_count, 27,
+            "T0 + resolved TS rows (two spans on yline)"
+        );
+        // ZERO deferred rows: the last four TS extent gaps closed by
+        // 7j.69/D161 (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 0);
+        // every emitted id is a real registry row of the scenario
+        // tiers — a `#name` suffix strips to its parent row (the
+        // 7j.69/D161 companion-span convention: one registry row,
+        // two emitted spans)
         for id in row_ids(&emitted.json) {
+            let base = id.split('#').next().unwrap_or(&id);
             let row = reg
                 .iter()
-                .find(|r| r.id == id)
+                .find(|r| r.id == base)
                 .unwrap_or_else(|| panic!("plan id {id:?} is not in the registry"));
             assert!(
                 scen.tiers.contains(&row.tier),
@@ -2163,6 +2356,29 @@ mod tests {
         assert!(emitted
             .json
             .contains("\"name\": \"map_h\", \"addr\": \"CS:0010748C\""));
+        // the four 7j.69/D161 pins, EXD cells: cgr_ptr/bin_ptr resolve
+        // rows + the four spans + the yline #zbase companion
+        assert!(emitted
+            .json
+            .contains("\"name\": \"cgr_ptr\", \"addr\": \"CS:00107540\""));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"bin_ptr\", \"addr\": \"CS:00107434\""));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-cgr-volume\", \"addr\": \"CS:$cgr_ptr\", \"len\": \"0x20562\" }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-bin-terrain\", \"addr\": \"CS:$bin_ptr\", \"len\": \"0x258960\" }"
+        ));
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"static-lnk-map\", \"addr\": \"CS:0010336C\", \"len\": 16384 }"));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-yline-zbase\", \"addr\": \"CS:0008B78C\", \"len\": \"4*$map_h\" }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-yline-zbase#zbase\", \"addr\": \"CS:00107718\", \"len\": 32 }"
+        ));
     }
 
     #[test]
@@ -2181,20 +2397,22 @@ mod tests {
         // closed by the W5-followup, blink-cursor by D132,
         // no-extract-latch by D133) = 17 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
-        // T0: 11 per-frame + TS: 11 anchor-only (gap set empty since
-        // D134: sfx-master-gate now emits like every other T0 row;
-        // min-bank resolved by 7j.62/D149; order-table by
-        // 7j.67/D157 + S0-15a/D158).
+        // T0: 11 per-frame + TS: 15 anchor rows with 0 deferred (gap
+        // set empty since D134: sfx-master-gate now emits like every
+        // other T0 row; min-bank resolved by 7j.62/D149; order-table
+        // by 7j.67/D157 + S0-15a/D158; cgr/bin/lnk/yline by 7j.69/
+        // D161 — yline emits its registry id + the #zbase companion).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17, "all T0 rows + T1 resolved");
-        assert_eq!(anchor_count, 22 + 17, "T0 + TS + T1 rows");
+        assert_eq!(anchor_count, 27 + 17, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            4,
-            "4 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
+            0,
+            "zero S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
              sfx-master-gate resolved by D90/D132/D133/D134; min-bank pinned by \
-             7j.62/D149; order-table pinned by 7j.67/D157)"
+             7j.62/D149; order-table pinned by 7j.67/D157; cgr/bin/lnk/yline \
+             pinned by 7j.69/D161)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -2347,6 +2565,32 @@ mod tests {
         assert!(emitted.json.contains(
             "{ \"id\": \"static-order-table\", \"addr\": \"0x004DE664\", \"len\": 1176 }"
         ));
+        // the four 7j.69/D161 pins, EXW cells: the CGR file-image
+        // PtrCell (0x20562 — the uniform 132354-B image, NOT the
+        // 0x20788 arena), the BIN boot-pass-arena PtrCell, the LNK
+        // direct .bss u16[8192] span, and the yline/zbase pair (the
+        // two-span row: the registry id + the #zbase companion)
+        assert!(emitted
+            .json
+            .contains("\"name\": \"cgr_ptr\", \"addr\": \"0x004EDD60\""));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-cgr-volume\", \"addr\": \"$cgr_ptr\", \"len\": \"0x20562\" }"
+        ));
+        assert!(emitted
+            .json
+            .contains("\"name\": \"bin_ptr\", \"addr\": \"0x004EDE1C\""));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-bin-terrain\", \"addr\": \"$bin_ptr\", \"len\": \"0x258960\" }"
+        ));
+        assert!(emitted
+            .json
+            .contains("{ \"id\": \"static-lnk-map\", \"addr\": \"0x0045CDDA\", \"len\": 16384 }"));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-yline-zbase\", \"addr\": \"0x004EA900\", \"len\": \"4*$map_h\" }"
+        ));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-yline-zbase#zbase\", \"addr\": \"0x004EAACC\", \"len\": 32 }"
+        ));
         // bank rows keep their forms on the EXW cells
         assert!(emitted.json.contains(
             "{ \"id\": \"robot-bank\", \"addr\": \"0x004C69E4\", \"len\": \"$robot_count*0xA8\" }"
@@ -2370,11 +2614,13 @@ mod tests {
             .contains("{ \"id\": \"selection-triple\", \"addr\": \"0x0046CBDC\", \"len\": 4 }"));
         assert!(!emitted.json.contains("0x0046CBD4"));
         // every emitted id is a real registry row of the scenario
-        // tiers with a non-empty EXW address (never a fabricated gap)
+        // tiers with a non-empty EXW address (never a fabricated gap);
+        // a `#name` suffix strips to its parent row (7j.69/D161)
         for id in row_ids(&emitted.json) {
+            let base = id.split('#').next().unwrap_or(&id);
             let row = reg
                 .iter()
-                .find(|r| r.id == id)
+                .find(|r| r.id == base)
                 .unwrap_or_else(|| panic!("plan id {id:?} is not in the registry"));
             assert!(
                 scen.tiers.contains(&row.tier),
@@ -2387,11 +2633,11 @@ mod tests {
             );
         }
         // row-set symmetry with O1 minus the EXD-only row: the same
-        // 28 per-frame rows, 39-1 anchor rows (static-cursor-clamp is
-        // EXD-only), 4+1 deferred
+        // 28 per-frame rows, 44-1 anchor rows (static-cursor-clamp is
+        // EXD-only), 1 deferred (the same EXD-only row)
         assert_eq!(count_rows(&emitted.json, "watches"), 28);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 38);
-        assert_eq!(emitted.deferred.len(), 5);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 43);
+        assert_eq!(emitted.deferred.len(), 1);
         assert!(emitted
             .deferred
             .iter()
@@ -2462,12 +2708,14 @@ mod tests {
         assert_eq!(scen.markers, vec![(18, 73, 1)], "the D91 staging key");
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // Same tier set as S1 -> the same row shape (22 anchor TS/T0 +
-        // 17 T1; 11 T0 + 17 T1 per-frame — gap set empty since D134).
+        // Same tier set as S1 -> the same row shape (27 anchor TS/T0 +
+        // 17 T1; 11 T0 + 17 T1 per-frame — gap set empty since D134;
+        // TS fully resolved incl. the 7j.69/D161 four + the yline
+        // #zbase companion).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17);
-        assert_eq!(anchor_count, 22 + 17);
+        assert_eq!(anchor_count, 27 + 17);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2629,14 +2877,15 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 11.
+        // T0 11 + T1 17 + T2 2 per-frame; anchor adds the 16 TS spans
+        // (15 resolved rows + the yline #zbase companion, 7j.69/D161).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17 + 2);
-        assert_eq!(anchor_count, frame_count + 11);
-        // deferred: the 4 S1-shape TS gaps + the 3 unaliased T2 rows
-        // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 7);
+        assert_eq!(anchor_count, frame_count + 16);
+        // deferred: the TS gap set is EMPTY since 7j.69/D161 — the
+        // 3 unaliased T2 rows remain
+        assert_eq!(emitted.deferred.len(), 3);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2673,12 +2922,14 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 11.
+        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds the 16
+        // TS spans (15 resolved rows + the yline #zbase companion,
+        // 7j.69/D161).
         assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 11);
-        // deferred: the 4 S1-shape TS gaps + ALL 14 T3 rows
-        // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 18);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 16);
+        // deferred: the TS gap set is EMPTY since 7j.69/D161 — ALL
+        // 14 T3 rows remain
+        assert_eq!(emitted.deferred.len(), 14);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),
@@ -2687,7 +2938,9 @@ mod tests {
             );
         }
         for id in row_ids(&emitted.json) {
-            let row = reg.iter().find(|r| r.id == id).expect("registry row");
+            // a `#name` suffix strips to its parent row (7j.69/D161)
+            let base = id.split('#').next().unwrap_or(&id);
+            let row = reg.iter().find(|r| r.id == base).expect("registry row");
             assert_ne!(
                 row.tier, "T3",
                 "unaliased T3 row {id:?} must never be emitted on O1"

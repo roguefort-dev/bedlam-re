@@ -5070,3 +5070,64 @@ moved: canonical runs feed `InputFrame::default()` (no mickeys, no
 clicks), and the cursor is D17-bucket presentation state — the
 canonical_dump_gate 13/13 + differ_gate 4/4 corpus lanes re-asserted
 the pinned chains unchanged; workspace release tests 733/0.
+
+## D161 — 2026-08-26: P4.2/S0-registry-tail `ts-extent-arms` — the LAST FOUR deferred dbx-plan extents resolved (cgr-volume, bin-terrain, lnk-map, yline-zbase); S0/S0W reach ZERO deferred rows
+
+THREE decisions recorded. (1) **THE EXTENTS** (RE-EXW-SIM §7j.69,
+both channels instruction-anchored, corpus cross-checked,
+MANIFEST clean before and after): `static-cgr-volume` →
+PtrCell len `0x20562` — the UNIFORM 132354-B file image (u16 count
+128 + 512-B self-relative directory + 128×1030-B records; all 44
+shipped .CGR exactly that), deliberately NOT the 0x20788 arena
+(D152's MIN arena choice was forced by varying files; the CGR corpus
+is uniform, so the file image is the tighter pin AND keeps the
+passthrough compare free of the 646-B stale tail). `static-bin-terrain`
+→ PtrCell len `0x258960` — the BOOT-PASS arena (EXW alloc 0x41d666 /
+EXD 0x2e098 — NOT in FUN_0041d954; the successor instruction loads
+GENERAL.BIN into the sibling bank), the MIN situation exactly (files
+vary 2041594..2443943, the count word lives inside the bank; stale
+tail never read — directory-relative readers; GAMEGFX/SHOPLITE.BIN at
+3081801 is a DIFFERENT bank family, not a counterexample).
+`static-lnk-map` → Form::Fixed 0x4000 at the DIRECT .bss targets
+(EXW 0x45cdda / EXD 0x10336c) — the u16[8192] image, all 44 .LNK +
+7 .LNG exactly 16384 B; the "(0x8000)" gloss in §7c.2/MISSIONVIEW §1
+had NO loader immediate anywhere and RETIRES. `static-yline-zbase` →
+TWO SPANS: the registry id keeps the y-line table (CountExpr
+`4*$map_h` — the D147 h-dwords pin re-verified on the EXD loops) and
+the z-base plane table rides the DERIVED id
+`static-yline-zbase#zbase` (Fixed 32, the 8-dword table) — the two
+tables are non-contiguous with a channel-DIFFERENT gap (EXW 0x1cc /
+EXD ~0x7c000), so no single span can mirror the layout across
+channels; capgen's keep-first dedupe never drops the companion
+(distinct ids) and the differ's static-* passthrough compares each
+span byte-exact. New resolve symbols cgr_ptr/bin_ptr in both PtrCell
+maps. (2) **BLAST RADIUS**: all 13 capture-plan artifacts regenerated
+on BOTH channels — the four rows leave `_deferred` everywhere (S0/
+S0W/S1/S2/S5/S5B/S5C hit 0 deferred; S3 3 = the unaliased T2 trio;
+S4/S6/S7 14 = the T3 set; S8 17; S1-o2 1 = the EXD-only
+static-cursor-clamp); anchor counts +5 per TS-bearing scenario (27
+on S0/S0W, 44 on the T1 scenarios, 46 S3/S8, 43 on o2). Test count
+asserts re-pinned (s0 27/0, s1 27+17/0, o2 43/1, s2 27+17, s3
+frame+16/3, s4 11+17+16/14) + the row_ids lookups strip the `#`
+companion suffix + new span asserts on both channels (cgr_ptr 0x4edd60/
+0x107540, bin_ptr 0x4ede1c/0x107434, lnk 0x45cdda/0x10336c len
+16384, yline 4*$map_h + #zbase 32). watches.toml extent strings moved
+off the symbolic placeholders; RE-EXD-MAP §5 rows re-pinned with the
+extent provenance. (3) **VERIFICATION, BOTH WAYS** (the S0-15a
+precedent for the shared-worktree overlap): the EXACT COMMITTED
+CONTENT was verified in a scratch crate = HEAD + only this unit's
+dbx-plan hunks (the interrupted O1-boot WIP's boot_trap deltas
+extracted OUT of the patch by hunk census: 16 of 20 hunks are this
+unit's, the 4 WIP hunks touch only boot_trap/BPLM/boot_note text) —
+all 101 diffharness tests green there, plans regenerated from that
+scratch binary (the S0-vs-HEAD delta is exactly the 2 resolve rows +
+5 anchor rows + 4 dropped deferred entries); AND the live worktree
+(both change sets stacked) is green with fmt + clippy clean. The WIP
+owner's boot_trap deltas remain INTACT in the worktree files — the
+commit stages the scratch blobs via hash-object/update-index, so
+`git diff HEAD` after this commit shows ONLY their deltas again. Zero
+canonical-chain movement (plan-only infra, the D152 class). Strict S0
+coverage unchanged (24/27 static + 2/27 dynamic-only + 1/27
+hardware/input-profile-only — the registry was already fully
+dispositioned; this closes the plan-side tails). (worker d093c3ef
+claim 1)

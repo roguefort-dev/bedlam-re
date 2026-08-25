@@ -12,6 +12,8 @@
     { "name": "obj_ptr", "addr": "0x0046CBF4", "len": 4 },
     { "name": "tot_ptr", "addr": "0x004EDE20", "len": 4 },
     { "name": "dat_ptr", "addr": "0x004EDD58", "len": 4 },
+    { "name": "cgr_ptr", "addr": "0x004EDD60", "len": 4 },
+    { "name": "bin_ptr", "addr": "0x004EDE1C", "len": 4 },
     { "name": "min_ptr", "addr": "0x004EDD9C", "len": 4 },
     { "name": "claim_ptr", "addr": "0x0046AF58", "len": 4 },
     { "name": "robot_count", "addr": "0x0046CBD8", "len": 4 },
@@ -49,12 +51,17 @@
     { "id": "static-type-table", "addr": "0x004DEDF2", "len": 21996 },
     { "id": "static-tot-volume", "addr": "$tot_ptr", "len": "4+16*$map_w*$map_h" },
     { "id": "static-dat-volume", "addr": "$dat_ptr", "len": "4+8*$map_w*$map_h" },
+    { "id": "static-cgr-volume", "addr": "$cgr_ptr", "len": "0x20562" },
+    { "id": "static-bin-terrain", "addr": "$bin_ptr", "len": "0x258960" },
     { "id": "static-min-bank", "addr": "$min_ptr", "len": "0x7530" },
+    { "id": "static-lnk-map", "addr": "0x0045CDDA", "len": 16384 },
     { "id": "static-pad-slots", "addr": "0x004E44F8", "len": 7992 },
     { "id": "static-map-wh", "addr": "0x004EDDEC", "len": 8 },
     { "id": "static-claim-bank", "addr": "$claim_ptr", "len": "10000" },
     { "id": "static-order-table", "addr": "0x004DE664", "len": 1176 },
     { "id": "static-player-type", "addr": "0x004EDB90", "len": 2 },
+    { "id": "static-yline-zbase", "addr": "0x004EA900", "len": "4*$map_h" },
+    { "id": "static-yline-zbase#zbase", "addr": "0x004EAACC", "len": 32 },
     { "id": "static-dither-noise", "addr": "0x004E6ED8", "len": 2048 }
   ],
   "watches": [
@@ -88,10 +95,6 @@
     { "id": "armor-pad-reads", "addr": "0x004796D4", "len": "$map_w*$map_h" }
   ],
   "_deferred": [
-    "static-cgr-volume (bank-sized)",
-    "static-bin-terrain (bank-sized)",
-    "static-lnk-map (map-sized)",
-    "static-yline-zbase (table-sized)",
     "static-cursor-clamp (8)"
   ]
 }

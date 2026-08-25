@@ -19,6 +19,8 @@
     { "name": "map_h", "addr": "CS:0010748C", "len": 4 },
     { "name": "tot_ptr", "addr": "CS:00107454", "len": 4 },
     { "name": "dat_ptr", "addr": "CS:00107518", "len": 4 },
+    { "name": "cgr_ptr", "addr": "CS:00107540", "len": 4 },
+    { "name": "bin_ptr", "addr": "CS:00107434", "len": 4 },
     { "name": "min_ptr", "addr": "CS:00107538", "len": 4 },
     { "name": "claim_ptr", "addr": "CS:00119564", "len": 4 }
   ],
@@ -37,12 +39,17 @@
     { "id": "static-type-table", "addr": "CS:00108428", "len": 21996 },
     { "id": "static-tot-volume", "addr": "CS:$tot_ptr", "len": "4+16*$map_w*$map_h" },
     { "id": "static-dat-volume", "addr": "CS:$dat_ptr", "len": "4+8*$map_w*$map_h" },
+    { "id": "static-cgr-volume", "addr": "CS:$cgr_ptr", "len": "0x20562" },
+    { "id": "static-bin-terrain", "addr": "CS:$bin_ptr", "len": "0x258960" },
     { "id": "static-min-bank", "addr": "CS:$min_ptr", "len": "0x7530" },
+    { "id": "static-lnk-map", "addr": "CS:0010336C", "len": 16384 },
     { "id": "static-pad-slots", "addr": "CS:0000F63C", "len": 7992 },
     { "id": "static-map-wh", "addr": "CS:0010748C", "len": 48 },
     { "id": "static-claim-bank", "addr": "CS:$claim_ptr", "len": "10000" },
     { "id": "static-order-table", "addr": "CS:00091EE4", "len": 1176 },
     { "id": "static-player-type", "addr": "CS:001075C0", "len": 2 },
+    { "id": "static-yline-zbase", "addr": "CS:0008B78C", "len": "4*$map_h" },
+    { "id": "static-yline-zbase#zbase", "addr": "CS:00107718", "len": 32 },
     { "id": "static-dither-noise", "addr": "CS:0008DED4", "len": 2048 },
     { "id": "static-cursor-clamp", "addr": "CS:001074AC", "len": 8 }
   ],
@@ -73,9 +80,5 @@
     { "id": "walk-mission", "addr": "CS:00119610", "len": 4 }
   ],
   "_deferred": [
-    "static-cgr-volume (bank-sized)",
-    "static-bin-terrain (bank-sized)",
-    "static-lnk-map (map-sized)",
-    "static-yline-zbase (table-sized)"
   ]
 }
