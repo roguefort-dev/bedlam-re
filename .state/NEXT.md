@@ -5,18 +5,42 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-12a] dbx-plan `static-min-bank` extent
-   resolution: now that the bank extent is pinned (ArenaAlloc 0x7530,
-   RE-EXW-SIM §7j.62/D149), resolve the deferred dbx-plan arm to
-   `Form::PtrCell { cell, len_expr: "0x7530" }` and update the
-   watches.toml `extent` from "bank-sized" to the pinned form. NOTE:
-   `tools/diffharness/src/bin/dbx-plan.rs` carries unrelated in-flight
-   O1-boot WIP (capture-plan JSON boot_trap/entry) — coordinate with
-   that work's owner state per AGENTS shared-worktree rules; stage only
-   the arm + watches.toml extent hunk, never the O1 hunks.
+1. [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
+   config rows explicitly: `score`, `money`, `difficulty`, `zone`,
+   `mission`, `mode`, `linear-mission-m`, and `sfx-master-gate`. NOTE:
+   the worktree carries interrupted O1-boot WIP (dbx-plan.rs boot_trap/
+   entry + dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + the
+   capture-plan boot_trap deltas, owner ≠ current worker): inspect,
+   preserve, adopt per AGENTS shared-worktree rules; stage explicit
+   task paths only. NOTE also: dbx-plan.rs at HEAD now resolves
+   static-min-bank (545e7f6/D152) — the WIP worktree files already
+   carry BOTH that resolution and the boot_trap changes, so a WIP
+   regeneration diffs against HEAD as boot_trap-only.
 
 ## Done
-1. DONE (2026-08-25, worker ab778f23 claim 1, commit 7760294,
+1. DONE (2026-08-25, worker ee030ded claim 1, commit 545e7f6,
+    PUSHED): P4/static-parity/S0-12a dbx-plan `static-min-bank` extent
+    RESOLVED (D152) — the deferred arm
+    `"static-cgr-volume" | "static-bin-terrain" | "static-min-bank"`
+    split; `static-min-bank` → `Form::PtrCell { cell, len_expr:
+    "0x7530" }` under a dedicated arm guarding the new watches.toml
+    extent "0x7530 (30000 B)" (moved off "bank-sized" per the pinned
+    ArenaAlloc 7j.62/D149); new resolve symbol `min_ptr` in both
+    PtrCell maps; all 13 capture-plan artifacts regenerated (the
+    `_deferred` entry gone, anchor row `{ "id": "static-min-bank",
+    "addr": "$min_ptr", "len": "0x7530" }` + resolve row added on both
+    channels); count asserts re-pinned (s0 21/5, s1 21+17/5, o2 37/6
+    symmetry, s2 21+17, s3 +10/8, s4 +10/19) + a min_ptr/0x7530 span
+    assert. cgr/bin-terrain stay deferred (sizes unpinned). NOT a
+    strict-coverage row (infra hop): strict S0 stays 11/27.
+    Verification: full diffharness suite green BOTH on the exact
+    committed content (scratch-crate simulation of staged blobs) and
+    on the live worktree; fmt + clippy clean; MANIFEST clean. The
+    unrelated O1-boot WIP (dbx-plan.rs boot_trap/entry, capgen,
+    RUNTIME.md, artifact boot_trap deltas) was deliberately NOT
+    staged and remains intact in the worktree for its owner. Queued:
+    S0-12 (the eight T0 campaign/config rows) as the new head.
+2. DONE (2026-08-25, worker ab778f23 claim 1, commit 7760294,
    PUSHED): P4/static-parity/S0-11b THE CLAIM-BANK STAGING SEAM —
    `static-claim-bank` closed BOTH sides (D151). (a) The rect farm
    promoted tests/data→`bedlam-core/src/claim_rects.rs` (byte-identical,
@@ -65,13 +89,9 @@ renumbered queue keeps every open item claimable by number).
   list was already off by one — re-audit the 27-row registry when
   S0-12 lands. `static-min-bank` (S0-10) is CLOSED original-side
   only: Rust retention deliberately none — presentation-half D17;
-  the display-phase producer stays queued, not covered (D149).
-  `static-min-bank` (S0-10) is CLOSED original-side only: Rust
-  retention deliberately none — presentation-half D17; the
-  display-phase producer stays queued, not covered (D149).
-- [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
-  config rows explicitly: `score`, `money`, `difficulty`, `zone`,
-  `mission`, `mode`, `linear-mission-m`, and `sfx-master-gate`.
+  the display-phase producer stays queued, not covered (D149); its
+  dbx-plan extent infra hop landed separately as S0-12a (545e7f6,
+  D152 — not a row).
 - [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
   and `static-dither-noise` initialization/evolution without treating
   Rust determinism as the oracle.

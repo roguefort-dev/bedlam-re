@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D152 S0-12a COMPLETE (worker ee030ded claim 1, commit
+    545e7f6, PUSHED): the dbx-plan `static-min-bank` extent RESOLVED —
+    the deferred arm split, the row now emits
+    `Form::PtrCell { cell, len_expr: "0x7530" }` under a dedicated arm
+    guarding the new watches.toml extent "0x7530 (30000 B)" (the
+    pinned ArenaAlloc of 7j.62/D149); new resolve symbol `min_ptr`;
+    all 13 capture-plan artifacts regenerated (row left `_deferred`
+    on both channels); count asserts re-pinned; diffharness suite
+    green both on the exact committed blobs (scratch-crate
+    simulation) and the live worktree; fmt/clippy/MANIFEST clean.
+    Infra hop only — NOT a strict-coverage row; strict S0 stays 11/27.
+    The unrelated O1-boot WIP (dbx-plan.rs boot_trap/entry hunks,
+    dbx-capgen.py, dosbox-harness.sh, RUNTIME.md, artifact boot_trap
+    deltas) was deliberately NOT staged and remains intact + green in
+    the worktree for its owner (a WIP regeneration now diffs against
+    HEAD as boot_trap-only). Next head: S0-12 (the eight T0
+    campaign/config rows: score, money, difficulty, zone, mission,
+    mode, linear-mission-m, sfx-master-gate).
+
   - 2026-08-25 D151 S0-11b COMPLETE (worker ab778f23 claim 1, commit
     7760294, PUSHED): the claim-bank STAGING SEAM landed —
     `static-claim-bank` closed BOTH sides (the first S0 static row so
