@@ -638,13 +638,39 @@ was where the tables filled: 0x41d954 only allocates.)
    in planes 0..6 is set to 0 (plane 7 untouched). The shipped corpus has
    0 such bytes in ZONEA (the 0xFF seen in-plane there is PAD-written
    post-sweep), so this only matters for editor/padded data.
-5. **PAD staging** [verified 0x41de44..0x41df03]: PAD is read into
-   `0x4e44f8` (0x1f38 = 999 records + slack) as 8-byte staged records
-   `(flag, x, y, kind)` (disk 6-byte `(x, y, kind)` unpacked 2 bytes at a
-   time), then for i in 0..999: if `x != -1`: flag word set 1, and
+5. **PAD staging** [verified 0x41de44..0x41df03; loop re-verified
+   instruction-by-instruction 2026-08-25 for the S0-07 static-parity
+   row]: PAD is read into `0x4e44f8` (0x1f38 = exactly 999×8, no
+   slack) as 8-byte staged records `{u16 active@+0, u16 x@+2, u16
+   y@+4, u16 kind@+6}` (disk 6-byte `(x, y, kind)` unpacked 2 bytes at
+   a time). EXACT loop semantics: (a) **pre-zero** —
+   `FUN_00402965(ecx=0x1f38, edi=0x4e44f8)` @0x41de62 is the
+   stos-ladder memset (byte/word/`rep stosd`), so the WHOLE 999-slot
+   bank is cleared on every .PAD load — no cross-mission stale tail is
+   possible; (b) `while i < 999` (`cmp esi,0x3e7` @0x41ded4): read u16
+   → staged `x@bank+8i+2` (persisted BEFORE the check — even the
+   terminator's 0xFFFF lands in the bank); reload the staged dword@+0,
+   `sar 16`, compare `-1` @0x41defa — on 0xFFFF EXIT (rewind
+   `FUN_0041cd42` @0x41df03), leaving the terminator slot as
+   **{active=0, x=0xFFFF, y=0, z=0}** (y/z never read); otherwise read
+   y@+4, read z@+6, **active word :=1** @0x41de8c, then for i in 0..999: if `x != -1`: flag word set 1, and
    **`DAT[kind·w·h + y·w + x] = 0xFF`** with NO bounds check on kind/x/y
    [verified absence — shipped kind values are 0..6 and the 0x13884
-   arena covers the largest map, so real writes stay in the allocation].
+   arena covers the largest map, so real writes stay in the allocation];
+   (c) slots past the terminator stay all-zero — the file bytes after
+   the terminator are never read (ZONEB/M3's orphan record is invisible
+   to the runtime bank). The EXD twin is the IDENTICAL algorithm
+   compiled from the same source: FUN_0002e55a PAD leg
+   @0x2e7a0..0x2e85d — memset twin 0x12206 @0x2e7be (edi=0x8f63c,
+   ecx=0x1f38), u16 read twin 0x2d5c8, same `sar`/-1 terminator check
+   @0x2e7f0, same active:=1 @0x2e809, same DAT stamp @0x2e84d (base
+   0x107518, w 0x1074b8, w·h 0x1074e4), same 999 bound @0x2e851. Rust
+   retention: `Terrain::pad_slots` keeps the LIVE RUN ONLY (records
+   before the terminator, file order, active implicitly 1); the
+   inactive terminator/tail slots are unretained — unobservable
+   through the retained seams because every original consumer gates on
+   active≠0 (probe §7j.40/1, elevator stager §7j.21, scanner icon
+   FUN_0041ee20).
    get_from_dat_file reads 0xFF back as type 1 → **a PAD marks its tile
    as a type-1 (CGR slot 0, 0x1F-height deck block) cell at level `kind`**
    — the concrete "pad effect" storage FORMATS-MISSION §10 was looking

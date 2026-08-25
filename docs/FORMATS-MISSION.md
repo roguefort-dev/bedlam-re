@@ -338,7 +338,12 @@ What RE must confirm: everything beyond the layout.
   ANCHORED (RE-EXW-SIM §7j.16): FUN_0041dc5a parses the ".PAD" section
   into the 0x4e44f8 runtime slots — 8 B each (word@+0 = active, written
   1 after load; x@+2, y@+4, z@+6 = the 3×u16 file record), x==0xFFFF
-  terminates, then `DAT[z][y][x] = 0xFF`. The 0x4e44f8 slots are drawn as
+  terminates, then `DAT[z][y][x] = 0xFF`. [Re-verified 2026-08-25,
+  S0-07: the whole 999×8 bank is memset-0 BEFORE parsing
+  (FUN_00402965 @0x41de62); the terminator's own x IS staged (slot t =
+  {0, 0xFFFF, 0, 0} — y/z never read, active never set); all slots
+  after t stay all-zero and their file bytes are never read; EXD twin
+  0x2e7a0..0x2e85d is the identical algorithm.] The 0x4e44f8 slots are drawn as
   scanner icon 0xC (FUN_0041ee20). Open: the
   interactive side (when a pad fires) lives in TOT/NME consumers.
 - **Honest negative (kept):** the TXT coordinates (e.g. `0/006/005`) still
