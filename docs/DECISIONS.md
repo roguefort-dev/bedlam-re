@@ -4989,3 +4989,63 @@ lobby/sync families).
    EXD linear image rebuilt to /tmp/opencode scratch only). The
    unrelated O1-boot WIP preserved untouched (unit staged only
    its own paths).
+
+## D160 — 2026-08-26: P4/static-parity/S0-17 — the `static-cursor-clamp` row DECODED AND RECLASSIFIED as hardware/input-profile-only (the third S0 disposition class, beside static-closed and dynamic-only): the "EXD-only 240x320 clamp maxima" premise DISPROVEN on all three counts, the real constants pinned BOTH channels, and the DOS/classic-input adapter re-pinned to them
+
+Worker 6027a7bf, claim 1. RE-EXD-MAP §5h carries the full decode
+(objdump whole-census, no Ghidra run). THREE decisions recorded:
+
+(1) **THE GLOSS DISPROVEN.** The cells 0x1074ac/0x1074b0 are the LIVE
+hardware-cursor POSITION pair — Y@0x1074ac, X@0x1074b0 — the EXW
+`g_cursor_x/y @0x4eddc4/0x4eddc8` twins (identity locked two ways:
+the INT-33h mickey axes + the in-mission hotspot twins carrying
+IDENTICAL literals 0x1ee/0x271/0xc3/0x146 @EXD 0x2f6d9 ⟷ EXW
+0x41ec9d). The 0xf0/0x140 dwords are the GameInit boot-CENTER
+literals (X=320, Y=240 of 640×480; instruction-exact twins EXD
+0x2c79a..0x2c7b2 ⟷ EXW 0x41c083..0x41c09b, in the RNG-seed boot
+sandwich). The space is 640×480 on BOTH channels (EXD VESA 0x101 mode
+set @0x1259a + the ×640 sprite-stride @0x1297e), NOT "320×240". The
+REAL clamp box **[9,631]×[9,463]** lives in the EXD poll handler
+0x12615..0x12659 (INT 33h AX=0003 buttons → g_mouse_flags twin
+[0x1074a4], AX=000B mickeys, integrate-then-clamp) and is the EXW
+ScrollUpdate@0x425b2e..0x425b84 box VERBATIM (+9 margin; the 9 = the
+24×24 cursor-sprite hotspot offset −9 @0x12970..0x12992). Writer
+census CLOSED: 4 stores / 2 functions (boot + poll), no memset span
+covers the cells; 119 sites bucketed (82 cmp-imm hit-tests, ~33
+reads, the 100Hz ISR family with iret@0x1287c: poll gates + the
+hardware-cursor redraw-on-move + the drag anchors 0x1074d8/d4 and
+0x107498/9c ⟷ EXW 0x4eddf8/fc and 0x4ede00/04 + the sidebar
+cursor-sprite gate X≥480; 9 callers of the poll).
+
+(2) **THE CLASSIFICATION.** The pair is host hardware-cursor state —
+written by the boot plant + a hardware poll, redrawn from an
+interrupt, driven by raw mickeys — the D17 non-hashed bucket on BOTH
+channels, NEVER read by the deterministic sim. The row is therefore
+classified **hardware/input-profile-only**, never counted as static
+parity (S0 final ledger: 24/27 static + 2/27 dynamic-only + 1/27
+hardware/input-profile-only). The registry row keeps id/exd_addr/
+extent/tier and stays EXD-address-only BY DOCUMENTED CHOICE (the EXW
+twin cells exist but stay unnamed so the row remains the D139/D143
+EXD-only anti-ghost vehicle — the stitch-refusal gates stay green
+unchanged); layout/note/anchor re-pinned to the truth (plan-neutral:
+plans embed only id/addr/len).
+
+(3) **THE ADAPTER RE-PIN (the Rust half).** The DOS/classic-input
+adapter — `bedlam_core::input::InputFrame` (mouse_dx/dy DELTAS =
+exactly the EXD INT-33h mickey model) + `bedlam_core::frame::
+FrameState` — previously clamped [0,639]×[0,479] from (0,0) with
+"exact EXW addresses TBD pending P2e input RE". Re-pinned to the
+twin-verified constants: clamp **9..=631 / 9..=463** and the
+FrameState boot plants the CENTER (320,240) (the GameInit twin).
+FrameState stays non-hashed (the D17 determinism guarantee re-pinned,
+not weakened: cursor trajectories still never move sim hashes).
+Oracle `static_cursor_clamp_differential.rs`: the poll-handler
+transcription (EXD branch order incl. the ≥631/≥463 saturation
+edges), the twin literal pins (9/0x277/9/0x1cf and the boot-center
+literals both channels), the VESA/hotspot space pins, adapter
+equality over scripted mickey walks from the boot center, and
+sensitivity BOTH directions (the old [0,639]-from-(0,0) adapter FAILS
+the comparison; a swapped or margin-less box fails; the original-side
+branch-order mutations fail). NO canonical chain moves (the cursor is
+not canonical state — no differ/O1/O2/O3 surface touched); no corpus
+read; no Ghidra run.

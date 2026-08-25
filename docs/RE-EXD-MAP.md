@@ -550,6 +550,105 @@ E-side changes. The §5g alias ledger is now complete for every cell
 named by the two bank walks (27 mission registers + 9 head-walk
 registers, minus the §5g-already-pinned 13).
 
+### 5h. The cursor cells — the S0-17 decode (D160, 2026-08-26, [verified] objdump whole-census)
+
+The registry row `static-cursor-clamp` (TS, EXD addresses only,
+0x1074ac/0x1074b0) was glossed "cursor clamp maxima x=0xf0 y=0x140
+(320×240 logical space)". **THE GLOSS IS DISPROVEN ON ALL THREE
+COUNTS** — the cells are the live hardware-cursor POSITION pair, the
+0xf0/0x140 dwords are the GameInit boot-CENTER literals, and the
+logical space is **640×480 on BOTH channels** (EXD sets VESA mode
+0x101 640×480×8: `mov ebx,0x101; mov eax,0x4f02; int 0x10` @0x1259a;
+the cursor-sprite draw walks a ×640 stride `lea ecx,[ecx+ecx*4]; shl
+ecx,7` @0x1297e).
+
+**Cell identity (locked by two independent proofs):**
+`[0x1074b0] = g_cursor_x`, `[0x1074ac] = g_cursor_y` — the EXW
+`g_cursor_x/y @0x4eddc4/0x4eddc8` twins (RE-EXW-INPUT sec 4).
+Proof 1 (mickey axes): the poll handler integrates the INT 33h AX=000B
+HORIZONTAL counter (cx) into 0x1074b0 and the VERTICAL counter (dx)
+into 0x1074ac. Proof 2 (hotspot twins): the in-mission panel hit-test
+@0x2f6d9..0x2f79a tests [0x1074b0] against 0x1ee/0x271 (494..629) and
+[0x1074ac] against 0xc3/0x146 (195..326) — the EXW FUN_0041ec81
+hotspot (x[494..626] y[195..327]) @0x41ec9d carries the IDENTICAL
+literals on 0x4eddc4/0x4eddc8.
+
+**Writer census (closed, 4 stores / 2 functions; no memset/movs span
+covers the cells — the GameInit memset @0x2c6f7 spans 0x10737c..0x1073fc
+only):**
+
+1. **GameInit boot plant** @0x2c79a..0x2c7b2:
+   `mov esi,0x140; mov [0x1074b0],esi; mov [0x1074ac],0xf0` — plants
+   the CENTER of 640×480 (X=320, Y=240), in the same boot sandwich as
+   the RNG seed plants (edx=0x39447/ebx=0x1e240 @0x2c7ba/0x2c7bf, the
+   §7j.65 twins). EXW twin INSTRUCTION-EXACT @0x41c083..0x41c09b:
+   `mov ebx,0x140; mov [0x4eddc4],ebx; mov [0x4eddc8],0xf0`.
+2. **Mouse poll handler FUN_000125a7** @0x12633/0x12659 — the clamp
+   writer. Full decode @0x125f9..0x126a5:
+   `mov eax,3; mov ebx,3; int 0x33` (AX=0003 position+buttons →
+   `[0x1074a4] := ebx` = g_mouse_flags, EXW twin 0x4dc6e4);
+   `mov eax,0xb; int 0x33` (AX=000B motion counters);
+   `eax := cwde(cx); eax += [0x1074b0]; <9 → 9; ≥0x277 → 0x277;
+   [0x1074b0] := eax` (X);
+   `eax := cwde(dx); eax += [0x1074ac]; <9 → 9; ≥0x1cf → 0x1cf;
+   [0x1074ac] := eax` (Y).
+   **THE CLAMP BOX IS [9,631]×[9,463] — the EXW ScrollUpdate@0x425ab9
+   box VERBATIM** (EXW: CursorToGame@0x44b428 maps the absolute window
+   cursor into game space — its own clamp is [0,W−1]×[0,H−1] against
+   the client dims 0x4ef6a6/0x4ef6a8 — then `add ebx,0x9 / add
+   ecx,0x9` @0x425b2e/0x425b31, x<9→9 @0x425b3b, x>0x277→0x277
+   @0x425b47, y<9→9, y>0x1cf→0x1cf @0x425b66, stores @0x425b7b/
+   0x425b84). Channel difference (input-profile only): EXD integrates
+   RELATIVE mickeys (INT 33h AX=B, the DOS classic-input model); EXW
+   maps the ABSOLUTE window cursor. Same cells, same box, same 9.
+
+**Consumers (119 listing sites, all bucketed):**
+- 82 `cmp [cell],imm` UI hit-tests (X 43 / Y 39) — screen/panel
+  hotspots; representative twin pair above.
+- ~33 plain reads (`mov reg,[cell]` fetch pairs, e.g. 0x4cb33/0x4cb38,
+  0x589a2/0x589a7, 0x1d165/0x1d174).
+- The 100Hz interrupt family (body 0x12787..0x1287c, `iret`
+  @0x1287c; bumps the tick counters 0x801a0/0x1075e8/0x1075fc/
+  0x1075b4/0x1075c8/0x1075e0 and the cursor-sprite frame cycle
+  [0x1075f8] wrapping 0x90..0x97 every 8 ticks @0x127b0..0x127db):
+  gates [0x1075fc]&1 (poll enabled) ∧ [0x1074b4]≠0 (mouse driver
+  present) ∧ [0x80088]==0 (VESA copy idle) → `call 0x125a7` (the
+  poll; ALSO called from 8 screen input loops 0x4cff4/0x4d6ec/
+  0x4d94e/0x4db90/0x4df8a/0x4e1dd/0x4f7b0/0x5784e — 9 callers total)
+  → hardware-cursor redraw iff [0x1075a0]≠0 (cursor shown) ∧
+  (sprite-rec saved-Y@+0x2 ≠ [0x1074ac] ∨ saved-X@+0x6 ≠ [0x1074b0];
+  rec ptr [0x107430]): erase FUN_00012a8f, draw FUN_00012962 et al.
+  **FUN_00012962 draws the 24×24 (0x18) sprite at (X−9, Y−9)** — the
+  cursor HOTSPOT offset −9, the same 9 as the clamp margin
+  (@0x12970..0x12992), VRAM 0xa0000 + bank walk FUN_00012b46.
+- Drag anchors (poll tail): button bit0 → FUN_000126a6:
+  [0x1074d8]:=X, [0x1074d4]:=Y (EXW twins 0x4eddf8/fc); bit1 →
+  FUN_000126bb: [0x107498]:=X, [0x10749c]:=Y (EXW 0x4ede00/04);
+  anchors track continuously while held (RE-EXW-INPUT sec 4 "drag
+  anchor" semantics).
+- Sidebar gate (poll tail @0x1267c..0x126a2): when [0x1075cc]≠0
+  (in-mission) the cursor-sprite selector [0x1075f8] := 0x5d(93) if
+  X≥0x1e0(480) (right panel region) else 0.
+
+**Classification (D160):** the pair is HARDWARE-INPUT-PROFILE state —
+the host hardware-cursor position: written by the boot plant + a
+hardware poll, redrawn from an interrupt, driven by raw mickeys/
+window-cursor input, never read by the deterministic sim. It is the
+D17 non-hashed bucket on BOTH channels; it is NOT semantic engine
+state and the registry row is NEVER counted as static-parity-covered
+(the S0-17 disposition: hardware/input-profile-only — a third
+disposition class beside static-closed and dynamic-only). The Rust
+DOS/classic-input adapter (`bedlam_core::input::InputFrame`
+mouse_dx/dy deltas — exactly the EXD INT-33h mickey model — +
+`bedlam_core::frame::FrameState`) is re-pinned to the twin-verified
+constants: clamp [9,631]×[9,463] and the boot center (320,240)
+(previously [0,639]×[0,479] from (0,0), "exact EXW addresses TBD
+pending P2e"). The row's addresses/extent/tier stay unchanged (its
+8-byte anchor dump reads {Y=boot-center, X=boot-center} on a
+mouseless scripted capture; the EXW cells stay deliberately unnamed in
+exw_addr so the row remains the D139/D143 EXD-only anti-ghost
+vehicle).
+
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
 | EXW | EXD | anchor | tag |
@@ -568,7 +667,7 @@ registers, minus the §5g-already-pinned 13).
 | player TYPE word 0x4edb90 | **0x1075c0** | spawn SP kind stamp `robot[i].kind@+0x2A := WORD[0x1075c0]` + first-robot `·robot_count` @0x1db19/0x1db28 + the mission-loop "my robot" gates `sar(d@+0x28,16) == [0x1075c0]` — RE-PINNED 2026-08-25 (S0-16/D159, §7j.68): whole-census 117 .text sites, EXACTLY 2 writers = the boot twin `xor ebx,ebx → [0x1075c0]` @0x2cc7b/0x2cc84 (the CINEMATICS sandwich around FUN_0004be7d, cell pair [0x1194d8]≡[0x46cca4]) + ONE MP serial-sync writer `call 0x62100; and eax,0xffff` @0x5b026..0x5b030 (the "Quit from synchronising"/"Found %i players, but could only sync %i !" path — no lobby family in the DOS port); the save family READ-only (the type is never saved); the D132 gloss refinement at §4/row 305 stands: in the MP cycler the cell is the current-robot ordinal | [verified; re-pinned 2026-08-25 S0-16/D159] |
 | y-line/z-base 0x4ea900/0x4eaacc | y-multiplier table **0x8b78c** (h dwords, y·w — NOT h+1), z-base table **0x107718..0x107734** (8 dwords, z·w·h; the store base 0x107714 is the adjacent screen-scale cell zeroed @0x14794 — never a table entry) | map-loader build loops 0x2e713..0x2e74b (identical to EXW 0x41ddaa..0x41dde2 + the 0x4466bd..0x4466f8 second producer, RE-EXW-SIM §7c.3) + volume reads | [verified; extents re-pinned 2026-08-25 S0-08/D147] |
 | dither noise bank 0x4e6ed8 (cursor 0x4ddb30) | **0x8ded4**, cursor **0x108424** | mission-loop churn: 15 B/frame, `RandB()&3==0 → 0xFF` else 0, ring wrap 0x800 — EXW 7i EXACT | [verified] |
-| cursor clamp (INPUT) | x max **0x1074ac**=0xf0, y max **0x1074b0**=0x140 | GameInit boot plants (320×240 logical space, B2 twin) | [verified] |
+| cursor cells (INPUT) | X **0x1074b0**, Y **0x1074ac** — the live hardware-cursor POSITION pair (EXW g_cursor_x/y 0x4eddc4/0x4eddc8 twins); NOT clamp maxima | RE-PINNED 2026-08-26 (S0-17/D160, §5h): GameInit plants the CENTER (X=0x140=320, Y=0xf0=240 — the old "clamp maxima x=0xf0 y=0x140" gloss misread these literals, and the space is 640×480 VESA 0x101, not 320×240); the ACTUAL clamp box [9,631]×[9,463] = the EXW ScrollUpdate 0x425b2e..0x425b84 box VERBATIM, enforced by the poll handler 0x12615..0x12659 (INT 33h AX=3 buttons + AX=B mickeys, integrate-then-clamp); writer census 4 stores / 2 fns; hardware/input-profile-only (D17 bucket) — never counted as static parity | [verified; re-pinned 2026-08-26 S0-17/D160] |
 
 EXD↔EXW layout note (divergence seed #1): the beacon armer writes the
 teleported x/y at robot+0x00/+0x04 (dwords, Q13) while EXW robots carry
