@@ -5,15 +5,61 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter`
-   ordering and classify dynamic-only row placement separately from
-   static closure. NOTE: the worktree carries interrupted O1-boot WIP
-   (dbx-plan.rs boot_trap/entry + dbx-capgen.py + dosbox-harness.sh +
-   RUNTIME.md + the capture-plan boot_trap deltas, owner ≠ current
-   worker): inspect, preserve, adopt per AGENTS shared-worktree rules;
-   stage explicit task paths only.
+1. [P4/static-parity/S0-15] the `static-order-table` TS row (order
+   table EXD 0x91ee4 / EXW twin): whole-writer/reader census +
+   independent static-oracle coverage (the S0-07..S0-14 pattern), or
+   a loud named gap if a seam stays unmodeled. NOTE: the worktree
+   carries interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry +
+   dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + the capture-plan
+   boot_trap deltas, owner ≠ current worker): inspect, preserve,
+   adopt per AGENTS shared-worktree rules; stage explicit task paths
+   only.
 
 ## Done
+1. DONE (2026-08-25, worker 9c711d0c claim 1, commits a335220 +
+   4e0af96, PUSHED): P4/static-parity/S0-14 the s0-trigger/
+   frame-counter ordering RESOLVED + the DYNAMIC-ONLY placement class
+   (D156, RE-EXW-SIM §7j.66). (a) RE first (a335220): the EXW
+   MissionShell tail decoded whole — pause gate 0x4485de, the
+   NORMAL-path PresentEnd CALL 0x4486c9 (THE O2 dump point;
+   PresentEnd FUN_00425a03 has 62 direct call sites, so the function
+   entry the registry exw_addr names is NOT a usable trigger — the
+   W11 deferral resolved, the O2 plan regen moves trigger.site
+   0x00425A03 -> 0x004486C9), pause-path present 0x44861f, and the
+   register-form counter increment 0x4486ce-da ALWAYS after the flip
+   — the EXD 0x5a6eb/0x5a6f0-fd twin order IDENTICAL; exactly one
+   present + one inc per pass both paths. D81 CORRECTED: the eight
+   bounded cinematic screens RESET the counter (xor+mov, the INC-only
+   census trap) and reuse it as their 100/200/300-frame duration
+   timer; the five interactive menu screens count cumulatively — so
+   C0 = the mission-entry counter value is a DETERMINISTIC FUNCTION
+   OF THE SCRIPTED MENU WALK, not a boot-frame total (T2 budget
+   consequence unchanged; the EXD menu reset family = open
+   cross-check, not blocking). Dumped value = pre-increment =
+   C0 + (k-1); O1/O2 = E + C0 (E already emits sim.frame()-1).
+   (b) The classification (D156): s0-trigger (extent 0, the dump
+   point itself) + frame-counter (the T2 timing cell) carry no
+   statically-closeable state — they close by MECHANISM under the new
+   dynamic-only placement disposition, tracked separately from static
+   closure: strict S0 = 22 static-closed + 2 dynamic-only + 3 static
+   remaining (S0-15/16/17) = 27. (c) Oracle (4e0af96):
+   static_frame_counter_differential.rs, 6 tests — the tail
+   transcription as a state machine (pre-increment, one inc per pass,
+   pause presents but does not fire the BP), the census pins (13+1
+   increments, the eight cinematic rows, 62 call sites, the walk
+   model falsifying the boot-total reading), the differ tie-in (the
+   transcribed O1 model vs E lands exactly on Class::T2Reported —
+   PassWithNotes, zero engine-bug/structural/coverage; identical-
+   script double-run byte-exact), the canonical E assertion (counter
+   == frame_no strictly from 0). watches.toml s0-trigger/
+   frame-counter layouts re-anchored (plan-neutral — layout strings
+   never feed plans); differ.rs alignment note corrected in place;
+   DESIGN §6a row + the s0-trigger E-gap note. Verified: workspace
+   release tests green (incl. differ_gate 4 corpus lanes +
+   canonical_dump_gate 13), fmt + clippy clean on touched files,
+   MANIFEST clean before AND after (no corpus read). The unrelated
+   O1-boot WIP preserved untouched (unit staged only its own paths).
+   Queued: S0-15 as item 1.
 1. DONE (2026-08-25, worker 77b1c512 claim 1, commits b2e522c +
    dc6c99d, PUSHED): P4/static-parity/S0-13 the RNG pair +
    dither-noise rows independently covered (D155, RE-EXW-SIM §7j.65).

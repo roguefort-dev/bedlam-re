@@ -1,5 +1,38 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D156 S0-14 COMPLETE (worker 9c711d0c claim 1, commits
+    a335220 + 4e0af96, PUSHED): the s0-trigger/frame-counter ordering
+    RESOLVED + the DYNAMIC-ONLY placement class. RE-EXW-SIM §7j.66:
+    the EXW MissionShell tail decoded whole — the NORMAL-path
+    PresentEnd CALL 0x4486c9 is THE O2 dump point (PresentEnd has 62
+    direct call sites — the function entry is not a trigger; the W11
+    plan regen moves trigger.site to 0x004486C9), pause-path present
+    0x44861f, register-form counter inc 0x4486ce-da ALWAYS after the
+    flip (the EXD 0x5a6eb/0x5a6f0-fd twin order identical; one
+    present + one inc per pass both paths). D81 CORRECTED: the eight
+    bounded cinematic screens RESET the counter and reuse it as their
+    100/200/300-frame duration timer (INC-only census trap) — C0 =
+    the mission-entry value is a DETERMINISTIC FUNCTION OF THE
+    SCRIPTED WALK, not a boot-frame total; dumped value = PRE-
+    increment = C0 + (k-1); O1/O2 = E + C0 (E already emits
+    sim.frame()-1 mission-relative). The classification (D156):
+    s0-trigger (extent 0 — the dump point itself) + frame-counter
+    (the T2 timing cell) close by MECHANISM under the new
+    dynamic-only placement disposition, reported separately from
+    static closure. Oracle static_frame_counter_differential.rs (6
+    tests): the tail transcription as a state machine, the census
+    pins (13+1 increments, eight cinematic rows, 62 call sites, the
+    walk model falsifying the boot-total reading), the differ tie-in
+    (the transcribed O1 model vs E lands exactly on T2Reported —
+    PassWithNotes, zero failing findings; double-run byte-exact), the
+    canonical E assertion (counter == frame_no strictly from 0).
+    watches.toml layouts re-anchored plan-neutral; differ.rs
+    alignment note corrected; DESIGN §6a amended. Workspace release
+    green, fmt/clippy clean on touched files, MANIFEST clean. The
+    unrelated O1-boot WIP preserved untouched. Strict S0 coverage
+    22/27 static + 2/27 dynamic-only; 3 static remain. Next head:
+    S0-15 (static-order-table).
+
   - 2026-08-25 D155 S0-13 COMPLETE (worker 77b1c512 claim 1, commits
     b2e522c + dc6c99d, PUSHED): the RNG pair + dither-noise rows
     independently covered. RE-EXW-SIM §7j.65: RandA/RandB decoded
