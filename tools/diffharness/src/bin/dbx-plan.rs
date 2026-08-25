@@ -921,15 +921,43 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
             }
             Ok(None)
         }
+        // Pinned: the order/weapon table is a DIRECT .bss fixed span —
+        // 12 rows x 0x62 = 0x498 (RE-EXW-SIM sec 7j.67 / D157), pinned
+        // from BOTH ends (the GameMain boot memset immediate ecx=0x498
+        // @0x41c3d6 / EXD 0x2cd0f, and the successor chassis base
+        // adjacent-EXW; the EXD twin sits past a 0x90-B path buffer at
+        // 0x9237c — a channel layout divergence, not an extent change).
+        // NOT pointer-indirect: the table IS the .bss image, so the
+        // form is Fixed at the registry address (the min-bank PtrCell
+        // precedent does NOT apply here).
         "static-order-table" => {
-            if row.extent != "0x62-stride rows" {
+            if row.indirect {
+                return Err(die(
+                    "static-order-table became indirect — it is a DIRECT .bss \
+                     span (7j.67/D157): re-pin the form if the cell moved"
+                        .into(),
+                ));
+            }
+            let addr = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                die(format!(
+                    "static-order-table has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
+                ))
+            })?;
+            if row.extent != "0x498 (12x0x62 rows)" {
                 return Err(die(format!(
-                    "static-order-table extent {:?} changed: resolve the row \
-                     count in dbx-plan if now pinned",
+                    "static-order-table extent {:?} changed from the pinned \
+                     12x0x62 = 0x498 geometry (7j.67/D157): update dbx-plan if \
+                     the pinned geometry moved",
                     row.extent
                 )));
             }
-            Ok(None)
+            plan(Form::Fixed { addr, len: 0x498 })
         }
         "static-yline-zbase" => {
             if row.extent != "table-sized" {
@@ -2075,7 +2103,10 @@ mod tests {
         assert_eq!(parse_extent("0x1f38 (999*8)"), Some(0x1f38));
         assert_eq!(parse_extent("282*0x4E"), Some(282 * 0x4E));
         assert_eq!(parse_extent("map-sized (8 u16 planes)"), None);
+        // the RETIRED pre-D158 order-table string stays a None pin
+        // (the '-' is not a delimiter); its pinned replacement parses
         assert_eq!(parse_extent("0x62-stride rows"), None);
+        assert_eq!(parse_extent("0x498 (12x0x62 rows)"), Some(0x498));
     }
 
     #[test]
@@ -2095,15 +2126,16 @@ mod tests {
         let emitted = emit_plan(&scen, &reg).unwrap();
         // T0: 11 rows, 0 gaps (difficulty closed by the W5-followup,
         // sfx-master-gate by the D134 twin census) -> 11 per-frame.
-        // TS: 15 rows, 5 deferred (min-bank pinned 0x7530 by
-        // 7j.62/D149) -> 10 anchor-only + T0 rides the
-        // anchor too: 11 + 10 = 21 anchor rows.
+        // TS: 15 rows, 4 deferred (min-bank pinned 0x7530 by
+        // 7j.62/D149; order-table pinned 0x498 by 7j.67/D157/S0-15a)
+        // -> 11 anchor-only + T0 rides the anchor too:
+        // 11 + 11 = 22 anchor rows.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11, "all T0 rows (gap set empty since D134)");
-        assert_eq!(anchor_count, 21, "T0 + resolved TS rows");
-        // 5 TS extent gaps (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 5);
+        assert_eq!(anchor_count, 22, "T0 + resolved TS rows");
+        // 4 TS extent gaps (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 4);
         // every emitted id is a real registry row of the scenario tiers
         for id in row_ids(&emitted.json) {
             let row = reg
@@ -2149,18 +2181,20 @@ mod tests {
         // closed by the W5-followup, blink-cursor by D132,
         // no-extract-latch by D133) = 17 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
-        // T0: 11 per-frame + TS: 10 anchor-only (gap set empty since
+        // T0: 11 per-frame + TS: 11 anchor-only (gap set empty since
         // D134: sfx-master-gate now emits like every other T0 row;
-        // min-bank resolved by 7j.62/D149).
+        // min-bank resolved by 7j.62/D149; order-table by
+        // 7j.67/D157 + S0-15a/D158).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17, "all T0 rows + T1 resolved");
-        assert_eq!(anchor_count, 21 + 17, "T0 + TS + T1 rows");
+        assert_eq!(anchor_count, 22 + 17, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            5,
-            "5 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
-             sfx-master-gate resolved by D90/D132/D133/D134; min-bank pinned by 7j.62/D149)"
+            4,
+            "4 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
+             sfx-master-gate resolved by D90/D132/D133/D134; min-bank pinned by \
+             7j.62/D149; order-table pinned by 7j.67/D157)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -2186,6 +2220,12 @@ mod tests {
         assert!(emitted.json.contains(
             "{ \"id\": \"trt-array\", \"addr\": \"CS:00095264\", \"len\": \"$trt_count*0x20\", \
              \"prefix\": { \"addr\": \"CS:0011949C\", \"len\": 4 } }"
+        ));
+        // the pinned order-table row on O1 (7j.67/D157 + S0-15a/D158:
+        // the 12x0x62 = 0x498 DIRECT .bss span at the EXD 0x91ee4 —
+        // Fixed, never pointer-indirect)
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-order-table\", \"addr\": \"CS:00091EE4\", \"len\": 1176 }"
         ));
         assert!(emitted.json.contains(
             "{ \"id\": \"object-instances\", \"addr\": \"CS:$obj_ptr\", \"len\": \"2000*0x14\", \
@@ -2301,6 +2341,12 @@ mod tests {
         assert!(emitted.json.contains(
             "{ \"id\": \"static-min-bank\", \"addr\": \"$min_ptr\", \"len\": \"0x7530\" }"
         ));
+        // the pinned order-table row (7j.67/D157 + S0-15a/D158: the
+        // 12x0x62 = 0x498 DIRECT .bss span, EXW 0x4de664 — the Fixed
+        // form, NOT pointer-indirect like min-bank)
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-order-table\", \"addr\": \"0x004DE664\", \"len\": 1176 }"
+        ));
         // bank rows keep their forms on the EXW cells
         assert!(emitted.json.contains(
             "{ \"id\": \"robot-bank\", \"addr\": \"0x004C69E4\", \"len\": \"$robot_count*0xA8\" }"
@@ -2341,11 +2387,11 @@ mod tests {
             );
         }
         // row-set symmetry with O1 minus the EXD-only row: the same
-        // 28 per-frame rows, 38-1 anchor rows (static-cursor-clamp is
-        // EXD-only), 5+1 deferred
+        // 28 per-frame rows, 39-1 anchor rows (static-cursor-clamp is
+        // EXD-only), 4+1 deferred
         assert_eq!(count_rows(&emitted.json, "watches"), 28);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 37);
-        assert_eq!(emitted.deferred.len(), 6);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 38);
+        assert_eq!(emitted.deferred.len(), 5);
         assert!(emitted
             .deferred
             .iter()
@@ -2416,12 +2462,12 @@ mod tests {
         assert_eq!(scen.markers, vec![(18, 73, 1)], "the D91 staging key");
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // Same tier set as S1 -> the same row shape (21 anchor TS/T0 +
+        // Same tier set as S1 -> the same row shape (22 anchor TS/T0 +
         // 17 T1; 11 T0 + 17 T1 per-frame — gap set empty since D134).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17);
-        assert_eq!(anchor_count, 21 + 17);
+        assert_eq!(anchor_count, 22 + 17);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2583,14 +2629,14 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 10.
+        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 11.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17 + 2);
-        assert_eq!(anchor_count, frame_count + 10);
-        // deferred: the 5 S1-shape TS gaps + the 3 unaliased T2 rows
+        assert_eq!(anchor_count, frame_count + 11);
+        // deferred: the 4 S1-shape TS gaps + the 3 unaliased T2 rows
         // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 8);
+        assert_eq!(emitted.deferred.len(), 7);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2627,12 +2673,12 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 10.
+        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 11.
         assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 10);
-        // deferred: the 5 S1-shape TS gaps + ALL 14 T3 rows
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 11);
+        // deferred: the 4 S1-shape TS gaps + ALL 14 T3 rows
         // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 19);
+        assert_eq!(emitted.deferred.len(), 18);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),

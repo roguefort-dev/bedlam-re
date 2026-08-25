@@ -10286,9 +10286,10 @@ robot-bank record is the 94-B modeled subset that contains neither
 the +0x36/+0x38/+0x3A group words nor the +0x6E order-bits word —
 so an E emission would be fabricated parity. The row stays a
 deliberate, loud E-gap (absent from every canonical frame, asserted
-by the oracle), and the capture-plan extent hop (dbx-plan's
-deferred arm resolving to the pinned 0x498 fixed span at a fixed
-address — the S0-12a PtrCell precedent, Form::Fixed here since the
-table is direct .bss, not pointer-indirect) is queued as its own
-unit. watches.toml layout note amended plan-neutrally (extent
-string unchanged).
+by the oracle), and the capture-plan extent hop LANDED (D158:
+dbx-plan's deferred arm resolves to the pinned 0x498 fixed span at
+a fixed address as Form::Fixed — the S0-12a precedent, Fixed here
+since the table is direct .bss, not pointer-indirect; all 13
+capture-plan artifacts regenerated, count asserts re-pinned).
+watches.toml layout note amended plan-neutrally; the extent string
+moved to "0x498 (12x0x62 rows)" by D158.

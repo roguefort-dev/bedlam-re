@@ -4857,3 +4857,57 @@ Six decisions recorded (RE-EXW-SIM §7j.67, oracle
    zero plan bytes moved; the capture-plan deltas in the tree remain
    the unrelated O1-boot WIP, preserved untouched; this unit staged
    only its own paths).
+
+## D158 — 2026-08-25: P4/static-parity/S0-15a — the dbx-plan `static-order-table` extent hop LANDED (infra, the S0-12a precedent): the deferred arm resolves to the D157-pinned fixed 0x498 span as Form::Fixed at the DIRECT .bss addresses (EXW 0x4de664 / EXD 0x91ee4 — never pointer-indirect, so the min-bank PtrCell form deliberately does NOT apply); all 13 capture-plan artifacts regenerated; NOT a strict-coverage row — strict S0 stays 23/27 static + 2/27 dynamic-only
+
+The D157 §6 follow-up landed exactly as queued (worker cb67f182,
+claim 2):
+
+1. **THE FORM (S0-12a mechanics, Fixed not PtrCell)**: the deferred
+   arm dies loudly if the row ever gains the `indirect` flag (the
+   table IS the .bss image — a pointer cell would be a fabricated
+   indirection), requires a parsable channel address, and guards the
+   exact extent string `"0x498 (12x0x62 rows)"` against drift before
+   planning `Form::Fixed { len: 0x498 }`. The emitted row on O1 is
+   `{ "id": "static-order-table", "addr": "CS:00091EE4", "len": 1176 }`
+   (registry anchor order, between claim-bank and player-type); on
+   O2 `{ "addr": "0x004DE664", "len": 1176 }` — the EXW flat form.
+   No resolve symbol (a fixed span needs none).
+2. **watches.toml**: extent `"0x62-stride rows"` → `"0x498 (12x0x62
+   rows)"` (the one plan-feeding byte that moved in this unit); the
+   layout tail note now records the resolution (D158).
+3. **COUNT RE-PINS (the anchor set grows by one everywhere)**:
+   S0/S0W 21→22 anchor / 5→4 deferred; S1 21+17→22+17 / 5→4;
+   S1-o2 37→38 / 6→5 (the O2 mirror of the same row — cursor-clamp
+   still the sole EXD-only refusal); S2 21+17→22+17; S3 +10→+11 TS
+   anchor, 8→7 deferred; S4 +10→+11, 19→18. The new span asserts pin
+   both channel forms (CS:00091EE4 / 0x004DE664, len 1176); the
+   `extent_forms_parse` pin gains `parse_extent("0x498 (12x0x62
+   rows)") == Some(0x498)` (the retired pre-D158 string stays a None
+   parser pin — '-' is not a delimiter).
+4. **ALL 13 ARTIFACTS REGENERATED** — S0, S0W, S1, S1-o2, S2..S8;
+   each delta is EXACTLY two lines (the anchor row added, the
+   `_deferred` entry dropped) against its pre-hop blob.
+5. **NOT a strict-coverage row** (infra hop, the S0-12a class):
+   `static-order-table` remains closed ORIGINAL-side only (D157, the
+   charter no-fabricated-parity class — E emits nothing, asserted by
+   the D157 oracle); strict S0 coverage stays 23/27 static + 2/27
+   dynamic-only. The remaining deferred TS arms after this hop:
+   static-cgr-volume, static-bin-terrain (bank-sized, unpinned),
+   static-lnk-map (map-sized, unpinned), static-yline-zbase
+   (table-sized, unpinned) + the T2/T3 unaliased sets.
+6. **VERIFICATION, STAGED CONTENT FIRST**: the exact committed
+   combination (HEAD + only this unit's hunks — the in-flight
+   O1-boot WIP in dbx-plan.rs/capture-plans/RUNTIME.md/capgen
+   deliberately EXCLUDED, preserved untouched for its owner) was
+   proven in a scratch crate: full diffharness suite green (25 lib +
+   35 dbx-plan + 21 differ + 15 registry_anchors + 2 dump_schema +
+   3 stitch_replay = 101 tests, 0 failed), fmt clean, every
+   artifact's scratch delta vs HEAD verified 2-line extent-only.
+   The LIVE worktree (WIP + this unit layered) is ALSO fully green
+   (same 101) with the regenerated artifacts carrying both change
+   sets; clippy clean on the crate. The index was loaded with the
+   scratch blobs (hash-object + update-index) so the commit contains
+   exactly the verified staged content while the working tree keeps
+   the predecessor's WIP intact. MANIFEST clean before and after; no
+   corpus read, no Ghidra run.

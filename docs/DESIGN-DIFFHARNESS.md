@@ -448,7 +448,8 @@ words nor the +0x6E order-bits word — so the row closes
 ORIGINAL-SIDE ONLY under the charter no-fabricated-parity class (the
 D149/D155 precedent, asserted loudly by
 `static_order_table_differential.rs`); the dbx-plan extent hop (the
-pinned 0x498 fixed span) is queued separately (the S0-12a precedent).
+pinned 0x498 fixed span) LANDED separately (S0-15a/D158 — the row
+now rides the anchor frame on every capture plan; still an E-gap).
 **s0-trigger NOTE (S0-14/D156):** this row is not an E-gap to
 close — it is the DUMP POINT itself (extent 0, a breakpoint with no
 comparable bytes). It closes by the DYNAMIC-ONLY placement: the

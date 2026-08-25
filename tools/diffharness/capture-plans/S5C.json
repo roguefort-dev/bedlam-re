@@ -79,6 +79,7 @@
     { "id": "static-pad-slots", "addr": "CS:0000F63C", "len": 7992 },
     { "id": "static-map-wh", "addr": "CS:0010748C", "len": 48 },
     { "id": "static-claim-bank", "addr": "CS:$claim_ptr", "len": "10000" },
+    { "id": "static-order-table", "addr": "CS:00091EE4", "len": 1176 },
     { "id": "static-player-type", "addr": "CS:001075C0", "len": 2 },
     { "id": "static-dither-noise", "addr": "CS:0008DED4", "len": 2048 },
     { "id": "static-cursor-clamp", "addr": "CS:001074AC", "len": 8 }
@@ -123,7 +124,6 @@
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
     "static-lnk-map (map-sized)",
-    "static-order-table (0x62-stride rows)",
     "static-yline-zbase (table-sized)"
   ]
 }
