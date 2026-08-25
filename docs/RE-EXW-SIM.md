@@ -9798,3 +9798,115 @@ case's gates hand-read), rebuilds line[] per mission TOT header, computes
 the expected claim image per mission, and pins the corpus identities
 (per-mission claimed-tile counts, the ZONEA/M1 59-tile set, the
 all-zero missions).
+
+## 7j.64. THE EIGHT FRESH-SESSION T0 CAMPAIGN/CONFIG SCALARS — the whole-cell boot/derive chain decoded (score 0x4dd40c, money 0x46ae70, difficulty 0x46cbf8, zone 0x4edd8c, mission 0x4edd88, mode 0x4edb88, linear-mission-m 0x46ae8c, sfx-master-gate 0x4ede58) (2026-08-25, worker 0f91b0d7 claim 1, D153, the P4/static-parity/S0-12 unit; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; read-only string probes of BEDLAM.EXW (VA 0x454000 = file 0x52600, the D135 anchor); MANIFEST.sha256 clean before AND after) [verified]
+
+Method: whole-objdump write-form censuses per cell (`mov [dword] ds:CELL,
+reg/imm` forms only — every other xref is a read), then instruction-level
+decode of each writer block. "Fresh session" = boot → title → NEW campaign
+(no save slot) → name entry accepted without touching the difficulty toggle
+→ mission 1 load — the S0 capture shape.
+
+**A. The GameMain boot-init head (0x41c05c..0x41c176) — the mode +
+difficulty fresh writes.** `xor ebx,ebx` @0x41c0b7 … `mov ebx,0x1`
+@0x41c12e, `xor eax,eax` @0x41c138, then the store fan:
+`[0x4dc6cc]:=eax`, **`[0x4edb88]:=eax` (MODE := 0)** @0x41c145,
+**`[0x46cbf8]:=ebx` (DIFFICULTY := 1)** @0x41c14a, `[0x4edbec]:=eax`,
+`[0x4dc6c8]:=eax`, `[0x4dc6c4]:=eax`, `[0x4ede5c]:=eax`,
+`[0x4e44c4]:=edx(−1)`, `[0x4edbdc]:=ebx(1)`, `[0x4edb6c]:=ebx(1)`,
+`[0x4edbf0]:=ebx(1)`. **The §7j.15/2 "campaign-start write 0x41c14a"
+gloss CORRECTED: it is the BOOT default, and the fresh value is 1, not 0**
+(ebx re-set to 1 six instructions before the store; no intervening def).
+The name-entry toggle (0x43ab7e `(d+1)%3` → 0x43ab85/0x43ab92) and the
+campaign save-load (0x43c3a6) are the only other difficulty writers (6
+write sites total; the zone-7 force/restore pair 0x41c578/0x41c58d is a
+call-scoped temp, §7j.15/2 — it wraps FUN_0044771c and restores EBP).
+
+**B. The episode-loop slot boot (0x41c41c..0x41c44e) — zone + mission +
+score fresh writes.** `edx:=1` @0x41c41c, `eax:=0`, `ecx:=0`:
+**`[0x4edd8c]:=edx` (ZONE := 1)** @0x41c42a, **`[0x4edd88]:=edx`
+(MISSION := 1)** @0x41c430; then `call FUN_0043a5fc` (the title/name-entry
+state machine — returns 0 on the fresh-new-campaign path) and
+`[0x46ae78]:=ecx`, `[0x46ae74]:=ecx`, **`[0x4dd40c]:=ecx` (SCORE := 0)**
+@0x41c44e. The §7f.9 "GameMain boot 0 (0x41c44e)" gloss stands, refined:
+the 0 is FUN_0043a5fc's fresh-path return.
+
+**C. The name-entry fresh-campaign arm (0x43aaa3..0x43aad0) — money +
+mode re-writes.** A jump-table arm of the name-entry state machine
+(`jmp [[0x46ae7c]−1]*4 + 0x43a5e8`): `eax := [0x46cbf8]·0x1f4` (500·d),
+`edx := 0xfa0` (4000), `esi := 0`, `edi := 1`,
+**`[0x4edb88]:=esi` (MODE := 0 again)** @0x43aab9, `[0x46cbe0]:=edi`,
+`edx := 4000 − 500·d`, **`[0x46ae70]:=edx` (MONEY := 4000−500·d)**
+@0x43aaca. This is the §7d.4 "title start 4000−500·diff" site, now
+address-pinned. Combined with A: **fresh money = 4000−500·1 = 3500 on an
+untouched-toggle fresh boot** (d cycled at name entry re-seeds the same
+formula; mode-2 variant 0x5DC is MP-only, excluded from S0's SP shape).
+
+**D. linear-mission-m 0x46ae8c is a DERIVED cell, not a progress
+counter (0x41c520..0x41c556).** Exactly 3 write sites, ALL in the
+GameMain episode loop right after the SHOP return:
+```
+eax := [0x4edd8c] (zone) − 2
+eax := eax·5 + [0x4edd88] (mission) − 1        ; lea eax,[eax+eax*4]; dec
+[0x46ae8c] := eax                                ; 0x41c534
+if eax >= 0x1b: [0x46ae8c] := 0x1a (26)          ; cap  @0x41c53e
+if 1 > [0x46ae8c]: [0x46ae8c] := 1               ; floor @0x41c550
+```
+i.e. **m = clamp(5·(zone−2) + mission − 1, floor 1, cap 26)**, recomputed
+from the CURRENT slot every episode — never persisted, never a counter
+(the other 11 xrefs are readers: the TRT hp formula 250+250·m/27
+(§7j.15/4-e), the pod-stagger 2000−m·1000/27 (§7j.20), FUN_00444d07).
+Zone/mission pairs: zone 2 m1..m7 → m 1..6; zone 3 → 5..11; … zone 7
+m1/m2 → 25/26. **Fresh (zone 1, mission 1): 5·(−1)+1−1 = −5 → floor →
+m = 1.** This corrects the E-side model assumption (canonical.rs reads
+`episode().linear()`, the 0-based campaign-progress counter, D108's
+"never fabricated" seam): the guest cell is 1 at the S0 anchor while E
+emits 0 — a live-capture divergence on this row, exactly the class
+S0-12 exists to surface.
+
+**E. sfx-master-gate fresh value = 1 (the loader default), pinned.**
+FUN_004252c0 @0x4252f0..0x42530f: `[0x4ddb2c]:=0x4b` (volume default 75),
+`call FUN_00444ed40` (the HKCU\Software\Mirage\Bedlam "DATA" probe —
+pushes/pops edx, edx UNTOUCHED = the `1` from 0x4252c9), `push edx(1)`
+(max), `ebx:=4` (REG_DWORD), `ecx:=edx(1)` (DEFAULT), `push 0` (min),
+`eax:="SOUND"`, `edx:=0x4ede58`, `call FUN_0044ede4` — the D128 bounded
+loader: absent/malformed/out-of-bounds ⇒ the DEFAULT (ecx) is written to
+the cell (and re-saved). Same shape as SPEECH/CINEMATICS/ACTIONPAN
+(bounds [0,1], default 1). **So the D134/D136 classification is
+value-exact for the default machine: guest fresh = 1 = E's constant 1**
+(a sound-DISABLED capture machine dumps 0 — the D136 loud finding,
+unchanged).
+
+**F. Whole-cell writer censuses (write forms only, EXW; EXD twins per
+RE-EXD-MAP §4/§7):**
+
+| cell | writes | families |
+|---|---|---|
+| score 0x4dd40c | 10 | GameMain slot boot 0x41c44e (fresh 0); campaign-restart restore 0x41c5e2 (from the pre-SHOP mirror [0x4eb934], stored 0x41c4fa); save-load 0x43c388 + the 6-slot family 0x4188xx..0x418fxx; the FUN_00444ca2 tail (0x444ca2 — the debrief/payout fold, §7f.9) |
+| money 0x46ae70 | 13 | name-entry fresh-campaign 0x43aaca (4000−500·d); campaign-restart 0x41c5ec (mirror [0x4eb938]); save-load 0x43c0dd/0x43c117/0x43c395; SHOP floor 0x4411a9 (min 100, §7j.45) + buy/sell 0x4414b2/0x4414ec; the pickups family 0x40f0a1/c0/de/100 |
+| difficulty 0x46cbf8 | 6 | boot 0x41c14a (fresh 1); name-entry cycle 0x43ab85/0x43ab92 ((d+1)%3); save-load 0x43c3a6; zone-7 force/restore 0x41c578/0x41c58d (temp) |
+| zone 0x4edd8c | 8 | slot boot 0x41c42a (fresh 1); campaign-advance 0x41c9e5; save-load 0x43c2b8; mission-select 0x43edcb/0x43ede8/0x43ee18/0x43ee3d (the §7j.1 mission-number→set map); MP lobby 0x43f34b |
+| mission 0x4edd88 | 6 | slot boot 0x41c430 (fresh 1); per-episode advance 0x41c4b9; mission-select 0x43ea9b/0x43ee5a/0x43eedc; MP lobby 0x43f360 |
+| mode 0x4edb88 | 6 | boot 0x41c145 (fresh 0); name-entry start 0x43aab9 (0 again); save/load 0x43c0e2/0x43c11d/0x43c54a; MP lobby 0x43f373 (2) |
+| linear-mission-m 0x46ae8c | 3 | the D derivation trio 0x41c534/0x41c53e/0x41c550 |
+| sfx-master-gate 0x4ede58 | 2 | FUN_0043a144 set/clear 0x43a198/0x43a1b1 (D134 — registry-driven, fresh 1) |
+
+**G. The fresh-session T0 table + E verdicts (the S0-12 coverage):**
+
+| row | original fresh | E canonical fresh | verdict |
+|---|---|---|---|
+| score | 0 | 0 | CLOSED both sides |
+| money | 3500 (4000−500·1) | 4000 (d=0 default; the boot-key seam `start_score(d)` is formula-exact) | GAP: fresh default d=0 vs boot 1 — S0-12b |
+| difficulty | 1 (boot) | 0 | GAP: fresh default — S0-12b |
+| zone | 1 | 0 (0-based stage; O1 normalizer maps cell−1, D99/D108) | CLOSED both sides (the pinned normalization) |
+| mission | 1 | 1 | CLOSED both sides |
+| mode | 0 | 0 (hardcoded SP) | CLOSED both sides |
+| linear-mission-m | 1 (floor of the D formula) | 0 (episode progress counter) | GAP: derived cell vs counter — S0-12b |
+| sfx-master-gate | 1 (registry default) | 1 (D136 constant) | CLOSED under the D134/D136/D144 machine-config seam |
+
+The three gaps are one queued seam unit (S0-12b): pin the canonical fresh
+session to the boot-block defaults (difficulty 1 → money 3500 via the
+existing start_score seam) and emit the linear row through the D
+derivation — a deliberate full-chain re-baseline (the D136/D151
+machinery), never a silent default change. No row is silently counted:
+the gaps stay loud until the seam lands.
