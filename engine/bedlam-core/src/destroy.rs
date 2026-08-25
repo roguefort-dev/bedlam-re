@@ -1730,11 +1730,13 @@ impl MissionSim {
 
     /// FUN_00424355 — the splash STAGER [§7j.10, §7j.14/5]:
     /// in-bounds + z clamp ≤ 7 + DAT volume(z) == 0 + z-word(z) ==
-    /// 0 + the tile-claim byte == 0 (the claim bank is host-staged
-    /// zeros — the order-marker writers are the D82 seam, the
-    /// platform stager is S7); allocation first age==0 slot else
-    /// max-age eviction (the evicted record is flushed through the
-    /// z-structure clear). NO RNG draws.
+    /// 0 + the tile-claim byte == 0 (§7j.63: the claim bank is the
+    /// DOOR-RECT tile claim map, stamped at mission load by the
+    /// hardcoded rect farm — Rust does not stage it yet, so the gate
+    /// reads 0 by construction [documented gap, seam queued]; the old
+    /// "D82 order-marker writers" attribution was disproven);
+    /// allocation first age==0 slot else max-age eviction (the evicted
+    /// record is flushed through the z-structure clear). NO RNG draws.
     pub fn stage_splash(&mut self, x: i32, y: i32, z: i32, delay: u16) -> bool {
         let (w, h) = self.terrain.size();
         if x < 0 || y < 0 || x >= w || y >= h {
@@ -1888,8 +1890,9 @@ impl MissionSim {
     /// FUN_004228ce — build ONE platform tile, gates in the
     /// original's instruction order [§7j.41/2, verified
     /// 0x4228ce..0x422a3c]: bounds; BOTH bank words 0; the
-    /// tile-claim arena byte 0 (host-staged zeros — the
-    /// order-marker writers are the D82 seam); no LIVE robot in
+    /// tile-claim arena byte 0 (§7j.63: the door-rect claim map,
+    /// staged at mission load from the hardcoded rect farm — not
+    /// staged in Rust yet [documented gap, seam queued]); no LIVE robot in
     /// the candidate's (tx,ty)..(tx+1,ty+1) quadrant block (the
     /// robot scan over the whole bank, tile =
     /// (q5 − 0xC)>>5); z ≥ 1; the mirror z-word at the build
@@ -1910,9 +1913,11 @@ impl MissionSim {
         if self.object_grid.get(tile).copied().unwrap_or(1) != 0 {
             return false;
         }
-        // The tile-claim byte (0x46af58 arena): host-staged zeros —
-        // the D82 order-marker writers are the unmodeled seam, so
-        // the gate reads 0 by construction [documented E-gap].
+        // The tile-claim byte (0x46af58 arena): §7j.63 — the bank is
+        // the DOOR-RECT tile claim map, stamped at mission load from
+        // the hardcoded rect farm (deterministic, input-free); Rust
+        // does not stage it yet, so the gate reads 0 by construction
+        // [documented gap, seam queued].
         for r in &self.robots {
             if !r.alive {
                 continue;
