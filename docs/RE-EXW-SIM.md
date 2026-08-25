@@ -9532,3 +9532,121 @@ Every remaining site (95 for W / 83 for H) is a READER; no game-state writer exi
 - ZONEA/MISSION1 anchors: record 0 = control 1, (W,H,D)=(1,1,1), hp=150, chain=1, type=15, effects [(1,0,0,0),0,0,0,0] (count 1), banks [53]/[1189]/[2]/[0] (the +0x4A word 0 ⇒ restore seen=1); 197 active / 85 empty; 26 active rows with count 0; record #19 carries five selector-1 entries.
 
 **E. Engine/differ consequence.** Rust retains the row bank (`ObjectTypeTable::from_bdg_bytes` in `destroy.rs`, staged verbatim into `MissionSim::object_types` by `stage_destroy_family` @mission.rs:725 — the four banks under their disk-order names, all head fields, effects; empty rows = `ObjectType::default()` ≙ the memset-0 row). **The count word is NOT retained (stays 0) — deliberately**: it is a pure function of the retained effect selectors (nonzero count) AND, per census B, write-only in the original; adding it would be fabricated parity, so none is added. The staged word@+0 (disk control) is likewise unretained (0/1 classification retained instead) — also write-only. The watch row `static-type-table` (base 0x4dedf2, 282×0x4E) stays accurate as captured; its layout note gains the count/arena semantics. The S0-09 oracle (`static_type_table_differential.rs`) is the independent whole-corpus differential built from this section.
+
+## 7j.62. THE `.MIN` MASK BANK — RE-VERIFIED INSTRUCTION-BY-INSTRUCTION (arena alloc 0x7530 with NO zeroing, a VERBATIM whole-file read with no header/transform/memset — unlike PAD/BDG — a zone-scoped path, and exactly ONE runtime reader: the 4×4 territory stamp) + THE STALE-TAIL-NEVER-READ CORPUS PROOF (2026-08-25, worker 95c99db8 claim 1, D149, the P4/static-parity/S0-10 unit; objdump-only from ghidra-project/exw-text-objdump.txt + exd-text-objdump.txt — no Ghidra run; read-only corpus census of all 7 .MIN + 37 TOT + LNK/LNG files; MANIFEST.sha256 clean before AND after) [verified]
+
+**A. The allocation (FUN_0041d954, the GameMain arena pass; EXW 0x41dabd..0x41dac7):**
+`mov eax,0x7530; call 0x41db89; mov ds:0x4edd9c,eax` — ArenaAlloc(30000) with
+the result stored in cell [0x4edd9c]. FUN_0041db89 (0x41db89..0x41dbd4) only
+bumps the arena cursor 0x46af0c (with the 0x46af10 high-water check +
+0x420100 grow/abort path) and returns the OLD cursor — **no zeroing anywhere**
+(contrast: the PAD slots @0x41de62 and the BDG table/arena §7j.61 are memset-0
+BY THEIR LOADERS; the MIN bank is never memset by anyone).
+
+**B. The loader leg (FUN_0041dc5a, the mission family loader; EXW 0x41dcd8..0x41dcf3):**
+`edx=0x4587ed` (the ".MIN" tag, entry 5 of the 8×5-B tag table
+0x4587d9..0x4587fc), `eax=0x4dca8c` (the ZONE-scoped path buffer),
+`ebx=[0x4edd9c]`, `call 0x41dbed` (path concat), `edx=ebx`,
+`call 0x41cc7f` (LoadFile). The path buffer 0x4dca8c is built by FUN_0044670c
+(0x446820..0x44690f) as the SECOND string triple's product:
+"EDITOR\\"(0x4597ba) + "ZONE"(0x4597c2) + zone letter([0x4edd8c]+0x40) +
+"\\MISSION"(0x4597c7) + zone letter AGAIN — i.e.
+`EDITOR\ZONE{X}\MISSION{X}.MIN`, **ZONE-scoped, not mission-scoped** (corpus
+confirms: exactly 7 files MISSIONA.MIN..MISSIONG.MIN; every mission load of a
+zone re-reads the identical bytes). FUN_0041cc7f(eax=name, edx=dest) opens
+(FUN_0041cd90), sizes (0x44e30b → 0x4eded4), rewinds (0x44e217), then
+FUN_0041cccb reads EXACTLY `size` bytes into dest in ≤0x80000 chunks
+(0x41cccb..0x41cd13) — **the whole file lands in the bank verbatim: no header
+skip (unlike TOT/DAT's +4), no transform (unlike DAT's ≥0x80→0 sanitize), no
+bounds check against 0x7530** (a hypothetical >30000 B .MIN would clobber the
+following arena allocations — unchecked in the original, never shipped; the
+tightest real file is 29952 B, 48 B under). Consequence for the tail: bytes
+[0x7530·0 …) beyond the file prefix are STALE ARENA — but see D.
+
+**C. The consumer census (whole-objdump grep of 0x4edd9c): exactly 3 .text
+sites** — the alloc store @0x41dac7, the loader read @0x41dce2, and ONE
+runtime reader @0x402acb inside FUN_00402ab8 (0x402ab8..0x402af6) = the 4×4
+territory stamp:
+```
+edx = (edx*5)<<7 + ecx + [0x4ede18]   ; dest = backbuffer + y'*640 + x'
+eax <<= 4                              ; cw*0x10
+esi = [0x4edd9c] + eax                 ; mask = MIN bank + cw*16
+ecx = 4 rows, edx = 4 cols:
+  al = [esi]; al==0 → transparent; else al = xlat EBX (ramp base); [edi] = al
+  row pitch 0x27c (= 640−4)
+```
+The sole caller loop (0x408a8e..0x408ae3, the §7e/§6c.9 MAP overlay pass):
+per tile column × 8 z-planes (ebp = 0,2,..0xE) of the TOT mirror (base
+0x4796bc, 0x1E row pitch — the dword read at 0x4796ba+tile·0x1E+ebp takes the
+mirror word AT 0x4796bc+…+ebp as its upper half, so **the lookup key = the
+raw TOT u16 word of (tile, plane)**): `edx = word@[edx*2+0x45cdd8] sar 16`
+= **cw = LNK_word[type]** (the zone-level MISSIONX.LNK/LNG image at 0x45cdda,
+16384 B = 8192 words; loaded by the same family loader @0x41dd09..0x41dd18
+behind the language gate `cmp [0x4eba1c],1` → .LNG 0x4587f2 else .LNK
+0x4587f7); the resolved word is written back into the live mirror
+@0x4796bc; `cw==0 → stamp skipped` (`test edx,edx; je` @0x408abd); the XLAT
+ramp = **MAPTRAN[territory-variant byte @[tilebase+0x4c420c]]**
+(`mov al,[ebx+0x4c420c]; mov ebx,[eax*4+0x4dd464]` @0x408ac7/0x408acf — §7e
+items 2–4). This pins the FIRST verified runtime consumer of the LNK image's
+permutation: **LNK cycles = rotation/variant links between adjacent 16-B mask
+entries** — FORMATS §5's "next orientation" hypothesis gains its anchor (the
+lookup is a plain table read here, not a chain walk).
+
+**D. Corpus census (all 7 zones × their missions; sizes exact, all files
+16-B entry multiples, all < 0x7530):**
+
+| zone | MIN bytes | entries | reachable nz cw (LNK/LNG/union) | max cw (LNK/LNG) | all-zero entries in union | distinct mask bytes (max) |
+|---|---|---|---|---|---|---|
+| A | 23200 | 1450 | 349 / 337 / 349 | 1356 / 1356 | 9 | 119 (254) |
+| B | 29952 | 1872 | 1180 / 1146 / 1180 | 1868 / 1868 | 11 | 181 (254) |
+| C | 27888 | 1743 | 1054 / 1026 / 1055 | 1741 / 1706 | 12 | 180 (254) |
+| D | 23200 | 1450 | 1008 / 988 / 1008 | 1356 / 1356 | 10 | 176 (254) |
+| E | 23280 | 1455 | 949 / 929 / 954 | 1398 / 1400 | 9 | 154 (254) |
+| F | 15824 | 989 | 632 / 632 / 632 | 960 / 960 | 9 | 170 (254) |
+| G | 29952 | 1872 | 271 / 271 / 271 | 1834 / 1834 | 2 | 100 (223) |
+
+- **ZONEA/MISSIONA.MIN ≡ ZONED/MISSIOND.MIN byte-for-byte** (same content,
+  different reachable sets because the zones' TOT/LNK differ).
+- Reachable = { LNK_or_LNG[type] : type ∈ all TOT u16 words of every mission
+  of the zone, all 8 planes } — a strict SUPERSET of the runtime overlay
+  lookups (the 0x408a49 pass walks a tile window of the mirror; the census
+  takes every word). **Every nonzero reachable cw satisfies cw·16+16 ≤
+  file size in all 7 zones under BOTH the LNK and LNG gates** (tightest:
+  ZONEB 1868·16+16 = 29904 ≤ 29952; ZONEG 1834·16+16 = 29360 ≤ 29952) —
+  **the stale arena tail beyond the file prefix is NEVER read at runtime.**
+- The language gate is NOT cosmetic for this bank: the LNK and LNG images
+  reach DIFFERENT entry sets (A: 349 vs 337; C: union 1055 > either alone;
+  E: union 954 > LNK's 949) — localized map overlays rotate differently.
+- Max TOT type over the whole corpus = 1868 < 8192 words — every lookup
+  stays inside the 16384-B LNK/LNG image too.
+- Per-mission max reachable cw (identity pin): A/M1 1356; B/M1..M5 1868,
+  B/M6 1812, B/M7 1814; C/M1..M4 1706, C/M5 1741, C/M6..M7 1633; D/M1..M5
+  1356, D/M6..M7 1344; E/M1 1398/1400, E/M2 1390/1389, E/M3 1384, E/M4
+  1361, E/M5 1375, E/M6..M7 1347; F/M1..M5 960, F/M6 915, F/M7 809;
+  G/M1 1834 (LNK/LNG where they differ).
+
+**E. The EXD twin is instruction-for-instruction the same source**: alloc
+`mov eax,0x7530; call 0x2e4b2; mov ds:0x107538,eax` @0x2e3e6..0x2e3f0
+(same 0x7530), loader leg @0x2e641..0x2e658 (tag 0x862bd ".MIN", buffer
+0x92f34, cell [0x107538], concat twin 0x2e55a, LoadFile twin 0x2d57c), and
+the reader twin FUN_00012df3 @0x12df3..0x12e31 (identical 4×4/0x27c/XLAT
+body, backbuffer 0x10745c); its sole caller loop 0x197da..0x19841 mirrors
+EXW 0x408a8e..0x408ae3 exactly (mirror 0xac1e2/0xac1e4 at 0x1E pitch, LNK
+lookup `[edx*2+0x10336a] sar 16` = word@0x10336c+2·type, cw==0 skip
+@0x1981d, variant byte 0x9ee34, ramp table 0x92bfc). The 0x107538 census
+is likewise exactly 3 sites.
+
+**F. Engine/differ consequence.** The `.MIN` bank is a PRESENTATION-half,
+verbatim file image (D17): its only consumer is the map-overlay territory
+stamp — backbuffer bytes, never engine state, never in the hash surface.
+Rust retains NOTHING of it (no `min` field anywhere in bedlam-core), and no
+seam is added by this unit: a retained `Vec<u8>` with zero Rust consumers
+would be fabricated parity. The watch row `static-min-bank` (EXW 0x4edd9c /
+EXD 0x107538, extent "bank-sized" = the pinned 0x7530 arena alloc with the
+zone-file prefix 15824..29952 B) keeps its O2 capture form; resolving the
+dbx-plan deferred extent to a PtrCell of 0x7530 is queued separately (the
+file is in flight with unrelated WIP). The S0-10 oracle
+(`static_min_bank_differential.rs`) is the independent whole-corpus
+differential built from this section: loader transcription (verbatim
+prefix, stale tail proven unreachable), the LNK/LNG→cw consumer projection
+over all 37 missions, the stamp semantics, and the corpus identity pins.

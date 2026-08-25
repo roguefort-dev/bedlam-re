@@ -219,6 +219,11 @@ the SAVEGAME file, unrelated to the ZONE* .BLD libraries.
 - **Interpretation (LIKELY):** `LNK[i]` = "next orientation/variant of object i"
   — i.e. rotate-object links over the same ~8192-object index space as CTG/LNG.
   Cycle lengths 3–10 fit 4/8-direction rotations plus multi-part sequences.
+- **First verified runtime consumer (2026-08-25, EXW §7j.62/D149):** the
+  ZONE-level LNK image (loaded to 0x45cdda behind the language gate) is the
+  **type→mask-index lookup** of the map-overlay territory stamps:
+  cw = LNK_word[TOT word], mask entry = the .MIN bank's 16 B at cw·16 —
+  the permutation cycles rotate/variant-link adjacent 4×4 mask entries.
 - **Only 7 distinct contents among 44 files** (per-zone variants; ZONEB/M6
   shares ZONEA/M1's exact table).
 - **What RE must confirm:** what the index space enumerates (sprites? BLD
@@ -669,6 +674,7 @@ Notable **negative** results (things that did NOT fit):
 | TXT | 409×33, 1649×4 (CRLF ASCII) | designer notes: score codes; pad reference | VERIFIED; EDITOR-ONLY (§0.2) | — |
 | BDG | 17100–43644, 282 recs/file | the destructible-object spec library (loader-parsed) | GRAMMAR VERIFIED (EXW 7j.25/7j.32) | — |
 | BLD | 29964–96430 (+6 zone files, A≡F, B≡G) | EDITOR-SOURCE object library (names + template banks); NEVER loaded at runtime | GRAMMAR VERIFIED (§17, EXW 7j.33) — editor-only | head flags; variable tails; zone-level (no BDG sibling) |
+| MIN | 15824–29952 (7 zone files, A≡D) | raw 4×4 territory-mask entries, 16 B/cw, indexed cw = LNK[TOT word] | VERIFIED (loader-anchored, EXW §7j.62) | — |
 | CGR | 132354 (44 files) | self-relative u32 directory; runtime-selected 7: 6 B hdr + raw 1024 B 32×32 maps | directory VERIFIED; codec RESOLVED (raw, EXW 7c) | render-side header use |
 
 ---
@@ -707,3 +713,32 @@ Notable **negative** results (things that did NOT fit):
   inside FUN_004424679 (the open-by-section reader) is not yet decoded;
   the [BOOT_CAMP_*] hint sections (§3 of EXW-SIM / D117) use the same
   container.
+
+## 23. MIN — the map-overlay territory-mask bank (loader-anchored 2026-08-25, EXW §7j.62/D149)
+
+- **Files:** exactly **7, ZONE-scoped** — `MISSION{A..G}.MIN` (the family
+  loader builds `EDITOR\ZONE{X}\MISSION{X}.MIN` via the zone-stem path
+  buffer; every mission load of a zone re-reads the same file). VERIFIED.
+- **Sizes:** A/D 23200, B/G 29952, C 27888, E 23280, F 15824 — all 16-B
+  entry multiples, all under the 0x7530 (30000) arena bank. **ZONEA and
+  ZONED files are byte-identical.** VERIFIED.
+- **Content:** **raw 4×4 mask-entry bytes, 16 B per entry, no header, no
+  codec** — the LoadFile read is verbatim (§7j.62 B). Entry `cw` is the
+  stamp source: byte[r·4+c] == 0 → transparent, else the pixel colour is
+  `MAPTRAN_ramp[variant][byte]` (XLAT through the territory-variant ramp
+  selected by the robot-proximity ring byte). Entries are indexed by
+  **cw = LNK_word[TOT word]** (the zone-level .LNK image, or .LNG under
+  the language gate) — the first verified runtime consumer of the LNK
+  permutation (§5): its cycles rotate/variant-link adjacent mask entries.
+  VERIFIED (EXW FUN_00402ab8 + caller 0x408a8e..0x408ae3; EXD twins
+  0x12df3 / 0x197da..0x19841).
+- **Reachable surface:** per zone only a subset of entries is reachable
+  (union over the zone's missions' TOT words under both LNK and LNG:
+  A 349, B 1180, C 1055, D 1008, E 954, F 632, G 271 nonzero cw); every
+  reachable entry lies inside the file prefix (max cw·16+16 ≤ size in all
+  zones) — the arena tail beyond the file bytes is never read. 9–12
+  reachable entries are all-zero per zone (2 in G). Mask byte domain ≤ 254
+  (ramp index space). VERIFIED (whole-corpus census).
+- **Editor note:** like §0.2's runtime set, .MIN IS runtime-loaded; it is
+  absent from the editor-only list. It has no BDG/BLD sibling — the mask
+  vocabulary is standalone.

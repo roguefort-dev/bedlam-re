@@ -559,7 +559,7 @@ registers, minus the §5g-already-pinned 13).
 | DAT volume ptr 0x4edd58 | ***0x107518** (+4 = u8 planes) | ".DAT" load + the ≥0x7F→0 sanitize sweep + every volume read (TRT stamp, platform plane-B) | [verified] |
 | CGR ptr 0x4edd60 | ***0x107540** | ".CGR" load | [verified] |
 | BIN terrain bank ptr 0x4ede1c | ***0x107434**; header word → **0x11a4a8** (EXW 0x46cdb8) | ".BIN" load + `_DAT_0011a4a8 = *DAT_00107434` | [verified] |
-| MIN bank ptr 0x4edd9c | ***0x107538** | ".MIN" load | [verified] |
+| MIN bank ptr 0x4edd9c | ***0x107538** | ".MIN" load (arena 0x7530, no memset, verbatim zone-file prefix; sole reader = the 4×4 territory stamp twin 0x12df3; loader/consumer re-pinned 2026-08-25 EXW §7j.62/D149) | [verified; re-pinned 2026-08-25 S0-10/D149] |
 | LNK map 0x45cdda | **0x10336c** | mode-indexed ".MAP/.LNK" strings 0x862c2/0x862c7 load (mode cell 0x10768c) | [verified] |
 | PAD slots 0x4e44f8 | **0xf63c** (999×8, size imm 0x1f38) | ".PAD" load `FUN_0002e55a(…, &DAT_000862cc, …, 0x1f38)` | [verified] |
 | map w/h 0x4eddec/0x4eddf0 | **w 0x1074b8 / h 0x10748c** (w·h → 0x1074e4) | TOT header words → cells; every bounds check (platform ring, resolver). SPAN-FORM ASYMMETRY (§7j.60/D137, arithmetic CORRECTED by D138): EXD pair 0x2c apart with h LOW (the O1 0x30 span: h@+0x00, w@+0x2c) vs EXW pair 4 apart — adjacent u32s with w LOW (w 0x4eddec, h 0x4eddf0, stride cell right after) — the O2 capture form = the 8-byte span @0x4eddec, w@+0x00/h@+0x04 (D137's "0x24 apart / 0x28 span / h@+0x24" was an arithmetic impossibility for these cells; corrected 2026-08-24) | [verified] |

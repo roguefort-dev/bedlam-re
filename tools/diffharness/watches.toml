@@ -434,7 +434,7 @@ exw_addr = "0x4edd9c"
 exd_addr = "0x107538"
 indirect = true
 extent = "bank-sized"
-layout = "MIN bank pointer cell (.MIN volume)"
+layout = "MIN bank pointer cell (.MIN volume): ArenaAlloc(0x7530=30000) no-memset, verbatim zone-file prefix (15824..29952 B, 7 files, A==D bytes), NO header/transform; sole consumer = the 4x4 map-overlay territory stamp, mask entry 16 B @ cw*0x10, cw = LNK/LNG word[TOT word], cw==0 transparent; stale tail beyond file prefix proven never read (EXW 7j.62/D149); Rust retention: none - presentation-half (D17), no seam"
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "MIN bank ptr 0x4edd9c"
