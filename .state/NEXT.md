@@ -5,28 +5,28 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-08] independently cover `static-yline-zbase`,
-   including exact staged extents and boundary entries. First statically
-   re-verify the EXW/EXD y_line/z_base producer loops (RE-EXW-SIM 7c.3:
-   `y_line[y] = y*w` at 0x4ea900, h+1 dwords; `z_base[z] = z*w*h` at
-   0x4eaacc, 8 dwords) instruction-by-instruction like D146 did for the
-   PAD bank, then build an independent all-37-mission oracle and compare
-   it byte/field-exact against the Rust target or a test-only
-   representation. Do not reuse production parsers/loaders/helpers; pin
-   corpus identities, bracket corpus reads with `MANIFEST.sha256`, and
-   prove sensitivity with a temporary mutation. If Rust retains no such
-   bank, document the gap and add only the smallest justified seam rather
-   than fabricating parity. DONE when the `static-yline-zbase` row is
+1. [P4/static-parity/S0-09] independently cover the `.BDG`
+   `static-type-table` staged representation. First statically
+   re-verify the EXW/EXD `.BDG` type-table loader (FORMATS §12/§16,
+   the FUN_0041a4f8 family; the 0x4dedf2 table + the §7j.32 consumers
+   +0x46/+0x4A — the +0x3E/+0x42 plane payload is dead editor data)
+   instruction-by-instruction like D146/D147 did, then build an
+   independent all-37-mission oracle and compare it byte/field-exact
+   against the Rust target or a test-only representation. Do not
+   reuse production parsers/loaders/helpers; pin corpus identities,
+   bracket corpus reads with `MANIFEST.sha256`, and prove sensitivity
+   with a temporary mutation. If Rust retains no such bank, document
+   the gap and add only the smallest justified seam rather than
+   fabricating parity. DONE when the `static-type-table` row is
    independently covered, or one concrete code/model gap is queued;
    tests/review/commit.
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  7/27 rows from commits bd91c10, 56918c5, 390acb9, and cd70efe. The
-  20-row remainder is fully assigned: S0-09 (1), S0-10 (1), S0-11 (1),
-  S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1), and S0-17 (1).
-- [P4/static-parity/S0-09] independently cover the `.BDG`
-  `static-type-table` staged representation.
+  8/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe, and
+  920aec2. The 19-row remainder is fully assigned: S0-10 (1), S0-11
+  (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1), and
+  S0-17 (1).
 - [P4/static-parity/S0-10] independently cover the retained `.MIN` bank
   row `static-min-bank`.
 - [P4/static-parity/S0-11] independently cover `static-claim-bank`
@@ -202,6 +202,38 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-08 COMPLETE (worker 2b25b994 claim 1,
+  commits 8a054b3 docs + 920aec2 test, both PUSHED; D147). The
+  `static-yline-zbase` row independently covered: both EXW table-build
+  loops pinned instruction-by-instruction with ONE GLOSS CORRECTED —
+  y_line is h dwords at 0x4ea900 (y·w for y in 0..h−1, bound h·4 under
+  jl @0x41ddbe; the old §7c.3 "h+1 dwords" boundary entry is never
+  staged or read), z_base is exactly 8 dwords at 0x4eaacc..0x4eaae8
+  (z·w·h stored factored; the store-base cells 0x4eaac8/EXD 0x107714
+  are the adjacent screen-scale family, not entries — watches.toml
+  exd_addr/layout corrected). Census: the four stores
+  0x41ddb1/0x41ddd9/0x4466c7/0x4466ef are the ONLY writers; SECOND
+  producer pair @0x4466bd..0x4466f8 (FUN_0044661b, brief-screen
+  loadout via 0x43d1a5: FULLFONT/BRIEF/palettes/SFX + mission
+  TOT/BIN/DAT into fresh arenas) re-runs both loops verbatim, no
+  0x302 copy/sweep/PAD on that path. EXD twin 0x2e713..0x2e74b:
+  y_line 0x8b78c (h dwords), z_base 0x107718..0x107734. Rust retains
+  NO bank (inline z·w·h + y·w + x in Terrain::dat_type) — the row's
+  parity content reduces to the retained dims + exact extents, so the
+  oracle compares a TOT-header-only transcription against a test-only
+  representation from Terrain::size() across all 37 missions and pins
+  the reduction invariant TOT[0..4]==DAT[0..4] on every shipped
+  mission (original reads TOT header, Rust the DAT header), dims
+  {25×75 ZONEA/M1, 100×100 ×35, 100×25 ZONEG/M1}, sizes 4+8·w·h, the
+  volume identity z_base[7]+y_line[h−1]+(w−1)==8·w·h−1, zero anchors.
+  No production seam (the tables are pure (w,h) functions; retaining
+  them would be fabricated parity). Mutation sensitivity: w bump moves
+  exactly y_line[1..h]/z_base[1..8] and fails the differential; h bump
+  grows the y_line extent by one over a byte-identical prefix; DAT
+  header bump → loader rejects. Workspace tests green, fmt+clippy
+  clean, MANIFEST clean pre+post (un-piped root-CWD checks), no
+  Ghidra run (objdump-only). Strict S0 coverage 8/27; next: S0-09
+  `static-type-table` (queued as item 1).
 - 2026-08-25: P4/static-parity/S0-07 COMPLETE (worker f25d060f claim 1,
   commits 848e2f7 + cd70efe, both PUSHED; D146). The retained PAD-slot
   bank row `static-pad-slots` independently covered: EXW staging loop

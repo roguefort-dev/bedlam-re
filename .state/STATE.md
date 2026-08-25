@@ -1,5 +1,20 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D147 S0-08 COMPLETE (worker 2b25b994 claim 1, commits
+    8a054b3 docs + 920aec2 test, both PUSHED): the DAT-addressing table
+    row `static-yline-zbase` is independently covered — both EXW build
+    loops re-verified instruction-by-instruction (y_line = h dwords at
+    0x4ea900, correcting the old "h+1" gloss; z_base = 8 dwords at
+    0x4eaacc; the store-base cells are NOT entries; a second producer
+    pair 0x4466bd..0x4466f8 in the brief-screen loadout path + the EXD
+    twin 0x2e713..0x2e74b are verbatim) and an all-37-mission
+    TOT-header-only oracle compared against a test-only representation
+    of the Rust retained dims, pinning the TOT==DAT header agreement
+    the reduction stands on. Rust retains no such bank (inline
+    indexing) — no production seam added. Strict S0 independent
+    coverage is 8/27 rows; next slice: S0-09 `static-type-table`. The
+    responsive-capture WIP remains uncommitted and preserved.
+
   - 2026-08-25 D146 S0-07 COMPLETE (worker f25d060f claim 1, commits
     848e2f7 docs + cd70efe test, both PUSHED): the retained PAD-slot
     bank row `static-pad-slots` is independently covered — the EXW
