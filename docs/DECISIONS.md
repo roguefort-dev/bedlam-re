@@ -4713,3 +4713,74 @@ workspace release tests green (bedlam-game incl. the new 7-oracle +
 canonical_dump_gate 13 + differ_gate 4 corpus lanes, diffharness,
 bedlam-core), fmt + clippy clean, MANIFEST.sha256 clean before AND
 after. (worker 77b1c512 claim 1)
+
+## D156 — 2026-08-25: P4/static-parity/S0-14 — the s0-trigger/frame-counter ordering RESOLVED + the DYNAMIC-ONLY placement class (and the D81 "no counter reset" claim corrected): the two rows close by MECHANISM, tracked separately from static closure
+
+**(1) THE ORDERING (RE-EXW-SIM §7j.66, objdump-only).** The EXW
+MissionShell loop tail decoded instruction-for-instruction: the P-pause
+gate `cmp [0x4edc34]` @0x4485de (MP never pauses), the NORMAL-path
+PresentEnd CALL @**0x4486c9** — THE O2/W11 dump point — the pause-path
+present @0x44861f (draw PAUSED, spin on the latch, unpause, then `jmp`
+PAST the normal call), and the register-form counter increment
+@0x4486ce-da ALWAYS after the flip: exactly one present + exactly one
+increment per loop pass, both paths. PresentEnd (FUN_00425a03) has
+**62 direct call sites** in .text — a BP at the FUNCTION ENTRY the
+registry's `exw_addr` names fires on every menu/loading/cinematic
+present on the way to the mission, so it is NOT a usable trigger; the
+call-site pin resolves the W11 deferral, and the W11 O2 plan regen
+moves `trigger.site` 0x00425A03 → 0x004486C9 (the registry row keeps
+the function entry as the canon-of-record address — plan-neutral, no
+plan bytes moved in this unit). The EXD twin (0x5a6eb CALL +
+0x5a6f0-fd register-form inc, RE-EXD-MAP §2) has IDENTICAL order.
+
+**(2) THE D81 CORRECTION.** "NO counter reset exists (14 INC sites
+incl. menu screens)" is WRONG on the reset half: an INC-form census
+misses mov stores (the trap the W1 EXD census documented for the same
+cell family). The eight BOUNDED CINEMATIC screens each RESET the
+counter to 0 (`xor reg; mov [0x46ae68],reg`) and reuse it as their
+duration timer, exiting at counter == bound {100, 200, 300}; the five
+interactive menu screens count cumulatively (inc BEFORE the present
+there — the opposite in-loop order). The 14 increment sites stand
+(13 INC + the mission-tail register form). Consequence: the
+mission-entry value C₀ = a DETERMINISTIC FUNCTION OF THE SCRIPTED
+MENU WALK, not a boot-frame total — and the T2 budget consequence is
+UNCHANGED (deterministic per script, so double-run compares it
+byte-exact; E-vs-O1 never bit-compares it). differ.rs's alignment
+note corrected in place; the EXD menu-screen reset family is recorded
+as an open cross-check (not blocking — the EXW side is the canon of
+record and a live S0W anchor stop pins C₀ empirically).
+
+**(3) THE DYNAMIC-ONLY PLACEMENT (the S0-14 classification ask).**
+`s0-trigger` (tier S0, extent 0 — the dump point itself) and
+`frame-counter` (T0 — the timing cell) carry NO statically-closeable
+state: the trigger row has no comparable bytes at all, and the counter
+is the deliberately-never-bit-compared T2 cell. They close under the
+new **dynamic-only placement** disposition — coverage = the ordering
+pin + the machinery built on it (the capture plans arm the anchor BP;
+the dump schema aligns by `frame_no`; the differ classes the row
+`T2Reported`; E already emits the mission-relative pre-increment
+`sim.frame()−1`, so O1/O2 = E + C₀). Strict S0 accounting becomes:
+**22 rows static-closed + 2 dynamic-only dispositioned + 3 static
+remaining (S0-15 static-order-table, S0-16 static-player-type, S0-17
+static-cursor-clamp) = 27** — the two classes are reported
+separately from here on; "static closure" never counts these rows.
+
+**(4) VERIFICATION.** `engine/bedlam-game/tests/
+static_frame_counter_differential.rs` (the S0-07..S0-13 static-oracle
+convention, two halves): the original-side transcription (the tail as
+a state machine — pre-increment dump, one inc per pass, the pause pass
+presents but does not fire the BP; the census tables — 13+1 increments,
+the eight (reset, cmp, bound, inc) cinematic rows, 62 call sites; the
+walk model falsifying the boot-total reading of C₀) + the E-side/
+differ classification (the canonical S0 run asserts counter ==
+frame_no strictly from 0, 4 B, the anchor = the first mission tick;
+the TRANSCRIBED O1 model `counter = C₀ + k` vs E through the differ
+lands exactly on `Class::T2Reported` — PassWithNotes, zero
+engine-bug/structural/coverage findings, frame-counter the only
+reporting row; the identical-script double-run compares byte-exact).
+watches.toml s0-trigger/frame-counter layout/note re-anchored to
+§7j.66 (plan-neutral — layout strings never feed the capture plans;
+the capture-plan deltas in the tree remain the unrelated O1-boot WIP,
+preserved untouched; this unit staged only its own paths).
+MANIFEST.sha256 clean before AND after (no corpus read). (worker
+9c711d0c claim 1)

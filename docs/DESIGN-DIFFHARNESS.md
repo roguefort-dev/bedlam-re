@@ -409,7 +409,7 @@ STRUCTURAL missing-on-E, never silently skipped).
 
 | watch id | canonical bytes (E) | source engine state |
 |---|---|---|
-| frame-counter | u32 | mission frame PRE-increment at the tail (`sim.frame()−1`; O1 reads the same pre-increment word at its tail — the registry row's dump-point ordering anchor) |
+| frame-counter | u32 | mission frame PRE-increment at the tail (`sim.frame()−1`; O1 reads the same pre-increment word at its tail — the registry row's dump-point ordering anchor). **ORDERING + C₀ PINNED (S0-14/D156, §7j.66):** both tails flip-then-increment (EXW call 0x4486c9 → inc 0x4486ce-da; EXD 0x5a6eb → 0x5a6f0-fd), so the dumped value = C₀ + (k−1) with C₀ = the scripted menu walk's leftover (the eight cinematic screens RESET the counter to 0 and count to their 100/200/300 bound — the D81 "no reset" claim corrected; the mission loop itself never resets) → **O1/O2 value = E value + C₀**, a per-script constant the differ's T2 class absorbs. DYNAMIC-ONLY row (D156): closed by placement, never by static closure |
 | rng-state-a | u64 | MissionSim PCG32 raw state (channel-native state word; T3-statistical class — never bit-compared) |
 | rng-state-b | u64 | MissionScene RandB-stand-in PCG32 raw state (same class) |
 | score / money | u32 / u32 | `MissionScene::campaign()` (0 / 3500 fresh — the §7j.64/C name-entry seed 4000−500·d at the boot-default difficulty 1, **S0-12b/D154**; `boot difficulty=d` overrides d and re-seeds through the engine's own `menu::start_score`; the pre-seam fresh value 4000 assumed the mis-modeled d=0 default) |
@@ -437,7 +437,11 @@ escape-counters, tile-claims); s0-trigger (S0); every TS row except
 static-map-wh (the engine parses the volumes into internal forms and
 does not retain raw bytes); all T4 (event capture); all TI (the E
 injection surface is the scenario step list, not watched keystore
-bytes). **AMENDED 2026-08-23 (D136):** sfx-master-gate and
+bytes). **s0-trigger NOTE (S0-14/D156):** this row is not an E-gap to
+close — it is the DUMP POINT itself (extent 0, a breakpoint with no
+comparable bytes). It closes by the DYNAMIC-ONLY placement: the
+ordering pin (§7j.66 — both tails' call sites + the
+flip-then-increment contract) + the capture machinery arming it. **AMENDED 2026-08-23 (D136):** sfx-master-gate and
 no-extract-latch LEAVE the list — E emits both now (the two table
 rows above; the W6-followup to D133/D134). The same amendment
 corrects the list for staleness, history preserved: the D85-era list

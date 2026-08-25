@@ -39,7 +39,11 @@
 //!   tiebreak dump is supplied).
 //!
 //! **Alignment**: frame-indexed by the record `frame_no` (NOT the
-//! frame-counter watch — the O1 counter never resets, RE-EXD-MAP §8).
+//! frame-counter watch — the O1 counter carries the mission-entry
+//! constant C₀ = the scripted menu walk's leftover, deterministic per
+//! script but not mission-relative; it never resets inside the mission
+//! loop, RE-EXW-SIM §7j.66 — the menu-path resets that produce C₀ are
+//! recorded there).
 //! A constant shift ≤8 is detected, applied, and reported as a finding
 //! (§6 anchor-event alignment); anything worse is a STRUCTURAL
 //! misalignment and only the common frames compare.
