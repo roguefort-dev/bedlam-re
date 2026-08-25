@@ -9646,10 +9646,12 @@ stamp — backbuffer bytes, never engine state, never in the hash surface.
 Rust retains NOTHING of it (no `min` field anywhere in bedlam-core), and no
 seam is added by this unit: a retained `Vec<u8>` with zero Rust consumers
 would be fabricated parity. The watch row `static-min-bank` (EXW 0x4edd9c /
-EXD 0x107538, extent "bank-sized" = the pinned 0x7530 arena alloc with the
-zone-file prefix 15824..29952 B) keeps its O2 capture form; resolving the
-dbx-plan deferred extent to a PtrCell of 0x7530 is queued separately (the
-file is in flight with unrelated WIP). The S0-10 oracle
+EXD 0x107538, extent "0x7530 (30000 B)" = the pinned 0x7530 arena alloc with
+the zone-file prefix 15824..29952 B) keeps its O2 capture form; the dbx-plan
+deferred extent is RESOLVED to `Form::PtrCell { cell, len_expr: "0x7530" }`
+(D152, S0-12a — landed after this section's queue note; the row left the
+plan `_deferred` list on both channels, `min_ptr` resolve symbol). The S0-10
+oracle
 (`static_min_bank_differential.rs`) is the independent whole-corpus
 differential built from this section: loader transcription (verbatim
 prefix, stale tail proven unreachable), the LNK/LNG→cw consumer projection

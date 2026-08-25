@@ -4462,3 +4462,41 @@ ZONEB/M1 tile in S0..S8 and the chains moved ONLY via the TS row.
 The refusal semantics remain proven by the unit gate test (future
 scenarios staging on claimed tiles will diverge from O1 exactly as
 the original does). (worker ab778f23 claim 1)
+
+## D152 — 2026-08-25: P4/static-parity/S0-12a — dbx-plan `static-min-bank` extent RESOLVED to the pinned PtrCell 0x7530 (the row leaves the plan `_deferred` set on both channels; no strict-coverage delta)
+
+**(1) The resolution.** The bank extent pinned by §7j.62/D149 (the
+`.MIN` ArenaAlloc `mov eax,0x7530` — 30000 B, stale tail beyond the
+verbatim zone-file prefix proven never read) now drives the capture
+plan: dbx-plan's deferred arm
+`"static-cgr-volume" | "static-bin-terrain" | "static-min-bank"`
+splits, and `static-min-bank` resolves to
+`Form::PtrCell { cell, len_expr: "0x7530" }` under a new dedicated arm
+guarding `row.extent == "0x7530 (30000 B)"` (the watches.toml extent
+moves off "bank-sized" to that pinned form — the registry stays the
+fail-loud source: a moved pin dies at plan compile, never silently).
+New resolve symbol `min_ptr` (EXW 0x4edd9c / EXD 0x107538) joins
+`claim_ptr`/`tot_ptr`/`dat_ptr`/`obj_ptr` in both PtrCell maps; the
+emitted anchor row is
+`{ "id": "static-min-bank", "addr": "$min_ptr", "len": "0x7530" }`.
+
+**(2) Blast radius.** All 13 committed capture-plan artifacts
+regenerated (S0..S8, S0W, S1-o2): the `_deferred` entry
+"static-min-bank (bank-sized)" is gone, the anchor row + resolve row
+added (O1 anchor rows +1 per TS-bearing scenario, deferred −1: S0/S0W
+21/5, S1/S2/S4..S7 38 anchor with 5 or 19 deferred by tier shape,
+S3/S8 40/8, o2 37/6). Test count asserts re-pinned (s0 21/5, s1
+21+17/5, o2 37/6 symmetry, s2 21+17, s3 +10/8, s4 +10/19) and a new
+min_ptr/0x7530 span assert rides the s0 artifact pins.
+`static-cgr-volume`/`static-bin-terrain` stay deferred — their sizes
+remain unpinned. No engine/differ code touched: this is infra only
+(the O1-boot WIP in dbx-plan.rs/capgen is a different owner's
+in-flight unit and was deliberately NOT staged).
+
+**(3) Coverage bookkeeping.** NOT an S0 strict-coverage row (same class
+as the S0-11b engine hop and D150's oracle hop — infra, not a row):
+`static-min-bank` remains CLOSED original-side only (S0-10/D149; Rust
+retention deliberately none, presentation-half D17). Strict S0
+independent coverage stays 11/27. RE-EXW-SIM §7j.62/F updated: the
+"queued separately" note now records the resolution landed. (worker
+ee030ded claim 1)

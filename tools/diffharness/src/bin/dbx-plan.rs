@@ -868,8 +868,40 @@ fn resolve_row(row: &diffharness::Watch, ch: Channel) -> Result<Option<RowPlan>,
                 len_expr: format!("{len}"),
             })
         }
+        // Pinned: the .MIN bank is the ArenaAlloc(0x7530 = 30000 B)
+        // verbatim zone-file image (RE-EXW-SIM sec 7j.62 / D149) — the
+        // stale tail beyond the file prefix is proven never read, so
+        // the full arena allocation is the extent.
+        "static-min-bank" => {
+            if !row.indirect {
+                return Err(die("static-min-bank lost its indirect flag".into()));
+            }
+            let cell = exd_cells(ch.src(row)).first().copied().ok_or_else(|| {
+                die(format!(
+                    "static-min-bank has no parsable {} address: {:?}",
+                    if ch == Channel::O1 {
+                        "exd_addr"
+                    } else {
+                        "exw_addr"
+                    },
+                    ch.src(row)
+                ))
+            })?;
+            if row.extent != "0x7530 (30000 B)" {
+                return Err(die(format!(
+                    "static-min-bank extent {:?} changed from the pinned 0x7530 \
+                     ArenaAlloc size (7j.62/D149): update dbx-plan if the pinned \
+                     size moved",
+                    row.extent
+                )));
+            }
+            plan(Form::PtrCell {
+                cell,
+                len_expr: "0x7530".into(),
+            })
+        }
         // Deferred: extent formulas not yet pinned to RE facts.
-        "static-cgr-volume" | "static-bin-terrain" | "static-min-bank" => {
+        "static-cgr-volume" | "static-bin-terrain" => {
             if row.extent != "bank-sized" {
                 return Err(die(format!(
                     "row {id} extent {:?} changed from bank-sized: if the bank \
@@ -1388,6 +1420,7 @@ fn watch_row_json(p: &RowPlan, ch: Channel) -> String {
                 "static-tot-volume" => "tot_ptr",
                 "static-dat-volume" => "dat_ptr",
                 "static-claim-bank" => "claim_ptr",
+                "static-min-bank" => "min_ptr",
                 "object-instances" => "obj_ptr",
                 _ => unreachable!("emit_plan gates the PtrCell ids"),
             };
@@ -1620,6 +1653,7 @@ fn emit_plan_channel(
                 "static-tot-volume" => "tot_ptr",
                 "static-dat-volume" => "dat_ptr",
                 "static-claim-bank" => "claim_ptr",
+                "static-min-bank" => "min_ptr",
                 "object-instances" => "obj_ptr",
                 other => {
                     return Err(die(format!(
@@ -2061,14 +2095,15 @@ mod tests {
         let emitted = emit_plan(&scen, &reg).unwrap();
         // T0: 11 rows, 0 gaps (difficulty closed by the W5-followup,
         // sfx-master-gate by the D134 twin census) -> 11 per-frame.
-        // TS: 15 rows, 6 deferred -> 9 anchor-only + T0 rides the
-        // anchor too: 11 + 9 = 20 anchor rows.
+        // TS: 15 rows, 5 deferred (min-bank pinned 0x7530 by
+        // 7j.62/D149) -> 10 anchor-only + T0 rides the
+        // anchor too: 11 + 10 = 21 anchor rows.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11, "all T0 rows (gap set empty since D134)");
-        assert_eq!(anchor_count, 20, "T0 + resolved TS rows");
-        // 6 TS extent gaps (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 6);
+        assert_eq!(anchor_count, 21, "T0 + resolved TS rows");
+        // 5 TS extent gaps (the T0 EXD gap set is empty since D134)
+        assert_eq!(emitted.deferred.len(), 5);
         // every emitted id is a real registry row of the scenario tiers
         for id in row_ids(&emitted.json) {
             let row = reg
@@ -2114,17 +2149,18 @@ mod tests {
         // closed by the W5-followup, blink-cursor by D132,
         // no-extract-latch by D133) = 17 resolved (the
         // move-target-words 0x60 span filled by W7-followup2, D90).
-        // T0: 11 per-frame + TS: 9 anchor-only (gap set empty since
-        // D134: sfx-master-gate now emits like every other T0 row).
+        // T0: 11 per-frame + TS: 10 anchor-only (gap set empty since
+        // D134: sfx-master-gate now emits like every other T0 row;
+        // min-bank resolved by 7j.62/D149).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17, "all T0 rows + T1 resolved");
-        assert_eq!(anchor_count, 20 + 17, "T0 + TS + T1 rows");
+        assert_eq!(anchor_count, 21 + 17, "T0 + TS + T1 rows");
         assert_eq!(
             emitted.deferred.len(),
-            6,
-            "6 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
-             sfx-master-gate resolved by D90/D132/D133/D134)"
+            5,
+            "5 S0-shape TS deferrals (move-target, blink-cursor, no-extract-latch AND \
+             sfx-master-gate resolved by D90/D132/D133/D134; min-bank pinned by 7j.62/D149)"
         );
         // count-cell resolve rows exist with the registry-derived cells
         // (obj_count is GONE — D109: the object row dumps the FULL
@@ -2257,6 +2293,14 @@ mod tests {
         assert!(emitted
             .json
             .contains("\"name\": \"claim_ptr\", \"addr\": \"0x0046AF58\""));
+        // the pinned MIN-bank resolve row + span (7j.62/D149: the
+        // 0x7530 ArenaAlloc image, EXW cell 0x4edd9c)
+        assert!(emitted
+            .json
+            .contains("\"name\": \"min_ptr\", \"addr\": \"0x004EDD9C\""));
+        assert!(emitted.json.contains(
+            "{ \"id\": \"static-min-bank\", \"addr\": \"$min_ptr\", \"len\": \"0x7530\" }"
+        ));
         // bank rows keep their forms on the EXW cells
         assert!(emitted.json.contains(
             "{ \"id\": \"robot-bank\", \"addr\": \"0x004C69E4\", \"len\": \"$robot_count*0xA8\" }"
@@ -2297,11 +2341,11 @@ mod tests {
             );
         }
         // row-set symmetry with O1 minus the EXD-only row: the same
-        // 28 per-frame rows, 37-1 anchor rows (static-cursor-clamp is
-        // EXD-only), 6+1 deferred
+        // 28 per-frame rows, 38-1 anchor rows (static-cursor-clamp is
+        // EXD-only), 5+1 deferred
         assert_eq!(count_rows(&emitted.json, "watches"), 28);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 36);
-        assert_eq!(emitted.deferred.len(), 7);
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 37);
+        assert_eq!(emitted.deferred.len(), 6);
         assert!(emitted
             .deferred
             .iter()
@@ -2372,12 +2416,12 @@ mod tests {
         assert_eq!(scen.markers, vec![(18, 73, 1)], "the D91 staging key");
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // Same tier set as S1 -> the same row shape (20 anchor TS/T0 +
+        // Same tier set as S1 -> the same row shape (21 anchor TS/T0 +
         // 17 T1; 11 T0 + 17 T1 per-frame — gap set empty since D134).
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17);
-        assert_eq!(anchor_count, 20 + 17);
+        assert_eq!(anchor_count, 21 + 17);
         // The order step's inject rows: frame 1 (the first mission
         // boundary), the three i32-LE cells of the order-target triple
         // (21, 73, 1) at the registry-derived cells.
@@ -2539,14 +2583,14 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T2"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 9.
+        // T0 11 + T1 17 + T2 2 per-frame; anchor adds TS 10.
         let anchor_count = count_rows(&emitted.json, "anchor_watches");
         let frame_count = count_rows(&emitted.json, "watches");
         assert_eq!(frame_count, 11 + 17 + 2);
-        assert_eq!(anchor_count, frame_count + 9);
-        // deferred: the 6 S1-shape TS gaps + the 3 unaliased T2 rows
+        assert_eq!(anchor_count, frame_count + 10);
+        // deferred: the 5 S1-shape TS gaps + the 3 unaliased T2 rows
         // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 9);
+        assert_eq!(emitted.deferred.len(), 8);
         // the 8 command volleys compile to inject rows (the S3 frame
         // schedule), and the loadout seam records never-fabricated
         assert_eq!(emitted.inject_count, 8);
@@ -2583,12 +2627,12 @@ mod tests {
         assert!(scen.tiers.iter().any(|t| t == "T3"));
         let reg = registry();
         let emitted = emit_plan(&scen, &reg).unwrap();
-        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 9.
+        // T0 11 + T1 17 per-frame (T3 adds none); anchor adds TS 10.
         assert_eq!(count_rows(&emitted.json, "watches"), 11 + 17);
-        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 9);
-        // deferred: the 6 S1-shape TS gaps + ALL 14 T3 rows
+        assert_eq!(count_rows(&emitted.json, "anchor_watches"), 11 + 17 + 10);
+        // deferred: the 5 S1-shape TS gaps + ALL 14 T3 rows
         // (the T0 EXD gap set is empty since D134)
-        assert_eq!(emitted.deferred.len(), 20);
+        assert_eq!(emitted.deferred.len(), 19);
         for gap in ["debris-stager (128*0x30)", "splash-records (250*0xA)"] {
             assert!(
                 emitted.deferred.iter().any(|d| d == gap),

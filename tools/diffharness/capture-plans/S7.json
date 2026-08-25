@@ -36,6 +36,7 @@
     { "name": "obj_ptr", "addr": "CS:00119584", "len": 4 },
     { "name": "tot_ptr", "addr": "CS:00107454", "len": 4 },
     { "name": "dat_ptr", "addr": "CS:00107518", "len": 4 },
+    { "name": "min_ptr", "addr": "CS:00107538", "len": 4 },
     { "name": "claim_ptr", "addr": "CS:00119564", "len": 4 },
     { "name": "robot_count", "addr": "CS:0011958C", "len": 4 },
     { "name": "trt_count", "addr": "CS:0011949C", "len": 4 }
@@ -72,6 +73,7 @@
     { "id": "static-type-table", "addr": "CS:00108428", "len": 21996 },
     { "id": "static-tot-volume", "addr": "CS:$tot_ptr", "len": "4+16*$map_w*$map_h" },
     { "id": "static-dat-volume", "addr": "CS:$dat_ptr", "len": "4+8*$map_w*$map_h" },
+    { "id": "static-min-bank", "addr": "CS:$min_ptr", "len": "0x7530" },
     { "id": "static-pad-slots", "addr": "CS:0000F63C", "len": 7992 },
     { "id": "static-map-wh", "addr": "CS:0010748C", "len": 48 },
     { "id": "static-claim-bank", "addr": "CS:$claim_ptr", "len": "10000" },
@@ -119,7 +121,6 @@
   "_deferred": [
     "static-cgr-volume (bank-sized)",
     "static-bin-terrain (bank-sized)",
-    "static-min-bank (bank-sized)",
     "static-lnk-map (map-sized)",
     "static-order-table (0x62-stride rows)",
     "static-yline-zbase (table-sized)",
