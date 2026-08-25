@@ -5,20 +5,62 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
-   config rows explicitly: `score`, `money`, `difficulty`, `zone`,
-   `mission`, `mode`, `linear-mission-m`, and `sfx-master-gate`. NOTE:
-   the worktree carries interrupted O1-boot WIP (dbx-plan.rs boot_trap/
-   entry + dbx-capgen.py + dosbox-harness.sh + RUNTIME.md + the
-   capture-plan boot_trap deltas, owner ≠ current worker): inspect,
-   preserve, adopt per AGENTS shared-worktree rules; stage explicit
-   task paths only. NOTE also: dbx-plan.rs at HEAD now resolves
-   static-min-bank (545e7f6/D152) — the WIP worktree files already
-   carry BOTH that resolution and the boot_trap changes, so a WIP
-   regeneration diffs against HEAD as boot_trap-only.
+1. [P4/static-parity/S0-12b] close the three named S0-12 gaps (D153,
+   the queued seam unit): re-pin the canonical FRESH session to the
+   GameMain boot defaults — difficulty 1 (0x41c14a, §7j.64/A) → money
+   3500 via the existing start_score seam (0x43aaca, §7j.64/C) — and
+   emit `linear-mission-m` through the derived-cell formula
+   clamp(5·(zone−2)+mission−1, 1, 26) (0x41c534, §7j.64/D) instead of
+   `episode().linear()`. A deliberate FULL-CHAIN re-baseline (the
+   D136/D151 machinery: every canonical chain pin + the synthetic
+   digest + the differ_gate table + the §6a docs) with its own
+   decision entry; record the D108 supersession note (its
+   "never-fabricated linear seam" stance predates the §7j.64 decode).
+   The three gap assertions in
+   `static_campaign_config_differential.rs` flip visibly — that test
+   is the acceptance gate. Check the grammar's `boot difficulty=`
+   scenarios (S0W/others) for the new default's blast radius before
+   re-pinning. NOTE: the worktree carries interrupted O1-boot WIP
+   (dbx-plan.rs boot_trap/entry + dbx-capgen.py + dosbox-harness.sh +
+   RUNTIME.md + the capture-plan boot_trap deltas, owner ≠ current
+   worker): inspect, preserve, adopt per AGENTS shared-worktree rules;
+   stage explicit task paths only. NOTE also: dbx-plan.rs at HEAD now
+   resolves static-min-bank (545e7f6/D152) — the WIP worktree files
+   already carry BOTH that resolution and the boot_trap changes, so a
+   WIP regeneration diffs against HEAD as boot_trap-only.
 
 ## Done
-1. DONE (2026-08-25, worker ee030ded claim 1, commit 545e7f6,
+1. DONE (2026-08-25, worker 0f91b0d7 claim 1, commits cda35f2 +
+   ea745fd, PUSHED): P4/static-parity/S0-12 the eight fresh-session
+   T0 campaign/config rows independently covered — FIVE closed both
+   sides, THREE named gaps queued (D153, RE-EXW-SIM §7j.64). (a) RE
+   first (cda35f2): whole-objdump write-form censuses per cell +
+   instruction-level decodes — the GameMain boot head (mode:=0
+   0x41c145, DIFFICULTY:=1 0x41c14a — the §7j.15 "campaign-start"
+   gloss CORRECTED), the episode slot boot (zone:=1/mission:=1/
+   score:=FUN_0043a5fc-fresh-0), the name-entry fresh arm (money :=
+   4000−500·d, 0x43aaca — fresh boot = 3500), the linear-mission-m
+   DERIVATION clamp 5·(zone−2)+mission−1 ∈[1,26] (0x41c520..556, 3
+   writes all GameMain — NOT a counter; fresh = 1), and the SOUND
+   loader default 1 (bounds [0,1] default ecx=1). (b) Oracle
+   (ea745fd): `bedlam-game/tests/static_campaign_config_differential.rs`
+   (first static oracle in bedlam-game — the rows' E half IS the
+   canonical harness): the original-side transcription consts + the
+   linear derivation spot table + all-37-mission census (3 floors,
+   max 26, sum 482) + the E-side comparison on the S0 anchor —
+   score/mission/mode/zone/sfx CLOSED; difficulty/money/linear pinned
+   LOUD with the original value named in each message (S0-12b flips
+   them); the boot-key seam proof (boot difficulty=1 → money 3500
+   through start_score — the gap is the DEFAULT, not the mechanism).
+   (c) watches.toml money/difficulty/linear layout notes corrected
+   (plan-neutral — zero plan bytes moved). (d) Coverage: strict S0
+   now 19/27 rows; the mandated 27-row registry re-audit CLOSED the
+   predecessor's off-by-one (27 = s0-trigger + 11 T0 + 15 TS;
+   remainder was 16 at D152, now 8: S0-13..S0-17). Verified: 35
+   release suites green (bedlam-game + diffharness + bedlam-core),
+   fmt + clippy clean, MANIFEST clean pre+post. The unrelated
+   O1-boot WIP untouched. Queued: S0-12b (the seam unit) as item 1.
+2. DONE (2026-08-25, worker ee030ded claim 1, commit 545e7f6,
     PUSHED): P4/static-parity/S0-12a dbx-plan `static-min-bank` extent
     RESOLVED (D152) — the deferred arm
     `"static-cgr-volume" | "static-bin-terrain" | "static-min-bank"`
@@ -80,18 +122,18 @@ renumbered queue keeps every open item claimable by number).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  11/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
-  920aec2, fcb8fb2, cec30a7, 2646ce8, and 76a14c6. The remainder is
-  assigned across the named S0-12..S0-17 slices (8+3+2+1+1+1 rows)
-  plus the S0-11b seam hop above (engine staging, not a row) and the
-  S0-12a infra hop above (dbx-plan extent, not a row). NOTE: the
-  predecessor's "18-row remainder" tally vs its 17-row assignment
-  list was already off by one — re-audit the 27-row registry when
-  S0-12 lands. `static-min-bank` (S0-10) is CLOSED original-side
-  only: Rust retention deliberately none — presentation-half D17;
-  the display-phase producer stays queued, not covered (D149); its
-  dbx-plan extent infra hop landed separately as S0-12a (545e7f6,
-  D152 — not a row).
+  19/27 rows (D153) — the 11 TS rows from bd91c10, 56918c5, 390acb9,
+  cd70efe, 920aec2, fcb8fb2, cec30a7, 2646ce8, 76a14c6 + the eight
+  T0 campaign/config rows from ea745fd (S0-12). The 27-row registry
+  re-audit CLOSED the predecessor's off-by-one: 27 = tier-S0
+  s0-trigger + 11 T0 + 15 TS; the remainder (8 rows) is assigned
+  across S0-13..S0-17 (3+2+1+1+1). `static-min-bank` (S0-10) is
+  CLOSED original-side only: Rust retention deliberately none —
+  presentation-half D17; the display-phase producer stays queued,
+  not covered (D149); its dbx-plan extent infra hop landed separately
+  as S0-12a (545e7f6, D152 — not a row). S0-12's three named gaps
+  (difficulty/money fresh defaults, the linear derived-cell) are
+  queued as the S0-12b seam unit at the head of Now.
 - [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
   and `static-dither-noise` initialization/evolution without treating
   Rust determinism as the oracle.

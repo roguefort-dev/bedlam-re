@@ -1,5 +1,30 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D153 S0-12 COMPLETE (worker 0f91b0d7 claim 1, commits
+    cda35f2 docs + ea745fd test, both PUSHED): the eight fresh-session
+    T0 campaign/config rows independently covered (score, money,
+    difficulty, zone, mission, mode, linear-mission-m, sfx-master-gate)
+    — FIVE closed both sides, THREE named gaps queued as the S0-12b
+    seam unit. RE: §7j.64 decoded the whole boot/derive chain (mode:=0
+    0x41c145 + DIFFICULTY:=1 0x41c14a — the §7j.15 gloss corrected;
+    zone/mission:=1 + score:=0 in the slot boot; money :=
+    4000−500·d at 0x43aaca so fresh boot = 3500; linear-mission-m is a
+    DERIVED cell clamp(5·(zone−2)+mission−1, 1, 26) at 0x41c534, not
+    a counter — fresh = 1; the SOUND loader default 1). Oracle:
+    bedlam-game/tests/static_campaign_config_differential.rs (first
+    static oracle on the game side — the rows' E half IS the canonical
+    harness): transcription + derivation spot table + all-37-mission
+    census + the S0 anchor comparison (5 closed, 3 LOUD gaps with the
+    original value named in each assertion; the boot-key seam proves
+    difficulty=1 → money 3500 is expressible today). watches.toml
+    layout notes corrected (plan-neutral). Strict S0 coverage
+    19/27; the mandated registry re-audit closed the predecessor's
+    off-by-one (27 = s0-trigger + 11 T0 + 15 TS; remainder 8 =
+    S0-13..S0-17). 35 release suites green, fmt/clippy/MANIFEST
+    clean. The unrelated O1-boot WIP untouched and still intact.
+    Next head: S0-12b (the fresh-default + linear-derived-cell seam,
+    a deliberate full-chain re-baseline).
+
   - 2026-08-25 D152 S0-12a COMPLETE (worker ee030ded claim 1, commit
     545e7f6, PUSHED): the dbx-plan `static-min-bank` extent RESOLVED —
     the deferred arm split, the row now emits
