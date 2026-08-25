@@ -4500,3 +4500,76 @@ retention deliberately none, presentation-half D17). Strict S0
 independent coverage stays 11/27. RE-EXW-SIM §7j.62/F updated: the
 "queued separately" note now records the resolution landed. (worker
 ee030ded claim 1)
+
+## D153 — 2026-08-25: P4/static-parity/S0-12 — the eight fresh-session T0 campaign/config rows independently covered (score, money, difficulty, zone, mission, mode, linear-mission-m, sfx-master-gate): FIVE closed both sides, THREE named gaps queued as the S0-12b seam unit (strict S0 coverage 19/27)
+
+**(1) RE first (cda35f2, RE-EXW-SIM §7j.64).** Whole-objdump
+write-form censuses per cell + instruction-level decode of every
+writer block, all [verified] against ghidra-project/exw-text-objdump.txt:
+(a) the GameMain boot-init head 0x41c05c..0x41c176 — **mode := 0
+(0x41c145) and DIFFICULTY := 1 (0x41c14a, ebx re-set 1 at 0x41c12e) —
+the §7j.15/2 "campaign-start write" gloss CORRECTED: it is the boot
+default and the fresh value is 1, not 0**; (b) the episode-loop slot
+boot 0x41c41c..0x41c44e — zone := 1, mission := 1 (edx=1), score :=
+the FUN_0043a5fc fresh-path return 0; (c) the name-entry
+fresh-campaign arm 0x43aaa3..0x43aad0 — money := 4000−500·d (imul
+0x1f4 off 0xfa0) + mode := 0 again, so **the untouched-toggle fresh
+boot carries money 3500**, not the d=0 value 4000 the E default
+assumes; (d) **linear-mission-m 0x46ae8c is a DERIVED cell, not a
+counter**: m = clamp(5·(zone−2)+mission−1, floor 1, cap 26), recomputed
+every episode at 0x41c520..0x41c556 (3 writes, all GameMain; the other
+11 xrefs are readers) — fresh (1,1) = 1, correcting the D108
+"0-based-progress-counter" E-side assumption; (e) the sfx-master-gate
+fresh value = 1: FUN_004252c0 loads HKCU "SOUND" through the D128
+bounded loader with bounds [0,1] and DEFAULT ecx=edx=1 (edx preserved
+through the FUN_00444ed40 HKCU DATA probe) — the D134/D136
+classification is value-exact for the default machine. Full writer
+census table per cell in §7j.64/F (10/13/6/8/6/6/3/2 writes).
+
+**(2) Oracle (this unit).**
+`engine/bedlam-game/tests/static_campaign_config_differential.rs`
+(the first static oracle in bedlam-game — the rows' E half IS the
+canonical harness, which bedlam-core cannot see; the file re-exports
+parity_harness the canonical_dump_gate way): (a) the original-side
+transcription — the fresh-scalar table consts, the linear derivation
+function + a hand-computed 13-row spot table + the all-37-mission
+corpus census (floor cases exactly 3, max 26, sum 482), and the money
+formula per d∈{0,1,2}; (b) the E-side comparison — the S0 canonical
+anchor frame's eight T0 rows judged against the transcription: score 0,
+mission 1, mode 0, sfx 1 CLOSED both sides (zone via the pinned
+D99/D108 +1 normalization); (c) the three gaps pinned LOUD with the
+original value named in each assertion message (difficulty 0 vs 1,
+money 4000 vs 3500, linear 0 vs 1) — they flip visibly when the seam
+lands, never silently; (d) the boot-key seam proof: `boot difficulty=1`
+expresses the original fresh-boot state exactly (money 3500,
+difficulty row 1) through the existing start_score formula — the gap
+is the fresh DEFAULT, not a missing mechanism.
+
+**(3) The seam is QUEUED (S0-12b), not landed here.** Closing the three
+gap rows means re-pinning the canonical fresh session (difficulty
+default 1 → money 3500) and emitting the linear row through the
+derivation instead of `episode().linear()` — a deliberate full-chain
+re-baseline of every canonical pin (the D136/D151 machinery), plus a
+D108 supersession note (the "never fabricated" seam stance predates the
+§7j.64/D decode). That is its own bounded unit with its own decision
+entry; no fabricated parity in the meantime (the gap rows stay loud).
+watches.toml money/difficulty/linear layout notes corrected to the
+§7j.64 facts (layout strings never feed the capture plans — no
+regeneration, no plan bytes moved).
+
+**(4) Coverage bookkeeping.** Eight S0 strict-coverage rows counted:
+strict S0 independent coverage is now **19/27 rows** (the D152-era 11 +
+score, money, difficulty, zone, mission, mode, linear-mission-m,
+sfx-master-gate); 8 rows remain (S0-13 rng-state-a/b +
+static-dither-noise, S0-14 s0-trigger/frame-counter, S0-15
+static-order-table, S0-16 static-player-type, S0-17
+static-cursor-clamp). THE D146-NOTE OFF-BY-ONE RE-AUDIT (mandated
+when S0-12 lands): the 27-row registry = the tier-S0 `s0-trigger` row
++ the 26 T0/TS watches.toml rows (11 T0 + 15 TS); the covered set is
+the 11 TS rows {tot-volume, dat-volume, cgr-volume, bin-terrain,
+lnk-map, min-bank, pad-slots, map-wh, claim-bank, yline-zbase,
+type-table} + this unit's eight T0 rows = 19; the uncovered eight
+list above = 19+8 = 27 ✓ — the predecessor's "18-row remainder"
+prose was the miscount (16 is the true remainder at D152), and the
+assignment list 8+3+2+1+1+1 = 16 is consistent. (worker 0f91b0d7
+claim 1)
