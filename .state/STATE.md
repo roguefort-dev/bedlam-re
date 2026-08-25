@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D148 S0-09 COMPLETE (worker e473f5db claim 1, commits
+    bad9ff6 docs + fcb8fb2 test, both PUSHED): the .BDG type-table row
+    `static-type-table` is independently covered — the EXW loader leg
+    + EXD twin re-verified instruction-by-instruction (§7j.61: table +
+    0x9C40-B arena memset pre-zero; the raw control word staged at +0
+    before the ==1 test; empty rows leave +2..+0x4E memset-0;
+    count@+0x12 = nonzero-selector count on active rows only —
+    write-only, one .text site; four banks into consecutive arena
+    slots in disk order, the §7j.32 interleave only in the pointer
+    slots), ONE FORMATS §16 erratum landed (footprint max (10,10,5),
+    not (3,3,3)), and an all-37-mission field-exact oracle vs the
+    retained `ObjectTypeTable::from_bdg_bytes` with full census pins
+    and a six-part mutation sensitivity proof. The count/control
+    write-only surfaces stay unretained — no fabricated seam. Strict
+    S0 independent coverage is 9/27 rows; next slice: S0-10
+    `static-min-bank` (queued as item 1). The responsive-capture WIP
+    (diffharness capture-plans + dbx-capgen tests) remains uncommitted
+    and preserved.
+
   - 2026-08-25 D147 S0-08 COMPLETE (worker 2b25b994 claim 1, commits
     8a054b3 docs + 920aec2 test, both PUSHED): the DAT-addressing table
     row `static-yline-zbase` is independently covered — both EXW build

@@ -5,30 +5,27 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-09] independently cover the `.BDG`
-   `static-type-table` staged representation. First statically
-   re-verify the EXW/EXD `.BDG` type-table loader (FORMATS §12/§16,
-   the FUN_0041a4f8 family; the 0x4dedf2 table + the §7j.32 consumers
-   +0x46/+0x4A — the +0x3E/+0x42 plane payload is dead editor data)
-   instruction-by-instruction like D146/D147 did, then build an
-   independent all-37-mission oracle and compare it byte/field-exact
-   against the Rust target or a test-only representation. Do not
-   reuse production parsers/loaders/helpers; pin corpus identities,
-   bracket corpus reads with `MANIFEST.sha256`, and prove sensitivity
-   with a temporary mutation. If Rust retains no such bank, document
-   the gap and add only the smallest justified seam rather than
-   fabricating parity. DONE when the `static-type-table` row is
+1. [P4/static-parity/S0-10] independently cover the retained `.MIN`
+   bank row `static-min-bank`. Follow the D146/D147/D148 unit shape:
+   first statically re-verify the EXW/EXD `.MIN` loader + the bank's
+   consumers instruction-by-instruction from the objdump texts, commit
+   the RE notes first, then build an independent all-37-mission oracle
+   (no production parser/loader/helper reuse on the expected side),
+   compare byte/field-exact against the Rust target (or a test-only
+   representation if the bank is unretained — then document the gap
+   and add only the smallest justified seam rather than fabricating
+   parity), pin corpus identities, bracket corpus reads with
+   `MANIFEST.sha256`, and prove sensitivity with a temporary
+   in-memory mutation. DONE when the `static-min-bank` row is
    independently covered, or one concrete code/model gap is queued;
    tests/review/commit.
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  8/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe, and
-  920aec2. The 19-row remainder is fully assigned: S0-10 (1), S0-11
-  (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1), and
-  S0-17 (1).
-- [P4/static-parity/S0-10] independently cover the retained `.MIN` bank
-  row `static-min-bank`.
+  9/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
+  920aec2, and fcb8fb2. The 18-row remainder is fully assigned:
+  S0-11 (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1),
+  and S0-17 (1).
 - [P4/static-parity/S0-11] independently cover `static-claim-bank`
   initialization.
 - [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
@@ -202,6 +199,24 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-09 COMPLETE (worker e473f5db claim 1,
+  commits bad9ff6 docs + fcb8fb2 test, both PUSHED; D148). The
+  `static-type-table` row independently covered: the EXW .BDG loader
+  leg (FUN_0041a4f8 @0x41a5d6..0x41a7ef) + EXD twin FUN_0002adb4
+  re-verified instruction-by-instruction (RE-EXW-SIM §7j.61) —
+  table+arena memset pre-zero, control word staged at +0 before the
+  test, count@+0x12 = nonzero selectors on ACTIVE rows only and
+  WRITE-ONLY (displacement 0x4dee04 has one site = the loader store),
+  four banks into consecutive arena slots in disk order (the §7j.32
+  interleave lives only in the row pointer slots); ONE FORMATS §16
+  corpus erratum (footprint max is (10,10,5), 113 distinct tuples, not
+  (3,3,3)); the all-37-mission field-exact oracle vs the retained
+  `ObjectTypeTable::from_bdg_bytes` with census pins (10434/7907/2527
+  rows, selector domain 0+1..9, count census, arena span 6728..27288,
+  hp min −1) and a six-part mutation sensitivity proof; the two
+  write-only surfaces (count word, control word@+0) deliberately
+  unretained, no seam fabricated. Strict S0 independent coverage is
+  9/27 rows; next slice: S0-10 `static-min-bank` (queued as item 1).
 - 2026-08-25: P4/static-parity/S0-08 COMPLETE (worker 2b25b994 claim 1,
   commits 8a054b3 docs + 920aec2 test, both PUSHED; D147). The
   `static-yline-zbase` row independently covered: both EXW table-build
