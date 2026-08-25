@@ -10027,3 +10027,117 @@ side is the charter T3 statistical stand-in — D155):
 | rng-state-a | boot 123456 (0x41c0d3) + per-mission reseed 123456 (0x447728) | S' = ((S<<7)+S+0x361962E9) mod 2^32 per RandA draw | PCG32 stand-in, draw-count-compared only (AcceptedT3) — never bit-compared |
 | rng-state-b | boot 234567 (0x41c0cd), never reseeded | same step function | same stand-in class |
 | static-dither-noise | cursor 0 + 2048 RandB draws at MissionShell staging (§C) | 15 RandB draws/frame at the epilogue; bank ∈ {0x00,0xFF}, `RandB()&3==0 → 0xFF` | presentation-half (D17): the bank never enters the dump/hash; the row is O1-side coverage |
+
+## 7j.66. THE S0 DUMP-TRIGGER ORDERING + THE g_frame_count WRITER CENSUS (the s0-trigger / frame-counter registry rows) — the MissionShell tail decoded, the PresentEnd call-site ambiguity RESOLVED, and the D81 "no counter reset" claim CORRECTED: the eight bounded cinematic screens RESET the counter (2026-08-25, worker 9c711d0c claim 1, D156, the P4/static-parity/S0-14 unit; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before AND after) [verified]
+
+Whole-objdump census of every 0x46ae68 .text reference (53 hits; 14
+increment forms + 8 zero-writes + reads) + instruction decode of the
+MissionShell loop tail. All items [verified] against the asm.
+
+**A. THE MISSION-LOOP TAIL (the EXW twin of the EXD S0 dump site
+0x5a6eb — the §1 pseudocode "PresentEnd(); g_frame_count++" decoded
+instruction-for-instruction):**
+
+```
+4485de  cmp  [0x4edc34], 0        ; P-pause latch
+4485e5  je   0x4486c9             ; not paused → NORMAL present path
+4485eb  mov  ebp, [0x4edb88]      ; network-session flag
+4485f3  jne  0x4486c9             ; MP never pauses → NORMAL path
+        ; --- SP pause path (scenarios never take it: P 0x19 banned):
+4485f9  [0x4edb64] := 0 ; [0x4edc34] := 0
+        ; draw the PAUSED overlay (text 0x46ba6c via FUN_0043cc3e)
+44861f  call 0x425a03             ; PresentEnd (the PAUSE-screen flip)
+448624  FUN_0041e215(0x19)        ; consume the P keypress
+44862e  spin while [0x4edc34]==0  ; the P-pause spin
+448637  FUN_0041e215(0x19, 0)     ; consume the unpause press
+        ; clear the 0x4edb50 → 0x4edc0c latch family ; [0x4edb64] := 1
+4486c7  jmp  0x4486ce             ; pause already presented — skip
+4486c9  call 0x425a03             ; PresentEnd — THE MISSION-LOOP FLIP
+4486ce  mov  ebp, [0x46ae68]      ; --- counter increment, register form
+4486d4  inc  ebp                  ;    (the unrelated [0x4dc67c] read
+4486da  mov  [0x46ae68], ebp      ;     at 0x4486d5 rides the middle)
+```
+
+Exactly ONE PresentEnd + exactly ONE counter increment per loop pass
+(the pause path presents at 0x44861f then jumps past 0x4486c9). The
+counter increment ALWAYS FOLLOWS the present, both paths.
+
+**B. THE S0-TRIGGER RESOLUTION (the O2/W11 deferral closed).**
+PresentEnd = FUN_00425a03 has **62 direct call sites** in .text
+(menus, loading screens, cinematics, the pause redraw) — a code BP at
+the FUNCTION ENTRY 0x425a03 fires on every present on the way to the
+mission, so it is NOT the frame-tail dump trigger. The frame-tail dump
+point is the **NORMAL-PATH CALL SITE 0x4486c9** (BP before the call
+executes = after the last state writer, before the flip) — the exact
+twin of EXD 0x5a6eb (CALL FUN_00010670) with its own register-form
+increment at 0x5a6f0-0x5a6fd right after (RE-EXD-MAP §2 — order
+IDENTICAL, verified). The registry s0-trigger row keeps exw_addr
+0x425a03 as the function canon (plan-neutral; the committed O2 plan's
+trigger.site 0x00425A03 regenerates to 0x004486C9 at the W11 plan
+regen — recorded in the row note + D156).
+
+**C. THE WRITER CENSUS (D81 CORRECTED).** The D81-era claim "NO
+counter reset exists (14 INC sites incl. menu screens)" is WRONG on
+the reset half: an INC-form census misses the register/mov stores
+(the exact trap the W1 EXD census documented for the mission tail —
+RE-EXD-MAP §2 "why the INC-only census first missed it"). The 14
+increment sites stand (13 INC + the mission-tail register form), but
+there are ALSO **8 zero-writes**: the eight BOUNDED CINEMATIC SCREEN
+loops reset the counter to 0 at entry and use it as their
+screen-duration timer, exiting with counter == bound:
+
+| reset site | bound loop | duration | INC site |
+|---|---|---|---|
+| 0x44466f (`xor ebx` @0x444668; FUN_0041cbf0 rides between xor and store) | cmp 0xc8 @0x444675 | 200 | 0x44469b |
+| 0x4446e4 (`xor esi`) | cmp 0x64 @0x4446ea | 100 | 0x44470d |
+| 0x4449f9 (`xor ecx`) | cmp 0x12c @0x4449ff | 300 | 0x444a3a |
+| 0x444c4b (`xor ecx`) | cmp 0xc8 @0x444c51 | 200 | 0x444c77 |
+| 0x444f87 (`xor edx`) | cmp 0x64 @0x444f8d | 100 | 0x444fb0 |
+| 0x445167 (`xor edx`) | cmp 0x64 @0x44516d | 100 | 0x445190 |
+| 0x44526c (`xor ebx`) | cmp 0x12c @0x445278 | 300 | 0x4452a2 |
+| 0x4453b7 (`xor esi`) | cmp 0xc8 @0x4453bd | 200 | 0x4453e7 |
+
+(the loop bodies draw, `call 0x425a03`, then `inc` — present-then-inc,
+same order as the mission tail). The other five INC sites are the
+INTERACTIVE menu screens — NO reset, cumulative counting, and there
+the in-loop order is inc-THEN-present: 0x43afa0, 0x43d4f7, 0x43d53f,
+0x43da5a, 0x43f31f. The counter is a REUSED global: cinematic screens
+hijack it as a duration timer, menu screens count frames on it, and
+only the mission-loop tail (0x4486ce-da) uses it as the frame pacer.
+
+**D. THE DUMP-POINT VALUE SEMANTICS (the frame-counter row).**
+MissionShell's HEAD (loading-screen presents @0x4476b3/0x4477fa/
+0x447840 + the staging chain) contains NO counter writer — the
+mission loop inherits whatever the last pre-mission screen left.
+With no reset in the mission loop either, the dumped value at dump k
+(1-based) = **C₀ + (k−1)** where C₀ = the counter at mission-loop
+entry = a DETERMINISTIC FUNCTION OF THE SCRIPTED MENU WALK (fixed
+for the S0W scripted walk; arbitrary only across different walks),
+NOT a boot-frame total. At the dump BP the counter is PRE-increment
+for the current pass (the increment is the tail's NEXT action). E's
+canonical emission already matches: `frame-counter = sim.frame()−1`
+(canonical.rs — mission-relative, pre-increment), so **O1/O2 value =
+E value + C₀**, a per-script constant. The machinery already built on
+exactly this: dump records align by schema frame_no (never the
+counter watch), the differ classes the row `T2Reported`, and the
+double-run verdict stays "identical chains modulo the T2/T3 cells"
+(the counter is deterministic per script — the reset discovery makes
+it MORE deterministic, never less). The D87 differ-doc phrasing "the
+O1 counter never resets" is corrected in place to the precise form:
+never resets IN THE MISSION LOOP; the menu-path resets are what make
+C₀ walk-determined. EXD twin cross-check: the EXD menu-screen reset
+family is NOT yet censused (no EXD whole-text objdump exists); the
+O1 trigger/counter ordering does not depend on it — the EXD mission
+tail is already pinned (§2) and a live S0W anchor stop pins C₀
+empirically. Open note, not a blocker.
+
+**E. THE S0-14 CLASSIFICATION (D156).** The two rows are
+DYNAMIC-ONLY — they carry no statically-closeable state: s0-trigger
+is the dump POINT itself (extent 0, a breakpoint — its "coverage" IS
+this ordering pin + the capture machinery arming it), and
+frame-counter is the T2 timing cell (deliberately never
+bit-compared). They close under the new **dynamic-only placement**
+disposition, tracked separately from static closure: strict S0
+accounting becomes 22 rows static-closed + 2 dynamic-only
+dispositioned + 3 static remaining (S0-15 static-order-table, S0-16
+static-player-type, S0-17 static-cursor-clamp) = 27.
