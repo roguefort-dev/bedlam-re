@@ -10432,3 +10432,127 @@ canonical chains re-baselined deliberately. watches.toml layout
 note corrected plan-neutrally (extent stays "2"); RE-EXD-MAP §5
 row re-pinned with the D132-gloss refinement recorded and the MP
 writer census.
+
+## 7j.69. THE FOUR DEFERRED TS EXTENTS PINNED (cgr-volume, bin-terrain, lnk-map, yline-zbase) — both channels instruction-anchored, corpus cross-checked, and ONE stale gloss retired (§7c.2/MISSIONVIEW §1 "(0x8000)" for the LNK buffer has no immediate anywhere in the loader path) (2026-08-26, worker d093c3ef claim 1, D161, the P4.2/S0-registry-tail `ts-extent-arms` unit; objdump-only from ghidra-project/exw-text-objdump.txt + exd-text-objdump.txt — no Ghidra run; read-only corpus size census (.CGR/.BIN/.LNK/.LNG) with MANIFEST.sha256 clean before AND after) [verified]
+
+The S0-15a/D158 follow-up: the last four `_deferred` dbx-plan arms
+resolve. Every extent below is read off the verified load path (the
+alloc/loader instructions, not a gloss) and cross-checked against the
+shipped corpus.
+
+**A. `static-cgr-volume` — the CGR height bank: extent = the uniform
+132354-B file image (0x20562), NOT the 0x20788 arena.**
+- Allocation [verified EXW 0x41d95f..0x41d969]: `mov eax,0x20788; call
+  0x41db89; mov ds:0x4edd60,eax` — ArenaAlloc(133000), the FIRST alloc
+  of the GameMain mission arena pass FUN_0041d954. EXD twin
+  [0x2e288..0x2e292]: `mov eax,0x20788; call 0x2e4b2; mov
+  ds:0x107540,eax` — ordinal-identical first alloc of the EXD arena
+  pass (same pass shape: 0x20788 CGR, 0x13884 DAT, 0x3cc0 viewport...).
+- Load [verified EXW 0x41dca0..0x41dcb7]: zone-scoped path2 0x4dca8c +
+  the ".CGR" tag 0x4587e3 (tag-table entry 2), concat FUN_0041dbed,
+  whole-file read FUN_0041cc7f into [0x4edd60] — VERBATIM (no header
+  skip, no transform; the §7j.62/B MIN class). EXD twin
+  [0x2e613..0x2e658]: same tag/path/read shape into [0x107540].
+- Content [FORMATS §18, VERIFIED 44/44]: every shipped .CGR is exactly
+  132354 B = u16 count 128 + the 512-B self-relative u32 directory +
+  128 × 1030-B records (6-B `{0,32,32}` header + 1024 raw height-map
+  bytes), the last record ending exactly at EOF. The get_z_pos reader
+  (§7c.6 `CGR[2 + 4·(type−1) + dir[type−1] + 6 + ...]`) never leaves
+  the file image: the 646-B arena tail (133000−132354) is stale and
+  unread — the §7j.62/D stale-tail class.
+- EXTENT DECISION: unlike `.MIN` (D149/D152, where the arena 0x7530
+  was pinned BECAUSE the files vary 15824..29952 and no tighter pin
+  exists), the CGR corpus is UNIFORM — the tightest pin is the file
+  image itself, pinned as the constant 0x20562 (132354). This also
+  keeps the row's cross-channel byte-passthrough compare CLEAN (a
+  0x20788 extent would drag 646 stale arena bytes into every dump that
+  differ between the DOS and Win32 heaps).
+
+**B. `static-bin-terrain` — the BIN sprite bank: extent = the
+0x258960 arena (the MIN precedent; no tighter pin exists).**
+- Allocation [verified EXW 0x41d666..0x41d670]: `mov eax,0x258960;
+  call 0x41db89; mov ds:0x4ede1c,eax` — ArenaAlloc(2460000). NOTE this
+  is NOT in FUN_0041d954 (the mission arena pass): it rides the
+  EARLIER boot alloc family (0x41d5xx..0x41d6xx), whose successor
+  instruction 0x41d685 loads the GENERAL.BIN tag 0x45865a into the
+  SIBLING bank [0x4edd7c] — the terrain BIN bank is boot-allocated,
+  mission-loaded. EXD twin [0x2e098..0x2e0a2]: `mov eax,0x258960;
+  call 0x2e4b2; mov ds:0x107434,eax`, successor tag 0x8610b into
+  [0x1074fc] — the same boot-pass shape.
+- Loads [verified]: the mission family loader ".BIN" tag 0x4587e8 →
+  [0x4ede1c] @0x41dcbc..0x41dcd3, plus the second site FUN_0044661b
+  (the EDITOR\ZONE restore reload) tag 0x45979a → [0x4ede1c]
+  @0x44663f..0x446656. Whole-file verbatim; the header word
+  u16[bank+0] is copied to the write-only cell 0x46cdb8 @0x41dd32
+  (EXD twin 0x11a4a8 @0x2e6a0).
+- Corpus cross-check [read-only, 44 .BIN sizes]: the 0x4ede1c
+  candidates (7 zone MISSION{A..G}.BIN + the 2 mission-level BINs
+  ZONED/MISSION5 + ZONEB/MISSION6) span 2041594..2443943 B — all
+  inside 0x258960 (stale tails 16..418 KB by zone, never read: every
+  content reader reaches sprites only through the self-relative
+  directory, §7j.36). `GAMEGFX/SHOPLITE.BIN` (3081801 B) is a
+  DIFFERENT bank family ([0x4edd7c] GENERAL.BIN-class), never loaded
+  into 0x4ede1c — its >arena size is not a counterexample.
+- EXTENT DECISION: the shipped sizes VARY and the byte length is not
+  derivable from any outside cell (the count word lives INSIDE the
+  bank at +0, behind the pointer) — exactly the D149/D152 `.MIN`
+  situation, so the pin is the ARENA constant 0x258960 (2460000 B).
+
+**C. `static-lnk-map` — the LNK/LNG link table: extent = 0x4000 (the
+u16[8192] table), a DIRECT .bss span — and the "(0x8000)" gloss
+retires.**
+- Load [verified EXW 0x41dcf4..0x41dd18]: language gate
+  `cmp [0x4eba1c],1` → ".LNG" (0x4587f2) else ".LNK" (0x4587f7), concat
+  on path2, then `mov edx,0x45cdda; call 0x41cc7f` — the file lands
+  DIRECTLY at the fixed .bss address 0x45cdda (never through a pointer
+  cell; the registry row is correctly NOT indirect). EXD twin
+  [0x2e65d..0x2e681]: gate on 0x10768c, tags 0x862c2/0x862c7,
+  `mov edx,0x10336c; call 0x2d57c`.
+- Readers [verified]: the territory-stamp lookup
+  `cw = word@[type*2 + 0x45cdda]` (§7j.62/C, @0x408a8e family) and the
+  terrain renderer's destructive chain-advance; EXD twins
+  `word@[eax*2+0x10336c]` @0x177dc/0x178c3 plus the dword VIEW at
+  base−2 (`dword@[edx*2+0x10336a]` @0x19809 — the §7d.1 "0x45cdd8
+  table" twin, same image, shifted index base).
+- Table [FORMATS §5, VERIFIED 44/44 + 7/7]: exactly 16384 B = 8192 ×
+  u16, every shipped .LNK and .LNG (§7j.62/C already pins "16384 B =
+  8192 words" at the loader).
+- GLOSS CORRECTION: the "(0x8000)" buffer gloss in §7c.2 item 2 and
+  RE-EXW-MISSIONVIEW §1 has NO immediate in the loader path (no alloc,
+  no size argument anywhere near 0x41dd13/0x2e67c — the load is a
+  whole-file read with no bound) and contradicts the verified uniform
+  16384-B corpus; it retires. The extent pin is the TABLE: 0x4000 at
+  0x45cdda (EXW) / 0x10336c (EXD), the Form::Fixed direct-span
+  analogue of the S0-15a order-table resolution.
+
+**D. `static-yline-zbase` — TWO non-contiguous tables, so the row
+emits TWO spans (the registry id keeps the y-line table; the z-base
+plane table rides the derived id `static-yline-zbase#zbase`).**
+- Semantics already pinned by S0-08/D147 (§7c.3); this unit re-verified
+  the EXD build loops first-hand [0x2e70b..0x2e74b]: y_line = h dwords
+  at 0x8b78c (bound `ebx = h<<2` @0x2e70b, `jl` @0x2e727 — h entries,
+  NOT h+1); z_base = exactly 8 dwords at 0x107718..0x107734 (loop eax
+  = 4,8,…,0x20 @0x2e73d..0x2e748 — the store base 0x107714 is the
+  adjacent pre-incremented screen-scale cell, never a table entry).
+  EXW twins 0x41ddaa..0x41dde2 + the second producer
+  0x4466bd..0x4466f8 (FUN_0044661b, §7c.3/D147).
+- WHY TWO SPANS: the two tables are non-contiguous on BOTH channels and
+  the inter-table gap DIFFERS per channel (EXW 0x4ea900 → 0x4eaacc,
+  0x1cc apart; EXD 0x8b78c → 0x107718, ~0x7c000 apart) — no single
+  span can mirror the layout across channels, and the differ's
+  static-* rows are byte-passthrough (a one-span row would either dump
+  half a megabyte of unrelated EXD memory or compare dirty). The row
+  therefore resolves to: `static-yline-zbase` = the y-line table
+  (CountExpr, len `4*$map_h` — the live h cell, the T1 grid precedent)
+  and `static-yline-zbase#zbase` = the z-base plane table (Fixed 32).
+  capgen's keep-first dedupe never drops either (distinct ids); both
+  compare byte-exact cross-channel (the build loops are
+  instruction twins and w/h agree per mission).
+- EXTENT PINS: y-line = 4·h bytes (h dwords); z-base = 32 bytes
+  (8 dwords).
+
+**E. Consequence for the capture plans:** the four rows leave the
+`_deferred` set on BOTH channels (S0/S0W reach ZERO deferred rows);
+anchor counts gain cgr/bin/lnk/yline/zbase (+5) on every TS-bearing
+scenario. Zero canonical-chain movement (plan-only infra, the
+S0-12a/D152 class).
