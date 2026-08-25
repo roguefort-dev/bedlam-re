@@ -367,6 +367,13 @@ impl TitleMenu {
     /// the menu is inert except for the attract skip (D42.3).
     pub fn tick(&mut self, input: &InputFrame, movies_playing: bool) -> MenuTick {
         // Integrate the pointer (the EXW ISR's absolute cursor).
+        // CLAMP DIVERGENCE (D160/RE-EXD-MAP §5h): the original twin
+        // cells clamp into [9,631]x[9,463] on BOTH channels (EXW
+        // ScrollUpdate 0x425b2e..0x425b84; EXD poll 0x12615..0x12659)
+        // and GameInit boots the CENTER (320,240) — this scene model
+        // still clamps [0,639] from (0,0) pending the P2e input map
+        // (the faithful re-pin is a package: boot center + box + the
+        // hover hit-strip audit).
         self.cursor.0 = (self.cursor.0 + i32::from(input.mouse_dx)).clamp(0, 639);
         self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(0, 479);
         self.blink = self.blink.wrapping_add(1);

@@ -971,6 +971,16 @@ impl MissionScene {
         if !self.active {
             return;
         }
+        // CLAMP DIVERGENCE (D160/RE-EXD-MAP §5h): the original twin
+        // cells clamp into [9,631]x[9,463] on BOTH channels (EXW
+        // ScrollUpdate 0x425b2e..0x425b84; EXD poll 0x12615..0x12659,
+        // mickey integrate-then-clamp) and GameInit boots the CENTER
+        // (320,240) — this scene model still clamps [0,639] from
+        // (0,0) pending the P2e input map (the faithful re-pin is a
+        // package: boot center + box + the click-seam target audit).
+        // The x >= 0x1E0 sidebar gate below IS the original gate twin
+        // (EXD poll 0x1268f: [0x1074b0] >= 480 flips the cursor-sprite
+        // selector; 480 <= 631, inside both boxes).
         self.cursor.0 = (self.cursor.0 + i32::from(input.mouse_dx)).clamp(0, 639);
         self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(0, 479);
         let left = input.mouse_buttons & 0x01;

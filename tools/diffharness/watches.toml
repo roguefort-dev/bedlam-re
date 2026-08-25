@@ -534,11 +534,11 @@ tier = "TS"
 exw_addr = ""
 exd_addr = "0x1074ac / 0x1074b0"
 extent = "8"
-layout = "cursor clamp maxima x=0xf0 y=0x140 (320x240 logical space, B2 twin)"
+layout = "live hardware-cursor POSITION pair: Y@0x1074ac, X@0x1074b0 (EXW g_cursor_x/y 0x4eddc4/8 twins; 640x480 VESA 0x101 space); GameInit boots the CENTER X=0x140/Y=0xf0 — NOT clamp maxima; the clamp box [9,631]x[9,463] is the EXW ScrollUpdate box verbatim, enforced by the INT-33h poll handler 0x12615..0x12659 (RE-EXD-MAP sec 5h, D160)"
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
-anchor = "cursor clamp (INPUT)"
-note = "EXD-only boot plant; the EXW cursor clamps live in host 640x480 space (RE-EXW-INPUT sec 4) — no EXW alias row."
+anchor = "cursor cells (INPUT) 0x1074b0/0x1074ac"
+note = "hardware/input-profile-only (D17 non-hashed bucket) — NEVER counted as static parity (D160). EXD-address-only BY DOCUMENTED CHOICE: the EXW twin cells 0x4eddc4/0x4eddc8 exist but stay unnamed so this row remains the D139/D143 EXD-only anti-ghost vehicle; a mouseless scripted O1 capture dumps the boot center {Y=0xf0, X=0x140}"
 
 # ------------------------------------------------- T2 weapons & actors (weapon + projectile aliases FILLED by W12-S3; critter/POI/trail banks await their units)
 

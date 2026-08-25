@@ -403,16 +403,21 @@ fn frame_state_excluded_from_hash() {
     assert_ne!(a.frame().cursor_x, b.frame().cursor_x);
     assert_eq!(a.sim().state_hash(), b.sim().state_hash());
 
-    // Six more moving frames: A clamps at the 640x480 edge, B stays put,
-    // and the hashes STILL match — dt-driven data never enters the hash.
+    // Six more moving frames: A clamps at the original [9,631]x[9,463]
+    // box edge (D160), B stays put at the boot center (320,240), and the
+    // hashes STILL match — dt-driven data never enters the hash.
     for _ in 0..6 {
         a.advance(4, &moving);
         b.advance(4, &still);
     }
-    assert_eq!(a.frame().cursor_x, 639, "cursor clamps into game space");
-    assert_eq!(b.frame().cursor_x, 0);
-    assert_eq!(a.frame().cursor_y, 0);
-    assert_eq!(b.frame().cursor_y, 0);
+    assert_eq!(
+        a.frame().cursor_x,
+        631,
+        "cursor clamps into the original box"
+    );
+    assert_eq!(b.frame().cursor_x, 320);
+    assert_eq!(a.frame().cursor_y, 240);
+    assert_eq!(b.frame().cursor_y, 240);
     assert_eq!(a.sim().state_hash(), b.sim().state_hash());
     assert_eq!(a.sim().tick_index(), 7);
     assert_eq!(b.sim().tick_index(), 7);

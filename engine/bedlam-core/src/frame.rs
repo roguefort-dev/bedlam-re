@@ -30,11 +30,34 @@ use crate::sim::{Sim, SimConfig};
 /// (100/50/12.5Hz). The two clocks never mix, and neither is a float.
 pub const SUBTICKS_PER_TICK: u32 = 4;
 
-/// Game-space extents the cursor clamps into (640x480 canonical render
-/// space). Clamp, not modulo — mirrors EXW scroll-clamp style; exact EXW
-/// addresses TBD pending P2e input RE.
-const CURSOR_MAX_X: i32 = 639;
-const CURSOR_MAX_Y: i32 = 479;
+/// Cursor clamp box — the ORIGINAL twin-verified constants (S0-17/D160,
+/// RE-EXD-MAP §5h): the hardware cursor integrates pointer deltas then
+/// clamps into **[9,631]×[9,463]** of the 640×480 game space.
+///
+/// Both original channels enforce the IDENTICAL box: EXW
+/// `ScrollUpdate@0x425ab9` (CursorToGame@0x44b428 maps the absolute
+/// window cursor, then `+9` margin, `<9→9`, `>0x277→0x277`,
+/// `>0x1cf→0x1cf` @0x425b2e..0x425b84, stores g_cursor_x/y
+/// @0x4eddc4/0x4eddc8) and the EXD mouse poll handler @0x12615..0x12659
+/// (INT 33h AX=000B mickeys, integrate-then-clamp, stores
+/// [0x1074b0](X)/[0x1074ac](Y)). The 9 is the cursor-sprite hotspot
+/// offset: the 24×24 hardware-cursor sprite draws at (X−9, Y−9)
+/// (EXD FUN_00012962 @0x12970..0x12992).
+///
+/// The asymmetric bottom margin (480−463 = 17) is literal-pinned on both
+/// channels — not a typo to "fix" to 471.
+pub const CURSOR_MIN_X: i32 = 9;
+pub const CURSOR_MIN_Y: i32 = 9;
+pub const CURSOR_MAX_X: i32 = 631;
+pub const CURSOR_MAX_Y: i32 = 463;
+
+/// Boot position: the ORIGINAL GameInit plants the cursor at the CENTER
+/// of 640×480 — X=0x140(320), Y=0xf0(240) — instruction-exact twins
+/// (EXW `mov ebx,0x140; mov [0x4eddc4],ebx; mov [0x4eddc8],0xf0`
+/// @0x41c083..0x41c09b; EXD `mov esi,0x140; mov [0x1074b0],esi; mov
+/// [0x1074ac],0xf0` @0x2c79a..0x2c7b2, in the RNG-seed boot sandwich).
+pub const CURSOR_BOOT_X: i32 = 320;
+pub const CURSOR_BOOT_Y: i32 = 240;
 
 /// Placeholder volume ceiling (doc nod: EXW music volume 0..100).
 const VOLUME_MAX: i32 = 100;
@@ -52,10 +75,11 @@ const VOLUME_MAX: i32 = 100;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FrameState {
     /// Pointer X, integrated from `mouse_dx` each frame, clamped
-    /// 0..=639.
+    /// 9..=631 (the original [9,631]×[9,463] box, D160; boots at the
+    /// GameInit center 320).
     pub cursor_x: i32,
     /// Pointer Y, integrated from `mouse_dy` each frame, clamped
-    /// 0..=479.
+    /// 9..=463 (boots at the GameInit center 240).
     pub cursor_y: i32,
     /// Edge latch on `buttons` bit 0: 1 exactly on the host frame where
     /// the button transitions released->pressed, 0 otherwise (press-edge
@@ -75,12 +99,14 @@ pub struct FrameState {
 }
 
 impl FrameState {
-    /// Zeroed state (`volume` starts 0 — hosts restore it from saved
-    /// settings once the EXW volume wiring is RE'd).
+    /// Boot state: the cursor is planted at the ORIGINAL GameInit center
+    /// (320, 240) — see [`CURSOR_BOOT_X`]/[`CURSOR_BOOT_Y`]. (`volume`
+    /// starts 0 — hosts restore it from saved settings once the EXW
+    /// volume wiring is RE'd.)
     pub fn new() -> FrameState {
         FrameState {
-            cursor_x: 0,
-            cursor_y: 0,
+            cursor_x: CURSOR_BOOT_X,
+            cursor_y: CURSOR_BOOT_Y,
             latch_primary: 0,
             volume: 0,
             cooldown_display: 0,
@@ -93,7 +119,8 @@ impl FrameState {
     /// `dt_subticks` is this frame's elapsed time quantized to whole
     /// sub-ticks (see [`SUBTICKS_PER_TICK`]). Behavior:
     /// - cursor integrates this frame's mouse deltas, then clamps into
-    ///   640x480 game space;
+    ///   the original [9,631]×[9,463] box (the EXD INT-33h poll-handler
+    ///   twin, D160);
     /// - `latch_primary` pulses 1 on the press edge of `buttons` bit 0
     ///   (rising edge only — held frames read 0);
     /// - `volume` is clamped back into 0..=100 (no input path yet);
@@ -101,8 +128,10 @@ impl FrameState {
     ///   ticks only, saturating at 0. PLACEHOLDER: simple and documented;
     ///   real cooldown displays replace it in P4+.
     pub fn advance_frame(&mut self, dt_subticks: u32, input: &InputFrame) {
-        self.cursor_x = (self.cursor_x + i32::from(input.mouse_dx)).clamp(0, CURSOR_MAX_X);
-        self.cursor_y = (self.cursor_y + i32::from(input.mouse_dy)).clamp(0, CURSOR_MAX_Y);
+        self.cursor_x =
+            (self.cursor_x + i32::from(input.mouse_dx)).clamp(CURSOR_MIN_X, CURSOR_MAX_X);
+        self.cursor_y =
+            (self.cursor_y + i32::from(input.mouse_dy)).clamp(CURSOR_MIN_Y, CURSOR_MAX_Y);
         let primary = input.buttons & 1 != 0;
         self.latch_primary = u32::from(primary && !self.prev_primary);
         self.prev_primary = primary;
@@ -196,10 +225,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn new_is_zeroed() {
+    fn new_plants_the_boot_center() {
+        // The GameInit twin (D160): boots at the center of 640x480,
+        // everything else zeroed.
         let f = FrameState::new();
-        assert_eq!(f, FrameState::default());
-        assert_eq!((f.cursor_x, f.cursor_y), (0, 0));
+        assert_eq!((f.cursor_x, f.cursor_y), (CURSOR_BOOT_X, CURSOR_BOOT_Y));
+        assert_eq!((f.cursor_x, f.cursor_y), (320, 240));
         assert_eq!(f.latch_primary, 0);
         assert_eq!(f.volume, 0);
         assert_eq!(f.cooldown_display, 0);
@@ -216,8 +247,9 @@ mod tests {
         for _ in 0..10 {
             f.advance_frame(4, &input);
         }
-        // 10 x (+100, -100) = (1000, -1000) clamps into 640x480.
-        assert_eq!((f.cursor_x, f.cursor_y), (639, 0));
+        // 10 x (+100, -100) from the boot center (320, 240) saturates
+        // into the original [9,631]x[9,463] box (D160).
+        assert_eq!((f.cursor_x, f.cursor_y), (631, 9));
     }
 
     #[test]
@@ -275,7 +307,8 @@ mod tests {
         };
         assert_eq!(driver.advance(4, &input), 1);
         assert_eq!(driver.sim().tick_index(), 1);
-        assert_eq!(driver.frame().cursor_x, 10);
+        // From the boot center 320: 320 + 10 = 330 (D160).
+        assert_eq!(driver.frame().cursor_x, 330);
         assert_eq!(driver.advance(3, &input), 0);
         assert_eq!(driver.sim().tick_index(), 1, "3 sub-ticks bank, no tick");
     }
