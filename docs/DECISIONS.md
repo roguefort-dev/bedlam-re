@@ -5049,3 +5049,24 @@ the comparison; a swapped or margin-less box fails; the original-side
 branch-order mutations fail). NO canonical chain moves (the cursor is
 not canonical state — no differ/O1/O2/O3 surface touched); no corpus
 read; no Ghidra run.
+
+**(4) ADDENDUM 2026-08-26 — the GAME-LAYER re-pin (the named P2e
+package, worker 80491508 claim 1).** The scene cursor models landed
+on the same constants: `TitleMenu` (menu.rs) and `MissionScene`
+(mission.rs) now import `bedlam_core::frame::{CURSOR_*}` — boots at
+the GameInit center (320,240), clamps into [9,631]×[9,463] every
+integrate (the two `CLAMP DIVERGENCE` annotations replaced by the
+faithful pin). AUDITS VERIFIED: (a) the menu hit-strip
+(0xdc,0x1a4)×(top,0x1d6) sits inside the box — x (220,420) well
+inside; top ≥ 302 > 9; the 0x1d6 (470) bottom is EXCLUSIVE while
+the cursor max y is 463, and at y=463 the row index (463−302)/0x18
+= 6 = the LAST row of a count-7 strip, so NO strip row is lost to
+the clamp (documented at the STRIP_* consts); (b) the mission
+click-seam targets are all inside the box (sidebar gate 480 ≤ 631;
+every scripted test target ≤ (630,453)); the gate test's
+absolute-from-(0,0) aim deltas were converted to target-driven
+deltas via a shared `aim` helper (5 sites). NO canonical chain
+moved: canonical runs feed `InputFrame::default()` (no mickeys, no
+clicks), and the cursor is D17-bucket presentation state — the
+canonical_dump_gate 13/13 + differ_gate 4/4 corpus lanes re-asserted
+the pinned chains unchanged; workspace release tests 733/0.

@@ -136,6 +136,23 @@ fn maptran_of(files: &[Vec<u8>]) -> Vec<&[u8]> {
     files[13..21].iter().map(|v| v.as_slice()).collect()
 }
 
+/// Aim the staged mission cursor at the absolute screen (x, y) with
+/// one move pump. Target-driven delta: the cursor boots at the
+/// GameInit center (320,240) and clamps into [9,631]x[9,463]
+/// [D160/RE-EXD-MAP §5h], so raw absolute deltas from (0,0) would
+/// land wrong (and every scripted target here is inside the box).
+fn aim(host: &mut GameHost, x: i32, y: i32) {
+    let (cx, cy) = host.mission().expect("mission staged").cursor();
+    host.pump_frame(
+        4,
+        &InputFrame {
+            mouse_dx: (x - cx) as i16,
+            mouse_dy: (y - cy) as i16,
+            ..InputFrame::default()
+        },
+    );
+}
+
 /// One scripted run: boot out of Boot, Advance to Mission, stage the
 /// mission, one entry pump (spawn frame), aim the cursor at robot
 /// 0's projection, click (arm), then three walk pumps. Then the MAP
@@ -211,16 +228,9 @@ fn scripted_run(
     // --- the click -----------------------------------------------------
     // Robot 0 projected at camera == its own position: dx=dy=0,
     // colAdj 0x20, rowAdj 15, z 31 -> (0x130, 0x10C+15-31) = (304,
-    // 252). Aim the cursor (deltas integrate from (0,0)), then the
-    // click edge.
-    host.pump_frame(
-        4,
-        &InputFrame {
-            mouse_dx: 304,
-            mouse_dy: 252,
-            ..InputFrame::default()
-        },
-    );
+    // 252). Aim the cursor (target-driven; it boots at the GameInit
+    // center, D160), then the click edge.
+    aim(&mut host, 304, 252);
     host.pump_frame(
         4,
         &InputFrame {
@@ -255,14 +265,9 @@ fn scripted_run(
     // Move to the map-toggle strip [0x213,0x24D]x[0x1B5,0x1CF] and
     // click: the overlay bit flips, the lockout arms 5, and the next
     // pump presents the strategic map instead of the viewport.
-    host.pump_frame(
-        4,
-        &InputFrame {
-            mouse_dx: 0x230 - 304,
-            mouse_dy: 0x1C0 - 252,
-            ..InputFrame::default()
-        },
-    );
+    // Target-driven aim again (the cursor sits at (304,252) after
+    // the robot click above).
+    aim(&mut host, 0x230, 0x1C0);
     host.pump_frame(
         4,
         &InputFrame {
@@ -452,15 +457,8 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     // Select strip 1 (x 0x219, squad of 2: MRK[0] + the staged
     // marker) -> slot 1, countdown set 2 then decremented by this
-    // pump's present (1 left).
-    host.pump_frame(
-        4,
-        &InputFrame {
-            mouse_dx: 0x219,
-            mouse_dy: 5,
-            ..InputFrame::default()
-        },
-    );
+    // pump's present (1 left). Target-driven aim (D160 boot center).
+    aim(&mut host, 0x219, 5);
     host.pump_frame(
         4,
         &InputFrame {
@@ -754,15 +752,8 @@ fn zonea_map_overlay_frame_composes_and_toggles() {
     // (0x213,0x1b5) on every normal frame [7e.5].
     assert_ne!(normal[0x1B5 * 640 + 0x213], 0, "chrome pixel nonzero");
 
-    // Open the map: click the strip rect.
-    host.pump_frame(
-        4,
-        &InputFrame {
-            mouse_dx: 0x230,
-            mouse_dy: 0x1C0,
-            ..InputFrame::default()
-        },
-    );
+    // Open the map: click the strip rect (target-driven aim, D160).
+    aim(&mut host, 0x230, 0x1C0);
     host.pump_frame(
         4,
         &InputFrame {
@@ -984,14 +975,8 @@ fn zonea_effect_rows_and_debris_draw_and_expire() {
         let mut cursor_pixels = 0;
         if with_cursor {
             assert_eq!(host.mission().expect("staged").sidebar_cursor(), 0);
-            host.pump_frame(
-                4,
-                &InputFrame {
-                    mouse_dx: 0x219,
-                    mouse_dy: 5,
-                    ..InputFrame::default()
-                },
-            );
+            // Target-driven aim (D160 boot center).
+            aim(&mut host, 0x219, 5);
             host.pump_frame(
                 4,
                 &InputFrame {

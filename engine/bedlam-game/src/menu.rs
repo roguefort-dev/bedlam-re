@@ -36,6 +36,9 @@
 //!   width(name))/2 on the item-3 row, blink while (frame & 0xc) != 0,
 //!   empty-on-exit defaults to "GOD" (0x459078) [inferred].
 
+use bedlam_core::frame::{
+    CURSOR_BOOT_X, CURSOR_BOOT_Y, CURSOR_MAX_X, CURSOR_MAX_Y, CURSOR_MIN_X, CURSOR_MIN_Y,
+};
 use bedlam_core::input::InputFrame;
 use bedlam_render::Vga6;
 
@@ -45,10 +48,20 @@ use crate::GameError;
 
 /// Hit-strip x bounds, exclusive [verified: 0xdc < g_cursor_x <
 /// 0x1a4].
+///
+/// Cursor-box audit [D160 P2e package]: the strip region
+/// (0xdc,0x1a4)x(top,0x1d6) sits inside the reachable cursor box
+/// [9,631]x[9,463] — x (220,420) well inside; top ≥ 0x1d6−7·0x18 =
+/// 302, above the box floor 9; and 0x1d6 (470) is EXCLUSIVE while
+/// the cursor max y is 463, so every strip row stays hoverable
+/// under the box clamp (at y=463 the row index (463−302)/0x18 = 6
+/// = the LAST row of a count-7 strip — no row is cut off).
 pub const STRIP_X_MIN: i32 = 0xdc;
 pub const STRIP_X_MAX: i32 = 0x1a4;
 /// Hit-strip bottom = the bottom anchor row, exclusive [verified:
-/// g_cursor_y < 0x1d6].
+/// g_cursor_y < 0x1d6]. 0x1d6 = 470 > CURSOR_MAX_Y (463): the
+/// exclusive bound is unreachable tail, not a lost row (see the
+/// STRIP_X_MIN audit note).
 pub const STRIP_Y_MAX: i32 = 0x1d6;
 /// Menu row height [verified: (y - top)/0x18 and i*0x18].
 pub const ROW_H: i32 = 0x18;
@@ -183,6 +196,9 @@ pub struct TitleMenu {
     entered: bool,
     /// Integrated absolute cursor (EXW g_cursor_x/y @004eddc4/c8;
     /// InputFrame carries deltas, the menu owns the position).
+    /// Boots at the GameInit center (320,240) and clamps into the
+    /// original [9,631]x[9,463] box every tick [D160/RE-EXD-MAP §5h
+    /// — the P2e package].
     cursor: (i32, i32),
     /// Idle counter (EXW 0046cbec).
     idle: u32,
@@ -231,7 +247,7 @@ impl TitleMenu {
             name: Vec::new(),
             phase: MenuPhase::Interactive,
             entered: false,
-            cursor: (0, 0),
+            cursor: (CURSOR_BOOT_X, CURSOR_BOOT_Y),
             idle: 0,
             debounce: 0,
             prev_buttons: 0,
@@ -366,16 +382,18 @@ impl TitleMenu {
     /// is currently playing (the first pass or the attract replay):
     /// the menu is inert except for the attract skip (D42.3).
     pub fn tick(&mut self, input: &InputFrame, movies_playing: bool) -> MenuTick {
-        // Integrate the pointer (the EXW ISR's absolute cursor).
-        // CLAMP DIVERGENCE (D160/RE-EXD-MAP §5h): the original twin
-        // cells clamp into [9,631]x[9,463] on BOTH channels (EXW
-        // ScrollUpdate 0x425b2e..0x425b84; EXD poll 0x12615..0x12659)
-        // and GameInit boots the CENTER (320,240) — this scene model
-        // still clamps [0,639] from (0,0) pending the P2e input map
-        // (the faithful re-pin is a package: boot center + box + the
-        // hover hit-strip audit).
-        self.cursor.0 = (self.cursor.0 + i32::from(input.mouse_dx)).clamp(0, 639);
-        self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(0, 479);
+        // Integrate the pointer (the EXW ISR's absolute cursor),
+        // pinned to the twin-verified model [D160/RE-EXD-MAP §5h, the
+        // P2e package]: clamp into [9,631]x[9,463] on every integrate
+        // (EXW ScrollUpdate 0x425b2e..0x425b84; EXD poll
+        // 0x12615..0x12659, mickey integrate-then-clamp — the 9 = the
+        // 24x24 cursor-sprite hotspot offset), boot at the GameInit
+        // center (320,240). The constants are the bedlam-core
+        // frame ones (the classic-input adapter's own box, D160).
+        self.cursor.0 =
+            (self.cursor.0 + i32::from(input.mouse_dx)).clamp(CURSOR_MIN_X, CURSOR_MAX_X);
+        self.cursor.1 =
+            (self.cursor.1 + i32::from(input.mouse_dy)).clamp(CURSOR_MIN_Y, CURSOR_MAX_Y);
         self.blink = self.blink.wrapping_add(1);
         if self.debounce > 0 {
             self.debounce -= 1;
@@ -1032,12 +1050,14 @@ pub(crate) mod tests {
     #[test]
     fn cursor_integrates_deltas_and_clamps() {
         let mut m = menu();
+        // Boot at the GameInit center [D160/RE-EXD-MAP §5h].
+        assert_eq!(m.cursor(), (320, 240));
         m.tick(&frame(700, 0, 0), false);
-        assert_eq!(m.cursor().0, 639);
+        assert_eq!(m.cursor().0, 631);
         m.tick(&frame(0, 1000, 0), false);
-        assert_eq!(m.cursor().1, 479);
+        assert_eq!(m.cursor().1, 463);
         m.tick(&frame(-2000, -2000, 0), false);
-        assert_eq!(m.cursor(), (0, 0));
+        assert_eq!(m.cursor(), (9, 9));
     }
 
     #[test]

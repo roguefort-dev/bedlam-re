@@ -196,7 +196,8 @@ palette with the mission — fetch set 10 files.
   for the slice). Leaving the scene drops the mission (the flow never
   ends on its own, like the briefing backdrop).
 - PER FRAME [FUN_0043d00b order]: per EXECUTED 60 Hz tick — integrate
-  the cursor from mouse deltas (clamp 0..639/0..479, the menu D42
+  the cursor from mouse deltas (the original [9,631]×[9,463] box
+  booting at the GameInit center (320,240), D160 — the menu D42
   pattern), on a left-button EDGE at the tick grid run the robot
   click seam, then `advance_frame` (the MissionShell frame). The
   click seam [RE-EXW-SIM sec 6.4]: clicks land in the viewport

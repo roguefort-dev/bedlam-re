@@ -21,6 +21,9 @@
 //! [design] tags below are reimplementation choices documented in
 //! DESIGN-GAME sec 11, not RE claims.
 
+use bedlam_core::frame::{
+    CURSOR_BOOT_X, CURSOR_BOOT_Y, CURSOR_MAX_X, CURSOR_MAX_Y, CURSOR_MIN_X, CURSOR_MIN_Y,
+};
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::dist_octagonal;
@@ -680,8 +683,11 @@ pub struct MissionScene {
     /// [design] FIXED at the first spawned robot's Q5 position for
     /// this slice (scroll input is out of scope).
     cam_q5: (i32, i32),
-    /// Pointer in 640x480 screen space (0,0 top-left), clamped on
-    /// every integrate [the menu D42 pattern; EXW clamps in the ISR].
+    /// Pointer in 640x480 screen space, clamped on every integrate
+    /// [the menu D42 pattern; EXW clamps in the ISR]. Pinned to the
+    /// twin-verified model [D160/RE-EXD-MAP §5h, the P2e package]:
+    /// boots at the GameInit center (320,240), clamps into
+    /// [9,631]x[9,463].
     cursor: (i32, i32),
     /// Left-button level at the last consumed tick (the D26 hashed
     /// edge-latch analog; only the left bit matters to this seam).
@@ -866,7 +872,7 @@ impl MissionScene {
             view,
             zone,
             cam_q5: (0, 0),
-            cursor: (0, 0),
+            cursor: (CURSOR_BOOT_X, CURSOR_BOOT_Y),
             prev_buttons: 0,
             rand_b: Pcg32::new(0x1E240, 0),
             dither: Dither::new(),
@@ -962,27 +968,31 @@ impl MissionScene {
 
     /// One executed 60 Hz tick [DESIGN-GAME sec 11 PER FRAME; the
     /// MissionShell order, RE-EXW-SIM sec 1]: integrate the pointer
-    /// from mouse deltas (clamp 0..=639 / 0..=479), run the click
-    /// seam on a left-button EDGE — the sidebar producer at
-    /// `x >= 0x1E0` [sec 6c], the robot arm below it [sec 6.4] —
-    /// then `advance_frame` (the six unit-manager phases + the
-    /// order-window tick). Inert until [`MissionScene::activate`].
+    /// from mouse deltas (the original [9,631]x[9,463] box, D160),
+    /// run the click seam on a left-button EDGE — the sidebar
+    /// producer at `x >= 0x1E0` [sec 6c], the robot arm below it
+    /// [sec 6.4] — then `advance_frame` (the six unit-manager phases
+    /// + the order-window tick). Inert until [`MissionScene::activate`].
     pub fn tick(&mut self, input: &InputFrame) {
         if !self.active {
             return;
         }
-        // CLAMP DIVERGENCE (D160/RE-EXD-MAP §5h): the original twin
-        // cells clamp into [9,631]x[9,463] on BOTH channels (EXW
-        // ScrollUpdate 0x425b2e..0x425b84; EXD poll 0x12615..0x12659,
-        // mickey integrate-then-clamp) and GameInit boots the CENTER
-        // (320,240) — this scene model still clamps [0,639] from
-        // (0,0) pending the P2e input map (the faithful re-pin is a
-        // package: boot center + box + the click-seam target audit).
-        // The x >= 0x1E0 sidebar gate below IS the original gate twin
+        // Integrate the pointer, pinned to the twin-verified model
+        // [D160/RE-EXD-MAP §5h, the P2e package]: clamp into
+        // [9,631]x[9,463] on every integrate (EXW ScrollUpdate
+        // 0x425b2e..0x425b84; EXD poll 0x12615..0x12659, mickey
+        // integrate-then-clamp — the 9 = the 24x24 cursor-sprite
+        // hotspot offset), boot at the GameInit center (320,240) —
+        // the constants are the bedlam-core frame ones (the
+        // classic-input adapter's own box, D160). Click-seam audit:
+        // the x >= 0x1E0 sidebar gate below IS the original gate twin
         // (EXD poll 0x1268f: [0x1074b0] >= 480 flips the cursor-sprite
-        // selector; 480 <= 631, inside both boxes).
-        self.cursor.0 = (self.cursor.0 + i32::from(input.mouse_dx)).clamp(0, 639);
-        self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(0, 479);
+        // selector; 480 <= 631, inside the box), and every scripted
+        // click target in this model's tests lands inside the box.
+        self.cursor.0 =
+            (self.cursor.0 + i32::from(input.mouse_dx)).clamp(CURSOR_MIN_X, CURSOR_MAX_X);
+        self.cursor.1 =
+            (self.cursor.1 + i32::from(input.mouse_dy)).clamp(CURSOR_MIN_Y, CURSOR_MAX_Y);
         let left = input.mouse_buttons & 0x01;
         if self.prev_buttons == 0 && left != 0 {
             if self.cursor.0 >= 0x1E0 {
@@ -2132,8 +2142,9 @@ mod tests {
         assert_eq!(m.sim().robots()[0].q5(), m.camera());
         assert_eq!(m.sim().robots()[0].z, 31, "the deck settles the spawn");
         fn click_at(m: &mut MissionScene, x: i32, y: i32) {
-            // The cursor integrates DELTAS (clamped 0..=639/0..=479);
-            // aim it at the absolute (x, y) with one move tick.
+            // The cursor integrates DELTAS (the original
+            // [9,631]x[9,463] box, D160); aim it at the absolute
+            // (x, y) with one move tick.
             let (cx, cy) = m.cursor();
             m.tick(&InputFrame {
                 mouse_dx: (x - cx) as i16,
