@@ -454,16 +454,31 @@ What RE must confirm: everything beyond the layout.
   consumption, exactly 282 records per file):** records start at offset 0 —
   **NO header** (the old "12-B header mirroring BLD rec0" read was a
   mis-frame; the `(1,1,1,1,150,0,1,15)` opening u16s ARE record 0). Record =
-  - `u16 control` — ≠1: the record is just these 2 bytes (empty library row);
-  - ==1: `u16 W, u16 H, u16 D` (footprint; corpus mostly (1,1,1)..(1,1,4),
-    max (3,3,3)), `i32 hp` (e.g. 150), `u16 chain` (chain-detonation gate,
-    EXW 7j.13), `i32 type` (objective/score code; corpus 15/5/30/11/120/90/
+  - `u16 control` — ≠1: the record is just these 2 bytes (empty library row;
+    the value is **0 on all 2527 corpus empty rows** — §7j.61/2);
+  - ==1: `u16 W, u16 H, u16 D` (footprint; **113 distinct tuples, W ≤ 10,
+    H ≤ 10, D ≤ 8, max (10,10,5) = 500 cells at ZONEF/M1 #184 — the
+    pre-2026-08-25 "max (3,3,3)" claim was WRONG (§7j.61/D)**; (1,1,1)
+    alone covers 3581 records), `i32 hp` (e.g. 150; domain −1..18900 —
+    negative hp exists on disk), `u16 chain` (chain-detonation gate,
+    EXW 7j.13; domain {0,1}), `i32 type` (objective/score code; corpus 15/5/30/11/120/90/
     20/40/10/60/180/270…; 0xb = score-10), `5 × 8 B` effect entries
     (`u16 selector, u16 x_off, u16 y_off, u16 z_off` — tile offsets staged
     relative to the instance; selector 1..9 → the destroy-tail debris/effect
     cases, EXW §7j.25; corpus uses ONLY 1..9: ×11098/1490/1385/402/330/304/
     316/178/56), then **four template banks of `2·W·H·D` bytes each**
     (u16 cells, linear `(z·H+i)·W+j` — H = y-extent, W = x-extent).
+- **STAGING SEMANTICS (§7j.61, re-verified instruction-by-instruction
+  2026-08-25):** the whole 282×0x4E = 0x55EC-B in-memory table at 0x4dedf2
+  AND 0x9C40 B of the bank arena are memset-0 before every load; the
+  loader stages the raw control word at row+0 BEFORE the ==1 test; empty
+  rows leave +2..+0x4E memset-0 (head, effects, count, and all four bank
+  pointer slots NULL); the count word@+0x12 = the number of NONZERO
+  selectors, computed at load on ACTIVE rows only (census 0..5; 554
+  active rows carry count 0 — not a presence flag) and has ZERO runtime
+  readers (write-only); the four banks are read into CONSECUTIVE arena
+  slots in DISK ORDER (cursor 0x46ad5c, += 2·W·H·D per bank) — the
+  current/under interleave lives only in the row's pointer slots.
 - **TEMPLATE-BANK SEMANTICS CLOSED (EXW §7j.32, 2026-08-22):** the four
   banks are a 2×2 of {CURRENT state, UNDER-terrain} × {TOT words, DAT
   volume}, and the **on-disk order is interleaved vs the in-memory slot

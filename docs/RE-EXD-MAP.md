@@ -554,7 +554,7 @@ registers, minus the §5g-already-pinned 13).
 
 | EXW | EXD | anchor | tag |
 |---|---|---|---|
-| type table 0x4dedf2 | **0x108428** (static) | .BDG parse: stride 0x4E, 282 recs (loop bound 0x55ec), 5×8B entries @+0x16.., template bank ptrs @+0x3E/0x42/0x46/0x4A (0x108466/6a/6e/72) — EXW layout byte-exact; arena cursor 0x1195f8 (EXW 0x46ad5c) | [verified] |
+| type table 0x4dedf2 | **0x108428** (static) | .BDG parse: stride 0x4E, 282 recs (loop bound 0x55ec on the row offset — EXW counts records against 0x11a, same 282), 5×8B entries @+0x16.., template bank ptrs @+0x3E/0x42/0x46/0x4A (0x108466/6a/6e/72) — EXW layout byte-exact; arena cursor 0x1195f8 (EXW 0x46ad5c); loader FUN_0002adb4 re-verified instruction-for-instruction 2026-08-25 (§7j.61: table+arena memset pre-zero, control staged at +0, count@+0x12 = nonzero selectors on active rows only, banks into consecutive arena slots in disk order) | [verified; re-pinned 2026-08-25 S0-09/D148] |
 | TOT volume ptr 0x4ede20 | ***0x107454** (pointer cell) | map loader ".TOT" → FUN_0002d57c(buf, DAT_00107454) | [verified] |
 | DAT volume ptr 0x4edd58 | ***0x107518** (+4 = u8 planes) | ".DAT" load + the ≥0x7F→0 sanitize sweep + every volume read (TRT stamp, platform plane-B) | [verified] |
 | CGR ptr 0x4edd60 | ***0x107540** | ".CGR" load | [verified] |
