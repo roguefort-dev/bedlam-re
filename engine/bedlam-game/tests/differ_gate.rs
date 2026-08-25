@@ -424,20 +424,20 @@ fn s0_s1_cross_and_double_run() {
     // back through the shared field walk — still exactly the 1
     // row-level finding, zero field gaps, zero T2 diffs.
     for (id, frames_total, pinned_chain, expect_coverage) in [
-        ("S0", 3u64, "b9b57b68e95f482a", 0u64),
-        ("S1", 401u64, "da833e535f833dcc", 1u64),
-        ("S2", 17u64, "43110d921137da19", 1u64),
+        ("S0", 3u64, "5ab9df44ca3ba0c6", 0u64),
+        ("S1", 401u64, "0224dcc5f4631460", 1u64),
+        ("S2", 17u64, "04dfa60b7262a474", 1u64),
         // Re-pinned at the W12-S4-prep landing (D104, §7j.39/9) —
         // the artillery burst-pair application draws the shared
         // stream (was 49193732e6dbc546).
-        ("S3", 133u64, "fdd9fae3de7a3ef9", 1u64),
+        ("S3", 133u64, "95375e99ba27990a", 1u64),
         // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
         // the guest banks and parse back through the destroy
         // normalizers — the T1 destroy rows join the exact-exact
         // set, the debris/splash T3 rows are E-only (no EXD alias
         // yet — 2 more row-level coverage findings, documented
         // never fabricated).
-        ("S4", 49u64, "f35b5e45b26891ea", 1u64 + 2),
+        ("S4", 49u64, "a8deea56f9308102", 1u64 + 2),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
         // the debris/splash rows never ride — exactly the 1 S1-class
@@ -446,8 +446,8 @@ fn s0_s1_cross_and_double_run() {
         // tile active) fabricate as the full 100x100 guest grid and
         // parse back through the same compact-tile filter; the zone
         // row exercises the D108 cell−1 convention end-to-end.
-        ("S5", 16u64, "744950e2d3753d04", 1u64),
-        ("S5B", 19u64, "28bfea820bfb05ac", 1u64),
+        ("S5", 16u64, "359d9131fb51a86c", 1u64),
+        ("S5B", 19u64, "18a27532aeb7858e", 1u64),
         // W12-S5C (D108's observability follow-up): the pre-damaged
         // walker run — same tier set as S5/S5B (T0/T1/TS: the
         // artillery's debris/splash staging stays unwatched, no T3
@@ -455,7 +455,7 @@ fn s0_s1_cross_and_double_run() {
         // finding. The destroy-chain cascade the burst rings
         // detonate rides the SAME aliased T1 rows (the compact-tile
         // filter + the destroy normalizers) — zero field gaps.
-        ("S5C", 55u64, "be8cf733f1d078c2", 1u64),
+        ("S5C", 55u64, "0095d08b9f92d51b", 1u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
         // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
         // alias), so exactly the 1 S1-class finding + 1 more. The
@@ -463,7 +463,7 @@ fn s0_s1_cross_and_double_run() {
         // the surviving claims fabricate through the u16-cell map
         // and parse back exactly; the swept robot's state-5/stop-1e6
         // words ride the aliased robot bank — zero field gaps.
-        ("S6", 75u64, "80066717ee97b67f", 1u64 + 1),
+        ("S6", 75u64, "7c4437ee14e9c7ab", 1u64 + 1),
         // W12-S7 (§7j.41, D113): the platform-dynamics lifecycle —
         // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
         // destroy rows + both platform banks ride, and the T3
@@ -474,7 +474,7 @@ fn s0_s1_cross_and_double_run() {
         // normalizers define (both channels carry the same form);
         // the creep-grown mirror words parse back through the
         // compact-tile filter — zero field gaps.
-        ("S7", 1361u64, "9b81586f58687994", 1u64 + 2),
+        ("S7", 1361u64, "f8e83317ca7c5f8a", 1u64 + 2),
         // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
         // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
         // cycle — ALIASED, S3 pinned the T2 form; the critter bank
@@ -483,7 +483,7 @@ fn s0_s1_cross_and_double_run() {
         // row-level finding + the critter-bank/effect-rows pair —
         // zero field gaps (the 0x68 records fabricate through the
         // same bare-span T2 form).
-        ("S8", 121u64, "acced68c68c14fa6", 1u64 + 2),
+        ("S8", 121u64, "0d1482d01f57b2b1", 1u64 + 2),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -660,7 +660,7 @@ fn s1_o2_tiebreak_arbitration() {
     let src = fs::read_to_string(scen_path("S1")).unwrap();
     let e_run = run_canonical(&src, &root).unwrap();
     assert_eq!(
-        e_run.manifest.chain_digest, "da833e535f833dcc",
+        e_run.manifest.chain_digest, "0224dcc5f4631460",
         "the pinned E content (S1)"
     );
     let e_dump = decode_dump(&e_run.bytes).unwrap();
@@ -761,8 +761,8 @@ fn s1_o2_tiebreak_arbitration() {
         f.detail,
         "O2/EXW canon agrees with O1: the engine (E) is the outlier"
     );
-    assert_eq!(f.a, Some(FieldVal::Int(3993))); // E' = 4000-7
-    assert_eq!(f.b, Some(FieldVal::Int(4000))); // O1/O2 canon
+    assert_eq!(f.a, Some(FieldVal::Int(3493))); // E' = 3500-7 (the S0-12b boot-default seed)
+    assert_eq!(f.b, Some(FieldVal::Int(3500))); // O1/O2 canon
     assert_eq!(res.first_divergence().unwrap().row, "money");
 
     // ---- lane (b): O2 sides with E against a perturbed O1 — the
@@ -782,8 +782,8 @@ fn s1_o2_tiebreak_arbitration() {
         f.detail,
         "O2/EXW canon agrees with E: EXD diverges from EXW (engine keeps EXW; log to docs/DIVERGENCES.md)"
     );
-    assert_eq!(f.a, Some(FieldVal::Int(4000))); // E/O2 canon
-    assert_eq!(f.b, Some(FieldVal::Int(3993))); // O1' = 4000-7
+    assert_eq!(f.a, Some(FieldVal::Int(3500))); // E/O2 canon
+    assert_eq!(f.b, Some(FieldVal::Int(3493))); // O1' = 3500-7
 
     // ---- lane (c): all three channels hold different readings ----
     let res = run_diff(&e_run.bytes, &o1_bad, Some(&o2_bad), &cross, &reg).unwrap();
@@ -795,8 +795,8 @@ fn s1_o2_tiebreak_arbitration() {
         f.detail,
         "all three channels differ (E wrong against both oracles)"
     );
-    assert_eq!(f.a, Some(FieldVal::Int(4000))); // E
-    assert_eq!(f.b, Some(FieldVal::Int(3993))); // O1' (O2' = 3997 off-stage)
+    assert_eq!(f.a, Some(FieldVal::Int(3500))); // E
+    assert_eq!(f.b, Some(FieldVal::Int(3493))); // O1' (O2' = 3497 off-stage)
 
     // ---- lane (d): no tiebreak dump supplied — provisional ----
     let res = run_diff(&e_run.bytes, &o1_bad, None, &cross, &reg).unwrap();
@@ -830,7 +830,7 @@ fn s0_o2_transcript_stitch_channel_rule() {
     let src = fs::read_to_string(scen_path("S0")).unwrap();
     let e_run = run_canonical(&src, &root).unwrap();
     assert_eq!(
-        e_run.manifest.chain_digest, "b9b57b68e95f482a",
+        e_run.manifest.chain_digest, "5ab9df44ca3ba0c6",
         "the pinned E content (S0)"
     );
     let e_dump = decode_dump(&e_run.bytes).unwrap();
@@ -924,7 +924,7 @@ fn s0_o3_transcript_stitch_channel_rule() {
     let src = fs::read_to_string(scen_path("S0")).unwrap();
     let e_run = run_canonical(&src, &root).unwrap();
     assert_eq!(
-        e_run.manifest.chain_digest, "b9b57b68e95f482a",
+        e_run.manifest.chain_digest, "5ab9df44ca3ba0c6",
         "the pinned E content (S0)"
     );
     let e_dump = decode_dump(&e_run.bytes).unwrap();

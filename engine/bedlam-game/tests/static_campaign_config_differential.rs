@@ -15,11 +15,13 @@
 //!    ORIGINAL's fresh-session semantics in code, independently of
 //!    the engine.
 //! 2. E-SIDE COMPARISON (corpus-gated): the S0 canonical run's
-//!    anchor-frame T0 rows against that table. Five rows are CLOSED
-//!    both sides; the remaining three are pinned as LOUD, NAMED gaps
-//!    (the S0-12b seam unit) — each assertion below states the
-//!    original value it diverges from, so the seam landing flips
-//!    exactly these assertions.
+//!    anchor-frame T0 rows against that table. ALL EIGHT rows are
+//!    CLOSED both sides since the S0-12b seam landed (D154): the
+//!    three former LOUD gaps (difficulty/money/linear-mission-m)
+//!    flipped to equality pins — the canonical fresh session now
+//!    carries the GameMain boot defaults (difficulty 1 → money 3500
+//!    via `start_score`) and the linear row rides the §7j.64/D
+//!    derivation; a regression re-opens any of them loudly.
 //!
 //! This test lives in bedlam-game (unlike the S0-07..S0-11 core
 //! oracles) because the rows' E half IS the canonical harness
@@ -99,8 +101,8 @@ fn original_fresh_session_scalar_table() {
     assert_eq!(original_fresh_money(0), 4000);
     assert_eq!(original_fresh_money(2), 3000);
     // §7j.64/D — linear-mission-m fresh (zone 1, mission 1):
-    // 5*(-1) + 1 - 1 = -5 -> the 0x41c550 floor -> 1.
-    // GAP COMPANION (S0-12b): E emits the 0-based progress counter 0.
+    // 5*(-1) + 1 - 1 = -5 -> the 0x41c550 floor -> 1. CLOSED by the
+    // S0-12b seam: E emits the same derived cell (D154).
     assert_eq!(original_linear_mission_m(1, 1), 1);
 }
 
@@ -219,29 +221,27 @@ fn corpus_s0_anchor_t0_rows_match_the_transcription() {
     // sound-disabled capture machine dumps 0: the loud finding).
     assert_eq!(u32row("sfx-master-gate"), ORIGINAL_FRESH_SFX_GATE);
 
-    // ---- LOUD NAMED GAPS (the S0-12b seam unit; each assertion
-    // states the original value it diverges from and flips when the
-    // seam lands — never silently re-baselined) ----
+    // ---- THE S0-12b SEAM LANDED (D154): the three former LOUD gaps
+    // are now EQUALITY pins — E's fresh session carries the GameMain
+    // boot defaults (difficulty 1 → money 3500 through the engine's
+    // own start_score seam) and emits linear-mission-m through the
+    // §7j.64/D derivation. Any regression re-opens the gap loudly. ----
     assert_eq!(
         u32row("difficulty"),
-        0,
-        "GAP S0-12b: E fresh default 0 vs the original boot write {} \
-         (0x41c14a, 7j.64/A)",
-        ORIGINAL_FRESH_DIFFICULTY
+        ORIGINAL_FRESH_DIFFICULTY,
+        "difficulty: 0x41c14a boot write == E fresh default (7j.64/A, S0-12b)"
     );
     assert_eq!(
         u32row("money"),
-        4000,
-        "GAP S0-12b: E fresh default 4000 (d=0) vs the original \
-         fresh-boot {} (4000-500*1, 0x43aaca with d=1, 7j.64/C)",
-        original_fresh_money(ORIGINAL_FRESH_DIFFICULTY as i32)
+        original_fresh_money(ORIGINAL_FRESH_DIFFICULTY as i32) as u32,
+        "money: 0x43aaca fresh-boot 4000-500*1 == E start_score seed (7j.64/C, S0-12b)"
     );
     assert_eq!(
         u32row("linear-mission-m"),
-        0,
-        "GAP S0-12b: E emits the 0-based progress counter 0 vs the \
-         original DERIVED cell 1 (the 0x41c550 floor of \
-         5*(1-2)+1-1, 7j.64/D)"
+        original_linear_mission_m(ORIGINAL_FRESH_ZONE, ORIGINAL_FRESH_MISSION) as u32,
+        "linear-mission-m: the 0x41c520..556 derivation on the CURRENT slot \
+         (fresh (1,1) -> the 0x41c550 floor 1) == E derived cell (7j.64/D, \
+         S0-12b)"
     );
 }
 
@@ -253,9 +253,10 @@ fn corpus_boot_difficulty_seed_matches_the_name_entry_formula() {
     }
     // The grammar's boot difficulty key IS the name-entry toggle seam
     // (§7j.64/C): the seed must land through the engine's own
-    // start_score formula, proving the ORIGINAL fresh-boot state
-    // (d=1 -> money 3500) is expressible on E today — the S0-12b gap
-    // is the fresh DEFAULT, not a missing mechanism.
+    // start_score formula. Since S0-12b (D154) the explicit
+    // `boot difficulty=1` run and the no-boot default run are the
+    // SAME state — the boot step now OVERRIDES a default instead of
+    // gating the seed.
     let scen = "scenario = \"SD1\"\ntiers = T0,TS\nframes = 2\nboot difficulty=1\nuntil-anchor mission-start\nstep 2\n";
     let run = run_canonical(scen, &root()).expect("boot difficulty=1 consumed");
     let dump = decode_dump(&run.bytes).expect("SD1 dump verifies");
@@ -267,11 +268,12 @@ fn corpus_boot_difficulty_seed_matches_the_name_entry_formula() {
     };
     assert_eq!(u32row("money"), original_fresh_money(1) as u32);
     assert_eq!(u32row("difficulty"), ORIGINAL_FRESH_DIFFICULTY);
-    // The original fresh-boot linear value is expressible through the
-    // zone-staging seam arithmetic the S0-12b seam unit will pin.
+    // The linear row rides the §7j.64/D derivation on this run too
+    // (fresh slot (1,1) -> the floor 1) — the zone-staging seam
+    // arithmetic the S0-12b unit pinned (D154).
     assert_eq!(
-        original_linear_mission_m(ORIGINAL_FRESH_ZONE, ORIGINAL_FRESH_MISSION),
-        1,
-        "the derived-cell value the S0-12b linear seam must emit"
+        u32row("linear-mission-m"),
+        original_linear_mission_m(ORIGINAL_FRESH_ZONE, ORIGINAL_FRESH_MISSION) as u32,
+        "the derived-cell value the S0-12b linear seam emits"
     );
 }

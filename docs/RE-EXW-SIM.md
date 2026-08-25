@@ -9910,3 +9910,12 @@ existing start_score seam) and emit the linear row through the D
 derivation — a deliberate full-chain re-baseline (the D136/D151
 machinery), never a silent default change. No row is silently counted:
 the gaps stay loud until the seam lands.
+
+**LANDED 2026-08-25 (S0-12b/D154):** the seam closed all three gaps BOTH
+sides — the canonical fresh default is difficulty 1 (the boot write
+re-created; `boot difficulty=d` overrides), the campaign seed runs on
+every run (money 3500 + the sim damage rows at the original's fresh d=1),
+and the emitted row + the TRT hp tier selector read the derived cell (the
+§7j.64/D formula from the CURRENT mission_slot()). The oracle's three
+loud gap assertions flipped to equality pins; every canonical chain
+re-baselined deliberately (see D154 for the digest table).

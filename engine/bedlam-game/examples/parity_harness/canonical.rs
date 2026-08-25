@@ -35,9 +35,14 @@
 //! the next COMMAND record in the sim ring and the pumped frame's
 //! MissionShell pass consumes it (FUN_00409138 — a ≥14 B payload
 //! fails loud); `pad` is still rejected naming the S6 extraction
-//! seam; `boot difficulty=d` seeds the campaign money via the
-//! engine's own `menu::start_score` formula + the sim's difficulty
-//! dword (the scaled damage rows).
+//! seam; `boot difficulty=d` OVERRIDES the fresh-session difficulty
+//! default (§7j.64/A: the GameMain boot head writes DIFFICULTY := 1
+//! at 0x41c14a — E's no-boot-step default is that 1, S0-12b/D154)
+//! and seeds the campaign money via the engine's own
+//! `menu::start_score` formula + the sim's difficulty dword (the
+//! scaled damage rows); the seed applies on EVERY run — the
+//! name-entry fresh-campaign arm 0x43aaca re-seeds money at every
+//! campaign start (§7j.64/C).
 //! The `markers` header key (D91) stages extra squad robots through
 //! the existing `load_mission(staged_markers)` seam after the MRK
 //! robots — the walk seam (the click-order moves only the OTHER
@@ -106,6 +111,8 @@ pub struct TickState<'a> {
     pub zone: u32,
     pub mission: u32,
     pub mode: u32,
+    /// The DERIVED linear-mission-m cell (§7j.64/D — clamp of
+    /// 5·(zone−2)+mission−1 into 1..=26; S0-12b/D154).
     pub linear: u32,
     pub robots: &'a [Robot],
     /// The armed click order (beacon-family + spread-claims source).
@@ -732,7 +739,21 @@ struct Session {
     difficulty: u32,
     zone: u32,
     mission: u32,
+    /// The DERIVED linear-mission-m cell [0x46ae8c] (not the episode
+    /// progress counter — §7j.64/D, S0-12b/D154).
     linear: u32,
+}
+
+/// The linear-mission-m derivation (§7j.64/D, EXW 0x41c520..0x41c556):
+/// `m = clamp(5*(zone-2) + mission - 1, floor 1, cap 26)` — GameMain
+/// recomputes the cell from the CURRENT zone/mission slot every
+/// episode (3 writes: the store 0x41c534, the cap 0x41c53e, the
+/// floor 0x41c550); it is never a persisted counter. `zone` is the
+/// 1-based guest set (mission_slot()'s 0-based index + 1, the D108
+/// zone-row convention), `mission` the 1-based within-zone number.
+/// Fresh slot (1,1): 5*(-1)+1-1 = -5 → the floor → 1.
+pub fn linear_mission_m(zone: u32, mission: u32) -> u32 {
+    (5 * (zone as i32 - 2) + mission as i32 - 1).clamp(1, 26) as u32
 }
 
 /// Run one scenario canonically and stitch the channel-E W3 dump.
@@ -763,15 +784,18 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
             ));
         }
     }
-    // BOOT (walk-phase-only by grammar): difficulty seeds the campaign
-    // money via the engine's own formula (menu.rs start_score).
-    let mut difficulty = 0u32;
+    // BOOT (walk-phase-only by grammar): an explicit `boot difficulty=d`
+    // step OVERRIDES the fresh-session default; the default is the
+    // GameMain boot-head write DIFFICULTY := 1 (§7j.64/A, 0x41c14a —
+    // S0-12b/D154; the pre-seam default 0 mis-modeled the fresh boot).
+    let mut boot_difficulty: Option<u32> = None;
     for step in walk {
         if let Step::Boot { key, value } = step {
             debug_assert_eq!(key, "difficulty", "grammar pins the boot key set");
-            difficulty = u32::try_from(*value).unwrap_or(0);
+            boot_difficulty = Some(u32::try_from(*value).unwrap_or(0));
         }
     }
+    let difficulty = boot_difficulty.unwrap_or(1);
 
     let mut source = MissionSource::new(root);
     let config = GameConfig::load(&mut source)?;
@@ -781,11 +805,13 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     // The episode-slot zone staging (W12-S5, grammar v1.5 `zone`,
     // D108): the host seam stands in for the campaign-advance
     // (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine
-    // does not model. Letter A..G → stage 1..7; mask 0 → MISSION1;
-    // linear stays the fresh-slot 0 (a played campaign carries its
-    // own counter — the recorded live-capture seam, never
-    // fabricated). Must run BEFORE the asset fetch (the zone drives
-    // the names + the robots-per-player count).
+    // does not model. Letter A..G → stage 1..7; mask 0 → MISSION1.
+    // The emitted linear row no longer reads the slot's progress
+    // counter — it is the DERIVED cell (see `linear_mission_m`
+    // below, §7j.64/D, S0-12b/D154; the D108 "linear stays the
+    // fresh-slot 0" note superseded). Must run BEFORE the asset
+    // fetch (the zone drives the names + the robots-per-player
+    // count).
     if let Some(letter) = scen.zone {
         let stage = u8::try_from(u32::from(letter) - u32::from(b'A') + 1)
             .expect("grammar pins the zone letter to A..G");
@@ -861,7 +887,13 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         None,
         &scen.markers,
     )?;
-    if difficulty != 0 {
+    // The campaign seed runs on EVERY run (§7j.64/C, S0-12b/D154):
+    // the name-entry fresh-campaign arm 0x43aaa3..0x43aad0 writes
+    // money := 4000−500·d at every campaign start — the default
+    // difficulty 1 seeds 3500 on an untouched-toggle fresh boot (the
+    // pre-seam gate skipped the seed at d=0, the mis-modeled
+    // default). `start_score` IS the 0x43aaca formula.
+    {
         let money = bedlam_game::menu::start_score(difficulty as u8);
         let scene = host.mission_mut().expect("mission staged");
         scene.set_campaign(0, money);
@@ -903,7 +935,13 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 pos_bytes.len()
             )));
         }
-        let linear = u32::from(host.fsm().episode().linear());
+        // The TRT hp tier selector is the DERIVED cell [0x46ae8c]
+        // (§7j.64/D lists the 250+250·m/27 formula among its readers;
+        // S0-12b/D154 — the pre-seam `episode().linear()` counter was
+        // the wrong source; fresh/staged slots now carry m from the
+        // same derivation as the emitted row).
+        let (zone_idx_for_m, mission_for_m) = host.mission_slot();
+        let linear = linear_mission_m(zone_idx_for_m as u32 + 1, mission_for_m as u32);
         if bedlam_core::destroy::parse_trt(&trt_bytes, linear).is_none() {
             return Err(CanonicalError(format!(
                 "{per_mission}.TRT desynced (the FORMATS §14 grammar)"
@@ -1038,7 +1076,10 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
         difficulty,
         zone: zone as u32,
         mission: mission_no as u32,
-        linear: u32::from(host.fsm().episode().linear()),
+        // The linear-mission-m row = the DERIVED cell, recomputed
+        // from the CURRENT slot (§7j.64/D, 0x41c520..0x41c556;
+        // S0-12b/D154) — never the episode progress counter.
+        linear: linear_mission_m(zone as u32 + 1, mission_no as u32),
     };
 
     // Boot hold → Title → Brief → Select → Mission, then the

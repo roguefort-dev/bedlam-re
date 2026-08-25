@@ -456,7 +456,7 @@ fn corpus_s0_s1_canonical_runs() {
     let s0 = fs::read_to_string(scen_path("S0")).expect("S0.scen committed");
     let run0 = run_canonical(&s0, &root).expect("S0 canonical run");
     assert_eq!(run0.manifest.frame_count, 3);
-    assert_eq!(run0.manifest.chain_digest, "b9b57b68e95f482a");
+    assert_eq!(run0.manifest.chain_digest, "5ab9df44ca3ba0c6");
     let run0b = run_canonical(&s0, &root).expect("S0 canonical re-run");
     assert_eq!(run0.bytes, run0b.bytes, "byte-identical double run");
 
@@ -467,10 +467,12 @@ fn corpus_s0_s1_canonical_runs() {
         dump.frames.iter().map(|f| f.frame_no).collect::<Vec<_>>(),
         vec![0, 1, 2]
     );
-    // Fresh campaign: money 4000, the ZONEA statics ride the anchor.
+    // Fresh campaign: money 3500 (the §7j.64/C name-entry seed at the
+    // boot-default difficulty 1 — S0-12b/D154; was 4000 at the
+    // mis-modeled d=0 default), the ZONEA statics ride the anchor.
     assert_eq!(
         dump.frames[0].watch("money"),
-        Some(&4000u32.to_le_bytes()[..])
+        Some(&3500u32.to_le_bytes()[..])
     );
     assert!(dump.frames[0].watch("static-map-wh").is_some());
     assert!(dump.frames[1].watch("static-map-wh").is_none());
@@ -485,7 +487,7 @@ fn corpus_s0_s1_canonical_runs() {
     let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
     let run1 = run_canonical(&s1, &root).expect("S1 canonical run");
     assert_eq!(run1.manifest.frame_count, 401);
-    assert_eq!(run1.manifest.chain_digest, "da833e535f833dcc");
+    assert_eq!(run1.manifest.chain_digest, "0224dcc5f4631460");
     let run1b = run_canonical(&s1, &root).expect("S1 canonical re-run");
     assert_eq!(run1.bytes, run1b.bytes, "byte-identical double run");
 }
@@ -590,7 +592,7 @@ fn corpus_s3_command_fire() {
     // moved from 49193732e6dbc546 BEFORE any O1 S3 capture exists
     // (the D103 dbx-plan T2-tier unit precedes any live S3).
     assert_eq!(
-        run.manifest.chain_digest, "fdd9fae3de7a3ef9",
+        run.manifest.chain_digest, "95375e99ba27990a",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s3, &root).expect("S3 canonical re-run");
@@ -754,7 +756,7 @@ fn corpus_s2_order_walk() {
     let run = run_canonical(&s2, &root).expect("S2 canonical run");
     assert_eq!(run.manifest.frame_count, 17);
     assert_eq!(
-        run.manifest.chain_digest, "43110d921137da19",
+        run.manifest.chain_digest, "04dfa60b7262a474",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s2, &root).expect("S2 canonical re-run");
@@ -1093,7 +1095,7 @@ fn corpus_s4_destroy_family() {
     let run = run_canonical(&s4, &root).expect("S4 canonical run");
     assert_eq!(run.manifest.frame_count, 49);
     assert_eq!(
-        run.manifest.chain_digest, "f35b5e45b26891ea",
+        run.manifest.chain_digest, "a8deea56f9308102",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s4, &root).expect("S4 canonical re-run");
@@ -1211,14 +1213,16 @@ fn corpus_s4_destroy_family() {
     // --- frame 32: the ARTILLERY ring-0 TURRET destroy ----------------
     // Robot 2's barrage bursts at its own tile (10,34): pair-ring 0
     // (the full 3x3 incl. the center) script-blasts the .TRT turret
-    // (10,33) at 5000: active 0, hp -4750, the RUBBLE stamp (zone-1
-    // word 0x20 + seen 1) in the mirror row. The blast box also
-    // spends 12 x 312 of robot 2's own hp (5000 -> 1256) — the
-    // faithful self-damage of a point-blank barrage.
+    // (10,33) at 5000: active 0, hp -4741 (the 5000 blast against the
+    // m=1 tier hp 259 = 250+250/27 — the §7j.64/D derived cell the
+    // S0-12b seam pins; was -4750 at the linear-0 tier), the RUBBLE
+    // stamp (zone-1 word 0x20 + seen 1) in the mirror row. The blast
+    // box also spends 12 x 312 of robot 2's own hp (5000 -> 1256) —
+    // the faithful self-damage of a point-blank barrage.
     let f32 = &dump.frames[32];
     let trt32 = trt_of(f32.watch("trt-array").unwrap());
-    assert_eq!(trt32[2], (0, -4750, 10, 33, 1), "the turret dies at ring 0");
-    assert_eq!(trt32[0], (1, 250, 14, 15, 1), "the other turrets hold");
+    assert_eq!(trt32[2], (0, -4741, 10, 33, 1), "the turret dies at ring 0");
+    assert_eq!(trt32[0], (1, 259, 14, 15, 1), "the other turrets hold");
     let m32 = f32.watch("typedb-mirror-rows").unwrap();
     let m32_tiles: Vec<u16> = (0..u32::from_le_bytes(m32[0..4].try_into().unwrap()) as usize)
         .map(|i| u16::from_le_bytes(m32[4 + i * 26..6 + i * 26].try_into().unwrap()))
@@ -1314,7 +1318,7 @@ fn corpus_s4_destroy_family() {
     let run0 = run_canonical(&s0, &root).unwrap();
     let dump0 = decode_dump(&run0.bytes).unwrap();
     assert!(dump0.frames[0].watch("object-instances").is_none());
-    assert_eq!(run0.manifest.chain_digest, "b9b57b68e95f482a");
+    assert_eq!(run0.manifest.chain_digest, "5ab9df44ca3ba0c6");
 }
 
 /// One typedb-mirror-rows cell (word, seen) at (tile, z) — the
@@ -1351,7 +1355,7 @@ fn corpus_s5_pickup_cases_1_2_4() {
     let run = run_canonical(&s5, &root).expect("S5 canonical run");
     assert_eq!(run.manifest.frame_count, 16);
     assert_eq!(
-        run.manifest.chain_digest, "744950e2d3753d04",
+        run.manifest.chain_digest, "359d9131fb51a86c",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5, &root).expect("S5 canonical re-run");
@@ -1387,7 +1391,7 @@ fn corpus_s5_pickup_cases_1_2_4() {
         assert_eq!(
             f.watch("trt-array").unwrap().len(),
             4 + 19 * 20,
-            "19 turrets (fresh-slot linear 0 -> hp 250)"
+            "19 turrets (the m=1 tier hp 259 = 250+250/27 — the S0-12b derived-cell seam)"
         );
     }
     let wh = dump.frames[0].watch("static-map-wh").unwrap();
@@ -1458,7 +1462,7 @@ fn corpus_s5_pickup_cases_1_2_4() {
     assert_eq!(m(4, t28), (0x48F, 1), "case 4 consumed at frame 4");
     assert_eq!(score(3), 0);
     assert_eq!(score(4), 1000, "the case-4 award folds into the score");
-    assert_eq!(money(15), 4000, "no money draw on this seed");
+    assert_eq!(money(15), 3500, "no money draw on this seed");
     // f5: the arrival.
     assert_eq!(walker_state(5), 3, "state 4→3 at the arrival");
     assert_eq!(walker_tile(5), (28, 21));
@@ -1530,7 +1534,7 @@ fn corpus_s5b_pickup_case_3() {
     let run = run_canonical(&s5b, &root).expect("S5B canonical run");
     assert_eq!(run.manifest.frame_count, 19);
     assert_eq!(
-        run.manifest.chain_digest, "28bfea820bfb05ac",
+        run.manifest.chain_digest, "18a27532aeb7858e",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5b, &root).expect("S5B canonical re-run");
@@ -1641,7 +1645,7 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     let run = run_canonical(&s5c, &root).expect("S5C canonical run");
     assert_eq!(run.manifest.frame_count, 55);
     assert_eq!(
-        run.manifest.chain_digest, "be8cf733f1d078c2",
+        run.manifest.chain_digest, "0095d08b9f92d51b",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s5c, &root).expect("S5C canonical re-run");
@@ -1682,7 +1686,7 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     assert_eq!(m(0, t77), (0x83, 0));
     assert_eq!(m(0, t78), (0x83, 0));
     assert_eq!(m(0, t769), (0x83, 0));
-    assert_eq!((score(0), money(0)), (0, 4000));
+    assert_eq!((score(0), money(0)), (0, 3500));
     // THE OBSERVABILITY SPEND (the S4 artillery pattern): the
     // frame-1 command's three records (9/0xA/0xB) all walk their
     // list-0 3x3 at tick 0x20 = frame 32; the four pairs whose blast
@@ -1736,10 +1740,10 @@ fn corpus_s5c_pickup_case_3_predamaged() {
     assert_eq!(hp(54, 3), 3746, "gunner hp through the tail");
     assert_eq!(
         money(41),
-        4150,
+        3650,
         "the side cell's case-4 draw folds same-frame"
     );
-    assert_eq!((score(54), money(54)), (2667, 4210), "the pinned tail");
+    assert_eq!((score(54), money(54)), (2667, 3710), "the pinned tail");
     // The arrival at frame 48: walker state 4→3 snapped at (78,10)
     // (one tile short of its spread slot — the west-approach
     // ARRIVE_RADIUS semantics, the S2 precedent).
@@ -1768,7 +1772,7 @@ fn corpus_s6_pad_extraction() {
     let run = run_canonical(&s6, &root).expect("S6 canonical run");
     assert_eq!(run.manifest.frame_count, 75);
     assert_eq!(
-        run.manifest.chain_digest, "80066717ee97b67f",
+        run.manifest.chain_digest, "7c4437ee14e9c7ab",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s6, &root).expect("S6 canonical re-run");
@@ -1914,7 +1918,7 @@ fn corpus_s7_platform_dynamics() {
     let run = run_canonical(&s7, &root).expect("S7 canonical run");
     assert_eq!(run.manifest.frame_count, 1361);
     assert_eq!(
-        run.manifest.chain_digest, "9b81586f58687994",
+        run.manifest.chain_digest, "f8e83317ca7c5f8a",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s7, &root).expect("S7 canonical re-run");
@@ -2142,56 +2146,58 @@ fn corpus_s8_critter_engagement() {
     assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
     // Chain pin (the fingerprint discipline, D28: moves only on a
     // deliberate engine/dump change, re-baselined loudly).
-    assert_eq!(run.manifest.chain_digest, "acced68c68c14fa6");
+    assert_eq!(run.manifest.chain_digest, "0d1482d01f57b2b1");
 
     let dump = decode_dump(&run.bytes).expect("S8 dump verifies");
     assert_eq!(dump.header.scenario, "S8");
     let frames = &dump.frames;
 
-    // THE DEBRIS-DAMAGE LANE (D115, §7j.44): the burst windows'
-    // spread chunks (mag-2, phys-6 countdowns) add small chips to
-    // the gunner's damage schedule — one −2 on the frames AFTER
-    // each 0x68 hit pair (f9/f11/f16/f18/f27/f29/f34/f36), the
-    // −77s = the 75-lane + one chip, f32/33 the burst lanes with
-    // the chips riding. Pinned end state: 3041 by f36, static
-    // after the windows close.
+    // THE DEBRIS-DAMAGE LANE (D115, §7j.44) at the S0-12b boot
+    // difficulty 1 (D154): the 0x68 lane is now the §7j.15/1
+    // difficulty-scaled row (d+1)·75 = 150/hit (was 75 at the
+    // mis-modeled d=0 default); the burst windows' spread chunks
+    // (mag-2, phys-6 countdowns) still chip −2 on the frames after
+    // each hit pair. First hit f5 (−304 = 2×150 + two chips), the
+    // pair cadence then lands 150+chip mixes; the burst frames
+    // 34/35 spend −776/−626. Pinned tail: 1132 by f39.
     let hp8 = |f: usize| -> i32 {
         let bank = frames[f].watch("robot-bank").unwrap();
         robots_of(bank)[1].i32(56)
     };
-    assert_eq!(hp8(7), 5000);
-    assert_eq!(hp8(8), 4923, "75 + one mag-2 chip");
-    assert_eq!(hp8(9), 4921, "a lone chip rides the burst window");
-    assert_eq!(hp8(36), 3041, "the last chip (1959 total spend)");
+    assert_eq!(hp8(4), 5000, "the last pre-hit frame");
+    assert_eq!(hp8(5), 4696, "2x150 + two mag-2 chips");
+    assert_eq!(hp8(39), 1132, "the tail after the burst windows close");
 
-    // The staging: 16 critters (6 kind-5 + 10 kind-4, §7j.42/5),
-    // the mode split {8: 6, 9: 10} at the anchor.
+    // The staging: 17 critters (7 kind-5 + 10 kind-4, §7j.42/5 — the
+    // d=1 spawn roll (RandA&1)+1 banks one extra kind-5 vs the d=0
+    // staging, S0-12b/D154), the mode split {8: 7, 9: 10} at the
+    // anchor.
     let b = frames[0].watch("critter-bank").expect("T2 critter row");
     let n = u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize;
-    assert_eq!(n, 16);
+    assert_eq!(n, 17);
     let mut kinds = std::collections::BTreeMap::new();
     for i in 0..n {
         let kind = critter_field(b, i, 0, 2) as u16;
         *kinds.entry(kind).or_insert(0) += 1;
     }
-    assert_eq!(kinds.get(&5), Some(&6));
+    assert_eq!(kinds.get(&5), Some(&7));
     assert_eq!(kinds.get(&4), Some(&10));
     // All ACTIVE from frame 0 (neither ZONEA family spawns
     // dormant): kind-5 engage-family modes (the anchor snapshot
     // sits AFTER the first controller pass — the near pack has
     // already transitioned/fired once), kind-4 mode 9, hp scaled
-    // base+base·0/27 = 150/200.
-    for i in 0..6 {
+    // base+base·1/27 = 155/207 (the §7j.42 difficulty staging).
+    for i in 0..7 {
         let mode = critter_field(b, i, 8, 2);
         assert!(
             matches!(mode, 2 | 3 | 8),
             "kind-5 engage-family mode (got {mode})"
         );
-        assert_eq!(critter_field(b, i, 6, 2), 150, "kind-5 hp 0x96");
+        assert_eq!(critter_field(b, i, 6, 2), 155, "kind-5 hp 150+150/27");
     }
-    for i in 6..16 {
+    for i in 7..17 {
         assert_eq!(critter_field(b, i, 8, 2), 9, "kind-4 mode 9");
-        assert_eq!(critter_field(b, i, 6, 2), 200, "kind-4 hp 0xC8");
+        assert_eq!(critter_field(b, i, 6, 2), 207, "kind-4 hp 200+200/27");
     }
 
     // The fire cycle: 0x68 records appear in the ALIASED
@@ -2214,15 +2220,18 @@ fn corpus_s8_critter_engagement() {
         "the 0x68 fire cycle ran ({fired} firing frames in f0..32)"
     );
 
-    // The gunner (robot 1) takes the 0x68 damage: hp < 5000 by
-    // the burst (75/hit through the walker, owner −1).
-    // (robot-bank blob: 4 + n*0x54, hp at +0x34 per record —
-    // asserted via the first hit-flash > 0 before f32.)
+    // The gunner (robot 1) takes the 0x68 damage: hp < 5000 from
+    // f5 (150/hit through the walker, owner −1).
+    // (robot-bank blob: 4 + n*94, hit_flash u16 at record +62 —
+    // asserted via the first hit-flash > 0 before f32. STRIDE FIX
+    // (S0-12b/D154): the old walk read stride 0x54/+0x2E — a wrong
+    // record offset that passed on a neighbor field; the 94-B
+    // record +62 is the pinned §6a hit_flash.)
     let mut flashed = 0usize;
     for f in frames.iter().take(31) {
         if let Some(rb) = f.watch("robot-bank") {
-            let (rec, stride) = (1usize, 0x54usize);
-            let o = 4 + rec * stride + 0x2E;
+            let (rec, stride) = (1usize, 94usize);
+            let o = 4 + rec * stride + 62;
             if u16::from_le_bytes([rb[o], rb[o + 1]]) > 0 {
                 flashed += 1;
             }
@@ -2244,7 +2253,7 @@ fn corpus_s8_critter_engagement() {
         "the burst deaths (>= 8 divers at f39, got {diving})"
     );
     let mut dead = 0usize;
-    for i in 0..16 {
+    for i in 0..17 {
         if critter_field(b39, i, 6, 2) <= 0 {
             dead += 1;
         }
@@ -2262,8 +2271,8 @@ fn corpus_s8_critter_engagement() {
 
     // The dying tail: the dives run their countdown-6 leash, the
     // mode-7 counters (0x28) run out, and the survivors' dormancy
-    // (mode 0xB) holds through the end (the d=0 respawn table
-    // 1500 frames out).
+    // (mode 0xB) holds through the end (the d=1 respawn table
+    // 900 frames out — S0-12b/D154).
     let b110 = frames[110].watch("critter-bank").expect("critter row f110");
     let m110 = critter_modes(b110);
     assert!(!m110.contains_key(&7), "the dying window closed by f110");
@@ -2288,7 +2297,7 @@ fn corpus_s8_critter_engagement() {
     // no critter rows without the key).
     let s1 = fs::read_to_string(scen_path("S1")).expect("S1.scen committed");
     let run1 = canonical::run_canonical(&s1, &root).expect("S1 canonical run");
-    assert_eq!(run1.manifest.chain_digest, "da833e535f833dcc");
+    assert_eq!(run1.manifest.chain_digest, "0224dcc5f4631460");
     assert!(decode_dump(&run1.bytes)
         .expect("S1 verifies")
         .frames

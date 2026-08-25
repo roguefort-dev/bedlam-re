@@ -3995,7 +3995,7 @@ Nudge-Worker: 78203f4f-22e4-4024-bcfa-88f79b85ac6a
 
 Nudge-Worker: f32193a2-ecfe-4387-8fbe-68f136fe4444
 
-## D108 — 2026-08-22: P4.2/W12-S5 — the S5/S5B pickup scenarios LANDED (grammar v1.5 `zone`/`pickup` keys + the episode-slot host seam + the zone-row O1 normalizer). FOUR decisions recorded: (1) ZONE STAGING = the D51 host seam `GameHost::stage_episode_slot(stage, mask)` standing in for the campaign-advance (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine does not model; the grammar key is `zone = "B"` (letter A..G → stage, mask 0 → MISSION1, linear stays the fresh-slot 0 — a live campaign-walk O1 session carries its own linear/mission counters, so the plan records the zone seam and the linear diff is the live-capture seam, never an E fabrication). (2) THE TWO-SCENARIO SPLIT: cases 1 and 3 are never co-walkable (nearest pair z3 (26,21)↔(76,10) = 61 octagonal tiles; one order's claims all lie within ORDER_RADIUS 0xC0 of the order tile), and two sequential orders need the first order CLEARED — all-alive-state-3 is impossible while the next leg's robots stand idle (state-3 robots can never re-claim, verified EXW subset), so the only in-model path is the 0x197-frame window expiry whose ~407 idle frames × ~340 KB/record of REAL mirror rows (every ZONEB tile is active: 15,102 words + 52,715 seen) is not a shippable dump — S5 (c1/c2/c4 row-21 trio) + S5B (c3+c4 row-10 five) cover cases 1..4 in 16+19 records. (3) DAT-BYTE VISIBILITY ANSWERED: the consume's DAT := 0 needs NO dedicated differ row — the mirror word (:= table-C floor)/seen carry the pickup observation, the walkability change rides the robot-bank rows, and the raw DAT volume is not a guest span any watch row carries. (4) THE ZONE-ROW CONVENTION: E's canonical zone is the 0-based mission-slot index while the guest cell (EXW 0x4edd8c / EXD 0x107500) is the 1-based set (D99) — the O1 normalizer maps cell−1 (S0..S4 chains unaffected; first exercised by S5/S5B). Staging order pinned: destroy family → stage_pickup_surface (the engine load-order note) → the §7j.12/6 hazard stamper (30 ZONEB grid cells: 24× 0x7d2 + 6× 0x7d3), matching the original mission-load order. Case-3 observability note: the walker spawns at the hp clamp ceiling (5000), so the case-3 +2500 body is value-invisible — the consume/dispatch still ride the rows; a pre-damaged-walker variant is the live follow-up (worker c2aba48b claim 2)
+## D108 — 2026-08-22: P4.2/W12-S5 — the S5/S5B pickup scenarios LANDED (grammar v1.5 `zone`/`pickup` keys + the episode-slot host seam + the zone-row O1 normalizer). FOUR decisions recorded: (1) ZONE STAGING = the D51 host seam `GameHost::stage_episode_slot(stage, mask)` standing in for the campaign-advance (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine does not model; the grammar key is `zone = "B"` (letter A..G → stage, mask 0 → MISSION1, linear stays the fresh-slot 0 — a live campaign-walk O1 session carries its own linear/mission counters, so the plan records the zone seam and the linear diff is the live-capture seam, never an E fabrication). **SUPERSEDED 2026-08-25 (S0-12b/D154):** the "linear stays the fresh-slot 0 / never fabricated" stance predates the §7j.64/D decode — the guest cell [0x46ae8c] is NOT a campaign-progress counter at all but a DERIVED cell `clamp(5·(zone−2)+mission−1, 1, 26)` recomputed by GameMain from the CURRENT slot every episode (fresh/staged slots read 1 on ZONEA/M1 and ZONEB/M1 alike). Emitting the derivation is therefore not a fabricated seam but the cell's actual write semantics; the canonical row + the TRT hp tier selector now read the derived value, and the live-capture seam D108 reserved is exactly the played-campaign slot (a zone/mission pair the corpus never stages) — still never fabricated. (2) THE TWO-SCENARIO SPLIT: cases 1 and 3 are never co-walkable (nearest pair z3 (26,21)↔(76,10) = 61 octagonal tiles; one order's claims all lie within ORDER_RADIUS 0xC0 of the order tile), and two sequential orders need the first order CLEARED — all-alive-state-3 is impossible while the next leg's robots stand idle (state-3 robots can never re-claim, verified EXW subset), so the only in-model path is the 0x197-frame window expiry whose ~407 idle frames × ~340 KB/record of REAL mirror rows (every ZONEB tile is active: 15,102 words + 52,715 seen) is not a shippable dump — S5 (c1/c2/c4 row-21 trio) + S5B (c3+c4 row-10 five) cover cases 1..4 in 16+19 records. (3) DAT-BYTE VISIBILITY ANSWERED: the consume's DAT := 0 needs NO dedicated differ row — the mirror word (:= table-C floor)/seen carry the pickup observation, the walkability change rides the robot-bank rows, and the raw DAT volume is not a guest span any watch row carries. (4) THE ZONE-ROW CONVENTION: E's canonical zone is the 0-based mission-slot index while the guest cell (EXW 0x4edd8c / EXD 0x107500) is the 1-based set (D99) — the O1 normalizer maps cell−1 (S0..S4 chains unaffected; first exercised by S5/S5B). Staging order pinned: destroy family → stage_pickup_surface (the engine load-order note) → the §7j.12/6 hazard stamper (30 ZONEB grid cells: 24× 0x7d2 + 6× 0x7d3), matching the original mission-load order. Case-3 observability note: the walker spawns at the hp clamp ceiling (5000), so the case-3 +2500 body is value-invisible — the consume/dispatch still ride the rows; a pre-damaged-walker variant is the live follow-up (worker c2aba48b claim 2)
 
 Nudge-Worker: c2aba48b-1e33-43f3-9ea5-19b4cabe8a1d
 
@@ -4573,3 +4573,81 @@ list above = 19+8 = 27 ✓ — the predecessor's "18-row remainder"
 prose was the miscount (16 is the true remainder at D152), and the
 assignment list 8+3+2+1+1+1 = 16 is consistent. (worker 0f91b0d7
 claim 1)
+
+## D154 — 2026-08-25: P4/static-parity/S0-12b — the fresh-session campaign/config seam LANDED (difficulty 1 + money 3500 + the linear-mission-m DERIVED cell): the three D153 gaps closed BOTH sides; every canonical chain re-baselined deliberately
+
+**(1) THE SEAM (canonical.rs, the E-side harness).** Three coupled
+changes, all pinned to the §7j.64 decode (D153): (a) the fresh-session
+difficulty DEFAULT is 1 — the GameMain boot-head write (§7j.64/A,
+0x41c14a); `boot difficulty=d` now OVERRIDES a default instead of gating
+the seed (an explicit `boot difficulty=0` is expressible again — the old
+`difficulty != 0` gate conflate the two). (b) the campaign seed runs on
+EVERY run: `set_campaign(0, start_score(d))` + `sim.set_difficulty(d)`
+— the name-entry fresh-campaign arm (§7j.64/C, 0x43aaa3..0x43aad0)
+re-seeds money 4000−500·d at every campaign start, so the untouched-
+toggle fresh boot carries 3500, and the sim's difficulty-scaled damage
+rows (§7j.15/1) now run at the ORIGINAL's fresh d=1 rather than the
+mis-modeled 0. (c) `linear-mission-m` is emitted through the DERIVED
+cell `clamp(5·(zone−2)+mission−1, 1, 26)` from the CURRENT
+`mission_slot()` (fresh ZONEA/M1 → 1, ZONEB/M1 → 1) — the §7j.64/D
+GameMain recompute at 0x41c520..0x41c556, NEVER the episode progress
+counter `episode().linear()`; the destroy staging's TRT hp tier
+selector (the [0x46ae8c] reader `250+250·m/27`, §7j.15/4-e) reads the
+same derived value. The D108 supersession note is recorded at D108
+(its "never-fabricated linear seam" stance predates the decode).
+
+**(2) THE ACCEPTANCE GATE flipped visibly.** The three LOUD gap
+assertions in `static_campaign_config_differential.rs` (D153(c)) now
+assert EQUALITY against the original-side transcription (difficulty 1
+== 0x41c14a, money 3500 == 0x43aaca with d=1, linear 1 == the 0x41c550
+floor of 5·(1−2)+1−1) — verified failing-then-passing around the seam,
+never silently re-baselined; the boot-key proof now asserts the derived
+row on the explicit `boot difficulty=1` run too. ALL EIGHT §7j.64/G
+rows are now closed both sides.
+
+**(3) THE DELIBERATE FULL-CHAIN RE-BASELINE (the D136/D151 machinery).**
+All 11 canonical corpus chains re-pinned in canonical_dump_gate +
+differ_gate (S0 5ab9df44ca3ba0c6, S1 0224dcc5f4631460, S2
+04dfa60b7262a474, S3 95375e99ba27990a, S4 a8deea56f9308102, S5
+359d9131fb51a86c, S5B 18a27532aeb7858e, S5C 0095d08b9f92d51b, S6
+7c4437ee14e9c7ab, S7 f8e83317ca7c5f8a, S8 0d1482d01f57b2b1 — live O1
+comparisons pin against these from this commit); the synthetic fixture
+digest is UNCHANGED (9e5efdc3fff70d88 — the hand-built TickState never
+read the session defaults); the differ_gate coverage counts are
+UNCHANGED on every scenario (the T0 rows compare clean on both
+channels). The tiebreak lanes' money examples re-based 4000→3500
+(perturbation −7 → 3493/3497).
+
+**(4) CONTENT RE-DERIVATIONS the difficulty-1 semantics forced (each
+re-derived from the new run, never blind re-pins).** S4: the .TRT
+turret hp tier moves 250→259 (m=1: 250+250/27) — the ring-0 destroy
+hp −4750→−4741, the survivors hold 259. S5: the money base 4000→3500
+("no money draw on this seed"). S5C: the money base + the two award
+folds (4150→3650, tail 4210→3710; the award values themselves are
+difficulty-independent — the 3744 burst spend is id 0xD = constant
+312/pair). S8 re-derived wholesale (the critter family is difficulty-
+scaled end-to-end, §7j.42): staging 17 critters now (7 kind-5 + 10
+kind-4 — the d=1 spawn roll (RandA&1)+1 banks one extra kind-5), hp
+155/207 (base+base·1/27), the 0x68 lane 150/hit ((d+1)·75, §7j.15/1 —
+first hit f5, tail 1132 by f39), 10 divers/dormant (respawn table 900
+frames). ONE LATENT TEST BUG fixed in passing: the S8 hit-flash walk
+read the robot-bank at stride 0x54/+0x2E — a WRONG record offset that
+passed on a neighbor field; the 94-B record +62 is the pinned §6a
+hit_flash (21 flashed frames f0..31 at d=1). Frame counts unchanged on
+every scenario; every double-run byte-identical.
+
+**(5) Docs.** DESIGN §6a rows (score/money, difficulty, the
+zone/mission/mode/linear quartet — the LINEAR AMENDMENT supersedes
+D108's fresh-slot-0 note), §6 seam grammar (the boot-key override
+semantics), the §7 S5 row + the §10-W12 S5 landing note corrected
+in place history-preserved; RE-EXW-SIM §7j.64 landing note appended.
+watches.toml UNTOUCHED (the D153 layout-note correction was already
+plan-neutral). No capture-plan/O1-side change rides — the rows' O1
+forms are value-carrying u32 scalars. Verified: workspace release
+tests green (bedlam-core + bedlam-game incl. the 13 canonical_dump_gate
+and 4 differ_gate corpus lanes + diffharness), fmt + clippy clean,
+MANIFEST.sha256 clean before AND after. The unrelated O1-boot WIP
+(dbx-plan.rs boot_trap/entry + dbx-capgen.py + dosbox-harness.sh +
+RUNTIME.md + capture-plan deltas) preserved untouched. Strict S0
+coverage stays 19/27 (this unit closes the Rust/E half of rows the
+D153 oracle already counted). (worker 52f0a9f0 claim 1)
