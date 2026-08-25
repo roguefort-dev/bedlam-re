@@ -4301,3 +4301,45 @@ Verified: bedlam-core suite green (10 test binaries), fmt + clippy
 clean, MANIFEST.sha256 clean before AND after the corpus reads, no
 Ghidra run. Strict S0 independent coverage is now **9/27 rows** (the
 D147 eight + `static-type-table`); 18 rows remain. (worker e473f5db claim 1)
+
+## D149 — 2026-08-25: P4/static-parity/S0-10 — the `.MIN` mask-bank row `static-min-bank` independently covered on the original side; Rust retention deliberately NONE (presentation-half)
+
+**(1) RE first (0ebb184).** The EXW/EXD `.MIN` loader + bank + consumers
+re-verified instruction-by-instruction from the objdump texts
+(RE-EXW-SIM §7j.62): ArenaAlloc 0x7530 @0x41dabd..0x41dac7 with NO
+memset anywhere (FUN_0041db89 is a pure cursor bump); the loader leg
+@0x41dcd8..0x41dcf3 is a verbatim whole-file read of the ZONE-scoped
+`EDITOR\ZONEX\MISSIONX.MIN` (the second string triple 0x4597ba..0x4597c7)
+— no header skip, no transform, no 0x7530 cap; the displacement census
+closes at exactly 3 .text sites with ONE runtime reader, the 4×4
+territory stamp FUN_00402ab8 (mask byte 0 → transparent, else XLAT
+MAPTRAN[variant]; cw = LNK/LNG word[TOT word], cw==0 skipped), which is
+also the FIRST verified runtime consumer of the LNK permutation table
+(FORMATS §5's rotation hypothesis gains its anchor). EXD twins identical
+(0x2e3f0/0x2e641/0x12df3). Whole-corpus census: 7 zone files (A≡D
+byte-identical), reachable-entry sets per zone under BOTH language
+gates, and the **stale-tail-never-read proof** — every nonzero reachable
+cw·16+16 ≤ file size, so the un-zeroed arena tail beyond the file prefix
+is dead bytes at runtime.
+
+**(2) Oracle (cec30a7).** `static_min_bank_differential.rs` transcribes
+the loader + consumer projection independently (no production reuse) and
+pins corpus identities (per-zone census, per-mission max cw, A≡D,
+LNK-vs-LNG variant fact, TOT type max 1868 < 8192). **The actual side is
+deliberately empty**: the bank is presentation-half (D17) — its only
+consumer writes backbuffer pixels, never engine state, never in the hash
+surface — and bedlam-core retains nothing. No seam is added: a retained
+`Vec<u8>` with zero Rust consumers would be fabricated parity. The
+row's parity status = original-side pinned + Rust absence documented.
+Sensitivity proven by temporary in-memory mutation (reachable-entry flip
+moves exactly one stamp pixel; dead-tail flip touches no reachable
+surface; a poisoned LNK lookup one-past-the-file is caught by the bound;
+a synthetic >0x7530 file is rejected loudly while the original read is
+uncapped — never shipped).
+
+**(3) Queued gaps (concrete, one line each):** resolve the dbx-plan
+deferred `static-min-bank` extent to PtrCell 0x7530 (file untouched this
+unit — in flight with unrelated O1-boot WIP), and the presentation-phase
+map-overlay territory-stamp producer (S5+ display work, D17/D50 scope).
+Strict S0 independent coverage is now **10/27 rows** (the D148 nine +
+`static-min-bank`); 17 rows remain. (worker 95c99db8 claim 1)
