@@ -5,31 +5,48 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-12b] close the three named S0-12 gaps (D153,
-   the queued seam unit): re-pin the canonical FRESH session to the
-   GameMain boot defaults — difficulty 1 (0x41c14a, §7j.64/A) → money
-   3500 via the existing start_score seam (0x43aaca, §7j.64/C) — and
-   emit `linear-mission-m` through the derived-cell formula
-   clamp(5·(zone−2)+mission−1, 1, 26) (0x41c534, §7j.64/D) instead of
-   `episode().linear()`. A deliberate FULL-CHAIN re-baseline (the
-   D136/D151 machinery: every canonical chain pin + the synthetic
-   digest + the differ_gate table + the §6a docs) with its own
-   decision entry; record the D108 supersession note (its
-   "never-fabricated linear seam" stance predates the §7j.64 decode).
-   The three gap assertions in
-   `static_campaign_config_differential.rs` flip visibly — that test
-   is the acceptance gate. Check the grammar's `boot difficulty=`
-   scenarios (S0W/others) for the new default's blast radius before
-   re-pinning. NOTE: the worktree carries interrupted O1-boot WIP
-   (dbx-plan.rs boot_trap/entry + dbx-capgen.py + dosbox-harness.sh +
-   RUNTIME.md + the capture-plan boot_trap deltas, owner ≠ current
-   worker): inspect, preserve, adopt per AGENTS shared-worktree rules;
-   stage explicit task paths only. NOTE also: dbx-plan.rs at HEAD now
-   resolves static-min-bank (545e7f6/D152) — the WIP worktree files
-   already carry BOTH that resolution and the boot_trap changes, so a
-   WIP regeneration diffs against HEAD as boot_trap-only.
+1. [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
+   and `static-dither-noise` initialization/evolution without treating
+   Rust determinism as the oracle. NOTE: the worktree carries
+   interrupted O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py
+   + dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
+   deltas, owner ≠ current worker): inspect, preserve, adopt per
+   AGENTS shared-worktree rules; stage explicit task paths only.
 
 ## Done
+1. DONE (2026-08-25, worker 52f0a9f0 claim 1, commit 0e7d245,
+   PUSHED): P4/static-parity/S0-12b the fresh-session campaign/config
+   seam LANDED (D154) — the three D153 gaps closed BOTH sides. (a)
+   canonical.rs: fresh difficulty default 1 (§7j.64/A 0x41c14a; `boot
+   difficulty=d` now OVERRIDES a default — an explicit d=0 is
+   expressible again), the campaign seed on EVERY run (money 3500 at
+   d=1 through start_score + the sim damage rows at the original's
+   fresh tier), and linear-mission-m emitted through the DERIVED cell
+   clamp(5·(zone−2)+mission−1, 1, 26) from the CURRENT mission_slot()
+   (§7j.64/D) — never episode().linear(); the destroy staging's TRT hp
+   tier selector reads the same derived value (m=1 tier 259).
+   (b) Acceptance: the three LOUD gap assertions in
+   `static_campaign_config_differential.rs` flipped to equality pins
+   (verified failing-then-passing around the seam); all eight §7j.64/G
+   rows closed both sides. (c) The deliberate full-chain re-baseline:
+   all 11 canonical corpus chains re-pinned (S0 5ab9df44ca3ba0c6, S1
+   0224dcc5f4631460, S2 04dfa60b7262a474, S3 95375e99ba27990a, S4
+   a8deea56f9308102, S5 359d9131fb51a86c, S5B 18a27532aeb7858e, S5C
+   0095d08b9f92d51b, S6 7c4437ee14e9c7ab, S7 f8e83317ca7c5f8a, S8
+   0d1482d01f57b2b1; synthetic 9e5efdc3fff70d88 unchanged) — live O1
+   comparisons pin against these from 0e7d245; differ_gate coverage
+   counts UNCHANGED on every scenario. (d) Difficulty-1 content
+   re-derivations: S4 turret tier 250→259 (ring-0 destroy −4741), S5C
+   money folds (3650/3710), S8 restaged whole (17 critters = 7 kind-5
+   + 10 kind-4, hp 155/207, the 0x68 lane 150/hit, 900-frame respawn
+   table) + ONE latent test bug fixed (the S8 hit-flash walk read
+   stride 0x54/+0x2E — the 94-B record +62 is the pinned hit_flash).
+   (e) Docs: DESIGN §6a/§6/§7/§10-W12 corrected in place + the D108
+   supersession note + D154 + the §7j.64 landing note. Verified:
+   workspace release tests green (incl. canonical_dump_gate 13 +
+   differ_gate 4 corpus lanes), fmt + clippy clean, MANIFEST clean
+   pre+post. The unrelated O1-boot WIP preserved untouched. Strict S0
+   coverage stays 19/27. Queued: S0-13 (rng/dither) as item 1.
 1. DONE (2026-08-25, worker 0f91b0d7 claim 1, commits cda35f2 +
    ea745fd, PUSHED): P4/static-parity/S0-12 the eight fresh-session
    T0 campaign/config rows independently covered — FIVE closed both
@@ -132,11 +149,10 @@ renumbered queue keeps every open item claimable by number).
   presentation-half D17; the display-phase producer stays queued,
   not covered (D149); its dbx-plan extent infra hop landed separately
   as S0-12a (545e7f6, D152 — not a row). S0-12's three named gaps
-  (difficulty/money fresh defaults, the linear derived-cell) are
-  queued as the S0-12b seam unit at the head of Now.
-- [P4/static-parity/S0-13] pin original `rng-state-a`, `rng-state-b`,
-  and `static-dither-noise` initialization/evolution without treating
-  Rust determinism as the oracle.
+  (difficulty/money fresh defaults, the linear derived-cell) LANDED
+  as S0-12b (0e7d245, D154) — all eight T0 campaign/config rows now
+  closed BOTH sides (the E half through the canonical seam, not a
+  second oracle).
 - [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter` ordering
   and classify dynamic-only row placement separately from static closure.
 - [P4/static-parity/S0-15] `static-order-table` — independently

@@ -1,5 +1,27 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D154 S0-12b COMPLETE (worker 52f0a9f0 claim 1, commit
+    0e7d245, PUSHED): the fresh-session campaign/config seam LANDED —
+    the three D153 gaps (difficulty/money/linear-mission-m) closed
+    BOTH sides. canonical.rs: fresh difficulty default 1 (§7j.64/A;
+    `boot difficulty=d` overrides), campaign seed on every run (money
+    3500 + the sim damage rows at d=1), and linear-mission-m emitted
+    through the DERIVED cell clamp(5·(zone−2)+mission−1, 1, 26) from
+    the current mission_slot() (§7j.64/D) — the TRT hp tier selector
+    reads the same value (tier 259 at m=1). Acceptance: the oracle's
+    three loud gap assertions flipped to equality; all eight §7j.64/G
+    rows closed. ALL 11 canonical chains re-baselined deliberately
+    (S0 5ab9df44ca3ba0c6 .. S8 0d1482d01f57b2b1 — live O1 comparisons
+    pin against these from 0e7d245; synthetic unchanged; differ_gate
+    coverage counts unchanged). Difficulty-1 content re-derived (S4
+    turret tier, S5C money folds, S8 restaged 17 critters/150-per-hit
+    lane) + one latent S8 hit-flash stride bug fixed (the 94-B
+    record +62). D108 supersession note + D154 recorded; DESIGN
+    §6a/§6/§7/§10-W12 corrected in place. Workspace release green,
+    fmt/clippy/MANIFEST clean. The unrelated O1-boot WIP preserved
+    untouched. Strict S0 coverage stays 19/27. Next head: S0-13
+    (rng-state-a/b + static-dither-noise).
+
   - 2026-08-25 D153 S0-12 COMPLETE (worker 0f91b0d7 claim 1, commits
     cda35f2 docs + ea745fd test, both PUSHED): the eight fresh-session
     T0 campaign/config rows independently covered (score, money,
