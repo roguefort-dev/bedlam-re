@@ -1,5 +1,18 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D146 S0-07 COMPLETE (worker f25d060f claim 1, commits
+    848e2f7 docs + cd70efe test, both PUSHED): the retained PAD-slot
+    bank row `static-pad-slots` is independently covered — the EXW
+    staging loop fully pinned (whole-bank memset-0 pre-parse,
+    terminator x staged before the check, terminator slot
+    {0,0xFFFF,0,0}, all-zero never-read tail, EXD twin identical) and
+    an all-37-mission bytes-only oracle compared field-exact against
+    Terrain::pad_slots, with pinned corpus census + 3-part mutation
+    sensitivity. Rust's live-run-only retention documented as the
+    justified seam (inactive slots unobservable: every consumer gates
+    on active!=0). Strict S0 independent coverage is 7/27 rows; next
+    slice: S0-08 `static-yline-zbase`. The responsive-capture WIP
+    remains uncommitted and preserved.
   - 2026-08-25 D145 STRATEGY TRANSITION: independent deterministic
     static oracles are now the default proof for T1 semantics. Commits
     bd91c10, 56918c5, and 390acb9 closed `static-map-wh`,

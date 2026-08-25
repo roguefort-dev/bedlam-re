@@ -5,27 +5,26 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-07] retained PAD-slot bank oracle — first
-   statically pin the exact EXW/EXD staged 999x8 `{active,x,y,z}`
-   semantics, including terminator and tail handling. Then build an
-   independent all-37-mission raw `.PAD` -> staged-bank oracle and
-   compare it byte/field-exact against the Rust target or a test-only
-   representation. Do not reuse production parsers/loaders/helpers or
-   inverse generators; pin corpus identities, bracket corpus reads with
-   `MANIFEST.sha256`, and prove sensitivity with a temporary mutation.
-   If Rust retains no PAD bank, document that semantic gap and add only
-   the smallest justified internal/test seam rather than fabricating
-   parity. DONE when the exact `static-pad-slots` row is independently
-   covered, or one concrete code/model gap is queued; tests/review/commit.
+1. [P4/static-parity/S0-08] independently cover `static-yline-zbase`,
+   including exact staged extents and boundary entries. First statically
+   re-verify the EXW/EXD y_line/z_base producer loops (RE-EXW-SIM 7c.3:
+   `y_line[y] = y*w` at 0x4ea900, h+1 dwords; `z_base[z] = z*w*h` at
+   0x4eaacc, 8 dwords) instruction-by-instruction like D146 did for the
+   PAD bank, then build an independent all-37-mission oracle and compare
+   it byte/field-exact against the Rust target or a test-only
+   representation. Do not reuse production parsers/loaders/helpers; pin
+   corpus identities, bracket corpus reads with `MANIFEST.sha256`, and
+   prove sensitivity with a temporary mutation. If Rust retains no such
+   bank, document the gap and add only the smallest justified seam rather
+   than fabricating parity. DONE when the `static-yline-zbase` row is
+   independently covered, or one concrete code/model gap is queued;
+   tests/review/commit.
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  6/27 rows from commits bd91c10, 56918c5, and 390acb9. The 21-row
-  remainder is fully assigned: S0-07 (1), S0-08 (1), S0-09 (1),
-  S0-10 (1), S0-11 (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15
-  (1), S0-16 (1), and S0-17 (1).
-- [P4/static-parity/S0-08] independently cover `static-yline-zbase`,
-  including exact staged extents and boundary entries.
+  7/27 rows from commits bd91c10, 56918c5, 390acb9, and cd70efe. The
+  20-row remainder is fully assigned: S0-09 (1), S0-10 (1), S0-11 (1),
+  S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1), and S0-17 (1).
 - [P4/static-parity/S0-09] independently cover the `.BDG`
   `static-type-table` staged representation.
 - [P4/static-parity/S0-10] independently cover the retained `.MIN` bank
@@ -203,6 +202,19 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-07 COMPLETE (worker f25d060f claim 1,
+  commits 848e2f7 + cd70efe, both PUSHED; D146). The retained PAD-slot
+  bank row `static-pad-slots` independently covered: EXW staging loop
+  pinned instruction-by-instruction (memset-0 pre-parse @0x41de62,
+  x staged before the 0xFFFF check, terminator slot {0,0xFFFF,0,0},
+  all-zero never-read tail; EXD twin 0x2e7a0 identical), watches.toml
+  layout corrected, and an all-37-mission bytes-only oracle compared
+  field-exact against Terrain::pad_slots with the pinned corpus census
+  (level tally 701, live-run 2..114, ZONEA/M1 114, ZONEB/M3 orphan
+  ignored) + 3-part mutation sensitivity (live field, tail-blind
+  orphan, terminator extension). Rust live-run-only retention
+  documented as the justified seam. Strict S0 coverage 7/27; next:
+  S0-08 `static-yline-zbase` (queued as item 1).
 - 2026-08-25: P4.2/DH-G0-live S0 LIVE SESSION RETIRED AS A T1
   SEMANTIC PREREQUISITE (D145). Independent deterministic static
   oracles are now the default. Operator capture was NOT completed and

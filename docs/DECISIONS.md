@@ -4145,3 +4145,51 @@ divergence. Static differential tests may supersede semantic rows when they prov
 stronger whole-corpus evidence. Current responsive-capture WIP is preserved, but no
 longer blocks semantic work. This decision does not statically close T0 RNG/session
 behavior or trigger/address placement.
+
+## D146 — 2026-08-25: P4/static-parity/S0-07 — the retained PAD-slot bank row `static-pad-slots` independently covered (strict S0 coverage 7/27)
+
+THREE decisions recorded. (1) **THE STAGED-BANK SEMANTICS ARE NOW FULLY PINNED**
+(instruction-level re-verification of the EXW PAD staging loop
+`FUN_0041dc5a` @0x41de44..0x41df03, committed as RE-EXW-SIM §7c.5 +
+FORMATS §10 amendments): the whole 999×8 bank at 0x4e44f8 is
+memset-0 BEFORE parsing (`FUN_00402965` @0x41de62 — the stos-ladder
+memset), so no cross-mission stale tail is possible; the loop stages
+each record's `x` word BEFORE the 0xFFFF check (even the terminator's
+0xFFFF lands in the bank), exits on `sar 16 == -1` @0x41defa leaving
+the terminator slot exactly `{active=0, x=0xFFFF, y=0, z=0}` (y/z
+never read, active never written), and all slots past the terminator
+stay all-zero with their file bytes never read (ZONEB/M3's orphan
+record is invisible to the runtime bank). The EXD twin
+(0x2e7a0..0x2e85d) is the IDENTICAL algorithm from the same source —
+memset twin 0x12206, u16-read twin 0x2d5c8, same terminator check/
+active:=1/DAT stamp/999 bound. The watches.toml layout string was
+corrected (u16 active word, not "u8 pad id"). (2) **THE ORACLE**
+(commit cd70efe, `engine/bedlam-core/tests/static_pad_slot_differential.rs`):
+an independent bytes-only transcription of the loop (no production
+parser/loader/terrain helper reused) builds the exact 7992-byte staged
+image + live-run length for all 37 shipped missions and compares it
+field-exact against the Rust target's retained bank —
+`Terrain::pad_slots` (the live run, file order, active implicitly 1)
+materialized into the same 8-byte record form. The INACTIVE surface
+(terminator slot bytes, all-zero tail) is unretained by Rust and is
+asserted against the statically pinned constants — never fabricated
+as Rust output; the omission is unobservable through the retained
+seams because every original consumer gates on active≠0 (probe
+§7j.40/1, elevator stager §7j.21, scanner icon FUN_0041ee20). Corpus
+identity pins: canonical 37-mission set, level tally
+{0:310,1:173,2:51,3:50,4:62,5:47,6:8}=701, live-run extremes 2..114,
+ZONEA/M1=114 (slot 0 (5,61,0) … slot 113 (18,24,4)), ZONEB/M3=6 with
+the ignored orphan (51,16,3) at index 7; every live record in the TOT
+volume (the original's write is unchecked; shipped values in range).
+(3) **SENSITIVITY PROVEN BY TEMPORARY IN-MEMORY MUTATION**: a live
+x-byte flip moves exactly that slot's staged x field; flipping every
+byte of the post-terminator orphan leaves the staged bank
+byte-identical (a parser that over-reads — the D112 dead-break bug
+class — fails this); rewriting the terminator record live extends the
+run by exactly one and re-stages the old terminator slot active.
+Verified: bedlam-core suite green (9 binaries), fmt + clippy clean
+(workspace), MANIFEST.sha256 clean before AND after the corpus reads,
+no Ghidra run. Strict S0 independent coverage is now **7/27 rows**
+(`static-map-wh`, `static-dat-volume`, `static-cgr-volume`,
+`static-tot-volume`, `static-bin-terrain`, `static-lnk-map`,
+`static-pad-slots`); 20 rows remain. (worker f25d060f claim 1)
