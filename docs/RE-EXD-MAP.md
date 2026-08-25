@@ -566,7 +566,7 @@ registers, minus the §5g-already-pinned 13).
 | tile-claim bank 0x46af58 | ***0x119564** (pointer cell) | platform ring claim check `… + DAT_00119564 == 0` | [verified] |
 | order table 0x4de664 (0x62 stride) | **0x91ee4** | spawn weapon/equipment copy `type·0x62` + the 0x2a/0x2b/0x2c extras switch @0x9240c (row 28) | [verified] |
 | player TYPE word 0x4edb90 | **0x1075c0** | spawn SP path `robot[0].type := DAT_001075c0` + mission-loop auto-switch `type == DAT_001075c0` | [verified] |
-| y-line/z-base 0x4ea900/0x4eaacc | y-multiplier table **0x8b78c**, z-line **0x107718**, z-idx **0x107714** | map-loader build loops + volume reads | [verified] |
+| y-line/z-base 0x4ea900/0x4eaacc | y-multiplier table **0x8b78c** (h dwords, y·w — NOT h+1), z-base table **0x107718..0x107734** (8 dwords, z·w·h; the store base 0x107714 is the adjacent screen-scale cell zeroed @0x14794 — never a table entry) | map-loader build loops 0x2e713..0x2e74b (identical to EXW 0x41ddaa..0x41dde2 + the 0x4466bd..0x4466f8 second producer, RE-EXW-SIM §7c.3) + volume reads | [verified; extents re-pinned 2026-08-25 S0-08/D147] |
 | dither noise bank 0x4e6ed8 (cursor 0x4ddb30) | **0x8ded4**, cursor **0x108424** | mission-loop churn: 15 B/frame, `RandB()&3==0 → 0xFF` else 0, ring wrap 0x800 — EXW 7i EXACT | [verified] |
 | cursor clamp (INPUT) | x max **0x1074ac**=0xf0, y max **0x1074b0**=0x140 | GameInit boot plants (320×240 logical space, B2 twin) | [verified] |
 

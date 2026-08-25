@@ -4193,3 +4193,55 @@ no Ghidra run. Strict S0 independent coverage is now **7/27 rows**
 (`static-map-wh`, `static-dat-volume`, `static-cgr-volume`,
 `static-tot-volume`, `static-bin-terrain`, `static-lnk-map`,
 `static-pad-slots`); 20 rows remain. (worker f25d060f claim 1)
+
+## D147 — 2026-08-25: P4/static-parity/S0-08 — the y_line/z_base table row `static-yline-zbase` independently covered (strict S0 coverage 8/27)
+
+THREE decisions recorded. (1) **THE TABLE SEMANTICS ARE NOW FULLY
+PINNED AND ONE GLOSS CORRECTED** (instruction-level re-verification of
+the EXW table-build loops, objdump-only from `ghidra-project/
+exw-text-objdump.txt` / `exd-text-objdump.txt`, committed as RE-EXW-SIM
+§7c.3 + the RE-EXD-MAP row amendment): **y_line has h dwords at
+0x4ea900 (y·w for y in 0..h−1), NOT "h+1 dwords"** — the loop bound is
+`h·4` under `jl` (@0x41ddbe; the §7c.3 gloss claimed a boundary entry
+at h that the code never stages and no consumer ever reads; the sweep's
+y bound is h @0x41de07). **z_base has exactly 8 dwords at
+0x4eaacc..0x4eaae8** (z·w·h, stored factored as w·(z·h) with the
+offset pre-incremented — the store base 0x4eaac8 / EXD 0x107714 is an
+ADJACENT SCREEN-SCALE CELL, not a table entry: EXW writer 0x424da6, EXD
+zeroed @0x14794; the watches.toml exd_addr dropped the bogus third
+cell and the layout string now carries the exact extents). Census: the
+four stores 0x41ddb1/0x41ddd9/0x4466c7/0x4466ef are the ONLY writers of
+the two spans program-wide; the SECOND producer pair @0x4466bd..0x4466f8
+(FUN_0044661b, called from the brief-screen loadout site 0x43d1a5 that
+loads FULLFONT/BRIEF/palettes/SFX + the mission .TOT/.BIN/.DAT into
+fresh arenas) re-runs both loops instruction-for-instruction — no
+0x302 copy, no sweep, no PAD on that path. EXD twin 0x2e713..0x2e74b:
+y_line 0x8b78c (h dwords), z_base 0x107718..0x107734 — identical
+algorithm. (2) **THE ORACLE** (`static_yline_zbase_differential.rs`):
+Rust retains NO such bank (indexes z·w·h + y·w + x inline) — the row's
+parity content reduces to the retained dims plus the exact staged
+extents, so the unit compares a TOT-header-only transcription of both
+loops (bytes only, no production parser/loader/helper reused) against
+a test-only representation built from `Terrain::size()` across all 37
+missions, byte/field-exact, and PINS the corpus invariants that make
+the reduction sound: **TOT[0..4] == DAT[0..4] on every shipped
+mission** (the original builds the tables from the TOT header while
+Rust takes its dims from the DAT header — the divergence is real but
+unobservable on the corpus, and the gate asserts the agreement rather
+than assuming it), dims {25×75 ZONEA/M1, 100×100 ×35, 100×25
+ZONEG/M1}, DAT sizes exactly 4+8·w·h, the volume-identity boundary
+z_base[7]+y_line[h−1]+(w−1) == 8·w·h−1, z_base[0]==y_line[0]==0. NO
+production seam added: retaining the tables in `Terrain` would be
+fabricated parity (no Rust consumer reads them — the values are pure
+(w,h) functions and unobservable through the inline indexing). (3)
+**SENSITIVITY PROVEN BY TEMPORARY IN-MEMORY MUTATION**: a TOT w-byte
+bump changes every y_line entry y≥1 and every z_base entry z≥1
+(y_line[0]/z_base[0] pinned 0) and makes the differential FAIL against
+the un-mutated Rust side (a TOT/DAT header disagreement is rejected,
+not absorbed); a TOT h-byte bump grows the y_line EXTENT by one entry
+while leaving the existing entries byte-identical (the h-entry count
+is load-bearing); a DAT header bump makes the Rust loader reject the
+file outright. Verified: bedlam-core suite green, fmt + clippy clean,
+MANIFEST.sha256 clean before AND after the corpus reads, no Ghidra
+run. Strict S0 independent coverage is now **8/27 rows** (the D146
+seven + `static-yline-zbase`); 19 rows remain. (worker 2b25b994 claim 1)

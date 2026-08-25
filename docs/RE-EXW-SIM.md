@@ -624,16 +624,66 @@ was where the tables filled: 0x41d954 only allocates.)
    (open/seek-end/tell/rewind/read ≤0x80000-chunks/close) into the arena:
    TOT→`DAT_004ede20`, DAT→`_DAT_004edd58`, CGR→`DAT_004edd60`,
    BIN→`DAT_004ede1c`, MIN→`DAT_004edd9c`, LNK/LNG→`0x45cdda` (0x8000).
-3. **Table build** [verified 0x41dd1d..0x41dde3]:
+3. **Table build** [verified 0x41dd1d..0x41dde3; the y_line/z_base pair
+   re-verified instruction-by-instruction 2026-08-25 for the S0-08
+   static-parity row — CORRECTS this item's old "h+1 dwords" gloss]:
    - `0x302` bytes copied from `0x4edbf8` → `0x4ddb34`, and
      `word[BIN_buf]` → `DAT_0046cdb8` [staged data, consumer unidentified];
    - `w = s16[TOT]` → `DAT_004eddec`, `h = s16[TOT+2]` → `DAT_004eddf0`
      (the TOT cursor advances 4; `DAT_004eddf4 = w*h`);
    - **DAT cursor +4** (skips the on-disk w/h header — the payload IS the
      plane-major u8 plane set);
-   - `y_line[y] = y*w` for y in 0..=h at `0x4ea900` (h+1 dwords; the
-     get_from_dat_file table);
-   - `z_base[z] = z*w*h` for z in 0..=7 at `0x4eaacc` (8 dwords).
+   - **y_line: `y_line[y] = y*w` for y in 0..h−1 at `0x4ea900` — h
+     dwords, NOT h+1** (the old gloss was wrong). Loop @0x41ddaa..0x41ddbe:
+     eax (byte offset) and edx (value) start 0, ecx = w, bound ebx = h·4
+     (`shl ebx,2` @0x41dda2 on the h cell 0x4eddf0); body stores
+     `[eax+0x4ea900] = edx`, then `eax += 4`, `edx += ecx`; condition
+     `cmp eax,ebx / jl` @0x41ddbc/e — the body runs for eax ∈
+     {0,4,…,4(h−1)}: exactly h entries. There is NO boundary entry at h
+     (the value h·w = one plane size is never staged), and every consumer
+     stays in 0..h−1 (the ≥0x80 sweep reads y_line[0..h−1], y bound h
+     @0x41de07; get_from_dat_file's callers clamp y < h).
+   - **z_base: `z_base[z] = z*w*h` for z in 0..7 at `0x4eaacc` — 8
+     dwords.** Loop @0x41ddc0..0x41dde2: ecx = h, eax = 0, edx = 0; head
+     @0x41ddcb: ebx = w, `imul ebx,edx` (the value is stored FACTORED as
+     w·(z·h)), `eax += 4` BEFORE the store, `edx += h` after the imul —
+     iteration k stores `[eax+0x4eaac8]` with eax ∈ {4,…,0x20}, i.e. the
+     8 dwords at 0x4eaacc..0x4eaae8, value w·(k·h) using the
+     PRE-increment k: z_base[0] = 0, z_base[7] = 7·w·h (the plane-7 base).
+   - **The store-BASE cells 0x4eaac8 / EXD 0x107714 are NOT table
+     entries** — the dword at the base belongs to the adjacent
+     screen-scale family (EXW writer 0x424da6 inside the 0x424d52 block;
+     EXD twin cell zeroed at init 0x14794); the loop's pre-incremented
+     eax never touches it. [census: the four table stores
+     0x41ddb1/0x41ddd9/0x4466c7/0x4466ef are the ONLY writers of the two
+     table spans program-wide]
+   - **SECOND producer pair** [verified 0x4466bd..0x4466f8 inside
+     FUN_0044661b]: a brief-screen loadout path (call site 0x43d1a5 —
+     allocates fresh DAT/TOT arenas 0x13884/0x4b000 @0x43d0cc..0x43d10f,
+     loads FULLFONT/BRIEF/palettes/SFX + the mission .TOT/.BIN/.DAT,
+     strings 0x4590f9..0x4591ae / 0x459795..0x45979f) re-reads the TOT
+     header into the same cells and re-runs BOTH loops
+     instruction-for-instruction (y_line @0x4466c7, bound h·4, `jl`
+     @0x4466d4; z_base @0x4466ef, base +0x4eaac8, eax ∈ {4..0x20},
+     `jne` @0x4466f8) — same tables; that path does NOT re-copy the
+     0x302 header block, re-run the ≥0x80 sweep, or stage PAD.
+   - **EXD twin** [verified 0x2e713..0x2e74b, the same load block whose
+     PAD leg is item 5's twin]: y_line at `0x8b78c` — same loop shape
+     (store / `add eax,4` / `add edx,ecx`, bound h·4, `jl` @0x2e725): h
+     entries, cells w 0x1074b8 / h 0x10748c / w·h 0x1074e4; z_base stores
+     `[eax+0x107714]` with eax ∈ {4,…,0x20} → the 8 dwords live at
+     **0x107718..0x107734**. Algorithm identical from the same source.
+   - **Rust retention: NONE** — the engine indexes `dat[z·w·h + y·w + x]`
+     inline (`Terrain::dat_type`); the tables are a pure (w,h) function
+     whose semantic content is the retained dims (`Terrain::size`).
+     Independently covered by the S0-08 oracle
+     `engine/bedlam-core/tests/static_yline_zbase_differential.rs` (D147):
+     a TOT-header-only transcription of both loops vs the Rust target
+     across all 37 missions, with the pinned corpus invariants —
+     **TOT[0..4] == DAT[0..4] on every shipped mission** (the original
+     builds the tables from the TOT header while Rust takes its dims from
+     the DAT header; observably identical only because the corpus pins
+     the agreement), dims {25×75 ZONEA/M1, 100×100 ×35, 100×25 ZONEG/M1}.
 4. **Runtime sweep** [verified 0x41dde4..0x41de43]: every DAT byte ≥ 0x80
    in planes 0..6 is set to 0 (plane 7 untouched). The shipped corpus has
    0 such bytes in ZONEA (the 0xFF seen in-plane there is PAD-written
