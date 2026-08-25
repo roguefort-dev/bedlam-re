@@ -10293,3 +10293,142 @@ since the table is direct .bss, not pointer-indirect; all 13
 capture-plan artifacts regenerated, count asserts re-pinned).
 watches.toml layout note amended plan-neutrally; the extent string
 moved to "0x498 (12x0x62 rows)" by D158.
+
+## 7j.68. THE PLAYER TYPE CELL (0x4edb90) — the fresh-SP value pinned 0 on BOTH channels, the whole writer census closed (EXW 6 = the boot writer + FIVE MP-lobby sites, FOUR of them the −1 error exit; EXD 2 = the boot twin + ONE MP serial-sync writer), the save family proven READ-ONLY (the type is never saved — the restore and the SAVED.BDL writer only INDEX by it), and the row closed BOTH SIDES through the canonical anchor seam (2026-08-25, worker 89591972 claim 1, D159, the P4/static-parity/S0-16 unit; objdump-only from ghidra-project/exw-text-objdump.txt + the tools/exd-relod.py linear image rebuilt to /tmp/opencode/s0-16 scratch; read-only byte probes of BEDLAM.EXW/BEDLAM.EXD; no Ghidra run; MANIFEST.sha256 clean before AND after) [verified]
+
+Whole-objdump displacement census of 0x4edb90 (EXW, 113 literal
+sites — the raw-dword scan of the whole BEDLAM.EXW file image finds
+EXACTLY 113 occurrences of 0x004edb90, every one mapping via
+BEGTEXT raw 0x400/va 0x1000 to a .text disp32 operand, DGROUP/
+.idata/.reloc hold ZERO — no initialized pointer cell can alias;
+zero occurrences of 0x004edb92 anywhere) and of 0x1075c0 (EXD, 117
+.text sites; zero of 0x1075c2). All items [verified] against the
+asm unless noted.
+
+**A. THE CELL IS DWORD-WRITTEN, WORD-CONSUMED.** Every writer on
+both channels is a 32-bit store; the plan extent "2" captures the
+consumed word (the only WORD-sized reads are the two spawn-side
+kind stamps: EXW 0x40cdec/0x44a2af, EXD 0x1db19 — see D). The
+upper words 0x4edb92/0x1075c2 have NO independent reference in
+either census; they are owned by the dword writers (nonzero only
+transiently, on the MP error paths that store −1). The adjacent
+cells are different rows: 0x4edb88 the MP respawn gate, 0x4edb8c
+the MP endgame count (D133), EXD 0x1075bc the map-overlay cell.
+
+**B. EXW WRITERS — exactly 6, and the §7d.3 gloss upgraded.**
+
+1. **The GameMain boot writer** [0x41c344..0x41c34c]:
+   `xor eax,eax; mov [0x4edb90],eax` — TYPE := 0, UNCONDITIONAL,
+   immediately after the sound-init call `call 0x43a144`
+   (FUN_0043a144, the D134 identification — the §7d.3 "bootattract
+   decompile" gloss superseded) and INSIDE the CINEMATICS sandwich:
+   [0x46cca4]:=1 before the call, restored @0x41c346, THEN the type
+   store. The successor call 0x41c351 is the radio-warning poster
+   FUN_004239ef family (§7j.53).
+2. **MP lobby, FOUR −1 error exits** [FUN_00448ef1, the network
+   object at 0x4ee490]: 0x44918a (esi=0xffffffff staged @0x449155,
+   the [esp+0x7c] path after the 0x4edc45 debug gate), 0x4493e0
+   (edi=[0x4ee8ac]==−1 — the unset local-slot case — same debug
+   gate), 0x4497f1 (ebx=−1 after a FAILED vtable+0x8 network call,
+   test eax,eax), 0x4498e6 (the literal −1 store after the
+   vtable+0x10/+0x8 failure pair). All four `jmp 0x449a6d` (the
+   function exit) — −1 = the "no local player" sentinel.
+3. **MP lobby, the ONE success writer** [0x449a5c]: `mov
+   [0x4edb90],eax` where eax = movsx(dx) of the loop index that
+   walks the player-id array [0x4ee450] against the local id
+   [0x4ee44c], bounded by the player count [0x46cbe0] — TYPE :=
+   the local player's ORDINAL in the network player list (the
+   domain the §7j.45 mirror equates with the 12-row table index).
+**EXCLUDED from this slice by charter** (S0-16 task text): every
+MP writer's value semantics — a later named task must cover the
+lobby/sync families before any MP closure claim.
+
+**C. EXD WRITERS — exactly 2 (the DOS port has no lobby family).**
+
+1. **The boot twin** [0x2cc5f..0x2cc8a]: the SAME CINEMATICS
+   sandwich with the cell pair [0x1194d8]≡[0x46cca4] := 1 around
+   the config/sound init `call 0x4be7d` (FUN_0004be7d, the D134
+   function twin), restore @0x2cc75, then `xor ebx,ebx` @0x2cc7b;
+   `mov [0x1075c0],ebx` @0x2cc84 — TYPE := 0, and the successor
+   call 0x2cc8a (FUN_00034895, the warning-post twin) preserves
+   the instruction ORDINAL of the EXW tail exactly.
+2. **The MP serial-sync writer** [0x5b026..0x5b030]: `call
+   0x62100; and eax,0xffff; mov [0x1075c0],eax` — in the
+   link-negotiation path bracketed by the strings "Quit from
+   synchronising" (0x871a3) and "Found %i players, but could only
+   sync %i !" (0x871ba) — TYPE := the 16-bit result of the serial
+   driver sync (the local player id). SP never enters this path
+   (the cycler trio that consumes it is the EXD MP family at
+   0x5b1cc+, D133).
+
+**D. THE READER CENSUS (107 EXW reads / 115 EXD reads) — five
+families, every EXW family with its 1:1 EXD twin.**
+
+1. **The spawn-side kind stamp + first-robot cell** [EXW
+   0x40cdec/0x40cdfb ⟷ EXD 0x1db19/0x1db28, instruction-exact]:
+   `robot[i].kind@+0x2A := WORD[0x4edb90]` (the 0xA8-stride
+   record, eax = 21·i scaled ×8) then `first-robot := [type] ·
+   [robot count]` (EXW imul [0x46cbd8] → [0x46cbd4], the selected
+   offset [0x46cbdc] := 0; EXD imul [0x11958c] → [0x11955c],
+   [0x11954c] := 0 — the D132/D133 addition-order pairing, the
+   cells swapped by channel as already recorded).
+2. **The "my robot" gate** (the dominant family, ~all mission
+   readers): `dword@robot+0x28 sar 16 == [type]` — EXW 0x408b9b,
+   0x40a1ef (equal → the 0x41c9f0 episode-transition helper),
+   0x40e2fd, 0x41034b, 0x4188a4/0x418940/0x418a75/0x418c73/
+   0x418df6/0x418f98 (the name-entry/walk family), 0x423eb0 (the
+   D132 chase-camera record gate), EXD twins 0x19910/0x1b2c2/
+   0x1f02e/0x2106b/0x291bf-family/0x34e44 — the SAME comparison
+   the Rust alarm/bounty/pickup gates model.
+3. **The row-index family** (the §7j.67 table consumers): imul by
+   0x62 (order rows) / 0x1C (chassis rows) across the shop
+   0x4402c2..0x443923, the SAVED.BDL writer 0x4469cc..0x446e0a,
+   the brief 0x43ead0..0x43f35a (cmp 0 gates), the restore
+   0x43c37a..0x43c7ac (cmp −1/0), MissionShell 0x4475f5/0x4480d0,
+   and the MP lobby/cycler 0x449cca..0x44a3af. **READ-ONLY on the
+   save path [verified]**: neither FUN_0044745e (restore) nor
+   FUN_0044693a (save) ever stores the cell — the type is NOT
+   SAVED.BDL state; the save writes the row INDEXED by the current
+   type (0x4469cc even derives the save name from it: lea
+   eax,[eax+eax*8] into the 0x4e43e0 name table), the restore
+   copies the row back into `0x4de664 + type·0x62` (§7j.67/B4).
+4. **The per-TYPE sibling bank** [0x41ee2b]: `mov eax,[type]; cmp
+   [eax*4+0x46ae94],1` — the variant-flag array 0x46ae94+type·4
+   (the D133 "DIFFERENT array" warning — boundary exclusion).
+5. **The remaining panel/walk reads** (0x40bb25 the robot-record
+   walk, 0x40a476/0x40e2fd/0x40f077/0x40f189 the respawn/pickup
+   family, 0x41170e) — all equality/indexing consumers, none
+   store.
+
+**E. THE FRESH-SP IMAGE = 0 (both channels, deterministic).** The
+boot writer is the ONLY SP-path writer (unconditional, value 0);
+the save path never restores the cell; the MP writers are gated on
+network/lobby entry which SP never takes. So the TS row's captured
+2 bytes are 00 00 for the whole SP campaign — and the value is a
+genuine ENGINE constant on the E side too (below), not an
+E-fabricated zero.
+
+**F. THE RUST COMPARISON + THE S0-16 CLASSIFICATION (D159) —
+the row closes BOTH SIDES through the canonical anchor seam (the
+D154 precedent), NOT the D157 no-fabricated-parity class.** E
+models the cell genuinely: `MissionSim::player_type: u16`
+constructed 0 with NO setter (the whole census's writer set is
+boot+MP, both outside the mission sim — the constant IS the
+faithful SP model), and three REAL consumer gates read it: the
+alarm trip (`alarm_ctr > 100 ∧ kind == player_type` → alarm :=
+100, ctr := 0 — the §7g.1 transcription), the critter bounty gate
+(`robots[attacker].kind == player_type` → score += 75/150 +
+strip_arm, §7j.24/2), and the case-4 pickup seam (the host seam's
+`type == [0x4edb90]` gate trivially 0==0 — documented at the
+seam). The spawn-side consumers match too: Rust robots are
+constructed `kind: 0` (the SP kind-stamp model) and `kind` IS in
+`state_hash` (mission.rs) while `player_type` stays unhashed —
+exactly the original's surface (the cell selects whose robot, the
+robot record carries the state). The row's E half is therefore the
+canonical anchor emission `static-player-type` = u16 LE of the sim
+cell (00 00, anchor frame only, byte passthrough on every channel
+— no differ change, the D136 static-map-wh precedent); all
+canonical chains re-baselined deliberately. watches.toml layout
+note corrected plan-neutrally (extent stays "2"); RE-EXD-MAP §5
+row re-pinned with the D132-gloss refinement recorded and the MP
+writer census.

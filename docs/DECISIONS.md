@@ -4911,3 +4911,81 @@ claim 2):
    exactly the verified staged content while the working tree keeps
    the predecessor's WIP intact. MANIFEST clean before and after; no
    corpus read, no Ghidra run.
+
+## D159 — 2026-08-25: P4/static-parity/S0-16 — the `static-player-type` row independently covered and closed BOTH SIDES through the canonical anchor seam (the D154 class, NOT the D157 no-fabricated-parity class): the fresh-SP value pinned 0 on BOTH channels, the whole writer census closed (EXW 6 = boot + 5 MP-lobby, 4 of them the −1 error exit; EXD 2 = boot twin + the MP serial-sync writer), the save family proven READ-only; all canonical chains re-baselined deliberately (strict S0 coverage 24/27 static + 2 dynamic-only)
+
+Worker 89591972, claim 1. RE-EXW-SIM §7j.68 carries the full
+decode; the unit excludes every MP value/writer semantics from its
+closure claim (the task charter — a later named task owns the
+lobby/sync families).
+
+1. **THE RE (§7j.68, objdump-only; raw-dword scan the D133
+   technique)**: EXW census 113 literal sites, 6 writers — the
+   boot writer `xor eax,eax → [0x4edb90]` @0x41c344/0x41c34c
+   (unconditional GameMain boot, inside the CINEMATICS
+   [0x46cca4]:=1 sandwich around the sound init FUN_0043a144 —
+   the §7d.3 "bootattract" gloss superseded by D134's sound-init
+   identification) + 5 sites in the MP lobby FUN_00448ef1: FOUR −1
+   error exits (0x44918a/0x4493e0/0x4497f1/0x4498e6 — the
+   "no local player" sentinel) and ONE success writer 0x449a5c
+   (TYPE := the local player's ORDINAL in the 0x4ee450 walk vs
+   [0x46cbe0]). EXD census 117 sites, 2 writers — the boot twin
+   @0x2cc7b/0x2cc84 (same CINEMATICS sandwich, cell pair
+   [0x1194d8]≡[0x46cca4], around FUN_0004be7d; the successor call
+   preserves the EXW tail's instruction ordinal) + the MP
+   serial-sync writer @0x5b026..0x5b030 (`call 0x62100; and
+   eax,0xffff` — the "Quit from synchronising" / "Found %i
+   players, but could only sync %i !" path; the DOS port has NO
+   lobby family). The raw file image holds EXACTLY 113
+   occurrences of 0x004edb90 (all .text disp32 operands, DGROUP/
+   .idata/.reloc zero — no aliasing pointer cell) and ZERO of
+   0x004edb92; EXD zero of 0x1075c2 — the cell is DWORD-written,
+   WORD-consumed (the two spawn kind stamps are the only WORD
+   reads), so extent "2" captures the consumed word and the high
+   words are dead. The save family is READ-ONLY both channels:
+   the type is NEVER SAVED.BDL state (the save derives the name
+   from it lea eax,[eax+eax·8] into 0x4e43e0; the restore copies
+   the row INTO type·0x62). Reader families: the spawn kind stamp
+   + first-robot cell (instruction-exact EXW 0x40cdec/0x40cdfb ⟷
+   EXD 0x1db19/0x1db28), the "my robot" gate `dword@robot+0x28
+   sar 16 == [type]` (the dominant mission family incl. the D132
+   chase gate 0x423eb0/0x34e44), the §7j.67 row-index imul 0x62/
+   0x1C families, the per-TYPE sibling 0x46ae94+type·4 (D133
+   boundary exclusion), and the panel/walk reads.
+2. **THE CLASSIFICATION — both sides, genuinely modeled (the
+   D154 seam precedent)**: `MissionSim::player_type: u16` is
+   constructed 0 with NO setter (the census's writer set is
+   boot+MP, both outside the mission sim — the constant IS the
+   faithful SP model), and three REAL gates consume it (alarm
+   trip §7g.1, critter bounty §7j.24/2, the case-4 pickup host
+   seam). Robots construct `kind: 0` (the SP kind-stamp model)
+   and `kind` rides `state_hash` while `player_type` stays
+   unhashed — exactly the original's surface. The E half of the
+   row = the canonical ANCHOR emission `static-player-type`
+   (u16 LE, 00 00, anchor frame only) — byte passthrough on
+   every channel, NO differ change (the D136 static-map-wh
+   precedent). Fresh-SP image = 0 deterministic on both channels
+   (boot is the only SP-path writer; save never restores the
+   cell; MP gated off in SP).
+3. **THE ORACLE** (`engine/bedlam-game/tests/
+   static_player_type_differential.rs`): the original-side
+   transcription (boot writer semantics both channels incl. the
+   CINEMATICS sandwich + the MP writer census pins + the save
+   READ-only proof), the spawn-consumer transcription (kind
+   stamp + first-robot cell + the my-robot gate arithmetic), the
+   E-side pins (sim constant 0, no setter exists, robots kind 0,
+   the three consumer gates' behavior at kind==type, the anchor
+   row bytes == 00 00, canonical chain moved-by-the-row), and
+   the sensitivity direction (a nonzero type changes the gates'
+   outcomes — the falsification the row exists to catch).
+4. **RE-BASELINE**: every canonical chain digest re-pinned (the
+   anchor row lands on every scenario that wants TS — all 12
+   plans carry the row as an anchor watch); differ_gate corpus
+   lanes re-pinned; coverage counts unchanged.
+5. **VERIFIED**: workspace release tests green (bedlam-game +
+   bedlam-core + diffharness incl. canonical_dump_gate 13 +
+   differ_gate 4 corpus lanes), fmt + clippy clean on touched
+   files, MANIFEST clean before AND after (no corpus write; the
+   EXD linear image rebuilt to /tmp/opencode scratch only). The
+   unrelated O1-boot WIP preserved untouched (unit staged only
+   its own paths).
