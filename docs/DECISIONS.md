@@ -4784,3 +4784,76 @@ the capture-plan deltas in the tree remain the unrelated O1-boot WIP,
 preserved untouched; this unit staged only its own paths).
 MANIFEST.sha256 clean before AND after (no corpus read). (worker
 9c711d0c claim 1)
+
+## D157 — 2026-08-25: P4/static-parity/S0-15 — the `static-order-table` TS row independently covered ORIGINAL-side (geometry pinned both ends 12×0x62=0x498, the whole-writer/reader census closed with TWO new GameMain writer families + the §7d.2(c) lobby gloss corrected to READ direction, and the fresh-session image proven all-zero); E stays a deliberate loud E-gap under the charter no-fabricated-parity class (strict S0 coverage 23/27 static + 2 dynamic-only)
+
+Six decisions recorded (RE-EXW-SIM §7j.67, oracle
+`bedlam-game/tests/static_order_table_differential.rs`):
+
+1. **GEOMETRY (the extent is now a NUMBER)**: the order/weapon table
+   is 12 rows × 0x62 = 0x498 bytes, EXW 0x4de664..0x4deafb / EXD
+   0x91ee4..0x9237b — pinned from BOTH ends: the GameMain boot
+   zero-init immediate (`mov ecx,0x498; mov edi,0x4de664` @0x41c3d6
+   / EXD 0x2cd0f) and the successor chassis table (EXW 0x4deafc
+   ADJACENT with its own 0x150 = 12×0x1C memset; EXD 0x9240c past a
+   0x90-B path-string buffer at 0x9237c — a channel layout
+   divergence worth recording). 12 rows matches the 12-slot robot
+   bank (D129) and the 12 chassis rows: row index = chassis TYPE
+   0..11 (MP contexts equate it with the player ordinal).
+2. **WRITER CENSUS — §7d.2's THREE-family list was INCOMPLETE**: (a)
+   the boot zeroing is an EXPLICIT GameMain memset (the ".bss-zeroed"
+   gloss upgraded; the intervening `call 0x43a48d` is a single-`ret`
+   no-op stub; the EXD twin call 0x4c7a5 is a 2-cell config copy — a
+   minor boot divergence); (b) a NEW episode-reset memset block
+   0x41ca06 (called 0x41c5f1) wipes table+chassis on the episode
+   transition; (c) a NEW post-mission loadout RECAPTURE block
+   0x41ca2e (called 0x41c665/82/89) pools every robot's group-ammo
+   word by type, divides by squad size [0x46cbd8] (idiv; quotient→
+   word@+2 ammo + item via FUN_0041cb38; the quotient==0 path writes
+   the REMAINDER to word@+0 — the `xor edx,eax` quirk); plus the
+   known save-restore (FUN_0044745e case 2, the 49-word map with the
+   +0xA/+0xC loop-carry displacements 0x4de660/0x4de662 — NOT a
+   pre-base header), the shop family, and the §7j.45 shop-exit MP
+   mirror (0x442ba7's 0x4de658 displacement is the +0xE carry to the
+   group +2 ammo word — eax ≥ 0xE always, never the salvo latch).
+3. **READER CENSUS + THE §7d.2(c) CORRECTION**: five families with
+   ordinal-identical EXD twins — the spawn copy (§6c.6: robot
+   +0x36/+0x38/+0x3A + default order bits = 1<<first group whose
+   word0 ≠ 0), the MP respawn re-copy (FUN_0040e230 §7j.24), the
+   shop reads (the 0x4403d3 row-text feeder via the −2 dword carry),
+   the SAVED.BDL writer (FUN_0044693a, identified by the 0x4597d1
+   "SAVED.BDL" string; stages mode/score/money + the full 49-word
+   row + the chassis row), and the MP lobby FUN_00448ef1 — which
+   READS word@+0/+2 into the outgoing 0x4dd4a0 staging and NEVER
+   writes the table (§7d.2(c)'s "5 writer sites" staged the buffer;
+   the table's only incoming MP mutation is the shop-exit mirror).
+   The adjacent equipment-chassis "extras switch" (EXW 0x40cf96 /
+   EXD 0x1dc66, base 0x4deafc/0x9240c: shield charges/variant/
+   battery := slot word@+2, slot cleared) is the chassis-side
+   sibling consumer, out of the row's window.
+4. **THE FRESH-SESSION STATIC IMAGE = ALL-ZERO 0x498**: boot memset →
+   no SAVED.BDL restores → the pre-mission shop mutates nothing
+   without purchases → the MissionShell-entry image is 1176 zero
+   bytes, deterministic; and it is a FIXED POINT of the writer cycle
+   (zero ammo pools → idiv → zero writes). A nonzero table WOULD
+   matter (order bits arm, group words copy into the robot record) —
+   the falsification direction the oracle pins both ways.
+5. **E-SIDE CLASSIFICATION = the charter no-fabricated-parity class**
+   (the D149/D155 precedent, NOT the volume-parsing clause): the
+   loadout is host-session state whose producers are outside the
+   engine; E has no loadout model and the canonical robot record is
+   the 94-B modeled subset with neither the +0x36/+0x38 group words
+   nor the +0x6E order-bits word. The oracle asserts the row stays
+   ABSENT on every canonical frame (the dither-row precedent) and
+   guards the 94-B record length on the T1-carrying S1 run. The row
+   closes ORIGINAL-side only; strict S0 coverage 23/27 static + 2/27
+   dynamic-only, 2 static rows remain (S0-16 static-player-type,
+   S0-17 static-cursor-clamp).
+6. **QUEUED FOLLOW-UP**: the dbx-plan extent hop — the deferred
+   `static-order-table` arm resolving to the now-pinned fixed 0x498
+   span (Form::Fixed at a direct .bss address, the S0-12a PtrCell
+   precedent) + the 13 capture-plan regenerations. watches.toml
+   layout note amended PLAN-NEUTRALLY (extent string unchanged —
+   zero plan bytes moved; the capture-plan deltas in the tree remain
+   the unrelated O1-boot WIP, preserved untouched; this unit staged
+   only its own paths).

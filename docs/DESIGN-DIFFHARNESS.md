@@ -437,7 +437,19 @@ escape-counters, tile-claims); s0-trigger (S0); every TS row except
 static-map-wh (the engine parses the volumes into internal forms and
 does not retain raw bytes); all T4 (event capture); all TI (the E
 injection surface is the scenario step list, not watched keystore
-bytes). **s0-trigger NOTE (S0-14/D156):** this row is not an E-gap to
+bytes). **static-order-table NOTE (S0-15/D157):** this TS row's gap
+reason is NOT the volume-parsing clause — the table is host-session
+LOADOUT state (12×0x62 = 0x498, §7j.67: boot-memset-0 + episode-reset
++ post-mission recapture + save-restore + shop + MP-mirror writers;
+fresh-session image all-zero) whose producers (shop screen, save-load,
+MP exchange) are outside the engine. E has no loadout model and the
+94-B canonical robot record contains neither the +0x36/+0x38 group
+words nor the +0x6E order-bits word — so the row closes
+ORIGINAL-SIDE ONLY under the charter no-fabricated-parity class (the
+D149/D155 precedent, asserted loudly by
+`static_order_table_differential.rs`); the dbx-plan extent hop (the
+pinned 0x498 fixed span) is queued separately (the S0-12a precedent).
+**s0-trigger NOTE (S0-14/D156):** this row is not an E-gap to
 close — it is the DUMP POINT itself (extent 0, a breakpoint with no
 comparable bytes). It closes by the DYNAMIC-ONLY placement: the
 ordering pin (§7j.66 — both tails' call sites + the

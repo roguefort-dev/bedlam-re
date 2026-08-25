@@ -10141,3 +10141,154 @@ disposition, tracked separately from static closure: strict S0
 accounting becomes 22 rows static-closed + 2 dynamic-only
 dispositioned + 3 static remaining (S0-15 static-order-table, S0-16
 static-player-type, S0-17 static-cursor-clamp) = 27.
+
+## 7j.67. THE 0x62-STRIDE ORDER/WEAPON TABLE (0x4de664) — geometry pinned (12 rows × 0x62 = 0x498, BOTH ends anchored), the whole-writer/reader census closed with TWO NEW GameMain writer families the §7d.2 census missed, the §7d.2(c) "MP lobby writer" gloss corrected to READ direction, and the fresh-session static image proven all-zero (2026-08-25, worker af39f59b claim 1, D157, the P4/static-parity/S0-15 unit; objdump-only from ghidra-project/exw-text-objdump.txt + the tools/exd-relod.py linear image (rebuilt to /tmp/opencode scratch); read-only byte probes of BEDLAM.EXW/BEDLAM.EXD; no Ghidra run; MANIFEST.sha256 clean before AND after) [verified]
+
+Whole-objdump census of every displacement resolving into
+[0x4de664, 0x4deafc) (the 0x4de6/0x4de7/0x4de8/0x4de9/0x4dea
+families, 119 raw hits, boundary families excluded by address) +
+instruction decode of every writer block. All items [verified]
+against the asm.
+
+**A. GEOMETRY — the extent is pinned from BOTH ends.** The table is
+**12 rows × 0x62 = 0x498 bytes**, EXW 0x4de664..0x4deafb, EXD
+0x91ee4..0x9237b. Proofs: (1) the GameMain boot zero-init immediate
+`mov ecx,0x498; mov edi,0x4de664` @0x41c3d6..0x41c3db (EXD twin
+`mov ecx,0x498; mov edi,0x91ee4` @0x2cd0f..0x2cd14) — the WHOLE-span
+memset, and 0x498/0x62 = 12 exactly; (2) the successor structure:
+EXW the 12-row chassis table at 0x4deafc (0x150 = 12×0x1C, its own
+boot memset @0x41c3f9), EXD the chassis twin at 0x9240c (memset
+@0x2cd32) — the EXW tables are ADJACENT (order table end == chassis
+base), while the EXD layout carries a **0x90-B path-string buffer at
+0x9237c** between them (read as a strcpy SOURCE by the config
+initializer FUN_0004be7d @0x4be89, staged with the 0x867f4
+"CONFIG.BDL" suffix; zero at rest in the linear image). The
+12-row/type domain matches the 12-slot robot bank (D129) and the
+12×0x1C chassis rows: **row index = chassis TYPE 0..11** (the MP
+contexts equate it with the player ordinal — the §7j.45 per-player
+mirror 0x4de664+p·0x62).
+
+**B. WRITER CENSUS (EXW, 6 families — §7d.2's list had 3 + the
+§7j.45 mirror; TWO GameMain families were missing):**
+
+1. **Boot zero-init** [0x41c3d6..0x41c3e5]: `mov ecx,0x498; mov
+   edi,0x4de664; call 0x43a48d; call 0x402965`. The intervening
+   `call 0x43a48d` is a **single-`ret` no-op stub** (whole function
+   = `c3`) — ecx/edi survive; the memset FUN_00402965 zeroes the
+   whole table. The §7d.2 ".bss-zeroed at boot" gloss UPGRADED: the
+   zeroing is an EXPLICIT GameMain boot instruction sequence, and
+   the row count is pinned by its immediate. EXD twin note: the EXD
+   intervening call 0x4c7a5 is NOT a bare stub — it copies two
+   config cells ([0x107668]→[0x107698]) before the memset — a minor
+   boot-order divergence, harmless to ecx/edi.
+2. **Episode-reset memset** [0x41ca06..0x41ca29, called 0x41c5f1]:
+   the GameMain episode-transition block that also stores
+   [0x46ae74]/[0x4edb50] (new-episode state) re-memsets the whole
+   table (0x498 @0x41ca0b..0x41ca15) + the chassis 0x150
+   (@0x41ca1a..0x41ca24) — the fresh-episode loadout wipe. EXD twin
+   0x2d2d6..0x2d2f4.
+3. **Post-mission loadout RECAPTURE** [0x41ca2e..0x41cb33, called
+   0x41c665/0x41c682/0x41c689] — NEW FAMILY, missed by §7d.2: after
+   MissionShell returns, GameMain pools every robot's group-ammo
+   word (robot +0x38+8j) into a per-(type,group-j) stack
+   accumulator (walk bounded by [0x46ccbc], the robot count), then
+   per player p < [0x46cbe0] and group j: `v = pooled[p·0x1c+j·4]`
+   idiv **[0x46cbd8] (squad size)**; quotient ≠ 0 → word@+2 := q
+   (ammo) and word@+0xA := FUN_0041cb38(ammo, group, player) (the
+   catalog item from the +6/+8 price/category words and the
+   0x4ea2ac/0x4ea2b0 tables); quotient == 0 → word@+0 := remainder
+   (the `xor edx,eax` quirk @0x41cae0 — r ^ 0 = r). Writes
+   0x41cae2/0x41cb0b/0x41cb24; reads 0x41cb51/0x41cb5b. EXD twin
+   0x2d398/0x2d3a1/0x2d3b1/0x2d3bc (+0x2d422/0x2d42c reads).
+4. **Save-load restore** [FUN_0044745e case 2, 0x43c3c3..0x43c42a]:
+   the saved row copied word-for-word, 7 groups × 7 words (+0,+2,
+   +4,+6,+8,+0xA,+0xC per group — the two last via the loop-carry
+   displacements 0x4de660/0x4de662 after `add eax,0xe`; NOT a
+   pre-base header). The boot call @0x41c417 runs the initializer;
+   on a FRESH session (no SAVED.BDL) nothing restores. EXD twin
+   0x4e583..0x4e5e9.
+5. **Shop family** [FUN_00440e45]: buy full-group write
+   0x4417f3..0x44183d, clear 0x441485..0x4414ab, ammo adjust
+   0x4418da/0x4418f7, staging 0x441e1d..0x441e3f, sell-all 7-word
+   clear 0x442821..0x442886 — the §7d.2(a)/§7j.45 census unchanged.
+6. **Shop-exit MP mirror** [0x442b97/0x442ba7, in the §7j.45 exit
+   0x442ae2..0x442c3e]: word@+0 := name, word@+2 := ammo from the
+   0x4dd4a0+p·0x80 record (first byte skipped); the 0x442ba7
+   displacement 0x4de658 is the +0xE loop-carry (eax ≥ 0xE always →
+   target = group +2; the §7j.54 "alias, never the latch" ruling
+   holds, now with the exact decode).
+
+**C. READER CENSUS (EXW, 5 families; every one has a 1:1 EXD
+twin — the two walks are ordinal-identical):**
+
+1. **Spawn copy** [load_markers 0x40cefd/0x40cf18/0x40cf33 ⟷ EXD
+   0x1dbc1/0x1dbdc/0x1dbf7]: the §6c.6 7-group copy into robot
+   +0x36/+0x38/+0x3A + the default order-bits derivation (bits :=
+   1 << first i with group word0 ≠ 0). The ADJACENT equipment-
+   chassis consumption (the "0x2a/0x2b/0x2c extras switch"):
+   EXW 0x40cf96..0x40d031 on base 0x4deafc ⟷ EXD 0x1dc66..0x1dcff
+   on base 0x9240c — per chassis slot (2 × 0xE), a 5-case switch on
+   the slot's name word ∈ 0x2A..0x2E: shield charges := slot word@+2
+   (robot +0x8C), variant := word@+2 (+0x94), battery := word@+2
+   ×0xC8 (+0x98) — then the slot's +0/+2/+6 words are CLEARED
+   (consumed). This is chassis-family (out of the order-table
+   window) but is the table's spawn-side sibling consumer; §7j.45/5
+   gloss confirmed at both channels.
+2. **MP respawn re-copy** [FUN_0040e230 0x40e97c/0x40e997 ⟷ EXD
+   0x1f690/0x1f6ab]: the §7j.24 "weapon/equipment re-copy".
+3. **Shop reads** [0x4402cd..0x443913 ⟷ EXD 0x52464..0x5599b]: the
+   row-text feeder (0x4403d3, dword@[eax+0x4de662]>>16 = group word
+   0 via the −2 carry, feeding FUN_00420260), the auto-loadout
+   search (0x443823/0x443859 — eax = 62t computed as
+   (t<<2−t)<<4+t), buy/sell/clear guards.
+4. **SAVED.BDL writer** [FUN_0044693a (function identified by the
+   0x4597d1 "SAVED.BDL" string) 0x446ce1..0x446d81 ⟷ EXD
+   0x58bef..0x58c73]: stages mode/score/money words then the FULL
+   row (7 groups × 7 words, `imul edx,[0x4edb90],0x62` + group
+   walk) then the chassis row — the byte-exact inverse of the
+   restore (B4).
+5. **MP lobby exchange** [FUN_00448ef1 0x449f94/0x449fbd ⟷ EXD
+   0x5b3fc/0x5b425]: READS word@+0 and word@+2 of the player's row
+   into the 0x4eba04-cursor record build (the outgoing network
+   staging). **§7d.2(c) CORRECTED**: FUN_00448ef1 NEVER writes the
+   table — its "5 writer sites" stage the 0x4dd4a0 buffer; the
+   table's only incoming MP mutation is the shop-exit mirror (B6).
+
+Boundary exclusions (address-adjacent, different families): the
+chase-camera override cells 0x4de648..0x4de654 (§7j.54), the salvo
+cooldown latch 0x4de658 (§7j.54), the chassis table 0x4deafc+
+(§7j.45). The pre-base displacements 0x4de660/0x4de662 and the
+−2/−4 carry reads are phantom (always in-window after the register
+arithmetic: eax ≥ 2 / ≥ 0xE on every path).
+
+**D. THE FRESH-SESSION STATIC IMAGE = ALL-ZERO 0x498 (the TS row's
+O1/O2 anchor content).** Derivation: boot memset (B1) → the
+save-load initializer runs but restores nothing on a fresh session
+(no SAVED.BDL) → the SP episode walk visits the shop before mission
+1 (§7d.4) but a fresh campaign makes no purchases (money 3500,
+zero input) and the shop mutates the table ONLY on buy/sell/auto
+actions (§7d.2a) → **the MissionShell-entry image is 1176 zero
+bytes**, deterministic. The SP player TYPE [0x4edb90] := 0 (§7d.3)
+makes row 0 the live row; rows 1..11 stay zero for the whole SP
+campaign (only the MP families touch them). Sim-side effect of the
+all-zero image: the spawn copy plants zero group words and the
+default order-bits derivation finds no nonzero word0 → bits 0 → no
+order rows (§6c.6); no RNG, no hash surface. A NONZERO table WOULD
+matter (bits = 1<<first-word0, copies land in the robot record) —
+the falsification direction the oracle pins.
+
+**E. THE S0-15 CLASSIFICATION (D157).** The row closes
+ORIGINAL-SIDE only, the charter no-fabricated-parity class (the
+D149/D155 precedent): the loadout is HOST-SESSION state whose
+producers (shop, save-load, MP exchange) are outside the E engine —
+E has NO loadout model, no shop screen, and the canonical
+robot-bank record is the 94-B modeled subset that contains neither
+the +0x36/+0x38/+0x3A group words nor the +0x6E order-bits word —
+so an E emission would be fabricated parity. The row stays a
+deliberate, loud E-gap (absent from every canonical frame, asserted
+by the oracle), and the capture-plan extent hop (dbx-plan's
+deferred arm resolving to the pinned 0x498 fixed span at a fixed
+address — the S0-12a PtrCell precedent, Form::Fixed here since the
+table is direct .bss, not pointer-indirect) is queued as its own
+unit. watches.toml layout note amended plan-neutrally (extent
+string unchanged).
