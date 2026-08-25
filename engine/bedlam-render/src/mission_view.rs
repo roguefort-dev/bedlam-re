@@ -1138,6 +1138,9 @@ fn flush_node(buf: &mut [u8], node: &SpriteNode, bank: &[u8]) {
 }
 
 #[cfg(test)]
+mod static_differential;
+
+#[cfg(test)]
 mod entity_tests {
     use super::*;
 

@@ -633,7 +633,7 @@ Notable **negative** results (things that did NOT fit):
 | Ext | Size rule (n=37 unless noted) | Content hypothesis | Confidence | RE must confirm |
 |-----|-------------------------------|--------------------|------------|-----------------|
 | MAP | 4 + w·h·16; dims 25×75 / 100×25 / 100×100 | 8 u16 planes/tile; plane 0 terrain-IDs, rest overlays | layout VERIFIED; semantics HYPOTHESIS | per-plane meaning |
-| TOT | same as MAP | MAP superset + dynamic data; planes 6/7 sparse indices | layout VERIFIED; superset VERIFIED; meaning LIKELY | what TOT is for; plane 6/7 target table |
+| TOT | same as MAP | eight u16 runtime tile-word planes plus mirror; meanings beyond anchored consumers unresolved; earlier target-table hypothesis REFUTED | layout VERIFIED; loader/mirror VERIFIED (EXW §7j.16/§7h.4); broader semantics unresolved | what TOT stands for; remaining plane meanings |
 | COL | same as MAP | per-tile class codes (≤102; 1 and 37 dominant) | layout VERIFIED; content LIKELY | code vocabulary |
 | DAT | 4 + w·h·8 | walkability TYPE grid (plane=z level); PAD writes 0xFF marks | layout VERIFIED; semantics VERIFIED (EXW 7c) | per-type behaviours |
 | LNK | 16384 = 8192×u16 (44 files) | orientation-link cycles over object space | layout VERIFIED; cycles VERIFIED; meaning LIKELY | index space + usage |

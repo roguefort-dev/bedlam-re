@@ -34,13 +34,16 @@ load_mission (7c)            init_tiles@00407e11         FUN_00403938 per frame
   and (c) FUN_00401010 = a 9-sprite RADAR STAMP that WRITES INTO
   the bank (5× downsample + 2:1 deshear of the 480×480 viewport at
   the camera, into scratch sprites u32[0x454b00+4·set]..+8 — a
-  shipped-inert feature: those records are fmt-0 stubs with
-  gate=rows=0, LNK is identity on their ids, and no code ever
-  draws them; the TOT references in zones A–D render nothing).
-  Container grammar (§7j.36, 11/11 banks): u16[bank+0] = count
-  (→ write-only 0x46cdb8); directory entry = bank+2+4·id, sprite =
-  entry + u32[entry] SELF-relative; records = u16 fmt/dy/dx/gate/
-  rows + stream, all real terrain = fmt 7.
+  shipped-inert feature: the seven runtime-selected lettered banks each
+  carry nine fmt-0 stubs physically encoded as the 6-B
+  `{u16 fmt=0,u16 dy=64,u16 dx=64}` followed by 4096 raw bytes. The
+  blitter reads the first four zero raw pixels as gate/rows and returns;
+  LNK is identity on their ids, so the TOT references in zones A–D
+  render nothing). Container grammar (§7j.36, tested seven runtime
+  banks): u16[bank+0] = count (→ write-only 0x46cdb8); directory entry =
+  bank+2+4·id, sprite = entry + u32[entry] SELF-relative. Those banks
+  contain only the nine fmt-0 stubs and fmt-7 compressed records; this
+  census makes no global claim about fmt 1..3 in other BIN banks.
 - **LNK** = u16[8192] near-identity permutation (FORMATS-MISSION §5),
   loaded to the IN-IMAGE buffer 0x45cdda (0x8000) [7c §2]. Consumer
   FOUND (this pass): it is the **tile animation link table** — the
@@ -186,8 +189,15 @@ bank (BIN), EDI = dest ptr in the 0x64000 buffer.
   is SELF-relative, exactly §5c's form; the old gloss
   "bank + u32[bank + 4 + id*4]" was wrong in both base and anchor;
   u16[bank+0] = the sprite count, never read by the blits).
-- Header (10 B): `u16 fmt; u16 dy; u16 dx; u16 gate(≠0 else return);
-  u16 rows;` then the stream. Dest = EDI + dy*0x280 + dx (stride 640).
+- Record prefix: compressed/nonzero formats use the 10-B logical prefix
+  `{u16 fmt,u16 dy,u16 dx,u16 gate,u16 rows}` before the stream; gate 0
+  returns. The tested seven runtime-selected lettered BIN banks contain
+  formats 0 and 7 only. Each has nine fmt-0 radar stubs physically encoded
+  as the 6-B `{u16 fmt=0,u16 dy=64,u16 dx=64}` plus 4096 raw 64×64 bytes
+  (4102 B total). The blitter's unconditional gate/rows reads therefore
+  observe the first four zero raw pixels and return without drawing. This
+  seven-bank census does not establish whether fmt 1..3 occur in other BIN
+  banks. Dest = EDI + dy*0x280 + dx (stride 640).
 - **fmt 0**: raw 64×64, transparency color 0, row stride 640
   (`ADD EDI,0x240` after 64 bytes = 640).
 - **fmt 1..3**: u16 RLE. Control word (bit15 set): bit14 set = end of

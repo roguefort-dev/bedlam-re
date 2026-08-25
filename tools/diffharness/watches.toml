@@ -398,7 +398,7 @@ exw_addr = "0x4edd58"
 exd_addr = "0x107518"
 indirect = true
 extent = "map-sized (u8 planes)"
-layout = "DAT volume pointer cell (>=0x7F bytes sanitized to 0 at load)"
+layout = "DAT volume pointer cell (>=0x80 bytes sanitized to 0 at load in planes 0-6; plane 7 preserved)"
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "DAT volume ptr 0x4edd58"
