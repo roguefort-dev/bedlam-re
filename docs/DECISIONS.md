@@ -4343,3 +4343,51 @@ unit — in flight with unrelated O1-boot WIP), and the presentation-phase
 map-overlay territory-stamp producer (S5+ display work, D17/D50 scope).
 Strict S0 independent coverage is now **10/27 rows** (the D148 nine +
 `static-min-bank`); 17 rows remain. (worker 95c99db8 claim 1)
+## D150 — 2026-08-25: P4/static-parity/S0-11 — the tile-claim bank row `static-claim-bank` independently covered original-side with a CONCRETE Rust staging gap queued (strict S0 coverage 11/27)
+
+**(1) RE first (2646ce8).** The 0x46af58/0x119564 claim bank decoded
+whole (RE-EXW-SIM §7j.63): exactly 7 `.text` sites EXW with a 7-for-7
+EXD twin census — the alloc pointer store, FOUR readers (the splash
+stager 0x4243e4, the platform tile build 0x422931, the death-blast
+smoke producer 0x423858, and the NEW radar marker-0xd gate 0x41f191),
+the memset load, and the write. **The §7j.10 "ORDER marker family
+0x425556" gloss RETIRED** — no order-marker writer exists; 0x425556 is
+the inner store of FUN_004254e1, the MISSION-LOAD initializer:
+memset-0 of the whole 10000-B bank, then the stamp of the ACTIVE
+PREFIX (first `state==0` stops the walk) of the 45×0x10 door-rect list
+0x4dcae8 (`{+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant}` — §7j.34
+grammar re-confirmed from the sar-16 loads), `claim[line[y0+row]+x0+col]
+:= 1`, NO bounds checks. The rect source = FUN_0042c4a0's per-zone
+HARDCODED store farm (zone table 0x42c484 ×7, mode gate [0x4edb88]==2,
+mission tables ×5 for zones 2..6, ==1-only for zones 1 and 7) after the
+0x447b7b whole-bank memset — fully deterministic per (zone, mission,
+mode); arena-staleness moot (the memset runs every mission). The arena
+side re-verified: the bank is the 7th per-mission bump block after the
+0x41d955 cursor reset to the [0x46af20] watermark.
+
+**(2) Oracle (76a14c6).** `static_claim_bank_differential.rs` = the
+independent all-37-mission oracle: the pinned 368-row rect farm
+(`tests/data/claim_rects.rs`, concrete-interpreter transcription with
+THREE cases hand-verified instruction-by-instruction — Z1M1, Z3M1,
+Z7M1), the initializer transcription over per-mission TOT-header map
+dims, and the corpus identity pins (A=1/B..F=7/G=1 missions, 25×75 /
+100×100 / 100×25 dims, per-mission claimed-tile census, the exact
+ZONEA/M1 59-tile set, total 3049, the 10 all-zero missions) +
+four-part sensitivity (rect widening, mid-record deactivation proving
+the prefix rule, map_w row arithmetic, compute-only off-map proof of
+the unchecked write).
+
+**(3) The actual side is deliberately absent — a documented GAP, not
+parity.** bedlam-core hardcodes claim==0 in the three staged gates;
+both halves of its justification ("host-staged zeros", "the D82
+order-marker writers are the unmodeled seam") are DISPROVEN by §7j.63
+(comments corrected in-code; the original REFUSES splash/platform/
+death-blast staging on the 59 claimed ZONEA/M1 tiles where Rust
+allows). The concrete seam is QUEUED as the next unit (S0-11b): stage
+the claim bank in MissionSim from the pinned rect tables, read it in
+the three gates, emit the canonical TS row, re-baseline the canonical
+chain pins — deliberately not landed here (it moves every E-side chain
+and belongs to its own bounded unit; no fabricated parity in the
+meantime). Strict S0 independent coverage is now **11/27 rows** (the
+D149 ten + `static-claim-bank`); 16 rows remain. (worker eeafac37
+claim 1)

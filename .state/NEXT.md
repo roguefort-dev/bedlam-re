@@ -5,19 +5,29 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-11] independently cover `static-claim-bank`
-   initialization (EXW 0x46af58 / EXD 0x119564, the platform-ring tile
-   claim bank). Follow the D146/D147/D148/D149 unit shape: first
-   statically re-verify the EXW/EXD initialization + writer/reader
-   census instruction-by-instruction from the objdump texts, commit the
-   RE notes first, then build an independent all-37-mission oracle (no
-   production parser/loader/helper reuse on the expected side), compare
-   byte/field-exact against the Rust target (or document the gap and
-   add only the smallest justified seam rather than fabricating parity),
-   pin corpus identities, bracket corpus reads with `MANIFEST.sha256`,
-   and prove sensitivity with a temporary in-memory mutation. DONE when
-   the `static-claim-bank` row is independently covered, or one concrete
-   code/model gap is queued; tests/review/commit.
+1. [P4/static-parity/S0-11b] LAND THE CLAIM-BANK STAGING SEAM in Rust
+   (the D150 queued gap): stage the 0x2710 tile-claim bank in
+   MissionSim at mission load from the pinned rect farm
+   (engine/bedlam-core/tests/data/claim_rects.rs is the transcription
+   source — promote it to a `bedlam-core` data module), read it in the
+   three modeled gates (`stage_splash`, `platform_tile_build`, the
+   death-blast smoke producer) instead of the hardcoded 0, and emit
+   the canonical `static-claim-bank` TS row in the E harness
+   (parity_harness/canonical.rs; the row is currently NOT emitted —
+   DESIGN §6a). This MOVES E-SIDE CANONICAL STATE: every canonical
+   chain pin re-baselines (S0..S8 + synthetic + frame digests per the
+   D136 re-baselining precedent) and the canonical_dump_gate asserts
+   need the new row added (the D82 grammar fixture in
+   canonical_dump_gate.rs carries the zone/mission seams). Prove the
+   gate effect: on a claimed ZONEA/M1 tile the original REFUSES the
+   splash/platform-tile/death-blast where Rust previously allowed (the
+   corpus S0 scenarios must be checked for reachability — if no staged
+   scenario stages on a claimed tile, the chains move ONLY via the new
+   TS row, not via gate behavior). Verify: full workspace tests +
+   fmt + clippy, manifest bracketed, dbx-plan regeneration if the
+   watches row changes (it should NOT — the row already carries
+   extent 10000/indirect). DONE when the three gates read the staged
+   bank, the TS row emits, and all gates/chains are re-pinned green.
 2. [P4/static-parity/S0-12a] dbx-plan `static-min-bank` extent
    resolution: now that the bank extent is pinned (ArenaAlloc 0x7530,
    RE-EXW-SIM §7j.62/D149), resolve the deferred dbx-plan arm to
@@ -30,10 +40,11 @@ renumbered queue keeps every open item claimable by number).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  10/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
-  920aec2, fcb8fb2, and cec30a7. The remainder is assigned across
-  the named S0-12..S0-17 slices (8+3+2+1+1+1 rows) plus the S0-12a
-  infra hop above (dbx-plan extent, not a row). NOTE: the
+  11/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
+  920aec2, fcb8fb2, cec30a7, 2646ce8, and 76a14c6. The remainder is
+  assigned across the named S0-12..S0-17 slices (8+3+2+1+1+1 rows)
+  plus the S0-11b seam hop above (engine staging, not a row) and the
+  S0-12a infra hop above (dbx-plan extent, not a row). NOTE: the
   predecessor's "18-row remainder" tally vs its 17-row assignment
   list was already off by one — re-audit the 27-row registry when
   S0-12 lands. `static-min-bank` (S0-10) is CLOSED original-side
@@ -213,6 +224,29 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-11 COMPLETE (worker eeafac37 claim 1,
+  commits 2646ce8 docs + 76a14c6 test; D150). The `static-claim-bank`
+  row independently covered ORIGINAL-SIDE with a CONCRETE Rust staging
+  gap queued (S0-11b, the new item 1). RE-EXW-SIM §7j.63: the
+  0x46af58/0x119564 bank decoded whole — 7-site EXW census with a
+  7-for-7 EXD twin census; the §7j.10 "ORDER marker family 0x425556"
+  gloss RETIRED (it is FUN_004254e1's inner store — the MISSION-LOAD
+  initializer: memset-0 of the whole 10000-B bank + the stamp of the
+  ACTIVE PREFIX of the 45×0x10 door-rect list, no bounds checks); the
+  rect source = FUN_0042c4a0's per-zone/mission HARDCODED store farm
+  (zone table 0x42c484, mode gate, mission tables ×5 for zones 2..6,
+  ==1-only zones 1/7) after the 0x447b7b whole-bank memset; a NEW 4th
+  reader found (the radar marker-0xd gate 0x41f191); arena side
+  re-verified (7th per-mission bump block after the 0x41d955 cursor
+  reset; staleness moot). Oracle: 368-row pinned rect farm
+  (tests/data/claim_rects.rs, concrete-interpreter transcription,
+  three cases hand-verified) + the independent all-37-mission
+  initializer transcription with census pins (per-mission counts, the
+  exact ZONEA/M1 59-tile set, total 3049, 10 all-zero missions) +
+  four-part sensitivity. Rust side deliberately absent (claim==0
+  hardcode) — both halves of its justification disproven, destroy.rs
+  comments corrected; the staging seam (gates + canonical TS row +
+  chain re-baselining) queued as S0-11b. Strict S0 coverage 11/27.
 - 2026-08-25: P4/static-parity/S0-10 COMPLETE (worker 95c99db8 claim 1,
   commits 0ebb184 docs + cec30a7 test; D149). The `static-min-bank`
   row independently covered ORIGINAL-SIDE; Rust retention deliberately

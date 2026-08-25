@@ -1,5 +1,26 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D150 S0-11 COMPLETE (worker eeafac37 claim 1, commits
+    2646ce8 docs + 76a14c6 test): the tile-claim bank row
+    `static-claim-bank` is independently covered ORIGINAL-SIDE with a
+    CONCRETE Rust staging gap queued (S0-11b = the new item 1). The
+    bank is the DOOR-RECT TILE CLAIM map: FUN_004254e1 @0x447b85
+    memsets the whole 0x2710 arena 0 and stamps the ACTIVE PREFIX of
+    the 45×0x10 door-rect list (§7j.34 grammar) from FUN_0042c4a0's
+    per-zone/mission HARDCODED store farm; 7-site EXW census with a
+    7-for-7 EXD twin census; the §7j.10 "order-marker writer" gloss
+    RETIRED; a NEW 4th reader (the radar marker-0xd gate 0x41f191);
+    the three modeled Rust gates' "host-staged zeros / D82 seam"
+    justification DISPROVEN (comments corrected; the original REFUSES
+    staging on the 59 claimed ZONEA/M1 tiles where Rust allows). The
+    independent all-37-mission oracle pins the corpus identities
+    (per-mission census, the exact ZONEA/M1 59-tile set, total 3049)
+    with four-part sensitivity. Strict S0 independent coverage is
+    11/27 rows; next head: S0-11b (land the staging seam — gates +
+    canonical TS row + chain re-baselining). The responsive-capture
+    WIP (diffharness capture-plans + dbx-capgen tests + dbx-plan
+    O1-boot hunks) remains uncommitted and preserved.
+
   - 2026-08-25 D149 S0-10 COMPLETE (worker 95c99db8 claim 1, commits
     0ebb184 docs + cec30a7 test): the `.MIN` mask-bank row
     `static-min-bank` is independently covered ORIGINAL-SIDE with Rust
