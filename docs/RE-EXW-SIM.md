@@ -1712,9 +1712,13 @@ Supporting family [all verified]:
   (x, y, z, delay). Gates: in-bounds x/y, z clamp ≤ 7, DAT
   volume(z) == 0 (FUN_0041eb28), z-word(z) == 0, claim byte
   `byte[0x46af58-bank + tile] == 0` (0x46af58 = a 10000-B arena
-  bank alloc'd at mission load 0x41d9d7; written 1 by the ORDER
-  marker family 0x425556, read by the platform stager 0x423858 —
-  the per-tile order/platform CLAIM bank). Allocation: first
+  bank alloc'd at mission load 0x41d9d7. CORRECTED by §7j.63: the
+  "written 1 by the ORDER marker family 0x425556" gloss was WRONG —
+  0x425556 is the inner store of FUN_004254e1, the MISSION-LOAD
+  initializer that memsets the bank 0 and stamps the door-rect tile
+  claims; readers: the platform stager 0x423858, this stager, the
+  death-blast producer, and the radar marker-0xd gate 0x41f191 —
+  the per-tile DOOR-RECT CLAIM bank). Allocation: first
   age==0 slot, else the max-age slot (evict; the evicted record
   is cancelled with FUN_0042394a(old,0,0) first). Writes
   {x, y, z, delay, age=1}.
@@ -4813,7 +4817,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | splash life | stamps water_base[zone]@age1, base+0x16@age40, frees @age≥47; body odd frames only | §7j.10 |
 | z-structure writer | FUN_0042394a: zword@rec+2z, seen@rec+0x10+z, DAT volume byte | §7j.10 |
 | DAT volume read | FUN_0041eb28(x,y,z): byte[DAT+tile+zoff[z]], 0xFF→1 | §7j.10 |
-| tile-claim bank | 0x46af58, 10000 B arena @mission-load; order-marker writer 0x425556 | §7j.10 |
+| tile-claim bank | 0x46af58, 10000 B arena @mission-load; NOT order-written — FUN_004254e1 @0x447b85 memsets 0 then stamps the door-rect tile claims (the §7j.10 gloss corrected) | §7j.10, §7j.63 |
 | sidebar select strips | [0x1E7,0x217]/[0x219,0x249]/[0x24B,0x27B] × y[5,0x35]; F1/F2/F3 latches 0x4edc0c/10/14 | §6c.2 |
 | sidebar order rows | x[0x1E9,0x275] × y[0x57,0xB8]; row=(y-0x57)/14 clamp ≤6; keys 1..7 latches 0x4edc18+4k | §6c.3/4 |
 | sidebar redraw flag | DAT_0046ccec countdown: set 2/3 by producers, dec+FUN_00408403 in the FUN_00403938 tail | 0x407205 |
@@ -9650,3 +9654,130 @@ file is in flight with unrelated WIP). The S0-10 oracle
 differential built from this section: loader transcription (verbatim
 prefix, stale tail proven unreachable), the LNK/LNG→cw consumer projection
 over all 37 missions, the stamp semantics, and the corpus identity pins.
+
+## 7j.63. THE TILE-CLAIM BANK (0x46af58) INITIALIZATION DECODED WHOLE — it is the DOOR-RECT TILE CLAIM map: a per-mission memset-0 + the stamp of the ACTIVE PREFIX of the 45-rect door list; the §7j.10 "ORDER marker family 0x425556" gloss RETIRED; a NEW 4th reader (the radar marker-0xd gate) (2026-08-25, worker eeafac37 claim 1, the P4/static-parity/S0-11 unit; objdump-only from ghidra-project/exw-text-objdump.txt + exd-text-objdump.txt — no Ghidra run; read-only byte probes of BEDLAM.EXW; scratch /tmp/opencode; MANIFEST.sha256 clean before AND after) [verified]
+
+**A. The whole `.text` census: EXACTLY 7 sites, EXW ⟷ EXD 7-for-7.**
+A raw grep of `0x46af58` over exw-text-objdump.txt (and the byte-verified
+call at 0x447b7b re-read from the EXW file image, delta 0x400C00) closes the
+displacement census — no site writes through a stale register copy (any
+writer must load the pointer first, and every load site is accounted):
+
+| # | EXW | EXD twin | kind | function/role |
+|---|-----|----------|------|---------------|
+| 1 | 0x41d9d7 | 0x2e300 | pointer store | mission-load arena pass (D below) |
+| 2 | 0x41f191 | 0x2fb8c | READER | NEW: the radar/map-overlay pass FUN_0041ee20 — `cmp byte[edx+claim],0; je skip` gates marker id 0xd (vs marker 7 on the other branch): claimed tiles draw door/marker 0xd on the overlay |
+| 3 | 0x422931 | 0x33857 | READER | FUN_004228ce platform tile build gate (§7j.41/2) |
+| 4 | 0x423858 | 0x347cf | READER | FUN_0042382c death-blast smoke producer gate (§7j.24) |
+| 5 | 0x4243e4 | 0x35349 | READER | FUN_00424355 splash stager gate (§7j.10/§7j.14) |
+| 6 | 0x4254ec | 0x36589 | memset load | FUN_004254e1 head (E below) |
+| 7 | 0x425556 | 0x365d4 | WRITE | FUN_004254e1 stamp loop: `mov byte[ecx+claim],1` |
+
+**No order-marker writer exists at all.** The §7j.10 gloss "written 1 by the
+ORDER marker family 0x425556" is RETIRED: 0x425556 is the inner-loop store of
+FUN_004254e1 — the MISSION-LOAD initializer (C below). The ledger row
+"tile-claim bank … order-marker writer 0x425556" and the engine-side comments
+("the D82 order-marker writers are the unmodeled seam") are corrected by this
+section: there is exactly ONE writer family and it runs once per mission load.
+
+**B. The initialization chain (MissionShell mission load, verified
+byte-order 0x447b6c..0x447b8a):**
+```
+447b6c: mov ecx,0x2d0
+447b71: mov edi,0x4dcae8        ; (dead setup — see below)
+447b76: call 0x41a4f8           ; .POS/.BDG loader (push/pop-guarded ecx/edi — pair survives, unused)
+447b7b: call 0x402965           ; MEMSET-0: 0x2d0 B at 0x4dcae8 — clears ALL 45 rect records
+447b80: call 0x42c4a0           ; the per-zone/mission HARDCODED rect filler
+447b85: call 0x4254e1           ; THE CLAIM INITIALIZER (C below)
+```
+(§7j.21 item 3's "MissionShell clears it @0x447b7b" confirmed byte-exact —
+an early terminal-transcription slip in this unit's own log was corrected
+against the file image: the target IS 0x402965 = memset, NOT 0x402975 = RandA;
+the two helpers are 10 bytes apart and near-identical in call shape.)
+
+**C. FUN_004254e1 = the claim initializer (EXW 0x4254e1..0x425567; EXD twin
+0x3657e..0x365fe instruction-equivalent, rect bank alias 0x92c64, line-table
+alias 0x8b78c):**
+```
+ecx := 0x2710 (10000); edi := [0x46af58]; call FUN_00402965   ; MEMSET-0 the WHOLE bank
+ebp := 0                                                       ; rect record offset
+loop: if ebp >= 0x2d0 -> ret
+      if word@0x4dcae8+ebp == 0 -> ret      ; STOPS at the first inactive record
+      for esi (row) in 0 .. word@(rect+8)   ; h  (loaded as dword@rect+6 >> 16)
+        for edx (col) in 0 .. word@(rect+6) ; w  (loaded as dword@rect+4 >> 16)
+          ebx := word@(rect+4) + row        ; y0 (loaded as dword@rect+2 >> 16)
+          ecx := word@(rect+2) + col        ; x0 (loaded as dword@rect+0 >> 16)
+          ecx += [ebx*4 + 0x4ea900]         ; tile = line[y] + x
+          byte@[[0x46af58] + ecx] := 1      ; CLAIM
+      ebp += 0x10
+```
+The sar-16 field loads confirm the §7j.34 grammar exactly — {+0 state, +2 x0,
++4 y0, +6 w, +8 h, +0xA variant}. **NO bounds checks anywhere** (same trust as
+the §7j.21 door stepper): a malformed rect writes out of the tile range (and
+potentially past the 10000-B bank); corpus data is well-formed (F below).
+
+**D. The arena side (re-verified from the D149 substrate):** FUN_0041d954
+resets the arena cursor [0x46af0c] := the post-boot watermark [0x46af20]
+(0x41d955) then bump-allocates the per-mission chain; the claim bank is the
+7th block (`mov eax,0x2710; call 0x41db89; mov ds:0x46af58,eax` @
+0x41d9cd..0x41d9d7) — the SAME absolute span every mission (deterministic
+order), arena memory NEVER zeroed by the allocator. The cross-mission
+staleness this would imply is MOOT for this bank: the initializer's memset-0
+(C) runs every mission load before any reader. (Contrast: the `.MIN` bank
+D149 — no memset anywhere, stale tail proven unreachable.)
+
+**E. The rect source — FUN_0042c4a0 = a per-zone HARDCODED store farm**
+(0x42c4a0..0x4330xx; zone dispatch `jmp [[0x4edd8c]-1)*4 + 0x42c484]`, 7
+entries: zone1→0x42c4bc, 2→0x42c660, 3→0x42d805, 4→0x42f0fc, 5→0x430de0,
+6→0x43181b, 7→0x433007; >7 → ret 0x426030). Each zone case gates on mode
+([0x4edb88]==2 → skip) then the within-zone mission number [0x4edd88] and
+writes a subset of the 45 rect records as IMMEDIATE constants
+(`mov eRg,imm; mov word ds:bank+off,Rg`). Because the whole bank was
+memset-0 at 0x447b7b, every record the case does NOT write stays inactive —
+the stamped set is fully deterministic per (zone, mission, mode), and
+cross-mission staleness in the RECT bank is moot too. **Zone 1 (ZONEA), mode
+≠ Head2Head, mission 1 — the S0 corpus mission — fills exactly records
+0..6** (verified instruction-by-instruction + a scripted register tracker,
+scratch /tmp/opencode/rect_extract.py):
+
+| rec | state | x0 | y0 | w | h | variant |
+|-----|-------|----|----|---|---|---------|
+| 0 | 1 | 2 | 51 | 9 | 2 | 1 |
+| 1 | 2 | 9 | 44 | 3 | 2 | 1 |
+| 2 | 2 | 16 | 35 | 2 | 5 | 1 |
+| 3 | 1 | 18 | 35 | 2 | 5 | 1 |
+| 4 | 1 | 4 | 32 | 1 | 3 | 5 |
+| 5 | 2 | 2 | 10 | 2 | 2 | 1 |
+| 6 | 1 | 16 | 11 | 4 | 2 | 2 |
+
+records 7..44 stay 0 → the stamper stops after record 6. All tiles land
+inside the ZONEA 25×75 map (line[y] = y·25; max x 19 < 25, max y 52 < 75);
+the rects are pairwise disjoint → **exactly 59 claimed tiles** for ZONEA/M1.
+Zone-1 missions ≠1 write NOTHING (the case gates mission==1) → the rect bank
+stays all-zero → the claim bank stays all-zero after the memset.
+
+**F. Engine/differ consequence (the S0-11 gap, queued):** bedlam-core models
+the claim byte as a hardcoded 0 ("host-staged zeros — the D82 order-marker
+writers are the unmodeled seam", destroy.rs stage_splash/platform_tile_build)
+— **both halves of that comment are now disproven**: the bank is NOT zero at
+mission load (the door-rect stamp runs before the first frame), and the
+writers are not order-marker/D82-seam writers (they are deterministic,
+input-free, hardcoded-data mission-load staging). The fresh-session
+static-after-load image for ZONEA/M1 = 59 bytes of 1 at fixed tile indices
+(59 disjoint tiles, list in the oracle test) in an otherwise zero 10000-B
+bank. The three modeled readers gate on claim==0 → on a claimed tile the
+original REFUSES the splash/platform-tile/death-blast where Rust ALLOWS it;
+the canonical E emission and the O1/O2 dumps would diverge on this row for
+every mission whose (zone,mission) has a rect case. The concrete gap:
+stage the claim bank in Rust from the pinned rect tables (data: this
+section E + the zone-2..7 census in the oracle test), read it in the three
+modeled gates, emit it in the canonical TS row — the S0-12..S0-17 slices
+stay untouched. No fabricated parity: the rect constants are file-free
+hardcode, so the seam is fully deterministic.
+
+The all-37-mission independent oracle (test/core, S0-11) transcribes the
+rect store farm for zones 1..7 from the objdump (register-tracked, each zone
+case's gates hand-read), rebuilds line[] per mission TOT header, computes
+the expected claim image per mission, and pins the corpus identities
+(per-mission claimed-tile counts, the ZONEA/M1 59-tile set, the
+all-zero missions).
