@@ -1,5 +1,43 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D159 S0-16 COMPLETE (worker 89591972 claim 1, commits
+    f5b6c1e + 5538fd9, both PUSHED): the `static-player-type` row
+    closed BOTH SIDES through the canonical anchor seam (the D154
+    class — the sim genuinely models the cell, so the E half is the
+    anchor emission, not fabricated parity). RE-EXW-SIM §7j.68:
+    fresh-SP value 0 pinned BOTH channels (the boot writers
+    0x41c344/0x41c34c inside the CINEMATICS sandwich around the
+    sound init FUN_0043a144 — the §7d.3 "bootattract" gloss
+    superseded; the EXD twin 0x2cc7b/0x2cc84 with the ordinal-
+    identical tail); the whole writer census closed — EXW 6 (boot +
+    5 MP-lobby sites: four −1 error exits + the ordinal success
+    writer 0x449a5c) / EXD 2 (boot + the MP serial-sync writer
+    0x5b030, the "Quit from sychronising" path — the original's own
+    typo; no lobby family in the DOS port); dword-written/
+    word-consumed (raw-dword scan 113/113 EXW sites, 0x4edb92/
+    0x1075c2 zero refs); the save family READ-only (the type is
+    never saved); reader census = the spawn kind stamp + first-
+    robot cell (instruction-exact EXW⟷EXD twins), the my-robot gate
+    family, the §7j.67 row-index imuls, the per-TYPE sibling bank.
+    Oracle static_player_type_differential.rs (8 tests: boot-byte
+    probes, the census re-derivation by store-opcode form, the EXD
+    string pins, the spawn-consumer transcription with the
+    nonzero-type falsification direction, the sim-constant +
+    alarm-gate behavioral pins, the anchor row wired-to-the-cell,
+    the real-S0 00 00 + anchor-only); TickState.player_type →
+    u16 LE anchor row, byte passthrough (no differ change); ALL 12
+    canonical chains re-pinned deliberately (synthetic d2e92edc…,
+    9e5efdc3→b61d0647…, S0→c766cc68…, S1→ed7deab5…, S2..S8
+    likewise). MP/config variants excluded per the task charter.
+    Workspace release green (canonical_dump_gate 13, differ_gate 4
+    corpus lanes, the oracle 8, full bedlam-game + bedlam-core +
+    diffharness), fmt + clippy clean on touched files (3 remaining
+    workspace warnings pre-exist at HEAD), MANIFEST clean pre+post.
+    The unrelated O1-boot WIP preserved untouched. Strict S0
+    coverage 24/27 static + 2/27 dynamic-only; 1 static row remains
+    (S0-17 static-cursor-clamp, the sole EXD-only registry row —
+    the D139 O2/O3 anti-ghost refusal case). Next head: S0-17.
+
   - 2026-08-25 D158 S0-15a COMPLETE (worker cb67f182 claim 2, commit
     ced80e6, PUSHED): the dbx-plan `static-order-table` extent hop
     (infra, the S0-12a precedent). The deferred arm resolves to the

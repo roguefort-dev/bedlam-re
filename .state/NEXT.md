@@ -5,20 +5,54 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-16] `static-player-type` — independently pin
-   the original fresh-SP value and writer semantics (EXW 0x4edb90 /
-   EXD 0x1075c0; the §7d.3 boot writer 0x41c34c + the MP lobby
-   writers), then compare them with Rust construction (the §7j.67/A
-   12-type domain + the spawn-copy consumer family are now pinned
-   next door). MP/config variants are explicitly excluded from this
-   slice and require a later named task before any MP closure claim.
-   NOTE: the worktree carries interrupted O1-boot WIP (dbx-plan.rs
-   boot_trap/entry + dbx-capgen.py + dosbox-harness.sh + RUNTIME.md +
-   the capture-plan boot_trap deltas, owner ≠ current worker):
-   inspect, preserve, adopt per AGENTS shared-worktree rules; stage
-   explicit task paths only.
+1. [P4/static-parity/S0-17] `static-cursor-clamp` — statically
+   verify the EXD-only 240x320 clamp maxima constants/formula
+   (EXD 0x1074ac x-max 0xf0 / 0x1074b0 y-max 0x140 per the
+   watches.toml row + RE-EXD-MAP "cursor clamp (INPUT)" entry)
+   and compare them with the DOS/classic-input adapter. If no such
+   target exists, explicitly classify the row as hardware/
+   input-profile-only rather than semantic engine state; never
+   silently count it as parity-covered. NOTE: the row is the sole
+   EXD-only registry row (empty exw_addr — the D139 O2/O3
+   anti-ghost refusal case). NOTE: the worktree carries interrupted
+   O1-boot WIP (dbx-plan.rs boot_trap/entry + dbx-capgen.py +
+   dosbox-harness.sh + RUNTIME.md + the capture-plan boot_trap
+   deltas, owner ≠ current worker): inspect, preserve, adopt per
+   AGENTS shared-worktree rules; stage explicit task paths only.
 
 ## Done
+1. DONE (2026-08-26, worker 89591972 claim 1, commits f5b6c1e +
+    5538fd9, PUSHED): P4/static-parity/S0-16 `static-player-type`
+    closed BOTH SIDES through the canonical anchor seam (D159,
+    RE-EXW-SIM §7j.68 — the D154 class, NOT the D157
+    no-fabricated-parity class). (a) RE first (f5b6c1e): fresh-SP
+    value pinned 0 BOTH channels — the EXW boot writer
+    xor+store @0x41c344/0x41c34c inside the CINEMATICS sandwich
+    around the sound init FUN_0043a144 (the §7d.3 "bootattract"
+    gloss superseded), the EXD twin @0x2cc7b/0x2cc84 (same
+    sandwich, cell pair 0x1194d8, ordinal-identical tail). Writer
+    census closed: EXW 6 (boot + 5 MP-lobby — four −1 error exits
+    + the ordinal success writer 0x449a5c), EXD 2 (boot + the MP
+    serial-sync writer 0x5b030 in the "Quit from sychronising"
+    path — the original's own typo; the DOS port has no lobby
+    family). Raw-dword scan: 113/113 EXW literal sites mapped
+    (DGROUP/.idata/.reloc zero), 0x4edb92/0x1075c2 zero refs —
+    dword-written, word-consumed, extent 2 = the consumed word.
+    Save family READ-only both channels (the type is never saved —
+    save/restore only index by it). Reader census: the spawn kind
+    stamp + first-robot cell (instruction-exact twins), the
+    my-robot gate family, the §7j.67 row-index imuls, the per-TYPE
+    sibling bank. (b) Oracle + seam (5538fd9):
+    static_player_type_differential.rs 8 tests + the canonical
+    anchor emission (TickState.player_type → u16 LE row, byte
+    passthrough, no differ change); all 12 canonical chains
+    re-pinned deliberately. MP/config variants excluded per the
+    task charter. Verified: canonical_dump_gate 13, differ_gate 4
+    corpus lanes, the oracle 8, full bedlam-game + bedlam-core +
+    diffharness suites green, fmt + clippy clean on touched files,
+    MANIFEST clean before AND after. The unrelated O1-boot WIP
+    preserved untouched. Strict S0 coverage 24/27 static + 2
+    dynamic-only (1 static row remains: S0-17).
 1. DONE (2026-08-25, worker cb67f182 claim 2, commit ced80e6,
    PUSHED): P4/static-parity/S0-15a the dbx-plan `static-order-table`
    extent hop (infra, the S0-12a precedent, D158). The deferred arm
@@ -280,14 +314,18 @@ renumbered queue keeps every open item claimable by number).
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  23/27 rows static + 2/27 dynamic-only (D157) — the 11 TS rows from
+  24/27 rows static + 2/27 dynamic-only (D159) — the 11 TS rows from
   bd91c10, 56918c5, 390acb9,
   cd70efe, 920aec2, fcb8fb2, cec30a7, 2646ce8, 76a14c6 + the eight
   T0 campaign/config rows from ea745fd (S0-12, closed both sides by
   the D154 seam) + the three RNG/dither rows from dc6c99d (S0-13,
-  closed original-side under the charter T3 class — D155). The
+  closed original-side under the charter T3 class — D155) + the
+  order-table row from bf8179d (S0-15, closed original-side — D157)
+  + the player-type row from 5538fd9 (S0-16, closed BOTH sides
+  through the canonical anchor seam — D159). The
   27-row registry: tier-S0 s0-trigger + 11 T0 + 15 TS; the remainder
-  (5 rows) is S0-14..S0-17 + the s0-trigger tier row. `static-min-bank` (S0-10) is
+  (1 static row) is S0-17 (cursor-clamp, the new Now item 1).
+  `static-min-bank` (S0-10) is
   CLOSED original-side only: Rust retention deliberately none —
   presentation-half D17; the display-phase producer stays queued,
   not covered (D149); its dbx-plan extent infra hop landed separately
@@ -296,17 +334,9 @@ renumbered queue keeps every open item claimable by number).
   as S0-12b (0e7d245, D154) — all eight T0 campaign/config rows now
   closed BOTH sides (the E half through the canonical seam, not a
   second oracle).
-- [P4/static-parity/S0-14] resolve `s0-trigger`/`frame-counter` ordering
-  and classify dynamic-only row placement separately from static closure.
-- [P4/static-parity/S0-16] `static-player-type` — independently pin the
-  original fresh-SP value and writer semantics, then compare them with
-  Rust construction. MP/config variants are explicitly excluded from
-  this slice and require a later named task before any MP closure claim.
-- [P4/static-parity/S0-17] `static-cursor-clamp` — statically verify the
-  EXD-only 240x320 clamp maxima constants/formula and compare them with
-  the DOS/classic-input adapter. If no such target exists, explicitly
-  classify the row as hardware/input-profile-only rather than semantic
-  engine state; never silently count it as parity-covered.
+- (S0-14 CLOSED 2026-08-25 by D156/a335220+4e0af96, S0-16 CLOSED
+  2026-08-26 by D159/f5b6c1e+5538fd9 — entries removed from the
+  backlog to keep one live queue locus; see Done.)
 - [P4.2/W7-followups] after the differ core: the T2/T3 field maps on
   the E side (projectile/critter banks, effects/debris rings) as
   their producer families land in-engine (S3+ pairing per §10-W12);
@@ -457,6 +487,28 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-26: P4/static-parity/S0-16 COMPLETE (worker 89591972
+   claim 1, commits f5b6c1e + 5538fd9, both PUSHED; D159). The
+   `static-player-type` row closed BOTH SIDES through the canonical
+   anchor seam (the D154 class). RE-EXW-SIM §7j.68: fresh-SP value
+   0 pinned BOTH channels (the boot writers 0x41c34c / 0x2cc84 in
+   the CINEMATICS sandwich; the §7d.3 gloss superseded); the whole
+   writer census closed — EXW 6 (boot + 5 MP-lobby: four −1 error
+   exits + the ordinal success writer), EXD 2 (boot + the MP
+   serial-sync writer in the "Quit from sychronising" path);
+   dword-written/word-consumed (0x4edb92/0x1075c2 zero refs); the
+   save family READ-only (the type is never saved); reader census
+   = spawn kind stamp + first-robot cell (instruction-exact twins),
+   the my-robot gates, the §7j.67 row-index imuls. Oracle
+   `static_player_type_differential.rs` (8 tests: boot-byte probes,
+   the 113/113 raw-dword census re-derivation, the EXD string
+   pins, the spawn-consumer transcription, the sim-constant +
+   alarm-gate behavioral pins, the anchor row wired-to-the-cell +
+   the real-S0 00 00); all 12 canonical chains re-pinned
+   deliberately; differ untouched (byte passthrough). MP/config
+   variants excluded per the task charter. Strict S0 coverage
+   24/27 static + 2 dynamic-only; S0-17 (cursor-clamp) queued as
+   the new item 1.
 - 2026-08-25: P4/static-parity/S0-11b COMPLETE (worker ab778f23
   claim 1, commit 7760294, D151). The D150-queued claim-bank staging
   seam LANDED — `static-claim-bank` closed BOTH sides (the FIRST S0
