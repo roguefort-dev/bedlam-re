@@ -5,29 +5,43 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/static-parity/S0-10] independently cover the retained `.MIN`
-   bank row `static-min-bank`. Follow the D146/D147/D148 unit shape:
-   first statically re-verify the EXW/EXD `.MIN` loader + the bank's
-   consumers instruction-by-instruction from the objdump texts, commit
-   the RE notes first, then build an independent all-37-mission oracle
-   (no production parser/loader/helper reuse on the expected side),
-   compare byte/field-exact against the Rust target (or a test-only
-   representation if the bank is unretained — then document the gap
-   and add only the smallest justified seam rather than fabricating
-   parity), pin corpus identities, bracket corpus reads with
-   `MANIFEST.sha256`, and prove sensitivity with a temporary
-   in-memory mutation. DONE when the `static-min-bank` row is
-   independently covered, or one concrete code/model gap is queued;
-   tests/review/commit.
+1. [P4/static-parity/S0-11] independently cover `static-claim-bank`
+   initialization (EXW 0x46af58 / EXD 0x119564, the platform-ring tile
+   claim bank). Follow the D146/D147/D148/D149 unit shape: first
+   statically re-verify the EXW/EXD initialization + writer/reader
+   census instruction-by-instruction from the objdump texts, commit the
+   RE notes first, then build an independent all-37-mission oracle (no
+   production parser/loader/helper reuse on the expected side), compare
+   byte/field-exact against the Rust target (or document the gap and
+   add only the smallest justified seam rather than fabricating parity),
+   pin corpus identities, bracket corpus reads with `MANIFEST.sha256`,
+   and prove sensitivity with a temporary in-memory mutation. DONE when
+   the `static-claim-bank` row is independently covered, or one concrete
+   code/model gap is queued; tests/review/commit.
+2. [P4/static-parity/S0-12a] dbx-plan `static-min-bank` extent
+   resolution: now that the bank extent is pinned (ArenaAlloc 0x7530,
+   RE-EXW-SIM §7j.62/D149), resolve the deferred dbx-plan arm to
+   `Form::PtrCell { cell, len_expr: "0x7530" }` and update the
+   watches.toml `extent` from "bank-sized" to the pinned form. NOTE:
+   `tools/diffharness/src/bin/dbx-plan.rs` carries unrelated in-flight
+   O1-boot WIP (capture-plan JSON boot_trap/entry) — coordinate with
+   that work's owner state per AGENTS shared-worktree rules; stage only
+   the arm + watches.toml extent hunk, never the O1 hunks.
 
 ## Backlog (not yet started)
 - S0 static-parity closure baseline: strict independent coverage is
-  9/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
-  920aec2, and fcb8fb2. The 18-row remainder is fully assigned:
-  S0-11 (1), S0-12 (8), S0-13 (3), S0-14 (2), S0-15 (1), S0-16 (1),
-  and S0-17 (1).
-- [P4/static-parity/S0-11] independently cover `static-claim-bank`
-  initialization.
+  10/27 rows from commits bd91c10, 56918c5, 390acb9, cd70efe,
+  920aec2, fcb8fb2, and cec30a7. The remainder is assigned across
+  the named S0-12..S0-17 slices (8+3+2+1+1+1 rows) plus the S0-12a
+  infra hop above (dbx-plan extent, not a row). NOTE: the
+  predecessor's "18-row remainder" tally vs its 17-row assignment
+  list was already off by one — re-audit the 27-row registry when
+  S0-12 lands. `static-min-bank` (S0-10) is CLOSED original-side
+  only: Rust retention deliberately none — presentation-half D17;
+  the display-phase producer stays queued, not covered (D149).
+  `static-min-bank` (S0-10) is CLOSED original-side only: Rust
+  retention deliberately none — presentation-half D17; the
+  display-phase producer stays queued, not covered (D149).
 - [P4/static-parity/S0-12] cover the eight fresh-session T0 campaign/
   config rows explicitly: `score`, `money`, `difficulty`, `zone`,
   `mission`, `mode`, `linear-mission-m`, and `sfx-master-gate`.
@@ -199,6 +213,30 @@ renumbered queue keeps every open item claimable by number).
   AGENTS-named manifest and verifies clean.
 
 ## Done (append concise entries only)
+- 2026-08-25: P4/static-parity/S0-10 COMPLETE (worker 95c99db8 claim 1,
+  commits 0ebb184 docs + cec30a7 test; D149). The `static-min-bank`
+  row independently covered ORIGINAL-SIDE; Rust retention deliberately
+  NONE (presentation-half D17 — backbuffer-only, never engine state;
+  no seam fabricated). RE-EXW-SIM §7j.62: arena alloc 0x7530 with NO
+  memset @0x41dabd..0x41dac7 (EXD 0x2e3f0), verbatim whole-file load of
+  the ZONE-scoped EDITOR\ZONEX\MISSIONX.MIN @0x41dcd8..0x41dcf3 (EXD
+  0x2e641; no header/transform/cap), displacement census closed at 3
+  sites with ONE reader = the 4×4 territory stamp FUN_00402ab8 (EXD
+  0x12df3), cw = LNK/LNG word[TOT word], cw==0 transparent, XLAT
+  MAPTRAN[variant] — the FIRST verified runtime consumer of the LNK
+  permutation (FORMATS §5 anchor). Corpus: 7 zone files (A≡D), per-zone
+  reachable sets under BOTH language gates (A 349 / B 1180 / C 1055 /
+  D 1008 / E 954 / F 632 / G 271 union nz), max cw 1868, and the
+  STALE-TAIL-NEVER-READ proof (every reachable cw·16+16 ≤ file size).
+  Oracle `static_min_bank_differential.rs`: loader+projection
+  transcription, per-mission max-cw identity pins (37), A≡D pin,
+  LNK≠LNG variant pins, TOT type max 1868<8192, reader spot-proof;
+  sensitivity = reachable-byte flip / dead-tail blindness / poisoned
+  LNK bound catch / >0x7530 rejection. fmt+clippy clean, suite green,
+  MANIFEST clean before AND after. Queued: S0-12a (dbx-plan extent →
+  PtrCell 0x7530; file in flight with unrelated O1-boot WIP) and the
+  display-phase map-overlay producer (D17/D50). Strict S0 coverage
+  10/27.
 - 2026-08-25: P4/static-parity/S0-09 COMPLETE (worker e473f5db claim 1,
   commits bad9ff6 docs + fcb8fb2 test, both PUSHED; D148). The
   `static-type-table` row independently covered: the EXW .BDG loader

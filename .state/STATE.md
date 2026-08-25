@@ -1,5 +1,22 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-25 D149 S0-10 COMPLETE (worker 95c99db8 claim 1, commits
+    0ebb184 docs + cec30a7 test): the `.MIN` mask-bank row
+    `static-min-bank` is independently covered ORIGINAL-SIDE with Rust
+    retention deliberately NONE — arena 0x7530 no-memset, verbatim
+    zone-scoped whole-file load, 3-site displacement census with ONE
+    reader = the 4×4 map-overlay territory stamp (cw = LNK/LNG
+    word[TOT word], the first verified LNK-permutation consumer;
+    RE-EXW-SIM §7j.62), the stale-tail-never-read corpus proof, and
+    the independent all-37-mission oracle with census/identity pins +
+    four-part sensitivity. Presentation-half (D17): no seam
+    fabricated; the display-phase producer and the dbx-plan PtrCell
+    0x7530 extent hop are queued (S0-12a). Strict S0 independent
+    coverage is 10/27 rows; next slice: S0-11 `static-claim-bank`
+    (queued as item 1). The responsive-capture WIP (diffharness
+    capture-plans + dbx-capgen tests + dbx-plan O1-boot hunks)
+    remains uncommitted and preserved.
+
   - 2026-08-25 D148 S0-09 COMPLETE (worker e473f5db claim 1, commits
     bad9ff6 docs + fcb8fb2 test, both PUSHED): the .BDG type-table row
     `static-type-table` is independently covered — the EXW loader leg
