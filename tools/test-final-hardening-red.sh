@@ -648,17 +648,22 @@ case_active_p4_contract_retires_stale_live_facts() {
   # units move to the ## Done ledger (queue convention, D106), so the
   # snapshot went stale the moment p4-trigger-contract finished and
   # every later worker burned its slot re-diagnosing a RED suite at
-  # HEAD (watchdog repair, 2026-08-26). The durable invariants the
-  # case actually protects: the live set contains ONLY canonical
-  # contract ids, consumed strictly front-first as a contiguous tail
+  # HEAD (watchdog repair, 2026-08-26; re-anchored again in D175 when
+  # the machine verdict consumed the LAST item). The durable invariants
+  # are phase-boundary aware via the validator-emitted verdict marker:
+  # the parser state is RUNNABLE or the designed REQUIRED-QUEUE-EMPTY
+  # terminal state (never anything else); while .state/P4-COMPLETE is
+  # absent the active set stays a non-empty contiguous front-first tail
   # of the canonical five (no reordering, no revivals, no foreign
-  # items), and the retired interactive/perceptual phrasing never
-  # returns to the active queue.
+  # items); once the phase-complete-v1 verdict marker exists no
+  # canonical id ever returns (P5+ queue content is new phase work,
+  # out of this case's scope); and the retired interactive/perceptual
+  # phrasing never returns to the active queue in any state.
   local state
   state=$($PARSER "$ROOT/.state/NEXT.md" "$ROOT/.state/claims" --state-v1)
-  [[ "$state" == RUNNABLE* ]]
-  python3 - "$ROOT/.state/NEXT.md" <<'PY'
-import re, sys
+  [[ "$state" == RUNNABLE* || "$state" == REQUIRED-QUEUE-EMPTY ]]
+  python3 - "$ROOT/.state/NEXT.md" "$ROOT/.state/P4-COMPLETE" <<'PY'
+import json, re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
 now = text.split("## Now", 1)[1].split("## Done", 1)[0]
 items = re.findall(r"^[1-5]\. .+$", now, re.M)
@@ -667,14 +672,30 @@ canonical = [
     "p4-required-gates-manifest", "p4-machine-verdict",
 ]
 ids = [re.search(r"\[id=([^]]+)\]", item).group(1) for item in items]
-assert 1 <= len(ids) <= 5, f"active P4 item count out of contract range: {len(ids)}"
-assert ids, "the P4 machine contract must stay queued until the verdict lands"
-# Front-first consumption: the active set is a contiguous tail of the
-# canonical five (a completed front unit is gone for good; nothing
-# ahead of an unfinished unit may silently disappear).
-assert ids == canonical[-len(ids):], f"active ids are not a canonical tail: {ids}"
-for item_id in ids:
-    assert item_id in canonical, f"non-contract item active in P4 queue: {item_id}"
+verdict_landed = False
+try:
+    with open(sys.argv[2], encoding="utf-8") as handle:
+        verdict = json.load(handle)
+    verdict_landed = (
+        verdict.get("schema") == "phase-complete-v1"
+        and verdict.get("phase") == "P4"
+    )
+except (OSError, ValueError):
+    pass
+if verdict_landed:
+    # Terminal state: the bound verdict consumed the whole contract.
+    # Nothing from it may return; P5+ items are legitimate new work.
+    revived = [item_id for item_id in ids if item_id in canonical]
+    assert not revived, f"P4 contract ids reappeared after the machine verdict: {revived}"
+else:
+    assert 1 <= len(ids) <= 5, f"active P4 item count out of contract range: {len(ids)}"
+    assert ids, "the P4 machine contract must stay queued until the verdict lands"
+    # Front-first consumption: the active set is a contiguous tail of the
+    # canonical five (a completed front unit is gone for good; nothing
+    # ahead of an unfinished unit may silently disappear).
+    assert ids == canonical[-len(ids):], f"active ids are not a canonical tail: {ids}"
+    for item_id in ids:
+        assert item_id in canonical, f"non-contract item active in P4 queue: {item_id}"
 contract = " ".join(items).casefold()
 assert "interactive" not in contract and "perceptual" not in contract
 PY
