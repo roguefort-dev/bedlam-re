@@ -274,8 +274,12 @@ case_launch_mutation() {
   make_repo "$plan"
   write_v2 "$plan/.state/claims/1-$session.claim" "$session"
   make_blocking_model "$TMP/model-$1" "$marker"
+  # id/gate renames are content-indistinguishable from the worker's own
+  # completion rewrite, so they travel the bounded grace window; a short
+  # window keeps the immediate-termination bound below this test's wait.
   setsid env BEDLAM_PLAN_DIR="$plan" OPENC_OVERRIDE="$TMP/model-$1" \
-    NUDGE_IDLE_POLL=0.05 NUDGE_IDLE_LIMIT=900 "$AGENT" 1 "$session" >"$marker.out" 2>&1 &
+    NUDGE_IDLE_POLL=0.05 NUDGE_IDLE_LIMIT=900 NUDGE_BOUNDARY_GRACE=1 \
+    "$AGENT" 1 "$session" >"$marker.out" 2>&1 &
   local worker=$!
   for _ in $(seq 1 300); do [ -e "$marker.entered" ] && break; sleep 0.01; done
   [ -e "$marker.entered" ]
@@ -360,6 +364,60 @@ EOF
   [ "$child_alive" -eq 0 ]
   [ "$grandchild_alive" -eq 0 ]
   [ $((ended - started)) -lt 1000 ]
+}
+
+case_completion_rewrite_clean_exit() {
+  # The 2026-08-26 watchdog repair: AGENTS.md step 7 has the WORKER rewrite
+  # NEXT.md (move its claimed item to ## Done) as its final act, and a real
+  # client keeps streaming its final message for seconds afterwards. The
+  # wrapper must treat that queue change as the sanctioned completion, let
+  # the model exit on its own, and record a clean end -- not kill it at the
+  # finish line with a preflight-mismatch failure (three completed+pushed
+  # units died that way: eb9917a1, 7003f272, 71effd2b).
+  local plan="$TMP/completion-clean" session=completion-clean marker="$TMP/completion-clean"
+  local model="$TMP/model-completion-clean" worker rc
+  make_repo "$plan"
+  write_v2 "$plan/.state/claims/1-$session.claim" "$session"
+  cat > "$model" <<EOF
+#!/usr/bin/env bash
+trap 'touch "$marker.terminated"; exit 143' TERM INT
+touch "$marker.entered"
+printf 'work\n' >> "$plan/code.txt"
+git -C "$plan" add code.txt
+git -C "$plan" commit -qm "fixture work" -m "Nudge-Worker: $session"
+cat > "$plan/.state/NEXT.md" <<'QEOF'
+# NEXT
+
+## Now
+1. [READY] [id=successor-one] [gate=gate-two] queued successor task
+
+## Done
+1. DONE (fixture): stable-one/gate-one completed by the model.
+QEOF
+# A real client is still streaming its final message here: far past the
+# old 200ms self-exit grace, well inside the sanctioned window.
+sleep 1
+exit 0
+EOF
+  chmod +x "$model"
+  setsid env BEDLAM_PLAN_DIR="$plan" OPENC_OVERRIDE="$model" \
+    NUDGE_IDLE_POLL=0.05 NUDGE_IDLE_LIMIT=900 NUDGE_BOUNDARY_GRACE=10 \
+    SYSTEMD_RUN_OVERRIDE=1 "$AGENT" 1 "$session" >"$marker.out" 2>&1 &
+  worker=$!
+  for _ in $(seq 1 400); do ! kill -0 "$worker" 2>/dev/null && break; sleep 0.05; done
+  wait "$worker" 2>/dev/null
+  rc=$?
+  kill -TERM -- "-$worker" 2>/dev/null || true
+  pkill -TERM -f "^timeout 3900 $model" 2>/dev/null || true
+  pkill -KILL -f "^timeout 3900 $model" 2>/dev/null || true
+  [ "$rc" -eq 0 ]
+  [ -e "$marker.entered" ]
+  # The model finished on its own: no termination, no failure artifact.
+  [ ! -e "$marker.terminated" ]
+  [ ! -e "$plan/.state/automation-failures/$session.json" ]
+  # A clean end releases the claim for the next scheduler pass.
+  [ ! -e "$plan/.state/claims/1-owner.claim" ]
+  grep -q "completion rewrite" "$plan/.state/nudge.log"
 }
 
 case_identityless_v1_new_launch() {
@@ -685,6 +743,7 @@ for mutation in id gate status inode body queue-body queue-inode; do
 done
 run_case 'PAUSE appearing after model start terminates the model' case_launch_mutation pause
 run_case 'launch mutation promptly kills child and grandchild process tree' case_launch_mutation_kills_process_tree
+run_case 'worker completion rewrite ends the run cleanly' case_completion_rewrite_clean_exit
 run_case 'identity-less lock-v1 cannot launch a newly current ordinal' case_identityless_v1_new_launch
 run_case 'locked lock-v1 remains compatible only as running migration state' case_locked_v1_migration_retained
 run_case 'invalid item/session are rejected before path construction' case_invalid_identifiers_before_paths

@@ -141,6 +141,44 @@ if [ "$claim_version" = 2 ]; then
   [ "$claim_gate" = "$item_gate" ] || reject_preflight gate-mismatch "claim=$claim_gate queue=$item_gate"
 fi
 
+boundary_completion_rewrite() {
+  # Is the observed queue change the worker's own AGENTS.md step-7 rewrite?
+  # Shape: the strict parser still validates the file, and the claimed
+  # (id, gate) identity LEFT the active set -- "the claimed item moved to
+  # ## Done", including the queue-the-next-tasks shape where a successor
+  # takes the same ordinal. Mutations that keep the claimed item active
+  # (body edits, status flips, inode swaps, unrelated rewrites) and corrupt
+  # rewrites stay immediate boundary violations. An identity rename is
+  # indistinguishable from a completion by content alone, so it earns the
+  # same bounded window -- and the model still dies with a recorded
+  # preflight failure the moment it outlives the window.
+  local empty_claims fields status active_id active_gate ordinal=0 sanctioned=1
+  empty_claims=$(mktemp -d "$STATE/.boundary-check.XXXXXX") || return 1
+  if ! "$QUEUE_PARSER" "$STATE/NEXT.md" "$empty_claims" --state-v1 >/dev/null 2>&1; then
+    sanctioned=0
+  else
+    while :; do
+      ordinal=$((ordinal + 1))
+      fields=$("$QUEUE_PARSER" "$STATE/NEXT.md" "$empty_claims" --item-v1 "$ordinal" 2>/dev/null) || break
+      read -r status active_id active_gate <<< "$fields"
+      if [ "$status" != READY ] && [ "$status" != WAITING-AUTOMATIC ]; then
+        sanctioned=0
+        break
+      fi
+      if [ "$active_id" = "$item_id" ] && [ "$active_gate" = "$item_gate" ]; then
+        sanctioned=0
+        break
+      fi
+      if [ "$ordinal" -ge 32 ]; then
+        sanctioned=0
+        break
+      fi
+    done
+  fi
+  rm -rf "$empty_claims"
+  [ "$sanctioned" -eq 1 ]
+}
+
 task_hash=$(sed -n "s/^[[:space:]]*$item\.[[:space:]]*//p" "$STATE/NEXT.md" 2>/dev/null | head -n 1 | sha256sum | cut -c1-16)
 claim_body_hash=$(sha256sum /proc/self/fd/8 | awk '{print $1}')
 
@@ -192,6 +230,16 @@ set +e
 # stay safe at the 900s default.
 IDLE_LIMIT=${NUDGE_IDLE_LIMIT:-900}
 IDLE_POLL=${NUDGE_IDLE_POLL:-5}
+# Bounded window granted when the ONLY observed boundary change is the
+# worker's own sanctioned end-of-run queue rewrite (its claimed item left
+# the active set, per AGENTS.md step 7). The client needs this long to
+# finish streaming its final message and exit by itself; a model still
+# running past the window is operating on a stale queue and dies as before
+# (watchdog repair 2026-08-26: 878c03f's mid-run poll killed three workers
+# at their own finish line -- every completed+pushed unit was recorded as a
+# preflight-mismatch failure because the 200ms self-exit grace cannot cover
+# a real client shutdown).
+BOUNDARY_GRACE=${NUDGE_BOUNDARY_GRACE:-240}
 reaped=0
 boundary_failure=0
 termination_sent=0
@@ -213,6 +261,38 @@ terminate_model_group() {
   [ "$signal" != TERM ] || sleep 0.05
   kill -"$signal" -- "-$agent_pid" 2>/dev/null || true
 }
+agent_exited() {
+  ! kill -0 "$agent_pid" 2>/dev/null || [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *Z* ]]
+}
+reap_idle_model() {
+  local now log_mtime idle _
+  now=$(date +%s)
+  log_mtime=$(stat -c %Y "$LOG" 2>/dev/null || echo "$now")
+  idle=$(( now - log_mtime ))
+  [ "$idle" -ge "$IDLE_LIMIT" ] || return 1
+  reaped=1
+  log_line "idle-log reaper: item $item agent log silent ${idle}s >= ${IDLE_LIMIT}s; terminating hung client pid $agent_pid"
+  "$STATE_HELPER" append-text "$LOG" "$(date -Is) idle-log reaper: terminating after ${idle}s with no agent-log output"$'\n' 2>/dev/null || true
+  terminate_model_group TERM
+  for _ in $(seq 1 10); do
+    kill -0 "$agent_pid" 2>/dev/null || break
+    sleep 1
+  done
+  terminate_model_group KILL
+  termination_sent=1
+  return 0
+}
+terminate_boundary_violation() {
+  local _
+  boundary_failure=1
+  terminate_model_group TERM
+  for _ in $(seq 1 3); do
+    kill -0 "$agent_pid" 2>/dev/null || break
+    sleep 0.01
+  done
+  terminate_model_group KILL
+  termination_sent=1
+}
 for _ in $(seq 1 100); do
   [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *T* ]] && break
   sleep 0.01
@@ -225,45 +305,39 @@ else
 fi
 while kill -0 "$agent_pid" 2>/dev/null; do
   sleep "$IDLE_POLL"
-  kill -0 "$agent_pid" 2>/dev/null || break
-  [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *Z* ]] && break
+  agent_exited && break
+  if [ -e "$STATE/PAUSE" ]; then
+    log_line "PAUSE appeared while the model ran for item $item; terminating model pid $agent_pid"
+    terminate_boundary_violation
+    break
+  fi
   if ! launch_boundary_valid; then
-    exited_after_change=0
-    for _ in $(seq 1 20); do
-      if ! kill -0 "$agent_pid" 2>/dev/null || [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *Z* ]]; then
-        exited_after_change=1
-        break
-      fi
-      sleep 0.01
-    done
-    [ "$exited_after_change" -eq 0 ] || break
-    boundary_failure=1
-    log_line "launch boundary changed for item $item; terminating model pid $agent_pid"
-    terminate_model_group TERM
-    for _ in $(seq 1 3); do
-      kill -0 "$agent_pid" 2>/dev/null || break
-      sleep 0.01
-    done
-    terminate_model_group KILL
-    termination_sent=1
+    if boundary_completion_rewrite; then
+      grace_deadline=$(( $(date +%s) + BOUNDARY_GRACE ))
+      log_line "item $item left the active queue (worker completion rewrite); awaiting model exit for up to ${BOUNDARY_GRACE}s"
+      while ! agent_exited && [ "$(date +%s)" -lt "$grace_deadline" ]; do
+        sleep "$IDLE_POLL"
+        reap_idle_model && break
+      done
+      [ "$termination_sent" -eq 0 ] || break
+      agent_exited && break
+      log_line "launch boundary changed for item $item and the model kept running ${BOUNDARY_GRACE}s past its own completion rewrite; terminating model pid $agent_pid"
+    else
+      exited_after_change=0
+      for _ in $(seq 1 20); do
+        if agent_exited; then
+          exited_after_change=1
+          break
+        fi
+        sleep 0.01
+      done
+      [ "$exited_after_change" -eq 0 ] || break
+      log_line "launch boundary changed for item $item; terminating model pid $agent_pid"
+    fi
+    terminate_boundary_violation
     break
   fi
-  now=$(date +%s)
-  log_mtime=$(stat -c %Y "$LOG" 2>/dev/null || echo "$now")
-  idle=$(( now - log_mtime ))
-  if [ "$idle" -ge "$IDLE_LIMIT" ]; then
-    reaped=1
-    log_line "idle-log reaper: item $item agent log silent ${idle}s >= ${IDLE_LIMIT}s; terminating hung client pid $agent_pid"
-    "$STATE_HELPER" append-text "$LOG" "$(date -Is) idle-log reaper: terminating after ${idle}s with no agent-log output"$'\n' 2>/dev/null || true
-    terminate_model_group TERM
-    for _ in $(seq 1 10); do
-      kill -0 "$agent_pid" 2>/dev/null || break
-      sleep 1
-    done
-    terminate_model_group KILL
-    termination_sent=1
-    break
-  fi
+  reap_idle_model && break
 done
 if [ "$termination_sent" -eq 0 ]; then
   terminate_model_group TERM

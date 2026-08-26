@@ -1,5 +1,28 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D171 `p4-trigger-contract` COMPLETE (worker
+    eb9917a1 claim 1, commit 06a8b09, PUSHED): the O2 operational
+    trigger pinned — S1-o2 regenerated with trigger.site =
+    0x004486C9 (the MissionShell NORMAL-path PresentEnd CALL site,
+    byte-verified `e8 35 d3 fd ff call 0x425a03`) while the
+    registry row KEEPS the callee canon exw_addr 0x425a03 + the
+    EXD twin exd_addr 0x5a6eb (all four facts locked by the
+    exact-text gate tools/check-p4-trigger-contract.py). Enabling
+    plumbing the locked capgen smoke required: the D161
+    companion-id convention taught to dump/stitch/differ
+    (companion_base; base-row binding; unknown base refuses
+    loudly) + capgen _count seeds + the 4 MiB span ceiling.
+    NUMBERING: D170 stays reserved for the controller's 878c03f
+    scope note (no DECISIONS entry); D171 is this unit. Gates:
+    dbx-plan 35/35, capgen smoke ALL GREEN (emitter determinism
+    byte-identical), exact-text GREEN; zero canonical-chain
+    movement proven (canonical_dump_gate 13 + differ_gate 4 +
+    static_frame_counter_differential 7); workspace 736/0;
+    fmt + clippy clean; MANIFEST clean before AND after. The unit
+    adopted interrupted same-slot predecessor WIP (ebca31ce, died
+    between the locked gates and the corpus gates) whole,
+    correcting only two D170→D171 strings.
+
   - 2026-08-26 D170 P4 closure scope corrected: the historical entries below
     that call an interactive S0 run the sole closure gate are preserved as
     history but superseded. Required P4 evidence is automation-only:

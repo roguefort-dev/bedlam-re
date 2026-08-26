@@ -5,13 +5,86 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p4-trigger-contract] [gate=p4-trigger-address] Correct the O2 operational trigger to EXW 0x004486C9 while preserving callee 0x00425A03 and EXD 0x0005A6EB; regenerate S1-o2 and pass the locked dbx-plan, capgen smoke, and exact text gates.
-2. [READY] [id=p4-static-proof-scope] [gate=p4-s0-dispositions] Reconcile D145-D164 closed static evidence and timing dispositions; S0-S8 and differ_gate plumbing remain automated, while calibration and live facts are excluded and not queued.
-3. [READY] [id=p4-wgpu-final] [gate=p4-dependency-spikes] Run bounded offline locked tests/build and record the final wgpu 27.0.1, winit, R8Uint, palette, and adapter-free decision.
-4. [READY] [id=p4-required-gates-manifest] [gate=p4-gates-validator] Finish the tracked required-gates manifest and validator with fail-closed corpus and automated validator tests.
-5. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
+1. [READY] [id=p4-required-gates-manifest] [gate=p4-gates-validator] Finish the tracked required-gates manifest and validator with fail-closed corpus and automated validator tests.
+2. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
 
 ## Done
+1. DONE (2026-08-26, worker 71effd2b claim 1, commit eb9a6c6,
+   PUSHED): P4/gate `p4-dependency-spikes` — the FINAL presentation
+   dependency decision RECORDED (D173), closing the D24 "final
+   version call" deferral (PLAN sec 6 P4 item 1). wgpu stays 27.0.1
+   (Cargo.lock: wgpu 27.0.1 + core 27.0.3/hal 27.0.4/types 27.0.1;
+   ONE workspace pin via the bedlam-platform `pub use wgpu`
+   re-export — bedlam-shell carries no direct wgpu dep, the D39
+   single-pin rule); window integration final = winit 0.30.13 +
+   pollster 0.4.0 (the D39 shape); the indexed-palette upload path
+   final = per-frame 640x480 R8Uint index re-upload + 256x1 R32Uint
+   palette packing r|g<<6|b<<12 re-uploaded ONLY on palette_dirty/
+   first upload (the 004ee9b6 handshake analog), WGSL expands
+   v<<2 / Full (v<<2)|(v>>4), indices NEVER interpolated, baseline
+   WebGPU only (default limits, NO optional features on both device
+   paths); adapter policy final = ADAPTER-FREE-SAFE headless
+   acquisition (request_adapter LowPower compatible_surface:None ->
+   Option; GPU tests SKIP never fail on adapter-less hosts). Both
+   gate commands green at the exact argv: cargo test --release
+   --locked --offline -p bedlam-platform (9/9 — scale 8 + the
+   offscreen GPU round-trip which RAN on this host's adapter, no
+   skip marker, 0.19-0.22 s, probing expansion 63->252 AND the
+   palette-reuse pass) + cargo build --release --locked --offline
+   -p bedlam-shell (exit 0). Docs-only (DECISIONS.md D173); zero
+   engine change; zero canonical-chain movement by construction;
+   MANIFEST clean before AND after; no Ghidra run. P4 item 1
+   dependency spikes now FULLY decided in-tree (SMK D30, cpal D40,
+   winit D39, presentation D173).
+1. DONE (2026-08-26, worker 7003f272 claim 1, commit 139d16c,
+   PUSHED): P4/gate `p4-static-proof-scope` — the `s0-dispositions`
+   gate RECONCILED with the complete closed static evidence (D172).
+   The controller's manifest shipped the gate with ONE command (the
+   D156 timing oracle only) while NO gate ran any bedlam-core or
+   bedlam-render test. The gate now runs 4 locked offline commands /
+   90 tests proving the 27-row S0 registry disposition ledger
+   (verified tier census S0=1 + T0=11 + TS=15 = 27; the D160 final
+   ledger 24/27 static-closed + 2/27 dynamic-only [D156] + 1/27
+   hardware/input-profile-only [D160]): bedlam-core 7 suites/16
+   tests (D146-D151 + the pre-D145 cgr/loader TS rows), bedlam-game
+   6 suites/42 tests (D153-D160, incl. the timing dispositions),
+   bedlam-render --lib 30 tests (the mission-view load-seam oracle
+   for tot/dat/bin/lnk/map-wh — the WHOLE lib surface, because cargo
+   name filters are fail-OPEN), diffharness registry_anchors 2 (the
+   W2 substrate guard). tracked_paths pin the 13 suite files +
+   registry_anchors.rs + watches.toml + the original four; corpus
+   (11 S0-S8 plans) and the other gates UNTOUCHED — scripted-slice-
+   scenes/diffharness-plumbing remain the separate automated gates;
+   S0W calibration + live O1/O2/O3 stay excluded and unqueued (D170
+   scope restated as a manifest comment). Verified: 90/90 green at
+   the exact gate argv; manifest parses (tomllib; 4 commands
+   --locked/--offline on the /usr/bin/cargo allowlist; 19
+   tracked_paths all git-tracked); validator hermetic tests 13/13;
+   autonomy-gap tests unaffected (hermetic mocks); MANIFEST clean
+   before AND after. Docs: PLAN P4 acceptance + DESIGN-DIFFHARNESS
+   CI-wiring note name the gate content; D172 recorded.
+1. DONE (2026-08-26, worker eb9917a1 claim 1, commit 06a8b09,
+   PUSHED): P4/gate `p4-trigger-contract` — the O2 operational
+   trigger CORRECTED to EXW 0x004486C9 (D171): dbx-plan pins
+   O2_TRIGGER_SITE at the emitter (an instruction call site has no
+   registry cell home) and S1-o2.json regenerated (trigger +
+   _comment), while the s0-trigger registry row PRESERVES callee
+   0x00425A03 + EXD 0x0005A6EB — locked by the exact-text gate.
+   Anchor byte-verified (4486c9: e8 35 d3 fd ff call 0x425a03,
+   counter read+inc immediately after). Enabling plumbing the
+   locked capgen smoke required: the D161 companion-id convention
+   `<base>#<key>` taught to dump/stitch/differ (companion_base,
+   base-row canonical/stitch binding, differ tier_of/seam_of
+   fallback, loud unknown-base refusal) + capgen-o2 _count seeds
+   (COUNT_SEED) + span ceiling 4 MiB (static-bin-terrain 0x258960).
+   Gates: dbx-plan 35/35, capgen smoke ALL GREEN (determinism
+   re-emit byte-identical + manifest), exact-text GREEN; zero
+   canonical-chain movement (canonical_dump_gate 13, differ_gate 4,
+   static_frame_counter_differential 7); workspace 736/0; fmt +
+   clippy clean; MANIFEST clean before AND after. NUMBERING: D170
+   reserved by the controller's 878c03f STATE note — this unit is
+   D171; the adopted predecessor WIP (ebca31ce) corrected only its
+   two D170→D171 strings.
 1. DONE (2026-08-26, worker 829d719c claim 1, commit 3f8db5c,
    PUSHED): P4/RE-objdump `exd-music-loader-census` - the D168
    residue CLOSED (D169, RE-EXD-MAP +5j + the RE-EXW-MUSIC +1
