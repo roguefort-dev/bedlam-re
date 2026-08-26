@@ -5,24 +5,55 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4.2/W-followup] `t2t3-differ-arms` — the D162-named follow-up:
-   the differ's O1 extraction arms for the four subset-form rows E
-   emits (critter-bank 74-of-0x7E, effect-rows 28-of-0x20,
-   debris-stager, splash-records — the D87 field-map class):
-   O1 normalizers that walk the GUEST full spans and project E's
-   modeled subset, inv_frame fabrication flips (the differ_gate
-   E-only `continue` arms drop), expect_coverage re-derivation for
-   every affected scenario lane, and the differ.rs "E-only" comment
-   corrections riding. Verify: differ_gate all lanes + diffharness
-   + canonical_dump_gate green, fmt+clippy, MANIFEST. Feed:
-   D162/§5i (docs/DECISIONS.md tail), tools/diffharness/src/differ.rs
-   normalize_o1_row, engine/bedlam-game/tests/differ_gate.rs inv_frame.
-   NOTE (shared worktree): the O1-boot WIP still holds dbx-plan.rs +
-   capture-plans deltas (boot_trap) + capgen/harness/docs — stage
-   explicit paths only, preserve via the D161 scratch-crate technique
-   if dbx-plan overlaps.
+1. [P4.2/W-followup] `dropship-identity-arm` — the LAST E-only
+   T3 row (D163 named it): the dropship-frame O1 normalizer arm
+   — the full-record IDENTITY form (E's canonical 0x1C craft
+   record IS the guest record field-for-field, §7j.40/6: active
+   u32@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, group@+0x14,
+   dwell@+0x18 — EXW 0x4e6610 / EXD 0x1081c4, plan len 28), so
+   the arm reuses the E-side field walk; the inv_frame
+   `dropship-frame` `continue` arm flips to identity fabrication;
+   differ_gate S6 1+1 → 1; the dropship comments in differ.rs/
+   canonical.rs close; check whether the O2 alias list takes it
+   (same layout, EXW-pinned). Verify: differ_gate all lanes +
+   diffharness + canonical_dump_gate green, fmt+clippy, MANIFEST.
+   Feed: D163/§1 (docs/DECISIONS.md tail), tools/diffharness/src/
+   differ.rs (the dropship-frame E arm + normalize_o1_row),
+   engine/bedlam-game/tests/differ_gate.rs inv_frame.
+   NOTE (shared worktree): the O1-boot WIP still holds dbx-plan.rs
+   + capture-plans deltas (boot_trap) + capgen/harness/docs —
+   stage explicit paths only, preserve via the D161 scratch-crate
+   technique if dbx-plan overlaps.
 
 ## Done
+1. DONE (2026-08-26, worker bb808d77 claim 1, commits 965796b +
+   51ba11a + 5f40a4b, all PUSHED): P4.2/W-followup
+   `t2t3-differ-arms` — the four D162 subset-form O1 extraction
+   arms LANDED (D163): debris-stager/splash-records/critter-bank/
+   effect-rows go CROSS-CHANNEL. RE notes first (965796b, DESIGN
+   §6a's subset-arm table): the normalizers walk the GUEST full
+   spans and project E's modeled subsets at the guest offsets —
+   critter-bank 23 leaves off count×0x7E (cap 350), effect-rows 8
+   leaves off the 80×0x20 LRU bank, debris-stager 4 leaves off the
+   128×0x30 ring (seq := the +0x18 DUAL field — E splits it; the
+   raw guest value rides, silent because T3 never bit-compares,
+   the offset pair documented as the known encoding difference if
+   ever re-tiered), splash-records identity off 250×0xA.
+   critter/effect counts join the STRUCTURAL count words; the O2
+   alias list takes all four (EXW-pinned maps, EXD field-exact
+   twins per §5i). Impl (51ba11a): the differ_gate inv_frame
+   E-only `continue` arms for the quartet DROP (guest-span
+   fabrications in their place), expect_coverage re-derived —
+   S4 3→1, S7 3→1, S8 3→1, S6 stays 1+1 (dropship = the one
+   remaining E-only T3 row, its identity arm queued); S4/S7/S8
+   assert the rows COMPARE-CLEAN; the stale E-only comments in
+   differ.rs + canonical.rs corrected (emitter edits comment-only
+   — ZERO canonical chain movement, re-asserted 13/13
+   canonical_dump_gate + the pinned chains inside differ_gate).
+   Verified: diffharness 101/101, differ_gate 4/4, canonical_
+   dump_gate 13/13, bedlam-game release 232/0, fmt+clippy clean,
+   MANIFEST clean before AND after; the O1-boot WIP preserved
+   untouched (unit staged only its own five paths).
 1. DONE (2026-08-26, worker 03cc1ea3 claim 1, commits 507da25 +
    30f5f56, both PUSHED): P4.2/W-survey `t2t3-alias-census` — THE
    LAST EXD-ALIAS CLASS CLOSED (D162, RE-EXD-MAP §5i). All 17

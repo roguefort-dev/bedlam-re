@@ -1,5 +1,22 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D163 `t2t3-differ-arms` COMPLETE (worker bb808d77
+    claim 1, commits 965796b + 51ba11a + 5f40a4b, all PUSHED):
+    the four D162 subset-form O1 extraction arms LANDED —
+    debris-stager/splash-records/critter-bank/effect-rows go
+    CROSS-CHANNEL (the normalizers walk the GUEST full spans and
+    project E's modeled subsets at the guest offsets, DESIGN §6a's
+    subset-arm table; zero field gaps; the debris +0x18 DUAL-split
+    caveat documented — the raw guest seq rides, silent under T3).
+    The differ_gate quartet's E-only `continue` arms dropped;
+    expect_coverage re-derived (S4 3→1, S7 3→1, S8 3→1, S6 keeps
+    its dropship 1+1). dropship-frame is now the ONE remaining
+    E-only T3 row (the full-record identity arm — queued as the
+    new item 1). ZERO canonical chain movement (emitter edits
+    comment-only). Verified: diffharness 101/101, differ_gate 4/4,
+    canonical_dump_gate 13/13, bedlam-game release 232/0,
+    fmt+clippy clean, MANIFEST clean; the O1-boot WIP preserved
+    untouched.
   - 2026-08-26 D162 `t2t3-alias-census` COMPLETE (worker 03cc1ea3
     claim 1, commits 507da25 + 30f5f56, both PUSHED): the LAST
     EXD-ALIAS CLASS CLOSED — all 17 `unmapped` T2/T3 watch rows
