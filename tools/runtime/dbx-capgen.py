@@ -13,15 +13,18 @@ Channel facts this driver is built on (source-pinned at e522642):
   [log] logfile line-oriented with fflush (src/debug/debug_gui.cpp:744) —
   acks are read from the LOGFILE, never scraped off the ncurses screen
   (redraws re-emit old pane text; screen-scraping is unreliable).
-- Input while the machine runs (RUNWATCH) queues in the tty buffer; the
-  queued command executes at the next stop. A stop emits a screen-redraw
-  burst on the PTY — used as the hit observable, with a proceed-anyway
-  fallback because the ack validation (logfile) catches a machine that
-  never stopped.
+- DEBUG_Enable flushes terminal input before drawing the re-entered debugger.
+  A probe sent while the guest runs is therefore discarded, not executed at
+  the stop. RUN/code-BP waits use PTY redraws only as probe wakeups; a unique
+  ADDLOG sent after a candidate must itself reach the logfile to prove command
+  readiness. BPLM waits first require their source-emitted Memory breakpoint
+  logfile line, then perform the same bounded readiness probing.
 
 Capture loop (one guest frame per iteration):
-    RUNWATCH                       -> guest resumes until the bp hit
-    (hit: PTY redraw burst + machine stopped)
+    RUN (responsive/code plans) or RUNWATCH (legacy memory-watch plans)
+                                   -> guest resumes until the bp hit
+    redraw candidate or fresh Memory breakpoint line -> ADDLOG readiness probe
+    (ready: only that fresh NOTICE logfile line is authoritative)
     for each watch in the plan:
         MEMDUMPBIN <seg>:<off> <len-hex> -> MEMDUMP.BIN (host CWD,
                                              overwritten per call)
@@ -33,17 +36,24 @@ The watch plan is a resolved JSON list; two forms:
 
 LEGACY v1: {watches:[{id,addr,len}]} (+ optional pre_commands
 [{cmd,expect}] run at the parked -break-start halt). Frame 1 dumps at
-that halt; frames 2+ RUNWATCH. `--probe` mode pins the plumbing
+that halt; frames 2+ use RUN with post-reentry readiness probes. `--probe`
+mode pins the plumbing
 headless WITHOUT launching the game (BPINT 8 surrogate) — the dbgprobe
 gate uses this.
 
 PLAN v2 (live, D81 — RUNTIME.md "S0 live channel mechanics"): the game
 runs from the staged conf's autoexec. Keys:
-  boot_commands [{cmd,expect}]  armed at the parked pre-boot halt (the
-      BPLM boot trap; BP locations resolve EAGERLY at arm time so a
-      game BP armed here would mis-resolve — BPLM is lazy/linear,
-      hence the trap).
-  flat_guard (default true)     after each boot-trap stop, SELINFO CS
+  boot_trap "entry"             responsive live-game path: BPINT 21 4B,
+      then a real-mode BP 5FBB:0000 whose resolved linear address is the
+      verified EXD entry 0x0005FBB0. The entry stop is validated from fresh
+      EV/SELINFO logfile output before the mission anchor is armed. Generated
+      non-walk O1 plans opt in; legacy and BPLM walk plans do not.
+  boot_commands [{cmd,expect}]  legacy/walk path, armed at the parked
+      pre-boot halt (the BPLM boot trap; BP locations resolve EAGERLY at
+      arm time so a game BP armed here would mis-resolve — BPLM is
+      lazy/linear, hence the trap).
+  flat_guard (default true)     on the legacy/walk path, after each
+      boot-trap stop, SELINFO CS
       is parsed from the logfile; the stop is armable iff base==0 and
       limit>=0x12583e (the game flat CS). Non-flat stops (LeLoader
       stub, real mode) retry: BPDEL * + re-arm boot_commands + RUNWATCH.
@@ -119,6 +129,7 @@ import json
 import os
 import pty
 import re
+import secrets
 import select
 import shutil
 import signal
@@ -150,6 +161,7 @@ class PtySession:
 
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         self.pty_log = open(log_path, "wb")
+        self.pty_log_path = log_path
         self.proc = subprocess.Popen(
             argv,
             stdin=slave,
@@ -161,7 +173,7 @@ class PtySession:
             preexec_fn=os.setsid,
         )
         os.close(slave)
-        self.quiet_since = time.monotonic()
+        self._io_lock = threading.Lock()
         self.total_bytes = 0
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._drain_forever, daemon=True)
@@ -173,43 +185,71 @@ class PtySession:
                 ready, _, _ = select.select([self.master], [], [], 0.05)
                 if not ready:
                     continue
-                chunk = os.read(self.master, 65536)
+                with self._io_lock:
+                    chunk = os.read(self.master, 65536)
+                    if chunk:
+                        self.pty_log.write(chunk)
+                        self.pty_log.flush()
+                        self.total_bytes += len(chunk)
             except OSError:
                 return
             if not chunk:
                 return
-            self.total_bytes += len(chunk)
-            self.quiet_since = time.monotonic()
-            self.pty_log.write(chunk)
-            self.pty_log.flush()
 
-    def quiesce(self, quiet=1.2, timeout=30):
-        """Wait until `quiet` seconds pass with no new PTY bytes."""
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if time.monotonic() - self.quiet_since >= quiet:
-                return True
-            time.sleep(0.02)
-        return False
-
-    def wait_hit(self, timeout=120):
-        """Wait for the breakpoint-hit redraw burst: absorb the RUNWATCH
-        redraw first, then any NEW bytes after a quiet gap = the stop.
-        Returns False on timeout (caller proceeds anyway: the logfile ack
-        validates whether the machine actually stopped)."""
-        self.quiesce(quiet=1.0, timeout=20)  # absorb the RUNWATCH redraw
-        deadline = time.monotonic() + timeout
-        base = self.total_bytes
-        while time.monotonic() < deadline:
-            if self.total_bytes > base:
-                # burst started: drain it out, then return
-                self.quiesce(quiet=1.2, timeout=20)
-                return True
-            time.sleep(0.02)
-        return False
+    def _write_locked(self, payload):
+        view = memoryview(payload)
+        while view:
+            written = os.write(self.master, view)
+            if written <= 0:
+                raise RuntimeError("capgen: short PTY command write")
+            view = view[written:]
 
     def send(self, line):
-        os.write(self.master, line.encode() + b"\r")
+        with self._io_lock:
+            self._write_locked(line.encode() + b"\r")
+
+    def output_mark(self):
+        with self._io_lock:
+            return self.total_bytes
+
+    def send_marked(self, line):
+        """Capture the PTY output boundary immediately before one command."""
+        with self._io_lock:
+            mark = self.total_bytes
+            self._write_locked(line.encode() + b"\r")
+            return mark
+
+    def _output_after(self, mark):
+        """Return one race-free PTY-log snapshot after an output mark."""
+        with self._io_lock:
+            end = self.total_bytes
+            if mark < 0 or mark > end:
+                raise RuntimeError(
+                    f"capgen: invalid PTY output mark {mark} (current end {end})"
+                )
+            with open(self.pty_log_path, "rb") as source:
+                source.seek(mark)
+                data = source.read(end - mark)
+            if len(data) != end - mark:
+                raise RuntimeError("capgen: PTY output log changed during snapshot")
+            return data, end
+
+    REDRAW_RE = re.compile(rb"[0-9A-F]{4}:[0-9A-F]{8}")
+
+    def redraw_after(self, mark):
+        """Check all bytes after `mark` for a debugger code-window repaint."""
+        data, end = self._output_after(mark)
+        return self.REDRAW_RE.search(data) is not None, end
+
+    def wait_redraw(self, mark, timeout):
+        """Wait for a redraw candidate without advancing past split output."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            found, end = self.redraw_after(mark)
+            if found:
+                return end
+            time.sleep(0.02)
+        return None
 
     def alive(self):
         return self.proc.poll() is None
@@ -241,13 +281,11 @@ class LogTail:
     the child REWRITES (truncates + re-emits) the logfile when the
     debugger initializes — byte offsets observed across polls are NOT
     stable, and a seek-based tail anchors into a stale pre-rewrite copy
-    and never sees new acks (cur=2700 > filesize=2212 measured). Acks are
-    therefore COUNT-matched over full reads: expect() records the
-    occurrence count of the pattern at entry and waits for it to grow.
-    Identical ack texts (N MEMDUMPBINs) stay distinguishable because the
-    caller waits between sends; the rewrite preserves prior lines, so
-    counts stay monotonic. DEBUG_ShowMsg writes one line + \\n + fflush
-    per ack (source: debug_gui.cpp:744).
+    and never sees new acks (cur=2700 > filesize=2212 measured). Legacy
+    acks are therefore COUNT-matched over full reads. Strict responsive
+    queries instead use unique supported ADDLOG begin/end markers, so a
+    logfile replacement cannot make stale EV/SELINFO/BPLIST output fresh.
+    DEBUG_ShowMsg flushes every ack line (source: debug_gui.cpp:744).
     """
 
     def __init__(self, path):
@@ -259,6 +297,92 @@ class LogTail:
                 return f.read().count(needle)
         except FileNotFoundError:
             return 0
+
+    def snapshot(self):
+        """Return the complete current logfile for bracket matching."""
+        try:
+            with open(self.path, "rb") as f:
+                return f.read()
+        except FileNotFoundError:
+            return b""
+
+    def expect_new_marker(self, marker, before, timeout):
+        """Wait for an exact appended ADDLOG marker; reject any log rewrite."""
+        line = f"NOTICE: {marker}\n".encode()
+        if line in before:
+            raise RuntimeError("capgen: stop-marker nonce already exists in logfile")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            current = self.snapshot()
+            if not current.startswith(before):
+                raise RuntimeError(
+                    "capgen: logfile replaced or truncated while waiting for "
+                    "a fresh stop marker"
+                )
+            fresh = current[len(before) :]
+            count = fresh.count(line)
+            if count > 1:
+                raise RuntimeError("capgen: duplicate fresh stop marker in logfile")
+            if count == 1:
+                return current
+            time.sleep(0.02)
+        raise TimeoutError(
+            f"fresh logfile marker {marker!r} timed out; "
+            f"tail:\n{self.snapshot()[-1500:]!r}"
+        )
+
+    def expect_new_pattern(self, pattern, before, timeout):
+        """Wait for a fresh appended logfile pattern; reject any rewrite."""
+        rx = re.compile(pattern, re.MULTILINE)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            current = self.snapshot()
+            if not current.startswith(before):
+                raise RuntimeError(
+                    "capgen: logfile replaced or truncated while waiting for "
+                    "a fresh stop signal"
+                )
+            if rx.search(current[len(before) :]):
+                return current
+            time.sleep(0.02)
+        raise TimeoutError(
+            f"fresh logfile stop signal {pattern!r} timed out; "
+            f"tail:\n{self.snapshot()[-1500:]!r}"
+        )
+
+    @staticmethod
+    def _bracketed_response(data, begin, end):
+        """Return bytes between unique ADDLOG markers, or None if incomplete."""
+        begin_line = f"NOTICE: {begin}\n".encode()
+        end_line = f"NOTICE: {end}\n".encode()
+        begin_count = data.count(begin_line)
+        end_count = data.count(end_line)
+        if begin_count > 1 or end_count > 1:
+            raise RuntimeError("capgen: duplicate strict-response marker in logfile")
+        if end_count and not begin_count:
+            raise RuntimeError(
+                "capgen: strict-response begin marker was lost by logfile rewrite"
+            )
+        if not begin_count or not end_count:
+            return None
+        start = data.index(begin_line) + len(begin_line)
+        stop = data.index(end_line)
+        if stop < start:
+            raise RuntimeError("capgen: strict-response markers are out of order")
+        return data[start:stop]
+
+    def expect_bracket(self, begin, end, timeout):
+        """Wait for one complete response bounded by unique ADDLOG markers."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            response = self._bracketed_response(self.snapshot(), begin, end)
+            if response is not None:
+                return response
+            time.sleep(0.02)
+        raise TimeoutError(
+            f"strict logfile response {begin!r}/{end!r} timed out; "
+            f"tail:\n{self.snapshot()[-1500:]!r}"
+        )
 
     def wait_present(self, pattern, timeout):
         """Wait for the pattern to appear at all (count >= 1). Use for
@@ -280,6 +404,13 @@ class LogTail:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             n = self._count_rx(rx)
+            if n < base:
+                # The logfile WRAPPED (dosbox re-emits/truncates on init
+                # and long sessions overflow its log buffer - live session
+                # 2026-08-24: base=23 unreachable after wrap). Occurrence
+                # counts are not monotonic forever; re-base to the current
+                # count and keep waiting for the NEXT fresh occurrence.
+                base = n
             if n > base:
                 return n
             time.sleep(0.02)
@@ -327,6 +458,102 @@ def send_cmd(sess, line, settle=1.0):
     0.35s proved too tight."""
     time.sleep(settle)
     sess.send(line)
+
+
+STOP_PROBE_TIMEOUT = 1.0
+MEMORY_HIT_RE = rb"^DEBUG: Memory breakpoint (?:\(Prot\))?:"
+
+
+def _remaining(deadline, context):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError(f"capgen: timed out waiting for {context}")
+    return remaining
+
+
+def _probe_debugger_ready(
+    sess, dblog, deadline, token, log_floor, retry_without_redraw=False
+):
+    """Probe after a stop candidate until one command survives re-entry flush."""
+    attempt = 0
+    while True:
+        attempt += 1
+        marker = f"CAPGEN_STOP_{token}_PROBE_{attempt:04d}"
+        before = dblog.snapshot()
+        if not before.startswith(log_floor):
+            raise RuntimeError(
+                "capgen: logfile replaced or truncated during resume wait"
+            )
+        line = f"NOTICE: {marker}\n".encode()
+        if line in before:
+            raise RuntimeError("capgen: stop-marker nonce already exists in logfile")
+
+        # This mark precedes the probe. If the probe is flushed, every redraw
+        # that races with its bounded logfile wait remains available below.
+        _remaining(deadline, "debugger readiness before probe write")
+        probe_mark = sess.send_marked(f"ADDLOG {marker}")
+        try:
+            dblog.expect_new_marker(
+                marker,
+                before,
+                timeout=min(STOP_PROBE_TIMEOUT, _remaining(deadline, "debugger readiness")),
+            )
+            return
+        except TimeoutError:
+            _remaining(deadline, "debugger readiness")
+
+        found, _ = sess.redraw_after(probe_mark)
+        if found:
+            continue
+        if retry_without_redraw:
+            time.sleep(min(0.05, _remaining(deadline, "debugger readiness")))
+            continue
+
+        # Keep the original mark: a CS:EIP split across drain chunks must not
+        # disappear when the observed end offset advances.
+        if sess.wait_redraw(
+            probe_mark, _remaining(deadline, "breakpoint re-entry redraw")
+        ) is None:
+            raise TimeoutError("capgen: breakpoint re-entry redraw timed out")
+
+
+def resume_until_hit(sess, dblog, command, timeout, stop_signal="redraw"):
+    """Resume and prove readiness within one deadline, including the settle."""
+    token = secrets.token_hex(16).upper()
+    before = dblog.snapshot()
+    first_marker = f"NOTICE: CAPGEN_STOP_{token}_PROBE_0001\n".encode()
+    if first_marker in before:
+        raise RuntimeError("capgen: stop-marker nonce already exists in logfile")
+    deadline = time.monotonic() + timeout
+    time.sleep(1.0)
+    _remaining(deadline, "resume command after settle")
+    resume_mark = sess.send_marked(command)
+
+    if stop_signal == "memory":
+        dblog.expect_new_pattern(
+            MEMORY_HIT_RE,
+            before,
+            timeout=_remaining(deadline, "memory breakpoint"),
+        )
+        # The hit line is emitted in CheckBreakpoint before DEBUG_Enable flushes
+        # input, so a bounded post-hit probe may still be discarded once.
+        _probe_debugger_ready(
+            sess,
+            dblog,
+            deadline,
+            token,
+            before,
+            retry_without_redraw=True,
+        )
+        return
+    if stop_signal != "redraw":
+        raise ValueError(f"capgen: unknown stop signal {stop_signal!r}")
+
+    if sess.wait_redraw(
+        resume_mark, _remaining(deadline, "resume redraw candidate")
+    ) is None:
+        raise TimeoutError("capgen: resume produced no debugger redraw candidate")
+    _probe_debugger_ready(sess, dblog, deadline, token, before)
 
 
 def dump_watch(sess, dblog, workdir, dest, addr, length):
@@ -556,43 +783,139 @@ def watch_target(w, symbols):
 
 
 def selinfo_cs(sess, dblog):
-    """SELINFO CS through the logfile; returns (base, limit) ints-or-None.
+    """SELINFO CS through a strict stopped-debugger logfile response."""
+    fresh = fresh_command(
+        sess, dblog, "SELINFO CS", rb"SelectorInfo CS:", timeout=15
+    )
+    base_match = re.search(rb"(?m)^CS: b:([0-9A-Fa-f]{8})\b", fresh)
+    limit_match = re.search(rb"(?m)^\s+l:([0-9A-Fa-f]{8})\b", fresh)
+    base = int(base_match.group(1), 16) if base_match else None
+    limit = int(limit_match.group(1), 16) if limit_match else None
+    return base, limit
 
-    Patient by design: during the operator's menu walk the machine RUNS
-    for minutes; a wait_hit false positive (stray redraw bytes) sends
-    this early and the ack only lands at the REAL boot-trap stop — soak
-    with wait_hit until the queued command executes instead of aborting
-    the session."""
-    send_cmd(sess, "SELINFO CS")
-    got = False
-    deadline = time.monotonic() + 600
-    while time.monotonic() < deadline:
-        try:
-            dblog.expect(rb"SelectorInfo CS:", timeout=15)
-            got = True
-            break
-        except TimeoutError:
-            sess.wait_hit(timeout=60)  # soak until the real stop; the
-            # queued command acks then (count growth). Re-send each
-            # round: expect() re-bases its count on entry, so a fresh
-            # ack is what the next expect matches.
-            send_cmd(sess, "SELINFO CS")
-    if not got:
-        raise RuntimeError("capgen: SELINFO CS never acked (no stop within 10 min)")
-    base = limit = None
-    m = dblog.last_match(rb"CS: b:([0-9A-Fa-f]{8})")
-    if m:
-        base = int(m, 16)
-    m = dblog.last_match(rb"l:([0-9A-Fa-f]{8})")
-    if m:
-        limit = int(m, 16)
+
+ENTRY_LINEAR = 0x0005FBB0
+ENTRY_REALMODE_BP = "5FBB:0000"
+
+
+def fresh_command(sess, dblog, command, pattern, timeout=30):
+    """Return one command response bounded by unique supported ADDLOG markers."""
+    token = secrets.token_hex(16).upper()
+    begin = f"CAPGEN_{token}_BEGIN"
+    end = f"CAPGEN_{token}_END"
+    send_cmd(sess, f"ADDLOG {begin}")
+    send_cmd(sess, command)
+    send_cmd(sess, f"ADDLOG {end}")
+    response = dblog.expect_bracket(begin, end, timeout=timeout)
+    if not re.search(pattern, response, re.DOTALL):
+        raise RuntimeError(
+            f"capgen: fresh response mismatch for {command!r}: {response[-1500:]!r}"
+        )
+    return response
+
+
+def _parse_breakpoint_list(response):
+    """Parse one complete source-pinned BPLIST response, failing closed."""
+    lines = response.splitlines()
+    separator = b"-" * 73
+    if len(lines) < 2 or lines[0] != b"Breakpoint list:" or lines[1] != separator:
+        raise RuntimeError("capgen: incomplete BPLIST heading/separator")
+
+    entries = []
+    row_rx = re.compile(
+        rb"^([0-9A-Fa-f]{2})\. ((?:BP|BPINT|BPMEM|BPPM|BPLM|FM)\b[^\r\n]*)$"
+    )
+    for expected_index, line in enumerate(lines[2:]):
+        match = row_rx.fullmatch(line)
+        if not match:
+            raise RuntimeError(f"capgen: malformed BPLIST row: {line!r}")
+        actual_index = int(match.group(1), 16)
+        if actual_index != expected_index:
+            raise RuntimeError(
+                f"capgen: non-contiguous BPLIST index: got {actual_index:02X}, "
+                f"expected {expected_index:02X}"
+            )
+        entries.append(match.group(2).decode())
+    return entries
+
+
+def breakpoint_list(sess, dblog):
+    """Return exact entries from one complete, fresh BPLIST response."""
+    fresh = fresh_command(sess, dblog, "BPLIST", rb"Breakpoint list:", timeout=15)
+    return _parse_breakpoint_list(fresh)
+
+
+def require_breakpoint_list(sess, dblog, expected, context):
+    actual = breakpoint_list(sess, dblog)
+    if actual != expected:
+        raise RuntimeError(
+            f"capgen: {context}: breakpoint list mismatch: expected {expected!r}, "
+            f"got {actual!r}"
+        )
+
+
+def delete_all_breakpoints_strict(sess, dblog, context):
+    fresh_command(
+        sess,
+        dblog,
+        "BPDEL *",
+        rb"DEBUG: Breakpoints deleted\.",
+        timeout=15,
+    )
+    require_breakpoint_list(sess, dblog, [], f"{context} after BPDEL")
+
+
+def validate_entry_stop(sess, dblog):
+    """Fail-closed proof that the real-mode BP reached the flat EXD entry."""
+    fresh = fresh_command(
+        sess,
+        dblog,
+        "EV CS EIP CR0",
+        rb"EV of 'CS EIP CR0' is:",
+        timeout=15,
+    )
+    match = re.search(
+        rb"EV of 'CS EIP CR0' is:\r?\n([0-9A-Fa-f]+) ([0-9A-Fa-f]+) ([0-9A-Fa-f]+)",
+        fresh,
+    )
+    if not match:
+        raise RuntimeError("capgen: fresh EV CS EIP CR0 response is unavailable")
+    cs, eip, cr0 = (int(value, 16) for value in match.groups())
+    if eip != ENTRY_LINEAR:
+        raise RuntimeError(
+            f"capgen: EXD entry stop EIP mismatch: got {eip:#010x}, "
+            f"wanted {ENTRY_LINEAR:#010x}"
+        )
+    if not cr0 & 1:
+        raise RuntimeError(f"capgen: EXD entry stop is not protected mode (CR0={cr0:#x})")
+
+    fresh = fresh_command(
+        sess,
+        dblog,
+        "SELINFO CS",
+        rb"SelectorInfo CS:",
+        timeout=15,
+    )
+    base_match = re.search(rb"(?m)^CS: b:([0-9A-Fa-f]{8})\b", fresh)
+    limit_match = re.search(rb"(?m)^\s+l:([0-9A-Fa-f]{8})\b", fresh)
+    if not base_match or not limit_match:
+        raise RuntimeError("capgen: fresh SELINFO CS base/limit is unavailable")
+    base = int(base_match.group(1), 16)
+    limit = int(limit_match.group(1), 16)
+    if base != 0 or limit < MIN_FLAT_LIMIT:
+        raise RuntimeError(
+            f"capgen: EXD entry CS is not the required flat image selector "
+            f"(CS={cs:#x}, base={base:#x}, limit={limit:#x})"
+        )
     return base, limit
 
 
 def run_boot_trap(sess, dblog, plan, args):
-    """v2: RUNWATCH into the first post-boot stop and keep retrying until
-    the stop is in a flat (base-0, full-image) CS context. Returns the
-    (base, limit) of the accepted stop."""
+    """Run the selected v2 boot route and return the accepted (base, limit).
+
+    Entry plans bridge EXEC to the validated protected-mode entry with plain
+    RUN. Legacy/walk plans RUNWATCH and retry until their stop has a flat CS.
+    """
     flat_guard = plan.get("flat_guard", True)
     boot_timeout = int(plan.get("boot_timeout", args.hit_timeout))
     boot_retries = int(plan.get("boot_retries", 24))
@@ -602,14 +925,49 @@ def run_boot_trap(sess, dblog, plan, args):
             send_cmd(sess, pre["cmd"])
             dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
 
+    # Responsive live-game boot. BP 5FBB:0000 is armed while still in real
+    # mode, so GetAddress resolves it to 0x0005FBB0 (debug.cpp:460-479,
+    # 585-586). Once the loader reaches that physical address, fresh
+    # EV/SELINFO logfile output proves the protected-mode flat entry stop.
+    if plan.get("boot_trap") == "entry":
+        if plan.get("boot_commands") or plan.get("walk"):
+            raise ValueError(
+                "capgen: boot_trap=entry cannot carry legacy BPLM boot_commands or walk"
+            )
+        fresh_command(
+            sess,
+            dblog,
+            "BPINT 21 4B",
+            rb"DEBUG: Set interrupt breakpoint at INT 21 AH=4B",
+            timeout=30,
+        )
+        resume_until_hit(sess, dblog, "RUN", timeout=boot_timeout)
+        delete_all_breakpoints_strict(sess, dblog, "EXEC stop")
+        fresh_command(
+            sess,
+            dblog,
+            f"BP {ENTRY_REALMODE_BP}",
+            rb"DEBUG: Set breakpoint at 5FBB:0000",
+            timeout=15,
+        )
+        require_breakpoint_list(
+            sess, dblog, [f"BP {ENTRY_REALMODE_BP}"], "EXD entry arm"
+        )
+        resume_until_hit(sess, dblog, "RUN", timeout=boot_timeout)
+        base, limit = validate_entry_stop(sess, dblog)
+        delete_all_breakpoints_strict(sess, dblog, "EXD entry stop")
+        return base, limit
+
     arm_boot()
     base = limit = None
     for attempt in range(1, boot_retries + 1):
-        send_cmd(sess, "RUNWATCH")
-        if not sess.wait_hit(timeout=boot_timeout):
-            raise RuntimeError(
-                f"capgen: boot trap never fired (attempt {attempt}/{boot_retries})"
-            )
+        resume_until_hit(
+            sess,
+            dblog,
+            "RUNWATCH",
+            timeout=boot_timeout,
+            stop_signal="memory",
+        )
         if not flat_guard:
             return None, None
         base, limit = selinfo_cs(sess, dblog)
@@ -621,8 +979,6 @@ def run_boot_trap(sess, dblog, plan, args):
         )
         if base == 0 and limit is not None and limit >= MIN_FLAT_LIMIT:
             return base, limit
-        # Non-flat stop (LeLoader stub / real mode): drop every trap,
-        # re-arm the boot trap, run again.
         send_cmd(sess, "BPDEL *")
         dblog.expect(rb"Breakpoints deleted", timeout=10)
         arm_boot()
@@ -635,6 +991,40 @@ def run_boot_trap(sess, dblog, plan, args):
 def run_arm(sess, dblog, plan):
     """v2: run arm_commands at the accepted stop; return the numeric flat
     selector echoed by the BP ack (the per-run selector pin)."""
+    if plan.get("boot_trap") == "entry":
+        anchor = None
+        selector = None
+        for pre in plan.get("arm_commands", []):
+            command = pre["cmd"]
+            if command == "BPDEL *":
+                delete_all_breakpoints_strict(sess, dblog, "mission arm")
+                continue
+            match = re.fullmatch(r"BP\s+CS:([0-9A-Fa-f]+)", command)
+            if not match:
+                raise ValueError(
+                    f"capgen: entry plan arm_commands contains unsupported command {command!r}"
+                )
+            offset = int(match.group(1), 16)
+            fresh = fresh_command(
+                sess,
+                dblog,
+                command,
+                rb"DEBUG: Set breakpoint at [0-9A-Fa-f]{4}:[0-9A-Fa-f]+",
+                timeout=pre.get("timeout", 30),
+            )
+            ack = re.search(
+                rb"DEBUG: Set breakpoint at ([0-9A-Fa-f]{4}):([0-9A-Fa-f]+)",
+                fresh,
+            )
+            if not ack or int(ack.group(2), 16) != offset:
+                raise RuntimeError(f"capgen: mission anchor ack mismatch for {command!r}")
+            selector = ack.group(1).decode().upper()
+            anchor = f"BP {selector}:{offset:04X}"
+        if anchor is None or selector is None:
+            raise RuntimeError("capgen: entry plan did not arm a mission code breakpoint")
+        require_breakpoint_list(sess, dblog, [anchor], "mission anchor arm")
+        return selector
+
     for pre in plan.get("arm_commands", []):
         send_cmd(sess, pre["cmd"])
         dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
@@ -683,9 +1073,13 @@ def run_walk(sess, dblog, plan, args, dumps, notes):
     last = max(by_stop)
     watch_defs = plan.get("walk_watches") or []
     for stop in range(1, last + 1):
-        send_cmd(sess, "RUNWATCH")
-        if not sess.wait_hit(timeout=args.hit_timeout):
-            print(f"capgen: walk stop {stop}: no hit burst seen; relying on ack", file=sys.stderr)
+        resume_until_hit(
+            sess,
+            dblog,
+            "RUNWATCH",
+            timeout=args.hit_timeout,
+            stop_signal="memory",
+        )
         wrote = 0
         for row in by_stop.get(stop, []):
             apply_inject(sess, dblog, args, dumps, row, {})
@@ -820,17 +1214,17 @@ def run_capture(args):
             dblog.expect(pre["expect"].encode(), timeout=pre.get("timeout", 30))
 
         if v2:
-            # The machine is parked pre-boot at -break-start: run into the
-            # boot trap, accept only a flat-CS stop, then (D84 flow) boot
-            # writes at that stop, the WALK phase on the still-armed BPLM
-            # (arm lands at the LAST walk stop), the anchor stop = frame 1.
+            # The machine is parked pre-boot at -break-start. Responsive
+            # plans bridge EXEC to the validated EXD entry with code BPs;
+            # walk plans retain the BPLM boot/flat-guard flow. Apply boot
+            # writes at the accepted stop, run any BPLM-driven WALK phase
+            # (arming at its last stop), then resume to anchor frame 1.
             if args.probe:
                 sys.exit("capgen: --probe is the legacy path; a v2 plan (boot/arm/resolve/anchor keys) must not combine with it")
             boot_facts = run_boot_trap(sess, dblog, plan, args)
             # W5 BOOT writes (§5.5): applied at the accepted boot stop —
-            # frame 0, before any walk stop (the SAME stop as the legacy
-            # arm position when no walk phase exists, so behavior is
-            # unchanged for walk-less plans). Literal addresses only:
+            # frame 0, before any walk stop and before the mission anchor
+            # is armed. Literal addresses only:
             # $symbols do not exist yet in the resolve_at=anchor flow.
             for row in plan.get("boot_writes", []):
                 data = bytes.fromhex(row.get("bytes", ""))
@@ -893,15 +1287,21 @@ def run_capture(args):
 
         for frame in range(1, frames_total + 1):
             # v1 keeps frame 1 at the parked pre-boot halt (the probe
-            # shape); v2 RUNWATCHes into every frame incl. 1 — the first
+            # shape); v2 resumes into every frame incl. 1 — the first
             # hit is the anchor (mission start; with a walk phase, the
             # first hit of the BP armed at the last walk stop).
             if v2 or frame > 1:
-                send_cmd(sess, "RUNWATCH")
-                if not sess.wait_hit(timeout=args.hit_timeout):
-                    # No burst seen; proceed anyway — the next ack check
-                    # fails loudly if the machine never stopped.
-                    print(f"capgen: frame {frame}: no hit burst seen; relying on ack", file=sys.stderr)
+                # Mission frames run against code/BPINT triggers, not BPLM.
+                # The heavy build's normal core checks those breakpoints in
+                # CPU_Core_Normal_Run
+                # (core_normal.cpp:160-180 -> debug.cpp:6218-6252), so plain
+                # RUN stops on every anchor without RUNWATCH's 30 Hz debugger
+                # redraw (debug.cpp:4913-4924). Only BPLM boot/walk stops retain
+                # RUNWATCH and use their Memory breakpoint logfile signal.
+                resume_command = "RUN"
+                resume_until_hit(
+                    sess, dblog, resume_command, timeout=args.hit_timeout
+                )
                 if frame == 1 and resolve_pending:
                     # D84 resolve_at=anchor: the loader statics are read
                     # at the anchor stop, before any dump needs the

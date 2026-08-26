@@ -5256,3 +5256,79 @@ write, no Ghidra run). The unrelated O1-boot WIP (dbx-plan.rs,
 capgen, harness, RUNTIME/RE-EXW-SIM docs, capture-plan deltas)
 preserved untouched — this unit staged only its own four paths.
 (worker f2e721b3 claim 1)
+
+## D165 — 2026-08-26: P4/infra `o1-responsive-boot-land` — the RESPONSIVE code-BP O1 boot path ADOPTED + LANDED: non-walk capture plans drop the heavy BPLM frame-counter trap; walk plans (S0W) retain BPLM/RUNWATCH; input-flush + strict logfile-bracket machinery makes every stop fail-closed provable
+**Status:** LANDED (worker 29669e49 claim 1 — ADOPTION of an
+interrupted predecessor WIP deliberately preserved through D162/
+D163/D164 by their workers; no .state/PAUSE ever covered it).
+**Provenance:** D81 (the original BPLM boot-trap flow), D84 (the
+walk driver that depends on BPLM stops), RUNTIME.md "S0 live
+channel mechanics" (all responsive-path facts [source-pinned] on
+the D80 build tree at e522642 — core_normal.cpp:160-180,
+debug.cpp:460-479,585-586,752-810,2324-2379,2600-2668,2861-2869,
+4913-4924,5078-5086,6218-6252; debug_gui.cpp:584-587); RE-EXD-MAP
+§1a (EXD entry 0x5fbb0). [verified by adoption run]
+**(1) WHY:** an armed BPLM makes the heavy build's normal core call
+`DEBUG_HeavyIsBreakpoint` (the breakpoint-list walk +
+`mem_readb_checked`) on EVERY instruction — a per-instruction tax
+paid across an entire multi-minute mission capture, for a trap
+that only ever needs to fire ONCE (the boot bridge). The mission
+anchor is a code BP anyway, and code BPs are checked by the
+normal core's cheap CS:EIP compare branch — so after the anchor is
+armed the capture can run plain RUN. BPLM-as-boot-trap existed
+only because BP locations resolve EAGERLY at arm time (a game BP
+armed at the real-mode pre-boot halt mis-resolves).
+**(2) THE RESPONSIVE BRIDGE** (boot_trap:"entry" plans): `BPINT 21
+4B` stops at DOS EXEC (still real mode); `BPDEL *` + a FRESH EMPTY
+BPLIST proves the trap dropped; `BP 5FBB:0000` armed while still
+in real mode resolves eagerly to linear 0x0005FBB0 = the verified
+EXD entry (5FBB<<4); a fresh BPLIST proves it is the SOLE
+breakpoint; plain RUN; at the stop `EV CS EIP CR0` must show
+EIP==0x0005FBB0 ∧ CR0.PE=1 and `SELINFO CS` must show base==0 ∧
+limit≥0x12583e — this RETIRES the old INT3-at-entry checklist
+item (the pmode flat-entry proof now needs NO guest-code
+modification); BPDEL * again; the plan's arm_commands (BPDEL * +
+`BP CS:0005A6EB`) run through the strict path with the selector
+pin; every mission-frame wait is plain RUN. S0W-class WALK plans
+keep BPLM + RUNWATCH + the flat-guard retry loop (stop-indexed
+menu walking NEEDS the memory-driven stops); legacy v1 probe
+plans keep their shape.
+**(3) THE STRICT MACHINERY** (the part that makes it trustworthy):
+(a) INPUT QUEUED BEHIND RUN/RUNWATCH IS DISCARDED AT RE-ENTRY —
+`DEBUG_Enable` calls `DEBUG_FlushInput` (ncurses drains getch())
+before drawing the stopped debugger, so a probe sent behind a
+running machine is NOT a stop barrier; readiness = a fresh
+`NOTICE:` marker sent AFTER a stop candidate and actually landing
+in the logfile, with PTY output marks so split/combined re-entry
+redraws are never lost and one global deadline bounding settle +
+resume + every probe retry (expiry emits no later write). (b)
+Strict queries (`EV`, `SELINFO`, `BPLIST`, `BP`, `BPINT`, `BPDEL`)
+are bracketed by unique `ADDLOG` begin/end nonces so a zero-overlap
+logfile replacement cannot make stale output look fresh; BPLIST
+additionally parses fail-closed (heading + 73-dash separator +
+contiguous indices + fully parseable rows). (c) BPLM stops (walk +
+legacy paths) use the fresh `DEBUG: Memory breakpoint ...` logfile
+line as the first-stage signal, then the same bounded readiness
+probing. (d) LogTail.expect re-bases when the logfile WRAPS (live
+2026-08-24: base=23 unreachable after wrap).
+**(4) LANDED:** dbx-plan.rs (boot_note split + `"boot_trap":
+"entry"` emitted for walk-less O1 plans + 2 content asserts);
+dbx-capgen.py (+610 lines: strict brackets, resume_until_hit,
+entry validation, strict arm, memory-signal BPLM waits);
+dosbox-harness.sh (2 lines, comment-only); RUNTIME.md (152 lines:
+the responsive protocol + the flush/33 ms-redraw source anchors);
+13 regenerated capture plans (S0..S8 non-walk carry boot_trap/
+entry + drop boot_commands; S0W comment-only); 2 new py test files
+(18 unit tests). RIDER RE CORRECTION (re-verified against the
+binary this run): the EXD serial-sync bracket string is "Quit from
+sychronising" — the original's own typo, exactly one occurrence in
+the file, zero "synchronising"; the 0x871a3/0x871ba address
+arithmetic (len+1) confirmed in-file. **(5) VERIFIED (this
+adoption run):** cargo build + full diffharness suite 101/101
+(release), py 18/18, fmt+clippy clean, all 13 plan artifacts
+byte-match `dbx-plan` regeneration to a scratch dir (S1-o2 the
+untouched control, also byte-identical), all 4 headless dbgprobe
+gates GREEN (gate / flow / inject / walk — the legacy BPLM paths
+regression-proven through the new resume machinery), MANIFEST
+clean before and after (read-only corpus probes only, no Ghidra
+run). (worker 29669e49 claim 1)

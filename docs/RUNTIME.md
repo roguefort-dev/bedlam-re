@@ -182,14 +182,19 @@ dbgprobe channel probes — see "D80 channel probe results" below]:
   "inert debuggerrun/-break-start" probes on the flathub build were
   never gated by this — that build simply lacked C_DEBUG. [verified:
   PTY session opens the debugger, banner + prompt live]
-- RUNWATCH (debug.cpp:2668): run with breakpoints ACTIVE; on a bp hit
-  the loop re-enters the debugger prompt (the watch-mode shape D29
-  assumed). RUN = plain resume. [verified: resume→hit→prompt→resume
-  cycles over multiple frames]
+- RUNWATCH (debug.cpp:2668) resumes with `debug_running=true`; while it
+  runs, DEBUG_Loop redraws the debugger every 33 ms (debug.cpp:4913-4924).
+  RUN is plain resume. Both modes activate breakpoints before returning to
+  the normal CPU loop (DEBUG_Run, debug.cpp:4371-4382). [verified:
+  resume→hit→prompt→resume cycles over multiple frames]
 - FRAME TRIGGER PRIMITIVES:
   - BP [seg]:[off] — code breakpoint (the present-tail site; live unit).
   - BPLM [linear] — LINEAR memory-change breakpoint (C_HEAVY_DEBUG
-    only, i.e. our build). [verified: `BPLM 46C` armed ("Set linear
+    only, i.e. our build). The normal core calls
+    `DEBUG_HeavyIsBreakpoint` before every instruction
+    (core_normal.cpp:160-180); an active BPLM therefore performs the
+    breakpoint-list walk and `mem_readb_checked` on every instruction
+    (debug.cpp:781-810,6218-6252). [verified: `BPLM 46C` armed ("Set linear
     memory breakpoint at 0000046C") and FIRED on the next write
     ("Memory breakpoint : 0000:046C - 00 -> AA"), stopping the machine]
   - BPINT [nr] [ah] [al] — interrupt breakpoint. [verified: `BPINT 8`
@@ -213,10 +218,11 @@ dbgprobe channel probes — see "D80 channel probe results" below]:
   DOS4GW the game's flat selectors have base 0, so `sel:linear` with
   the runtime flat selector (pinned via SELINFO/LDT at DH-G0) reads
   the LE objects at their linear addresses (0x10000/0x80000). The
-  INT3-at-_entry proof (EXD entry 0x5fbb0) pins this conversion at the
-  first interactive session, as the watch skeleton requires. [real-mode
-  linear verified; the pmode/flat-selector path is the live unit's
-  first checklist item]
+  responsive path proves this conversion without modifying guest code:
+  at the real-mode EXEC stop, `BP 5FBB:0000` resolves eagerly to linear
+  0x0005FBB0 and fires when the protected-mode loader reaches the verified
+  EXD entry. [real-mode linear verified; protected-mode entry validation is
+  fail-closed in dbx-capgen]
 - VIEWS: D seg:off / DV linear / DP physical; SELINFO, GDT/LDT/IDT,
   EMU MEM/MACHINE for pinning the selector facts. [source-pinned only]
 
@@ -238,6 +244,13 @@ these in, do not "simplify" them away):
 4. Ack lines land in the [log] logfile (DEBUG_ShowMsg: fprintf+fflush
    per message, debug_gui.cpp:744) — the logfile is the ack channel,
    NOT the ncurses screen (redraws re-emit old pane text).
+5. INPUT QUEUED WHILE RUNNING IS DISCARDED AT RE-ENTRY: DEBUG_Enable sets
+   debugger state, calls DEBUG_SetupConsole, then DEBUG_FlushInput before
+   drawing the stopped debugger and installing DEBUG_Loop
+   (debug.cpp:5078-5086). The ncurses implementation drains getch() until
+   empty (debug_gui.cpp:584-587). A command typed behind RUN/RUNWATCH is
+   therefore not a stop barrier; readiness requires a fresh command sent
+   after a stop candidate and actually acknowledged in the logfile.
 
 D80 channel probe results (2026-08-22, this host, this build; probe
 transcript runtime/harness-out/dbgprobe2/capture.dbxcap — plumbing-only
@@ -261,19 +274,25 @@ removed AVCodec::sample_fmts — both features are irrelevant to the
 harness; binary 144MB, `--version` banner "2026.07.02 SDL2" = the
 e522642 banner, sha256 24f71092885df7ebd6ebc92c7cbf0edf...). Behavioral
 probe DONE (see "D80 channel probe results"). Emitter WIRED:
-tools/runtime/dbx-capgen.py (PTY + count-based log acks + MEMDUMPBIN
-slicing → DBXCAP) driven by `dosbox-harness.sh dbgprobe` (unattended,
+tools/runtime/dbx-capgen.py (PTY + count-based legacy acks + bracketed
+strict responses + MEMDUMPBIN slicing → DBXCAP) driven by
+`dosbox-harness.sh dbgprobe` (unattended,
 no game) and `diff capture` (FORCE_DIFF_RUN=1, needs the staged
 capture-plan.json — the DH-G1 live unit's deliverable). The live game
-run + the pmode flat-selector proof (INT3 at EXD _entry 0x5fbb0, BP at
+run + the pmode flat-selector proof (code BP at EXD entry 0x5fbb0, BP at
 the present-tail 0x5a6eb) + cycles calibration remain INTERACTIVE-GATED
 for the next unit (S0 live + DH-G1 determinism).
 
-## S0 live channel mechanics (2026-08-22, queue item 1 prep; all facts
+## S0 live channel mechanics (2026-08-22, queue item 1 prep; responsive path
+## LANDED as D165, 2026-08-26; all facts
 ## [source-pinned] on the D80 build's tree at e522642 unless noted)
 
-These facts retire the queue item's INT3/SELINFO-first ordering: the live
-capture plan needs NO numeric selector parameter at all.
+The responsive non-walk O1 path is source-pinned to DOSBox-X commit
+e522642. Official debugger reference:
+https://github.com/joncampbell123/dosbox-x/blob/e522642b8c86d87cd4e58ffb2961fa30608c119a/README.debugger
+The exact implementation anchors are `src/cpu/core_normal.cpp:160-180`
+and `src/debug/debug.cpp:460-479,585-586,752-810,2324-2379,2600-2668,
+2861-2869,4913-4924,6218-6252` in that same pinned tree.
 
 1. THE `CS:` REGISTER-NAME FORM ELIMINATES THE SELECTOR PARAM
    [source-pinned, debug.cpp:1547-1680 + 2013-2019 + 2540-2544]:
@@ -292,32 +311,33 @@ capture plan needs NO numeric selector parameter at all.
    - `GetAddress` current-CS path is limit-check-FREE (debug.cpp:470-472
      uses the cached base directly), so watch reads up to object2 top
      0x12583e cannot fail on a limit gate.
-2. BP ARMING IS EAGER, BPLM IS LAZY — THE BOOT-TRAP ORDER FOLLOWS
-   [source-pinned, debug.cpp:585 SetAddress → GetAddress at ARM time]:
-   `BP <seg>:<off>` resolves its location WHEN ARMED. Armed at the
-   pre-boot `-break-start` halt (real mode, GDT empty) a game BP
-   mis-resolves (real-mode seg<<4) and never fires. `BPLM <linear>`
-   (BKPNT_MEMORY_LINEAR) is the opposite: it stores only the linear
-   offset and the value-compare happens per-instruction at CHECK time
-   (debug.cpp:787-810) — so the live flow arms `BPLM 1195F0` (the EXD
-   frame-counter cell, watches.toml row frame-counter) at the pre-boot
-   halt; it fires on the first post-boot write to that cell (LeLoader
-   object2 copy — 0x1195f0 sits inside object2 — and/or the first
-   screen-loop INC; 14 INC sites exist, exd-probe2 census), giving a
-   guaranteed stop with the machine in game context, where the real
-   `BP CS:0005A6EB` is then armed.
-3. SELINFO RIDES THE LOGFILE [source-pinned, debug.cpp:2861-2869]:
-   SELINFO output goes through DEBUG_ShowMsg (the [log] logfile), 3
-   lines: "SelectorInfo CS:", "CS: b:XXXXXXXX type:..", "    l:XXXXXXXX
-   ..". GetLimit applies the granularity bit (cpu.h:436-441), so a flat
-   4GB descriptor prints l:FFFFFFFF. capgen parses b:/l: as a RUNTIME
-   GUARD: a stop is armable iff base==0 (limit>=0x12583e belt+braces).
-   Stops in non-flat context (LeLoader stub, real mode) retry: BPDEL *,
-   re-arm BPLM, RUNWATCH again (bounded retries).
+2. RESPONSIVE ENTRY TRAP [source-pinned, debug.cpp:460-479,585-586,
+   752-764]: `BP` resolves eagerly when armed. That was a bug for a
+   pre-boot `BP CS:<game offset>`, but it gives a precise bridge here.
+   The generated `boot_trap: "entry"` flow stops on `BPINT 21 4B`
+   (DOS EXEC), requires `BPDEL *` plus an empty fresh BPLIST, arms
+   `BP 5FBB:0000` while still in real mode (5FBB<<4 = the verified EXD
+   linear entry 0x0005FBB0; RE-EXD-MAP §1a), confirms that sole BPLIST
+   entry, and uses plain RUN. No BPLM is present on this path.
+3. ENTRY CONTEXT IS LOGFILE-PROVED, NEVER SCREEN-INFERRED
+   [source-pinned, debug.cpp:1547-1680,2354-2379,2861-2869]: at the
+   entry stop capgen issues the exact supported command
+   `EV CS EIP CR0`, parses only its fresh logfile response, and requires
+   EIP==0x0005FBB0 and CR0.PE=1. It then issues `SELINFO CS` and requires
+   base==0 and limit>=0x0012583e. Missing/malformed/mismatched output is
+   fatal. Each strict query is bounded by unique `ADDLOG` begin/end
+   markers (`ADDLOG` is source-pinned at debug.cpp:2377-2379), so stale
+   data from a zero-overlap logfile replacement is outside the response;
+   losing the begin marker fails closed. BPLIST additionally requires its
+   heading, 73-dash separator, contiguous indices, and fully parseable rows
+   (debug.cpp:2600-2605). Finally BPDEL must ack, an empty BPLIST must prove
+   deletion, and the existing arm_commands run. A final fresh BPLIST must
+   contain exactly the mission anchor BP, with no BPINT or BPLM.
 4. `debuggerrun = watch` WOULD FREE-RUN [source-pinned, RUNTIME.md D80
    entry]: watch mode auto-RUNWATCHes at debugger entry — with no
-   breakpoints yet the machine boots through the parked halt and queued
-   PTY commands never execute (input is only processed at stops). The
+   breakpoints yet the machine boots through the parked halt. PTY commands
+   sent while it runs are discarded by DEBUG_FlushInput at the next debugger
+   re-entry rather than executed there. The
    canon conf tools/runtime/dosbox-x-harness.conf pins watch mode (fine
    for its original purpose); `diff stage` therefore rewrites the STAGED
    copy (runtime/-only) to `debuggerrun = debugger` — a channel-mode
@@ -340,17 +360,44 @@ capture plan needs NO numeric selector parameter at all.
    (SDL_VIDEODRIVER="" = unset → the desktop X server) flip this; audio
    stays dummy for capture runs (real audio only for the cycles
    calibration listen test).
-7. THE ANCHOR-FRAME OFF-BY-A-TAIL [derived from 2]: the BPLM boot trap
-   fires AFTER mission frame 1's present tail (the counter INC sits
-   past the CALL at 0x5a6eb), so the armed BP's first hit = mission
-   frame 2's dump point. capgen frame 1 = that hit; alignment is by the
-   frame-counter watch value (DESIGN §2), so the one-frame shift is a
-   recorded constant, not a divergence.
+7. MISSION CODE-BP WAITS USE PLAIN RUN [source-pinned]: the heavy build's
+   normal core checks `DEBUG_HeavyIsBreakpoint` every instruction
+   (core_normal.cpp:160-180), and its code-BP branch compares the current
+   CS:EIP address (debug.cpp:752-779,6218-6252). RUNWATCH is not required
+   to catch the persistent mission anchor. Frames 1 and 2+ therefore all
+   use plain RUN after BPLIST proves that anchor is the sole breakpoint.
+   A live 2026-08-24 run exposed that RUN itself redraws the current register
+   and disassembly panes before returning to the normal loop; their CS:EIP
+   text is therefore only a probe wakeup, not proof of a later breakpoint
+   stop. A second source review found the complementary ordering: DEBUG_Enable
+   calls DEBUG_FlushInput before its re-entry redraw and DEBUG_Loop install
+   (debug.cpp:5078-5086), and the ncurses flush drains every queued getch()
+   byte (debug_gui.cpp:584-587). Thus ADDLOG queued behind RUN is discarded.
+   Capgen marks PTY output before each post-candidate ADDLOG probe. Only the
+   probe's fresh `NOTICE: <message>` logfile line (debug.cpp:2377-2379) proves
+   debugger command readiness. If the probe times out, capgen rescans every
+   byte after its saved mark so a concurrent, combined, or split re-entry
+   redraw is not lost, then sends a new nonce marker. One global timeout starts
+   before the fixed 1-second pre-resume settle and bounds that settle, the
+   resume write, stop observation, and every readiness retry. The deadline is
+   checked immediately before each command write, so expiry emits no later
+   RUN/ADDLOG. Logfile replacement/truncation and stale/duplicate markers fail
+   closed.
+
+   RUNWATCH redraws every 33 ms while running (debug.cpp:4913-4924), so BPLM
+   waits do not probe every repaint. `CheckBreakpoint` emits the fresh
+   `DEBUG: Memory breakpoint ...` logfile line when the watched value changes
+   (debug.cpp:800-808); capgen uses that as the first-stage stop signal, then
+   performs bounded marker retries because the line precedes DEBUG_FlushInput.
+   The legacy dbgprobe and stop-indexed S0W menu walk retain BPLM/RUNWATCH for
+   those memory-driven stops. After S0W drops BPLM and arms its code-only
+   mission anchor, frame waits switch to plain RUN. Legacy BPINT/code-trigger
+   frame waits also use RUN, leaving no code-only RUNWATCH polling path.
 
 ## S0 LIVE SESSION CHECKLIST (interactive; the machinery is landed + headless-verified — this is all that remains)
 
 Everything below was prepared by the unattended units (commits f659db5
-+ d5550a3 + ee2f0d4): capgen plan v2 (boot trap → flat guard → arm →
++ d5550a3 + ee2f0d4): capgen plan v2 (entry trap → context validation → arm →
 resolve → anchor/per-frame capture), dbx-plan (scenario + registry →
 plan), the committed S0 plan artifact, the staged-conf channel flip.
 The flow machinery itself is proven headless by `dbgprobe flow`
@@ -369,11 +416,13 @@ bytes; no game, unattended-safe — safe to re-run any time).
    the debugger rides the PTY — do not type debugger commands into the
    game window):
      FORCE_DIFF_RUN=1 tools/runtime/dosbox-harness.sh diff capture tools/diffharness/scenarios/S0.scen
-   capgen parks at -break-start, arms `BPLM 1195F0`, RUNWATCHes; the
-   game boots — WALK THE TITLE MENU to ZONEA/MISSION1 (new campaign).
-   At the first mission frame tail the trap fires; capgen checks the
-   flat CS (SELINFO base==0 — a loader-stub stop retries automatically),
-   arms `BP CS:0005A6EB`, then captures 3 records (anchor + 2); the
+   capgen parks at -break-start, stops at DOS EXEC (`BPINT 21 4B`),
+   deletes/verifies that trap, arms `BP 5FBB:0000`, and uses plain RUN.
+   At the EXD entry it verifies fresh `EV CS EIP CR0` and `SELINFO CS`
+   output, deletes/verifies the entry BP, and arms the sole mission
+   anchor `BP CS:0005A6EB`. The game then runs responsively — WALK THE
+   TITLE MENU to ZONEA/MISSION1 (new campaign). The anchor and both
+   following frame waits use plain RUN; the
    loader statics (map w/h, TOT/DAT/claim pointers) are read AT THE
    ANCHOR STOP (D84 resolve_at=anchor — they are mission-load values;
    the pre-mission arm stop reads garbage). stderr prints the
@@ -669,8 +718,8 @@ inject form). Row shape:
 1. Launching BEDLAM.EXW under the wine prefix - needs a desktop session and
    DirectDraw; do it interactively, not from an unattended run.
 2. The interactive DOSBox-X golden run: game-mode launch calibration
-   (cycles pin), debugger command-name verification (BPINT/BPLM/D forms,
-   linear conversion via INT3 at _entry), first watch dumps vs the D28 CPU
+   (cycles pin), behavior confirmation of the source-pinned entry/code-BP
+   flow, first watch dumps vs the D28 CPU
    anchors - all desktop-gated, checklist in dosbox-watch.skeleton.txt.
 
 game-data/ was only read; manifests verified before and after.

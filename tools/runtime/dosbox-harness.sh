@@ -103,7 +103,7 @@ diff_stage() {
   # free-runs past the parked -break-start halt — queued PTY commands
   # never execute (RUNTIME.md "S0 live channel mechanics" #4). capgen
   # needs mode "debugger" (sit at the prompt until the boot trap).
-  sed -i 's/^debuggerrun = .*/debuggerrun = debugger  # D81 channel flip (staged copy; watch mode would free-run)/' \
+  sed -i 's/^debuggerrun = .*/debuggerrun = debugger/' \
     "$DIFF_OUT/$SID/run.conf"
   grep -q "^debuggerrun = debugger" "$DIFF_OUT/$SID/run.conf" || {
     echo "diff stage: FATAL - could not flip debuggerrun in the staged conf (canon conf changed?)" >&2

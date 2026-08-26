@@ -10355,7 +10355,8 @@ lobby/sync families before any MP closure claim.
 2. **The MP serial-sync writer** [0x5b026..0x5b030]: `call
    0x62100; and eax,0xffff; mov [0x1075c0],eax` — in the
    link-negotiation path bracketed by the strings "Quit from
-   synchronising" (0x871a3) and "Found %i players, but could only
+   sychronising" (0x871a3 — the original's own typo, single
+   occurrence in the file) and "Found %i players, but could only
    sync %i !" (0x871ba) — TYPE := the 16-bit result of the serial
    driver sync (the local player id). SP never enters this path
    (the cycler trio that consumes it is the EXD MP family at
