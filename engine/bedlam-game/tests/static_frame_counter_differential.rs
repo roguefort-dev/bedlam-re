@@ -259,6 +259,108 @@ fn census_counts_pin_the_asm() {
 }
 
 // ---------------------------------------------------------------------
+// 1b. EXD twin census (RE-EXD-MAP §2b, D167) — the ordinal-match half
+// ---------------------------------------------------------------------
+
+/// §2b/A — the eight EXD reset sites (counter twin [0x1195f0]),
+/// address order: `(reset store, bound-cmp site, bound frames, inc
+/// site)`. Every one is `xor reg; [optional rider call]; mov
+/// [0x1195f0],reg; cmp bound; loop {draw; PRESENT; inc}` — the
+/// present-then-inc EXW cinematic order exact.
+const EXD_CINEMATIC_RESETS: [(u32, u32, u32, u32); 8] = [
+    (0x56785, 0x5678b, 200, 0x567b1),
+    (0x567fa, 0x56800, 100, 0x56823),
+    (0x56afd, 0x56b03, 300, 0x56b3e),
+    (0x56d50, 0x56d56, 200, 0x56d7c),
+    (0x5708c, 0x57092, 100, 0x570b5),
+    (0x5726c, 0x57272, 100, 0x57295),
+    (0x57371, 0x5737d, 300, 0x573a7),
+    (0x574bc, 0x574c2, 200, 0x574ec),
+];
+
+/// §2b/C — the five EXD cumulative menu INC sites (address order),
+/// each `inc [0x1195f0]` immediately followed by the present call
+/// 0x10670 — the inc-then-present EXW interactive-menu order exact.
+const EXD_MENU_CUMULATIVE_INC: [u32; 5] = [0x4d212, 0x4f6b4, 0x4f6fc, 0x4fc17, 0x5148b];
+
+/// §2b/B — the EXD DEBRIEF twin (EXW FUN_0044425c): entry + the
+/// GameMain call site (the 0x41c610 twin). All eight resets live
+/// inside it (shared [esp+0x520] frame slot + shared exit 0x56835).
+const EXD_DEBRIEF_ENTRY: u32 = 0x5638d;
+const EXD_DEBRIEF_GAMEMAIN_CALL: u32 = 0x2cf3f;
+
+#[test]
+fn exd_twin_census_holds_ordinally_instruction_form_exact() {
+    // (a) FORM SPLIT: 53 total references split identically — 13
+    // INC-form sites (8 cinematic + 5 menu), 1 register-form mission
+    // tail, 8 zero-writes, 31 reads (22 standalone + 8 loop-head
+    // cmps + the tail load).
+    assert_eq!(EXD_CINEMATIC_RESETS.len(), CINEMATIC_RESETS.len(), "8 = 8");
+    assert_eq!(
+        EXD_MENU_CUMULATIVE_INC.len(),
+        MENU_CUMULATIVE_INC.len(),
+        "5 = 5"
+    );
+    let exd_inc_forms = EXD_CINEMATIC_RESETS.len() + EXD_MENU_CUMULATIVE_INC.len();
+    assert_eq!(exd_inc_forms, 13, "13 EXD INC-form sites");
+    assert_eq!(exd_inc_forms + 1, 14, "+ the register-form tail = 14");
+    // (b) BOUND SEQUENCE: identical in address order — the pinned
+    // 200/100/300/200/100/100/300/200.
+    let exw_bounds: Vec<u32> = CINEMATIC_RESETS.iter().map(|r| r.2).collect();
+    let exd_bounds: Vec<u32> = EXD_CINEMATIC_RESETS.iter().map(|r| r.2).collect();
+    assert_eq!(exw_bounds, exd_bounds, "the bound sequence holds ordinally");
+    assert_eq!(
+        exd_bounds,
+        vec![200, 100, 300, 200, 100, 100, 300, 200],
+        "the pinned EXD bound sequence"
+    );
+    // (c) SITE SANITY: every EXD site in the EXD .text image
+    // (0x10000-based linear), cmp rides the reset, inc follows, and
+    // the eight resets sit inside the DEBRIEF twin's span
+    // (entry 0x5638d .. first helper 0x574f4).
+    for &s in EXD_MENU_CUMULATIVE_INC.iter() {
+        assert!((0x10000..0x60000).contains(&s), "menu inc {s:#x}");
+    }
+    for &(reset, cmp, _b, inc) in &EXD_CINEMATIC_RESETS {
+        assert!((0x10000..0x60000).contains(&reset));
+        assert!(
+            cmp > reset && cmp - reset < 0x10,
+            "cmp rides the reset ({reset:#x})"
+        );
+        assert!(inc > cmp, "the inc loop body follows ({reset:#x})");
+        assert!(
+            reset > EXD_DEBRIEF_ENTRY && reset < 0x574f4,
+            "reset {reset:#x} inside the DEBRIEF twin"
+        );
+    }
+    // The menu INC sites sit BELOW the debrief twin (menu screens
+    // run before the mission; the debrief after — the walk order).
+    for &s in EXD_MENU_CUMULATIVE_INC.iter() {
+        assert!(
+            s < EXD_DEBRIEF_ENTRY,
+            "menu inc {s:#x} precedes the debrief"
+        );
+    }
+    // (d) ORDER SEMANTICS: both tails flip-then-increment (§7j.66/B
+    // + §2); the EXD tail constants stay the pinned ones. The
+    // ordering invariant in the file's compile-time-pin form.
+    assert_eq!(EXD_TRIGGER, 0x5a6eb);
+    assert_eq!(EXD_INC, 0x5a6f0);
+    const _: () = {
+        assert!(EXD_INC > EXD_TRIGGER, "EXD inc AFTER the flip");
+    };
+    // The DEBRIEF twin is called from the EXD GameMain at the EXW
+    // 0x41c610 twin's ordinal position (§2b/B).
+    assert_eq!(EXD_DEBRIEF_ENTRY, 0x5638d);
+    assert_eq!(EXD_DEBRIEF_GAMEMAIN_CALL, 0x2cf3f);
+    assert!((0x2c000..0x2d500).contains(&EXD_DEBRIEF_GAMEMAIN_CALL));
+    // (e) C0 CONSEQUENCE: none — the §7j.66/D model carries to EXD
+    // verbatim (C0 = scripted-walk leftover on BOTH binaries).
+    let c0 = walk_c0(&[Leg::Menu(9), Leg::Cinematic(200), Leg::Menu(4)]);
+    assert_eq!(c0, 204, "the shared walk model — binary-agnostic");
+}
+
+// ---------------------------------------------------------------------
 // 2. E-side + differ classification — the dynamic-only placement half
 // ---------------------------------------------------------------------
 

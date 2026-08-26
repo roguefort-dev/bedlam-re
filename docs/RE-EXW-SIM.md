@@ -10165,11 +10165,15 @@ double-run verdict stays "identical chains modulo the T2/T3 cells"
 it MORE deterministic, never less). The D87 differ-doc phrasing "the
 O1 counter never resets" is corrected in place to the precise form:
 never resets IN THE MISSION LOOP; the menu-path resets are what make
-C₀ walk-determined. EXD twin cross-check: the EXD menu-screen reset
-family is NOT yet censused (no EXD whole-text objdump exists); the
-O1 trigger/counter ordering does not depend on it — the EXD mission
-tail is already pinned (§2) and a live S0W anchor stop pins C₀
-empirically. Open note, not a blocker.
+C₀ walk-determined. EXD twin cross-check: **CLOSED (D167,
+2026-08-26, RE-EXD-MAP §2b)** — the EXD whole-text objdump census of
+the counter twin [0x1195f0] returns the EXACT EXW form split (53
+references; 13 INC + 1 register form + 8 zero-writes + 31 reads; the
+bound sequence 200/100/300/200/100/100/300/200 identical; all eight
+resets inside the DEBRIEF twin 0x5638d, the FUN_0044425c twin called
+from GameMain @0x2cf3f; cinematic present-then-inc vs menu
+inc-then-present orders exact). The twin census holds ordinally,
+instruction-form-exact — the C₀ model carries to EXD verbatim.
 
 **E. THE S0-14 CLASSIFICATION (D156).** The two rows are
 DYNAMIC-ONLY — they carry no statically-closeable state: s0-trigger

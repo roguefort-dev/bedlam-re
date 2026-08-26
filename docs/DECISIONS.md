@@ -5336,3 +5336,48 @@ run). (worker 29669e49 claim 1)
 ## D166 — 2026-08-26: P4/RE-objdump `fe93-stride-alias-census` — the "160-B stride at 0x4c69e4" question CLOSED FOR GOOD: independently re-verified as a CENSUS ARITHMETIC SLIP (no second array); the stale §7j.13 OPEN marker amended (docs-only). HEADLINE: the queue item re-asked §7j.11's last open [census] point ("either a SECOND array aliasing the bank base or an original-code quirk — unpinned since 7j.11") UNAWARE that D73/§7j.25 item 7 had already resolved it on 2026-08-21; the residue was the §7j.13 amendment's own `OPEN:` marker (the item's "§7j.11" label was a misnomer — the gloss lives in §7j.13's text, which cites "the 7j.11 k12 sites"). This unit independently re-derived EVERYTHING from ghidra-project/exw-text-objdump.txt and closed the residue. (1) STRIDE ARITHMETIC re-decoded instruction-exact: 0x40fe9c `mov esi,eax` / 0x40fe9e `shl eax,2` / 0x40fea1 `add eax,esi` / 0x40fea3 `shl eax,2` / 0x40fea6 `add eax,esi` → eax = 21·idx (the Watcom ×21 idiom = ((idx<<2)+idx)<<2+idx); the three loads `[eax*8+0x4c69e4]`/`+0x4c69e8`/`+0x4c69ec` then address x/y/z dwords @+0/+4/+8 of the SAME robot record with effective stride 21·8 = 168 = 0xA8 — the canonical stride; the 7j.13 "20·i << 3 = 160" gloss dropped the second `add eax,esi`. (2) CALLER CENSUS re-run over the full objdump text: exactly ONE reference to 0x40fe93 in the entire binary (the direct call 0x40bc44) and ZERO jump-table encodings (byte pattern `93 fe 40 00` — no hits); the site sits in FUN_0040b9f6's per-robot walk with idx pinned by the loop tail 0x40c483..0x40c491: idx ([esp+0x20]) ∈ [0, [0x46ccbc]) — the robot count, ≤ 12. (3) EXTENT MAP: no 20×160 array exists anywhere at the base; the only bank is the D129 12×0xA8 = 0x7E0 zero-fill span 0x4c69e4..0x4c71c4 (FUN_00402965, ecx=0x7E0 @0x40cd29..38); with idx ≤ 11 the highest byte touched is base+0x740 (0x4c7124), well inside; even under the erroneous 160 gloss idx 13 would be needed to cross the extent (count caps at 12), and the strides disagree at every idx ≥ 1, so the instruction decode is dispositive. (4) VERDICT: QUIRK (census slip), NO second array — the queue's alternative "second aliased array" is DISPROVEN. Registry/plan consequence audit: NONE (per the item's own gate — a real second array does not exist; watches.toml and the dbx-plan robot-bank row were always pinned 0xA8; nothing moves). Deliverables: the §7j.13 OPEN→CLOSED amendment, the §7j.25 item 7 addendum (this census), the constant-ledger stride-proof anchor on the robot-bank row, and this entry. Verified: objdump-only (no Ghidra run, no corpus read, no game-data touch), MANIFEST.sha256 clean before AND after. (worker 690e3606 claim 1)
 
 Nudge-Worker: 690e3606-8408-432b-a22f-d64dbfd47a03
+
+## D167 — 2026-08-26: P4/RE-objdump `exd-menu-reset-census` — the §7j.66 open residue CLOSED: the EXD menu-screen counter-RESET family censused from the whole-text objdump and the twin census HOLDS instruction-form-exact (53/53 references; 13 INC + 1 register + 8 zero-writes; bound sequence 200-100-300-200-100-100-300-200 identical; the DEBRIEF twin pinned 0x5638d)
+
+The D156 EXW census's open cross-check ("the EXD menu-screen reset
+family is NOT yet censused" — stale even then on the "no EXD
+whole-text objdump exists" clause, since ghidra-project/
+exd-text-objdump.txt has existed since 2026-08-23/D162) is closed by
+a whole-objdump census of every [0x1195f0] reference (RE-EXD-MAP §2b;
+objdump-only, no Ghidra run, no corpus read, MANIFEST clean before
+AND after). (1) FORM SPLIT EXACT: 53 .text references — 13 INC-form
+sites (8 cinematic-loop + 5 menu), 1 register-form mission tail
+(0x5a6f0-fd, the §2 pin re-verified), 8 zero-writes, 31 reads
+(22 standalone + 8 loop-head cmps + the tail load) — the EXW split
+identical down to every bucket. (2) THE EIGHT RESETS: every one
+`xor reg; [rider call may ride between xor and store]; mov
+[0x1195f0],reg; cmp bound; loop {draw; call 0x1256c; PRESENT
+0x10670; inc; jmp}` — present-then-inc, the EXW cinematic order
+exact; bound sequence in address order 200/100/300/200/100/100/300/
+200 IDENTICAL to EXW; 6/8 xor-registers register-exact, sites 3+6
+regalloc-shifted to ebx (semantically void); the riders are
+register-preserving setup (0x2d4c3 ×3, 0x503a2 ×1) — the EXW
+site-1 FUN_0041cbf0 rider idiom, more frequent in EXD. (3)
+CONTAINMENT: all eight in ONE function — the EXD DEBRIEF twin of
+EXW FUN_0044425c (RE-EXW-MUSIC screen table), entry 0x5638d, called
+from the EXD GameMain @0x2cf3f (the 0x41c610 twin; the GameMain
+delta arithmetic predicted ≈0x2cf43). Evidence: shared [esp+0x520]
+frame slot + shared exit 0x56835 + intra-family draw helpers
+0x574f4/0x5763a; b2-functions.txt NOT used (B2 layout drifts from
+EXD in this region). (4) THE FIVE CUMULATIVE MENUS: 0x4d212,
+0x4f6b4, 0x4f6fc, 0x4fc17, 0x5148b — each inc immediately followed
+by the 0x10670 present (inc-THEN-present, the EXW interactive-menu
+order exact; EXW twins OPTIONS ×1 / BRIEF ×3 / SELECT ×1 — the 1/3/1
+per-screen split). Per-function attribution of the EXD five: future
+work (no EXD function table; ordinal/order/count pinned). (5) VERDICT:
+the twin census holds ORDINALLY, instruction-form-exact — no
+divergence in count, form, bound sequence, in-loop order, or
+containment topology. C₀ CONSEQUENCE: NONE — the §7j.66/D model
+carries to EXD verbatim (C₀ = the scripted menu walk's leftover;
+O1/O2 = E + C₀; the T2 class absorbs it on both binaries; a live S0W
+anchor stop still pins C₀ empirically). Deliverables: RE-EXD-MAP
+§2b (the census), the §7j.66 addendum (open note closed), the
+DESIGN-DIFFHARNESS frame-counter row note amended (no new ledger
+row — the row exists), the differential test extended with the EXD
+tables + the ordinal-match assertions (7/7 green), this entry.
+(worker e2dded59 claim 1)

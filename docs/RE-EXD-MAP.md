@@ -138,6 +138,79 @@ anchors (two independent evidence pieces) per the W1 ticket.
   count/marker staging one-hop-confirmed both sides — §5d),
   FUN_0001d274 = robot_move, FUN_0001e440 = the probe writer.
 
+### 2b. The menu-screen counter-RESET census (D167, 2026-08-26, [verified] objdump whole-census)
+
+The §7j.66 open residue closed: the EXD twin of the D156 EXW
+"eight bounded cinematic screens RESET the counter / five interactive
+menu screens count cumulatively" census. Whole-objdump census of every
+0x1195f0 reference in ghidra-project/exd-text-objdump.txt — **53 hits,
+the EXACT EXW count**, with the EXACT EXW form split:
+
+| form | EXW (§7j.66/D156) | EXD (this census) |
+|---|---|---|
+| total .text references | 53 | **53** |
+| INC-form increments | 13 (8 cinematic-loop + 5 menu) | **13** (8 + 5) |
+| register-form increment (mission tail) | 1 (0x4486ce-da) | **1** (0x5a6f0-fd, §2) |
+| zero-writes (resets) | 8 | **8** |
+| reads | 31 (22 standalone + 8 loop cmps + 1 tail load) | **31** (same split) |
+
+**A. THE EIGHT RESET SITES** (address order; every one
+`xor reg; [call may ride]; mov [0x1195f0],reg; cmp bound; jge exit;
+loop {draw; call 0x1256c; call 0x10670 PRESENT; inc; jmp}` —
+present-then-inc, the EXW cinematic order exact):
+
+| # | xor (reg) | reset store | bound (cmp) | inc | EXW twin (store/bound/inc) | EXW reg | match |
+|---|---|---|---|---|---|---|---|
+| 1 | 0x5677e (ebx; call 0x2d4c3 rides between xor+store) | 0x56785 | 200 @0x5678b | 0x567b1 | 0x44466f/200/0x44469b | ebx | exact incl. the rider quirk |
+| 2 | 0x567f3 (esi; call 0x503a2 rides) | 0x567fa | 100 @0x56800 | 0x56823 | 0x4446e4/100/0x44470d | esi | exact |
+| 3 | 0x56af6 (ebx; call 0x2d4c3 rides) | 0x56afd | 300 @0x56b03 | 0x56b3e | 0x4449f9/300/0x444a3a | ecx | reg shifted (regalloc), bound exact |
+| 4 | 0x56d4e (ecx) | 0x56d50 | 200 @0x56d56 | 0x56d7c | 0x444c4b/200/0x444c77 | ecx | exact |
+| 5 | 0x5708a (edx) | 0x5708c | 100 @0x57092 | 0x570b5 | 0x444f87/100/0x444fb0 | edx | exact |
+| 6 | 0x5726a (ebx) | 0x5726c | 100 @0x57272 | 0x57295 | 0x445167/100/0x445190 | edx | reg shifted, bound exact |
+| 7 | 0x5736d (ebx; `add edx,eax` rides; ALSO stores [0x119600] sibling) | 0x57371 | 300 @0x5737d | 0x573a7 | 0x44526c/300/0x4452a2 | ebx | exact |
+| 8 | 0x574b5 (esi; call 0x2d4c3 rides) | 0x574bc | 200 @0x574c2 | 0x574ec | 0x4453b7/200/0x4453e7 | esi | exact |
+
+Bound sequence in address order: **200, 100, 300, 200, 100, 100,
+300, 200 — the EXW sequence IDENTICAL.** The rider calls are
+register-preserving setup (0x2d4c3 pushes ebx..ebp + 0x304 locals;
+0x503a2 pushes esi/edi) — the zeroed register survives into the
+store, the same scheduling idiom as EXW site 1's FUN_0041cbf0 rider
+(EXD carries riders at sites 1/2/3/8; EXW documented one at site 1).
+
+**B. CONTAINMENT — the DEBRIEF twin.** All eight loops live in ONE
+function, the EXD twin of EXW FUN_0044425c = DEBRIEF (RE-EXW-MUSIC
+screen table): EXD entry **0x5638d**, called from the EXD GameMain
+@**0x2cf3f** (the 0x41c610 twin — the EXW→EXD GameMain delta
+arithmetic predicts ≈0x2cf43, actual 0x2cf3f). Evidence without a
+Ghidra boundary pass: all eight loops share the [esp+0x520] frame
+slot + the shared exit target 0x56835; intra-family draw helpers
+0x574f4 and 0x5763a are called from the loop bodies. (b2-functions.txt
+NOT used — B2's layout drifts from EXD in this region.)
+
+**C. THE FIVE CUMULATIVE MENU SITES** — `inc [0x1195f0]` immediately
+followed by `call 0x10670` (inc-THEN-present, the EXW interactive-menu
+order exact): **0x4d212, 0x4f6b4, 0x4f6fc, 0x4fc17, 0x5148b** (EXW
+twins: OPTIONS 0x43afa0, BRIEF 0x43d4f7/0x43d53f/0x43da5a, SELECT
+0x43f31f — the 1/3/1 per-screen split). Per-function attribution of
+the EXD five: future work (no EXD function table; ordinal + order +
+count already pinned).
+
+**D. THE READS** (31): 22 standalone — including the `and eax,0x7` /
+`and ebx,0xf` animation-phase hijacks with the [reg*4+0x82e1a] table
+(0x1519f, 0x15bf2, 0x1780d, 0x1792a, 0x512af, 0x5131e) and the
+`test BYTE PTR,0x1/0x3/0xc` parity/blink gates (0x162e1, 0x1a14f,
+0x1d1d6, 0x35032, 0x4d1ba) — + 8 loop-head cmps + the 0x5a6f0 tail
+load. The §7j.66 "REUSED global" gloss holds verbatim on the EXD side.
+
+**E. VERDICT — the twin census holds ORDINALLY,
+instruction-form-exact.** No divergence in count, form, bound
+sequence, in-loop order, or containment topology. Sole differences:
+2/8 xor registers (regalloc), the rider-call pattern, and the site-7
+sibling store [0x119600] (immaterial). C₀ consequence for the S0W
+anchors: **NONE — the §7j.66/D model carries to EXD verbatim**
+(C₀ = the scripted menu walk's leftover; O1/O2 value = E value + C₀;
+the differ's T2 class absorbs it on both binaries).
+
 ## 3. Mapping method (how EXW rows get EXD aliases)
 
 The two B1 builds are the same game from (presumably) one source tree —
