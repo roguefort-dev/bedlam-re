@@ -5381,3 +5381,56 @@ DESIGN-DIFFHARNESS frame-counter row note amended (no new ledger
 row — the row exists), the differential test extended with the EXD
 tables + the ordinal-match assertions (7/7 green), this entry.
 (worker e2dded59 claim 1)
+
+## D168 — 2026-08-26: P4/RE-objdump `exd-menu-fn-attribution` — the D167 §2b/C residue CLOSED: the five EXD cumulative-menu INC sites attributed to their screen functions, the 1/3/1 OPTIONS/BRIEF/SELECT split HOLDS, and the EXD screen layout order proven identical to EXW (docs-only)
+
+The one residue the D167 exd-menu-reset-census left open. Bounded
+objdump-only unit (NO Ghidra launch; b2-functions.txt untouched);
+substrate: ghidra-project/exd-text-objdump.txt + the
+tools/exd-relod.py linear image (rebuilt read-only to /tmp/opencode
+scratch — the image maps VMA == raw offset in the object2 string
+pool, verified by the code immediates 0x86b21 "Name: "/0x86b28
+"GOD"). FOUR deliverable points: (1) THE ATTRIBUTION — OPTIONS INC
+0x4d212 ∈ entry **0x4c80c**; BRIEF INCs 0x4f6b4/0x4f6fc/0x4fc17 ∈
+entry **0x4f1d1**; SELECT INC 0x5148b ∈ entry **0x50953**; SHOP
+(0x52fd7) and DEBRIEF (0x5638d, §2b/B) complete the five-screen
+layout, ORDER-IDENTICAL to EXW (FUN_0043a5fc < FUN_0043d00b <
+FUN_0043e7d4 < FUN_00440e45 < FUN_0044425c). The 1/3/1 per-screen
+split HOLDS; no divergence. (2) THE ANCHORS (≥2 §3 classes per
+screen): the per-screen "SOUND\MIDI\<NAME>" basename loads
+(OPTIONS 0x4c93f / BRIEF 0x4f5e9 / SELECT 0x50ba2 / SHOP 0x5316e /
+DEBRIEF 0x5646d — the last +0xe0 inside §2b's pinned DEBRIEF
+entry, cross-validating the method; all five through the ONE
+common callee **0x1405f** = the EXD load-music-by-basename twin,
+BRIEF following with `mov eax,3; call 0x13e04` = music START on
+song slot 3, the EXW MusicPump "slot 3 only" fact intact) + the
+GameMain dispatch in the EXW call order (0x2cd6e→0x4c80c looped
+with the ≥7/[0x119624]≠0 re-init recall, 0x2ce0c→0x4f1d1,
+0x2ce45→0x52fd7, 0x2cf3f→0x5638d, 0x2cf7b→0x50953, flanked by the
+§5g sound-init/free-voices pair) + the instruction-context shapes
+(OPTIONS `mov eax,0x8e; call 0x111fa` ⟷ `0x401ca2` §5h pair; BRIEF
+#1/#3 double text-draws at 0x82/0x104·0xbe/0xdc over the
+0x30-spaced buffer pairs 0xf7b8c/0xf7bbc ⟷ 0x46b49c/0x46b4cc;
+BRIEF #2 the eax=3→0x5b066⟷0x449c94 + eax=0xa→0x2ec12⟷0x41e215 +
+0x302-memset 0x12206⟷0x425a1e tail; SELECT triple xor-ecx draws +
+post-present mode cmp [0x1075d8]⟷[0x4edb88] §4-pinned; BRIEF #3
+post-present cinematics cmp [0x1194d8]⟷[0x46cca4] S0-16/D159
+confirming). (3) THE BOUNDARY PROOF: whole-objdump call-target
+census — NO direct-call target inside (entry, last INC] for any
+group (next targets 0x4e934/0x4fe28/0x5159d, each body closing at a
+frame-matched exit tail right before); every entry carries the
+family prologue 53 51 52 56 57 55 (OPTIONS 0x4c80c decoded from raw
+bytes — the committed objdump desyncs 0x4c7b0..0x4c989, hiding it,
+the same desync EXW suffers before 0x43a5fc); the three bodies
+share the epilogue trampoline **0x51d11** (pop ebp/edi/esi/edx/
+ecx/ebx; ret); BRIEF's INCs all use the 0x650 frame's slots, the
+OPTIONS INC uses the prologue's [ebp+0xa]/[ebp+0xe] arena slots;
+BRIEF's entry→INC offsets uniformly −9 on EXD (0x4EC/0x534/0xA4F →
+0x4E3/0x52B/0xA46), SELECT −0x13, OPTIONS +0x662. NEW helper
+identity: **0x4e9a8 ≡ EXW 0x43c87c** (menu-text draw; 4 GameMain
+calls per side). (4) CONSEQUENCES: C₀ model unchanged (§2b/E);
+registry/ledger NONE (attribution metadata, no new row). Residue
+QUEUED: the EXD music-LOADER chain twins (0x1405f / 0x13e04 / the
+.MRS/.MRW literals 0x95050/0x95055) vs EXW RE-EXW-MUSIC §1.
+Verified: objdump-only, no Ghidra run, no corpus write, MANIFEST
+clean before AND after. (worker 4e41bf00 claim 1)

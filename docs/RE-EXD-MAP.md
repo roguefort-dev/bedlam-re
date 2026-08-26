@@ -191,9 +191,88 @@ NOT used — B2's layout drifts from EXD in this region.)
 followed by `call 0x10670` (inc-THEN-present, the EXW interactive-menu
 order exact): **0x4d212, 0x4f6b4, 0x4f6fc, 0x4fc17, 0x5148b** (EXW
 twins: OPTIONS 0x43afa0, BRIEF 0x43d4f7/0x43d53f/0x43da5a, SELECT
-0x43f31f — the 1/3/1 per-screen split). Per-function attribution of
-the EXD five: future work (no EXD function table; ordinal + order +
-count already pinned).
+0x43f31f — the 1/3/1 per-screen split). **Per-function attribution
+CLOSED (D168, 2026-08-26, [verified] objdump + linear-image string
+scan; the former "future work" note retired): the 1/3/1 split HOLDS —
+one screen function per group, the EXD screen LAYOUT ORDER identical
+to EXW (OPTIONS < BRIEF < SELECT < SHOP < DEBRIEF):**
+
+| screen | EXW entry | EXD entry | EXD frame | EXD INC sites (offset from entry) | body end (exit tail) |
+|---|---|---|---|---|---|
+| OPTIONS | FUN_0043a5fc | **0x4c80c** | ebp-dual (`mov ebp,esp; sub esp,0x160; sub ebp,0x82`) | 0x4d212 (+0xa06) | 0x4e933 (`lea esp,[ebp+0x82]; jmp 0x51d11`) |
+| BRIEF | FUN_0043d00b | **0x4f1d1** | esp 0x650 | 0x4f6b4 (+0x4e3), 0x4f6fc (+0x52b), 0x4fc17 (+0xa46) | 0x4fe27 (`add esp,0x650; jmp 0x51d11`) |
+| SELECT | FUN_0043e7d4 | **0x50953** | esp 0x344 | 0x5148b (+0xb38) | 0x5159c (`add esp,0x344; jmp 0x51d11`) |
+| SHOP | FUN_00440e45 | 0x52fd7 | esp 0x438 | — (no INC, as EXW) | — |
+| DEBRIEF | FUN_0044425c | 0x5638d (§2b/B) | esp 0x530 | the 8 resets (§2b/A) | — |
+
+Evidence, ≥2 anchors per screen per the §3 classes:
+
+1. **Music-basename loads (class 2, string refs).** Each screen body
+   contains `mov eax,<str>` for its OWN `"SOUND\MIDI\<NAME>"` string,
+   all through the ONE common callee **0x1405f** (the EXD
+   load-music-by-basename twin): OPTIONS @0x4c93f (str 0x86b02),
+   BRIEF @0x4f5e9 (0x86c5e), SELECT @0x50ba2 (0x86dcc), SHOP @0x5316e
+   (0x86e46), DEBRIEF @0x5646d (0x86ec8 — +0xe0 inside the §2b-pinned
+   0x5638d, cross-validating the method). String-pool addressing fact:
+   in the object2 pool VMA == linear-image raw offset (code immediates
+   0x86b21 "Name: " / 0x86b28 "GOD" — both INSIDE the OPTIONS span —
+   verify the mapping). BRIEF follows the load with `mov eax,3; call
+   0x13e04` = music START on song slot 3, the EXW MusicPump
+   "slot 3 only" fact landing intact.
+2. **GameMain dispatch (class 3, call shape).** The five screens are
+   called from the EXD GameMain driver in the EXW call ORDER
+   (OPTIONS, BRIEF, SHOP, DEBRIEF, SELECT): 0x2cd6e→0x4c80c
+   (looped — result ≥7 or [0x119624]≠0 re-inits at 0x2cd0f and
+   recalls; ⟷ EXW 0x41c436→0x43a5fc), 0x2ce0c→0x4f1d1 (⟷ 0x41c4d5),
+   0x2ce45→0x52fd7 (⟷ 0x41c50e), 0x2cf3f→0x5638d (⟷ 0x41c610, §2b/B),
+   0x2cf7b→0x50953 (⟷ 0x41c64f); flanked by sound-init
+   0x2cc70→0x4be7d (§5g ⟷ 0x41c33f→0x43a144) and free-voices
+   0x2ccc1/0x2ccde→0x57775 (⟷ 0x41c3e0→0x43a48d).
+3. **Boundary proof (no intervening entries).** Whole-objdump
+   call-target census: NO direct-call target inside (entry, last INC]
+   for any group — the next targets after each group's last INC are
+   0x4e934 / 0x4fe28 / 0x5159d, and every screen body closes at a
+   frame-matched exit tail immediately before the next entry. All
+   entries carry the family prologue `53 51 52 56 57 55 …`
+   (push ebx/ecx/edx/esi/edi/ebp); OPTIONS 0x4c80c decoded from raw
+   image bytes (the committed linear objdump desyncs 0x4c7b0..0x4c989,
+   hiding the prologue — the EXW objdump desyncs the same way before
+   0x43a5fc). The three bodies share the epilogue trampoline
+   **0x51d11** (`5d 5f 5e 5a 59 5b c3` = pop ebp/edi/esi/edx/ecx/ebx;
+   ret — the exact pop-inverse of the family prologue). BRIEF's three
+   INC sites all address [esp+0x62x..0x64x] slots of the 0x650 frame;
+   the OPTIONS INC context uses [ebp+0xa]/[ebp+0xe] — the two
+   arena-alloc slots staged at the 0x4c80c prologue (0x64000 +
+   0x14ff0 via 0x2e4b2).
+4. **INC-context shape (class 1 constants + pinned helper twins).**
+   OPTIONS: `mov eax,0x8e; call 0x111fa` immediately before the INC
+   ⟷ EXW `mov eax,0x8e; call 0x401ca2` (the §5h image-draw pair).
+   BRIEF #1/#3: double menu-text draws at ecx 0x82/0x104, ebx
+   0xbe/0xdc, over the 0x30-spaced runtime text-buffer pairs
+   0xf7b8c/0xf7bbc ⟷ 0x46b49c/0x46b4cc (both BSS, both 0x30 apart);
+   #3 gated by the same `je <inc>` skip. BRIEF #2: `mov eax,3; call
+   0x5b066` (cmd builder ⟷ 0x449c94), `mov eax,0xa; …call 0x2ec12`
+   (key consume ⟷ 0x41e215), the 0x302-byte frame memset 0x12206 ⟷
+   0x425a1e tail. SELECT: triple xor-ecx menu-text draws at ebx
+   0xdc/0xfa ⟷ EXW 0x46b19c/0x46b1cc family, and the post-present
+   `cmp [0x1075d8],0` = the §4-pinned mode cell ⟷ `cmp [0x4edb88],0`;
+   BRIEF #3's post-present `cmp [0x1194d8],0` ⟷ `cmp [0x46cca4],0`
+   (the S0-16/D159 CINEMATICS pair — confirming). NEW helper identity
+   landed: **0x4e9a8 ≡ EXW 0x43c87c** (the menu-text draw; 4 GameMain
+   calls each side: 0x2d1f8/0x2d213/0x2d239/0x2d25d ⟷
+   0x41c91c/0x41c937/0x41c95d/0x41c981).
+5. **Alignment fingerprint.** BRIEF entry→INC offsets are uniformly
+   −9 on EXD (0x4EC/0x534/0xA4F → 0x4E3/0x52B/0xA46); SELECT −0x13
+   (0xB4B→0xB38); OPTIONS +0x662 (0x3A4→0xA06; the EXD-larger pre-INC
+   body — the name-entry/cheat block with "Name: "/"GOD"/CREDIT
+   strings sits before the INC on both sides).
+
+VERDICT: no divergence — count, order, per-screen split, and
+containment all match the EXW D156 census. C₀ consequence: NONE
+(unchanged from §2b/E). Registry/ledger consequence: NONE
+(attribution metadata; no new row). Residue QUEUED: the EXD
+music-LOADER chain twins (0x1405f / 0x13e04 / the .MRS/.MRW literal
+family 0x95050/0x95055) vs the EXW RE-EXW-MUSIC §1 chain.
 
 **D. THE READS** (31): 22 standalone — including the `and eax,0x7` /
 `and ebx,0xf` animation-phase hijacks with the [reg*4+0x82e1a] table
