@@ -223,7 +223,8 @@ if [ "$ncl" -ge "$cur_conc" ]; then
   exit 0
 fi
 
-# free queue item numbers = Now-section entries not claimed
+# Queue state is validated before idle or spawn decisions. Parser failures are
+# deadlocks requiring queue repair, never an empty queue.
 maybe_idle_notify() {
   # Operator UX (2026-08-24): the loop drained its queue at 03:03 and
   # stood down silently for 3h - nobody told the operator the next
@@ -239,12 +240,35 @@ maybe_idle_notify() {
   fi
 }
 
-free_items=$("$SCRIPT_DIR/nudge-free-items.py" "$STATE/NEXT.md" "$CLAIMS")
-if [ -z "$free_items" ]; then
-  echo "$(date -Is) no unattended Now items are available - standing down" >> "$STATE/nudge.log"
-  maybe_idle_notify
-  exit 0
+queue_state=$("$SCRIPT_DIR/nudge-free-items.py" "$STATE/NEXT.md" "$CLAIMS" --state-v1 2>> "$STATE/nudge.log")
+queue_rc=$?
+if [ "$queue_rc" -ne 0 ]; then
+  echo "$(date -Is) queue INVALID-DEADLOCKED (parser rc=$queue_rc) - repair required; refusing idle/spawn" >> "$STATE/nudge.log"
+  exit "$queue_rc"
 fi
+
+case "$queue_state" in
+  RUNNABLE\ *)
+    free_items=${queue_state#RUNNABLE }
+    ;;
+  CLAIMED-RUNNING)
+    echo "$(date -Is) all READY Now items are claimed and running - standing down" >> "$STATE/nudge.log"
+    exit 0
+    ;;
+  AUTOMATIC-WAIT)
+    echo "$(date -Is) queue is in bounded AUTOMATIC-WAIT - standing down" >> "$STATE/nudge.log"
+    exit 0
+    ;;
+  REQUIRED-QUEUE-EMPTY)
+    echo "$(date -Is) required Now queue is structurally empty - standing down" >> "$STATE/nudge.log"
+    maybe_idle_notify
+    exit 0
+    ;;
+  *)
+    echo "$(date -Is) queue INVALID-DEADLOCKED (unknown parser state: $queue_state) - repair required; refusing idle/spawn" >> "$STATE/nudge.log"
+    exit 2
+    ;;
+esac
 
 # Skip items whose task is cooling down after repeated attributable failures.
 chosen=""

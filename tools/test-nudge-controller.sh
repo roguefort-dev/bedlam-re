@@ -32,6 +32,8 @@ setsid "\$script" "\$item" "\$slot" >> "$TMP/agent-console.log" 2>&1 &
 echo \$! >> "$TMP/agent.pgids"
 EOF
 chmod +x "$TMP/mock-systemd-run"
+mkdir -p "$TMP/mock-bin"
+ln -s "$TMP/mock-systemd-run" "$TMP/mock-bin/systemd-run"
 
 cat > "$TMP/mock-network-watchdog" <<EOF
 #!/usr/bin/env bash
@@ -42,7 +44,7 @@ chmod +x "$TMP/mock-network-watchdog"
 make_plan() {
   rm -rf "$PLAN"
   mkdir -p "$PLAN/.state/claims"
-  printf "# NEXT\n\n## Now\n1. [P5] controller test task\n\n## Backlog\n" > "$PLAN/.state/NEXT.md"
+  printf "# NEXT\n\n## Now\n1. [READY] [id=controller-test] [gate=p5-controller] controller test task\n\n## Backlog\n" > "$PLAN/.state/NEXT.md"
   printf "# AGENTS\n" > "$PLAN/AGENTS.md"
   printf "initial\n" > "$PLAN/code.txt"
   git -C "$PLAN" init -q
@@ -79,7 +81,19 @@ run_nudge() {
   SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl-chain" \
   REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" \
   NOTIFY_SEND="$TMP/mock-notify-send" \
-  "$ROOT/tools/nudge.sh"
+    "$ROOT/tools/nudge.sh"
+}
+
+run_nudge_with_production_idle() {
+  env -u SYSTEMD_RUN_OVERRIDE \
+    PATH="$TMP/mock-bin:$PATH" \
+    BEDLAM_PLAN_DIR="$PLAN" NUDGE_LOCK="$TMP/nudge.lock" \
+    OPENC_OVERRIDE="$TMP/mock-client" \
+    NETWORK_WATCHDOG_OVERRIDE="$TMP/mock-network-watchdog" \
+    SYSTEMCTL_OVERRIDE="$TMP/mock-systemctl-chain" \
+    REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" \
+    NOTIFY_SEND="$TMP/mock-notify-send" \
+    "$ROOT/tools/nudge.sh"
 }
 
 taskhash() {
@@ -227,5 +241,33 @@ now=$(date +%s)
 [ "$until" -gt "$now" ]
 [ "$until" -le $(( now + 1805 )) ]
 rm -f "$PLAN/.state/taskcooldown/$th" "$PLAN/.state/claims/1-owner.claim"
+
+# 9. Invalid active queues are deadlocks, not idle queues. The parser's
+# nonzero status must reach the caller without spawning or notifying.
+for invalid_case in blocked untagged; do
+  make_plan
+  case "$invalid_case" in
+    blocked)
+      printf '# NEXT\n\n## Now\n1. [BLOCKED - unattended] [id=blocked-controller] [gate=blocked-controller-gate] blocked task\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+      ;;
+    untagged)
+      printf '# NEXT\n\n## Now\n1. untagged controller task\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+      ;;
+  esac
+  : > "$TMP/run-calls"
+  rm -f "$TMP/notifications"
+  set +e
+  run_nudge_with_production_idle
+  invalid_rc=$?
+  set -e
+  [ "$invalid_rc" -eq 2 ]
+  [ ! -s "$TMP/run-calls" ]
+  [ ! -s "$TMP/notifications" ]
+  [ ! -e "$PLAN/.state/idle-notified" ]
+  grep -q "queue INVALID-DEADLOCKED" "$PLAN/.state/nudge.log"
+  grep -q "repair required; refusing idle/spawn" "$PLAN/.state/nudge.log"
+  ! grep -q "idle: no spawnable work" "$PLAN/.state/nudge.log"
+  ! grep -q "spawning agent" "$PLAN/.state/nudge.log"
+done
 
 echo "nudge controller tests: PASS"
