@@ -187,12 +187,18 @@ audio present.
    content fingerprints (decoded pixel bytes + palette hash — never PNG file bytes) so
    codec re-encodes cannot false-regress.
 Acceptance: replay determinism + state-dump parity on scripted slice scenes.
-The required P4 engineering proof is fully automated: deterministic T1/static
-tests, committed S0-S8 scenario/capture-plan corpus checks, and the
+The required P4 engineering proof is fully automated: the `s0-dispositions`
+static differential proof (the 13 `static_*_differential` oracle suites of
+bedlam-core + bedlam-game — the D145-D164 closed evidence, plus the pre-D145
+cgr/loader TS rows — the bedlam-render mission-view load-seam oracle, and the
+diffharness `registry_anchors` substrate guard), committed S0-S8
+scenario/capture-plan corpus checks, and the
 `differ_gate` plumbing tests enumerated in `docs/required-gates.toml`. Live
 O1/O2/O3 captures, S0W menu calibration, cycles/audio checks, hardware checks,
 and perceptual review are excluded diagnostics, not P4 closure gates or queued
-work. D145-D164 closed the semantic and timing dispositions, and the sole
+work. D145-D164 closed the semantic and timing dispositions (final ledger
+D160: 24/27 static-closed + 2/27 dynamic-only placement + 1/27
+hardware/input-profile-only), and the sole
 original-side contract correction LANDED 2026-08-26 (D171): the O2 emitter pins
 the operational trigger at `0x004486C9` (callee/canon `0x00425A03`, EXD
 `0x0005A6EB`; S1-o2 regenerated; the exact-text gate

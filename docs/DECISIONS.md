@@ -5556,3 +5556,59 @@ WIP ADOPTION: the unit adopted interrupted same-slot predecessor WIP
 gates); git status/diff recorded to .state/scratch/eb9917a1/, all of
 it preserved, only the two D170→D171 strings corrected. (worker
 eb9917a1 claim 1)
+
+## D172 — 2026-08-26: P4/gate `p4-static-proof-scope` — the `s0-dispositions` gate reconciled to execute the COMPLETE closed static evidence: all 13 static differential oracle suites + the render load-seam oracle + the registry anchor guard (4 commands, 90 tests)
+
+THE GAP: the controller's 878c03f manifest shipped `s0-dispositions`
+with ONE command (static_frame_counter_differential only — the D156
+timing oracle). The D145-D164 closure evidence is far wider: the
+static-parity rows S0-07..S0-17 landed eleven more differential
+suites across bedlam-core and bedlam-game, the pre-D145 TS rows
+(cgr-volume S0-05, the TOT-driven loader S0-06) landed two more in
+bedlam-core, and NO gate ran ANY bedlam-core or bedlam-render test —
+the static proof had unguarded halves while the ledger claimed full
+disposition.
+
+RECONCILIATION (gate `s0-dispositions`, docs/required-gates.toml):
+commands 1..4 run every oracle that proves the 27-row S0 registry
+(verified tier census: S0=1 + T0=11 + TS=15 = 27, the D160 final
+ledger 24/27 static-closed + 2/27 dynamic-only placement [D156:
+s0-trigger + frame-counter] + 1/27 hardware/input-profile-only
+[D160: static-cursor-clamp]):
+- bedlam-core, 7 suites / 16 tests — pad-slots D146, yline-zbase
+  D147, type-table D148, min-bank D149, claim-bank D150+D151,
+  cgr-volume + loader (the pre-D145 TS rows).
+- bedlam-game, 6 suites / 42 tests — campaign/config D153+D154,
+  RNG+dither D155, frame-counter/s0-trigger ordering D156 (the
+  timing dispositions), order-table D157, player-type D159,
+  cursor-clamp D160.
+- bedlam-render --lib, 30 tests — the mission-view load-seam oracle
+  (EXW TOT/DAT/BIN/LNK transform = the tot-volume, dat-volume,
+  bin-terrain, lnk-map, map-wh TS rows); the whole lib surface runs
+  so a renamed-or-vanished oracle cannot silently pass (cargo name
+  filters are fail-OPEN — rejected for gate use).
+- diffharness registry_anchors, 2 tests — the registry substrate
+  guard (W2 anti-ghost; the D161/D162 verified EXD fills anchored).
+tracked_paths pinned to the 13 suite files + registry_anchors.rs +
+watches.toml + the controller's original four (PLAN, DESIGN,
+RUNTIME, STATE). The corpus (11 S0-S8 capture plans) and the other
+gates are UNTOUCHED: scripted-slice-scenes and diffharness-plumbing
+remain the separate automated S0-S8/differ gates per the item
+charter; S0W calibration, live O1/O2/O3, cycles/audio, hardware and
+perceptual checks stay EXCLUDED and not queued (D170 scope, restated
+as a manifest comment so the exclusion is machine-visible).
+
+VERIFIED this run at the exact gate argv (warm target): core 16/16,
+game 42/42, render lib 30/30 (incl.
+all_shipped_missions_exw_tot_dat_bin_lnk_transform_matches_mission_
+view), registry_anchors 2/2 — 90/90 green; manifest parses
+(tomllib, schema required-gates-v1, 4 commands all --locked
+--offline against the /usr/bin/cargo allowlist, 19 tracked_paths
+all git-tracked); tools/test-validate-required-gates.py 13/13 (the
+manifest edit breaks no hermetic validator contract);
+tools/test-autonomy-remaining-gaps.sh unaffected (its p4 binding
+mocks are hermetic); MANIFEST clean before AND after (no corpus
+write; the oracle runs are read-only corpus consumers). PLAN.md P4
+acceptance + DESIGN-DIFFHARNESS §CI-wiring note name the gate
+content. NUMBERING: D170 reserved by the controller, D171 =
+p4-trigger-contract, this entry D172. (worker 7003f272 claim 1)

@@ -688,7 +688,12 @@ instances, 3 turrets).
   every chain moved deliberately) — CI
   checkouts never carry game-data (it is never committed), so those
   run wherever the required corpus is present; the required-gates validator
-  fails closed when that corpus is absent. Original-side O1/O2/O3 runs are
+  fails closed when that corpus is absent. The static differential oracles
+  (the D145-D164 closed evidence and timing dispositions — see the
+  `s0-dispositions` gate in `docs/required-gates.toml`) run under that same
+  validator: the 13 `static_*_differential` suites (bedlam-core +
+  bedlam-game), the bedlam-render mission-view load-seam oracle, and the
+  `registry_anchors` substrate guard. Original-side O1/O2/O3 runs are
   separate diagnostics and never satisfy or block the P4 engineering gates.
 - **CI wiring**: original-side runs never run in CI (pinned emulator,
   desktop-gated). CI runs the ENGINE dump emitter + differ against committed

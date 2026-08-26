@@ -59,11 +59,39 @@ commands = [
 ]
 tracked_paths = ["Cargo.lock", "engine/bedlam-platform/src/gpu.rs", "docs/DECISIONS.md"]
 
+# s0-dispositions — the D145-D164 closed static evidence and timing
+# dispositions made executable. The 27-row S0 registry (watches.toml) is
+# FULLY DISPOSITIONED (D160 final ledger): 24/27 static-closed + 2/27
+# dynamic-only placement (D156: s0-trigger + frame-counter — closed by
+# mechanism, the ordering oracle) + 1/27 hardware/input-profile-only
+# (D160: static-cursor-clamp — never counted as static parity). The four
+# commands run every oracle suite that proves the rows:
+#   bedlam-core, 7 suites / 16 tests — pad-slots D146, yline-zbase D147,
+#     type-table D148, min-bank D149, claim-bank D150+D151, and the
+#     pre-D145 cgr-volume + TOT-driven DAT/PAD loader rows.
+#   bedlam-game, 6 suites / 42 tests — campaign/config D153+D154, RNG +
+#     dither D155, frame-counter/s0-trigger ordering D156 (the timing
+#     dispositions), order-table D157, player-type D159, cursor-clamp D160.
+#   bedlam-render lib, 30 tests — the mission-view load-seam oracle
+#     (EXW TOT/DAT/BIN/LNK transform: the tot-volume, dat-volume,
+#     bin-terrain, lnk-map, map-wh TS rows).
+#   diffharness registry_anchors, 2 tests — the registry substrate guard
+#     (W2 anti-ghost: every watch anchor resolves to its ledger row; the
+#     D161/D162 verified EXD fills stay anchored).
+# Excluded by design — never P4 gates, never queued: S0W menu calibration,
+# live O1/O2/O3 captures, cycles/audio listening, hardware, perceptual
+# checks. The S0-S8 corpus gates and the differ_gate plumbing gate are
+# separate automated gates and are not duplicated here.
 [[gate]]
 id = "s0-dispositions"
 timeout_seconds = 1800
-commands = [["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "static_frame_counter_differential"]]
-tracked_paths = ["engine/bedlam-game/tests/static_frame_counter_differential.rs", "docs/PLAN.md", "docs/DESIGN-DIFFHARNESS.md", "docs/RUNTIME.md", ".state/STATE.md"]
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "static_cgr_differential", "--test", "static_claim_bank_differential", "--test", "static_loader_differential", "--test", "static_min_bank_differential", "--test", "static_pad_slot_differential", "--test", "static_type_table_differential", "--test", "static_yline_zbase_differential"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "static_campaign_config_differential", "--test", "static_cursor_clamp_differential", "--test", "static_frame_counter_differential", "--test", "static_order_table_differential", "--test", "static_player_type_differential", "--test", "static_rng_differential"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-render", "--lib"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "diffharness", "--test", "registry_anchors"],
+]
+tracked_paths = ["engine/bedlam-core/tests/static_cgr_differential.rs", "engine/bedlam-core/tests/static_claim_bank_differential.rs", "engine/bedlam-core/tests/static_loader_differential.rs", "engine/bedlam-core/tests/static_min_bank_differential.rs", "engine/bedlam-core/tests/static_pad_slot_differential.rs", "engine/bedlam-core/tests/static_type_table_differential.rs", "engine/bedlam-core/tests/static_yline_zbase_differential.rs", "engine/bedlam-game/tests/static_campaign_config_differential.rs", "engine/bedlam-game/tests/static_cursor_clamp_differential.rs", "engine/bedlam-game/tests/static_frame_counter_differential.rs", "engine/bedlam-game/tests/static_order_table_differential.rs", "engine/bedlam-game/tests/static_player_type_differential.rs", "engine/bedlam-game/tests/static_rng_differential.rs", "tools/diffharness/tests/registry_anchors.rs", "tools/diffharness/watches.toml", "docs/PLAN.md", "docs/DESIGN-DIFFHARNESS.md", "docs/RUNTIME.md", ".state/STATE.md"]
 corpus = ["tools/diffharness/capture-plans/S0.json", "tools/diffharness/capture-plans/S1.json", "tools/diffharness/capture-plans/S2.json", "tools/diffharness/capture-plans/S3.json", "tools/diffharness/capture-plans/S4.json", "tools/diffharness/capture-plans/S5.json", "tools/diffharness/capture-plans/S5B.json", "tools/diffharness/capture-plans/S5C.json", "tools/diffharness/capture-plans/S6.json", "tools/diffharness/capture-plans/S7.json", "tools/diffharness/capture-plans/S8.json"]
 
 [[gate]]
