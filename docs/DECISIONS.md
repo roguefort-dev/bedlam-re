@@ -5165,3 +5165,59 @@ ride that unit too). (3) The DESIGN §4 T2/T3 tables carry the EXD
 column; the S6/S8 "no EXD alias" claims amended in place (the rows
 are alias-complete; E-only remains a DIFFER-coverage state only).
 (worker 03cc1ea3 claim 1)
+
+## D163 — 2026-08-26: P4.2/W-followup `t2t3-differ-arms` — the four D162 subset-form O1 extraction arms LANDED: debris-stager/splash-records/critter-bank/effect-rows go cross-channel; dropship-frame is the one remaining E-only T3 row
+
+(1) **THE ARMS** (RE notes first, 965796b — DESIGN §6a's new
+subset-arm table): the four rows whose E canonical record is a
+SUBSET of the guest record normalize on the O1 side by walking the
+GUEST full span and projecting E's modeled fields at the guest
+offsets — the D87 field-map class, zero field gaps by construction
+(every canonical leaf sources from the guest). critter-bank (T2):
+the `$critter_count*0x7E` span → 23 leaves (kind w@+0, species
+w@+2, attacker i16@+4, hp i16@+6, mode w@+0xC, anim w@+0xE, heading
+d@+0x10, impact d@+0x1C/+0x20, presence w@+0x24, target
+d@+0x2A/+0x2E/+0x32, xyz d@+0x36/+0x3A/+0x3E, home d@+0x42/+0x46,
+death_ctr d@+0x52, countdown w@+0x56 zero-extended, facing w@+0x72,
+target_robot i16@+0x7A, fuse w@+0x7C), cap 350 = 0xAC44/0x7E.
+effect-rows (T3): the 80×0x20 LRU bank → 8 leaves (age w@+0, x
+d@+2, y d@+6, z d@+0xA, cos d@+0xE, sin d@+0x12, ttl d@+0x16, id
+w@+0x1A). debris-stager (T3): the 128×0x30 ring → active u8@+0,
+kind d@+0x1C, delay d@+0x24, **seq d@+0x18 — the DUAL field the
+engine splits** (§7j.44: E keeps the LRU-eviction role as its
+global staging counter `debris_seq`, the walk-cursor role as
+`anim`): the projection carries the raw guest +0x18; its value
+diverges from E's counter BY CONSTRUCTION and stays silent only
+because the row is T3 (never bit-compared) — if the row is ever
+re-tiered, this offset pair is the known encoding difference
+(recorded in the arm's doc comment + the §6a table). splash-records
+(T3): the 250×0xA bank → identity, count synthesized from the fixed
+bank. critter-bank/effect-rows `count` join the STRUCTURAL count
+words (a count mismatch is a staging divergence, never a T2/T3
+budget item). The O2 alias list takes all four — the maps were
+pinned EXW-side (§7j.11/§7j.24-5/§7j.17/§7j.10) and §5i closed the
+EXD twins, so the guest-span projections are shared. **dropship-frame
+stays the one E-only T3 row** (D162 pinned 0x1081c4 and the plan
+emits it, but the O1 normalizer arm — the full-record identity
+form, its canonical record IS the guest 0x1C craft record
+field-for-field — is its own named follow-up; the differ.rs/
+canonical.rs comments now state exactly that). (2) **THE TEST
+FLIP** (51ba11a): the differ_gate `inv_frame` E-only `continue`
+arms for the quartet drop, replaced by the guest-span fabrications
+(each canonical field placed back at its guest offset; presence/
+countdown narrow word↔i32 at the word; the debris table INDEX
+zero-extends into the +0x2C pointer word — E models the index, not
+the pointer). expect_coverage re-derived: S4 3→1, S7 3→1, S8 3→1,
+S6 stays 1+1 (dropship); the S4/S7 destroy set + the S8 critter/
+effect/projectile set now assert COMPARE-CLEAN (no findings at
+all). NO canonical chain moved (the emitter edits are comment-only
+— the E-side bytes are untouched, verified by the 13/13
+canonical_dump_gate + the pinned-chain asserts inside differ_gate).
+(3) **VERIFIED**: diffharness 101/101, differ_gate 4/4 (110 s),
+canonical_dump_gate 13/13, bedlam-game release 232/0, fmt + clippy
+clean on both crates, MANIFEST clean before AND after (no corpus
+read, no Ghidra run). The unrelated O1-boot WIP (dbx-plan.rs,
+capgen, harness, RUNTIME/RE-EXW-SIM docs, capture-plan deltas)
+preserved untouched — this unit staged only its own five paths.
+Queued: `dropship-identity-arm` as the new item 1. (worker
+bb808d77 claim 1)
