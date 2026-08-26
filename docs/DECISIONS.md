@@ -5221,3 +5221,38 @@ capgen, harness, RUNTIME/RE-EXW-SIM docs, capture-plan deltas)
 preserved untouched — this unit staged only its own five paths.
 Queued: `dropship-identity-arm` as the new item 1. (worker
 bb808d77 claim 1)
+
+## D164 — 2026-08-26: P4.2/W-followup `dropship-identity-arm` — the dropship-frame full-record IDENTITY O1 arm LANDED: the LAST E-only T3 row goes cross-channel; zero E-only T3 rows remain
+**Status:** LANDED (commit 6d4ea58, worker f2e721b3 claim 1).
+**Provenance:** §7j.40/6 (the craft-record decode, D112); D162
+§5i (the EXD twin 0x1081c4); DESIGN-DIFFHARNESS §6a (the D163
+subset-arm table named the identity form as its own follow-up).
+[verified] **(1) THE FORM:** unlike the D162 quartet, the
+dropship row is NOT subset-form — E's canonical 0x1C craft record
+IS the guest record FIELD-FOR-FIELD (active u32@+0, phase@+4,
+x@+8, y@+0xC, alt@+0x10, group@+0x14, dwell@+0x18 — EXW 0x4e6610 /
+EXD 0x1081c4, plan len 28), so no projection is needed: the O1 arm
+(`normalize_o1_row`) delegates to the E-side field walk verbatim
+(`normalize_engine_row` — the tile-word-grid/platform-strength
+identity precedent). The O2 alias list takes the row (same
+layout, EXW-pinned), so O3 (which normalizes through O2) takes it
+too — a real O2/O3 capture compares it cross-channel as-is. **(2)
+THE TEST FLIP** (differ_gate): the `inv_frame` `dropship-frame`
+E-only `continue` arm DROPS — the row fabricates identity through
+the scalar catch-all (`w.bytes.clone()`), exactly the D132
+blink-cursor precedent; expect_coverage S6 1+1 → 1; the S6 lane
+gains a COMPARE-CLEAN assert on the row (no findings at all: row-
+or field-level). The stale E-only comments in differ.rs +
+canonical.rs close (the emitter edit is comment-only — ZERO
+canonical chain movement, re-asserted 13/13 canonical_dump_gate +
+the pinned chains inside differ_gate). **(3) CONSEQUENCE:**
+move-target-words is now the ONLY E-only row (row- or field-level)
+on every scenario S0..S8 — the T3 tier is alias-complete and
+cross-channel end-to-end. **(4) VERIFIED:** diffharness suite all
+green, differ_gate 4/4 (110 s), canonical_dump_gate 13/13,
+bedlam-game release 232/0, fmt clean + clippy clean on both
+crates (bedlam-game + diffharness), MANIFEST clean (no corpus
+write, no Ghidra run). The unrelated O1-boot WIP (dbx-plan.rs,
+capgen, harness, RUNTIME/RE-EXW-SIM docs, capture-plan deltas)
+preserved untouched — this unit staged only its own four paths.
+(worker f2e721b3 claim 1)
