@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D167 `exd-menu-reset-census` COMPLETE (worker
+    e2dded59 claim 1, commit fdbe8ec, PUSHED): the §7j.66 open
+    residue closed — the EXD counter-twin [0x1195f0] whole-objdump
+    census returns the EXW D156 form split INSTRUCTION-FORM-EXACT
+    (53 refs: 13 INC + 1 register-form tail 0x5a6f0-fd + 8
+    zero-writes + 31 reads). All eight resets inside the EXD
+    DEBRIEF twin 0x5638d (called from GameMain @0x2cf3f, the
+    0x41c610 twin), bound sequence 200/100/300/200/100/100/300/200
+    identical, present-then-inc; the five cumulative menus
+    (0x4d212/0x4f6b4/0x4f6fc/0x4fc17/0x5148b) inc-then-present.
+    TWIN CENSUS HOLDS ordinally; C₀ consequence NONE — the §7j.66/D
+    model carries to EXD verbatim. RE-EXD-MAP §2b + §7j.66
+    addendum + DIFFHARNESS frame-counter row amended + D167 +
+    differential test extended (7/7; workspace green; fmt+clippy
+    clean; MANIFEST clean pre+post). Phase unchanged: P4.2
+    unattended build order COMPLETE; the S0 live session
+    (interactive-gated) remains the P4 closure gate. Queued:
+    `exd-menu-fn-attribution` (item 1 — the D167 residue) + item 2.
+
   - 2026-08-26 D166 `fe93-stride-alias-census` COMPLETE (worker
     690e3606 claim 1, commit 227054f, PUSHED, docs-only): the
     "160-B stride at 0x4c69e4" question closed FOR GOOD — the

@@ -5,26 +5,29 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/RE-objdump] `exd-menu-reset-census` — close the §7j.66/D
-   open residue: the EXD menu-screen COUNTER-RESET family (the
-   EXW twin of the D156 "eight bounded cinematic screens reset
-   the counter / five interactive menu screens count
-   cumulatively" census). The 7j.66 blocker note "no EXD
-   whole-text objdump exists" is STALE — ghidra-project/
-   exd-text-objdump.txt has existed since 2026-08-23 (D162 used
-   it). Bounded objdump-only unit (NO Ghidra launch — check
-   `pgrep -f analyzeHeadless` first anyway; matches may be false
-   positives from your own prompt text): (a) census the EXD
-   menu/cinematic screen functions for the counter cell's reset
-   sites (xor+mov/stores — the INC-only census trap D156/
-   RE-EXD-MAP §2 documents; the EXD counter cell twin must be
-   pinned first from the mission-tail twin 0x5a6eb/0x5a6f0-fd,
-   §2); (b) classify each screen: reset-vs-cumulative, matching
-   the EXW eight-reset/five-cumulative split; (c) verdict: the
-   twin census holds ordinally (expected) OR diverges (document
-   the exact screens + the C₀-consequence for S0W anchors);
-   (d) land the §7j.66 addendum + ledger row if new + D-entry.
-   MANIFEST before AND after; emit interim notes early.
+1. [P4/RE-objdump] `exd-menu-fn-attribution` — the one residue the
+   D167 exd-menu-reset-census left open (RE-EXD-MAP §2b/C): the
+   per-FUNCTION attribution of the five EXD cumulative menu INC
+   sites 0x4d212/0x4f6b4/0x4f6fc/0x4fc17/0x5148b to the EXD
+   OPTIONS/BRIEF/SELECT twins (EXW split 1/3/1: OPTIONS 0x43afa0,
+   BRIEF 0x43d4f7/0x43d53f/0x43da5a, SELECT 0x43f31f). Bounded
+   objdump-only unit, NO Ghidra launch (b2-functions.txt is NOT
+   usable — B2's layout drifts from EXD in this region, §2b/B):
+   (a) derive EXD function boundaries around 0x4c000..0x52000 by
+   prologue/ret/`call`-target scans of ghidra-project/
+   exd-text-objdump.txt (Watcom `push ebp`-style entries + padding
+   gaps), triangulating with the EXW twins' call shapes (menu
+   screens are called from the EXD GameMain/menu-walk driver —
+   find the call sites in the 0x2c000-0x2d500 GameMain region and
+   work inward); (b) name each of the five INC sites' containing
+   function via TWO anchors per the §3 method (music-basename
+   strings, draw-helper call shapes, the 0x4e9a8/0x111fa draw
+   families); (c) verify the 1/3/1 per-screen split holds in EXD
+   or document the divergence; (d) land the §2b/C amendment +
+   D-entry (no new ledger row expected). MANIFEST before AND
+   after; emit interim notes early. Keep it bounded: if the
+   boundary derivation needs >~2h of scan work, land the GameMain
+   call-site census alone as the deliverable and requeue the rest.
 2. [INTERACTIVE-gated — SKIP when unattended; needs desktop +
    operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
    live capture vs the E canonical chains + the DH-G1 double-run
@@ -36,7 +39,26 @@ renumbered queue keeps every open item claimable by number).
    workers: do NOT attempt this item — select item 1 instead.
 
 ## Done
-1. DONE (2026-08-26, worker 690e3606 claim 1, commit 227054f,
+1. DONE (2026-08-26, worker e2dded59 claim 1, commit fdbe8ec,
+   PUSHED): P4/RE-objdump `exd-menu-reset-census` — the §7j.66 open
+   residue CLOSED (D167, RE-EXD-MAP §2b + the §7j.66 addendum). The
+   EXD whole-text objdump census of the counter twin [0x1195f0]
+   returns the EXW form split INSTRUCTION-FORM-EXACT: 53 references
+   (13 INC-form — 8 cinematic-loop + 5 menu; 1 register-form mission
+   tail 0x5a6f0-fd re-verified; 8 zero-writes; 31 reads); the eight
+   reset sites all inside the EXD DEBRIEF twin (entry 0x5638d,
+   called from GameMain @0x2cf3f — the 0x41c610 twin) with the
+   IDENTICAL bound sequence 200/100/300/200/100/100/300/200,
+   present-then-inc; the five cumulative menus
+   (0x4d212/0x4f6b4/0x4f6fc/0x4fc17/0x5148b) inc-then-present. Sole
+   divergences: 2/8 xor registers (regalloc), rider-call pattern,
+   site-7 sibling store [0x119600] — all immaterial. VERDICT: the
+   twin census holds ordinally; C₀ consequence NONE (the §7j.66/D
+   model carries to EXD verbatim). DESIGN-DIFFHARNESS frame-counter
+   row amended (no new row); differential test extended (7/7 green,
+   fmt+clippy clean, workspace green); MANIFEST clean before/after.
+   Residue queued: item 1 exd-menu-fn-attribution.
+2. DONE (2026-08-26, worker 690e3606 claim 1, commit 227054f,
    PUSHED): P4/RE-objdump `fe93-stride-alias-census` — the
    "160-B stride at 0x4c69e4" question CLOSED FOR GOOD (D166,
    §7j.13 amendment + §7j.25 item 7 addendum). QUEUE HYGIENE
@@ -3371,3 +3393,13 @@ renumbered queue keeps every open item claimable by number).
    76, fmt+clippy clean, MANIFEST.sha256 clean post-run. Queued
    next: item 2 = the differ_gate O2 tiebreak fabrication (the
    W7/D87 arbitration path has no gate coverage).
+- 2026-08-26: P4/RE-objdump exd-menu-reset-census COMPLETE (worker
+  e2dded59 claim 1, commit fdbe8ec, PUSHED; D167). The §7j.66 EXD
+  twin census CLOSED: 53/53 [0x1195f0] references with the EXW form
+  split exact (13 INC + 1 register tail + 8 zero-writes + 31 reads);
+  eight DEBRIEF-twin resets (0x5638d, GameMain call 0x2cf3f) with
+  the identical bound sequence 200/100/300/200/100/100/300/200;
+  five cumulative menu INCs inc-then-present. Twin census HOLDS
+  instruction-form-exact; C₀ consequence NONE. RE-EXD-MAP §2b +
+  §7j.66 addendum + DIFFHARNESS row amend + test extension (7/7).
+  Follow-up queued: exd-menu-fn-attribution (item 1).
