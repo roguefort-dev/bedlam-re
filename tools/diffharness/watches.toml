@@ -39,7 +39,7 @@ layout = "frame-tail dump point: after the last state writer, before the flip (E
 exd_status = "verified"
 anchor_doc = "RE-EXD-MAP"
 anchor = "2. EXD present/frame-tail site (the S0 dump trigger) — PINNED"
-note = "EXW call-site pin 0x4486c9 RESOLVED (7j.66, D156 — was a W11 deferral). exw_addr keeps the PresentEnd function entry 0x425a03 as the canon-of-record (plan-neutral); the W11 O2 plan regen moves trigger.site 0x00425A03 -> 0x004486C9."
+note = "EXW call-site pin 0x4486c9 RESOLVED (7j.66, D156 — was a W11 deferral). exw_addr keeps the PresentEnd function entry 0x425a03 as the canon-of-record (plan-neutral); the O2 emitter pins trigger.site = 0x004486C9 (O2_TRIGGER_SITE in dbx-plan.rs, LANDED D171 - S1-o2 regenerated)."
 
 # ----------------------------------------------------------------- T0 frame
 

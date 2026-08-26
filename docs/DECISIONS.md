@@ -5491,3 +5491,68 @@ watches.toml/dbx-plan row references any of these cells).
 Deliverables: RE-EXD-MAP §5j (the §5g-bis-style addendum) + the
 RE-EXW-MUSIC §1 cross-ref + this entry. Residue: NONE — the D168
 queue item fully discharged. (worker 829d719c claim 1)
+
+## D171 — 2026-08-26: P4/gate `p4-trigger-contract` — the O2 operational trigger pinned at the emitter: S1-o2 regenerated with `trigger.site = 0x004486C9` (callee `0x00425A03` + EXD `0x0005A6EB` preserved) + the D161 companion-id/count-seed plumbing the locked gates required
+
+NUMBERING: D170 is reserved by the controller's 878c03f STATE.md
+"P4 closure scope corrected" note (no DECISIONS entry written); this
+entry takes D171 to avoid contradicting committed controller
+numbering. The adopted predecessor WIP's two "D170" strings
+(watches.toml note, dbx-plan test comment) were corrected to D171.
+
+THE CONTRACT (gate p4-trigger-address; D156, RE-EXW-SIM §7j.66/W11):
+the O2 plan's ptrace trigger must be the MissionShell NORMAL-path
+PresentEnd CALL SITE 0x4486c9, not the callee entry — PresentEnd
+FUN_00425a03 has ~62 direct call sites (the D156 Ghidra reference
+census, pinned as constant 62 by static_frame_counter_differential;
+an independent exw-text-objdump.txt call-ENCODING count returns 61 —
+a method nuance, immaterial: both ≫ 1, so the entry fires on every
+menu/loading/cinematic present and is not a frame-tail trigger).
+Anchor re-verified this unit, byte-exact at exw-text-objdump.txt:75966:
+`4486c9: e8 35 d3 fd ff  call 0x425a03` with the counter read+inc
+immediately after (0x4486ce `mov ebp,ds:0x46ae68`; `inc ebp` — the
+pre-increment dump ordering, D156). LANDED: `O2_TRIGGER_SITE: u64 =
+0x4486c9` const in dbx-plan.rs (an instruction call site has no
+registry cell home, so the operational site is pinned at the
+EMITTER); S1-o2.json regenerated (trigger + _comment; emitter
+determinism proven byte-identical by smoke step (f)); watches.toml
+s0-trigger note records the landing. PRESERVED: the registry row's
+exw_addr = 0x425a03 (callee canon-of-record) and exd_addr = 0x5a6eb
+(the EXD dump-point twin) — all four facts locked by the exact-text
+gate tools/check-p4-trigger-contract.py.
+
+ENABLING PLUMBING (why the unit is larger than one line): the locked
+capgen smoke drives the committed S1-o2 plan end-to-end, and its rows
+(landed D161/D162) already carry companion-span ids
+(`static-yline-zbase#zbase`) and count-symbol spans
+(`$critter_count*0x7E`, `$poi_count*0x1E`) the dump/stitch/differ
+chain had never learned. Taught: (1) `dump::companion_base()` — the
+D161 `<base>#<key>` convention (registry ids never contain `#`);
+`canonicalize_frame` binds companions to the BASE row's position via
+tuple key (companion sorts after base, transcript-order independent;
+an unknown base still refuses loudly — anti-ghost); (2) stitch
+(runner.rs) binds `<base>#<key>` watch rows to the BASE registry row
+so tier + channel address checks apply to the row the span derives
+from (full id kept in the dump); (3) the differ's tier_of/seam_of
+fall back to the base row; (4) capgen-o2.py seeds `_count`-suffixed
+resolve cells with COUNT_SEED=4 (a fabricated POINTER value explodes
+count*stride span lengths — the name convention is the load-bearing
+dbx-plan resolve symbol) and raises the sanity ceiling 0x100000 →
+0x400000 (static-bin-terrain's 0x258960 boot-pass arena legitimately
+exceeds 1 MiB; 4 MiB keeps anti-ghost headroom above every pinned
+extent). New tests: canonicalize_binds_companion_spans_to_the_base_
+row_order, stitch_accepts_companion_span_ids.
+
+GATES: the three locked gate commands GREEN — dbx-plan 35/35; capgen
+smoke ALL GREEN (incl. determinism re-emit + manifest); exact-text
+check-p4-trigger-contract.py. ZERO CANONICAL-CHAIN MOVEMENT proven
+(canonicalize_frame + differ lookups touched): canonical_dump_gate
+13 + differ_gate 4 + static_frame_counter_differential 7; full
+workspace 736 passed / 0 failed; fmt clean; clippy 0 warnings;
+MANIFEST clean before AND after (no corpus read).
+
+WIP ADOPTION: the unit adopted interrupted same-slot predecessor WIP
+(session ebca31ce, died between the locked gates and the corpus
+gates); git status/diff recorded to .state/scratch/eb9917a1/, all of
+it preserved, only the two D170→D171 strings corrected. (worker
+eb9917a1 claim 1)

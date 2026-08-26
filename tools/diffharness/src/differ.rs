@@ -2313,6 +2313,14 @@ pub fn run_diff(
     let tier_of = |id: &str| -> String {
         reg.iter()
             .find(|r| r.id == id)
+            .or_else(|| {
+                // D161 companion spans: "<base>#<key>" tiers as its
+                // base row (the derived span is the same row's data).
+                let base = crate::dump::companion_base(id);
+                (base != id)
+                    .then(|| reg.iter().find(|r| r.id == base))
+                    .flatten()
+            })
             .map(|r| r.tier.clone())
             .unwrap_or_default()
     };
@@ -2341,6 +2349,12 @@ pub fn run_diff(
         let exw = reg
             .iter()
             .find(|r| r.id == id)
+            .or_else(|| {
+                let base = crate::dump::companion_base(id);
+                (base != id)
+                    .then(|| reg.iter().find(|r| r.id == base))
+                    .flatten()
+            })
             .map(|r| r.exw_addr.as_str())
             .unwrap_or("");
         o3_seam_reason(id, exw)

@@ -387,6 +387,22 @@ pub fn chain_digest(frame_digests: &[DumpDigest]) -> DumpDigest {
     DumpDigest(h.finish())
 }
 
+/// The registry row a transcript/dump watch id binds to (D161
+/// companion spans): a derived multi-table row id is `<base>#<key>`
+/// (e.g. `static-yline-zbase#zbase` — the z-base plane table, the
+/// second span of the y-line row whose channel-different table gaps
+/// make a single span impossible, §7j.69); every other id is its own
+/// base. Registry ids never contain `#`, so the split is unambiguous;
+/// an unknown base still fails the caller's registry lookup loudly
+/// (the capture plan is the id authority — the suffix key itself is
+/// not re-validated here).
+pub fn companion_base(id: &str) -> &str {
+    match id.split_once('#') {
+        Some((base, _)) => base,
+        None => id,
+    }
+}
+
 /// Sort a frame's watches into the committed registry's file order (the
 /// canonical order), rejecting ids the registry does not know and
 /// duplicate ids. Stable: equal elements never were equal.
@@ -400,16 +416,26 @@ pub fn canonicalize_frame(frame: &mut FrameRecord, reg: &[Watch]) -> Result<(), 
             });
         }
     }
-    let index_of = |id: &str| -> Option<usize> { reg.iter().position(|w| w.id == id) };
+    // Companion ids (D161 `<base>#<key>`) take their BASE row's
+    // position and sort after it (tuple key), so the canonical order
+    // is transcript-order independent for the derived spans.
+    let index_of = |id: &str| -> Option<usize> {
+        reg.iter()
+            .position(|w| w.id == id)
+            .or_else(|| reg.iter().position(|w| w.id == companion_base(id)))
+    };
     // Reject unknowns BEFORE sorting so the error names the offender.
     for w in &frame.watches {
         if index_of(&w.id).is_none() {
             return Err(DumpError::UnknownWatchId(w.id.clone()));
         }
     }
-    frame
-        .watches
-        .sort_by_key(|w| index_of(&w.id).expect("checked above"));
+    frame.watches.sort_by_key(|w| {
+        (
+            index_of(&w.id).expect("checked above"),
+            companion_base(&w.id) != w.id,
+        )
+    });
     Ok(())
 }
 
@@ -677,5 +703,39 @@ mod tests {
         canonical_frame_bytes(&f, &mut buf).unwrap();
         assert_eq!(&buf[..4], b"BDLD");
         assert_eq!(frame_digest(&f).unwrap().0, fnv1a64(&buf));
+    }
+
+    #[test]
+    fn canonicalize_binds_companion_spans_to_the_base_row_order() {
+        // D161: "<base>#<key>" ids take the BASE row's canonical
+        // position, sorted after the base regardless of transcript
+        // order; an unknown base still refuses loudly.
+        let reg = crate::registry();
+        let mut f = FrameRecord::new(1, false);
+        f.push_watch("static-yline-zbase#zbase", [0u8; 32]);
+        f.push_watch("frame-counter", 7u32.to_le_bytes());
+        f.push_watch("static-yline-zbase", [1u8; 4]);
+        canonicalize_frame(&mut f, &reg).unwrap();
+        let ids: Vec<&str> = f.watches.iter().map(|w| w.id.as_str()).collect();
+        let base = ids.iter().position(|i| *i == "static-yline-zbase").unwrap();
+        // registry order: frame-counter (T0) before the TS rows
+        assert_eq!(ids[0], "frame-counter");
+        assert_eq!(ids[base + 1], "static-yline-zbase#zbase");
+
+        // reversed companion/base input order canonicalizes identically
+        let mut g = FrameRecord::new(1, false);
+        g.push_watch("static-yline-zbase", [1u8; 4]);
+        g.push_watch("static-yline-zbase#zbase", [0u8; 32]);
+        g.push_watch("frame-counter", 7u32.to_le_bytes());
+        canonicalize_frame(&mut g, &reg).unwrap();
+        assert_eq!(f.watches, g.watches);
+
+        // unknown base: rejected
+        let mut h = FrameRecord::new(1, false);
+        h.push_watch("not-a-row#zbase", [0u8; 32]);
+        assert!(matches!(
+            canonicalize_frame(&mut h, &reg),
+            Err(DumpError::UnknownWatchId(_))
+        ));
     }
 }

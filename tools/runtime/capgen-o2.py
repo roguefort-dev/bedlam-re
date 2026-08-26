@@ -128,7 +128,12 @@ def o2_len(field, symbols):
     n = resolve_expr(field, symbols)
     if not isinstance(n, int) or n <= 0:
         raise ValueError(f"watch length must be positive: {field!r}")
-    if n > 0x100000:
+    # Sanity ceiling only (anti-corruption): the largest legitimately
+    # pinned plan span is static-bin-terrain's boot-pass arena
+    # 0x258960 (D161, RE-EXW-SIM sec 7j.69 — the GENERAL.BIN-family
+    # zone bank; cgr-volume 0x20562 is second). Cap = 4 MiB, above
+    # every pinned extent with anti-ghost headroom.
+    if n > 0x400000:
         raise ValueError(f"watch length too large ({n:#x})")
     return n
 
@@ -535,6 +540,7 @@ class Synth:
     TRT_COUNT = 4
     OBJ_COUNT = 2000
     FC_ANCHOR = 0x1E0
+    COUNT_SEED = 4
 
     def __init__(self, plan):
         self.plan = plan
@@ -553,7 +559,15 @@ class Synth:
                 v = self.ROBOT_COUNT
             elif r["name"] == "trt_count":
                 v = self.TRT_COUNT
-            else:  # obj/tot/dat/claim pointers: fabricated flat values
+            elif r["name"].endswith("_count"):
+                # The D162 count symbols (critter_count/poi_count —
+                # the CountExpr bank prefixes) and any future count
+                # cell: a small seed keeps every count*stride span
+                # walkable (a fabricated POINTER value here would
+                # explode the span length; the name convention is
+                # load-bearing, dbx-plan resolve symbols).
+                v = self.COUNT_SEED
+            else:  # obj/tot/dat/claim/cgr/bin/min pointers: fabricated flat values
                 v = 0x07000000 + 0x10000 * n_ptr
                 n_ptr += 1
             self.pinned_cells[a] = v.to_bytes(4, "little")

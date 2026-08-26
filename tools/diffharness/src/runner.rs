@@ -1147,6 +1147,16 @@ pub fn stitch(
             let row = reg
                 .iter()
                 .find(|r| r.id == w.id)
+                .or_else(|| {
+                    // D161 companion-span ids ("<base>#<key>", e.g.
+                    // static-yline-zbase#zbase) bind to their BASE
+                    // registry row: the tier + channel address checks
+                    // below apply to the row the span derives from.
+                    let base = dump::companion_base(&w.id);
+                    (base != w.id.as_str())
+                        .then(|| reg.iter().find(|r| r.id == base))
+                        .flatten()
+                })
                 .ok_or_else(|| StitchError::UnknownWatch(w.id.clone()))?;
             if !scenario.tiers.contains(&row.tier) {
                 return Err(StitchError::TierOutOfScenario {
@@ -1490,6 +1500,46 @@ mod tests {
         let dec = dump::decode_dump(&a.bytes).unwrap();
         assert_eq!(dec.frames.len(), 3);
         assert_eq!(dec.header.scenario, "S0");
+    }
+
+    #[test]
+    fn stitch_accepts_companion_span_ids() {
+        // D161: a multi-table row's derived span rides the transcript
+        // as "<base>#<key>" (static-yline-zbase#zbase, the 32-B z-base
+        // plane table) — stitch binds it to the BASE registry row
+        // (tier + channel rules), keeping the full id in the dump. An
+        // unknown BASE still refuses loudly (anti-ghost).
+        let s = Scenario::parse(SCEN).unwrap();
+        let r = reg();
+        let cap = "DBXCAP v1\n\
+                   frame 100\n\
+                   watch frame-counter 64000000\n\
+                   watch static-yline-zbase#zbase 0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20\n\
+                   frame 101\n\
+                   watch frame-counter 65000000\n\
+                   frame 102\n\
+                   watch frame-counter 66000000\n";
+        let t = Transcript::parse(cap).unwrap();
+        let hdr = DumpHeader::new(Channel::O1ExdDosboxX, [0; 32], "S0");
+        let stitched = stitch(&s, &t, &hdr, &r).unwrap();
+        let dec = dump::decode_dump(&stitched.bytes).unwrap();
+        assert_eq!(
+            dec.frames[0].watch("static-yline-zbase#zbase"),
+            Some(
+                &[
+                    1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+                ][..]
+            )
+        );
+
+        // unknown base: refused (the suffix never invents a row)
+        let bad = "DBXCAP v1\nframe 100\nwatch not-a-row#zbase 00\nframe 101\nwatch frame-counter 00\nframe 102\nwatch frame-counter 00\n";
+        let tb = Transcript::parse(bad).unwrap();
+        assert!(matches!(
+            stitch(&s, &tb, &hdr, &r),
+            Err(StitchError::UnknownWatch(_))
+        ));
     }
 
     #[test]

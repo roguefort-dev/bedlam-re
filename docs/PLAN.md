@@ -192,9 +192,11 @@ tests, committed S0-S8 scenario/capture-plan corpus checks, and the
 `differ_gate` plumbing tests enumerated in `docs/required-gates.toml`. Live
 O1/O2/O3 captures, S0W menu calibration, cycles/audio checks, hardware checks,
 and perceptual review are excluded diagnostics, not P4 closure gates or queued
-work. D145-D164 closed the semantic and timing dispositions; the only remaining
-original-side contract correction is the EXW operational trigger at
-`0x004486C9` (callee/canon `0x00425A03`, EXD `0x0005A6EB`). P4 completion emits
+work. D145-D164 closed the semantic and timing dispositions, and the sole
+original-side contract correction LANDED 2026-08-26 (D171): the O2 emitter pins
+the operational trigger at `0x004486C9` (callee/canon `0x00425A03`, EXD
+`0x0005A6EB`; S1-o2 regenerated; the exact-text gate
+`tools/check-p4-trigger-contract.py` locks it). P4 completion emits
 only the HEAD/manifest-bound `.state/P4-COMPLETE`;
 global completion additionally requires every P0-P7 phase gate.
 
