@@ -68,6 +68,14 @@ Chain (SFX path shown for completeness):
   literal ".MRW" @00457a21), same shape; its caller is downstream of load_midi
   (tail call `FUN_0044c2cc(base, song)`, not yet decompiled - next unit).
 
+  EXD twins (D169, 2026-08-26): the whole chain is ported verbatim —
+  load_midi 0x1405f / MusicStart 0x13e04 / MusicStop 0x13f1e /
+  wipe 0x1401a / free-voices 0x4c7a5 / load_mrs 0x14409 /
+  load_mrw+mrw_load MERGED into 0x14254 / MrsNextEvent 0x138aa /
+  LoadFile 0x2d57c / ArenaAlloc 0x2e4b2, with all bank-cell aliases,
+  the five load/START call-site twins (every song slot 3) and the
+  census divergences tabulated in RE-EXD-MAP §5j.
+
 Globals set by load_midi (matches 8street names, now EXW-anchored):
 - DAT_0045cdd0 = raw .MRS file base (arena ptr)
 - 0045cce0+2*song = midi_arr[song]    = file word0 = W0 (chunk count)

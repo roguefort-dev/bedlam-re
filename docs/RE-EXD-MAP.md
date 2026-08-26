@@ -875,6 +875,118 @@ fabrication (the D87 field-map class) — a FOLLOW-UP unit, tracked as
 the next queue item. The DESIGN S6/S8 "E-only (no EXD alias)" notes
 are amended in place.
 
+### 5j. The music-LOADER chain twins (D169, 2026-08-26, [verified] objdump-only + binary string read)
+
+The D168 residue: the EXD music-LOADER chain vs the EXW RE-EXW-MUSIC
+§1 chain. Bounded objdump-only unit (NO Ghidra launch); substrate
+ghidra-project/exd-text-objdump.txt + exw-text-objdump.txt, plus a
+read-only LE-header image→file map of BEDLAM.EXD (obj2 page map:
+page 105 base pins image 0x850a3 = the probe-1 "C:\MIRAGE\BEDLAM\
+OPTIONS.BDL" literal, giving image 0x85050 content-verified as
+`".MRW\0.MRS\0"`). QUEUE CORRECTION: the D168 residue note named the
+literals at image "0x95055/0x95050" — the actual image addresses are
+**0x85055 (".MRS") / 0x85050 (".MRW")**, exactly the two `mov esi,`
+immediates in the loaders.
+
+**A. THE FUNCTION TWINS** (each ≥2 anchors: instruction-exact head,
+call shapes, literal refs, the slot-3 constant):
+
+| EXW | EXD | identity | anchors |
+|---|---|---|---|
+| FUN_00403642 (gate 0x40364d) | **0x1405f** | **load_midi(base, song)** | head near-instruction-exact through the whole prefix (sole encoding variant: the strlen tail's `mov dl,[edx]; and edx,0xff` ⟷ `cmp [edx],0` — same loop): prologue/push-eax/`mov edi,edx`; gates `[0x4ede58]`⟷`[0x10743c]` ∧ `[0x4ede5c]`⟷`[0x107444]`; `mov eax,3; call MusicStop`; free-voices; wipe; loop-flag word store `[eax*2+0x45cdc0]`⟷`[eax*2+0x87730]`; strlen; `mov edx,&filebase; mov eax,base; call load_mrs` (0x45cdd0⟷0x894d0); W0/W1 word stores `[ebx*2+0x45cce0]`⟷`[ebx*2+0x88f18]`, `[0x45cdb8]`⟷`[0x87720]` |
+| FUN_004033d4 (gate 0x4033df) | **0x13e04** | **MusicStart(song)** | FOUR gates in the same order (0x4033df⟷0x13e0f `[0x4ede58]`⟷`[0x10743c]`; 0x4033ec⟷0x13e1c `[0x4edbe0]`⟷`[0x107578]` = the §5g-pinned pair; 0x4033f9⟷0x13e29 `[0x4ede5c]`⟷`[0x107444]`; 0x403406⟷0x13e36 `[0x4ee9b0]≠-1`⟷`[0x107654]≠-1`); loop-flag zero; the `song&3` chunk loop with strides 0x2f8/0x26, four -1 fills + position-counter zero + per-chunk MrsNextEvent-init; play flag `[eax*2+0x45b010]:=1`⟷`[eax*2+0x80338]:=1` |
+| FUN_004034ef (gate 0x4034fa) | **0x13f1e** | **MusicStop(song)** | three gates (master/music/sound-on, no hardware gate); play-flag test-then-clear; per-chunk loop releasing the 4 sub-voice slots (id≠-1 → release twin 0x143c7, then -1) over the same 0x2f8/0x26 strides; DOS mixer-stop tail `call 0x36966` |
+| FUN_004035f5 | **0x1401a** | voice-table wipe | triple loop 8 songs × 0x14 chunks × 4 sub-voices storing -1 at `[song*0x2f8+chunk*0x26+sub*4+0x45b020]`⟷`+0x87758` — shape-identical |
+| FUN_0043a48d | **0x4c7a5** | free voices | called at the load_midi head both sides (0x403671⟷0x1408e); EXW 4 callers / EXD 3 (see census D) |
+| FUN_00403827 | **0x14409** | **load_mrs(base, &filebase)** | head INSTRUCTION-EXACT: the repnz-scas strcat of the basename then the literal `mov esi,0x457a1c`⟷`mov esi,0x85055` (".MRS"); open(2) → double size-probe → ArenaAlloc → `*dest:=ptr` → close → LoadFile-whole → return size |
+| FUN_004038c6 + FUN_0044c2cc | **0x14254** (MERGED) | **load_mrw + mrw_load** | same strcat idiom with `mov esi,0x457a21`⟷`mov esi,0x85050` (".MRW"); u16 n_inst + n×{u32 off, u32 size} reads; per-instrument wave staging. EXW splits load_mrw(0x4038c6) from the DS-voice half (0x44c2cc, called at load_midi tail 0x4037d9); EXD merges both into ONE callee of the 0x1405f tail (0x141ee ⟷ 0x4037d9) |
+| FUN_00402e74 | **0x138aa** | MrsNextEvent(song, chan) | 4⟷4 callers (pump region ×3 + MusicStart); calls the twin delta-word reader (EXW inline / EXD 0x13ff4 → 0x13fc0 two-byte LE read); stores the new delta to chunk state +0x18 (0x45b038 ⟷ 0x87770); the `cmp dx,0x7531` = the >30000 backward-reposition constant VERBATIM |
+| FUN_004032a5 | (pump-internal) | MrsChunkStart | EXD callers 0x13d80/0x13da8 sit in the EXD pump twin (entry 0x13cd2, gates `[0x107654]≠-1`, `and al,3` — the §5g "gated pump" fact) |
+| FUN_0041cc7f LoadFile | **0x2d57c** (+family) | DOS file layer | 0x2d65a=DOSOpen (install-dir prefix [0x9237c] + mode literal "r+b"@0x85627, probe FUN_0005f23f → handle cell [0x1076ac]); 0x2d5c8=DOSRead(buf,len); 0x2d62b=seek/tell size-probe; 0x2d60c=DOSClose; 0x2d57c=open→seek-END→size→rewind→read-whole→close |
+| FUN_0041db89 ArenaAlloc | **0x2e4b2** | main arena bump | bump cell [0x1195c4], cap [0x1194fc]+[0x1195b4]-8, fatal "ERROR: Not enough memory!"@0x86270 via 0x5ef05 + exit(1) |
+| (DirectSound CreateSoundBuffer 0x44c64c: WAVEFORMATEX 11025/8/1) | **0x14254's wave-record stomp** | voice creation | per-instrument record: WaveAlloc 0x2e4fe (sound-arena bump [0x107698], cap [0x107668]+0x4ffe0, fatal "…base memory!"@0x8628a), data at +0xF0, size@+0xC, **rate 0x2B11@+0x34, 8-bit@+0x38, 1-channel@+0x3C** — the 11025 Hz 8-bit mono constants VERBATIM; voice table [0x11a6c0+4·i] (EXW 0x4ef4e0 family) |
+
+**B. THE NEW CELL ALIASES pinned by this chain** (bank cells; none
+are S0 watches — loader internals):
+
+| EXW | EXD | meaning |
+|---|---|---|
+| 0x4ee9b0 | **0x107654** | hardware/-1 gate (DS active ⟷ DOS sound driver active) |
+| 0x45cdc0+2·song | **0x87730+2·song** | g_music_loopflag (ONLY writers store 0: MusicStart + load_midi, both channels) |
+| 0x45cdd0 | **0x894d0** | raw .MRS file base (arena ptr) |
+| 0x45cce0+2·song | **0x88f18+2·song** | midi_arr[song] = W0 chunk count |
+| 0x45cdb8+2·song | **0x87720+2·song** | midi_arr_pl1[song] = W1 channel count |
+| 0x45cd88+4·song | **0x88f20+4·song** | table A ptr (per-chunk start-offset) |
+| 0x45cd98+4·song | **0x87738+4·song** | table B ptr (initial tick delay) |
+| 0x45cda8+4·song | **0x87748+4·song** | table C ptr (write-only, dead both channels) |
+| 0x45c7e0+song·0x50+i·4 | **0x89250+song·0x50+i·4** | per-chunk data ptrs |
+| 0x45ca60+song·0x50+i·4 | **0x88f30+song·0x50+i·4** | per-chunk position counters |
+| 0x45cce8+song·0x28+i·2 | **0x891b0+song·0x28+i·2** | per-chunk init state |
+| 0x45b020 (+0x2f8·song+0x26·chunk+4·sub) | **0x87758** (same strides) | sub-voice id table, init -1 |
+| 0x45b010+2·song | **0x80338+2·song** | play flag |
+| 0x457a1c ".MRS" / 0x457a21 ".MRW" | **0x85055 ".MRS" / 0x85050 ".MRW"** | literal pair — same +5 adjacency, ORDER REVERSED (seed 8 below, immaterial) |
+| 0x4e7ed8 (DEBRIEF rider edi) | **0x8da34** | same `mov edi,<cell>` placement after the DEBRIEF start call |
+
+**C. THE LOAD/START CENSUSES (call-site twins, ordinal-identical):**
+
+- **load_midi callers: EXW 5 ⟷ EXD 5**, one per screen, SAME order:
+  0x43a739⟷0x4c944 (OPTIONS), 0x43d42f⟷0x4f5ee (BRIEF),
+  0x43ea3d⟷0x50ba7 (SELECT), 0x440fde⟷0x53175 (SHOP),
+  0x444346⟷0x56477 (DEBRIEF). ALL TEN sites pass **song slot 3**
+  (`mov edx,3` both channels); each passes its OWN basename
+  (EXW 0x459052/0x4591e6/0x459486/0x459550/0x459644 ⟷ EXD
+  0x86b02/0x86c5e/0x86dcc/0x86e46/0x86ec8 = `SOUND\MIDI\{OPTIONS,
+  BRIEF,SELECT,SHOP,DEBRIEF}`). Compiler fingerprints survive
+  verbatim: OPTIONS stops slot 3 immediately before the load
+  (0x43a725-0x43a72f ⟷ 0x4c930-0x4c93a); SELECT carries the SAME
+  leftover `mov edx,0xa` before the START call (0x43ea66 ⟷ 0x50bcc);
+  DEBRIEF the same `mov edi,<cell>` rider (0x444350 ⟷ 0x56481);
+  BRIEF loads then starts back-to-back (0x43d42f→0x43d439 ⟷
+  0x4f5ee→0x4f5f8).
+- **MusicStart callers: EXW 5 ⟷ EXD 6.** The five screens all pass
+  `mov eax,3` (slot 3) — the MusicPump "slot 3 only" fact lands
+  structurally: only slot 3 is ever loaded AND started. The EXD 6th
+  = **0x5b049** (`mov eax,3` after `call 0x4be7d` = the sound init)
+  — the EXD TITLE path, the same EXD-only title caller family the
+  §5g census found for the sound init itself (EXW has only the
+  GameMain boot call).
+- **MusicStop callers: EXW 11 ⟷ EXD 13** — 11 pair one-for-one in
+  the same screen/function order (load_midi head, OPTIONS ×2, BRIEF,
+  SELECT ×2, SHOP, SHOP-family ×2 (0x442c37/0x4437d5 ⟷
+  0x54dd6/0x55926), DEBRIEF, MissionShell 0x447854⟷0x5af39). The two
+  EXD-only sites: **0x30ebd** — inside the shared fatal OOM helper
+  0x30ea3/0x30ea4 that BOTH arena allocators (0x2e4b2/0x2e4fe) call
+  on exhaustion ("Not enough (base) memory!" → stop music → exit):
+  an allocator-coupled stop, not a gameplay site; **0x59825** —
+  inside FUN_000596ed (the EXD MissionShell entry, §1c RNG plant
+  0x596f9), a text-draw + present + stop(3) + free-voices(0x4c121)
+  sequence; EXW MissionShell carries ONE stop. [the what verified;
+  the why — EXD mission-shell audio teardown — medium]
+- **free-voices callers: EXW 4 ⟷ EXD 3** (load_midi head 0x403671⟷
+  0x1408e; GameMain 0x41c3e0⟷0x2cd19; EXW's MissionShell volume-key
+  pair 0x447eeb/0x447f74 has no EXD 0x4c7a5 twins — EXD's third
+  caller is 0x4c121, a free-voices + SFX-reload helper that opens
+  `SOUND\SFX\MIDIGUN.RAW`/`BOOM1.RAW`, itself called from the
+  0x59825 teardown).
+
+**D. VERDICT — the loader chain is a faithful port.** Function
+shapes, gate orders, the whole load_midi prefix, the header-table
+pointer math (tables A/B/C, per-chunk ptrs/counters at the same
+strides), the slot-3 discipline, the five basenames, and the 11025/
+8/1 voice constants are twin-verbatim. Sole divergences: (a) the
+".MRW"/".MRS" literal pair ORDER reversed (same +5 adjacency);
+(b) EXD merges load_mrw+mrw_load into one function and replaces the
+DirectSound voice creation with a DOS wave-record stomp (+0xF0
+header per wave, sound-arena alloc); (c) the census extras above
+(title-path start; the two EXD-only stops); (d) the file layer is
+the DOS INT-21 family vs Win32 LoadFile. NO registry row, NO
+ledger row, NO C₀ consequence (loader internals are not S0 watches;
+nothing in watches.toml/dbx-plan references these cells). RE-EXW-
+MUSIC §1 gains the cross-ref. Residue: NONE — the D168 queue item
+is fully discharged (the pump internals stay where §5g/RE-EXW-MUSIC
+§1 left them; the 0x59825 teardown attribution is [medium] and
+immaterial).
+
 ### 5b. Static-after-load table aliases (DESIGN §4 one-shot dump)
 
 | EXW | EXD | anchor | tag |
@@ -949,6 +1061,10 @@ file is next touched.
 7. **EXD staging cells the EXW build inlines** (§5c): order word
    0x10e15c, command flags 0x11a51a, held-keys counter 0x107534 —
    watch-artifact class, not gameplay divergence.
+8. **".MRW"/".MRS" literal order reversed** (§5j, D169): EXW parks
+   ".MRS"@0x457a1c before ".MRW"@0x457a21; EXD parks ".MRW"@0x85050
+   before ".MRS"@0x85055 — same +5 adjacency both channels, swapped
+   order. Cosmetic (string-pool layout), no code consequence.
 
 ## 8. The W7 normalizer field map (robot record + row forms) — PINNED 2026-08-22, back half added 2026-08-22 (D88)
 

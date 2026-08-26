@@ -5434,3 +5434,60 @@ QUEUED: the EXD music-LOADER chain twins (0x1405f / 0x13e04 / the
 .MRS/.MRW literals 0x95050/0x95055) vs EXW RE-EXW-MUSIC §1.
 Verified: objdump-only, no Ghidra run, no corpus write, MANIFEST
 clean before AND after. (worker 4e41bf00 claim 1)
+
+## D169 — 2026-08-26: P4/RE-objdump `exd-music-loader-census` — the D168 residue CLOSED: the EXD music-LOADER chain decoded whole and proven a FAITHFUL PORT of the EXW RE-EXW-MUSIC §1 chain (docs-only)
+
+The D168-queued residue (the EXD music-loader twins). Bounded
+objdump-only unit (NO Ghidra launch; no corpus write; MANIFEST clean
+before AND after); substrate ghidra-project/exd-text-objdump.txt +
+exw-text-objdump.txt + a read-only LE-header image→file map of
+BEDLAM.EXD (obj2 page 105 anchored on the probe-1 literal 0x850a3,
+content-verifying image 0x85050 = ".MRW\0.MRS\0"). QUEUE CORRECTION:
+the D168 residue note's literal addresses "0x95050/0x95055" were a
+typo — the real image addresses are 0x85050 (".MRW") / 0x85055
+(".MRS"), the two `mov esi` immediates in the loaders (same +5
+adjacency as EXW 0x457a21/0x457a1c but ORDER REVERSED — recorded as
+RE-EXD-MAP §7 seed 8). (1) THE CHAIN DECODED: EXD 0x1405f = load_midi
+(head INSTRUCTION-EXACT twin of FUN_00403642 through the whole
+prefix: the two entry gates [0x10743c]/[0x107444] ⟷ [0x4ede58]/
+[0x4ede5c], stop slot 3, free-voices, wipe, loop-flag store
+[0x87730+2·song] ⟷ [0x45cdc0], strlen, load_mrs call with the file-
+base cell 0x894d0 ⟷ 0x45cdd0, the W0/W1 stores, the tables-A/B/C
+pointer math, the per-chunk data-ptr/position-counter/init-state
+fills at the SAME 0x50/0x28 strides, and the load_mrw tail call);
+0x13e04 = MusicStart (four gates in the EXW order incl. the §5g pair
+0x13e1c⟷0x4033ec and the NEW hardware-cell alias 0x107654⟷0x4ee9b0;
+play flag 0x80338+2·song ⟷ 0x45b010); 0x13f1e = MusicStop; 0x1401a
+= the 8×0x14×4 voice-table wipe; 0x4c7a5 = free voices; 0x14409 =
+load_mrs (scas-strcat twin with ".MRS"@0x85055, open→size-probe→
+ArenaAlloc 0x2e4b2 ⟷ FUN_0041db89→LoadFile-whole 0x2d57c with the
+DOS layer named: open 0x2d65a/read 0x2d5c8/probe 0x2d62b/close
+0x2d60c); 0x14254 = load_mrw+mrw_load MERGED (u16 n_inst + off/size
+record pairs; per-wave record: sound-arena alloc 0x2e4fe, data
++0xF0, size +0xC, rate 0x2B11/8-bit/mono — the DirectSound
+constants VERBATIM); 0x138aa = MrsNextEvent (4⟷4 callers, the
+0x7531 >30000 reposition constant verbatim, delta stored to chunk
+state +0x18 = 0x87770). Fourteen NEW bank-cell aliases pinned
+(§5j/B table — the W0/W1 cells, three table ptrs, per-chunk
+ptrs/counters/state, the -1 voice-id table 0x87758, the loop-flag
+0x87730, the play flag 0x80338, the hardware cell 0x107654).
+(2) THE CENSUSES: load_midi callers 5⟷5 (the five screens,
+ordinal-identical, ALL song slot 3, own basenames, compiler
+fingerprints verbatim — OPTIONS' pre-load stop, SELECT's leftover
+`mov edx,0xa`, DEBRIEF's `mov edi,<cell>` rider); MusicStart 6⟷5
+(the EXD 6th = the title path 0x5b049 after the sound init — the
+same EXD-only title-caller family §5g documented); MusicStop 13⟷11
+(the two EXD-only sites EXPLAINED: 0x30ebd inside the shared OOM
+fatal helper both arena allocators call — allocator-coupled, not
+gameplay; 0x59825 inside the EXD MissionShell FUN_000596ed — a
+draw/present/stop/free-voices teardown, EXW MissionShell has one
+stop [what verified, why medium]); free-voices 3⟷4 (EXD's third
+caller = 0x4c121, free-voices + SFX-reload of MIDIGUN/BOOM1).
+(3) VERDICT: faithful port; sole divergences the literal order,
+the load_mrw/mrw_load merge, the DOS voice-record stomp vs
+DirectSound, and the census extras above. Registry/ledger/C₀
+consequence NONE (loader internals are not S0 watches; no
+watches.toml/dbx-plan row references any of these cells).
+Deliverables: RE-EXD-MAP §5j (the §5g-bis-style addendum) + the
+RE-EXW-MUSIC §1 cross-ref + this entry. Residue: NONE — the D168
+queue item fully discharged. (worker 829d719c claim 1)
