@@ -6,10 +6,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import pwd
 import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -33,16 +33,34 @@ EXECUTABLES = {
     "/usr/bin/test",
     "/usr/bin/true",
 }
-PROXY_NAMES = {
-    "ALL_PROXY", "BASH_ENV", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_HOME",
-    "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
-    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "PATH", "PYTHONHOME",
-    "PYTHONPATH", "RUSTC_WRAPPER", "http_proxy", "https_proxy", "no_proxy",
+GATE_KEYS = {
+    "id", "timeout_seconds", "tracked_paths", "corpus", "depends",
+    "commands", "command", "writable",
 }
+PHASE_KEYS = {"id", "status", "required_gates"}
+SCRATCH_BASE = Path("/tmp/opencode")
 
 
 class ValidationError(Exception):
     pass
+
+
+def scratch_base() -> Path:
+    """Host-side scratch root for gate containment.
+
+    The shared /tmp/opencode staging area is the controller contract; a
+    validator nested inside a gate command runs after --tmpfs /tmp, so
+    that path does not exist there and its scratch must live under the
+    per-command HOME (a writable repo-anchored bind) instead -- never by
+    creating anything under the gate's own /tmp, which the containment
+    contract requires to start empty.
+    """
+    if SCRATCH_BASE.is_dir():
+        return SCRATCH_BASE
+    home = os.environ.get("HOME") or pwd.getpwuid(os.geteuid()).pw_dir
+    fallback = Path(home) / ".required-gate-scratch"
+    fallback.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return fallback
 
 
 def sha256(data: bytes) -> str:
@@ -82,6 +100,82 @@ def head_bytes(root: Path, relative: str) -> bytes:
         ).stdout
     except subprocess.CalledProcessError as error:
         raise ValidationError(f"required path is not tracked at HEAD: {relative}") from error
+
+
+def tracked_in_head(root: Path, relative: str) -> bool:
+    return subprocess.run(
+        [GIT, "-C", str(root), "cat-file", "-e", f"HEAD:{relative}"],
+        capture_output=True,
+        timeout=30,
+        env={"LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0"},
+    ).returncode == 0
+
+
+def gitignored(root: Path, relative: str) -> bool:
+    return subprocess.run(
+        [GIT, "-C", str(root), "check-ignore", "-q", "--no-index", relative],
+        cwd=root,
+        capture_output=True,
+        timeout=30,
+        env={"LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0"},
+    ).returncode == 0
+
+
+def head_paths_under(root: Path, relative: str) -> list[str]:
+    listed = git(root, "ls-tree", "-r", "--name-only", "HEAD", "--", relative)
+    return listed.splitlines() if listed else []
+
+
+def ensure_target_dir(root: Path) -> None:
+    """Guarantee the target mountpoint exists before the sandbox binds it.
+
+    A detached read-only checkout (the controller's completion basis)
+    pre-creates target/ because bwrap cannot make mountpoints on a
+    read-only root; a live writable root gets it created here.
+    """
+    target = root / "target"
+    if target.is_dir():
+        return
+    if target.exists():
+        raise ValidationError("target path is not a directory")
+    try:
+        target.mkdir(mode=0o755)
+    except OSError as error:
+        raise ValidationError(
+            "the invocation root has no target directory and is read-only"
+        ) from error
+
+
+def ensure_writable_dir(root: Path, relative: str) -> None:
+    """Validate and create a gate-declared writable scratch directory.
+
+    Writable binds are how a contained gate writes inside the read-only
+    repository, so the declaration must be fail-closed: the path is
+    repository-relative, never a symlink (at any depth), untracked at
+    HEAD with no tracked content beneath it, and covered by .gitignore
+    so the bind can never cover or fabricate tracked evidence. A
+    read-only invocation root must have pre-created the directory
+    (bwrap can only bind over mountpoints that exist).
+    """
+    path = relative_path(root, relative)
+    if path.exists() and not path.is_dir():
+        raise ValidationError(f"writable path is not a directory: {relative}")
+    if not gitignored(root, relative):
+        raise ValidationError(f"writable path must be gitignored: {relative}")
+    if head_paths_under(root, relative):
+        raise ValidationError(f"writable path must not contain tracked files: {relative}")
+    walked = root
+    for part in Path(relative).parts:
+        walked = walked / part
+        if walked.is_symlink():
+            raise ValidationError(f"writable path traverses a symlink: {relative}")
+    try:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError:
+        if not path.is_dir():
+            raise ValidationError(
+                f"writable path cannot be created and does not exist: {relative}"
+            ) from None
 
 
 def tracked_at_head(root: Path, relative: str) -> bytes:
@@ -178,16 +272,48 @@ def command_arrays(gate: dict[str, object], root: Path) -> list[list[str]]:
     return commands
 
 
-def clean_environment() -> dict[str, str]:
-    # No PATH means every executable, including nested script tools, must be explicit.
+def command_environment(home: str) -> dict[str, str]:
+    # No PATH means every executable, including nested script tools, must be
+    # explicit. HOME is the per-command scratch home: a repo-anchored unique
+    # path inside the target bind (never under /tmp, so nested validators
+    # inside a gate command can neither see nor lose their fixtures to a
+    # sandbox-private tmpfs).
     return {
         "CARGO_NET_OFFLINE": "true",
         "GIT_TERMINAL_PROMPT": "0",
-        "HOME": "/tmp/opencode",
+        "HOME": home,
         "LANG": "C",
         "LC_ALL": "C",
         "TZ": "UTC",
     }
+
+
+def cargo_environment(root: Path) -> dict[str, str]:
+    """Resolve the account cargo/rustup homes for offline --locked builds.
+
+    The /usr/bin/cargo on this host is a rustup proxy: under containment
+    it refuses to run with an unwritable default home and offline crate
+    resolution fails without the account registry cache. Pin CARGO_HOME
+    (and RUSTUP_HOME when it exists) at the account's real, read-only
+    homes so the proxy resolves the installed toolchain and crates
+    without writing anything. Fail closed when the cache is missing:
+    an offline gate that cannot resolve crates must not run at all.
+    """
+    account = pwd.getpwuid(os.geteuid()).pw_dir
+    cargo_home = os.environ.get("CARGO_HOME") or os.path.join(account, ".cargo")
+    if not Path(cargo_home).is_dir():
+        raise ValidationError(
+            "the account cargo cache is unavailable for offline gate commands"
+        )
+    rustup_home = os.environ.get("RUSTUP_HOME") or os.path.join(account, ".rustup")
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "CARGO_HOME": cargo_home,
+        "TMPDIR": str(root / "target"),
+    }
+    if Path(rustup_home).is_dir():
+        environment["RUSTUP_HOME"] = rustup_home
+    return environment
 
 
 def cleanup_group(process: subprocess.Popen[bytes]) -> None:
@@ -205,31 +331,61 @@ def cleanup_group(process: subprocess.Popen[bytes]) -> None:
         process.wait()
 
 
-def run_command(command: list[str], root: Path, timeout: int) -> int:
+def run_command(
+    command: list[str],
+    root: Path,
+    timeout: int,
+    *,
+    cargo_environment_vars: dict[str, str] | None = None,
+    writable: tuple[str, ...] = (),
+) -> int:
     if not Path(BWRAP).is_file() or not os.access(BWRAP, os.X_OK):
         raise ValidationError("required network/PID containment is unavailable")
-    with tempfile.TemporaryDirectory(prefix="required-gate-build-", dir="/tmp/opencode") as scratch:
-        scratch_path = Path(scratch)
-        target = scratch_path / "target"
-        target.mkdir()
-        environment = clean_environment()
+    # Host-side scratch lives outside the invocation root (a detached
+    # read-only checkout cannot host it); every bind below maps it in.
+    scratch = Path(tempfile.mkdtemp(prefix="required-gate-", dir=scratch_base()))
+    try:
+        target_scratch = scratch / "target"
+        target_scratch.mkdir(mode=0o700)
+        # The per-command home rides INSIDE the target bind at a unique
+        # repo-anchored path: HOME's parent is <root>/target/.gate-home,
+        # exactly what the env-probe containment contract pins, and a
+        # validator nested inside a gate command binds only its own
+        # root's paths, so this never nests with the outer mount.
+        home_root = target_scratch / ".gate-home"
+        home_root.mkdir(mode=0o700)
+        home_name = Path(tempfile.mkdtemp(dir=home_root)).name
+        ensure_target_dir(root)
+        home_mount = root / "target" / ".gate-home" / home_name
+        environment = command_environment(str(home_mount))
         if command[0] == "/usr/bin/cargo":
-            account_home = Path(pwd.getpwuid(os.geteuid()).pw_dir)
-            environment.update({
-                "PATH": "/usr/bin:/bin",
-                "RUSTUP_HOME": str(account_home / ".rustup"),
-                "TMPDIR": str(root / "target"),
-            })
+            environment.update(cargo_environment_vars or cargo_environment(root))
         sandbox = [
             BWRAP,
             "--unshare-net", "--unshare-pid", "--die-with-parent", "--new-session",
             "--ro-bind", "/", "/",
             "--dev-bind", "/dev", "/dev", "--proc", "/proc",
+            # A fresh private /tmp: gate commands never see host /tmp
+            # state, the env-probe contract requires it empty, and no
+            # gate scratch may be allocated there (see scratch_base()).
+            "--tmpfs", "/tmp",
+            # The controller may root the invocation itself under /tmp
+            # (complete_from_head seals its detached basis in
+            # /tmp/opencode); the tmpfs above would hide that basis and
+            # leave only an empty auto-created directory, so the root is
+            # re-exposed read-only at its own path. check-gates-env
+            # tolerates exactly this chain and nothing else under /tmp.
+            "--ro-bind", str(root), str(root),
+            # Writable scratch through the read-only root: target/ is the
+            # pre-existing mountpoint and carries the per-command home.
+            "--bind", str(target_scratch), str(root / "target"),
         ]
-        if (root / "target").is_dir():
-            sandbox.extend(["--bind", str(target), str(root / "target")])
+        for index, relative in enumerate(writable):
+            writable_scratch = scratch / f"w{index}"
+            writable_scratch.mkdir(mode=0o700)
+            sandbox.extend(["--bind", str(writable_scratch), str(root / relative)])
         sandbox.extend(["--chdir", str(root), "--clearenv"])
-        for name, value in environment.items():
+        for name, value in sorted(environment.items()):
             sandbox.extend(["--setenv", name, value])
         sandbox.extend(["--", "/usr/bin/env", "-u", "PWD", *command])
         process = subprocess.Popen(
@@ -238,7 +394,7 @@ def run_command(command: list[str], root: Path, timeout: int) -> int:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            env=environment,
+            env={"LC_ALL": "C"},
             start_new_session=True,
         )
         try:
@@ -250,6 +406,8 @@ def run_command(command: list[str], root: Path, timeout: int) -> int:
             return return_code
         finally:
             cleanup_group(process)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) -> tuple[dict[str, object], bool]:
@@ -265,6 +423,9 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
     phases = value.get("phase", [])
     if not isinstance(gates, list) or not gates or not isinstance(phases, list):
         raise ValidationError("required-gates manifest requires gate and phase arrays")
+    for phase in phases:
+        if not isinstance(phase, dict) or set(phase) - PHASE_KEYS:
+            raise ValidationError("phase entries have unknown keys")
     phase_by_id = {phase.get("id"): phase for phase in phases if isinstance(phase, dict)}
     if phases and set(phase_by_id) != {f"P{number}" for number in range(8)}:
         raise ValidationError("global manifest must enumerate exactly P0 through P7")
@@ -275,12 +436,16 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
             raise ValidationError(f"unknown phase {selected_phase}")
         selected_ids = set(phase.get("required_gates", []))
 
+    cargo_environment_vars: dict[str, str] | None = None
     results: list[dict[str, object]] = []
     passed: dict[str, bool] = {}
     corpus_hashes: dict[str, str] = {}
     for gate in gates:
         if not isinstance(gate, dict) or not isinstance(gate.get("id"), str):
             raise ValidationError("gate entries require stable string ids")
+        unknown = set(gate) - GATE_KEYS
+        if unknown:
+            raise ValidationError(f"gate {gate.get('id')} has unknown keys: {sorted(unknown)}")
         gate_id = gate["id"]
         if selected_ids is not None and gate_id not in selected_ids:
             continue
@@ -297,18 +462,31 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
             raw_path = tracked_at_head(root, relative)
             if relative in corpus:
                 corpus_hashes[relative] = sha256(raw_path)
+        writable = gate.get("writable", [])
+        if not isinstance(writable, list) or not all(isinstance(item, str) for item in writable):
+            raise ValidationError(f"gate {gate_id} writable policy must be an array of strings")
+        for relative in writable:
+            ensure_writable_dir(root, relative)
         dependencies = gate.get("depends", [])
         if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
             raise ValidationError(f"gate {gate_id} dependencies must be ids")
         commands = command_arrays(gate, root)
         if not commands and not dependencies:
             raise ValidationError(f"gate {gate_id} has neither commands nor dependencies")
+        if cargo_environment_vars is None and any(command[0] == "/usr/bin/cargo" for command in commands):
+            cargo_environment_vars = cargo_environment(root)
         ok = all(passed.get(dependency, False) for dependency in dependencies)
         command_results: list[dict[str, object]] = []
         if ok or not dependencies:
             ok = True
             for command in commands:
-                rc = run_command(command, root, timeout)
+                rc = run_command(
+                    command,
+                    root,
+                    timeout,
+                    cargo_environment_vars=cargo_environment_vars,
+                    writable=tuple(writable),
+                )
                 command_results.append({"argv": command, "rc": rc})
                 # Every command boundary revalidates the immutable basis.
                 if git(root, "rev-parse", "HEAD") != head:
@@ -322,7 +500,7 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
                         raise ValidationError(f"tracked corpus changed during validation: {relative}")
                 ok = ok and rc == 0
         passed[gate_id] = ok
-        results.append({"commands": command_results, "id": gate_id, "passed": ok})
+        results.append({"commands": command_results, "id": gate_id, "passed": ok, "writable": writable})
 
     if selected_ids is not None:
         complete = selected_ids == set(passed) and all(passed.values())

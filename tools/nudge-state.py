@@ -18,6 +18,7 @@ import shutil
 import tempfile
 import tarfile
 import time
+import tomllib
 from pathlib import Path
 
 
@@ -1250,6 +1251,23 @@ def complete_from_head(arguments: list[str]) -> None:
 
         target = checkout / "target"
         target.mkdir(mode=0o700)
+        # Gate-declared writable scratch directories must exist before the
+        # checkout is sealed read-only: bwrap can only bind over mountpoints
+        # that exist, and the validator re-validates each declaration
+        # (gitignored, untracked, no tracked content beneath) itself. A
+        # checkout without the tracked manifest has no declarations (and
+        # the validator fails closed on its own terms in that case).
+        gates_manifest_path = checkout / "docs" / "required-gates.toml"
+        if gates_manifest_path.is_file():
+            gates_manifest = tomllib.loads(
+                gates_manifest_path.read_text(encoding="utf-8")
+            )
+            for gate in gates_manifest.get("gate", []):
+                for relative in gate.get("writable", []):
+                    writable_path = Path(relative)
+                    if writable_path.is_absolute() or ".." in writable_path.parts:
+                        raise ValueError(f"unsafe writable path in required-gates: {relative}")
+                    (checkout / writable_path).mkdir(mode=0o700, parents=True, exist_ok=True)
 
         # The copied validation basis is read-only; writable outputs live outside it.
         for current_root, directories, files in os.walk(checkout, topdown=False):

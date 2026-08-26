@@ -4,6 +4,7 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -13,11 +14,29 @@ from pathlib import Path
 
 
 VALIDATOR = Path(__file__).with_name("validate-required-gates.py")
+# Gate commands run with no PATH: every spawned executable must be
+# absolute or the suite itself fails inside its own validator containment.
+GIT = "/usr/bin/git"
+SHA256SUM = "/usr/bin/sha256sum"
 
 
 class ValidatorTests(unittest.TestCase):
-    def fixture(self, manifest: str, files: dict[str, str] | None = None) -> Path:
-        root = Path(tempfile.mkdtemp(prefix="required-gates-", dir="/tmp/opencode"))
+    def fixture(
+        self,
+        manifest: str,
+        files: dict[str, str] | None = None,
+        ignore: list[str] | None = None,
+        base_dir: str | None = None,
+    ) -> Path:
+        # Fixtures live under HOME: inside the gates-validator gate that is
+        # the validator's own repo-anchored scratch home (writable through
+        # the sandbox, and visible to a nested validator, unlike /tmp which
+        # every sandbox layer replaces with a fresh private tmpfs).
+        # base_dir overrides that for controller-shaped fixtures that must
+        # live under /tmp itself (the sandbox tmpfs is writable and the
+        # validator re-exposes the invocation root's own chain there).
+        base = Path(base_dir) if base_dir else Path(os.environ.get("HOME") or tempfile.gettempdir())
+        root = Path(tempfile.mkdtemp(prefix="required-gates-", dir=base))
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         (root / "docs").mkdir()
         (root / "docs/required-gates.toml").write_text(manifest)
@@ -28,24 +47,32 @@ class ValidatorTests(unittest.TestCase):
         anchor = root / "manifest-anchor.txt"
         anchor.write_text("manifest anchor\n")
         digest = subprocess.run(
-            ["sha256sum", str(anchor)], check=True, capture_output=True, text=True
+            [SHA256SUM, str(anchor)], check=True, capture_output=True, text=True
         ).stdout.split()[0]
         (root / "MANIFEST.sha256").write_text(f"{digest}  manifest-anchor.txt\n")
-        subprocess.run(["git", "init", "-q", str(root)], check=True)
-        subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
-        subprocess.run(["git", "-C", str(root), "config", "user.name", "test"], check=True)
-        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
+        if ignore:
+            (root / ".gitignore").write_text("".join(f"{line}\n" for line in ignore))
+        subprocess.run([GIT, "init", "-q", str(root)], check=True)
+        subprocess.run([GIT, "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run([GIT, "-C", str(root), "config", "user.name", "test"], check=True)
+        subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+        subprocess.run([GIT, "-C", str(root), "commit", "-qm", "fixture"], check=True)
         return root
 
     def run_validator(
-        self, root: Path, *, env: dict[str, str] | None = None
+        self,
+        root: Path,
+        *,
+        env: dict[str, str] | None = None,
+        cwd: Path | None = None,
+        report: Path | None = None,
     ) -> tuple[int, dict]:
-        report = root / "report.json"
+        report = report or root / "report.json"
         result = subprocess.run(
             [sys.executable, str(VALIDATOR), "--root", str(root), "--report", str(report)],
             env=env,
-            timeout=8,
+            cwd=str(cwd or root),
+            timeout=60,
         )
         return result.returncode, json.loads(report.read_text())
 
@@ -84,8 +111,8 @@ class ValidatorTests(unittest.TestCase):
         root = self.fixture(
             'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
         )
-        subprocess.run(["git", "-C", str(root), "rm", "-q", "MANIFEST.sha256"], check=True)
-        subprocess.run(["git", "-C", str(root), "commit", "-qm", "remove manifest"], check=True)
+        subprocess.run([GIT, "-C", str(root), "rm", "-q", "MANIFEST.sha256"], check=True)
+        subprocess.run([GIT, "-C", str(root), "commit", "-qm", "remove manifest"], check=True)
         rc, report = self.run_validator(root)
         self.assertNotEqual(rc, 0)
         self.assertIn("MANIFEST.sha256", report["error"])
@@ -171,7 +198,7 @@ class ValidatorTests(unittest.TestCase):
             },
         )
         original = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            [GIT, "-C", str(root), "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
             text=True,
@@ -213,6 +240,172 @@ class ValidatorTests(unittest.TestCase):
                     self.assertEqual(rc, 0)
                 time.sleep(1.3)
                 self.assertFalse((root / sentinel_name).exists())
+
+    def test_manifest_writable_dir_is_bound_with_private_tmp_and_read_only_root(self):
+        script = """#!/bin/bash
+set -e
+cd runtime/out
+printf '%s\\n' "$HOME" > home.txt
+[ -z "$(ls -A /tmp)" ] || { ls -A /tmp > listing.txt; exit 3; }
+[ -n "$HOME" ] && [ -d "$HOME" ]
+case "$HOME" in /tmp/*) exit 4;; esac
+if (echo x > ../../tracked-roots.txt) 2>/dev/null; then exit 7; fi
+exit 0
+"""
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="w"\n'
+            'command=["/bin/bash","tools/w.sh"]\ntimeout_seconds=30\n'
+            'writable=["runtime/out"]\n',
+            {"tools/w.sh": script},
+            ignore=["/runtime/"],
+        )
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
+        self.assertEqual(report["gates"][0]["writable"], ["runtime/out"])
+
+    def test_writable_dir_must_be_gitignored_and_untracked(self):
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="w"\n'
+            'command=["/usr/bin/true"]\ntimeout_seconds=2\n'
+            'writable=["runtime/out"]\n',
+            {"runtime/out/keep.txt": "tracked\n"},
+        )
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("gitignored", report["error"])
+
+    def test_cargo_gate_requires_the_account_cache(self):
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="c"\n'
+            'command=["/usr/bin/cargo","test","--locked","--offline"]\n'
+            "timeout_seconds=30\n"
+        )
+        rc, report = self.run_validator(root, env={"CARGO_HOME": "/nonexistent-cargo-home"})
+        self.assertNotEqual(rc, 0)
+        self.assertIn("cargo cache", report["error"])
+
+    def test_env_probe_gate_script_passes_under_containment(self):
+        # The env-probe gate's own command, exercised end to end: the real
+        # check-gates-env.py runs inside the validator's sandbox and passes
+        # only when the HOME parent contract, the empty private /tmp, the
+        # read-only root, and the declared writable directory all hold.
+        probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
+            'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
+            {"tools/check-gates-env.py": probe},
+            ignore=["/runtime/"],
+        )
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
+
+    def test_controller_shaped_root_under_tmp_runs_env_probe_gate(self):
+        # complete_from_head roots the detached validation basis under
+        # /tmp itself (/tmp/opencode/bedlam-completion-*). The sandbox's
+        # private /tmp tmpfs must not hide that basis: the validator
+        # re-exposes the invocation root read-only at its own path and
+        # check-gates-env tolerates exactly that chain, nothing else.
+        probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
+            'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
+            {"tools/check-gates-env.py": probe},
+            ignore=["/runtime/"],
+            base_dir="/tmp",
+        )
+        self.assertTrue(root.is_relative_to(Path("/tmp")))
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
+
+    def test_sealed_read_only_controller_root_pre_creates_mountpoints(self):
+        # The controller seals the checkout read-only BEFORE validating
+        # and pre-creates target/ plus every gate-declared writable
+        # directory (bwrap can only bind over mountpoints that exist);
+        # the report is written outside the sealed root, exactly like
+        # complete_from_head passes output paths beside the checkout.
+        probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
+            'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
+            {"tools/check-gates-env.py": probe},
+            ignore=["/runtime/"],
+            base_dir="/tmp",
+        )
+        (root / "target").mkdir(mode=0o700)
+        (root / "runtime" / "env-probe-out").mkdir(mode=0o700, parents=True)
+
+        def unseal() -> None:
+            for current, directories, files in os.walk(root):
+                os.chmod(current, 0o700)
+                for name in files:
+                    os.chmod(os.path.join(current, name), 0o600)
+
+        self.addCleanup(unseal)
+        for current, directories, files in os.walk(root, topdown=False):
+            for name in files:
+                path = os.path.join(current, name)
+                os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+            for name in directories:
+                path = os.path.join(current, name)
+                os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+        outside = Path(tempfile.mkdtemp(prefix="required-gates-report-"))
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        rc, report = self.run_validator(root, report=outside / "report.json")
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
+
+
+    def test_gate_commands_can_run_nested_validators(self):
+        # The gates-validator gate runs this very suite inside the sandbox:
+        # a gate command must be able to run a full nested validator whose
+        # fixtures live under HOME and whose own scratch must not need the
+        # gate's private (empty) /tmp.
+        validator_source = VALIDATOR.read_text()
+        nested = (
+            "import hashlib, json, os, pathlib, subprocess, sys, tempfile\n"
+            "validator = pathlib.Path(__file__).with_name('validate-required-gates.py')\n"
+            "root = pathlib.Path(tempfile.mkdtemp(prefix='nested-', "
+            "dir=pathlib.Path(os.environ['HOME'])))\n"
+            "(root / 'docs').mkdir()\n"
+            "(root / 'docs/required-gates.toml').write_text(\n"
+            "    'schema=\"required-gates-v1\"\\n[[gate]]\\nid=\"ok\"\\n'\n"
+            "    'command=[\"/usr/bin/true\"]\\ntimeout_seconds=10\\n')\n"
+            "anchor = root / 'anchor.txt'\n"
+            "anchor.write_text('anchor\\n')\n"
+            "digest = hashlib.sha256(anchor.read_bytes()).hexdigest()\n"
+            "(root / 'MANIFEST.sha256').write_text(f'{digest}  anchor.txt\\n')\n"
+            "subprocess.run(['/usr/bin/git', 'init', '-q', str(root)], check=True)\n"
+            "subprocess.run(['/usr/bin/git', '-C', str(root), 'config', "
+            "'user.email', 'test@example.invalid'], check=True)\n"
+            "subprocess.run(['/usr/bin/git', '-C', str(root), 'config', "
+            "'user.name', 'test'], check=True)\n"
+            "subprocess.run(['/usr/bin/git', '-C', str(root), 'add', '.'], check=True)\n"
+            "subprocess.run(['/usr/bin/git', '-C', str(root), 'commit', "
+            "'-qm', 'nested'], check=True)\n"
+            "subprocess.run(\n"
+            "    [sys.executable, str(validator), '--root', str(root),\n"
+            "     '--report', str(root / 'report.json')],\n"
+            "    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)\n"
+            "report = json.loads((root / 'report.json').read_text())\n"
+            "raise SystemExit(0 if report.get('plan_complete') else 1)\n"
+        )
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="nested"\n'
+            'command=["/usr/bin/python3","tools/nested.py"]\ntimeout_seconds=60\n',
+            {
+                "tools/nested.py": nested,
+                "tools/validate-required-gates.py": validator_source,
+            },
+        )
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
 
 
 if __name__ == "__main__":

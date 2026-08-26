@@ -23,7 +23,7 @@ required_gates = []
 [[phase]]
 id = "P4"
 status = "pending"
-required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "p4-machine-verdict"]
+required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "env-probe", "p4-machine-verdict"]
 
 [[phase]]
 id = "P5"
@@ -49,6 +49,9 @@ commands = [
   ["/usr/bin/python3", "tools/check-p4-trigger-contract.py"],
 ]
 tracked_paths = ["tools/diffharness/watches.toml", "tools/diffharness/src/bin/dbx-plan.rs", "tools/diffharness/capture-plans/S1-o2.json", "tools/runtime/capgen-o2-smoke.sh", "tools/check-p4-trigger-contract.py"]
+# The smoke writes runtime/harness-out (gitignored); the validator binds a
+# private scratch directory over every declared writable path.
+writable = ["runtime/harness-out"]
 
 [[gate]]
 id = "dependency-spikes"
@@ -114,7 +117,24 @@ timeout_seconds = 120
 commands = [["/usr/bin/python3", "tools/test-validate-required-gates.py"]]
 tracked_paths = ["tools/validate-required-gates.py", "tools/test-validate-required-gates.py", "docs/required-gates.toml"]
 
+# env-probe — CONTAINMENT EVIDENCE, not a project gate. The command runs
+# under the validator's own bwrap containment and fails closed unless the
+# environment matches the documented contract (no PATH, no proxy/wrapper
+# variables, per-command scratch HOME under target/, fresh private /tmp
+# holding only the invocation root's own chain when the controller roots
+# the sealed basis under /tmp, read-only repository root) and the declared
+# writable scratch directory is usable. It records the observed
+# environment as JSON evidence in the writable scratch. Kept in the same
+# manifest so the machinery that runs the real gates also proves the
+# sandbox those gates run in.
+[[gate]]
+id = "env-probe"
+timeout_seconds = 60
+commands = [["/usr/bin/python3", "tools/check-gates-env.py"]]
+tracked_paths = ["tools/check-gates-env.py", "docs/required-gates.toml"]
+writable = ["runtime/env-probe-out"]
+
 [[gate]]
 id = "p4-machine-verdict"
 timeout_seconds = 1
-depends = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator"]
+depends = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "env-probe"]
