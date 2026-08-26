@@ -706,6 +706,13 @@ case_capgen_smoke_and_validator_invocation_are_offline() {
     "$ROOT/tools/runtime/capgen-o2-smoke.sh"
   grep -Fq 'commands = [["/usr/bin/python3", "tools/test-validate-required-gates.py"]]' \
     "$ROOT/docs/required-gates.toml"
+  # complete-from-head EXECS the HEAD-extracted validator directly after
+  # the tar data-filter extraction and the read-only seal (mode & ~0o222).
+  # A committed 100644 mode archives as 644, seals as 444, and execve
+  # fails EACCES — the 2026-08-26 23:05 controller incident (Permission
+  # denied: /tmp/opencode/bedlam-completion-*/tools/validate-required-
+  # gates.py). The index mode must carry the user-exec bit.
+  [ "$(git -C "$ROOT" ls-files -s tools/validate-required-gates.py | awk '{print $1}')" = "100755" ]
 }
 
 case_mutable_inputs_have_practical_size_and_count_caps() {

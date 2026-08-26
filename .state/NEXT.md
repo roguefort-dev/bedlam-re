@@ -10,6 +10,41 @@ renumbered queue keeps every open item claimable by number).
 consumed and the bound phase verdict landed; the controller's
 empty-queue path now owns the P0-P7 completion decision and P5+
 queue content is operator/controller work)
+1. DONE (2026-08-26, watchdog repair 1698872, this trailer-bound
+   commit, PUSHED): automation/completion-path repair — the
+   controller's empty-queue branch (first exercised 23:05:12, right
+   after the P4 verdict emptied Now) crashed instead of deciding:
+   `[Errno 13] Permission denied: /tmp/opencode/bedlam-completion-*/
+   tools/validate-required-gates.py`. Root cause (smallest concrete):
+   nudge-state.py complete-from-head EXECS the HEAD-extracted
+   validator directly (subprocess [validator, --root, ...] under the
+   minimal HOME/LANG/LC_ALL/TZ env), but the file was committed mode
+   100644 — git archive carries 644, tar extractall(filter="data")
+   keeps it non-exec, the read-only seal strips write bits to 444, and
+   execve dies EACCES. Fix: committed mode 100755 (repo convention for
+   executed tools; the #!/usr/bin/python3 shebang is already absolute
+   and PATH-free). Probes: archived 644 -> sealed 444 -> exec
+   PermissionError REPRODUCED pre-fix; archived 755 -> data-filter
+   755 -> sealed 555 -> direct exec rc=0 post-fix (exact minimal env).
+   Regression guard: the capgen/validator hardening case now asserts
+   the committed index mode is 100755. DESIGNED post-repair steady
+   state until the operator queues P5+ work: the controller's full
+   P0-P7 validation now RUNS (all 8 P4 gates) and complete-from-head
+   ends rc=1 `HEAD required-gates validator failed rc=1` with the
+   truthful report published to .state/required-gates-report.json —
+   P4-P7 manifest statuses stay pending and plan-complete stays
+   controller-owned; a NEW completion-missing beacon carrying THAT
+   reason is the designed operator alarm, NOT a defect to repair.
+   Failures archived by this repair (nudge-failure-ack-v1):
+   2eaa23a4 + d6fcfa24 (p4-machine-verdict client-error /
+   preflight-mismatch — replaced-task: the verdict landed at 010f3e7,
+   .state/P4-COMPLETE phase-complete-v1) and the 23:05
+   completion-missing record (required-empty: Now is designedly empty
+   and the completion machinery is repaired). Verified: probe
+   repro pre/post, tools/test-validate-required-gates.py 22/22,
+   tools/test-final-hardening-red.sh PASS (incl. the new mode
+   assertion), complete-from-head end-to-end rc=1 truthful (report
+   published, no PermissionError), MANIFEST clean before and after.
 1. DONE (2026-08-26, worker d6fcfa24 claim 1, commits 010f3e7 +
    verdict commit, PUSHED): P4/gate `p4-machine-verdict` — the bound
    phase verdict LANDED (D175). First bound run failed at the
