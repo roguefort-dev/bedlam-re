@@ -1,5 +1,17 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D174 `p4-required-gates-manifest` COMPLETE (watchdog
+    repair 364897 adopting the d7f85d22/579650c9/d6f199cb WIP,
+    commit 9f2a049, PUSHED): the required-gates manifest and
+    validator finished — gate-declared fail-closed writable binds,
+    the env-probe containment-evidence gate wired into P4, strict
+    manifest key schema, private per-command /tmp + scratch HOME,
+    controller-side mountpoint pre-creation, 20/20 validator tests;
+    all automation suites green. P4 now has exactly ONE required
+    item left: p4-machine-verdict (ordinal 1). The final-hardening
+    live-facts assertion is re-anchored to the durable canonical
+    five-id tail contract (D174).
+
   - 2026-08-26 D171 `p4-trigger-contract` COMPLETE (worker
     eb9917a1 claim 1, commit 06a8b09, PUSHED): the O2 operational
     trigger pinned — S1-o2 regenerated with trigger.site =

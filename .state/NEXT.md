@@ -5,10 +5,32 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p4-required-gates-manifest] [gate=p4-gates-validator] Finish the tracked required-gates manifest and validator with fail-closed corpus and automated validator tests.
-2. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
+1. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
 
 ## Done
+1. DONE (2026-08-26, watchdog repair 364897 claim adopted, commit
+   9f2a049, workers d7f85d22/579650c9/d6f199cb WIP, PUSHED):
+   P4/gate `p4-required-gates-manifest` — the tracked
+   required-gates manifest and validator FINISHED with fail-closed
+   corpus and automated validator tests (D174). New gate `env-probe`
+   (tools/check-gates-env.py) proves the validator's own bwrap
+   containment contract and is wired into P4 required_gates and
+   p4-machine-verdict depends; gates may declare `writable`
+   scratch binds (fail-closed: gitignored, untracked, no tracked
+   content, no symlink traversal) — diffharness-plumbing declares
+   runtime/harness-out; per-command fresh private /tmp tmpfs with
+   the /tmp-rooted invocation basis re-exposed read-only; per-command
+   scratch HOME under target/.gate-home; strict TOML gate/phase key
+   schema; cargo gates resolve the account's read-only cargo/rustup
+   homes and fail closed without the offline cache;
+   complete_from_head pre-creates writable mountpoints on the sealed
+   basis. Verified: tools/test-validate-required-gates.py 20/20 (the
+   exact gate argv), test-final-hardening-red.sh PASS,
+   test-reviewer-security-red.sh PASS,
+   test-autonomy-remaining-gaps.sh PASS (full llm-watchdog suite);
+   MANIFEST clean before and after. The unit landed via watchdog
+   repair after three environment-level rc=137 client kills left the
+   same WIP uncommitted (D174).
 1. DONE (2026-08-26, worker 71effd2b claim 1, commit eb9a6c6,
    PUSHED): P4/gate `p4-dependency-spikes` — the FINAL presentation
    dependency decision RECORDED (D173), closing the D24 "final

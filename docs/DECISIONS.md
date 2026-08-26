@@ -5690,3 +5690,49 @@ docs/DECISIONS.md — a docs-only unit; no engine code moved).
 NUMBERING: D170 reserved (controller, no entry), D171 =
 p4-trigger-contract, D172 = p4-static-proof-scope; this entry D173.
 (worker 71effd2b claim 1)
+
+## D174 — gates-validator unit landed; live-facts hardening assertion re-anchored (watchdog repair 2026-08-26)
+
+1. CONTEXT: queue item `p4-required-gates-manifest` churned through
+   three structured failures (d7f85d22 client-error, 579650c9
+   transport, d6f199cb client-error; all client rc=137 SIGKILL,
+   progress=0, queue unchanged). Journal evidence shows the model
+   client died to host-level memory exhaustion (node V8
+   FatalProcessOutOfMemory traces, 20Gi swap in use) under an
+   unrelated concurrent workload on this host — not to any bedlam
+   machinery defect. Each session rebuilt the same ~450-line WIP,
+   verified it, and died before committing; additionally every
+   session burned its tail re-diagnosing
+   tools/test-final-hardening-red.sh, which was RED AT HEAD since
+   b24f772 moved the three finished P4 units to ## Done.
+
+2. DECISIONS:
+   a. The interrupted WIP is ADOPTED AND LANDED whole (commit 9f2a049)
+      after full re-verification: writable-bind gate policy, the
+      env-probe containment-evidence gate, strict manifest schema,
+      private per-command /tmp + scratch HOME, controller-side
+      mountpoint pre-creation, 20/20 validator tests.
+   b. The hardening case 'five-unit P4 contract retires stale live
+      facts' no longer pins the one-time five-item live snapshot
+      (with d145/d164/static-evidence/timing body facts that retire
+      into the ## Done ledger as units complete, per the D106
+      convention). It now asserts the durable invariants: the active
+      set is a contiguous front-first-consumed tail of the canonical
+      five-id P4 contract, only canonical ids, and the retired
+      interactive/perceptual phrasing never returns.
+   c. The rc=137 churn itself is environmental (host memory); no
+      wrapper classification change is made — a SIGKILLed client is
+      indistinguishable from a broken one at the wrapper boundary,
+      and the existing transport exemptions already cover the
+      provider-side stream deaths.
+
+3. EVIDENCE (this run): tools/test-validate-required-gates.py 20/20;
+   tools/test-final-hardening-red.sh PASS (all categories);
+   tools/test-reviewer-security-red.sh PASS;
+   tools/test-autonomy-remaining-gaps.sh PASS (contains the full
+   llm-watchdog suite); strict queue parser RUNNABLE after the
+   rewrite; game-data MANIFEST clean before and after.
+
+NUMBERING: D173 = presentation dependency decision; this entry D174.
+(watchdog repair 364897 1787768451, adopting WIP from workers
+d7f85d22, 579650c9, d6f199cb)

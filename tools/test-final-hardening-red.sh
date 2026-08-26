@@ -640,6 +640,20 @@ case_canonical_metadata_order_is_enforced() {
 }
 
 case_active_p4_contract_retires_stale_live_facts() {
+  # The five-unit P4 contract (D145-D164 evidence retiming, 2026-08-25)
+  # replaced the human-only interactive/perceptual engineering gates with
+  # machine-checkable units. This case originally pinned the exact
+  # five-item live snapshot INCLUDING the one-time rewrite facts
+  # (d145, d164, "static evidence", "timing", ...) -- but completed
+  # units move to the ## Done ledger (queue convention, D106), so the
+  # snapshot went stale the moment p4-trigger-contract finished and
+  # every later worker burned its slot re-diagnosing a RED suite at
+  # HEAD (watchdog repair, 2026-08-26). The durable invariants the
+  # case actually protects: the live set contains ONLY canonical
+  # contract ids, consumed strictly front-first as a contiguous tail
+  # of the canonical five (no reordering, no revivals, no foreign
+  # items), and the retired interactive/perceptual phrasing never
+  # returns to the active queue.
   local state
   state=$($PARSER "$ROOT/.state/NEXT.md" "$ROOT/.state/claims" --state-v1)
   [[ "$state" == RUNNABLE* ]]
@@ -648,15 +662,20 @@ import re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
 now = text.split("## Now", 1)[1].split("## Done", 1)[0]
 items = re.findall(r"^[1-5]\. .+$", now, re.M)
-assert len(items) == 5
-expected = [
+canonical = [
     "p4-trigger-contract", "p4-static-proof-scope", "p4-wgpu-final",
     "p4-required-gates-manifest", "p4-machine-verdict",
 ]
-assert [re.search(r"\[id=([^]]+)\]", item).group(1) for item in items] == expected
+ids = [re.search(r"\[id=([^]]+)\]", item).group(1) for item in items]
+assert 1 <= len(ids) <= 5, f"active P4 item count out of contract range: {len(ids)}"
+assert ids, "the P4 machine contract must stay queued until the verdict lands"
+# Front-first consumption: the active set is a contiguous tail of the
+# canonical five (a completed front unit is gone for good; nothing
+# ahead of an unfinished unit may silently disappear).
+assert ids == canonical[-len(ids):], f"active ids are not a canonical tail: {ids}"
+for item_id in ids:
+    assert item_id in canonical, f"non-contract item active in P4 queue: {item_id}"
 contract = " ".join(items).casefold()
-for fact in ("d145", "d164", "static evidence", "timing", "calibration", "live", "excluded", "not queued", "exw"):
-    assert fact in contract, fact
 assert "interactive" not in contract and "perceptual" not in contract
 PY
 }
