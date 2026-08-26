@@ -149,25 +149,23 @@ fn inv_frame(
             // E-only rows: the O1 plan cannot carry them
             // (move-target-words is CONSUMED into the robot-bank
             // splice on the O1 side, so the E row stays E-only at
-            // the row level; the W12-S4 debris/splash T3 rows have
-            // no EXD alias pinned yet — the stitcher's O1-address
-            // rule excludes them, the differ reports the E-only row
-            // as a coverage finding, never fabricated). blink-cursor
-            // is NO LONGER in this set: D132 closed the EXD twin
-            // 0x10e108 (a plain 4-B u32 cell — capture-plans/S1.json
-            // carries the row), so it fabricates identity through
-            // the scalar catch-all below and compares clean (the
-            // D136 sfx-master-gate precedent).
-            "debris-stager" | "splash-records" => continue,
-            // The W12-S6 dropship row: no EXD alias (exd_status
-            // unmapped) — the stitcher's O1-address rule excludes
-            // it, the differ reports the E-only row as a coverage
+            // the row level). blink-cursor is NOT in this set:
+            // D132 closed the EXD twin 0x10e108 (a plain 4-B u32
+            // cell — capture-plans/S1.json carries the row), so it
+            // fabricates identity through the scalar catch-all
+            // below and compares clean (the D136 sfx-master-gate
+            // precedent). The D162 subset-form quartet
+            // (debris-stager, splash-records, critter-bank,
+            // effect-rows) fabricates through the guest-span
+            // projections below and compares cross-channel — zero
+            // field gaps by construction.
+            // The W12-S6 dropship row REMAINS the one E-only
+            // T3 row: D162 pinned its EXD twin 0x1081c4 and the
+            // plan emits it, but the O1 normalizer arm (the
+            // full-record identity form) is its own follow-up —
+            // the differ reports the E-only row as a coverage
             // finding, never fabricated.
             "dropship-frame" => continue,
-            // The W12-S8 critter-family rows: no EXD alias (the
-            // critter bank + the effect rows are unmapped) — E-only
-            // coverage findings, never fabricated on O1.
-            "critter-bank" | "effect-rows" => continue,
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -312,6 +310,120 @@ fn inv_frame(
                 // Both channels carry the same span — identity.
                 w.bytes.clone()
             }
+            // The D162 subset-form quartet (the differ's O1
+            // extraction arms): canonical -> the guest full spans,
+            // each modeled field placed back at its guest offset
+            // (§6a's subset-arm table; the projections are the
+            // inverse of the normalizer walks).
+            "debris-stager" => {
+                // canonical u32 128 + 128*42 -> the bare 128*0x30
+                // guest ring: active u8@+0x00, xyz d@+0x04..,
+                // init_a/b d@+0x10/+0x14, seq d@+0x18, kind d@+0x1C,
+                // phys d@+0x20, delay d@+0x24, param d@+0x28; the
+                // +0x2C pointer word carries the E table INDEX
+                // zero-extended (E models the index, not the
+                // pointer — never a compared field).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 42);
+                let mut span = vec![0u8; 128 * 0x30];
+                let i32c =
+                    |rec: &[u8], p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 42..];
+                    let g = &mut span[i * 0x30..];
+                    g[0] = rec[0]; // active
+                    g[0x04..0x08].copy_from_slice(&i32c(rec, 1).to_le_bytes());
+                    g[0x08..0x0C].copy_from_slice(&i32c(rec, 5).to_le_bytes());
+                    g[0x0C..0x10].copy_from_slice(&i32c(rec, 9).to_le_bytes());
+                    g[0x10..0x14].copy_from_slice(&i32c(rec, 13).to_le_bytes());
+                    g[0x14..0x18].copy_from_slice(&i32c(rec, 17).to_le_bytes());
+                    g[0x18..0x1C].copy_from_slice(&i32c(rec, 21).to_le_bytes()); // seq
+                    g[0x1C..0x20].copy_from_slice(&i32c(rec, 25).to_le_bytes()); // kind
+                    g[0x20..0x24].copy_from_slice(&i32c(rec, 29).to_le_bytes()); // phys
+                    g[0x24..0x28].copy_from_slice(&i32c(rec, 33).to_le_bytes()); // delay
+                    g[0x28..0x2C].copy_from_slice(&i32c(rec, 37).to_le_bytes()); // param
+                    g[0x2C] = rec[41]; // the table index byte
+                }
+                span
+            }
+            "splash-records" => {
+                // canonical u32 250 + 250*10 -> the bare 250*0xA
+                // guest bank (the stride IS the record — identity).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 10);
+                w.bytes[4..].to_vec()
+            }
+            "critter-bank" => {
+                // canonical u32 count + count*74 -> the bare
+                // count*0x7E guest bank: the 23 modeled leaves at
+                // their §7j.17/§7j.42 offsets; presence/countdown
+                // narrow word<->i32 at the word (the canonical
+                // values are small timers/flags, so the round-trip
+                // is exact).
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 74);
+                let mut span = vec![0u8; n * 0x7E];
+                let u16c =
+                    |rec: &[u8], p: usize| u16::from_le_bytes(rec[p..p + 2].try_into().unwrap());
+                let i32c =
+                    |rec: &[u8], p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+                let put16 =
+                    |g: &mut [u8], p: usize, v: u16| g[p..p + 2].copy_from_slice(&v.to_le_bytes());
+                let put32 =
+                    |g: &mut [u8], p: usize, v: i32| g[p..p + 4].copy_from_slice(&v.to_le_bytes());
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 74..];
+                    let g = &mut span[i * 0x7E..];
+                    put16(g, 0x00, u16c(rec, 0)); // kind
+                    put16(g, 0x02, u16c(rec, 2)); // species
+                    put16(g, 0x04, u16c(rec, 4)); // attacker
+                    put16(g, 0x06, u16c(rec, 6)); // hp
+                    put16(g, 0x0C, u16c(rec, 8)); // mode
+                    put16(g, 0x0E, u16c(rec, 10)); // anim
+                    put32(g, 0x10, i32c(rec, 12)); // heading
+                    put32(g, 0x1C, i32c(rec, 32)); // impact_x
+                    put32(g, 0x20, i32c(rec, 36)); // impact_y
+                    put16(g, 0x24, i32c(rec, 16) as u16); // presence
+                    put32(g, 0x2A, i32c(rec, 20)); // target_x
+                    put32(g, 0x2E, i32c(rec, 24)); // target_y
+                    put32(g, 0x32, i32c(rec, 28)); // target_z
+                    put32(g, 0x36, i32c(rec, 40)); // x
+                    put32(g, 0x3A, i32c(rec, 44)); // y
+                    put32(g, 0x3E, i32c(rec, 48)); // z
+                    put32(g, 0x42, i32c(rec, 52)); // home_x
+                    put32(g, 0x46, i32c(rec, 56)); // home_y
+                    put32(g, 0x52, i32c(rec, 64)); // death_ctr
+                    put16(g, 0x56, i32c(rec, 60) as u16); // countdown
+                    put16(g, 0x72, u16c(rec, 72)); // facing
+                    put16(g, 0x7A, u16c(rec, 68)); // target_robot
+                    put16(g, 0x7C, u16c(rec, 70)); // fuse
+                }
+                span
+            }
+            "effect-rows" => {
+                // canonical u32 80 + 80*28 -> the bare 80*0x20
+                // guest LRU bank: age w@+0x00, x d@+0x02, y d@+0x06,
+                // z d@+0x0A, cos d@+0x0E, sin d@+0x12, ttl d@+0x16,
+                // id w@+0x1A.
+                let n = u32::from_le_bytes(w.bytes[..4].try_into().unwrap()) as usize;
+                assert_eq!(w.bytes.len(), 4 + n * 28);
+                let mut span = vec![0u8; 80 * 0x20];
+                let i32c =
+                    |rec: &[u8], p: usize| i32::from_le_bytes(rec[p..p + 4].try_into().unwrap());
+                for i in 0..n {
+                    let rec = &w.bytes[4 + i * 28..];
+                    let g = &mut span[i * 0x20..];
+                    g[0x00..0x02].copy_from_slice(&rec[0..2]); // age
+                    g[0x02..0x06].copy_from_slice(&i32c(rec, 4).to_le_bytes());
+                    g[0x06..0x0A].copy_from_slice(&i32c(rec, 8).to_le_bytes());
+                    g[0x0A..0x0E].copy_from_slice(&i32c(rec, 12).to_le_bytes());
+                    g[0x0E..0x12].copy_from_slice(&i32c(rec, 16).to_le_bytes());
+                    g[0x12..0x16].copy_from_slice(&i32c(rec, 20).to_le_bytes());
+                    g[0x16..0x1A].copy_from_slice(&i32c(rec, 24).to_le_bytes());
+                    g[0x1A..0x1C].copy_from_slice(&rec[2..4]); // id
+                }
+                span
+            }
             "static-map-wh" => {
                 let wv = u32::from_le_bytes(w.bytes[..4].try_into().unwrap());
                 let hv = u32::from_le_bytes(w.bytes[4..8].try_into().unwrap());
@@ -434,10 +546,11 @@ fn s0_s1_cross_and_double_run() {
         // W12-S4 (DESIGN §7 S4 row): the destroy rows fabricate as
         // the guest banks and parse back through the destroy
         // normalizers — the T1 destroy rows join the exact-exact
-        // set, the debris/splash T3 rows are E-only (no EXD alias
-        // yet — 2 more row-level coverage findings, documented
-        // never fabricated).
-        ("S4", 49u64, "1357af61ef082cb5", 1u64 + 2),
+        // set; the debris/splash T3 pair fabricates through the
+        // D162 subset-form projections and compares cross-channel
+        // too, so the lane keeps exactly the 1 S1-class row-level
+        // finding.
+        ("S4", 49u64, "1357af61ef082cb5", 1u64),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
         // the debris/splash rows never ride — exactly the 1 S1-class
@@ -457,8 +570,10 @@ fn s0_s1_cross_and_double_run() {
         // filter + the destroy normalizers) — zero field gaps.
         ("S5C", 55u64, "84b88562afa6fa54", 1u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
-        // T0/T1/T3/TS. The T3 dropship-frame row is E-only (no EXD
-        // alias), so exactly the 1 S1-class finding + 1 more. The
+        // T0/T1/T3/TS. The T3 dropship-frame row is the ONE
+        // remaining E-only T3 row (D162 pinned its EXD twin but
+        // the full-record identity arm is its own follow-up), so
+        // exactly the 1 S1-class finding + 1 more. The
         // beacon-family row's post-deploy latch {0,0,19,70,31} and
         // the surviving claims fabricate through the u16-cell map
         // and parse back exactly; the swept robot's state-5/stop-1e6
@@ -468,22 +583,25 @@ fn s0_s1_cross_and_double_run() {
         // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
         // destroy rows + both platform banks ride, and the T3
         // debris/splash rows carry the k7 destroy debris — no
-        // dropship, no T2 banks). Exactly the 1 S1-class row-level
-        // finding + the debris/splash E-only pair (like S4). The
-        // platform rows fabricate as the identity spans their
-        // normalizers define (both channels carry the same form);
-        // the creep-grown mirror words parse back through the
-        // compact-tile filter — zero field gaps.
-        ("S7", 1361u64, "5d7217beb232d64b", 1u64 + 2),
+        // dropship, no T2 banks). The debris/splash pair rides the
+        // D162 subset-form projections (no findings), so exactly
+        // the 1 S1-class row-level finding. The platform rows
+        // fabricate as the identity spans their normalizers define
+        // (both channels carry the same form); the creep-grown
+        // mirror words parse back through the compact-tile filter —
+        // zero field gaps.
+        ("S7", 1361u64, "5d7217beb232d64b", 1u64),
         // W12-S8 (§7j.42, D114): the critter-engagement lifecycle —
         // T0/T1/T2/T3/TS (the projectile bank rides the 0x68 fire
         // cycle — ALIASED, S3 pinned the T2 form; the critter bank
-        // itself + the effect rows are E-ONLY). No destroy staging:
-        // the debris/splash rows never ride. Exactly the 1 S1-class
-        // row-level finding + the critter-bank/effect-rows pair —
-        // zero field gaps (the 0x68 records fabricate through the
-        // same bare-span T2 form).
-        ("S8", 121u64, "10c78a7144cf6d3d", 1u64 + 2),
+        // itself + the effect rows ride the D162 subset-form
+        // projections and compare cross-channel). No destroy
+        // staging: the debris/splash rows never ride. Exactly the
+        // 1 S1-class row-level finding — zero field gaps (the 0x68
+        // records fabricate through the same bare-span T2 form; the
+        // critter bank through the 23-leaf 0x7E projection; the
+        // effect rows through the 8-leaf 0x20 walk).
+        ("S8", 121u64, "10c78a7144cf6d3d", 1u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();
@@ -525,9 +643,10 @@ fn s0_s1_cross_and_double_run() {
         );
         assert_eq!(res.count(Class::EngineBug), 0, "{id}");
         assert_eq!(res.count(Class::Structural), 0, "{id}");
-        // move-target-words is the one E-only row (S1+): the splice
-        // sources every robot leaf, so exactly the 1 row-level
-        // finding remains — no field-level gaps.
+        // move-target-words is the one E-only row (S1+; S6 adds
+        // the dropship): the splice sources every robot leaf, so
+        // exactly the 1 row-level finding remains on S0..S5/S7/S8 —
+        // no field-level gaps.
         assert_eq!(res.count(Class::Coverage), expect_coverage, "{id}");
         if expect_coverage > 0 {
             assert!(res
@@ -544,20 +663,12 @@ fn s0_s1_cross_and_double_run() {
             report_text(&res)
         );
         if id == "S4" || id == "S7" {
-            // The debris/splash rows have no EXD alias yet — exactly
-            // the 2 extra row-level findings (E-only rows, never
-            // fabricated O1 bytes).
-            assert!(res
-                .findings
-                .iter()
-                .any(|f| f.row == "debris-stager" && f.class == Class::Coverage));
-            assert!(res
-                .findings
-                .iter()
-                .any(|f| f.row == "splash-records" && f.class == Class::Coverage));
-            // The aliased destroy rows compare exact-exact: ZERO
-            // field-level findings on them.
+            // The debris/splash rows ride the D162 subset-form
+            // projections — they must compare CLEAN (no findings at
+            // all: row- or field-level, both channels carry them).
             for r in [
+                "debris-stager",
+                "splash-records",
                 "object-instances",
                 "trt-array",
                 "tile-word-grid",
@@ -565,16 +676,20 @@ fn s0_s1_cross_and_double_run() {
                 "typedb-mirror-rows",
             ] {
                 assert!(
-                    res.findings
-                        .iter()
-                        .all(|f| f.row != r || f.class == Class::Coverage),
-                    "{id}: row {r} must be gap-or-clean, got {}",
-                    res.findings
-                        .iter()
-                        .filter(|f| f.row == r)
-                        .map(|f| format!("{:?}", f.class))
-                        .collect::<Vec<_>>()
-                        .join(",")
+                    res.findings.iter().all(|f| f.row != r),
+                    "{id}: row {r} must compare clean post-D162\n{}",
+                    report_text(&res)
+                );
+            }
+        }
+        if id == "S8" {
+            // The critter-bank/effect-rows pair rides the D162
+            // subset-form projections — CLEAN, like the destroy set.
+            for r in ["critter-bank", "effect-rows", "projectile-bank"] {
+                assert!(
+                    res.findings.iter().all(|f| f.row != r),
+                    "{id}: row {r} must compare clean post-D162\n{}",
+                    report_text(&res)
                 );
             }
         }

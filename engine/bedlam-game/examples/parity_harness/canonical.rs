@@ -153,11 +153,11 @@ pub struct TickState<'a> {
     pub enemy_bank: &'a [EnemyProjectile],
     /// The critter-family watch surfaces (W12-S8), gated on the
     /// scenario's `critters = 1` key — `None` on S0..S7 (their
-    /// pinned bytes carry no critter rows). The bank is the
-    /// E-ONLY T2 `critter-bank` row (no EXD alias — the differ
-    /// reports it as a coverage finding, never fabricated on
-    /// O1); the effect-row bank is the E-ONLY T3 `effect-rows`
-    /// row. NEVER in `state_hash` (the W6 split).
+    /// pinned bytes carry no critter rows). The bank is the T2
+    /// `critter-bank` row and the effect-row bank the T3
+    /// `effect-rows` row — both EXD-aliased (D162, §5i) and
+    /// cross-channel compared since the subset-form O1 arms
+    /// landed. NEVER in `state_hash` (the W6 split).
     pub critter: Option<CritterView<'a>>,
     /// The destroy-family watch surfaces (W12-S4), gated on the
     /// scenario's `destroy = 1` staging key — `None` on S0..S3
@@ -337,8 +337,9 @@ fn mirror_blob(words: &[u16], seen: &[u8]) -> Vec<u8> {
 /// param i32×10, table u8}` (42 B, the E-modeled field set of the
 /// 0x30 stride; the unmapped words are out of the row). FULL BANK
 /// like the T2 rows: slot identity (first-free/LRU allocation) is
-/// the watched state. NO EXD alias yet — the row is E-only until
-/// the alias lands (a documented coverage gap, never fabricated).
+/// the watched state. EXD alias 0x93064 (D162, §5i); the O1
+/// normalizer projects the four compared leaves off the guest
+/// 0x30 records.
 fn debris_blob(debris: &[DebrisRecord]) -> Vec<u8> {
     let mut b = Vec::with_capacity(4 + debris.len() * 42);
     b.extend_from_slice(&(debris.len() as u32).to_le_bytes());
@@ -361,7 +362,8 @@ fn debris_blob(debris: &[DebrisRecord]) -> Vec<u8> {
 
 /// Encode the splash-bank row (W12-S4): u32 250 + the FULL bank of
 /// `{x i16, y i16, z i16, delay u16, age u16}` — the guest 0xA
-/// stride exactly. NO EXD alias yet (E-only row, documented gap).
+/// stride exactly. EXD alias 0x107774 (D162, §5i); the O1 side is
+/// the bare span with the count synthesized from the fixed bank.
 fn splash_blob(splashes: &[SplashRecord]) -> Vec<u8> {
     let mut b = Vec::with_capacity(4 + splashes.len() * 10);
     b.extend_from_slice(&(splashes.len() as u32).to_le_bytes());
@@ -436,7 +438,8 @@ fn robot_bank_blob(robots: &[Robot]) -> Vec<u8> {
     b
 }
 
-/// The critter-bank blob (E-ONLY T2 row, W12-S8): u32 count +
+/// The critter-bank blob (T2 row, W12-S8; EXD alias 0x10e81c +
+/// count cell 0x1194dc — D162, §5i): u32 count +
 /// count × the modeled 0x7E-record subset, the field order pinned
 /// here (kind, species, attacker, hp, mode, anim, heading,
 /// presence, target triple, impact pair, xyz, home pair,
@@ -474,7 +477,8 @@ fn critter_bank_blob(cs: &[bedlam_core::critter::CritterRecord]) -> Vec<u8> {
     b
 }
 
-/// The effect-rows blob (E-ONLY T3 row, W12-S8): u32 count + the
+/// The effect-rows blob (T3 row, W12-S8; EXD alias 0x9d534 —
+/// D162, §5i): u32 count + the
 /// fixed rows {age u16, id u16, x, y, z, cos, sin, ttl} — 28 B
 /// per row (the E-modeled subset of the 0x20-stride guest row).
 fn effect_rows_blob(rs: &[bedlam_core::critter::EffectRow]) -> Vec<u8> {
@@ -625,8 +629,10 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         }
     }
     // The extraction dropship row (W12-S6): the T3 craft record
-    // 0x4e6610 — an E-only row (no EXD alias; the differ reports it
-    // as a coverage finding, never fabricated on O1). Gated on the
+    // 0x4e6610. EXD alias 0x1081c4 pinned (D162, §5i) but the O1
+    // normalizer arm is not landed — the row still reports E-only
+    // coverage findings in cross-channel reports (the named
+    // full-record-identity follow-up). Gated on the
     // scenario's pad-step presence.
     if let Some(c) = &st.dropship {
         if want("T3") {
@@ -641,11 +647,11 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
             f.push_watch("dropship-frame", b);
         }
     }
-    // The critter-family rows (W12-S8): the T2 critter bank is
-    // E-ONLY (no EXD alias — coverage finding, never fabricated
-    // on O1); the T3 effect-row bank likewise. Gated on the
-    // scenario's `critters = 1` key — S0..S7 pinned bytes carry
-    // neither row.
+    // The critter-family rows (W12-S8): the T2 critter bank and
+    // the T3 effect-row bank are both EXD-aliased (D162, §5i) and
+    // cross-channel compared since the subset-form O1 arms landed.
+    // Gated on the scenario's `critters = 1` key — S0..S7 pinned
+    // bytes carry neither row.
     if let Some(v) = &st.critter {
         if want("T2") {
             f.push_watch("critter-bank", critter_bank_blob(v.critters));

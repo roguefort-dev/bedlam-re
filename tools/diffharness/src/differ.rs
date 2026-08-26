@@ -470,8 +470,9 @@ fn bank_row_canonical<'a>(
 
 // ---------------------------------------------------------------------
 // The destroy-family rows (W12-S4 — DESIGN §7 S4 row; the registry
-// T1 destroy rows + the T3 debris/splash rows, both EXD-verified or
-// documented E-only)
+// T1 destroy rows + the T3 debris/splash rows — every row EXD-
+// aliased, the D162 §5i census; the subset-form O1 arms landed
+// with the debris/splash pair)
 // ---------------------------------------------------------------------
 
 /// Object-instance slot cap: the .POS 2000×0x10 array (loader cap
@@ -802,9 +803,9 @@ fn mirror_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
     })
 }
 
-/// The debris-ring row: E-only (no EXD alias yet — the registry
-/// documents the gap). Canonical: u32 128 + 42-B records; the raw
-/// passthrough keeps the O2/unknown form comparable byte-exact.
+/// The debris-ring row (D162: EXD alias 0x93064 verified; the T2
+/// full-bank row). Canonical: u32 128 + 42-B records; the O1 side
+/// is the bare 128×0x30 guest span (`debris_o1`).
 fn debris_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
     let id = "debris-stager";
     let recs = bank_row_canonical(id, frame_no, b, DEBRIS_SLOTS_W12, 42)?;
@@ -824,9 +825,10 @@ fn debris_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> 
     })
 }
 
-/// The splash-bank row: E-only (no EXD alias yet). Canonical: u32
-/// 250 + 10-B records {x, y, z, delay, age} — the guest 0xA stride
-/// exactly.
+/// The splash-bank row (D162: EXD alias 0x107774 verified).
+/// Canonical: u32 250 + 10-B records {x, y, z, delay, age} — the
+/// guest 0xA stride exactly (the O1 side is the bare span,
+/// `splash_o1`).
 fn splash_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
     let id = "splash-records";
     let recs = bank_row_canonical(id, frame_no, b, SPLASH_SLOTS, 10)?;
@@ -840,6 +842,242 @@ fn splash_canonical(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> 
         fields.push((format!("s[{i}].z"), FieldVal::Int(rd16(4))));
         fields.push((format!("s[{i}].delay"), FieldVal::Int(rd16(6))));
         fields.push((format!("s[{i}].age"), FieldVal::Int(rd16(8))));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+// ---------------------------------------------------------------------
+// The D162 subset-form extraction arms — the four rows whose E
+// canonical record is a SUBSET of the guest record: the normalizer
+// walks the GUEST full span and projects E's modeled fields at the
+// guest offsets (the D87 field-map class; every canonical leaf
+// sources from the guest — zero field gaps by construction).
+// ---------------------------------------------------------------------
+
+/// The debris ring's guest-span walk: the bare 128×0x30 bank at
+/// 0x476fbc (EXW) / 0x93064 (EXD) — the fixed full bank, slot
+/// identity watched. The projection reads the four canonical
+/// leaves from the §7j.11 record: active u8@+0x00, kind d@+0x1C,
+/// delay d@+0x24, seq d@+0x18. The +0x18 is the DUAL field the
+/// ENGINE splits (§7j.44: E keeps the LRU-eviction role as its
+/// global staging counter `debris_seq`, the walk-cursor role as
+/// `anim`); the projection carries the guest's raw +0x18 — its
+/// value diverges from E's counter by construction and stays
+/// silent only because the row is T3 (never bit-compared). If the
+/// row is ever re-tiered, this offset pair is the known encoding
+/// difference (DESIGN §6a, the subset-arm table).
+fn debris_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "debris-stager";
+    need(
+        id,
+        frame_no,
+        b,
+        "128*0x30 records (the full guest ring)",
+        DEBRIS_SLOTS_W12 * 0x30,
+    )?;
+    let mut fields = Vec::with_capacity(1 + DEBRIS_SLOTS_W12 * 4);
+    fields.push(("count".to_string(), FieldVal::Int(DEBRIS_SLOTS_W12 as i128)));
+    for i in 0..DEBRIS_SLOTS_W12 {
+        let rec = &b[i * 0x30..];
+        fields.push((format!("d[{i}].active"), FieldVal::Int(rec[0] as i128)));
+        fields.push((
+            format!("d[{i}].kind"),
+            FieldVal::Int(i32le(&rec[0x1C..]) as i128),
+        ));
+        fields.push((
+            format!("d[{i}].delay"),
+            FieldVal::Int(i32le(&rec[0x24..]) as i128),
+        ));
+        fields.push((
+            format!("d[{i}].seq"),
+            FieldVal::Int(i32le(&rec[0x18..]) as i128),
+        ));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The splash bank's guest-span walk: the bare 250×0xA bank at
+/// 0x4e9778 (EXW) / 0x107774 (EXD) — the guest stride IS the
+/// canonical record, so the projection is identity and only the
+/// count is synthesized from the fixed bank.
+fn splash_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "splash-records";
+    need(
+        id,
+        frame_no,
+        b,
+        "250*0xA records (the full guest bank)",
+        SPLASH_SLOTS * 10,
+    )?;
+    let mut fields = Vec::with_capacity(1 + SPLASH_SLOTS * 5);
+    fields.push(("count".to_string(), FieldVal::Int(SPLASH_SLOTS as i128)));
+    for i in 0..SPLASH_SLOTS {
+        let rec = &b[i * 10..];
+        let rd16 = |p: usize| u16le(&rec[p..]) as i128;
+        fields.push((format!("s[{i}].x"), FieldVal::Int(rd16(0))));
+        fields.push((format!("s[{i}].y"), FieldVal::Int(rd16(2))));
+        fields.push((format!("s[{i}].z"), FieldVal::Int(rd16(4))));
+        fields.push((format!("s[{i}].delay"), FieldVal::Int(rd16(6))));
+        fields.push((format!("s[{i}].age"), FieldVal::Int(rd16(8))));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The critter bank's guest-span walk: the bare count×0x7E bank at
+/// 0x4cff98 (EXW, count 0x46cc2c) / 0x10e81c (EXD, count
+/// 0x1194dc) — the dbx-plan `$critter_count*0x7E` span, no prefix.
+/// The projection maps E's 23 modeled leaves (§7j.17/§7j.42 + the
+/// critter.rs field docs): kind w@+0x00, species w@+0x02, attacker
+/// i16@+0x04, hp i16@+0x06, mode w@+0x0C, anim w@+0x0E, heading
+/// d@+0x10, impact_x d@+0x1C, impact_y d@+0x20, presence
+/// w@+0x24, target d@+0x2A/+0x2E/+0x32, xyz d@+0x36/+0x3A/+0x3E,
+/// home d@+0x42/+0x46, death_ctr d@+0x52, countdown w@+0x56
+/// (zero-extended into the canonical i32), facing w@+0x72,
+/// target_robot i16@+0x7A, fuse w@+0x7C.
+fn critter_bank_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "critter-bank";
+    if b.is_empty() || !b.len().is_multiple_of(0x7E) {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: "count*0x7E records (the guest critter bank)".into(),
+        });
+    }
+    // Bank capacity 0xAC44 / 0x7E = 350 slots (§7j.17: the EXW
+    // arena at 0x4cff98; the count cell bounds the plan span).
+    const CRITTER_CAP: usize = 0xAC44 / 0x7E;
+    let count = b.len() / 0x7E;
+    if count > CRITTER_CAP {
+        return Err(NormalizeError::BadLength {
+            id: id.into(),
+            frame_no,
+            len: b.len(),
+            want: format!("<= {CRITTER_CAP}*0x7E records (the bank capacity)"),
+        });
+    }
+    let mut fields = Vec::with_capacity(1 + count * 23);
+    fields.push(("count".to_string(), FieldVal::Int(count as i128)));
+    let w16 = |rec: &[u8], p: usize| u16le(&rec[p..]) as i128;
+    let s16 = |rec: &[u8], p: usize| u16le(&rec[p..]) as i16 as i128;
+    let d32 = |rec: &[u8], p: usize| i32le(&rec[p..]) as i128;
+    for i in 0..count {
+        let rec = &b[i * 0x7E..];
+        fields.push((format!("critter[{i}].kind"), FieldVal::Int(w16(rec, 0x00))));
+        fields.push((
+            format!("critter[{i}].species"),
+            FieldVal::Int(w16(rec, 0x02)),
+        ));
+        fields.push((
+            format!("critter[{i}].attacker"),
+            FieldVal::Int(s16(rec, 0x04)),
+        ));
+        fields.push((format!("critter[{i}].hp"), FieldVal::Int(s16(rec, 0x06))));
+        fields.push((format!("critter[{i}].mode"), FieldVal::Int(w16(rec, 0x0C))));
+        fields.push((format!("critter[{i}].anim"), FieldVal::Int(w16(rec, 0x0E))));
+        fields.push((
+            format!("critter[{i}].heading"),
+            FieldVal::Int(d32(rec, 0x10)),
+        ));
+        fields.push((
+            format!("critter[{i}].presence"),
+            FieldVal::Int(w16(rec, 0x24)),
+        ));
+        fields.push((
+            format!("critter[{i}].target_x"),
+            FieldVal::Int(d32(rec, 0x2A)),
+        ));
+        fields.push((
+            format!("critter[{i}].target_y"),
+            FieldVal::Int(d32(rec, 0x2E)),
+        ));
+        fields.push((
+            format!("critter[{i}].target_z"),
+            FieldVal::Int(d32(rec, 0x32)),
+        ));
+        fields.push((
+            format!("critter[{i}].impact_x"),
+            FieldVal::Int(d32(rec, 0x1C)),
+        ));
+        fields.push((
+            format!("critter[{i}].impact_y"),
+            FieldVal::Int(d32(rec, 0x20)),
+        ));
+        fields.push((format!("critter[{i}].x"), FieldVal::Int(d32(rec, 0x36))));
+        fields.push((format!("critter[{i}].y"), FieldVal::Int(d32(rec, 0x3A))));
+        fields.push((format!("critter[{i}].z"), FieldVal::Int(d32(rec, 0x3E))));
+        fields.push((
+            format!("critter[{i}].home_x"),
+            FieldVal::Int(d32(rec, 0x42)),
+        ));
+        fields.push((
+            format!("critter[{i}].home_y"),
+            FieldVal::Int(d32(rec, 0x46)),
+        ));
+        fields.push((
+            format!("critter[{i}].countdown"),
+            FieldVal::Int(w16(rec, 0x56)),
+        ));
+        fields.push((
+            format!("critter[{i}].death_ctr"),
+            FieldVal::Int(d32(rec, 0x52)),
+        ));
+        fields.push((
+            format!("critter[{i}].target_robot"),
+            FieldVal::Int(s16(rec, 0x7A)),
+        ));
+        fields.push((format!("critter[{i}].fuse"), FieldVal::Int(w16(rec, 0x7C))));
+        fields.push((
+            format!("critter[{i}].facing"),
+            FieldVal::Int(w16(rec, 0x72)),
+        ));
+    }
+    Ok(NormRow {
+        id: id.to_string(),
+        fields,
+    })
+}
+
+/// The effect-row bank's guest-span walk: the bare 80×0x20 LRU
+/// bank at 0x4cec38 (EXW) / 0x9d534 (EXD) — the fixed full bank
+/// (§7j.24/5: always-evict, every row carries state). The
+/// projection maps E's 8 modeled leaves: age w@+0x00, x d@+0x02,
+/// y d@+0x06, z d@+0x0A, cos d@+0x0E, sin d@+0x12, ttl d@+0x16,
+/// id w@+0x1A.
+fn effect_rows_o1(frame_no: u64, b: &[u8]) -> Result<NormRow, NormalizeError> {
+    let id = "effect-rows";
+    const ROWS: usize = 80;
+    const STRIDE: usize = 0x20;
+    need(
+        id,
+        frame_no,
+        b,
+        "80*0x20 records (the full guest LRU bank)",
+        ROWS * STRIDE,
+    )?;
+    let mut fields = Vec::with_capacity(1 + ROWS * 8);
+    fields.push(("count".to_string(), FieldVal::Int(ROWS as i128)));
+    let w16 = |p: usize| u16le(&b[p..]) as i128;
+    let d32 = |p: usize| i32le(&b[p..]) as i128;
+    for i in 0..ROWS {
+        let o = i * STRIDE;
+        fields.push((format!("row[{i}].age"), FieldVal::Int(w16(o))));
+        fields.push((format!("row[{i}].id"), FieldVal::Int(w16(o + 0x1A))));
+        fields.push((format!("row[{i}].x"), FieldVal::Int(d32(o + 0x02))));
+        fields.push((format!("row[{i}].y"), FieldVal::Int(d32(o + 0x06))));
+        fields.push((format!("row[{i}].z"), FieldVal::Int(d32(o + 0x0A))));
+        fields.push((format!("row[{i}].cos"), FieldVal::Int(d32(o + 0x0E))));
+        fields.push((format!("row[{i}].sin"), FieldVal::Int(d32(o + 0x12))));
+        fields.push((format!("row[{i}].ttl"), FieldVal::Int(d32(o + 0x16))));
     }
     Ok(NormRow {
         id: id.to_string(),
@@ -1153,10 +1391,14 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
         "typedb-mirror-rows" => mirror_canonical(no, b),
         "debris-stager" => debris_canonical(no, b),
         "splash-records" => splash_canonical(no, b),
-        // The extraction dropship row (W12-S6): E-only (no EXD alias;
-        // the watch's exd_status is unmapped). Canonical = the 0x1C
-        // craft record {active, phase, x, y, alt, group, dwell}
-        // exactly as the emitter lays it out (§7j.40/6).
+        // The extraction dropship row (W12-S6): the 0x1C craft
+        // record {active, phase, x, y, alt, group, dwell} exactly
+        // as the emitter lays it out (§7j.40/6). D162 pinned the
+        // EXD twin 0x1081c4 (§5i) and the O1 plan emits the row,
+        // but the O1 normalizer arm is NOT landed (the full-record
+        // identity form is its own follow-up): the raw side still
+        // falls to the passthrough, so the row reports E-only
+        // coverage findings in cross-channel reports today.
         "dropship-frame" => {
             need(
                 id,
@@ -1175,10 +1417,11 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
                 int("dwell", i32le(&b[24..]) as i128),
             ]))
         }
-        // The critter-bank row (W12-S8): E-ONLY (no EXD alias; the
-        // watch's exd_status is unmapped). Canonical = u32 count +
-        // count × the modeled 0x7E-record subset exactly as the
-        // emitter lays it out (74 B/record; §7j.42/1).
+        // The critter-bank row (W12-S8): D162 pinned the EXD alias
+        // 0x10e81c (count cell 0x1194dc, §5i) and the subset-form
+        // O1 arm landed with it. Canonical = u32 count + count ×
+        // the modeled 0x7E-record subset exactly as the emitter
+        // lays it out (74 B/record; §7j.42/1).
         "critter-bank" => {
             if b.len() < 4 {
                 return Err(NormalizeError::BadLength {
@@ -1238,10 +1481,11 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
             }
             Ok(row(fields))
         }
-        // The effect-rows row (W12-S8): E-ONLY (§7j.24/5). Canonical
-        // = u32 count + count × 28 B {age u16, id u16, x, y, z, cos,
-        // sin, ttl} (the E-modeled subset of the 0x20-stride guest
-        // row).
+        // The effect-rows row (W12-S8): D162 pinned the EXD alias
+        // 0x9d534 (§5i) and the subset-form O1 arm landed with it.
+        // Canonical = u32 count + count × 28 B {age u16, id u16, x,
+        // y, z, cos, sin, ttl} (the E-modeled subset of the
+        // 0x20-stride guest row).
         "effect-rows" => {
             const STRIDE: usize = 28;
             if b.len() < 4 || !(b.len() - 4).is_multiple_of(STRIDE) {
@@ -1491,6 +1735,14 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         "object-instances" => object_instances_o1(no, b),
         "trt-array" => trt_o1(no, b),
         "typedb-mirror-rows" => mirror_o1(no, b),
+        // The D162 subset-form rows: the bare guest spans, each
+        // projected onto E's modeled subset (see the per-row
+        // parsers; the EXD/EXW record layouts are field-exact
+        // twins — the §5i accessor-twin census).
+        "debris-stager" => debris_o1(no, b),
+        "splash-records" => splash_o1(no, b),
+        "critter-bank" => critter_bank_o1(no, b),
+        "effect-rows" => effect_rows_o1(no, b),
         "tile-word-grid" | "platform-strength" => normalize_engine_row(id, no, b),
         "order-target" => {
             need(id, no, b, "3 contiguous i32 cells", 12)?;
@@ -1613,7 +1865,16 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "blink-cursor"
         | "per-player-selected"
         | "typedb-fade-byte"
-        | "armor-pad-reads" => normalize_o1_row(id, no, b),
+        | "armor-pad-reads"
+        // The D162 subset-form rows: the EXW record layouts are
+        // the field-exact twins of the EXD banks (the maps were
+        // pinned EXW-side — §7j.11 debris, §7j.24/5 effect rows,
+        // §7j.17 critter, §7j.10 splash — and §5i closed the EXD
+        // aliases), so the guest-span projections are shared.
+        | "debris-stager"
+        | "splash-records"
+        | "critter-bank"
+        | "effect-rows" => normalize_o1_row(id, no, b),
         "robot-bank" => robot_row_from_map(id, no, b, EXW_ROBOT_MAP),
         // The W11 pin (D137, §7j.60; arithmetic corrected by D138):
         // the EXW w/h cells are ADJACENT u32s with w LOW (w 0x4eddec,
@@ -1833,6 +2094,10 @@ fn field_class(row: &str, field: &str, tier: &str) -> Class {
         | ("typedb-mirror-rows", "count")
         | ("debris-stager", "count")
         | ("splash-records", "count") => Class::Structural,
+        // The D162 subset-form counts: structural like every other
+        // bank count word — a count mismatch is a staging
+        // divergence, never a T2/T3 budget item.
+        ("critter-bank", "count") | ("effect-rows", "count") => Class::Structural,
         ("robot-bank", f) if is_t2_position(f) => Class::T2Reported,
         ("move-target-words", f) if f.ends_with(".tx") || f.ends_with(".ty") => Class::T2Reported,
         // TS statics: byte-exact structural comparison.
