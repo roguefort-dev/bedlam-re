@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D168 `exd-menu-fn-attribution` COMPLETE (worker
+    4e41bf00 claim 1, commit a4ea1c6, PUSHED, docs-only): the D167
+    §2b/C residue closed — the five EXD cumulative-menu INC sites
+    attributed per-function. OPTIONS 0x4d212 ∈ entry 0x4c80c,
+    BRIEF 0x4f6b4/0x4f6fc/0x4fc17 ∈ 0x4f1d1, SELECT 0x5148b ∈
+    0x50953; SHOP 0x52fd7 / DEBRIEF 0x5638d complete the layout,
+    ORDER-IDENTICAL to EXW — the 1/3/1 split HOLDS, no divergence.
+    Anchors: per-screen "SOUND\MIDI\<NAME>" loads via the common
+    callee 0x1405f (+ BRIEF music-start eax=3, song slot 3, the
+    EXW MusicPump fact intact), GameMain dispatch in EXW call
+    order, call-target census boundary proof (no entry inside any
+    (entry, last-INC] span), family prologue 53 51 52 56 57 55 at
+    every entry (OPTIONS decoded from raw bytes past the
+    0x4c7b0..0x4c989 desync), shared epilogue trampoline 0x51d11,
+    instruction-exact INC contexts, the BRIEF −9-per-site offset
+    fingerprint. NEW helper identity 0x4e9a8 ≡ EXW 0x43c87c
+    (menu-text draw). C₀ model unchanged; registry/ledger
+    consequence NONE. Verified objdump-only (no Ghidra run, no
+    corpus write), MANIFEST clean before AND after. Phase
+    unchanged: P4.2 unattended build order COMPLETE; the S0 live
+    session (interactive-gated) remains the P4 closure gate.
+    Queued: `exd-music-loader-census` (item 1 — the D168 residue)
+    + item 2.
+
   - 2026-08-26 D167 `exd-menu-reset-census` COMPLETE (worker
     e2dded59 claim 1, commit fdbe8ec, PUSHED): the §7j.66 open
     residue closed — the EXD counter-twin [0x1195f0] whole-objdump

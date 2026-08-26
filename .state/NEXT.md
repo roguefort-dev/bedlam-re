@@ -5,29 +5,25 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/RE-objdump] `exd-menu-fn-attribution` — the one residue the
-   D167 exd-menu-reset-census left open (RE-EXD-MAP §2b/C): the
-   per-FUNCTION attribution of the five EXD cumulative menu INC
-   sites 0x4d212/0x4f6b4/0x4f6fc/0x4fc17/0x5148b to the EXD
-   OPTIONS/BRIEF/SELECT twins (EXW split 1/3/1: OPTIONS 0x43afa0,
-   BRIEF 0x43d4f7/0x43d53f/0x43da5a, SELECT 0x43f31f). Bounded
-   objdump-only unit, NO Ghidra launch (b2-functions.txt is NOT
-   usable — B2's layout drifts from EXD in this region, §2b/B):
-   (a) derive EXD function boundaries around 0x4c000..0x52000 by
-   prologue/ret/`call`-target scans of ghidra-project/
-   exd-text-objdump.txt (Watcom `push ebp`-style entries + padding
-   gaps), triangulating with the EXW twins' call shapes (menu
-   screens are called from the EXD GameMain/menu-walk driver —
-   find the call sites in the 0x2c000-0x2d500 GameMain region and
-   work inward); (b) name each of the five INC sites' containing
-   function via TWO anchors per the §3 method (music-basename
-   strings, draw-helper call shapes, the 0x4e9a8/0x111fa draw
-   families); (c) verify the 1/3/1 per-screen split holds in EXD
-   or document the divergence; (d) land the §2b/C amendment +
-   D-entry (no new ledger row expected). MANIFEST before AND
-   after; emit interim notes early. Keep it bounded: if the
-   boundary derivation needs >~2h of scan work, land the GameMain
-   call-site census alone as the deliverable and requeue the rest.
+1. [P4/RE-objdump] `exd-music-loader-census` — the D168 residue: the
+   EXD music-LOADER chain twins vs the EXW RE-EXW-MUSIC §1 chain.
+   D168 pinned the five per-screen load sites (each `mov eax,<str>`
+   + the ONE common callee **0x1405f** = load-music-by-basename;
+   BRIEF's `mov eax,3; call 0x13e04` = music START on song slot 3)
+   and the ".MRS"/".MRW" literals at image 0x95055/0x95050. Bounded
+   objdump-only unit, NO Ghidra launch: (a) decode 0x1405f and 0x13e04
+   (prologue/shape/args) and their call chains down to the
+   .MRS/.MRW-name builders and the arena allocator; (b) anchor each
+   against the EXW chain (load_midi FUN_00403642 → load_mrs 0x403827
+   → load_mrw 0x4038c6 → mrw_load 0x44c2cc; music start 0x4033d4;
+   the sequencer trio already §5g-mapped) with TWO anchors per row
+   (string refs, call shapes, the song-slot-3 constant); (c) census
+   the callers of 0x1405f (expect the five screens + ?) and of
+   0x13e04 (expect song-slot args); (d) land a §5g-bis-style addendum
+   in RE-EXD-MAP + the D-entry. No registry row expected (loader
+   internals are not S0 watches). MANIFEST before AND after; interim
+   notes early; if the chain decode exceeds ~2h, land the 0x1405f +
+   0x13e04 decode alone and requeue the rest.
 2. [INTERACTIVE-gated — SKIP when unattended; needs desktop +
    operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
    live capture vs the E canonical chains + the DH-G1 double-run
@@ -39,7 +35,32 @@ renumbered queue keeps every open item claimable by number).
    workers: do NOT attempt this item — select item 1 instead.
 
 ## Done
-1. DONE (2026-08-26, worker e2dded59 claim 1, commit fdbe8ec,
+1. DONE (2026-08-26, worker 4e41bf00 claim 1, commit a4ea1c6,
+   PUSHED): P4/RE-objdump `exd-menu-fn-attribution` — the D167
+   §2b/C residue CLOSED (D168, RE-EXD-MAP §2b/C amended). The five
+   EXD cumulative-menu INC sites attributed per-function: OPTIONS
+   0x4d212 ∈ entry 0x4c80c, BRIEF 0x4f6b4/0x4f6fc/0x4fc17 ∈ entry
+   0x4f1d1, SELECT 0x5148b ∈ entry 0x50953 (SHOP 0x52fd7 / DEBRIEF
+   0x5638d complete the five-screen layout, ORDER-IDENTICAL to
+   EXW). The 1/3/1 per-screen split HOLDS, no divergence. Anchors:
+   per-screen "SOUND\MIDI\<NAME>" basename loads via the ONE common
+   callee 0x1405f (BRIEF then music-start eax=3 → song slot 3, the
+   EXW MusicPump fact intact) + GameMain dispatch in the EXW call
+   order (0x2cd6e/0x2ce0c/0x2ce45/0x2cf3f/0x2cf7b) + whole-objdump
+   call-target census (NO entry inside any (entry, last INC] span;
+   next targets 0x4e934/0x4fe28/0x5159d) + family prologue
+   53 51 52 56 57 55 at every entry (OPTIONS decoded from raw bytes
+   past the 0x4c7b0..0x4c989 objdump desync) + the shared epilogue
+   trampoline 0x51d11 + instruction-exact INC contexts (0x8e-image
+   draw §5h pair; BRIEF buffer pairs 0xf7b8c/0xf7bbc ⟷
+   0x46b49c/0x46b4cc; SELECT post-present mode cmp §4 pair; BRIEF #3
+   cinematics cmp S0-16 pair) + the BRIEF −9-per-site offset
+   fingerprint. NEW helper identity 0x4e9a8 ≡ EXW 0x43c87c
+   (menu-text draw, 4 GameMain calls per side). C₀ model unchanged;
+   registry/ledger consequence NONE. Verified objdump-only (no
+   Ghidra run, no corpus write), MANIFEST clean before AND after.
+   Residue queued: item 1 exd-music-loader-census.
+2. DONE (2026-08-26, worker e2dded59 claim 1, commit fdbe8ec,
    PUSHED): P4/RE-objdump `exd-menu-reset-census` — the §7j.66 open
    residue CLOSED (D167, RE-EXD-MAP §2b + the §7j.66 addendum). The
    EXD whole-text objdump census of the counter twin [0x1195f0]
