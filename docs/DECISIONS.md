@@ -5736,3 +5736,85 @@ p4-trigger-contract, D172 = p4-static-proof-scope; this entry D173.
 NUMBERING: D173 = presentation dependency decision; this entry D174.
 (watchdog repair 364897 1787768451, adopting WIP from workers
 d7f85d22, 579650c9, d6f199cb)
+
+## D175 — 2026-08-27: P5/gate `p5-zone-gate-scaffold` — the per-zone parity LEDGER format decided (docs/P5-MISSION-LEDGER.toml, schema p5-mission-ledger-v1: 37 mission rows, disposition pending|green, catalog_refs feeding P6 triage) + the fail-closed checker wired as the FIRST P5 required gate
+
+Context: PLAN §6 P5 ("Parity completion (per-zone gates)") requires
+"an automated completeness gate validates every zone" and "a committed,
+schema-validated per-bug ledger" (the original-behavior catalog) that
+"feeds P6 triage". The P4 closure (972748d) queued this scaffold as the
+first P5 unit: land the per-zone parity LEDGER + the first P5 required
+gate before any zone work starts, so every zone unit from now on has a
+machine-checkable completion contract (the P4 pattern: gates land as
+evidence lands).
+
+1. THE ENUMERATION (read-only, VERIFIED): the 37 shipped missions were
+   enumerated from game-data/BEDLAM/EDITOR/ZONE*/MISSION*.TOT — ZONEA
+   MISSION1; ZONEB..ZONEF MISSION1..7 each; ZONEG MISSION1 — with
+   sha256sum -c MANIFEST.sha256 --quiet clean BEFORE and AFTER. The .TOT
+   mission-total file is the runtime-loaded mission identity
+   (FORMATS-MISSION §0.2 runtime extension census; the zone-level
+   lettered MISSION{A..G}.* files carry no .TOT). Arithmetic
+   self-check: TOT = u16 w + u16 h + 8·w·h u16 planes = 4+16·w·h bytes
+   (FORMATS-MISSION §2) — 25×75→30004, 100×100→160004, 100×25→40004,
+   all 37 files match their zone's expected size; the census equals the
+   independent FORMATS-MISSION §0 table (1+7·5+1, 354 375 tiles).
+
+2. THE LEDGER FORMAT (the decision):
+   a. Artifact docs/P5-MISSION-LEDGER.toml, TOML (the repo convention —
+      required-gates.toml, watches.toml; stdlib tomllib, no deps), schema
+      string "p5-mission-ledger-v1" fail-closed.
+   b. One [[mission]] row per mission: id "ZONE{L}-MISSION{n}", zone,
+      mission, disposition, catalog_refs. Why per-mission rows (not
+      per-zone): the acceptance shape is per zone but the work and the
+      original-behavior catalog are per mission ("repro, affected
+      missions"); zone status is DERIVED (all missions green), never
+      stored — one source of truth per fact, no two-field drift.
+   c. disposition ∈ {pending, green} — deliberately minimal. Every
+      mission starts pending. No "failed"/"blocked" state: the ledger
+      records CLOSURE, not attempt history (history lives in NEXT.md
+      Done entries + DECISIONS.md); a mission that fails verification
+      stays pending. Adding states later bumps the schema string and
+      checker together.
+   d. catalog_refs = original-behavior catalog entry ids observed on the
+      mission (non-empty, unique, whitespace-free strings): the P6
+      triage feed named by the plan. A green mission may carry zero refs
+      (no divergences found); refs while pending record findings as they
+      land.
+   e. Per-file digests are NOT duplicated into the ledger: MANIFEST.sha256
+      already pins every corpus file and is checked at every gate run —
+      the ledger pins identity (zone, mission), not content.
+
+3. THE CHECKER (tools/check-p5-zone-ledger.py + 18-case hermetic suite
+   tools/test-p5-zone-ledger.py, all fail-closed): ledger schema/row
+   validation (unknown keys, dup ids, id↔zone/mission agreement,
+   disposition enum, catalog_ref hygiene); corpus enumeration re-derived
+   READ-ONLY at runtime and pinned to the 37-mission zone shape (A:1,
+   B-F:7, G:1 — drift anywhere fails loud); ledger set == corpus set;
+   and CROSS-ARTIFACT SAFETY with docs/required-gates.toml: a
+   p5-zone-{a..g} completion gate present in P5 required_gates requires
+   that zone fully green (wiring can never run ahead of closure), and
+   manifest P5 status green requires ALL 37 green (a premature phase
+   flip fails even with an empty gate list — the validator's
+   all-gates-pass semantics alone would let an empty green P5 pass).
+   game-data never appears in tracked_paths/corpus (never git-tracked);
+   the checker reads the corpus read-only exactly like MANIFEST
+   verification, PATH-free under the validator's bwrap.
+
+4. GATE WIRING: P5 required_gates = ["p5-zone-gate-scaffold"] (the
+   FIRST entry), commands = the checker + its test suite on
+   tracked_paths [P5-ZONE-GATES.md, P5-MISSION-LEDGER.toml, both tools,
+   required-gates.toml]; no corpus key. The gate validates ledger
+   COMPLETENESS + consistency, NOT zone completion: green from the
+   moment it lands (0/37 is the honest scaffold state). Per-zone gates
+   p5-zone-{a..g} land as zones close; P5 stays pending until then.
+   Acceptance shape recorded VERBATIM in docs/P5-ZONE-GATES.md §1 with
+   the seven-criterion decomposition (incl. the DM carve-out as scope,
+   not check).
+
+5. VERIFIED THIS RUN: checker OK on the real repo (37 missions, 0/37
+   green); test suite 18/18; manifest TOML re-parsed (9 gates, 8 phase
+   rows, P5 required_gates exactly one entry); gates-validator 22/22;
+   canonical_dump_gate 13/13 (controls — no engine change, docs/tools
+   only); MANIFEST clean before AND after; no Ghidra run; no corpus
+   write. (worker 05e2d7ae claim 1)

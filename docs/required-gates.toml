@@ -28,7 +28,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 [[phase]]
 id = "P5"
 status = "pending"
-required_gates = []
+required_gates = ["p5-zone-gate-scaffold"]
 
 [[phase]]
 id = "P6"
@@ -138,3 +138,26 @@ writable = ["runtime/env-probe-out"]
 id = "p4-machine-verdict"
 timeout_seconds = 1
 depends = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "env-probe"]
+
+# p5-zone-gate-scaffold — the P5 opener per PLAN §6 (D175): the per-zone
+# parity LEDGER (docs/P5-MISSION-LEDGER.toml, schema p5-mission-ledger-v1,
+# every mission starts pending) plus its fail-closed checker. The checker
+# re-enumerates the 37 shipped missions READ-ONLY from the game-data corpus
+# (ZONEA M1; ZONEB..F M1-7 each; ZONEG M1) and validates ledger
+# completeness + internal consistency: exactly those missions, valid
+# zones/dispositions/ids, ledger set == corpus set, and cross-artifact
+# safety with this manifest (a p5-zone-{a..g} completion gate may only be
+# wired once its zone is fully green; P5 status green requires all 37
+# green). game-data is never git-tracked: no corpus path may appear in
+# tracked_paths/corpus — the checker reads the corpus read-only at runtime,
+# the MANIFEST.sha256 contract. Per-zone completion gates land here as each
+# zone closes; P5 stays pending until every zone closes. The second command
+# is the checker's fail-closed hermetic test suite (18 cases).
+[[gate]]
+id = "p5-zone-gate-scaffold"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p5-zone-ledger.py"],
+  ["/usr/bin/python3", "tools/test-p5-zone-ledger.py"],
+]
+tracked_paths = ["docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "tools/check-p5-zone-ledger.py", "tools/test-p5-zone-ledger.py", "docs/required-gates.toml"]
