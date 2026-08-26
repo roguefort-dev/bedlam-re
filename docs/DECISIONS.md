@@ -5612,3 +5612,81 @@ write; the oracle runs are read-only corpus consumers). PLAN.md P4
 acceptance + DESIGN-DIFFHARNESS §CI-wiring note name the gate
 content. NUMBERING: D170 reserved by the controller, D171 =
 p4-trigger-contract, this entry D172. (worker 7003f272 claim 1)
+
+## D173 — 2026-08-26: P4/gate `p4-dependency-spikes` — the FINAL presentation dependency decision recorded (wgpu stays 27.0.1; winit 0.30.13 window integration; the R8Uint + packed-R32Uint-palette upload path; adapter-free-safe headless acquisition) — closes the D24 "final version call" deferral
+
+Context: PLAN sec 6 P4 item 1 (dependency spikes decided here —
+"wgpu version/window integration and indexed-palette upload path")
++ PLAN sec 4 ("DECISIONS.md records each choice + evidence"). D24
+pinned wgpu 27.0.1 + pollster 0.4.0 for the P3 skeleton but
+explicitly left "the FINAL version call ... with the P4 dependency
+spike"; D39 added winit 0.30.13 as the window host. This entry is
+that final call, executed as the `dependency-spikes` required gate
+(docs/required-gates.toml: two bounded offline locked commands over
+tracked_paths Cargo.lock + engine/bedlam-platform/src/gpu.rs +
+docs/DECISIONS.md — a docs-only unit; no engine code moved).
+
+1. THE DECISION (final for P4 closure):
+   a. wgpu = 27.0.1, UNCHANGED from D24. Cargo.lock today: wgpu
+      27.0.1 (+ wgpu-core 27.0.3 / wgpu-hal 27.0.4 / wgpu-types
+      27.0.1); exactly ONE workspace pin via the bedlam-platform
+      re-export (`pub use wgpu;`, engine/bedlam-platform/src/lib.rs)
+      — bedlam-platform asks `wgpu = "27"`, bedlam-shell carries NO
+      direct wgpu dependency (the D39 single-pin rule holds). No
+      30.x bump: the 27 line is the mature one, the parity pipeline
+      uses only baseline WebGPU surface (see c), and a later major
+      bump stays presentation-only surgery — goldens + the parity
+      hash are CPU-side over the canonical Frame and never touch
+      the GPU path (D24/D20).
+   b. Window integration = winit 0.30.13 + pollster 0.4.0 (the D39
+      shape carried as final: window created inside `resumed()`
+      behind `Arc<Window>`, `about_to_wait` borrow-scoped clock ->
+      pump -> stage -> redraw; pollster blocking is window-host
+      ONLY, never on the sim path).
+   c. Indexed-palette upload path = the D24 pipeline, FINAL:
+      per-frame re-upload of the 640x480 R8Uint index texture
+      (write_texture, bytes_per_row 640) + a 256x1 R32Uint palette
+      texture whose entries pack the 6-bit VGA triple
+      r | g<<6 | b<<12, re-uploaded ONLY on frame.palette_dirty or
+      first upload (the 004ee9b6 handshake analog, DESIGN-RENDER
+      sec 2 fact 7); the fullscreen-triangle WGSL expands 6->8 bits
+      (Original v<<2 default, Full (v<<2)|(v>>4)) and NEVER
+      interpolates indices — bilinear mixes the expanded RGB of
+      four neighbors only. R8Uint/R32Uint + TEXTURE_BINDING +
+      textureLoad are baseline WebGPU: both device paths open with
+      DEFAULT limits and NO optional features (gpu.rs
+      new_headless/new_for_surface share that contract), so the
+      path needs no adapter capability beyond the baseline.
+   d. Adapter policy = ADAPTER-FREE-SAFE: `ParityGpu::new_headless`
+      requests a low-power adapter with `compatible_surface: None`
+      and returns Option; on hosts with no adapter (pure-CI
+      containers) GPU tests SKIP, never fail — this gate is
+      hermetically green wherever the crate compiles. The surface
+      host path (`new_for_surface`) mirrors the same low-power /
+      default-limits / no-features device contract so both hosts
+      behave alike.
+
+2. EVIDENCE (this run, the exact gate argv):
+   - `/usr/bin/cargo test --release --locked --offline -p
+     bedlam-platform` — 9/9 green (scale 8: integer/fit/fill +
+     uv-crop geometry; headless 1: `parity_offscreen_roundtrip`,
+     which RAN on this host's adapter — no skip marker under
+     --nocapture, 0.19-0.22 s — a real offscreen 1280x960 present +
+     readback probing the Original expansion 63 -> 252 AND the
+     palette_dirty=false palette-reuse pass).
+   - `/usr/bin/cargo build --release --locked --offline -p
+     bedlam-shell` — Finished release, exit 0 (compiles the winit
+     0.30.13 window host + platform + game chain).
+   - MANIFEST.sha256 clean before AND after; no game-data/ or
+     derived/ write; no Ghidra run.
+
+3. CONSEQUENCE: the D24 deferral is closed; P4 item 1 (dependency
+   spikes) now has every element decided in-tree — SMK D30, cpal
+   D40, winit D39, and the presentation stack here. No engine
+   change (docs-only unit); zero canonical-chain movement by
+   construction (presentation never feeds sim or hashed state,
+   D12/D17/D20).
+
+NUMBERING: D170 reserved (controller, no entry), D171 =
+p4-trigger-contract, D172 = p4-static-proof-scope; this entry D173.
+(worker 71effd2b claim 1)
