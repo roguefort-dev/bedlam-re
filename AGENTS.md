@@ -20,7 +20,7 @@ runs. Read it fully before doing anything.
 - Never run interactive/sudo commands. Never modify files outside the repo except
   .state/ logs, ghidra-project/, and /tmp scratch.
 - One bounded work unit per run. Small commits. Push when green.
-- Unattended nudge agents MUST NOT spawn or delegate to subagents. No nesting; each claimed slot is one glm-5.3 session.
+- Unattended nudge agents MUST NOT spawn or delegate to subagents. No nesting; each claimed slot is one glm-5.3 (#high effort) session.
 - Every commit advances substantive code or documentation; runtime state is machine-owned evidence.
 
 ## Required-task outcomes

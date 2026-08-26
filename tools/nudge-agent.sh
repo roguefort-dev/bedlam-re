@@ -26,7 +26,8 @@ elif command -v opencode2 >/dev/null 2>&1; then
 else
   OPENC=/home/kato/.local/share/fnm/node-versions/v24.19.0/installation/bin/opencode2
 fi
-MODEL=zai-coding-plan/glm-5.3
+# Workers run GLM-5.3 at high reasoning effort (matches llm-watchdog WD_MODEL default).
+MODEL=zai-coding-plan/glm-5.3#high
 NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 unit_name="bedlam-nudge-item${item}-${slotid}"
 
