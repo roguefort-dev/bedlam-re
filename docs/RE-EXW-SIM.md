@@ -2197,11 +2197,20 @@ loop. All [verified] asm unless tagged.
      tile byte == 0x62 (FUN_0041eb4c) AND grid word ≠ 0 →
      FUN_0041a894(damage 100, flag 0); destroyed → 5× kind-12
      debris (RandA&0xF/&0x1F jitter, delays 0/2/4/6/8 - the
-     7j.11 k12 sites 0x40ff7e/0x4100a8). OPEN: FUN_0040fe93
-     indexes 0x4c69e4 with a 160-byte stride (20·i << 3) while
-     the canonical robot stride is 0xA8 (`imul 0xa8` sites) -
-     either a second array aliasing the base or an original-code
-     quirk; unpinned [census].
+     7j.11 k12 sites 0x40ff7e/0x4100a8). CLOSED [was OPEN:
+     "FUN_0040fe93 indexes 0x4c69e4 with a 160-byte stride
+     (20·i << 3) while the canonical robot stride is 0xA8" —
+     second array or quirk?]: a CENSUS ARITHMETIC SLIP, not a
+     second array — 0x40fe9e..0x40fea6 computes eax = 21·idx
+     (`mov esi,eax; shl eax,2; add eax,esi; shl eax,2; add
+     eax,esi` — the Watcom ×21 idiom; the gloss dropped the
+     second `add`), so `[eax*8+0x4c69e4]` has stride 21·8 =
+     168 = 0xA8, the canonical robot stride. Resolved by
+     §7j.25 item 7 (D73, 2026-08-21); independently
+     re-verified 2026-08-26 with the full caller/extent
+     census (sole call site 0x40bc44, idx ∈ [0,[0x46ccbc]]
+     ≤ 12, no jump-table refs, extent map inside the D129
+     12×0xA8 bank) — see the §7j.25 item 7 addendum [D166].
    - **FUN_004244a1 = the script/explosion entry** (site
      0x424503): tile-coordinate args, FUN_00424355 first, then
      FUN_0041bc1c(x, y, 5000) + FUN_0041a894(x, y, 0, damage
@@ -4014,6 +4023,37 @@ Closes the 7j.22/7j.23-promised 9-case selector decode. All
    FUN_0040fe93 ← robots()/FUN_0040b9f6 @0x40bc44 (the
    phase-1 walk); FUN_0040ff92 ← the critter controller
    FUN_00412f34 @0x413fd7 — both actors trigger floor traps.
+   ADDENDUM 2026-08-26 (the `fe93-stride-alias-census` unit;
+   queue hygiene: the queue re-asked this point as OPEN — D73
+   had already closed it, and the §7j.13 `OPEN:` marker was the
+   residue; everything below independently re-derived from
+   ghidra-project/exw-text-objdump.txt): (a) stride arithmetic
+   re-decoded instruction-exact — 0x40fe9c `mov esi,eax`,
+   0x40fe9e `shl eax,2`, 0x40fea1 `add eax,esi`, 0x40fea3
+   `shl eax,2`, 0x40fea6 `add eax,esi` → eax = 21·idx; the
+   three loads `[eax*8+0x4c69e4]` / `+0x4c69e8` / `+0x4c69ec`
+   = x/y/z dwords @+0/+4/+8 of the SAME 0xA8-stride record
+   (sar 0xd / 0xd / 0x5, z clamped ≥ 0 — the §3 field layout).
+   (b) caller census re-run over the FULL objdump text:
+   exactly ONE reference to 0x40fe93 anywhere (the direct call
+   0x40bc44) and ZERO jump-table encodings (byte pattern
+   `93 fe 40 00` — no hits). The call site sits in
+   FUN_0040b9f6's per-robot walk; the idx range is pinned by
+   the loop tail 0x40c483..0x40c491: idx ([esp+0x20]) runs
+   [0, [0x46ccbc]) — the robot count, ≤ 12 (the D129 12-slot
+   bank). (c) extent map: NO 20×160 array exists anywhere at
+   the base — the only bank is the D129 12×0xA8 = 0x7E0
+   zero-fill span 0x4c69e4..0x4c71c4 (FUN_00402965,
+   ecx=0x7E0 @0x40cd29..38); with idx ≤ 11 the highest byte
+   FUN_0040fe93 touches is base + 11·0xA8 + 8 = +0x740
+   (0x4c7124), well inside. Even under the erroneous 160 gloss
+   idx would have to reach 13 before crossing the extent (and
+   count is capped at 12), but the two strides disagree at
+   every idx ≥ 1 (160 ≠ 168), so the instruction decode is the
+   dispositive evidence. VERDICT: QUIRK — census arithmetic
+   slip; NO second array. Registry/plan consequence: NONE —
+   watches.toml and the dbx-plan robot-bank row were always
+   pinned stride 0xA8; nothing moves (D166).
 8. **.BDG grammar CLOSED + corpus census [verified, python
    framing per the parse; 37/37 files EOF-exact]**: NO
    header — records start at offset 0. Per record: control
@@ -4691,7 +4731,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 
 | constant | value | anchor |
 |---|---|---|
-| robot record base/stride/count | 0x4c69e4 / 0xA8 / DAT_0046ccbc | 0x40c536, 0x40b9f6 |
+| robot record base/stride/count | 0x4c69e4 / 0xA8 / DAT_0046ccbc | 0x40c536, 0x40b9f6, 0x40fe93 stride proof (×21-idiom, §7j.25 item 7 + D166 re-verify) |
 | Q13 per tile | 0x2000 | 0x440cfe9 region, robots() |
 | Q5 per tile | 0x20 | 0041e897 bounds, 0041e231 |
 | spawn center offset | 0xF00 | FUN_0040cca0 |
