@@ -275,6 +275,49 @@ exit 0
         self.assertNotEqual(rc, 0)
         self.assertIn("gitignored", report["error"])
 
+    def test_manifest_corpus_accepts_controller_scale_assets(self):
+        # The external corpus contract: MANIFEST.sha256 lists read-only
+        # originals (game-data WAVs, TITLE.SMK) that are untracked-but-
+        # present and range 17-40 MB. The validator must accept them at
+        # the controller's 128 MiB binding cap, not the 16 MiB tracked
+        # content cap, or every real validation fails before any gate.
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+        )
+        corpus = root / "game-data" / "BIG0.WAV"
+        corpus.parent.mkdir(parents=True, exist_ok=True)
+        corpus.touch()
+        os.truncate(corpus, 17 * 1024 * 1024)  # sparse: no disk cost
+        digest = subprocess.run(
+            [SHA256SUM, str(corpus)], check=True, capture_output=True, text=True
+        ).stdout.split()[0]
+        manifest = root / "MANIFEST.sha256"
+        manifest.write_text(manifest.read_text() + f"{digest}  game-data/BIG0.WAV\n")
+        subprocess.run([GIT, "-C", str(root), "add", "MANIFEST.sha256"], check=True)
+        subprocess.run([GIT, "-C", str(root), "commit", "-qm", "corpus"], check=True)
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0)
+        self.assertTrue(report["plan_complete"])
+
+    def test_manifest_corpus_over_controller_cap_fails_closed(self):
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+        )
+        corpus = root / "game-data" / "HUGE.WAV"
+        corpus.parent.mkdir(parents=True, exist_ok=True)
+        corpus.touch()
+        os.truncate(corpus, 128 * 1024 * 1024 + 1)
+        digest = subprocess.run(
+            [SHA256SUM, str(corpus)], check=True, capture_output=True, text=True
+        ).stdout.split()[0]
+        manifest = root / "MANIFEST.sha256"
+        manifest.write_text(manifest.read_text() + f"{digest}  game-data/HUGE.WAV\n")
+        subprocess.run([GIT, "-C", str(root), "add", "MANIFEST.sha256"], check=True)
+        subprocess.run([GIT, "-C", str(root), "commit", "-qm", "corpus"], check=True)
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("unsafe or oversized", report["error"])
+
     def test_cargo_gate_requires_the_account_cache(self):
         root = self.fixture(
             'schema="required-gates-v1"\n[[gate]]\nid="c"\n'

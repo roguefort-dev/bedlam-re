@@ -21,6 +21,13 @@ from pathlib import Path
 
 MAX_TIMEOUT = 1800
 MAX_FILE_SIZE = 16 * 1024 * 1024
+# MANIFEST.sha256 corpus files (the read-only game-data corpus) are bound
+# into the sealed completion basis by the controller at 128 MiB -- the
+# exact cap complete_from_head enforces for external corpus paths. The
+# smaller tracked-content cap above must not leak into that contract:
+# the corpus legitimately carries 17-40 MB originals (BEDLAM0*.WAV,
+# GAMEGFX/TITLE.SMK).
+MAX_MANIFEST_FILE_SIZE = 128 * 1024 * 1024
 GIT = "/usr/bin/git"
 BWRAP = "/usr/bin/bwrap"
 EXECUTABLES = {
@@ -65,6 +72,16 @@ def scratch_base() -> Path:
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    # Streamed: MANIFEST corpus files may reach the 128 MiB binding cap
+    # and this digest re-runs at every command boundary.
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def git(root: Path, *arguments: str) -> str:
@@ -213,9 +230,9 @@ def check_manifest(root: Path) -> str:
         path = relative_path(root, relative)
         try:
             info = path.lstat()
-            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_FILE_SIZE:
-                raise ValidationError(f"MANIFEST.sha256 path is unsafe: {relative}")
-            actual = sha256(path.read_bytes())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_MANIFEST_FILE_SIZE:
+                raise ValidationError(f"MANIFEST.sha256 path is unsafe or oversized: {relative}")
+            actual = sha256_file(path)
         except OSError as error:
             raise ValidationError(f"MANIFEST.sha256 path is missing: {relative}") from error
         if actual != expected:
