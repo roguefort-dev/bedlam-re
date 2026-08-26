@@ -5,27 +5,70 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4.2/W-followup] `dropship-identity-arm` — the LAST E-only
-   T3 row (D163 named it): the dropship-frame O1 normalizer arm
-   — the full-record IDENTITY form (E's canonical 0x1C craft
-   record IS the guest record field-for-field, §7j.40/6: active
-   u32@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, group@+0x14,
-   dwell@+0x18 — EXW 0x4e6610 / EXD 0x1081c4, plan len 28), so
-   the arm reuses the E-side field walk; the inv_frame
-   `dropship-frame` `continue` arm flips to identity fabrication;
-   differ_gate S6 1+1 → 1; the dropship comments in differ.rs/
-   canonical.rs close; check whether the O2 alias list takes it
-   (same layout, EXW-pinned). Verify: differ_gate all lanes +
-   diffharness + canonical_dump_gate green, fmt+clippy, MANIFEST.
-   Feed: D163/§1 (docs/DECISIONS.md tail), tools/diffharness/src/
-   differ.rs (the dropship-frame E arm + normalize_o1_row),
-   engine/bedlam-game/tests/differ_gate.rs inv_frame.
-   NOTE (shared worktree): the O1-boot WIP still holds dbx-plan.rs
-   + capture-plans deltas (boot_trap) + capgen/harness/docs —
-   stage explicit paths only, preserve via the D161 scratch-crate
-   technique if dbx-plan overlaps.
+1. [P4/infra-WIP-adopt] `o1-responsive-boot-land` — ADOPT, VALIDATE,
+   and LAND the interrupted O1-boot WIP (no .state/PAUSE; multiple
+   prior units deliberately preserved it for this adoption). WHAT
+   IT IS: non-walk O1 capture plans drop the heavy BPLM frame-
+   counter boot trap (RUNTIME.md now documents the cost: an armed
+   BPLM makes core_normal call DEBUG_HeavyIsBreakpoint + a
+   mem_readb_checked walk on EVERY instruction) in favor of the
+   RESPONSIVE code-BP entry path — BPINT 21 AH=4B stops at EXEC,
+   a real-mode BP 5FBB:0000 resolves to the verified EXD linear
+   entry 0x0005FBB0, fresh EV CS EIP CR0 + SELINFO CS prove the
+   protected flat entry, BPLIST proves the anchor BP is the only
+   survivor, mission-anchor waits use plain RUN; WALK plans
+   (S0W-class) KEEP the BPLM + RUNWATCH flow (stop-indexed walk
+   needs it). WIP STATE (verified green by the D164 worker):
+   dbx-plan.rs (boot_note split + `"boot_trap": "entry"` for
+   walk-less O1 emits + 2 plan-content asserts), dbx-capgen.py
+   (+610 lines responsive/resume machinery), dosbox-harness.sh
+   (2 lines), docs/RUNTIME.md (152 lines: RUNWATCH 33 ms redraw
+   + the heavy-BPLM per-instruction cost + the responsive boot
+   protocol), docs/RE-EXW-SIM.md (3 lines), 13 regenerated
+   capture-plans (S0..S8 non-walk carry boot_trap/entry + drop
+   boot_commands; S0W _comment-only), UNTRACKED py tests
+   tools/runtime/test_dbx_capgen_responsive.py +
+   test_dbx_capgen_resume.py (both PASS under
+   `python3 -m unittest` — verified 02:30 2026-08-26). STEPS:
+   (1) re-verify: cargo build + full diffharness suite green in
+   the stacked worktree, the two py tests, fmt+clippy on
+   diffharness; (2) confirm the 13 plan artifacts byte-match
+   `dbx-plan` regeneration (GENERATED files — regenerate to a
+   scratch dir and diff, never hand-edit); (3) stage EXPLICIT
+   paths ONLY — the 15 WIP files + the 2 py tests — NEVER
+   tools/runtime/__pycache__ or .state/scratch; commit with the
+   worker trailer, push; (4) D-entry in DECISIONS.md + RUNTIME
+   provenance tags; (5) MANIFEST before AND after. Feed: the WIP
+   diff itself (git diff on the paths above), docs/RUNTIME.md's
+   new sections, tools/runtime/test_dbx_capgen_*.py.
 
 ## Done
+1. DONE (2026-08-26, worker f2e721b3 claim 1, commits 6d4ea58 +
+   ee82b5b, both PUSHED): P4.2/W-followup `dropship-identity-arm`
+   — the dropship-frame full-record IDENTITY O1 arm LANDED (D164):
+   the LAST E-only T3 row goes CROSS-CHANNEL; ZERO E-only T3 rows
+   remain. The form (§7j.40/6, D162 §5i): E's canonical 0x1C craft
+   record IS the guest record field-for-field (active u32@+0,
+   phase@+4, x@+8, y@+0xC, alt@+0x10, group@+0x14, dwell@+0x18 —
+   EXW 0x4e6610 / EXD 0x1081c4, plan len 28) — no projection
+   needed: the O1 arm delegates to normalize_engine_row verbatim
+   (the tile-word-grid/platform-strength identity precedent), and
+   the O2 alias list takes the row (same layout, EXW-pinned), so
+   O3 follows through O2. Impl (6d4ea58): the differ_gate inv_frame
+   dropship `continue` arm DROPS (identity through the scalar
+   catch-all, the D132 blink-cursor precedent); expect_coverage S6
+   1+1 → 1; the S6 lane gains a COMPARE-CLEAN assert on the row;
+   the stale E-only comments in differ.rs + canonical.rs close
+   (emitter edit comment-only); DESIGN §6a + the S6 table row
+   updated. VERIFIED: diffharness suite all green, differ_gate 4/4
+   (110 s), canonical_dump_gate 13/13, bedlam-game release 232/0,
+   fmt + clippy clean (bedlam-game + diffharness), MANIFEST clean
+   before AND after; the O1-boot WIP preserved untouched (unit
+   staged only its own four paths — differ.rs, canonical.rs,
+   differ_gate.rs, DESIGN-DIFFHARNESS.md). CONSEQUENCE:
+   move-target-words is now the ONLY E-only row anywhere; the T3
+   tier is alias-complete and cross-channel end-to-end. Queued:
+   `o1-responsive-boot-land` (the WIP adoption) as the new item 1.
 1. DONE (2026-08-26, worker bb808d77 claim 1, commits 965796b +
    51ba11a + 5f40a4b, all PUSHED): P4.2/W-followup
    `t2t3-differ-arms` — the four D162 subset-form O1 extraction

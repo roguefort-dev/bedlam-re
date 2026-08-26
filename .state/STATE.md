@@ -1,5 +1,25 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D164 `dropship-identity-arm` COMPLETE (worker
+    f2e721b3 claim 1, commits 6d4ea58 + ee82b5b, both PUSHED):
+    the dropship-frame full-record IDENTITY O1 arm LANDED — the
+    LAST E-only T3 row goes cross-channel; ZERO E-only T3 rows
+    remain (move-target-words is now the ONLY E-only row, row- or
+    field-level, on every scenario S0..S8; the T3 tier is
+    alias-complete and cross-channel end-to-end). The canonical
+    0x1C craft record IS the guest record field-for-field
+    (§7j.40/6 — EXW 0x4e6610 / EXD 0x1081c4), so the O1 arm reuses
+    the E-side field walk verbatim and the O2/O3 alias list takes
+    the row; differ_gate inv_frame flips to identity fabrication,
+    S6 coverage 1+1 → 1 + a COMPARE-CLEAN assert; stale E-only
+    comments in differ.rs/canonical.rs closed; DESIGN §6a updated.
+    ZERO canonical chain movement (emitter edit comment-only).
+    Verified: diffharness suite green, differ_gate 4/4,
+    canonical_dump_gate 13/13, bedlam-game release 232/0,
+    fmt+clippy clean, MANIFEST clean; the O1-boot WIP (responsive
+    entry path: dbx-plan boot_trap/entry, capgen, RUNTIME.md, plan
+    deltas, 2 green py tests) preserved untouched and QUEUED AS
+    ITEM 1 for adoption (`o1-responsive-boot-land`).
   - 2026-08-26 D163 `t2t3-differ-arms` COMPLETE (worker bb808d77
     claim 1, commits 965796b + 51ba11a + 5f40a4b, all PUSHED):
     the four D162 subset-form O1 extraction arms LANDED —
