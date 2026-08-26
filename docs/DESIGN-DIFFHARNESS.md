@@ -652,7 +652,7 @@ instances, 3 turrets).
 
 ## 9. Gates
 
-- **DH-G0 watch-proof** (interactive, one session): first interactive
+- **DH-G0 watch-proof** (excluded channel diagnostic, not required closure): first
   DOSBox-X run per the RUNTIME skeleton checklist verifies debugger command
   names, the linear-address conversion, and produces S0 dumps whose digests
   reproduce across two runs. Converts [pin-unverified] items to runbook facts.
@@ -663,9 +663,9 @@ instances, 3 turrets).
   The audit itself converted the §3 trigger UNCERTAINs to NEGATIVE facts
   (committed); the breakpoint shape + bulk-read forms get pinned on the
   re-pinned channel at the first interactive session.
-- **DH-G1 runner-determinism**: headless S1 run twice → identical dump
-  chains (same pin, same scratch corpus). No CI; desktop/local only, results
-  committed as fingerprints.
+- **DH-G1 runner-determinism** (excluded original-capture diagnostic): an
+  original-side S1 double run can qualify a capture channel, but it is not a
+  required engineering gate and is never queued.
 - **DH-G2 structural parity (the P4 acceptance slice)**: S0–S2 STRUCTURAL
   mode green (loader statics + bank layouts/counts + occupancy shapes).
 - **DH-G3 field parity budget**: S2 T1-exact green; S3/S4 T1-exact on the
@@ -687,11 +687,9 @@ instances, 3 turrets).
   D136 re-baseline: E now emits sfx-master-gate + no-extract-latch,
   every chain moved deliberately) — CI
   checkouts never carry game-data (it is never committed), so those
-  run wherever a corpus is present (dev/operator machines run the
-  same commands pre-push; the identical test names make the leg
-  auditable). The LIVE session (DH-G0) is the separate,
-  desktop-gated proof of the O1 capture channel; original-side runs
-  (O1/O2/O3) never run in CI by design (pinned emulator).
+  run wherever the required corpus is present; the required-gates validator
+  fails closed when that corpus is absent. Original-side O1/O2/O3 runs are
+  separate diagnostics and never satisfy or block the P4 engineering gates.
 - **CI wiring**: original-side runs never run in CI (pinned emulator,
   desktop-gated). CI runs the ENGINE dump emitter + differ against committed
   reference fingerprints (corpus-gated, skip when game-data absent — the
@@ -761,9 +759,8 @@ differ come before any new scenario depth.
    BP armed at the LAST walk stop. `resolve_at=anchor` moves the
    loader-static reads to the mission-start stop (they are mission-
    load values — the D81 arm-stop read was a latent gap, fixed for
-   S0/S1 too). The S0W scenario + draft schedule are committed; stop
-   indices calibrate at the first live session via `walk_watches`
-   transcript comments. The PAD step keeps its own unit (the capgen
+    S0/S1 too). The S0W scenario + draft schedule are retained as an excluded
+    diagnostic artifact; calibration is not an engineering task or gate. The PAD step keeps its own unit (the capgen
    runtime pad-slot read op still pending, deliberately out of scope).
    **W5-pad ADDENDUM 2026-08-22 (D86):** the PAD step LANDED +
    headless-verified (`dbgprobe pad`, no game). The capgen

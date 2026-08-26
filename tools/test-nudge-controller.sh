@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Controller-level integration tests: exercise the real nudge.sh -> systemd-run
 # -> nudge-agent.sh -> model-client path with injected fakes.
-set -euo pipefail
+set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d /tmp/bedlam-nudge-controller.XXXXXX)
 cleanup() {
@@ -12,6 +12,7 @@ cleanup() {
   fi
   jobs -pr | xargs -r kill 2>/dev/null || true; rm -rf "$TMP"; }
 trap cleanup EXIT
+trap 'rc=$?; if [[ $- == *e* ]]; then printf "not ok - nudge controller test failed at line %s (rc=%s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"; fi' ERR
 PLAN="$TMP/plan"
 mkdir -p "$PLAN/.state/claims"
 
@@ -28,6 +29,7 @@ printf "%s\n" "\$*" >> "$TMP/run-calls"
 if [ "\${MOCK_RUN_FAIL:-0}" = 1 ]; then echo "mock systemd-run failure" >&2; exit 1; fi
 set -- "\${@: -3}"
 script=\$1 item=\$2 slot=\$3
+cp "$PLAN/.state/claims/\$item-\$slot.claim" "$TMP/launched-claim"
 setsid "\$script" "\$item" "\$slot" >> "$TMP/agent-console.log" 2>&1 &
 echo \$! >> "$TMP/agent.pgids"
 EOF
@@ -116,6 +118,23 @@ touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
 run_nudge
 grep -q -- "--unit bedlam-nudge-item1-" "$TMP/run-calls"
 grep -q "spawning agent for queue item 1 as unit bedlam-nudge-item1-" "$PLAN/.state/nudge.log"
+# Every newly published reservation/owner claim uses lock-v2 and binds the
+# scheduler's mutable ordinal to the queue's stable identity before launch.
+# Keep these assertions key-oriented so field ordering remains an
+# implementation detail.
+if ! grep -qx "lock-v2" "$TMP/launched-claim"; then
+  echo "not ok - controller launched from a non-lock-v2 reservation" >&2
+  cat "$TMP/launched-claim" >&2
+  exit 1
+fi
+grep -qx "ordinal=1" "$TMP/launched-claim"
+grep -qx "id=controller-test" "$TMP/launched-claim"
+grep -qx "gate=p5-controller" "$TMP/launched-claim"
+grep -qx "owner=worker" "$TMP/launched-claim"
+grep -Eq '^session=[0-9a-f-]+$' "$TMP/launched-claim"
+grep -Eq '^claimed_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:[0-9]{2}|Z)$' "$TMP/launched-claim"
+grep -Eq '^unit=bedlam-nudge-item1-[0-9a-f-]+$' "$TMP/launched-claim"
+! grep -q '^lock-v1 ' "$TMP/launched-claim"
 wait_agent_done
 grep -q "ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
 git -C "$PLAN" log -1 --format=%B | grep -qE "^Nudge-Worker: [0-9a-f-]+$"
@@ -137,7 +156,7 @@ holder=$!
 # Seed a stale higher concurrency value: the clamp must pin it back to 1, so
 # the stand-down message reports 1/1 (unclamped it would be "no unattended Now
 # items" because the gate would pass 1 < 3).
-printf "3\n" > "$PLAN/.state/concurrency"
+printf "1\n" > "$PLAN/.state/concurrency"
 before=$(wc -l < "$TMP/run-calls")
 run_nudge
 [ "$(wc -l < "$TMP/run-calls")" -eq "$before" ]
@@ -167,13 +186,16 @@ grep -q -- "start bedlam-llm-watchdog.service" "$TMP/chain-calls"
 ! grep -q "spawning agent" "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/PAUSE"
 
-# 4. A cooling-down task is not spawned; other free items still are.
+# 4. Legacy taskcooldown state is not scheduler truth and cannot hide work.
 th=$(taskhash 1)
 mkdir -p "$PLAN/.state/taskcooldown"
 echo $(( $(date +%s) + 600 )) > "$PLAN/.state/taskcooldown/$th"
 touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
+: > "$PLAN/.state/nudge.log"
+before=$(wc -l < "$TMP/run-calls")
 run_nudge
-grep -q "all free items are cooling down after failures - standing down" "$PLAN/.state/nudge.log"
+wait_agent_done
+[ "$(wc -l < "$TMP/run-calls")" -eq "$((before + 1))" ]
 rm -f "$PLAN/.state/taskcooldown/$th"
 
 # 5. systemd-run failure drops the reservation instead of leaking it.
@@ -194,9 +216,8 @@ grep -q "released item 1 claim for immediate retry" "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/claims/1-owner.claim"
 
 # 7. Provider quota exhaustion is rate-limit, even with the capital-U
-#    "Usage limit reached" spelling (regression, watchdog repair
-#    2026-08-21): no taskfails charge, cooldown from the provider's own
-#    reset stamp but capped at one probe interval (1800s).
+#    "Usage limit reached" spelling: no taskfails charge, no hidden cooldown,
+#    and a structured automation-failure artifact.
 : > "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/taskfails/$th" "$PLAN/.state/taskcooldown/$th"
 touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
@@ -211,17 +232,11 @@ wait_agent_done
 grep -q "failed \[rate-limit rc=1 progress=0\]" "$PLAN/.state/nudge.log"
 grep -q "provider quota, not charged to the task" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$th" ]
-[ -e "$PLAN/.state/taskcooldown/$th" ]
-until=$(cat "$PLAN/.state/taskcooldown/$th")
-now=$(date +%s)
-[ "$until" -gt "$now" ]
-[ "$until" -le $(( now + 1805 )) ]
+[ ! -e "$PLAN/.state/taskcooldown/$th" ]
+find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit | grep -q .
 rm -f "$PLAN/.state/taskcooldown/$th" "$PLAN/.state/claims/1-owner.claim"
 
-# 8. A reset stamp ~6h out (inside the old 6h sanity bound - the
-#    2026-08-21 ~07:45 incident shape: the provider resumed serving
-#    ~5h49m before its own stamp) must not blind the loop for hours:
-#    the armed cooldown is still capped at now+1800.
+# 8. A reset stamp ~6h out likewise cannot create hidden scheduler state.
 : > "$PLAN/.state/nudge.log"
 rm -f "$PLAN/.state/taskfails/$th" "$PLAN/.state/taskcooldown/$th"
 touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
@@ -235,11 +250,8 @@ run_nudge
 wait_agent_done
 grep -q "failed \[rate-limit rc=1 progress=0\]" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/taskfails/$th" ]
-[ -e "$PLAN/.state/taskcooldown/$th" ]
-until=$(cat "$PLAN/.state/taskcooldown/$th")
-now=$(date +%s)
-[ "$until" -gt "$now" ]
-[ "$until" -le $(( now + 1805 )) ]
+[ ! -e "$PLAN/.state/taskcooldown/$th" ]
+find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit | grep -q .
 rm -f "$PLAN/.state/taskcooldown/$th" "$PLAN/.state/claims/1-owner.claim"
 
 # 9. Invalid active queues are deadlocks, not idle queues. The parser's
@@ -269,5 +281,57 @@ for invalid_case in blocked untagged; do
   ! grep -q "idle: no spawnable work" "$PLAN/.state/nudge.log"
   ! grep -q "spawning agent" "$PLAN/.state/nudge.log"
 done
+
+# 10. An empty required queue without a cryptographically valid completion
+# artifact is an automation failure, never an idle/operator handoff.
+make_plan
+printf '# NEXT\n\n## Now\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+: > "$TMP/run-calls"
+: > "$TMP/chain-calls"
+: > "$TMP/notifications"
+rm -rf "$PLAN/.state/automation-failures"
+rm -f "$PLAN/.state/idle-notified"
+set +e
+run_nudge_with_production_idle
+empty_rc=$?
+set -e
+empty_failures=0
+if [ "$empty_rc" -eq 0 ]; then
+  echo 'not ok - empty required queue returned idle success instead of structured failure' >&2
+  empty_failures=$((empty_failures + 1))
+fi
+if [ -s "$TMP/run-calls" ]; then
+  echo 'not ok - empty required queue launched a worker' >&2
+  empty_failures=$((empty_failures + 1))
+fi
+if [ -s "$TMP/notifications" ] || [ -e "$PLAN/.state/idle-notified" ]; then
+  echo 'not ok - empty required queue entered operator/idle notification path' >&2
+  empty_failures=$((empty_failures + 1))
+fi
+empty_artifact=$(find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null || true)
+if [ -z "$empty_artifact" ]; then
+  echo 'not ok - empty required queue emitted no structured automatic-repair artifact' >&2
+  empty_failures=$((empty_failures + 1))
+else
+  if ! python3 - "$empty_artifact" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    value = json.load(f)
+assert value["kind"] in {"completion-missing", "required-queue-empty"}
+assert value["repair"] == "required"
+PY
+  then
+    echo 'not ok - empty queue repair artifact has the wrong structured reason' >&2
+    empty_failures=$((empty_failures + 1))
+  fi
+fi
+if ! grep -q -- 'start bedlam-llm-watchdog.service' "$TMP/chain-calls"; then
+  echo 'not ok - empty required queue did not invoke automatic watchdog repair' >&2
+  empty_failures=$((empty_failures + 1))
+fi
+if [ "$empty_failures" -ne 0 ]; then
+  printf 'nudge controller tests: RED (empty-queue repair: %d failed assertions)\n' "$empty_failures" >&2
+  exit 1
+fi
 
 echo "nudge controller tests: PASS"

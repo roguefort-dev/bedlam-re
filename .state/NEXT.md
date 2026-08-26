@@ -5,18 +5,11 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [INTERACTIVE-gated - SKIP when unattended; needs desktop +
-   operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
-   live capture vs the E canonical chains + the DH-G1 double-run
-   determinism verdict + cycles calibration. With D165 landed the
-   boot is the RESPONSIVE code-BP path (no BPLM per-instruction
-   tax; BPINT 21 4B -> BP 5FBB:0000 -> EV/SELINFO entry proof ->
-   sole mission anchor -> plain RUN frame waits). Checklist:
-   docs/RUNTIME.md "S0 LIVE SESSION CHECKLIST". Unattended nudge
-   workers: do NOT attempt this item - the unattended queue is
-   EMPTY (the P4.2 build order + every RE residue discharged;
-   D169 closed the last one). Before standing down, check
-   STATE.md's head entry for any newly-recorded residue.
+1. [READY] [id=p4-trigger-contract] [gate=p4-trigger-address] Correct the O2 operational trigger to EXW 0x004486C9 while preserving callee 0x00425A03 and EXD 0x0005A6EB; regenerate S1-o2 and pass the locked dbx-plan, capgen smoke, and exact text gates.
+2. [READY] [id=p4-static-proof-scope] [gate=p4-s0-dispositions] Reconcile D145-D164 closed static evidence and timing dispositions; S0-S8 and differ_gate plumbing remain automated, while calibration and live facts are excluded and not queued.
+3. [READY] [id=p4-wgpu-final] [gate=p4-dependency-spikes] Run bounded offline locked tests/build and record the final wgpu 27.0.1, winit, R8Uint, palette, and adapter-free decision.
+4. [READY] [id=p4-required-gates-manifest] [gate=p4-gates-validator] Finish the tracked required-gates manifest and validator with fail-closed corpus and automated validator tests.
+5. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
 
 ## Done
 1. DONE (2026-08-26, worker 829d719c claim 1, commit 3f8db5c,

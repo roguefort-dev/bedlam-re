@@ -2,7 +2,7 @@
 Description=bedlam-re event-driven supervisor trigger (new task failures)
 
 [Path]
-PathModified=/home/kato/Documents/bedlam-re/.state/taskfails
+PathChanged=/home/kato/Documents/bedlam-re/.state/automation-failures
 Unit=bedlam-llm-watchdog.service
 
 [Install]

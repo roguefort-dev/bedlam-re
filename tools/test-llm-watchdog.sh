@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d /tmp/bedlam-llm-watchdog-test.XXXXXX)
-cleanup() { jobs -pr | xargs -r kill 2>/dev/null || true; rm -rf "$TMP"; }
+cleanup() {
+  jobs -pr | xargs -r kill 2>/dev/null || true
+  jobs -pr | xargs -r wait 2>/dev/null || true
+  rm -rf "$TMP"
+}
 trap cleanup EXIT
+trap 'rc=$?; printf "not ok - llm watchdog test failed at line %s (rc=%s): %s\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 PLAN="$TMP/plan"
 mkdir -p "$PLAN/.state/claims"
 printf "# NEXT\n\n## Now\n1. [P4] test task\n\n## Backlog\n" > "$PLAN/.state/NEXT.md"
@@ -37,6 +42,20 @@ case "\$*" in
     ;;
   *bedlam-llm-watchdog-repair*)
     if [ "\${MOCK_REPAIR_SLEEP:-0}" = 1 ]; then sleep 3; fi
+    case "\${MOCK_REPAIR_QUEUE:-unchanged}" in
+      ready)
+        printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] repaired automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+        ;;
+      blocked)
+        printf '# NEXT\n\n## Now\n1. [BLOCKED] [id=test-task] [gate=test-gate] invalid repair handoff\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+        ;;
+      waiting)
+        printf '# NEXT\n\n## Now\n1. [WAITING-AUTOMATIC] [id=test-task] [gate=test-gate] [probe=tools/probe.sh] [retry=30s] [timeout=20m] bounded machine wait\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+        ;;
+      malformed-waiting)
+        printf '# NEXT\n\n## Now\n1. [WAITING-AUTOMATIC] [id=test-task] [gate=test-gate] [probe=../probe.sh] [retry=0s] unbounded invalid wait\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+        ;;
+    esac
     if [ "\${MOCK_REPAIR_COMMIT:-0}" = 1 ]; then
       token=\$(cat "$PLAN/.state/PAUSE")
       echo repaired >> "$PLAN/code.txt"
@@ -68,7 +87,27 @@ chmod +x "$TMP/mock-proc-check"
 # Process matchers must accept the absolute executable path used by systemd.
 grep -q "\^\[\^ \]\*opencode2 run" "$ROOT/tools/llm-watchdog.sh"
 ! grep -q "\"^opencode2 run" "$ROOT/tools/llm-watchdog.sh"
-common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 LLM_WATCHDOG_MIN_INTERVAL=0 NOTIFY_SEND="$TMP/mock-notify-send")
+# Test-mode repairs intentionally do not start a replacement worker. Do not
+# spend the production 20-second resume observation window after every case;
+# that made this nominal unit test look hung for minutes.
+common=(BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-opencode" REAPER_OVERRIDE="$ROOT/tools/nudge-reap-claims.sh" WATCHDOG_TEST_MODE=1 SUPERVISE_TIMEOUT=5 REPAIR_TIMEOUT=5 REPAIR_COOLDOWN=60 LLM_WATCHDOG_MIN_INTERVAL=0 RESUME_WAIT_LOOPS=0 RESUME_WAIT_SLEEP=0 NOTIFY_SEND="$TMP/mock-notify-send")
+
+# Strict parser state is a launch preflight, not advice for the model. An
+# INVALID-DEADLOCKED queue bypasses a nominally healthy supervisor answer and
+# forces the repair path. Repair is successful only after strict re-validation.
+printf '# NEXT\n\n## Now\n1. [BLOCKED] [id=deadlock-task] [gate=deadlock-gate] invalid active task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+supervise_before=$(grep -c "bedlam-llm-watchdog-supervise" "$TMP/calls" 2>/dev/null || echo 0)
+repair_before=$(grep -c "bedlam-llm-watchdog-repair" "$TMP/calls" 2>/dev/null || echo 0)
+MOCK_SUPERVISE=healthy MOCK_REPAIR_QUEUE=ready MOCK_REPAIR_COMMIT=1 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/preflight-deadlock.lock" "$ROOT/tools/llm-watchdog.sh"
+supervise_after=$(grep -c "bedlam-llm-watchdog-supervise" "$TMP/calls" || true)
+repair_after=$(grep -c "bedlam-llm-watchdog-repair" "$TMP/calls" || true)
+if [ "$supervise_after" -ne "$supervise_before" ] || [ "$repair_after" -ne "$((repair_before + 1))" ]; then
+  echo "not ok - INVALID-DEADLOCKED did not force parser-preflight repair (supervise $supervise_before->$supervise_after, repair $repair_before->$repair_after)" >&2
+  exit 1
+fi
+grep -q "INVALID-DEADLOCKED" "$PLAN/.state/llm-watchdog.log"
+grep -q "strict queue preflight" "$PLAN/.state/llm-watchdog.log"
+grep -q '^state=repaired$' "$PLAN/.state/llm-watchdog-verdict"
 
 # ANSI/CR final marker is accepted as healthy and does not invoke repair agent.
 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/healthy.lock" "$ROOT/tools/llm-watchdog.sh"
@@ -86,6 +125,49 @@ grep -q -- "--agent build" "$TMP/calls"
 [ ! -e "$PLAN/.state/llm-watchdog-pause" ]
 grep -q "produced evidence" "$PLAN/.state/llm-watchdog.log"
 grep -q "^state=repaired$" "$PLAN/.state/llm-watchdog-verdict"
+
+# Adding any BLOCKED-shaped line is invalid repair output, never evidence.
+printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+MOCK_SUPERVISE=repair MOCK_REPAIR_QUEUE=blocked env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/blocked-evidence.lock" "$ROOT/tools/llm-watchdog.sh"
+grep -q '^state=repair-no-evidence$' "$PLAN/.state/llm-watchdog-verdict"
+[ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
+
+# A substantive attributed commit is necessary but not sufficient: the queue
+# produced by the repair must also pass the strict parser.
+printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+MOCK_SUPERVISE=repair MOCK_REPAIR_QUEUE=blocked MOCK_REPAIR_COMMIT=1 env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/commit-invalid-queue.lock" "$ROOT/tools/llm-watchdog.sh"
+grep -q '^state=repair-no-evidence$' "$PLAN/.state/llm-watchdog-verdict"
+[ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
+
+# A no-commit WAITING-AUTOMATIC rewrite is not evidence unless a working
+# automatic-wait executor has validated and owns it. This fixture has none.
+printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+MOCK_SUPERVISE=repair MOCK_REPAIR_QUEUE=waiting env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/bounded-wait.lock" "$ROOT/tools/llm-watchdog.sh"
+if ! grep -q '^state=repair-no-evidence$' "$PLAN/.state/llm-watchdog-verdict"; then
+  echo "not ok - watchdog accepted no-commit WAITING without a working executor" >&2
+  exit 1
+fi
+[ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+
+# Merely spelling WAITING-AUTOMATIC cannot bypass its probe/retry/bound grammar.
+printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+MOCK_SUPERVISE=repair MOCK_REPAIR_QUEUE=malformed-waiting env "${common[@]}" LLM_WATCHDOG_LOCK="$TMP/malformed-wait.lock" "$ROOT/tools/llm-watchdog.sh"
+grep -q '^state=repair-no-evidence$' "$PLAN/.state/llm-watchdog-verdict"
+[ -e "$PLAN/.state/llm-watchdog-cooldown-until" ]
+rm -f "$PLAN/.state/llm-watchdog-cooldown-until"
+
+# Generated supervisor and repair instructions are automation-only. These
+# categories may remain in historical tests/diagnostics, but not model tasks.
+if grep 'bedlam-llm-watchdog-\(supervise\|repair\)' "$TMP/calls" \
+    | grep -Eqi '(^|[^[:alnum:]])(BLOCKED|human|operator|manual|interactive|desktop|sudo|credentials?|secrets?|legal|license)([^[:alnum:]]|$)|stand(ing)?[- ]down|ask (a |the )?.*(action|input|approval)|wait for input'; then
+  echo "watchdog generated a human-only task instruction" >&2
+  exit 1
+fi
+printf '# NEXT\n\n## Now\n1. [READY] [id=test-task] [gate=test-gate] automated task\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
 
 # A supervisor observation failure (invalid marker, transport, timeout) must NOT
 # stop workers, invoke the fix agent, or write a cooldown. State becomes unknown.
@@ -150,6 +232,7 @@ for _ in $(seq 1 100); do [ -e "$PLAN/.state/PAUSE" ] && break; sleep 0.02; done
 [ -e "$PLAN/.state/PAUSE" ]
 kill -TERM "$watchdog_pid"
 wait "$watchdog_pid" 2>/dev/null || true
+for _ in $(seq 1 100); do [ ! -e "$PLAN/.state/PAUSE" ] && break; sleep 0.01; done
 [ ! -e "$PLAN/.state/PAUSE" ]
 [ ! -e "$PLAN/.state/llm-watchdog-pause" ]
 

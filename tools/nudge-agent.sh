@@ -2,14 +2,22 @@
 # One asynchronous bedlam agent plus adaptive-concurrency result reporting.
 set -u
 PLAN_DIR=${BEDLAM_PLAN_DIR:-/home/kato/Documents/bedlam-re}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 STATE="$PLAN_DIR/.state"
 CLAIMS="$STATE/claims"
+FAILURES=${NUDGE_FAILURE_DIR:-$STATE/automation-failures}
+QUEUE_PARSER=${QUEUE_PARSER_OVERRIDE:-$SCRIPT_DIR/nudge-free-items.py}
+STATE_HELPER="$SCRIPT_DIR/nudge-state.py"
 CONC_FILE="$STATE/concurrency"
 CONC_DOWN_TS="$STATE/conc-degraded-at"
 NUDGE_LOCK=${NUDGE_LOCK:-/tmp/bedlam-nudge.lock}
 CONC_MIN=1
 item=${1:?queue item required}
 slotid=${2:?slot id required}
+if [[ ! "$item" =~ ^[1-9][0-9]*$ ]] || [[ ! "$slotid" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  exit 64
+fi
+case "$slotid" in owner|publish.lock|executor.lock|queue.lock|archive|tmp-lock) exit 64 ;; esac
 LOG="$STATE/agent-$slotid.log"
 if [ -n "${OPENC_OVERRIDE:-}" ]; then
   OPENC=$OPENC_OVERRIDE
@@ -22,48 +30,142 @@ MODEL=zai-coding-plan/glm-5.3
 NOTIFY_SEND=${NOTIFY_SEND-notify-send}
 unit_name="bedlam-nudge-item${item}-${slotid}"
 
+source "$SCRIPT_DIR/nudge-claim.sh"
+log_line() { "$STATE_HELPER" append-text "$STATE/nudge.log" "$(date -Is) $*"$'\n' 2>/dev/null || true; }
+logged_call() {
+  local output rc
+  if output=$("$@" 2>&1); then rc=0; else rc=$?; fi
+  [ -z "$output" ] || "$STATE_HELPER" append-text "$STATE/nudge.log" \
+    "$(date -Is) $output"$'\n' 2>/dev/null || true
+  return "$rc"
+}
+
+write_failure() {
+  local kind=$1 reason=$2 evidence=$3 queue_unchanged=${4:-true}
+  "$STATE_HELPER" publish-failure "$FAILURES" "$item" "${item_id:-unknown}" \
+    "${item_gate:-unknown}" "$slotid" "$kind" "$reason" "$evidence" \
+    "$queue_unchanged" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$queue_before_json" "$STATE/NEXT.md"
+}
+
 cd "$PLAN_DIR" || exit 1
+if [ "${NUDGE_OWNER_FD:-}" != 8 ]; then
+  exec "$STATE_HELPER" claim-owner-exec "$CLAIMS" "$item-$slotid.claim" \
+    "$item-owner.claim" "$item" "$slotid" "$0" "$@"
+fi
 start_head=$(git rev-parse HEAD 2>/dev/null || echo none)
-touch "$STATE/heartbeat"
+queue_before_json=$("$STATE_HELPER" queue-snapshot "$STATE/NEXT.md")
+queue_hash_before=$(printf '%s' "$queue_before_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha256") or "")')
+queue_identity_before=$(printf '%s' "$queue_before_json" | python3 -c 'import json,sys; v=json.load(sys.stdin); print("{}:{}".format(v.get("device"),v.get("inode")))')
+"$STATE_HELPER" touch "$STATE/heartbeat" || exit 75
 placeholder="$CLAIMS/$item-$slotid.claim"
 own="$CLAIMS/$item-owner.claim"
+reservation_identity=$(stat -c "%d:%i" "$placeholder" 2>/dev/null || echo missing)
+
+unlink_identity() {
+  local path=$1 identity=$2 device inode
+  case "$identity" in
+    *:*)
+      device=${identity%%:*}
+      inode=${identity#*:}
+      "$STATE_HELPER" unlink "$path" "$device" "$inode" 2>/dev/null
+      ;;
+    *) return 1 ;;
+  esac
+}
 
 # A pause created after the timer reserved this slot still wins before launch.
 if [ -e "$STATE/PAUSE" ]; then
-  rm -f "$placeholder"
+  unlink_identity "$placeholder" "$reservation_identity" || true
   exit 0
 fi
 
-# Atomically publish the canonical owner name without replacing an existing owner.
-if ! ln "$placeholder" "$own" 2>/dev/null; then
-  rm -f "$placeholder"
-  echo "$(date -Is) item $item already owned; worker standing down" >> "$STATE/nudge.log"
-  exit 75
-fi
-rm -f "$placeholder"
-exec 8>>"$own"
-flock 8 || {
-  rm -f "$own"
-  echo "$(date -Is) failed to lock claim for item $item; worker standing down" >> "$STATE/nudge.log"
-  exit 75
+claim_identity=${NUDGE_CLAIM_IDENTITY:?pinned owner claim identity required}
+
+drop_owned_claim() {
+  exec 8>&-
+  local current_identity
+  current_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
+  [ "$current_identity" = "$claim_identity" ] && unlink_identity "$own" "$claim_identity"
+  unlink_identity "$placeholder" "$reservation_identity" || true
+}
+
+reject_preflight() {
+  local reason=$1 evidence=$2
+  local unchanged=false current_hash
+  current_hash=$(sha256sum "$STATE/NEXT.md" 2>/dev/null | awk '{print $1}')
+  [ "$current_hash" = "$queue_hash_before" ] && unchanged=true
+  logged_call write_failure preflight-mismatch "$reason" "$evidence" "$unchanged" || true
+  log_line "agent item $item launch preflight rejected reason=$reason evidence=$evidence session=$slotid"
+  drop_owned_claim
+  exit 76
 }
 
 # Re-check PAUSE after winning the claim: a watchdog pause that appeared while
 # we were claiming must still stop this launch before the model runs.
 if [ -e "$STATE/PAUSE" ]; then
   exec 8>&-
-  rm -f "$own"
-  echo "$(date -Is) PAUSE appeared during claim acquisition for item $item; worker standing down" >> "$STATE/nudge.log"
+  current_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
+  [ "$current_identity" = "$claim_identity" ] && unlink_identity "$own" "$claim_identity" || true
+  log_line "PAUSE appeared during claim acquisition for item $item; worker standing down"
   exit 0
 fi
 
-task_hash=$(sed -n "s/^[[:space:]]*$item\.[[:space:]]*//p" "$STATE/NEXT.md" 2>/dev/null | head -n 1 | sha256sum | cut -c1-16)
-echo "lock-v1 worker $slotid owns queue item $item" >&8
-echo "task=$task_hash" >&8
-echo "unit=$unit_name" >&8
-claim_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
+item_id=""
+item_gate=""
+claim_valid=0
+if claim_read "$own" "$item" "$slotid"; then
+  claim_valid=1
+  claim_version=$CLAIM_VERSION
+  claim_id=$CLAIM_ID
+  claim_gate=$CLAIM_GATE
+else
+  claim_version=""
+  claim_id=""
+  claim_gate=""
+fi
 
-PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow it EXACTLY. HARD CONCURRENCY RULE: do NOT spawn or invoke subagents. You personally perform one bounded unit. The wrapper atomically acquired queue item $item for slot $slotid before launching you; .state/claims/$item-owner.claim naming worker $slotid is YOUR claim, not another owner claim. NEVER infer ownership from Ghostty, cmux, an operator OpenCode TUI, editors, shells, process age, dirty files, prior decisions, or historical stand-down entries. The persistent operator TUI is supervisory and never blocks work; only .state/PAUSE does. Work ONLY item $item and never switch items. For any reverse-engineering or analysis-heavy step, decode a bounded piece and immediately write committed RE notes before continuing - never reason silently for more than a few minutes (the client dies after 300s of silent streaming). Inspect and adopt relevant interrupted WIP while preserving unrelated changes; stage explicit paths only. Do not create state-only stand-down commits. If genuinely blocked, rewrite item $item with a [BLOCKED] tag and one concrete reason, then stop. Every commit you create MUST include the exact trailer Nudge-Worker: $slotid (for example, a second git commit -m paragraph). Commit and push substantive completed work. Checkpoint aggressively: whenever a coherent milestone compiles and is green (tests+fmt+clippy), commit it immediately with your trailer and push - never hold all work uncommitted until the end of the unit; a session can die at any moment. NEVER create, delete, rename, or modify claim files; the wrapper owns them. On model/transport/API error, commit recoverable substantive work if possible. Never start an analyzeHeadless import already running or succeeded. Do not ask questions or wait for input."
+item_fields=$("$QUEUE_PARSER" "$STATE/NEXT.md" "$CLAIMS" --item-v1 "$item" 2>/dev/null)
+queue_rc=$?
+if [ "$queue_rc" -ne 0 ]; then
+  item_id=$claim_id
+  item_gate=$claim_gate
+  reject_preflight queue-invalid "strict queue parser rc=$queue_rc"
+fi
+read -r item_status item_id item_gate <<< "$item_fields"
+[ "$claim_valid" -eq 1 ] || reject_preflight claim-invalid "claim schema, filename, ordinal, or session mismatch"
+[ "$claim_version" = 2 ] || reject_preflight legacy-claim "lock-v1 cannot authorize a new launch"
+[ "$item_status" = READY ] || reject_preflight status-mismatch "expected READY, found $item_status"
+if [ "$claim_version" = 2 ]; then
+  [ "$claim_id" = "$item_id" ] || reject_preflight id-mismatch "claim=$claim_id queue=$item_id"
+  [ "$claim_gate" = "$item_gate" ] || reject_preflight gate-mismatch "claim=$claim_gate queue=$item_gate"
+fi
+
+task_hash=$(sed -n "s/^[[:space:]]*$item\.[[:space:]]*//p" "$STATE/NEXT.md" 2>/dev/null | head -n 1 | sha256sum | cut -c1-16)
+claim_body_hash=$(sha256sum /proc/self/fd/8 | awk '{print $1}')
+
+launch_boundary_valid() {
+  local current_identity current_hash fields status current_id current_gate queue_now queue_hash queue_identity
+  [ ! -e "$STATE/PAUSE" ] || return 1
+  [ -f "$own" ] && [ ! -L "$own" ] || return 1
+  current_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
+  [ "$current_identity" = "$claim_identity" ] || return 1
+  current_hash=$(sha256sum /proc/self/fd/8 2>/dev/null | awk '{print $1}')
+  [ "$current_hash" = "$claim_body_hash" ] || return 1
+  claim_read "$own" "$item" "$slotid" || return 1
+  [ "$CLAIM_VERSION" = 2 ] && [ "$CLAIM_ID" = "$item_id" ] \
+    && [ "$CLAIM_GATE" = "$item_gate" ] || return 1
+  queue_now=$("$STATE_HELPER" queue-snapshot "$STATE/NEXT.md") || return 1
+  queue_hash=$(printf '%s' "$queue_now" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha256") or "")')
+  queue_identity=$(printf '%s' "$queue_now" | python3 -c 'import json,sys; v=json.load(sys.stdin); print("{}:{}".format(v.get("device"),v.get("inode")))')
+  [ "$queue_hash" = "$queue_hash_before" ] && [ "$queue_identity" = "$queue_identity_before" ] || return 1
+  fields=$("$QUEUE_PARSER" "$STATE/NEXT.md" "$CLAIMS" --item-v1 "$item" 2>/dev/null) || return 1
+  read -r status current_id current_gate <<< "$fields"
+  [ "$status" = READY ] && [ "$current_id" = "$item_id" ] \
+    && [ "$current_gate" = "$item_gate" ]
+}
+
+PROMPT="You are an unattended continuation agent for bedlam-re. Read AGENTS.md and follow its engineering and safety rules. Do not spawn or invoke subagents. Perform one bounded unit: queue item $item, stable id $item_id, gate $item_gate. The wrapper acquired it for slot $slotid before launch; this exact versioned claim is yours. Work only this item and never switch items. Inspect and adopt relevant interrupted WIP while preserving unrelated changes; stage explicit paths only. For reverse-engineering or analysis-heavy work, decode a bounded piece and immediately write committed RE notes before continuing. If the task cannot be completed or a tool, transport, or API fails, leave NEXT unchanged and stop; the wrapper records a machine repair artifact. Do not park, retag, or convert required work into a passive state. Every commit must include the exact trailer Nudge-Worker: $slotid. Commit and push substantive completed work. Checkpoint coherent green milestones. Never create, delete, rename, or modify claim files. Never start an analyzeHeadless import already running or already successful."
 
 set +e
 # --agent build: the nudge worker needs the coding agent, NOT the
@@ -91,32 +193,94 @@ set +e
 IDLE_LIMIT=${NUDGE_IDLE_LIMIT:-900}
 IDLE_POLL=${NUDGE_IDLE_POLL:-5}
 reaped=0
-timeout 3900 "$OPENC" run --standalone --agent build --model "$MODEL" --auto --title "bedlam-nudge-item$item" "$PROMPT" >> "$LOG" 2>&1 &
+boundary_failure=0
+termination_sent=0
+if ! launch_boundary_valid; then
+  reject_preflight launch-boundary "queue or canonical claim changed immediately before exec"
+fi
+if [ ! -x /usr/bin/bwrap ]; then
+  reject_preflight containment-unavailable "bubblewrap PID containment is required"
+fi
+setsid bash -c 'kill -STOP "$$"; exec "$@"' bash \
+  /usr/bin/bwrap --unshare-pid --die-with-parent --bind / / \
+  --dev-bind /dev /dev --proc /proc -- \
+  "$STATE_HELPER" exec-output "$LOG" append timeout 3900 "$OPENC" run --standalone --agent build --model "$MODEL" --auto \
+  --title "bedlam-nudge-item$item" "$PROMPT" &
 agent_pid=$!
+terminate_model_group() {
+  local signal=$1
+  "$STATE_HELPER" signal-descendants "$agent_pid" "$signal" 2>/dev/null || true
+  [ "$signal" != TERM ] || sleep 0.05
+  kill -"$signal" -- "-$agent_pid" 2>/dev/null || true
+}
+for _ in $(seq 1 100); do
+  [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *T* ]] && break
+  sleep 0.01
+done
+if ! launch_boundary_valid; then
+  boundary_failure=1
+  terminate_model_group TERM
+else
+  kill -CONT -- "-$agent_pid" 2>/dev/null || true
+fi
 while kill -0 "$agent_pid" 2>/dev/null; do
   sleep "$IDLE_POLL"
   kill -0 "$agent_pid" 2>/dev/null || break
+  [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *Z* ]] && break
+  if ! launch_boundary_valid; then
+    exited_after_change=0
+    for _ in $(seq 1 20); do
+      if ! kill -0 "$agent_pid" 2>/dev/null || [[ "$(ps -o stat= -p "$agent_pid" 2>/dev/null)" == *Z* ]]; then
+        exited_after_change=1
+        break
+      fi
+      sleep 0.01
+    done
+    [ "$exited_after_change" -eq 0 ] || break
+    boundary_failure=1
+    log_line "launch boundary changed for item $item; terminating model pid $agent_pid"
+    terminate_model_group TERM
+    for _ in $(seq 1 3); do
+      kill -0 "$agent_pid" 2>/dev/null || break
+      sleep 0.01
+    done
+    terminate_model_group KILL
+    termination_sent=1
+    break
+  fi
   now=$(date +%s)
   log_mtime=$(stat -c %Y "$LOG" 2>/dev/null || echo "$now")
   idle=$(( now - log_mtime ))
   if [ "$idle" -ge "$IDLE_LIMIT" ]; then
     reaped=1
-    echo "$(date -Is) idle-log reaper: item $item agent log silent ${idle}s >= ${IDLE_LIMIT}s; terminating hung client pid $agent_pid" >> "$STATE/nudge.log"
-    echo "$(date -Is) idle-log reaper: terminating after ${idle}s with no agent-log output" >> "$LOG"
-    kill -TERM "$agent_pid" 2>/dev/null
+    log_line "idle-log reaper: item $item agent log silent ${idle}s >= ${IDLE_LIMIT}s; terminating hung client pid $agent_pid"
+    "$STATE_HELPER" append-text "$LOG" "$(date -Is) idle-log reaper: terminating after ${idle}s with no agent-log output"$'\n' 2>/dev/null || true
+    terminate_model_group TERM
     for _ in $(seq 1 10); do
       kill -0 "$agent_pid" 2>/dev/null || break
       sleep 1
     done
-    kill -KILL "$agent_pid" 2>/dev/null
-    pkill -KILL -P "$agent_pid" 2>/dev/null
+    terminate_model_group KILL
+    termination_sent=1
     break
   fi
 done
+if [ "$termination_sent" -eq 0 ]; then
+  terminate_model_group TERM
+  sleep 0.05
+  terminate_model_group KILL
+fi
 wait "$agent_pid"
 rc=$?
+[ "$boundary_failure" -eq 1 ] && rc=76
 set -e
-cat "$LOG" >> "$STATE/nudge-run.log" 2>/dev/null || true
+if [ "$boundary_failure" -eq 1 ]; then
+  logged_call write_failure preflight-mismatch launch-boundary \
+    "queue or canonical claim changed after model start" false || true
+  drop_owned_claim
+  exit 76
+fi
+"$STATE_HELPER" append-file "$STATE/nudge-run.log" "$LOG" 2>/dev/null || true
 
 end_head=$(git rev-parse HEAD 2>/dev/null || echo none)
 progress=0
@@ -131,10 +295,19 @@ if [ "$end_head" != "$start_head" ] && git cat-file -e "$start_head^{commit}" 2>
 fi
 
 kind=none
+post_claims="$STATE/.post-claims-$slotid"
+"$STATE_HELPER" ensure-dir "$post_claims" 2>/dev/null || true
+set +e
+post_queue=$("$QUEUE_PARSER" "$STATE/NEXT.md" "$post_claims" --state-v1 2>/dev/null)
+post_queue_rc=$?
+rmdir "$post_claims" 2>/dev/null || true
+set -e
 # -i: the provider prints "Usage limit reached" (capital U); the
 # pre-2026-08-21 case-sensitive matcher missed it and every quota death
 # fell through to client-error (watchdog repair, 2026-08-21).
-if grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
+if [ "$post_queue_rc" -ne 0 ] || [ "$post_queue" = INVALID-DEADLOCKED ]; then
+  kind=queue-invalid
+elif grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
 # Provider HTTP 5xx ("Provider request failed with HTTP 502", the
 # 2026-08-21 19:15/19:34 incident) is provider-side overload, not a
@@ -157,20 +330,63 @@ elif grep -aq "Maximum steps for this agent" "$LOG"; then
   kind=step-cap
 elif [ "$rc" -ne 0 ]; then
   kind=client-error
-# A block tag may carry a suffix ([BLOCKED-operator-desktop], the
-# 2026-08-22 watchdog repair: worker e63e5ff4 correctly parked the
-# operator-gated S0 live session but the bare-\[BLOCKED\] matcher
-# mislabeled the legitimate no-commit block as no-progress, charging a
-# false taskfails strike and - with cooldowns disabled - immediately
-# respawning the unprogressable item in a loop while W5 starved behind
-# it). Any BLOCKED-prefixed tag excuses the run.
-elif [ "$progress" -eq 0 ] && ! grep -qE "^[[:space:]]*$item\.[[:space:]]+(\[[^]]+\][[:space:]]*)*\[BLOCKED[^]]*\]" "$STATE/NEXT.md" 2>/dev/null; then
+elif [ "$progress" -eq 0 ] && [ "$post_queue" = AUTOMATIC-WAIT ]; then
+  # The model may request a bounded wait, but only the wrapper can initialize
+  # and seal its schedule while holding the shared queue/executor locks.
+  if "$STATE_HELPER" run-output "$STATE/nudge.log" append \
+      "$SCRIPT_DIR/nudge-wait.py" run "$STATE/NEXT.md" "$STATE/automatic-waits" \
+      && "$STATE_HELPER" run-output "$STATE/nudge.log" append \
+      "$SCRIPT_DIR/nudge-wait.py" verify "$STATE/NEXT.md" "$STATE/automatic-waits"; then
+    kind=none
+  else
+    kind=wait-invalid
+  fi
+elif [ "$progress" -eq 0 ]; then
   kind=no-progress
 fi
 
-exec 9>"$NUDGE_LOCK"
-flock 9
-cur=$(cat "$CONC_FILE" 2>/dev/null || echo 3)
+if [ "$kind" = queue-invalid ] && [ "$rc" -eq 0 ]; then
+  rc=76
+fi
+
+# Validate mutable accounting before publishing the ordinary run failure so a
+# corrupt counter produces one unambiguous repair artifact for this session.
+previous_fail_count=0
+if [ "$kind" != none ] && [ "$kind" != step-cap ] && [ "$kind" != transport ] && [ "$kind" != rate-limit ]; then
+  "$STATE_HELPER" ensure-dir "$STATE/taskfails" 2>/dev/null || {
+    write_failure mutable-state-invalid "task failure directory refused" "mutable fail count state" true 2>/dev/null || true
+    drop_owned_claim
+    exit 76
+  }
+  fails_file="$STATE/taskfails/$task_hash"
+  if [ -e "$fails_file" ]; then
+    previous_fail_count=$("$STATE_HELPER" read-int "$fails_file" task-failure-count 0 1000000 - 2>&1) || {
+      logged_call write_failure mutable-state-invalid "fail count invalid: $previous_fail_count" "mutable fail count state" true || true
+      drop_owned_claim
+      exit 76
+    }
+  fi
+fi
+
+if [ "$kind" != none ] && [ "$kind" != step-cap ]; then
+  queue_hash_after=$(sha256sum "$STATE/NEXT.md" 2>/dev/null | awk '{print $1}')
+  queue_unchanged=false
+  [ "$queue_hash_after" = "$queue_hash_before" ] && queue_unchanged=true
+  logged_call write_failure "$kind" "$kind" "client_rc=$rc;progress=$progress;task=$task_hash" \
+    "$queue_unchanged" || true
+fi
+
+if [ -e "$CONC_FILE" ]; then
+  cur=$("$STATE_HELPER" read-int "$CONC_FILE" concurrency-value 0 3 - 2>&1) || {
+    logged_call write_failure mutable-state-invalid "concurrency value invalid: $cur" "mutable concurrency state" true || true
+    drop_owned_claim
+    exit 76
+  }
+else
+  cur=3
+fi
+clean_log_line=""
+result_log_line=""
 if [ "$kind" = step-cap ]; then
   # A step-capped run is a budget truncation, not a task failure:
   # counting it as no-progress sent the loop into a fail/cooldown
@@ -178,7 +394,7 @@ if [ "$kind" = step-cap ]; then
   # (watchdog repair, 2026-08-20; four spawns died at the cap on
   # task 247ce5e255167e9a). Log loudly, keep the claim for the
   # short DEAD_CLAIM_TTL backoff, never punish the task.
-  echo "$(date -Is) agent item $item hit the opencode2 step cap [rc=$rc progress=$progress] task=$task_hash; treating as truncation, not failure" >> "$STATE/nudge.log"
+  result_log_line="agent item $item hit the opencode2 step cap [rc=$rc progress=$progress] task=$task_hash; treating as truncation, not failure"
 elif [ "$kind" = transport ]; then
   # A provider-side stream failure is environmental, not a task failure
   # (watchdog repair, 2026-08-20: "Invalid zai-coding-plan/openai-
@@ -191,9 +407,9 @@ elif [ "$kind" = transport ]; then
   # provider-incident escalation.
   reap_note=""
   [ "$reaped" -eq 1 ] && reap_note=" (idle-log reaper)"
-  echo "$(date -Is) agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task$reap_note" >> "$STATE/nudge.log"
-  mkdir -p "$STATE/taskfails"
-  touch "$STATE/taskfails/.transport-streak" 2>/dev/null || true
+  result_log_line="agent item $item failed [transport rc=$rc progress=$progress] task=$task_hash; provider-side, not charged to the task$reap_note"
+  "$STATE_HELPER" ensure-dir "$STATE/taskfails" 2>/dev/null || true
+  "$STATE_HELPER" touch "$STATE/taskfails/.transport-streak" 2>/dev/null || true
   # event beacon: the llm-watchdog path unit watches this dir - a transport
   # storm escalates to the supervisor in seconds, no timer involved.
 elif [ "$kind" = rate-limit ]; then
@@ -203,82 +419,66 @@ elif [ "$kind" = rate-limit ]; then
   # deaths mislabeled client-error charged task c72d408d50275d04 with
   # fails + 15-min cooldowns that rolled over repeatedly for the rest of
   # the quota window). Never touch taskfails; instead hold this task in
-  # cooldown until the reset timestamp the provider prints (fallback and
-  # sanity cap: the standard 900s window), but never trust that stamp
-  # beyond one probe interval (see the 1800s cap below), so the
-  # controller stands down without cycling doomed ~40s spawns and still
-  # notices early recovery. The llm-watchdog owns cross-item escalation
-  # (global pause) for longer or unparsable outages.
-  reset=$(grep -aoiE "will reset at [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}" "$LOG" | head -n 1 | cut -d' ' -f4-5)
-  until=$(date -d "$reset" +%s 2>/dev/null || echo 0)
-  now_ts=$(date +%s)
-  if [ "$until" -le "$now_ts" ] || [ "$until" -gt $(( now_ts + 21600 )) ]; then
-    until=$(( now_ts + 900 ))
-  fi
-  # Watchdog repair 2, 2026-08-21 ~08:30: the provider's reset stamp can
-  # be wildly wrong. This morning it printed "will reset at 13:41:22"
-  # from ~07:45 but resumed serving at ~07:52; the armed 5h59m cooldown
-  # froze the sole queue item on a healthy provider for a would-be ~5h.
-  # Cap the armed cooldown at one probe interval: if the quota window is
-  # genuinely still open, the next probe dies in ~40s with the same
-  # rate-limit signature and re-arms the cap (at most one benign probe
-  # per 30 min, no taskfails charge); if the provider recovered early,
-  # the loop is back within 30 min instead of hours.
-  if [ "$until" -gt $(( now_ts + 1800 )) ]; then
-    until=$(( now_ts + 1800 ))
-  fi
-  mkdir -p "$STATE/taskcooldown"
-  echo "$until" > "$STATE/taskcooldown/$task_hash"
-  echo "$(date -Is) agent item $item failed [rate-limit rc=$rc progress=$progress] task=$task_hash; provider quota, not charged to the task; cooling down until $(date -d "@$until" '+%F %T %z')" >> "$STATE/nudge.log"
+  # The structured failure artifact is the scheduler-visible outcome. Hidden
+  # per-task cooldown files are deliberately not scheduler truth.
+  result_log_line="agent item $item failed [rate-limit rc=$rc progress=$progress] task=$task_hash; provider quota, not charged to the task; structured automatic repair required"
 elif [ "$kind" != none ]; then
 
   # Operator no-cooldown doctrine (2026-08-22): a failed run retries
   # immediately, like a clean one. Age the heartbeat so the controller
   # freshness gate (300s) cannot become a silent per-failure backoff
-  # now that claims are released instead of retained. rate-limit keeps
-  # its provider-closed hold (the quota cooldown) by design.
+  # now that claims are released instead of retained. Provider rate limits
+  # publish structured failures instead of hidden scheduler holds.
   if [ "$kind" != rate-limit ]; then
-    touch -d @0 "$STATE/heartbeat"
+    logged_call "$STATE_HELPER" touch "$STATE/heartbeat" 0 || true
   fi
   # Failures are scoped to this task, not to the whole controller, so
   # unrelated items can never be blamed for (or cleared by) this run.
-  mkdir -p "$STATE/taskfails" "$STATE/taskcooldown"
+  "$STATE_HELPER" ensure-dir "$STATE/taskfails" 2>/dev/null || {
+    write_failure mutable-state-invalid "task failure directory refused" "mutable fail count state" true 2>/dev/null || true
+    drop_owned_claim
+    exit 76
+  }
   fails_file="$STATE/taskfails/$task_hash"
-  fail_count=$(( $(cat "$fails_file" 2>/dev/null || echo 0) + 1 ))
-  echo "$fail_count" > "$fails_file"
+  fail_count=$((previous_fail_count + 1))
+  logged_call "$STATE_HELPER" write-text "$fails_file" "$fail_count" || {
+    logged_call write_failure mutable-state-invalid "fail count write refused" "mutable fail count state" true || true
+    drop_owned_claim
+    exit 76
+  }
   if [ "$fail_count" -ge 3 ]; then
     if [ "$fail_count" -eq 3 ] && [ -n "$NOTIFY_SEND" ] && command -v "$NOTIFY_SEND" >/dev/null 2>&1; then
       "$NOTIFY_SEND" -u critical "bedlam-re repeated agent failures" "item $item failed three consecutive observed runs ($kind, task $task_hash); cooling down 15 minutes" 2>/dev/null || true
     fi
   fi
   if [ "$cur" -gt "$CONC_MIN" ]; then
-    echo $((cur-1)) > "$CONC_FILE"
-    date +%s > "$CONC_DOWN_TS"
-    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency degraded $cur -> $((cur-1))" >> "$STATE/nudge.log"
+    logged_call "$STATE_HELPER" write-text "$CONC_FILE" "$((cur-1))" || true
+    logged_call "$STATE_HELPER" write-text "$CONC_DOWN_TS" "$(date +%s)" || true
+    result_log_line="agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency degraded $cur -> $((cur-1))"
   else
-    echo "$(date -Is) agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency remains 1" >> "$STATE/nudge.log"
+    result_log_line="agent item $item failed [$kind rc=$rc progress=$progress] task=$task_hash; concurrency remains 1"
   fi
 else
-  rm -f "$STATE/taskfails/$task_hash"
-  echo "$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress) task=$task_hash" >> "$STATE/nudge.log"
+  "$STATE_HELPER" unlink "$STATE/taskfails/$task_hash" 2>/dev/null || true
+  clean_log_line="$(date -Is) agent item $item ended cleanly (rc=$rc progress=$progress) task=$task_hash"
 fi
 
 # Drop only this wrapper lock, then inspect the same inode we acquired. A live
 # inherited descriptor is a real ghost and keeps the claim. Failed runs retain
 # an unlocked claim for DEAD_CLAIM_TTL as intentional retry backoff.
 exec 8>&-
-rm -f "$placeholder"
+unlink_identity "$placeholder" "$reservation_identity" || true
 current_identity=$(stat -c "%d:%i" "$own" 2>/dev/null || echo missing)
-if [ "$current_identity" = "$claim_identity" ] && grep -q "^lock-v1 worker $slotid owns queue item $item$" "$own" 2>/dev/null; then
+if [ "$current_identity" = "$claim_identity" ]; then
   if flock -n "$own" true 2>/dev/null; then
     if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
-      rm -f "$own"
+      unlink_identity "$own" "$claim_identity" || true
     else
-      rm -f "$own"
-      echo "$(date -Is) failed run released item $item claim for immediate retry (no cooldowns - operator 2026-08-21)" >> "$STATE/nudge.log"
+      unlink_identity "$own" "$claim_identity" || true
+      log_line "failed run released item $item claim for immediate retry (no cooldowns - operator 2026-08-21)"
     fi
   else
-    echo "$(date -Is) retaining item $item claim held by a live descendant" >> "$STATE/nudge.log"
+    log_line "retaining item $item claim held by a live descendant"
   fi
 fi
 
@@ -290,7 +490,7 @@ fi
 # (never touch the real systemd there); SYSTEMCTL_OVERRIDE lets tests
 # record the chained call instead.
 if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
-  touch -d @0 "$STATE/heartbeat"
+  logged_call "$STATE_HELPER" touch "$STATE/heartbeat" 0 || true
   if [ -n "${SYSTEMCTL_OVERRIDE:-}" ]; then
     "$SYSTEMCTL_OVERRIDE" --user start bedlam-nudge.service >/dev/null 2>&1 || true
   elif [ -z "${SYSTEMD_RUN_OVERRIDE:-}" ]; then
@@ -301,4 +501,6 @@ if [ "$kind" = none ] && [ "$rc" -eq 0 ]; then
     systemd-run --user --collect --on-active=4s "--unit=bedlam-nudge-chain-$slotid" systemctl --user start bedlam-nudge.service >/dev/null 2>&1 || true
   fi
 fi
+[ -z "$result_log_line" ] || "$STATE_HELPER" append-text "$STATE/nudge.log" "$(date -Is) $result_log_line"$'\n' 2>/dev/null || true
+[ -z "$clean_log_line" ] || "$STATE_HELPER" append-text "$STATE/nudge.log" "$clean_log_line"$'\n' 2>/dev/null || true
 exit "$rc"

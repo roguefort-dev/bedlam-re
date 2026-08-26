@@ -130,7 +130,7 @@ The W4 runner ships unattended-safe staging + the channel-agnostic capture
 transcript format + the stitcher (see DESIGN §3/§10-W4); the live-run piece
 is [BLOCKED]-on-DH-G0-channel-repin.
 
-## DH-G0 channel re-pin (2026-08-22, queue item 1) — DECISION: option (a), self-build at e522642 (D80)
+## DH-G0 channel re-pin (2026-08-22, queue item 1) — SUPERSEDED historical decision: option (a), self-build at e522642 (D80)
 
 DECISION (the queue item's stated DEFAULT, no operator input): the O1
 capture channel becomes a REPO-LOCAL SELF-BUILT DOSBox-X at the SAME
@@ -283,7 +283,7 @@ run + the pmode flat-selector proof (code BP at EXD entry 0x5fbb0, BP at
 the present-tail 0x5a6eb) + cycles calibration remain INTERACTIVE-GATED
 for the next unit (S0 live + DH-G1 determinism).
 
-## S0 live channel mechanics (2026-08-22, queue item 1 prep; responsive path
+## S0 live channel mechanics (2026-08-22, superseded queue item 1 prep; responsive path
 ## LANDED as D165, 2026-08-26; all facts
 ## [source-pinned] on the D80 build's tree at e522642 unless noted)
 
@@ -394,7 +394,12 @@ and `src/debug/debug.cpp:460-479,585-586,752-810,2324-2379,2600-2668,
    mission anchor, frame waits switch to plain RUN. Legacy BPINT/code-trigger
    frame waits also use RUN, leaving no code-only RUNWATCH polling path.
 
-## S0 LIVE SESSION CHECKLIST (interactive; the machinery is landed + headless-verified — this is all that remains)
+## S0 LIVE SESSION CHECKLIST (retired diagnostic; not required or queued)
+
+This historical runbook may be used to investigate the original capture
+channel, but D170 removed it from required engineering scope. It does not close
+P4, cannot substitute for deterministic S0-S8/static evidence, and its S0W,
+cycles, audio, hardware, and perceptual steps are never scheduler work.
 
 Everything below was prepared by the unattended units (commits f659db5
 + d5550a3 + ee2f0d4): capgen plan v2 (entry trap → context validation → arm →
@@ -558,10 +563,9 @@ KNOWN LIMITS (documented, not blockers):
 - SMV input sent while the machine runs queues until the next stop
   (same proceed-anyway + ack-reliance as the frame loop).
 
-S0W calibration: the committed S0W.scen walk schedule is a STRUCTURAL
-DRAFT (stop counts are placeholders) — the first live session calibrates
-the indices via `walk_watches` output (see the S0 checklist note); the
-schedule itself is then just data (no code change). Headless
+S0W calibration: the committed S0W.scen walk schedule is an EXCLUDED
+DIAGNOSTIC DRAFT (stop counts are placeholders), retained for historical
+channel investigation and not a required task or gate. Headless
 verification: `dbgprobe walk` GREEN 2026-08-22 (walk loop + stop
 indexing incl. a pure-skip stop + write-then-read calibration notes +
 arm-at-walk-end + resolve_at=anchor feeding expr lens; probe conf, no
@@ -713,7 +717,7 @@ inject form). Row shape:
   52f6044c2033cb34); (f) re-emission is byte-identical. Outputs under
   runtime/harness-out/o2-smoke/ (gitignored).
 
-## Explicitly NOT done here (follow-ups queued)
+## Explicitly NOT done here (superseded historical follow-ups queued)
 
 1. Launching BEDLAM.EXW under the wine prefix - needs a desktop session and
    DirectDraw; do it interactively, not from an unattended run.

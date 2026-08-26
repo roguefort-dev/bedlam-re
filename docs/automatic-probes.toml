@@ -1,0 +1,4 @@
+schema = "automatic-probes-v1"
+
+# Add probes only as committed id/path/digest entries. An empty registry means
+# no WAITING-AUTOMATIC item is currently authorized in the production queue.

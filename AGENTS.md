@@ -21,7 +21,16 @@ runs. Read it fully before doing anything.
   .state/ logs, ghidra-project/, and /tmp scratch.
 - One bounded work unit per run. Small commits. Push when green.
 - Unattended nudge agents MUST NOT spawn or delegate to subagents. No nesting; each claimed slot is one glm-5.3 session.
-- Never make a commit whose only effect is a stand-down/status journal in `.state/`. A real blocker is recorded once by tagging the claimed Now item `[BLOCKED]`; that tag mechanically prevents respawn.
+- Every commit advances substantive code or documentation; runtime state is machine-owned evidence.
+
+## Required-task outcomes
+- Keep the claimed task executable until its completion criteria pass.
+- A pending machine event becomes `WAITING-AUTOMATIC` with an executable in-repo
+  probe, retry cadence, and finite timeout or deadline.
+- An unexpected inability leaves `.state/NEXT.md` unchanged; the worker wrapper
+  emits `.state/automation-failures/<session>.json` for watchdog repair.
+- Completion is checkable: substantive work is committed and the queue is valid,
+  or a bounded probe is persisted and scheduled, or a structured failure exists.
 
 ## Ownership and shared-worktree rules
 - For an unattended run, the wrapper has already acquired the queue-item claim named
@@ -36,8 +45,8 @@ runs. Read it fully before doing anything.
   inspect and preserve it, then adopt, validate, and continue it. Before editing,
   record `git status`/`git diff`; never reset, checkout, clean, or overwrite it.
   Stage explicit task paths only--never `git add -A` or `git commit -a` in a dirty
-  shared tree. Leave unrelated WIP untouched. If overlap is genuinely ambiguous,
-  tag the claimed item `[BLOCKED]` with one concrete reason and stop.
+  shared tree. Leave unrelated WIP untouched. Ambiguous overlap keeps the queue
+  unchanged and produces the structured failure outcome above.
 - Interactive operators must create `.state/PAUSE` before editing queue-relevant
   files and remove it when handing the work back. Merely keeping this TUI open never
   pauses or blocks autonomy.
@@ -47,7 +56,9 @@ runs. Read it fully before doing anything.
 ## Workflow for every run
 1. touch .state/heartbeat  (do this again periodically during long shell work)
 2. If .state/PAUSE exists -> do nothing, exit. The sole exception is a watchdog repair launched by `tools/llm-watchdog.sh`: it may proceed only when its prompt supplies a watchdog token and both `.state/PAUSE` and `.state/llm-watchdog-pause` contain that exact token. It must leave both files untouched for the wrapper to release.
-3. Read .state/NEXT.md. An unattended worker works ONLY its wrapper-assigned item. If genuinely blocked, tag that item `[BLOCKED]`, record one concrete reason, and stop; never select another item. Interactive runs may select another unclaimed item.
+3. Read .state/NEXT.md. An unattended worker works ONLY its wrapper-assigned item
+   and finishes with one Required-task outcome. Interactive runs may select another
+   unclaimed item.
 4. Do the work. Keep it small enough to finish and verify in this run.
 5. Update docs as you go (provenance + confidence tags for RE claims; DECISIONS.md for choices).
 6. git add (never game-data/derived), commit with a clear message, git push.
@@ -57,9 +68,12 @@ runs. Read it fully before doing anything.
 10. Stop. The nudge system will spawn the next unit.
 
 ## Completion
-When ALL gates of docs/PLAN.md (P0..P7) are genuinely passed, create the file
-.state/PLAN-COMPLETE (with a summary inside) instead of queuing more work. That file
-stops the autonomous loop permanently.
+Workers never assert global completion and `.state/PLAN-COMPLETE` is never trusted
+as later-run input. When the active required queue is empty, the controller runs
+the fixed bounded offline validator over `docs/required-gates.toml`; only zero
+active items plus every P0-P7 gate green produces an informational, atomic,
+HEAD/manifest-bound `plan-complete-v1` report for that invocation. A P4 verdict
+may emit `.state/P4-COMPLETE`, never global PLAN completion.
 
 ## Build/test baseline
 - cargo build --release / cargo run --release -q -- game-data derived  (tools/inspect)
@@ -74,9 +88,8 @@ stops the autonomous loop permanently.
   `-noanalysis` and a postScript; do not re-import.
 - BedlamWatcom project status: BEDLAM.EXW imported ONCE under
   x86:LE:32:default + openwatcomcpp cspec, single program, verified 03:33.
-- If a model/transport/API error interrupts you mid-task: stop, record exactly
-  what you finished and the blocker in .state/NEXT.md, commit that much, stop.
-  Never leave silent partial state for the next agent to trip over.
+- If a model, transport, or API error interrupts the task, preserve substantive
+  WIP and leave the queue unchanged so the wrapper records structured evidence.
 
 ## Reverse-engineering discipline (stream-survival rule)
 The API client dies after 300s of zero streamed bytes (known upstream bug). A model

@@ -7,18 +7,78 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PARSER="$ROOT/tools/nudge-free-items.py"
 TMP=$(mktemp -d /tmp/opencode/bedlam-nudge-queue.XXXXXX)
-trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/claims"
+LOCK_PIDS=""
+trap 'for pid in $LOCK_PIDS; do kill "$pid" 2>/dev/null || true; done; rm -rf "$TMP"' EXIT
+QUEUE="$TMP/.state/NEXT.md"
+CLAIMS="$TMP/.state/claims"
+mkdir -p "$CLAIMS"
+mkdir -p "$TMP/tools"
+mkdir -p "$TMP/docs"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/tools/probe.sh"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/tools/probe-ci.sh"
+chmod +x "$TMP/tools/probe.sh" "$TMP/tools/probe-ci.sh"
+probe_digest=$(sha256sum "$TMP/tools/probe.sh" | awk '{print $1}')
+probe_ci_digest=$(sha256sum "$TMP/tools/probe-ci.sh" | awk '{print $1}')
+cat > "$TMP/docs/automatic-probes.toml" <<EOF
+schema = "automatic-probes-v1"
+[[probe]]
+id = "tools/probe.sh"
+path = "tools/probe.sh"
+sha256 = "$probe_digest"
+[[probe]]
+id = "tools/probe-ci.sh"
+path = "tools/probe-ci.sh"
+sha256 = "$probe_ci_digest"
+EOF
+git -C "$TMP" init -q
+git -C "$TMP" config user.email test@example.invalid
+git -C "$TMP" config user.name test
+git -C "$TMP" add tools docs/automatic-probes.toml
+git -C "$TMP" commit -qm probe-policy
 
 failures=0
 
 write_queue() {
-  rm -f "$TMP/claims"/*.claim "$TMP/stdout" "$TMP/stderr"
-  cat > "$TMP/NEXT.md"
+  for pid in $LOCK_PIDS; do kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; done
+  LOCK_PIDS=""
+  rm -f "$CLAIMS"/*.claim "$TMP/stdout" "$TMP/stderr"
+  cat > "$QUEUE"
+}
+
+write_v2_owner() {
+  local ordinal=$1 item_id=$2 gate=$3 session=queue-test fields status parsed_id parsed_gate body dev ino queue
+  fields=$($PARSER "$QUEUE" "$CLAIMS" --item-v2 "$ordinal")
+  read -r status parsed_id parsed_gate body dev ino queue <<< "$fields"
+  cat > "$CLAIMS/$ordinal-owner.claim" <<EOF
+lock-v2
+ordinal=$ordinal
+id=$item_id
+gate=$gate
+owner=worker
+session=$session
+claimed_at=$(date -Is)
+unit=bedlam-nudge-item$ordinal-$session
+pid=$$
+body_sha256=$body
+queue_device=$dev
+queue_inode=$ino
+queue_sha256=$queue
+EOF
+  (
+    exec 8<>"$CLAIMS/$ordinal-owner.claim"
+    flock 8
+    sleep 300
+  ) &
+  local holder=$!
+  LOCK_PIDS="$LOCK_PIDS $holder"
+  for _ in $(seq 1 100); do
+    flock -n "$CLAIMS/$ordinal-owner.claim" true 2>/dev/null || break
+    sleep 0.01
+  done
 }
 
 run_parser() {
-  "$PARSER" "$TMP/NEXT.md" "$TMP/claims" "$@" \
+  "$PARSER" "$QUEUE" "$CLAIMS" "$@" \
     >"$TMP/stdout" 2>"$TMP/stderr"
   LAST_RC=$?
   LAST_OUT=$(cat "$TMP/stdout")
@@ -75,7 +135,7 @@ write_queue <<'EOF'
 ## Backlog
 EOF
 expect_ok "READY keeps numeric output compatibility" "1"
-touch "$TMP/claims/1-owner.claim"
+write_v2_owner 1 compile-slice p4-build
 expect_ok "numeric owner claims still suppress READY items" ""
 
 write_queue <<'EOF'
@@ -253,9 +313,10 @@ EOF
   expect_invalid "rejects non-positive or malformed wait bound: $malformed" 'retry|timeout|positive|bounded|malformed'
 done
 
-write_queue <<'EOF'
+deadline=$(date -u -d '+1 day' '+%Y-%m-%dT%H:%M:%SZ')
+write_queue <<EOF
 ## Now
-1. [WAITING-AUTOMATIC] [id=deadline-wait] [gate=deadline-gate] [probe=tools/probe.sh] [retry=5m] [deadline=2099-08-27T12:00:00Z] wait for the machine probe
+1. [WAITING-AUTOMATIC] [id=deadline-wait] [gate=deadline-gate] [probe=tools/probe.sh] [retry=5m] [deadline=$deadline] wait for the machine probe
 ## Backlog
 EOF
 expect_ok "absolute deadline is a valid bounded automatic wait" ""
@@ -440,7 +501,7 @@ write_queue <<'EOF'
 1. [READY] [id=claimed-ready] [gate=claimed-ready-gate] claimed task
 ## Backlog
 EOF
-touch "$TMP/claims/1-owner.claim"
+write_v2_owner 1 claimed-ready claimed-ready-gate
 expect_ok "all claimed READY items remain valid in numeric mode" ""
 expect_ok "all claimed READY items have explicit state" "CLAIMED-RUNNING" --state-v1
 
@@ -450,7 +511,7 @@ write_queue <<'EOF'
 2. [WAITING-AUTOMATIC] [id=mixed-wait] [gate=mixed-wait-gate] [probe=tools/probe.sh] [retry=30s] [timeout=20m] bounded wait
 ## Backlog
 EOF
-touch "$TMP/claims/1-owner.claim"
+write_v2_owner 1 claimed-ready claimed-ready-gate
 expect_ok "mixed claimed READY and wait has no numeric claim" ""
 expect_ok "claimed work takes precedence over automatic wait" "CLAIMED-RUNNING" --state-v1
 
@@ -488,20 +549,41 @@ write_queue <<'EOF'
 1. [READY] [id=claims-path] [gate=claims-path-gate] validate claims path
 ## Backlog
 EOF
-rmdir "$TMP/claims"
+rmdir "$CLAIMS"
 expect_deadlocked "missing claims directory"
-mkdir "$TMP/claims"
+mkdir "$CLAIMS"
 
 write_queue <<'EOF'
 ## Now
 1. [READY] [id=claims-file] [gate=claims-file-gate] reject claims file
 ## Backlog
 EOF
-rmdir "$TMP/claims"
-: > "$TMP/claims"
+rmdir "$CLAIMS"
+: > "$CLAIMS"
 expect_deadlocked "claims path must be a directory"
-rm -f "$TMP/claims"
-mkdir "$TMP/claims"
+rm -f "$CLAIMS"
+mkdir "$CLAIMS"
+
+# Repository-level migration contract: the live active queue is itself an
+# input to the strict scheduler, not exempt historical documentation. Only the
+# ## Now slice is scoped here; human/operator prose may remain under Done.
+active_state=$($PARSER "$ROOT/.state/NEXT.md" "$CLAIMS" --state-v1 \
+  2>"$TMP/active-queue.err")
+active_rc=$?
+active_now=$(awk '
+  /^## Now[[:space:]]*$/ { active=1; next }
+  /^## / && active { exit }
+  active { print }
+' "$ROOT/.state/NEXT.md")
+if [ "$active_rc" -ne 0 ] \
+    || [[ "$active_state" != RUNNABLE\ * && "$active_state" != AUTOMATIC-WAIT ]] \
+    || printf '%s\n' "$active_now" | grep -Eqi 'BLOCKED|operator|interactive|human|manual'; then
+  LAST_RC=$active_rc
+  LAST_OUT=$active_state
+  LAST_ERR=$(cat "$TMP/active-queue.err")
+  fail 'repository active queue contains only permitted autonomous state' \
+    'strict parser RUNNABLE/AUTOMATIC-WAIT and no BLOCKED/operator/interactive entry in ## Now'
+fi
 
 if [ "$failures" -ne 0 ]; then
   printf 'nudge queue tests: FAIL (%d failure(s))\n' "$failures"

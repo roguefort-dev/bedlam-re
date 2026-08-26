@@ -166,7 +166,8 @@ are data — stated as a hypothesis to verify in P2d, with code-defined quirk ho
 tolerated until P5 evidence settles it). Errors: thiserror in parsers, never panic on
 user-supplied assets, panic = engine bug. Logging: tracing with per-subsystem targets
 (doubles as RE diff tooling). CI: Linux every commit from the first window; Windows
-weekly; macOS nightly/manual (owner: if possible) — goldens never on macOS CI.
+weekly; automated scheduled macOS CI when a runner is available. Runner availability
+is external and does not block other technical gates; goldens never run on macOS CI.
 
 ### P4 — Vertical slice + the two harnesses
 Boot → TITLE.SMK → menu → ZONEA/MISSION1 render → move one squad member → palette/
@@ -186,6 +187,16 @@ audio present.
    content fingerprints (decoded pixel bytes + palette hash — never PNG file bytes) so
    codec re-encodes cannot false-regress.
 Acceptance: replay determinism + state-dump parity on scripted slice scenes.
+The required P4 engineering proof is fully automated: deterministic T1/static
+tests, committed S0-S8 scenario/capture-plan corpus checks, and the
+`differ_gate` plumbing tests enumerated in `docs/required-gates.toml`. Live
+O1/O2/O3 captures, S0W menu calibration, cycles/audio checks, hardware checks,
+and perceptual review are excluded diagnostics, not P4 closure gates or queued
+work. D145-D164 closed the semantic and timing dispositions; the only remaining
+original-side contract correction is the EXW operational trigger at
+`0x004486C9` (callee/canon `0x00425A03`, EXD `0x0005A6EB`). P4 completion emits
+only the HEAD/manifest-bound `.state/P4-COMPLETE`;
+global completion additionally requires every P0-P7 phase gate.
 
 ### P5 — Parity completion (per-zone gates)
 37 missions playable; AI, weapons, shop, briefings, speech+music+SFX, save/load,
@@ -197,14 +208,16 @@ checks at key moments (T2); differential harness spot-checks for structure (not
 tick-complete); cross-OS replay hash equality of OUR engine (internal determinism).
 Original save compatibility: declared IN — original SAVED/OPTIONS.BDL import is
 read-only, bounds-checked, fuzzed; new saves use the new versioned format.
-Original-behavior catalog is a P5 artifact (per-bug ledger: repro, affected missions,
-severity, gameplay-coupling) — the input to P6 triage; owner signs it at each zone gate.
+Original-behavior catalog is a P5 artifact: a committed, schema-validated per-bug
+ledger (repro, affected missions, severity, gameplay-coupling) that feeds P6 triage;
+an automated completeness gate validates every zone.
 
 ### P6 — Modernization (default = modern; classic available)
 Architecture (simplified by the 99% target): fixes land directly in the engine —
 there is no bug-complete-faithful core to preserve. Classic mode shrinks to a small
 purist toggle set covering feel-contested items only (timing lock, control scheme,
-selected catalog entries the owner marks preserve). Mode is one immutable ModeConfig
+selected catalog entries classified for preservation by a deterministic rubric and
+decision record, with regression tests). Mode is one immutable ModeConfig
 injected at sim construction; test surface = the purist toggles, not 2^features.
 - Time-based simulation: accumulator decouples tick rate from render; optional uncapped
   FPS. High-refresh displays (USER REQ 2026-08-17: 240Hz+) are a first-class present
@@ -220,7 +233,8 @@ injected at sim construction; test surface = the purist toggles, not 2^features.
   selectable.
 - Bug triage rubric (per catalog entry): crash/data-loss → fix everywhere;
   gameplay-coupled → classic preserves / modern fixes; cosmetic → fix in modern.
-  Fixed = deviation from the catalog, decided by rubric, signed off — not vibes.
+  Fixed = deviation from the catalog established by mechanically applying the rubric
+  and recording regression evidence — not vibes.
 - Resolution independence + GPU rendering (D9/D20/D21): wgpu presents at any
   window/borderless/fullscreen resolution. PARITY mode keeps the canonical
   640x480 indexed frame + palette and GPU-scales it (nearest/integer default;
@@ -236,22 +250,26 @@ injected at sim construction; test surface = the purist toggles, not 2^features.
   (b) alpha-aware sprite/sprite-sheet upscale, (c) seamless tile/texture
   upscale, and (d) portraits/UI art. Git contains only workflow JSON, recipes,
   masks, model/tool/version hashes, seeds/prompts, manifests and provenance;
-  generated images live in a user-selected external HD-pack directory. Every
-  output requires human approval; runtime resolves replacements by stable
-  asset ID and falls back to originals. Text, controls, click targets and
-  gameplay information are rendered/layouted by the engine, never hallucinated
-  into generated backgrounds. Setup must be isolated and hardware-profiled;
+  generated images live in a user-selected external HD-pack directory. Automated gates
+  validate provenance, dimensions, alpha integrity, seam quality, and perceptual
+  thresholds; outputs without recorded evidence are excluded from shipping. Runtime
+  resolves replacements by stable asset ID and falls back to originals. Text, controls,
+  click targets and gameplay information are rendered/layouted by the engine, never
+  hallucinated into generated backgrounds. Setup must be isolated and hardware-profiled;
   exact package/model pins come from docs/RESEARCH-HD-ASSET-PIPELINE.md.
 - QoL: window modes, vsync control, volume mixers, save slots + metadata + opt-in
   autosave. Game-feel proxies: input-to-present ≤ 1 original frame; animation cadence
   matches at the active display refresh (validated 60–240Hz+); no stutter under
-  p95 frame-time budget at that refresh (240Hz frame-pacing check in the
-  CI-manual set).
+  p95 frame-time budget at that refresh. An automated scheduled CI benchmark checks
+  240Hz frame pacing against a pinned hardware profile and thresholds; an unavailable
+  profile creates no task and only excludes that platform attestation.
 
 ### P7 — Ports and packaging
-Linux native + Flatpak; Windows installer; macOS universal2 (best-effort per owner);
-CI artifacts per push. CDDA: user-supplied original tracks (WAV/CD), optional local
-lossy cache generated on first run — never redistributed. SteamDeck defaults stretch.
+Linux native + Flatpak; Windows installer; macOS universal2 through automated CI.
+Runner, signing, and publication availability are external conditions and do not block
+engineering completion. CI artifacts per push. CDDA: user-supplied original tracks
+(WAV/CD), optional local lossy cache generated on first run — never redistributed.
+SteamDeck defaults stretch.
 
 ### P8 — Bedlam 2: Absolute Bedlam support (post-P5, user requirement D11)
 Same engine, parameterized content: bedlam-assets already parses 89% of the B2

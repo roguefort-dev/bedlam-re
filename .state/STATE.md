@@ -1,5 +1,17 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D170 P4 closure scope corrected: the historical entries below
+    that call an interactive S0 run the sole closure gate are preserved as
+    history but superseded. Required P4 evidence is automation-only:
+    deterministic T1/static proof, the committed S0-S8 scenario/capture-plan
+    corpus, diffharness plumbing, dependency decisions, and the tracked
+    required-gates validator. Live O1/O2/O3 captures, S0W calibration,
+    cycles/audio listening, hardware, and perceptual checks are excluded
+    diagnostics and are never queue categories. P4 may emit P4-COMPLETE only;
+    D145-D164 semantic/timing rows are closed and only the EXW operational
+    trigger correction remains on the original-side contract. P5-P7 remain
+    incomplete, so global PLAN completion is false.
+
   - 2026-08-26 D169 `exd-music-loader-census` COMPLETE (worker
     829d719c claim 1, commit 3f8db5c, PUSHED, docs-only): the D168
     residue closed — the EXD music-LOADER chain decoded whole and

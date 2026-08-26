@@ -1,0 +1,92 @@
+schema = "required-gates-v1"
+
+[[phase]]
+id = "P0"
+status = "green"
+required_gates = []
+
+[[phase]]
+id = "P1"
+status = "green"
+required_gates = []
+
+[[phase]]
+id = "P2"
+status = "green"
+required_gates = []
+
+[[phase]]
+id = "P3"
+status = "green"
+required_gates = []
+
+[[phase]]
+id = "P4"
+status = "pending"
+required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "p4-machine-verdict"]
+
+[[phase]]
+id = "P5"
+status = "pending"
+required_gates = []
+
+[[phase]]
+id = "P6"
+status = "pending"
+required_gates = []
+
+[[phase]]
+id = "P7"
+status = "pending"
+required_gates = []
+
+[[gate]]
+id = "trigger-address"
+timeout_seconds = 900
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "diffharness", "--bin", "dbx-plan"],
+  ["/bin/bash", "tools/runtime/capgen-o2-smoke.sh"],
+  ["/usr/bin/python3", "tools/check-p4-trigger-contract.py"],
+]
+tracked_paths = ["tools/diffharness/watches.toml", "tools/diffharness/src/bin/dbx-plan.rs", "tools/diffharness/capture-plans/S1-o2.json", "tools/runtime/capgen-o2-smoke.sh", "tools/check-p4-trigger-contract.py"]
+
+[[gate]]
+id = "dependency-spikes"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-platform"],
+  ["/usr/bin/cargo", "build", "--release", "--locked", "--offline", "-p", "bedlam-shell"],
+]
+tracked_paths = ["Cargo.lock", "engine/bedlam-platform/src/gpu.rs", "docs/DECISIONS.md"]
+
+[[gate]]
+id = "s0-dispositions"
+timeout_seconds = 1800
+commands = [["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "static_frame_counter_differential"]]
+tracked_paths = ["engine/bedlam-game/tests/static_frame_counter_differential.rs", "docs/PLAN.md", "docs/DESIGN-DIFFHARNESS.md", "docs/RUNTIME.md", ".state/STATE.md"]
+corpus = ["tools/diffharness/capture-plans/S0.json", "tools/diffharness/capture-plans/S1.json", "tools/diffharness/capture-plans/S2.json", "tools/diffharness/capture-plans/S3.json", "tools/diffharness/capture-plans/S4.json", "tools/diffharness/capture-plans/S5.json", "tools/diffharness/capture-plans/S5B.json", "tools/diffharness/capture-plans/S5C.json", "tools/diffharness/capture-plans/S6.json", "tools/diffharness/capture-plans/S7.json", "tools/diffharness/capture-plans/S8.json"]
+
+[[gate]]
+id = "scripted-slice-scenes"
+timeout_seconds = 1800
+commands = [["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "canonical_dump_gate"]]
+tracked_paths = ["engine/bedlam-game/tests/canonical_dump_gate.rs"]
+corpus = ["tools/diffharness/scenarios/S0.scen", "tools/diffharness/scenarios/S1.scen", "tools/diffharness/scenarios/S2.scen", "tools/diffharness/scenarios/S3.scen", "tools/diffharness/scenarios/S4.scen", "tools/diffharness/scenarios/S5.scen", "tools/diffharness/scenarios/S5B.scen", "tools/diffharness/scenarios/S5C.scen", "tools/diffharness/scenarios/S6.scen", "tools/diffharness/scenarios/S7.scen", "tools/diffharness/scenarios/S8.scen"]
+
+[[gate]]
+id = "diffharness-plumbing"
+timeout_seconds = 1800
+commands = [["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "differ_gate"]]
+tracked_paths = ["engine/bedlam-game/tests/differ_gate.rs", "tools/diffharness/src/differ.rs"]
+corpus = ["tools/diffharness/tests/fixtures/s0-replay.dbxcap"]
+
+[[gate]]
+id = "gates-validator"
+timeout_seconds = 120
+commands = [["/usr/bin/python3", "tools/test-validate-required-gates.py"]]
+tracked_paths = ["tools/validate-required-gates.py", "tools/test-validate-required-gates.py", "docs/required-gates.toml"]
+
+[[gate]]
+id = "p4-machine-verdict"
+timeout_seconds = 1
+depends = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator"]

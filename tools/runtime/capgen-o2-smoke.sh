@@ -26,7 +26,7 @@ mkdir -p "$OUT"
 rm -rf "$OUT"/*
 
 note "build the diffharness bins"
-cargo build -q -p diffharness --release --bins \
+/usr/bin/cargo build -q -p diffharness --release --bins --locked --offline \
   || fail "cargo build"
 
 # --- (a) plan side: the o2 compiler still byte-pins the committed plan

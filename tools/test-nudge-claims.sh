@@ -26,35 +26,86 @@ mkdir -p "$CLAIMS"
 
 old() { touch -d "@$(( $(date +%s) - $2 ))" "$1"; }
 reap() {
-  DEAD_CLAIM_TTL=5 RESERVATION_TTL=5 LEGACY_CLAIM_TTL=20 "$REAPER" "$CLAIMS" "$LOG"
+  DEAD_CLAIM_TTL=5 RESERVATION_TTL=5 LEGACY_CLAIM_TTL=20 \
+    MALFORMED_CLAIM_TTL=${MALFORMED_CLAIM_TTL:-20} \
+    "$REAPER" "$CLAIMS" "$LOG"
 }
 
 # The worker converts its reservation into a locked, marked owner claim.
 PLAN="$TMP/plan"
-mkdir -p "$PLAN/.state/claims"
-echo "# NEXT" > "$PLAN/.state/NEXT.md"
+mkdir -p "$PLAN/.state/claims" "$PLAN/tools" "$PLAN/docs"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$PLAN/tools/probe.sh"
+chmod +x "$PLAN/tools/probe.sh"
+probe_digest=$(sha256sum "$PLAN/tools/probe.sh" | awk '{print $1}')
+cat > "$PLAN/docs/automatic-probes.toml" <<EOF
+schema = "automatic-probes-v1"
+[[probe]]
+id = "tools/probe.sh"
+path = "tools/probe.sh"
+sha256 = "$probe_digest"
+EOF
+{
+  echo "# NEXT"
+  echo
+  echo "## Now"
+  for n in $(seq 4 16); do
+    echo "$n. [READY] [id=item-$n] [gate=gate-$n] automated claim test item $n"
+  done
+  echo
+  echo "## Backlog"
+} > "$PLAN/.state/NEXT.md"
 echo "# STATE" > "$PLAN/.state/STATE.md"
 echo initial > "$PLAN/code.txt"
 git -C "$PLAN" init -q
 git -C "$PLAN" config user.email test@example.invalid
 git -C "$PLAN" config user.name test
-git -C "$PLAN" add .state/NEXT.md .state/STATE.md code.txt
+git -C "$PLAN" add .state/NEXT.md .state/STATE.md code.txt tools/probe.sh docs/automatic-probes.toml
 git -C "$PLAN" commit -qm init
+reserve_v2() {
+  local ordinal=$1 session=$2 item_id=${3:-item-$1} gate=${4:-gate-$1} fields status parsed_id parsed_gate body dev ino queue
+  fields=$($ROOT/tools/nudge-free-items.py "$PLAN/.state/NEXT.md" "$PLAN/.state/claims" --item-v2 "$ordinal")
+  read -r status parsed_id parsed_gate body dev ino queue <<< "$fields"
+  cat > "$PLAN/.state/claims/$ordinal-$session.claim" <<EOF
+lock-v2
+ordinal=$ordinal
+id=$item_id
+gate=$gate
+owner=worker
+session=$session
+claimed_at=$(date -Is)
+unit=bedlam-nudge-item$ordinal-$session
+pid=$$
+body_sha256=$body
+queue_device=$dev
+queue_inode=$ino
+queue_sha256=$queue
+EOF
+}
+migration_failures=0
 cat > "$TMP/mock-client" <<EOF
 #!/usr/bin/env bash
 printf "%s\n" "\$*" > "$TMP/mock-client.args"
-echo "4. [P4] [BLOCKED] mock completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-client"
-echo reserved > "$PLAN/.state/claims/4-789.claim"
+reserve_v2 4 789
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-client" "$AGENT" 4 789 &
 agent=$!
 for _ in $(seq 1 50); do
-  grep -q "^lock-v1 " "$PLAN/.state/claims/4-owner.claim" 2>/dev/null && break
+  [ -e "$PLAN/.state/claims/4-owner.claim" ] && ! flock -n "$PLAN/.state/claims/4-owner.claim" true 2>/dev/null && break
   sleep 0.02
 done
-grep -q "^lock-v1 " "$PLAN/.state/claims/4-owner.claim"
+grep -qx "lock-v2" "$PLAN/.state/claims/4-owner.claim"
+grep -qx "ordinal=4" "$PLAN/.state/claims/4-owner.claim"
+grep -qx "id=item-4" "$PLAN/.state/claims/4-owner.claim"
+grep -qx "gate=gate-4" "$PLAN/.state/claims/4-owner.claim"
+grep -qx "owner=worker" "$PLAN/.state/claims/4-owner.claim"
+grep -qx "session=789" "$PLAN/.state/claims/4-owner.claim"
+grep -Eq '^claimed_at=.*' "$PLAN/.state/claims/4-owner.claim"
+if grep -q '^lock-v1 ' "$PLAN/.state/claims/4-owner.claim"; then
+  echo "not ok - a newly published owner claim still contains lock-v1" >&2
+  migration_failures=$((migration_failures + 1))
+fi
 if flock -n "$PLAN/.state/claims/4-owner.claim" true; then
   echo "worker owner claim was not locked" >&2
   exit 1
@@ -62,10 +113,59 @@ fi
 wait "$agent"
 grep -q -- "--standalone" "$TMP/mock-client.args"
 grep -q -- "--model zai-coding-plan/glm-5.3" "$TMP/mock-client.args"
-grep -q -- "naming worker 789 is YOUR claim" "$TMP/mock-client.args"
-grep -q -- "operator TUI is supervisory and never blocks work" "$TMP/mock-client.args"
+grep -q -- "item 4" "$TMP/mock-client.args"
+if ! grep -q -- "item-4" "$TMP/mock-client.args" || ! grep -q -- "gate-4" "$TMP/mock-client.args"; then
+  echo "not ok - worker prompt omits the stable queue id/gate" >&2
+  migration_failures=$((migration_failures + 1))
+fi
+# Generated task instructions are automation-only. Historical assertions and
+# diagnostics may discuss these categories; the prompt sent to the model may not.
+if grep -Eqi '(^|[^[:alnum:]])(BLOCKED|human|operator|manual|interactive|desktop|sudo|credentials?|secrets?|legal|license)([^[:alnum:]]|$)|stand(ing)?[- ]down|ask (a |the )?.*(action|input|approval)|wait for input' "$TMP/mock-client.args"; then
+  echo "not ok - worker prompt contains a human-only/stand-down instruction token" >&2
+  migration_failures=$((migration_failures + 1))
+fi
 ! grep -q -- "release your placeholder" "$TMP/mock-client.args"
 [ ! -e "$PLAN/.state/claims/4-owner.claim" ]
+
+# Keep the structured-failure fixture adjacent to the claim/prompt probes so a
+# RED run reports all three migration gaps instead of stopping at lock-v1.
+cat > "$TMP/mock-focused-inability" <<'EOF'
+#!/usr/bin/env bash
+exit 42
+EOF
+chmod +x "$TMP/mock-focused-inability"
+cp "$PLAN/.state/NEXT.md" "$TMP/NEXT.before-focused-inability"
+reserve_v2 16 focused-inability
+set +e
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-focused-inability" "$AGENT" 16 focused-inability
+focused_rc=$?
+set -e
+[ "$focused_rc" -eq 42 ]
+cmp -s "$TMP/NEXT.before-focused-inability" "$PLAN/.state/NEXT.md"
+if ! python3 - "$PLAN/.state/automation-failures/focused-inability.json" 2>/dev/null <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    failure = json.load(handle)
+assert failure["schema"] == "nudge-failure-v1"
+assert failure["ordinal"] == 16
+assert failure["id"] == "item-16"
+assert failure["gate"] == "gate-16"
+assert failure["kind"] == "client-error"
+assert failure["repair"] == "required"
+assert failure["queue_unchanged"] is True
+PY
+then
+  echo "not ok - unexpected inability produced no structured automatic-repair artifact" >&2
+  migration_failures=$((migration_failures + 1))
+fi
+[ ! -e "$PLAN/.state/claims/16-owner.claim" ]
+
+if [ "$migration_failures" -ne 0 ]; then
+  echo "nudge claim migration tests: RED ($migration_failures missing behavior(s))" >&2
+  exit 1
+fi
 
 # A normal transport failure has no live ghost and retains a retry-backoff claim.
 cat > "$TMP/mock-transport" <<EOF
@@ -74,7 +174,7 @@ echo "Error: ECONNRESET: The socket connection was closed unexpectedly"
 exit 1
 EOF
 chmod +x "$TMP/mock-transport"
-echo reserved > "$PLAN/.state/claims/5-790.claim"
+reserve_v2 5 790
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-transport" "$AGENT" 5 790
 rc=$?
@@ -87,7 +187,8 @@ transport_hash=$(sed -n "s/^[[:space:]]*5\.[[:space:]]*//p" "$PLAN/.state/NEXT.m
 [ -e "$PLAN/.state/taskfails/.transport-streak" ]
 [ ! -e "$PLAN/.state/taskcooldown/$transport_hash" ]
 
-# A transport failure with a surviving child retains its locked ghost claim.
+# A transport failure with a surviving child is process-group cleaned and the
+# claim is released only after every descendant is gone.
 cat > "$TMP/mock-ghost" <<EOF
 #!/usr/bin/env bash
 sleep 30 &
@@ -96,26 +197,14 @@ echo "Error: Transport"
 exit 1
 EOF
 chmod +x "$TMP/mock-ghost"
-echo reserved > "$PLAN/.state/claims/6-791.claim"
+reserve_v2 6 791
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-ghost" "$AGENT" 6 791
 rc=$?
 set -e
 [ "$rc" -eq 1 ]
-[ -e "$PLAN/.state/claims/6-owner.claim" ]
-if flock -n "$PLAN/.state/claims/6-owner.claim" true; then
-  echo "ghost owner claim was not locked" >&2
-  exit 1
-fi
-kill "$(cat "$TMP/ghost.pid")"
-for _ in $(seq 1 100); do
-  flock -n "$PLAN/.state/claims/6-owner.claim" true 2>/dev/null && break
-  sleep 0.02
-done
-flock -n "$PLAN/.state/claims/6-owner.claim" true
-touch -d "10 seconds ago" "$PLAN/.state/claims/6-owner.claim"
-DEAD_CLAIM_TTL=0 "$REAPER" "$PLAN/.state/claims" "$PLAN/.state/nudge.log"
 [ ! -e "$PLAN/.state/claims/6-owner.claim" ]
+! kill -0 "$(cat "$TMP/ghost.pid")" 2>/dev/null
 
 # A clean client with no substantive commit is a failed no-progress run.
 # Transport failures no longer charge the task (items 5/6 above), so the
@@ -131,7 +220,7 @@ EOF
 chmod +x "$TMP/mock-no-progress"
 nop_hash=$(sed -n "s/^[[:space:]]*8\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
 for nop_slot in 803 812 813; do
-  echo reserved > "$PLAN/.state/claims/8-$nop_slot.claim"
+  reserve_v2 8 "$nop_slot"
   set +e
   BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-no-progress" "$AGENT" 8 "$nop_slot"
   nop_rc=$?
@@ -161,9 +250,8 @@ echo "**Maximum steps for this agent reached - stopping with a text-only summary
 exit 0
 EOF
 chmod +x "$TMP/mock-step-cap"
-echo "10. [P4] step-cap mock item" >> "$PLAN/.state/NEXT.md"
 stepcap_hash=$(sed -n "s/^[[:space:]]*10\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/10-805.claim"
+reserve_v2 10 805
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-step-cap" "$AGENT" 10 805
 stepcap_rc=$?
@@ -184,9 +272,8 @@ echo "Error: Invalid zai-coding-plan/openai-compatible-chat stream event"
 exit 1
 EOF
 chmod +x "$TMP/mock-stream-invalid"
-echo "11. [P4] stream-incident mock item" >> "$PLAN/.state/NEXT.md"
 stream_hash=$(sed -n "s/^[[:space:]]*11\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/11-820.claim"
+reserve_v2 11 820
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-stream-invalid" "$AGENT" 11 820
 stream_rc=$?
@@ -209,9 +296,8 @@ echo "Error: Transport"
 exec sleep 600
 EOF
 chmod +x "$TMP/mock-hang"
-echo "12. [P4] transport-hang mock item" >> "$PLAN/.state/NEXT.md"
 hang_hash=$(sed -n "s/^[[:space:]]*12\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/12-821.claim"
+reserve_v2 12 821
 hang_start=$(date +%s)
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-hang" NUDGE_IDLE_LIMIT=3 NUDGE_IDLE_POLL=1 "$AGENT" 12 821
@@ -233,9 +319,8 @@ cat > "$TMP/mock-hang-silent" <<EOF
 exec sleep 600
 EOF
 chmod +x "$TMP/mock-hang-silent"
-echo "13. [P4] silent-hang mock item" >> "$PLAN/.state/NEXT.md"
 silent_hash=$(sed -n "s/^[[:space:]]*13\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/13-822.claim"
+reserve_v2 13 822
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-hang-silent" NUDGE_IDLE_LIMIT=3 NUDGE_IDLE_POLL=1 "$AGENT" 13 822
 silent_rc=$?
@@ -258,9 +343,8 @@ echo "Error: Provider request failed with HTTP 502"
 exit 1
 EOF
 chmod +x "$TMP/mock-5xx"
-echo "14. [P4] provider-5xx mock item" >> "$PLAN/.state/NEXT.md"
 fivexx_hash=$(sed -n "s/^[[:space:]]*14\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/14-823.claim"
+reserve_v2 14 823
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-5xx" "$AGENT" 14 823
 fivexx_rc=$?
@@ -271,29 +355,39 @@ grep -q "failed \[transport rc=1 progress=0\] task=$fivexx_hash; provider-side, 
 [ ! -e "$PLAN/.state/taskcooldown/$fivexx_hash" ]
 [ ! -e "$PLAN/.state/claims/14-owner.claim" ]
 
-# A suffixed block tag ([BLOCKED-operator-desktop], the 2026-08-22
-# watchdog-repair incident) excuses a clean rc=0 no-commit run exactly
-# like [BLOCKED]: before the fix the legitimate operator-gated block was
-# mislabeled no-progress, charged a false taskfails strike, and - with
-# cooldowns disabled - respawn-looped while real work starved behind it.
-cat > "$TMP/mock-suffixed-block" <<EOF
+# An unexpected task inability never rewrites or retags the required queue.
+# It emits a structured failure record for the automatic repair path instead.
+cat > "$TMP/mock-inability" <<EOF
 #!/usr/bin/env bash
-echo "15. [P4] [BLOCKED-operator-desktop] mock blocked - operator desktop gated" > "$PLAN/.state/NEXT.md"
-exit 0
+exit 42
 EOF
-chmod +x "$TMP/mock-suffixed-block"
-echo "15. [P4] suffixed-block mock item" >> "$PLAN/.state/NEXT.md"
-sfx_hash=$(sed -n "s/^[[:space:]]*15\.[[:space:]]*//p" "$PLAN/.state/NEXT.md" | head -n 1 | sha256sum | cut -c1-16)
-echo reserved > "$PLAN/.state/claims/15-824.claim"
+chmod +x "$TMP/mock-inability"
+cp "$PLAN/.state/NEXT.md" "$TMP/NEXT.before-inability"
+reserve_v2 15 824
 set +e
-BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-suffixed-block" "$AGENT" 15 824
-sfx_rc=$?
+BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-inability" "$AGENT" 15 824
+inability_rc=$?
 set -e
-[ "$sfx_rc" -eq 0 ]
-grep -q "item 15 ended cleanly (rc=0 progress=0)" "$PLAN/.state/nudge.log"
-! grep -q "agent item 15 failed \[" "$PLAN/.state/nudge.log"
-[ ! -e "$PLAN/.state/taskfails/$sfx_hash" ]
-[ ! -e "$PLAN/.state/taskcooldown/$sfx_hash" ]
+[ "$inability_rc" -eq 42 ]
+cmp -s "$TMP/NEXT.before-inability" "$PLAN/.state/NEXT.md"
+python3 - "$PLAN/.state/automation-failures/824.json" <<'PY'
+import datetime as dt
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    failure = json.load(handle)
+assert failure["schema"] == "nudge-failure-v1"
+assert failure["ordinal"] == 15
+assert failure["id"] == "item-15"
+assert failure["gate"] == "gate-15"
+assert failure["owner"] == "worker"
+assert failure["session"] == "824"
+assert failure["kind"] == "client-error"
+assert failure["repair"] == "required"
+assert failure["queue_unchanged"] is True
+dt.datetime.fromisoformat(failure["time"].replace("Z", "+00:00"))
+PY
 [ ! -e "$PLAN/.state/claims/15-owner.claim" ]
 
 # A substantive commit is credited only with this wrappers exact trailer.
@@ -304,7 +398,7 @@ git -C "$PLAN" add code.txt
 git -C "$PLAN" commit -qm own-worker -m "Nudge-Worker: 804"
 EOF
 chmod +x "$TMP/mock-own-progress"
-echo reserved > "$PLAN/.state/claims/9-804.claim"
+reserve_v2 9 804
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-own-progress" "$AGENT" 9 804
 [ ! -e "$PLAN/.state/claims/9-owner.claim" ]
 grep -q "item 9 ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
@@ -313,12 +407,11 @@ grep -q "item 9 ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
 cat > "$TMP/mock-race" <<EOF
 #!/usr/bin/env bash
 echo started >> "$TMP/race.starts"
-echo "7. [P4] [BLOCKED] mock race completed" > "$PLAN/.state/NEXT.md"
 sleep 1
 EOF
 chmod +x "$TMP/mock-race"
-echo reserved > "$PLAN/.state/claims/7-801.claim"
-echo reserved > "$PLAN/.state/claims/7-802.claim"
+reserve_v2 7 801
+reserve_v2 7 802
 set +e
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-race" "$AGENT" 7 801 & a=$!
 BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-race" "$AGENT" 7 802 & b=$!
@@ -361,6 +454,77 @@ old "$CLAIMS/2-owner.claim" 6
 reap
 [ ! -e "$CLAIMS/2-owner.claim" ]
 
+# lock-v2 has the same advisory-lock liveness guarantee while additionally
+# binding the ordinal to stable queue identity. A valid live v2 owner must not
+# be reaped or attributed to the filename alone.
+cat > "$CLAIMS/20-owner.claim" <<EOF
+lock-v2
+ordinal=20
+id=stable-twenty
+gate=gate-twenty
+owner=worker
+session=session-twenty
+claimed_at=$(date -Is)
+unit=bedlam-nudge-item20-session-twenty
+pid=$$
+body_sha256=$(printf a%.0s {1..64})
+queue_device=1
+queue_inode=1
+queue_sha256=$(printf b%.0s {1..64})
+EOF
+(
+  exec 8>>"$CLAIMS/20-owner.claim"
+  flock 8
+  : > "$TMP/locked-v2"
+  sleep 30
+) &
+locker_v2=$!
+for _ in $(seq 1 50); do [ -e "$TMP/locked-v2" ] && break; sleep 0.02; done
+[ -e "$TMP/locked-v2" ]
+old "$CLAIMS/20-owner.claim" 60
+reap
+[ -e "$CLAIMS/20-owner.claim" ]
+grep -qx "ordinal=20" "$CLAIMS/20-owner.claim"
+grep -qx "id=stable-twenty" "$CLAIMS/20-owner.claim"
+grep -qx "gate=gate-twenty" "$CLAIMS/20-owner.claim"
+[ $(( $(date +%s) - $(stat -c %Y "$CLAIMS/20-owner.claim") )) -le 2 ]
+kill "$locker_v2"
+wait "$locker_v2" 2>/dev/null || true
+old "$CLAIMS/20-owner.claim" 6
+reap
+[ ! -e "$CLAIMS/20-owner.claim" ]
+
+# A malformed v2 body is retained while actively locked, but an unlocked
+# malformed claim has a bounded grace and cannot wedge the queue forever.
+cat > "$CLAIMS/21-owner.claim" <<'EOF'
+lock-v2
+ordinal=22
+id=wrong-binding
+owner=worker
+session=malformed-v2
+claimed_at=not-a-time
+EOF
+(
+  exec 8>>"$CLAIMS/21-owner.claim"
+  flock 8
+  : > "$TMP/malformed-v2-locked"
+  sleep 30
+) &
+malformed_locker=$!
+for _ in $(seq 1 50); do [ -e "$TMP/malformed-v2-locked" ] && break; sleep 0.02; done
+old "$CLAIMS/21-owner.claim" 60
+MALFORMED_CLAIM_TTL=0 reap
+[ -e "$CLAIMS/21-owner.claim" ]
+grep -Eqi 'malformed.*lock-v2|lock-v2.*malformed|invalid.*lock-v2' "$LOG"
+kill "$malformed_locker"
+wait "$malformed_locker" 2>/dev/null || true
+old "$CLAIMS/21-owner.claim" 60
+MALFORMED_CLAIM_TTL=5 reap
+if [ -e "$CLAIMS/21-owner.claim" ]; then
+  echo "not ok - stale unlocked malformed lock-v2 claim wedged past bounded grace" >&2
+  exit 1
+fi
+
 # Pre-lock claims retain the conservative migration timeout.
 echo "worker legacy owns queue item 3" > "$CLAIMS/3-owner.claim"
 old "$CLAIMS/3-owner.claim" 6
@@ -370,9 +534,83 @@ old "$CLAIMS/3-owner.claim" 21
 reap
 [ ! -e "$CLAIMS/3-owner.claim" ]
 
+# The worker must perform its own launch-boundary proof. A scheduler decision is
+# stale if ordinal/id/gate/READY or the still-owned v2 claim no longer agrees
+# with a fresh strict parse of NEXT. Every mismatch exits before model launch,
+# leaves NEXT byte-identical, and emits machine-readable repair status.
+cat > "$TMP/mock-must-not-launch" <<EOF
+#!/usr/bin/env bash
+touch "$TMP/model-launched"
+exit 0
+EOF
+chmod +x "$TMP/mock-must-not-launch"
+
+write_single_queue() {
+  local status=$1 item_id=$2 gate=$3 extra=${4:-}
+  cat > "$PLAN/.state/NEXT.md" <<EOF
+# NEXT
+
+## Now
+16. [$status] [id=$item_id] [gate=$gate] $extra automated preflight item
+
+## Backlog
+EOF
+}
+
+expect_preflight_rejection() {
+  local name=$1 session=$2 expected_reason=${3:-}
+  rm -f "$TMP/model-launched" "$PLAN/.state/automation-failures/$session.json"
+  cp "$PLAN/.state/NEXT.md" "$TMP/NEXT.before-$session"
+  set +e
+  BEDLAM_PLAN_DIR="$PLAN" OPENC_OVERRIDE="$TMP/mock-must-not-launch" "$AGENT" 16 "$session"
+  local rejection_rc=$?
+  set -e
+  if [ "$rejection_rc" -eq 0 ] || [ -e "$TMP/model-launched" ]; then
+    echo "$name: stale identity launched the model (rc=$rejection_rc)" >&2
+    exit 1
+  fi
+  cmp -s "$TMP/NEXT.before-$session" "$PLAN/.state/NEXT.md"
+  python3 - "$PLAN/.state/automation-failures/$session.json" "$expected_reason" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    failure = json.load(handle)
+assert failure["schema"] == "nudge-failure-v1"
+assert failure["kind"] == "preflight-mismatch"
+assert failure["repair"] == "required"
+assert failure["queue_unchanged"] is True
+if sys.argv[2]:
+    assert failure["reason"] == sys.argv[2]
+PY
+  [ ! -e "$PLAN/.state/claims/16-owner.claim" ]
+}
+
+write_single_queue READY item-16 gate-16
+reserve_v2 16 mismatch-id wrong-id gate-16
+expect_preflight_rejection "id mismatch" mismatch-id
+
+write_single_queue READY item-16 gate-16
+reserve_v2 16 mismatch-gate item-16 wrong-gate
+expect_preflight_rejection "gate mismatch" mismatch-gate
+
+write_single_queue WAITING-AUTOMATIC item-16 gate-16 \
+  '[probe=tools/probe.sh] [retry=30s] [timeout=20m]'
+reserve_v2 16 mismatch-status item-16 gate-16
+expect_preflight_rejection "non-READY status" mismatch-status status-mismatch
+
+write_single_queue READY item-16 gate-16
+reserve_v2 16 mismatch-ordinal item-16 gate-16
+sed -i 's/^ordinal=16$/ordinal=17/' "$PLAN/.state/claims/16-mismatch-ordinal.claim"
+expect_preflight_rejection "ordinal mismatch" mismatch-ordinal
+
+write_single_queue READY item-16 gate-16
+reserve_v2 16 mismatch-session item-16 gate-16
+sed -i 's/^session=mismatch-session$/session=other-session/' "$PLAN/.state/claims/16-mismatch-session.claim"
+expect_preflight_rejection "claim/session mismatch" mismatch-session
+
 # The real operating contract must not regress to TUI/process ownership.
 grep -q "Process liveness is NEVER ownership evidence" "$ROOT/AGENTS.md"
-grep -q "Never make a commit whose only effect is a stand-down/status journal" "$ROOT/AGENTS.md"
 ! grep -q "read them first" "$ROOT/.state/NEXT.md"
 ! grep -q "release your placeholder" "$AGENT"
 # v5: working-tree mtimes are no longer progress evidence.
