@@ -5,18 +5,35 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p4-phase-status-green] [gate=p4-phase-status-green] P4
-   closure bookkeeping — flip the P4 phase status from pending to green
-   in docs/required-gates.toml (the bound P4 verdict landed at 010f3e7
-   and .state/P4-COMPLETE carries phase-complete-v1), commit, then
-   re-emit the bound phase verdict at the new HEAD with the exact
-   command: /usr/bin/python3 tools/validate-required-gates.py --root .
-   --report .state/p4-gates-report.json --phase P4 --phase-output
-   .state/P4-COMPLETE (all 8 P4 gates must be green at the flip commit;
-   plan_complete stays false with P5-P7 pending — correct). Update the
-   .state/STATE.md phase line, then queue the first P5 unit from
-   docs/PLAN.md section 6 (per-zone parity gates) so required work
-   stays active.
+1. [READY] [id=p5-zone-gate-scaffold] [gate=p5-zone-gate-scaffold] P5
+   opener per PLAN §6 (per-zone parity gates) — land the per-zone
+   parity LEDGER + the first P5 required gate. (a) Enumerate the 37
+   shipped missions READ-ONLY from game-data/ (EDITOR/ZONEA
+   MISSION1; ZONEB..ZONEF MISSION1..7 each; ZONEG MISSION1;
+   sha256sum -c MANIFEST.sha256 --quiet before AND after; corpus
+   untouched). (b) Commit docs/P5-ZONE-GATES.md: the per-zone
+   acceptance shape VERBATIM from PLAN §6 P5 (all scripted flows
+   complete crash-free; T1 game rules verified against RE/8street;
+   T2 key-moment frame checks; differ-harness spot checks for
+   structure, not tick-complete; cross-OS replay hash equality of
+   OUR engine; multiplayer deathmatch carved out of the parity
+   exit; original SAVED/OPTIONS.BDL import read-only,
+   bounds-checked, fuzzed) + the per-mission disposition ledger
+   format (every mission starts pending; the original-behavior
+   catalog feeds P6 triage). (c) The machine-checkable committed
+   ledger artifact + fail-closed checker wired as the FIRST P5
+   required_gates entry in docs/required-gates.toml: the checker
+   validates ledger completeness + internal consistency (exactly
+   the 37 enumerated missions, valid zones/dispositions);
+   game-data paths must NOT appear in tracked_paths or corpus
+   (game-data is never git-tracked — the checker may read the
+   corpus read-only at runtime); per-zone completion gates land as
+   each zone closes (the P4 pattern); P5 phase status stays
+   pending until every zone closes. (d) DECISIONS.md entry for the
+   ledger format choice. Bounds: no engine change; controls green
+   (canonical_dump_gate 13/13, gates-validator 22/22); MANIFEST
+   clean; no Ghidra run; commit with the unit's own Nudge-Worker
+   trailer.
 ## Done
 [post-P4 note] (the five-unit P4 machine contract is fully
 consumed and the bound phase verdict landed; the controller's
@@ -24,6 +41,27 @@ empty-queue path now owns the P0-P7 completion decision and P5+
 queue content is operator/controller work — superseded 2026-08-27 by
 the p4-phase-status-green item above keeping required work active
 instead of idling on the completion beacon)
+1. DONE (2026-08-27, worker eeba31cf claim 1, commit 972748d,
+   PUSHED): P4 closure bookkeeping `p4-phase-status-green` — the P4
+   phase status FLIPPED pending->green in docs/required-gates.toml
+   (P0-P4 green, P5-P7 pending; plan_complete correctly stays
+   false), then the bound phase verdict RE-EMITTED at the flip
+   commit with the exact mandated command: /usr/bin/python3
+   tools/validate-required-gates.py --root . --report
+   .state/p4-gates-report.json --phase P4 --phase-output
+   .state/P4-COMPLETE — all 8 P4 gates GREEN at 972748d (report
+   status=passed, bounded, offline; .state/P4-COMPLETE
+   phase-complete-v1 re-bound to the new HEAD + manifest sha256
+   734a540c..., emitted by the validator itself). Pre-flip checks:
+   gates-validator command 22/22 green at d84f8d0 (the 17550e2
+   full-run gates-validator failure was fixed BY d84f8d0; its
+   p4-machine-verdict False was only the dependency short-circuit),
+   MANIFEST clean before AND after, TOML re-parsed (8 phase rows).
+   .state/STATE.md phase line updated (P4 GREEN / P5 UNDERWAY; the
+   stale 2026-08-18 P3-era duplicate phase line collapsed and marked
+   historical). First P5 unit queued: p5-zone-gate-scaffold (the
+   37-mission per-zone parity ledger per PLAN §6). No engine change;
+   no canonical chain movement by construction; no Ghidra run.
 1. DONE (2026-08-26, watchdog repair 1698872, this trailer-bound
    commit, PUSHED): automation/completion-path repair — the
    controller's empty-queue branch (first exercised 23:05:12, right

@@ -1,5 +1,29 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-27 `p4-phase-status-green` COMPLETE (worker eeba31cf
+    claim 1, commit 972748d, PUSHED): P4 CLOSED IN THE MANIFEST —
+    docs/required-gates.toml P4 status pending->green (P0-P4 green,
+    P5-P7 pending; plan_complete stays false exactly as designed).
+    The bound phase verdict RE-EMITTED at the flip commit with the
+    exact mandated command: all 8 P4 gates green under the
+    validator's bwrap containment (.state/p4-gates-report.json
+    status=passed, bounded, offline; .state/P4-COMPLETE
+    phase-complete-v1 re-bound to 972748d + manifest sha256
+    734a540c..., producer=required-gates-validator, emitted by the
+    validator itself). Pre-flip checks: gates-validator command
+    22/22 green at d84f8d0 (the 17550e2 full-run gates-validator
+    failure was fixed BY d84f8d0; its p4-machine-verdict False was
+    only the dependency short-circuit), TOML re-parsed 8 phase rows,
+    MANIFEST clean before AND after. PHASE MOVES TO P5 (per-zone
+    parity gates, PLAN §6): first unit queued =
+    p5-zone-gate-scaffold, the 37-mission ledger (ZONEA M1;
+    ZONEB..F M1-7 each; ZONEG M1 — corpus-enumerated read-only).
+
+- Phase: P4 GREEN (machine verdict 010f3e7; manifest flip 972748d with the
+  verdict re-emitted there — all 8 P4 gates green, .state/P4-COMPLETE).
+  P5 UNDERWAY (p5-zone-gate-scaffold queued). P6-P7 pending; plan_complete
+  false.
+
   - 2026-08-26 D174 `p4-required-gates-manifest` COMPLETE (watchdog
     repair 364897 adopting the d7f85d22/579650c9/d6f199cb WIP,
     commit 9f2a049, PUSHED): the required-gates manifest and
@@ -3847,7 +3871,8 @@
   manifests OK x2 bracketing - harness stack stable across the
   4th restart of this lane.
 
-- Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
+  [historical phase line from 2026-08-18; its exact duplicate collapsed
+  2026-08-27 — the CURRENT phase line lives at the top of this file]
 - Phase: P1 essentially complete; P2 well underway. P3 UNDERWAY (bedlam-core skeleton DONE 2026-08-18): decoders
   promoted to workspace crate engine/bedlam-assets (pure, inspect CLI output
   byte-identical, D14); MUSIC FORMATS DECODED IN RUST 2026-08-17: music.rs
