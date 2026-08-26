@@ -5,36 +5,59 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/RE-objdump] `exd-music-loader-census` — the D168 residue: the
-   EXD music-LOADER chain twins vs the EXW RE-EXW-MUSIC §1 chain.
-   D168 pinned the five per-screen load sites (each `mov eax,<str>`
-   + the ONE common callee **0x1405f** = load-music-by-basename;
-   BRIEF's `mov eax,3; call 0x13e04` = music START on song slot 3)
-   and the ".MRS"/".MRW" literals at image 0x95055/0x95050. Bounded
-   objdump-only unit, NO Ghidra launch: (a) decode 0x1405f and 0x13e04
-   (prologue/shape/args) and their call chains down to the
-   .MRS/.MRW-name builders and the arena allocator; (b) anchor each
-   against the EXW chain (load_midi FUN_00403642 → load_mrs 0x403827
-   → load_mrw 0x4038c6 → mrw_load 0x44c2cc; music start 0x4033d4;
-   the sequencer trio already §5g-mapped) with TWO anchors per row
-   (string refs, call shapes, the song-slot-3 constant); (c) census
-   the callers of 0x1405f (expect the five screens + ?) and of
-   0x13e04 (expect song-slot args); (d) land a §5g-bis-style addendum
-   in RE-EXD-MAP + the D-entry. No registry row expected (loader
-   internals are not S0 watches). MANIFEST before AND after; interim
-   notes early; if the chain decode exceeds ~2h, land the 0x1405f +
-   0x13e04 decode alone and requeue the rest.
-2. [INTERACTIVE-gated — SKIP when unattended; needs desktop +
+1. [INTERACTIVE-gated - SKIP when unattended; needs desktop +
    operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
    live capture vs the E canonical chains + the DH-G1 double-run
    determinism verdict + cycles calibration. With D165 landed the
    boot is the RESPONSIVE code-BP path (no BPLM per-instruction
-   tax; BPINT 21 4B → BP 5FBB:0000 → EV/SELINFO entry proof →
-   sole mission anchor → plain RUN frame waits). Checklist:
+   tax; BPINT 21 4B -> BP 5FBB:0000 -> EV/SELINFO entry proof ->
+   sole mission anchor -> plain RUN frame waits). Checklist:
    docs/RUNTIME.md "S0 LIVE SESSION CHECKLIST". Unattended nudge
-   workers: do NOT attempt this item — select item 1 instead.
+   workers: do NOT attempt this item - the unattended queue is
+   EMPTY (the P4.2 build order + every RE residue discharged;
+   D169 closed the last one). Before standing down, check
+   STATE.md's head entry for any newly-recorded residue.
 
 ## Done
+1. DONE (2026-08-26, worker 829d719c claim 1, commit 3f8db5c,
+   PUSHED): P4/RE-objdump `exd-music-loader-census` - the D168
+   residue CLOSED (D169, RE-EXD-MAP +5j + the RE-EXW-MUSIC +1
+   cross-ref): the EXD music-LOADER chain decoded whole and proven
+   a FAITHFUL PORT of the EXW RE-EXW-MUSIC +1 chain. Twins:
+   load_midi 0x1405f (head near-instruction-exact vs FUN_00403642;
+   sole encoding variant the strlen tail), MusicStart 0x13e04
+   (four gates in EXW order; NEW hardware-cell alias
+   0x107654<->0x4ee9b0; play flag 0x80338<->0x45b010), MusicStop
+   0x13f1e, wipe 0x1401a (8x0x14x4 shape-exact), free-voices
+   0x4c7a5, load_mrs 0x14409 (".MRS"), load_mrw+mrw_load MERGED
+   into 0x14254 (".MRW"; per-wave records carry rate 0x2B11/
+   8-bit/mono - the DirectSound constants verbatim), MrsNextEvent
+   0x138aa (0x7531 reposition constant), the DOS file layer
+   (DOSOpen 0x2d65a / Read 0x2d5c8 / probe 0x2d62b / Close
+   0x2d60c / LoadFile-whole 0x2d57c) + ArenaAlloc 0x2e4b2 /
+   sound-arena 0x2e4fe. FOURTEEN new bank-cell aliases (W0/W1
+   cells, table A/B/C ptrs, per-chunk ptrs/counters/init-state,
+   the -1 voice-id table 0x87758, loop flag 0x87730, play flag,
+   hardware cell, the DEBRIEF edi rider 0x8da34<->0x4e7ed8).
+   CENSUSES: load_midi 5<->5 (the five screens, ordinal-identical,
+   ALL song slot 3, own basenames, compiler fingerprints verbatim -
+   OPTIONS' pre-load stop, SELECT's leftover `mov edx,0xa`,
+   DEBRIEF's `mov edi` rider); MusicStart 6<->5 (the EXD 6th = the
+   title/MP path 0x5b049 after the sound init, the +5g
+   title-caller family); MusicStop 13<->11 (both EXD-only sites
+   EXPLAINED: 0x30ebd inside the shared OOM fatal helper both
+   arena allocators call - allocator-coupled; 0x59825 inside the
+   EXD MissionShell FUN_000596ed teardown [why = medium]);
+   free-voices 3<->4 (EXD's third = 0x4c121 free+SFX-reload of
+   MIDIGUN/BOOM1). QUEUE TYPO CORRECTED: the .MRS/.MRW literals
+   live at image 0x85050/0x85055 (content-verified via the LE page
+   map anchored on the probe-1 literal 0x850a3), NOT 0x950xx;
+   literal order REVERSED vs EXW (+7 seed 8, immaterial).
+   VERDICT: faithful port; registry/ledger/C0 consequence NONE
+   (loader internals are not S0 watches). Verified objdump-only
+   (no Ghidra run; corpus read-only), MANIFEST clean before AND
+   after. Residue: NONE - with this the unattended RE queue is
+   EMPTY.
 1. DONE (2026-08-26, worker 4e41bf00 claim 1, commit a4ea1c6,
    PUSHED): P4/RE-objdump `exd-menu-fn-attribution` — the D167
    §2b/C residue CLOSED (D168, RE-EXD-MAP §2b/C amended). The five

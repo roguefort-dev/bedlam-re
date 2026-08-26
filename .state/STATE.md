@@ -1,5 +1,31 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D169 `exd-music-loader-census` COMPLETE (worker
+    829d719c claim 1, commit 3f8db5c, PUSHED, docs-only): the D168
+    residue closed — the EXD music-LOADER chain decoded whole and
+    proven a FAITHFUL PORT of the EXW RE-EXW-MUSIC §1 chain
+    (RE-EXD-MAP §5j + the §1 cross-ref). Twins: load_midi 0x1405f,
+    MusicStart 0x13e04, MusicStop 0x13f1e, wipe 0x1401a,
+    free-voices 0x4c7a5, load_mrs 0x14409, load_mrw+mrw_load
+    MERGED into 0x14254 (wave records carry rate 0x2B11/8-bit/mono
+    — the DirectSound constants verbatim), MrsNextEvent 0x138aa,
+    the DOS file layer + ArenaAlloc 0x2e4b2/sound-arena 0x2e4fe;
+    14 new bank-cell aliases (incl. the hardware cell
+    0x107654⟷0x4ee9b0, play flag 0x80338⟷0x45b010, loop flag
+    0x87730⟷0x45cdc0). Censuses: load_midi 5⟷5 ALL song slot 3;
+    MusicStart 6⟷5 (EXD title/MP path); MusicStop 13⟷11 (the two
+    EXD-only sites explained: the OOM fatal helper + the
+    MissionShell teardown). QUEUE TYPO CORRECTED: the .MRS/.MRW
+    literals live at image 0x85050/0x85055 (LE page-map
+    content-verified), NOT 0x950xx; order REVERSED vs EXW (§7
+    seed 8). Registry/ledger/C₀ consequence NONE (loader internals
+    are not S0 watches). Verified objdump-only (no Ghidra run,
+    corpus read-only), MANIFEST clean before AND after. Phase
+    unchanged: P4.2 unattended build order COMPLETE and the
+    unattended RE queue is now EMPTY; the S0 live session
+    (interactive-gated) remains the P4 closure gate — the sole
+    queue item.
+
   - 2026-08-26 D168 `exd-menu-fn-attribution` COMPLETE (worker
     4e41bf00 claim 1, commit a4ea1c6, PUSHED, docs-only): the D167
     §2b/C residue closed — the five EXD cumulative-menu INC sites
