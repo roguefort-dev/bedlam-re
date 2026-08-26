@@ -629,11 +629,11 @@ pub fn emit_frame(st: &TickState, tiers: &[String], injected: bool, anchor: bool
         }
     }
     // The extraction dropship row (W12-S6): the T3 craft record
-    // 0x4e6610. EXD alias 0x1081c4 pinned (D162, §5i) but the O1
-    // normalizer arm is not landed — the row still reports E-only
-    // coverage findings in cross-channel reports (the named
-    // full-record-identity follow-up). Gated on the
-    // scenario's pad-step presence.
+    // 0x4e6610. EXD alias 0x1081c4 pinned (D162, §5i) and the O1
+    // normalizer arm landed with it (D164 — the full-record
+    // identity form: the canonical record IS the guest 0x1C craft
+    // record field-for-field), so the row compares cross-channel.
+    // Gated on the scenario's pad-step presence.
     if let Some(c) = &st.dropship {
         if want("T3") {
             let mut b = Vec::with_capacity(28);

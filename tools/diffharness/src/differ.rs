@@ -1394,11 +1394,10 @@ fn normalize_engine_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, Normaliz
         // The extraction dropship row (W12-S6): the 0x1C craft
         // record {active, phase, x, y, alt, group, dwell} exactly
         // as the emitter lays it out (§7j.40/6). D162 pinned the
-        // EXD twin 0x1081c4 (§5i) and the O1 plan emits the row,
-        // but the O1 normalizer arm is NOT landed (the full-record
-        // identity form is its own follow-up): the raw side still
-        // falls to the passthrough, so the row reports E-only
-        // coverage findings in cross-channel reports today.
+        // EXD twin 0x1081c4 (§5i); D164 landed the O1 arm as the
+        // full-record IDENTITY form (E's canonical record IS the
+        // guest record field-for-field), so the row compares
+        // cross-channel — zero E-only T3 rows remain.
         "dropship-frame" => {
             need(
                 id,
@@ -1743,6 +1742,14 @@ fn normalize_o1_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         "splash-records" => splash_o1(no, b),
         "critter-bank" => critter_bank_o1(no, b),
         "effect-rows" => effect_rows_o1(no, b),
+        // The W12-S6 dropship row (D164): the full-record IDENTITY
+        // form — E's canonical 0x1C craft record IS the guest
+        // record field-for-field (§7j.40/6: active u32@+0,
+        // phase@+4, x@+8, y@+0xC, alt@+0x10, group@+0x14,
+        // dwell@+0x18 — EXW 0x4e6610 / EXD 0x1081c4, plan len 28),
+        // so the arm reuses the E-side field walk verbatim (the
+        // tile-word-grid/platform-strength identity precedent).
+        "dropship-frame" => normalize_engine_row(id, no, b),
         "tile-word-grid" | "platform-strength" => normalize_engine_row(id, no, b),
         "order-target" => {
             need(id, no, b, "3 contiguous i32 cells", 12)?;
@@ -1874,7 +1881,12 @@ fn normalize_o2_row(id: &str, no: u64, b: &[u8]) -> Result<NormRow, NormalizeErr
         | "debris-stager"
         | "splash-records"
         | "critter-bank"
-        | "effect-rows" => normalize_o1_row(id, no, b),
+        | "effect-rows"
+        // dropship-frame (D164): the 0x1C craft record map was
+        // pinned EXW-side (0x4e6610, §7j.40) and §5i closed the
+        // EXD twin 0x1081c4 — the identity form is shared, so the
+        // O2 (and via it, O3) alias list takes the row too.
+        | "dropship-frame" => normalize_o1_row(id, no, b),
         "robot-bank" => robot_row_from_map(id, no, b, EXW_ROBOT_MAP),
         // The W11 pin (D137, §7j.60; arithmetic corrected by D138):
         // the EXW w/h cells are ADJACENT u32s with w LOW (w 0x4eddec,

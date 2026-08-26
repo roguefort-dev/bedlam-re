@@ -158,14 +158,12 @@ fn inv_frame(
             // (debris-stager, splash-records, critter-bank,
             // effect-rows) fabricates through the guest-span
             // projections below and compares cross-channel — zero
-            // field gaps by construction.
-            // The W12-S6 dropship row REMAINS the one E-only
-            // T3 row: D162 pinned its EXD twin 0x1081c4 and the
-            // plan emits it, but the O1 normalizer arm (the
-            // full-record identity form) is its own follow-up —
-            // the differ reports the E-only row as a coverage
-            // finding, never fabricated.
-            "dropship-frame" => continue,
+            // field gaps by construction. The W12-S6 dropship row
+            // fabricates identity through the same catch-all since
+            // D164 landed the O1 arm (the full-record identity
+            // form: the canonical 28-B record IS the guest craft
+            // record field-for-field) — zero E-only T3 rows
+            // remain.
             "rng-state-a" | "rng-state-b" => {
                 let v = u64::from_le_bytes(w.bytes[..8].try_into().unwrap()) as u32;
                 v.wrapping_add(rng_wander).to_le_bytes().to_vec()
@@ -570,15 +568,16 @@ fn s0_s1_cross_and_double_run() {
         // filter + the destroy normalizers) — zero field gaps.
         ("S5C", 55u64, "84b88562afa6fa54", 1u64),
         // W12-S6 (§7j.40, D112): the pad step-on extraction run —
-        // T0/T1/T3/TS. The T3 dropship-frame row is the ONE
-        // remaining E-only T3 row (D162 pinned its EXD twin but
-        // the full-record identity arm is its own follow-up), so
-        // exactly the 1 S1-class finding + 1 more. The
+        // T0/T1/T3/TS. The T3 dropship-frame row fabricates
+        // identity through the catch-all since D164 landed the O1
+        // full-record-identity arm (the canonical record IS the
+        // guest 0x1C craft record field-for-field), so exactly the
+        // 1 S1-class finding remains — zero E-only T3 rows. The
         // beacon-family row's post-deploy latch {0,0,19,70,31} and
         // the surviving claims fabricate through the u16-cell map
         // and parse back exactly; the swept robot's state-5/stop-1e6
         // words ride the aliased robot bank — zero field gaps.
-        ("S6", 75u64, "1f26e1343d7296d4", 1u64 + 1),
+        ("S6", 75u64, "1f26e1343d7296d4", 1u64),
         // W12-S7 (§7j.41, D113): the platform-dynamics lifecycle —
         // T0/T1/T3/TS (the S4 tier set: destroy staged, so the T1
         // destroy rows + both platform banks ride, and the T3
@@ -643,10 +642,9 @@ fn s0_s1_cross_and_double_run() {
         );
         assert_eq!(res.count(Class::EngineBug), 0, "{id}");
         assert_eq!(res.count(Class::Structural), 0, "{id}");
-        // move-target-words is the one E-only row (S1+; S6 adds
-        // the dropship): the splice sources every robot leaf, so
-        // exactly the 1 row-level finding remains on S0..S5/S7/S8 —
-        // no field-level gaps.
+        // move-target-words is the one E-only row (S1+): the splice
+        // sources every robot leaf, so exactly the 1 row-level
+        // finding remains on S1..S8 — no field-level gaps.
         assert_eq!(res.count(Class::Coverage), expect_coverage, "{id}");
         if expect_coverage > 0 {
             assert!(res
@@ -692,6 +690,17 @@ fn s0_s1_cross_and_double_run() {
                     report_text(&res)
                 );
             }
+        }
+        if id == "S6" {
+            // The dropship row rides the D164 identity arm — it
+            // must compare CLEAN (no findings at all: row- or
+            // field-level, both channels carry the same 0x1C
+            // record). This closes the LAST E-only T3 row.
+            assert!(
+                res.findings.iter().all(|f| f.row != "dropship-frame"),
+                "{id}: dropship-frame must compare clean post-D164\n{}",
+                report_text(&res)
+            );
         }
         // The never-resetting O1 counter is the single T2 note.
         assert_eq!(res.count(Class::T2Reported), 1, "{id}");
