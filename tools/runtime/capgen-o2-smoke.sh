@@ -26,6 +26,30 @@ mkdir -p "$OUT"
 rm -rf "$OUT"/*
 
 note "build the diffharness bins"
+# The required-gates validator resolves CARGO_HOME/RUSTUP_HOME only for
+# commands whose argv[0] is /usr/bin/cargo; under its --clearenv
+# containment this bash gate command must resolve the account's
+# read-only cargo/rustup homes itself (passwd-based, the same rule as
+# the validator's cargo_environment) or the rustup proxy dies looking
+# for a toolchain under the per-command scratch HOME. PATH is exported
+# UNCONDITIONALLY, not `[ -z "${PATH:-}" ]`-guarded: under clearenv the
+# shell INVENTS a default PATH that is never exported to children (env
+# shows none), so the guard never fires while Rust's Command — which
+# has no compiled-in default PATH — still cannot exec rustc/cc
+# (ENOENT, "never executed"). /usr/bin:/bin leads exactly like the
+# validator's own cargo_environment; any inherited/dev PATH follows.
+if [ -z "${CARGO_HOME:-}" ]; then
+  ACCOUNT_HOME=$(/usr/bin/getent passwd "$(/usr/bin/id -u)" | /usr/bin/cut -d: -f6)
+  [ -n "$ACCOUNT_HOME" ] || fail "account home resolution"
+  CARGO_HOME="$ACCOUNT_HOME/.cargo"
+  export CARGO_HOME
+  if [ -d "$ACCOUNT_HOME/.rustup" ]; then
+    RUSTUP_HOME="$ACCOUNT_HOME/.rustup"
+    export RUSTUP_HOME
+  fi
+fi
+PATH="/usr/bin:/bin${PATH:+:$PATH}"
+export PATH
 /usr/bin/cargo build -q -p diffharness --release --bins --locked --offline \
   || fail "cargo build"
 
