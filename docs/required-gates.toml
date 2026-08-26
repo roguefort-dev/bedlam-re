@@ -22,7 +22,7 @@ required_gates = []
 
 [[phase]]
 id = "P4"
-status = "pending"
+status = "green"
 required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "scripted-slice-scenes", "diffharness-plumbing", "gates-validator", "env-probe", "p4-machine-verdict"]
 
 [[phase]]
