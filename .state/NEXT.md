@@ -5,9 +5,36 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p4-machine-verdict] [gate=p4-machine-verdict] After the prior P4 gates pass, run the bound validator and emit P4-COMPLETE only; global PLAN-COMPLETE remains controller-owned and requires P0-P7.
-
 ## Done
+[post-P4 note] (no active items — the five-unit P4 machine contract is fully
+consumed and the bound phase verdict landed; the controller's
+empty-queue path now owns the P0-P7 completion decision and P5+
+queue content is operator/controller work)
+1. DONE (2026-08-26, worker d6fcfa24 claim 1, commits 010f3e7 +
+   verdict commit, PUSHED): P4/gate `p4-machine-verdict` — the bound
+   phase verdict LANDED (D175). First bound run failed at the
+   trigger-address gate: under the validator's --clearenv bwrap the
+   bash gate command has NO exported PATH (bash invents a default it
+   never exports, and Rust's Command has no compiled-in default), so
+   cargo died ENOENT spawning `rustc -vV`; the predecessor WIP's
+   `[ -z "${PATH:-}" ]` guard could never fire for exactly that
+   reason. Fix (010f3e7, adopting+correcting the interrupted WIP):
+   capgen-o2-smoke.sh exports `PATH="/usr/bin:/bin${PATH:+:$PATH}"`
+   unconditionally and self-resolves the passwd-based
+   CARGO_HOME/RUSTUP_HOME — verified ALL GREEN under an exact
+   run_command bwrap replica AND the bound validator. Verdict: `python3
+   tools/validate-required-gates.py --root . --report
+   .state/p4-gates-report.json --phase P4 --phase-output
+   .state/P4-COMPLETE` — all 8 P4 gates green at HEAD 010f3e7
+   (report status=passed, bounded, offline, manifest_sha256
+   d20aba2b...); `.state/P4-COMPLETE` (phase-complete-v1, HEAD/
+   manifest-bound, producer=required-gates-validator) emitted by the
+   validator itself; plan_complete correctly FALSE (P5-P7 pending —
+   global PLAN-COMPLETE stays controller-owned). Hardening case
+   `active_p4_contract_retires_stale_live_facts` re-anchored to the
+   post-verdict terminal state (REQUIRED-QUEUE-EMPTY accepted; the
+   canonical-tail rule binds only pre-verdict; no canonical id may
+   revive) — the fc26558 staleness class, fixed ahead of the burn.
 1. DONE (2026-08-26, watchdog repair 364897 claim adopted, commit
    9f2a049, workers d7f85d22/579650c9/d6f199cb WIP, PUSHED):
    P4/gate `p4-required-gates-manifest` — the tracked
