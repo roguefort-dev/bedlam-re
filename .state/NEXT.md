@@ -5,44 +5,70 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/infra-WIP-adopt] `o1-responsive-boot-land` — ADOPT, VALIDATE,
-   and LAND the interrupted O1-boot WIP (no .state/PAUSE; multiple
-   prior units deliberately preserved it for this adoption). WHAT
-   IT IS: non-walk O1 capture plans drop the heavy BPLM frame-
-   counter boot trap (RUNTIME.md now documents the cost: an armed
-   BPLM makes core_normal call DEBUG_HeavyIsBreakpoint + a
-   mem_readb_checked walk on EVERY instruction) in favor of the
-   RESPONSIVE code-BP entry path — BPINT 21 AH=4B stops at EXEC,
-   a real-mode BP 5FBB:0000 resolves to the verified EXD linear
-   entry 0x0005FBB0, fresh EV CS EIP CR0 + SELINFO CS prove the
-   protected flat entry, BPLIST proves the anchor BP is the only
-   survivor, mission-anchor waits use plain RUN; WALK plans
-   (S0W-class) KEEP the BPLM + RUNWATCH flow (stop-indexed walk
-   needs it). WIP STATE (verified green by the D164 worker):
-   dbx-plan.rs (boot_note split + `"boot_trap": "entry"` for
-   walk-less O1 emits + 2 plan-content asserts), dbx-capgen.py
-   (+610 lines responsive/resume machinery), dosbox-harness.sh
-   (2 lines), docs/RUNTIME.md (152 lines: RUNWATCH 33 ms redraw
-   + the heavy-BPLM per-instruction cost + the responsive boot
-   protocol), docs/RE-EXW-SIM.md (3 lines), 13 regenerated
-   capture-plans (S0..S8 non-walk carry boot_trap/entry + drop
-   boot_commands; S0W _comment-only), UNTRACKED py tests
-   tools/runtime/test_dbx_capgen_responsive.py +
-   test_dbx_capgen_resume.py (both PASS under
-   `python3 -m unittest` — verified 02:30 2026-08-26). STEPS:
-   (1) re-verify: cargo build + full diffharness suite green in
-   the stacked worktree, the two py tests, fmt+clippy on
-   diffharness; (2) confirm the 13 plan artifacts byte-match
-   `dbx-plan` regeneration (GENERATED files — regenerate to a
-   scratch dir and diff, never hand-edit); (3) stage EXPLICIT
-   paths ONLY — the 15 WIP files + the 2 py tests — NEVER
-   tools/runtime/__pycache__ or .state/scratch; commit with the
-   worker trailer, push; (4) D-entry in DECISIONS.md + RUNTIME
-   provenance tags; (5) MANIFEST before AND after. Feed: the WIP
-   diff itself (git diff on the paths above), docs/RUNTIME.md's
-   new sections, tools/runtime/test_dbx_capgen_*.py.
+1. [P4/RE-objdump] `fe93-stride-alias-census` — close §7j.11's
+   LAST open [census] point: FUN_0040fe93 indexes the robot-bank
+   base 0x4c69e4 with a 160-BYTE stride (`20·i << 3` sites) while
+   the canonical robot stride is 0xA8 (`imul 0xa8` sites) — either
+   a SECOND array aliasing the bank base or an original-code
+   quirk; unpinned since 7j.11. Bounded objdump-only unit from
+   ghidra-project/exw-text-objdump.txt (NO Ghidra launch — check
+   `pgrep -f analyzeHeadless` first anyway): (a) full caller/callee
+   census of FUN_0040fe93 (who reaches the 20·i<<3 sites, with
+   what i range); (b) determine the ARRAY EXTENT the stride
+   implies (20 slots × 160 B vs 12 × 0xA8 — overlap/alias map
+   against the D129 12-slot bank pin); (c) verdict: second aliased
+   array (name its true base + record layout) OR quirk (document
+   the exact records walked + why 160 works); (d) land §7j.11
+   amendment + ledger row + D-entry; registry/plan consequence
+   audit (only if a REAL second array exists — else none).
+   MANIFEST before AND after; emit interim notes early.
+2. [INTERACTIVE-gated — SKIP when unattended; needs desktop +
+   operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
+   live capture vs the E canonical chains + the DH-G1 double-run
+   determinism verdict + cycles calibration. With D165 landed the
+   boot is the RESPONSIVE code-BP path (no BPLM per-instruction
+   tax; BPINT 21 4B → BP 5FBB:0000 → EV/SELINFO entry proof →
+   sole mission anchor → plain RUN frame waits). Checklist:
+   docs/RUNTIME.md "S0 LIVE SESSION CHECKLIST". Unattended nudge
+   workers: do NOT attempt this item — select item 1 instead.
 
 ## Done
+1. DONE (2026-08-26, worker 29669e49 claim 1, commit d9eb9b0,
+   PUSHED): P4/infra `o1-responsive-boot-land` — the interrupted
+   O1-boot WIP ADOPTED, VALIDATED, AND LANDED (D165). Non-walk O1
+   capture plans drop the heavy BPLM frame-counter boot trap (the
+   per-instruction DEBUG_HeavyIsBreakpoint + mem_readb_checked
+   tax) for the RESPONSIVE code-BP entry path: BPINT 21 4B (DOS
+   EXEC) → fresh-empty BPLIST proof → real-mode BP 5FBB:0000
+   (resolves eagerly to the verified EXD linear entry 0x0005FBB0,
+   RE-EXD-MAP §1a) → sole-entry BPLIST proof → plain RUN → fresh
+   EV CS EIP CR0 (EIP==0x5FBB0 ∧ CR0.PE=1) + SELINFO CS (base==0
+   ∧ limit≥0x12583e) = the protected flat-entry proof WITHOUT
+   guest-code modification (retires the INT3-at-entry checklist
+   item) → strict arm of the sole mission anchor → plain RUN for
+   every mission-frame wait. WALK plans (S0W) retain BPLM/RUNWATCH
+   (stop-indexed menu walking needs memory-driven stops); legacy
+   probe plans unchanged. STRICT MACHINERY: ADDLOG begin/end nonce
+   brackets make logfile responses uniquely fresh (zero-overlap
+   logfile replacement cannot fake staleness); fail-closed BPLIST
+   parsing; INPUT QUEUED BEHIND RUN IS DISCARDED AT RE-ENTRY
+   (DEBUG_Enable → DEBUG_FlushInput — readiness = a fresh NOTICE
+   marker after a stop candidate, PTY output marks preserve split
+   redraws, one global deadline bounds settle+resume+probes); BPLM
+   stops use the fresh Memory-breakpoint logfile line as stage
+   one; LogTail.expect re-bases on logfile wrap. LANDED: dbx-plan
+   (boot_note split + "boot_trap":"entry" for walk-less O1 + 2
+   asserts), dbx-capgen.py (+610 lines), dosbox-harness.sh (2
+   lines), RUNTIME.md (152 lines), 13 regenerated plans (S0..S8
+   non-walk; S0W comment-only), 2 py test files (18 tests); rider
+   RE correction re-verified against the binary ("Quit from
+   sychronising" — the original's own typo, single occurrence,
+   address arithmetic confirmed). VERIFIED this run: diffharness
+   101/101 release, py 18/18, fmt+clippy clean, all 13 plans
+   byte-match dbx-plan regeneration (S1-o2 untouched control),
+   4/4 dbgprobe gates GREEN headless (gate/flow/inject/walk),
+   MANIFEST clean before AND after. Queued: the §7j.11 stride
+   census (item 1) + the interactive S0 live session (item 2).
 1. DONE (2026-08-26, worker f2e721b3 claim 1, commits 6d4ea58 +
    ee82b5b, both PUSHED): P4.2/W-followup `dropship-identity-arm`
    — the dropship-frame full-record IDENTITY O1 arm LANDED (D164):

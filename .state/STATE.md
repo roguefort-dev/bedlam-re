@@ -1,5 +1,34 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D165 `o1-responsive-boot-land` COMPLETE (worker
+    29669e49 claim 1, commit d9eb9b0, PUSHED): the interrupted
+    O1-boot WIP (preserved deliberately through D162-D164) ADOPTED
+    + VALIDATED + LANDED. Non-walk O1 capture plans now boot via
+    the RESPONSIVE code-BP path — BPINT 21 4B (DOS EXEC) → real-
+    mode BP 5FBB:0000 (eager-resolves to the verified EXD entry
+    0x0005FBB0) → fresh EV CS EIP CR0 + SELINFO CS prove the
+    protected flat entry (retires the INT3-at-entry checklist
+    item; no guest-code modification) → sole-anchor BPLIST proof
+    → plain RUN for all mission-frame waits — dropping the armed
+    BPLM's per-instruction DEBUG_HeavyIsBreakpoint +
+    mem_readb_checked tax. WALK plans (S0W) retain BPLM/RUNWATCH
+    (stop-indexed menu walking needs memory-driven stops). Strict
+    machinery landed with it: ADDLOG nonce-bracketed logfile
+    responses (zero-overlap replacement cannot fake freshness),
+    fail-closed BPLIST parsing, the DEBUG_FlushInput discovery
+    (input queued behind RUN is DISCARDED at re-entry; readiness =
+    a fresh NOTICE marker after a stop candidate; PTY output
+    marks preserve split redraws; one global deadline), BPLM stops
+    keyed on the fresh Memory-breakpoint logfile line, LogTail
+    wrap re-basing. Rider RE correction binary-verified ("Quit
+    from sychronising"). Verified: diffharness 101/101, py 18/18,
+    fmt+clippy clean, 13/13 plans byte-match regeneration (S1-o2
+    control), 4/4 dbgprobe gates headless, MANIFEST clean.
+    CONSEQUENCE: the S0 live session (the P4 closure gate) is
+    fully prepped on the responsive path — remains INTERACTIVE-
+    gated (item 2); the unattended P4.2 build order stays
+    COMPLETE. Queued: the §7j.11 FUN_0040fe93 160-byte-stride
+    robot-bank alias census (item 1, objdump-only).
   - 2026-08-26 D164 `dropship-identity-arm` COMPLETE (worker
     f2e721b3 claim 1, commits 6d4ea58 + ee82b5b, both PUSHED):
     the dropship-frame full-record IDENTITY O1 arm LANDED — the
