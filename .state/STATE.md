@@ -1,5 +1,23 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-26 D166 `fe93-stride-alias-census` COMPLETE (worker
+    690e3606 claim 1, commit 227054f, PUSHED, docs-only): the
+    "160-B stride at 0x4c69e4" question closed FOR GOOD — the
+    queue item was a STALE re-ask (D73/§7j.25 item 7 had resolved
+    it 2026-08-21; the residue was §7j.13's own stale OPEN
+    marker). Independently re-derived from exw-text-objdump:
+    eax = 21·idx via shl2/add/shl2/add → [eax*8+base] stride
+    0xA8 canonical; sole caller 0x40bc44 (loop tail 0x40c483,
+    idx ≤ count ≤ 12), zero jump-table refs; no 20×160 array —
+    the D129 12×0xA8 zero-fill bank is the only one at the base.
+    VERDICT: census arithmetic slip, "second array" DISPROVEN;
+    registry/plan consequence NONE. §7j.13 OPEN→CLOSED +
+    §7j.25 item 7 addendum + ledger stride-proof anchor + D166.
+    registry_anchors 2/2, MANIFEST clean pre+post. Phase
+    unchanged: P4.2 unattended build order COMPLETE; the S0 live
+    session (interactive-gated) remains the P4 closure gate.
+    Queued: `exd-menu-reset-census` (the 7j.66/D EXD open
+    residue — the "no EXD objdump" blocker is stale) + item 2.
   - 2026-08-26 D165 `o1-responsive-boot-land` COMPLETE (worker
     29669e49 claim 1, commit d9eb9b0, PUSHED): the interrupted
     O1-boot WIP (preserved deliberately through D162-D164) ADOPTED

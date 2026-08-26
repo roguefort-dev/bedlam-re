@@ -5,22 +5,25 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [P4/RE-objdump] `fe93-stride-alias-census` — close §7j.11's
-   LAST open [census] point: FUN_0040fe93 indexes the robot-bank
-   base 0x4c69e4 with a 160-BYTE stride (`20·i << 3` sites) while
-   the canonical robot stride is 0xA8 (`imul 0xa8` sites) — either
-   a SECOND array aliasing the bank base or an original-code
-   quirk; unpinned since 7j.11. Bounded objdump-only unit from
-   ghidra-project/exw-text-objdump.txt (NO Ghidra launch — check
-   `pgrep -f analyzeHeadless` first anyway): (a) full caller/callee
-   census of FUN_0040fe93 (who reaches the 20·i<<3 sites, with
-   what i range); (b) determine the ARRAY EXTENT the stride
-   implies (20 slots × 160 B vs 12 × 0xA8 — overlap/alias map
-   against the D129 12-slot bank pin); (c) verdict: second aliased
-   array (name its true base + record layout) OR quirk (document
-   the exact records walked + why 160 works); (d) land §7j.11
-   amendment + ledger row + D-entry; registry/plan consequence
-   audit (only if a REAL second array exists — else none).
+1. [P4/RE-objdump] `exd-menu-reset-census` — close the §7j.66/D
+   open residue: the EXD menu-screen COUNTER-RESET family (the
+   EXW twin of the D156 "eight bounded cinematic screens reset
+   the counter / five interactive menu screens count
+   cumulatively" census). The 7j.66 blocker note "no EXD
+   whole-text objdump exists" is STALE — ghidra-project/
+   exd-text-objdump.txt has existed since 2026-08-23 (D162 used
+   it). Bounded objdump-only unit (NO Ghidra launch — check
+   `pgrep -f analyzeHeadless` first anyway; matches may be false
+   positives from your own prompt text): (a) census the EXD
+   menu/cinematic screen functions for the counter cell's reset
+   sites (xor+mov/stores — the INC-only census trap D156/
+   RE-EXD-MAP §2 documents; the EXD counter cell twin must be
+   pinned first from the mission-tail twin 0x5a6eb/0x5a6f0-fd,
+   §2); (b) classify each screen: reset-vs-cumulative, matching
+   the EXW eight-reset/five-cumulative split; (c) verdict: the
+   twin census holds ordinally (expected) OR diverges (document
+   the exact screens + the C₀-consequence for S0W anchors);
+   (d) land the §7j.66 addendum + ledger row if new + D-entry.
    MANIFEST before AND after; emit interim notes early.
 2. [INTERACTIVE-gated — SKIP when unattended; needs desktop +
    operator] THE S0 LIVE SESSION (the P4 closure gate): first O1
@@ -33,6 +36,42 @@ renumbered queue keeps every open item claimable by number).
    workers: do NOT attempt this item — select item 1 instead.
 
 ## Done
+1. DONE (2026-08-26, worker 690e3606 claim 1, commit 227054f,
+   PUSHED): P4/RE-objdump `fe93-stride-alias-census` — the
+   "160-B stride at 0x4c69e4" question CLOSED FOR GOOD (D166,
+   §7j.13 amendment + §7j.25 item 7 addendum). QUEUE HYGIENE
+   HEADLINE: the item re-asked §7j.11's last open [census]
+   point UNAWARE that D73/§7j.25 item 7 had already resolved it
+   on 2026-08-21 (the gloss actually lives in §7j.13's text —
+   the item's "§7j.11" label was a misnomer); the residue was
+   the §7j.13 amendment's own stale `OPEN:` marker. This unit
+   independently re-derived everything from ghidra-project/
+   exw-text-objdump.txt: (a) stride arithmetic instruction-exact
+   — 0x40fe9e..0x40fea6 computes eax = 21·idx (Watcom ×21 idiom:
+   shl2/add/shl2/add; the gloss dropped the second `add
+   eax,esi`), so `[eax*8+0x4c69e4]`/`+0x4c69e8`/`+0x4c69ec`
+   address x/y/z dwords @+0/+4/+8 with effective stride 21·8 =
+   0xA8 CANONICAL; (b) caller census over the FULL objdump:
+   exactly ONE reference to 0x40fe93 anywhere (direct call
+   0x40bc44 in FUN_0040b9f6's per-robot walk) + ZERO jump-table
+   encodings (byte pattern `93 fe 40 00` no hits); idx pinned by
+   the loop tail 0x40c483..0x40c491: idx ∈ [0,[0x46ccbc]) ≤ 12;
+   (c) extent map: NO 20×160 array exists — the only bank is the
+   D129 12×0xA8 = 0x7E0 zero-fill span (0x4c69e4..0x4c71c4);
+   highest byte touched +0x740 (0x4c7124), inside; even the
+   erroneous gloss needs idx 13 to cross (count caps at 12) and
+   the strides disagree at every idx ≥ 1, so the decode is
+   dispositive. VERDICT: QUIRK (census arithmetic slip), the
+   "second aliased array" alternative DISPROVEN; registry/plan
+   consequence NONE (watches.toml/dbx-plan always pinned 0xA8 —
+   per the item's own else-branch). Also landed: the
+   constant-ledger robot-bank row gains the 0x40fe93 ×21-idiom
+   stride-proof anchor. Verified: objdump-only (no Ghidra run,
+   no corpus read — the pgrep matches were false positives from
+   the worker's own prompt text), registry_anchors 2/2 green,
+   diffharness fmt clean, MANIFEST clean before AND after.
+   Queued: `exd-menu-reset-census` (item 1) + the interactive S0
+   live session (item 2).
 1. DONE (2026-08-26, worker 29669e49 claim 1, commit d9eb9b0,
    PUSHED): P4/infra `o1-responsive-boot-land` — the interrupted
    O1-boot WIP ADOPTED, VALIDATED, AND LANDED (D165). Non-walk O1
