@@ -242,13 +242,39 @@ class ValidatorTests(unittest.TestCase):
                 self.assertFalse((root / sentinel_name).exists())
 
     def test_manifest_writable_dir_is_bound_with_private_tmp_and_read_only_root(self):
+        # /tmp holds either nothing (live-root invocation) or exactly the
+        # invocation root's own path chain when that root lives under /tmp
+        # (the controller's sealed completion basis, re-exposed read-only)
+        # -- the single tolerated presence the check-gates-env containment
+        # contract pins. HOME must be the per-command scratch home under
+        # the invocation root's target/.gate-home, wherever that root
+        # lives (a /tmp-rooted basis puts the gate home under /tmp too).
         script = """#!/bin/bash
 set -e
+root="$PWD"
 cd runtime/out
 printf '%s\\n' "$HOME" > home.txt
-[ -z "$(ls -A /tmp)" ] || { ls -A /tmp > listing.txt; exit 3; }
+tmp_holds_only_root_chain() {
+  local top path rest component
+  top="$(ls -A /tmp)" || return 1
+  [ -z "$top" ] && return 0
+  case "$1" in
+    /tmp/*) ;;
+    *) return 1 ;;
+  esac
+  path=/tmp
+  rest="${1#/tmp/}"
+  while [ -n "$rest" ]; do
+    component="${rest%%/*}"
+    [ "$(ls -A "$path")" = "$component" ] || return 1
+    path="$path/$component"
+    if [ "$rest" = "$component" ]; then rest=; else rest="${rest#*/}"; fi
+  done
+  return 0
+}
+tmp_holds_only_root_chain "$root" || { ls -A /tmp > listing.txt; exit 3; }
 [ -n "$HOME" ] && [ -d "$HOME" ]
-case "$HOME" in /tmp/*) exit 4;; esac
+case "$HOME" in "$root"/target/.gate-home/*) ;; *) exit 4;; esac
 if (echo x > ../../tracked-roots.txt) 2>/dev/null; then exit 7; fi
 exit 0
 """

@@ -5,11 +5,25 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
+1. [READY] [id=p4-phase-status-green] [gate=p4-phase-status-green] P4
+   closure bookkeeping — flip the P4 phase status from pending to green
+   in docs/required-gates.toml (the bound P4 verdict landed at 010f3e7
+   and .state/P4-COMPLETE carries phase-complete-v1), commit, then
+   re-emit the bound phase verdict at the new HEAD with the exact
+   command: /usr/bin/python3 tools/validate-required-gates.py --root .
+   --report .state/p4-gates-report.json --phase P4 --phase-output
+   .state/P4-COMPLETE (all 8 P4 gates must be green at the flip commit;
+   plan_complete stays false with P5-P7 pending — correct). Update the
+   .state/STATE.md phase line, then queue the first P5 unit from
+   docs/PLAN.md section 6 (per-zone parity gates) so required work
+   stays active.
 ## Done
-[post-P4 note] (no active items — the five-unit P4 machine contract is fully
+[post-P4 note] (the five-unit P4 machine contract is fully
 consumed and the bound phase verdict landed; the controller's
 empty-queue path now owns the P0-P7 completion decision and P5+
-queue content is operator/controller work)
+queue content is operator/controller work — superseded 2026-08-27 by
+the p4-phase-status-green item above keeping required work active
+instead of idling on the completion beacon)
 1. DONE (2026-08-26, watchdog repair 1698872, this trailer-bound
    commit, PUSHED): automation/completion-path repair — the
    controller's empty-queue branch (first exercised 23:05:12, right
@@ -3597,3 +3611,34 @@ queue content is operator/controller work)
   instruction-form-exact; C₀ consequence NONE. RE-EXD-MAP §2b +
   §7j.66 addendum + DIFFHARNESS row amend + test extension (7/7).
   Follow-up queued: exd-menu-fn-attribution (item 1).
+- 2026-08-27: watchdog repair 1939031 (trailer-bound commit, PUSHED):
+  automation/completion-machinery repair #2. The 23:59:24 controller
+  completion run failed `HEAD required-gates validator failed rc=1`
+  INSIDE the sealed /tmp/opencode/bedlam-completion-* basis while the
+  same suite passed 22/22 from the live tree — the 17550e2
+  verification only ever exercised the live root. Root cause A
+  (machinery): test_manifest_writable_dir_is_bound_with_private_tmp_
+  and_read_only_root demanded a completely empty /tmp in its nested
+  sandbox and a HOME outside /tmp, but a controller-shaped invocation
+  root (under /tmp) necessarily re-exposes its own chain in /tmp and
+  its per-command gate homes live under that root — exactly the single
+  tolerated presence the check-gates-env containment contract pins.
+  Fix: the fixture gate script tolerates ONLY the invocation root's
+  own /tmp chain (strict one-component-per-level walk, mirrored from
+  check-gates-env.py) and pins HOME to <root>/target/.gate-home/*
+  instead of a /tmp-prefix ban; any other host state under /tmp still
+  fails closed. Root cause B (the churn): the prior repair's ack never
+  archived — archive-failures requires the remediation commit to touch
+  .state/NEXT.md and 17550e2 changed only tools/ — so all 4 failure
+  records stayed unarchived and every watchdog cycle re-forced repair
+  while the empty queue kept minting a fresh completion-missing beacon
+  per controller pass. This commit touches the queue and re-queues
+  required work (item 1 p4-phase-status-green: flip + fresh bound
+  verdict — new phase work; canonical P4 ids stay retired per the
+  phase-boundary hardening), and the ack binds all 4 snapshot records
+  as replaced-task to this exact commit. Verified: sealed-basis gate
+  repro FAIL exit 3 pre-fix -> 22/22 RC=0 post-fix; live suite 22/22;
+  full sealed validator at this HEAD: all 8 gates green, overall rc=1
+  truthful (P4-P7 manifest statuses pending, plan_complete false — the
+  designed controller decision, not a machinery error). MANIFEST clean
+  before and after.
