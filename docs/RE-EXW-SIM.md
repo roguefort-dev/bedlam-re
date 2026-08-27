@@ -10803,12 +10803,15 @@ tagged.
    bedlam-core::critter).
 ENGINE CONSEQUENCE (landed this unit): S2 accepted by
 stage_critters (kind 1, RAW-px coords, DIR −1 spawn seed, hp =
-200+(200·m)/27 via MissionSim::linear — the S3/S4 hp scalars
-aligned to the same [0x46ae8c] pin in the same seam), the k1
-controller body + the door gate (skipped E-gap — no door-bank
-mirror engine-side; documented) + the suicide trigger + the squash
-semantics land in bedlam-core::critter; the 8-sample probe is
-modeled as floor_z(sample)==z ∧ dat_type ≤ 3 with the offset
-footprint exact. The canonical critter-bank blob is UNTOUCHED (new
-record fields dir/frame/z_restore are not serialized; no chain
-movement).
+200+(200·m)/27 via MissionSim::linear — §7j.71/1's [0x46ae8c] pin
+for the S2 rows), the k1 controller body + the door gate (skipped
+E-gap — no door-bank mirror engine-side; documented) + the suicide
+trigger + the squash semantics land in bedlam-core::critter; the
+8-sample probe is modeled as floor_z(sample)==z ∧ raw DAT tile ≤ 3
+with the offset footprint exact. The S3/S4 hp scalars HOLD the
+§7j.18 difficulty form DELIBERATELY: the S8 canonical chain stages
+ZONEA S3+S4 and the m-scalar swap would move its pinned T2
+critter-bank bytes — no scenario exercises S2, so no chain is
+touched (the queue contract); the alignment rides the next G2
+unit. The canonical critter-bank blob is UNTOUCHED (new record
+fields dir/frame/z_restore are not serialized; no chain movement).

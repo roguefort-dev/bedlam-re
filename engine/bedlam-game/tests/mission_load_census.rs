@@ -192,7 +192,8 @@ fn stage_pickup(scene: &mut MissionScene, tot: &[u8], zone: i32) -> Result<(), S
 }
 
 /// Name the .NME sections `stage_critters` refuses (every non-empty
-/// section other than MixedState5/SeekSteppers, §7j.42/6).
+/// section other than Wanderers/MixedState5/SeekSteppers — the
+/// kind-1 landing §7j.71 added Wanderers to the modeled set).
 fn unmodeled_nme_sections(nme: &[u8]) -> Vec<String> {
     let parsed = assets::misc::parse_nme(nme);
     parsed
@@ -202,7 +203,8 @@ fn unmodeled_nme_sections(nme: &[u8]) -> Vec<String> {
             assets::misc::NmeSection::Section { kind, count, .. } => {
                 let modeled = matches!(
                     kind,
-                    assets::misc::NmeSectionKind::MixedState5
+                    assets::misc::NmeSectionKind::Wanderers
+                        | assets::misc::NmeSectionKind::MixedState5
                         | assets::misc::NmeSectionKind::SeekSteppers
                 );
                 (*count != 0 && !modeled).then(|| format!("{kind:?}x{count}"))
@@ -544,42 +546,42 @@ fn run_census() -> Vec<Row> {
 /// commit message saying why (the D28 fingerprint rule).
 const PINNED: &[(&str, &str)] = &[
     ("ZONEA-MISSION1", "host:clean"),
-    ("ZONEB-MISSION1", "host:gaps critters refused (Wanderersx24,Chasersx10,BallisticState6x9)"),
-    ("ZONEB-MISSION2", "host:gaps critters refused (Shootersx3,Wanderersx22,Chasersx6,BallisticState6x5)"),
-    ("ZONEB-MISSION3", "host:gaps critters refused (Wanderersx18,Chasersx7,BallisticState6x12)"),
-    ("ZONEB-MISSION4", "host:gaps critters refused (Shootersx1,Wanderersx13,Chasersx12,BallisticState6x21)"),
-    ("ZONEB-MISSION5", "host:gaps critters refused (Shootersx1,Wanderersx28,Chasersx16,BallisticState6x12)"),
+    ("ZONEB-MISSION1", "host:gaps critters refused (Chasersx10,BallisticState6x9)"),
+    ("ZONEB-MISSION2", "host:gaps critters refused (Shootersx3,Chasersx6,BallisticState6x5)"),
+    ("ZONEB-MISSION3", "host:gaps critters refused (Chasersx7,BallisticState6x12)"),
+    ("ZONEB-MISSION4", "host:gaps critters refused (Shootersx1,Chasersx12,BallisticState6x21)"),
+    ("ZONEB-MISSION5", "host:gaps critters refused (Shootersx1,Chasersx16,BallisticState6x12)"),
     ("ZONEB-MISSION6", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
     ("ZONEB-MISSION7", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
-    ("ZONEC-MISSION1", "host:gaps critters refused (Shootersx1,Wanderersx13,Chasersx10,BallisticState6x13)"),
-    ("ZONEC-MISSION2", "host:gaps critters refused (Wanderersx22,Chasersx13,BallisticState6x13)"),
-    ("ZONEC-MISSION3", "host:gaps critters refused (Shootersx4,Wanderersx18,Chasersx9,BallisticState6x21,CloseCombatx4)"),
-    ("ZONEC-MISSION4", "host:gaps critters refused (Wanderersx19,Chasersx15,BallisticState6x23)"),
-    ("ZONEC-MISSION5", "host:gaps critters refused (Shootersx1,Wanderersx12,Chasersx2,BallisticState6x22)"),
+    ("ZONEC-MISSION1", "host:gaps critters refused (Shootersx1,Chasersx10,BallisticState6x13)"),
+    ("ZONEC-MISSION2", "host:gaps critters refused (Chasersx13,BallisticState6x13)"),
+    ("ZONEC-MISSION3", "host:gaps critters refused (Shootersx4,Chasersx9,BallisticState6x21,CloseCombatx4)"),
+    ("ZONEC-MISSION4", "host:gaps critters refused (Chasersx15,BallisticState6x23)"),
+    ("ZONEC-MISSION5", "host:gaps critters refused (Shootersx1,Chasersx2,BallisticState6x22)"),
     ("ZONEC-MISSION6", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
     ("ZONEC-MISSION7", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
-    ("ZONED-MISSION1", "host:gaps critters refused (Shootersx4,Wanderersx33,Chasersx9,BallisticState6x18)"),
-    ("ZONED-MISSION2", "host:gaps critters refused (Shootersx8,Wanderersx20,Chasersx7,BallisticState6x9)"),
-    ("ZONED-MISSION3", "host:gaps critters refused (Shootersx8,Wanderersx2,Chasersx4,BallisticState6x21)"),
-    ("ZONED-MISSION4", "host:gaps critters refused (Shootersx8,Wanderersx2,Chasersx4,BallisticState6x16)"),
-    ("ZONED-MISSION5", "host:gaps critters refused (Shootersx4,Wanderersx12,BallisticState6x17)"),
+    ("ZONED-MISSION1", "host:gaps critters refused (Shootersx4,Chasersx9,BallisticState6x18)"),
+    ("ZONED-MISSION2", "host:gaps critters refused (Shootersx8,Chasersx7,BallisticState6x9)"),
+    ("ZONED-MISSION3", "host:gaps critters refused (Shootersx8,Chasersx4,BallisticState6x21)"),
+    ("ZONED-MISSION4", "host:gaps critters refused (Shootersx8,Chasersx4,BallisticState6x16)"),
+    ("ZONED-MISSION5", "host:gaps critters refused (Shootersx4,BallisticState6x17)"),
     ("ZONED-MISSION6", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
     ("ZONED-MISSION7", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
-    ("ZONEE-MISSION1", "host:gaps critters refused (Shootersx4,Wanderersx18,Chasersx6,BallisticState6x17,CloseCombatx5,Personnelx12)"),
-    ("ZONEE-MISSION2", "host:gaps critters refused (Shootersx1,Wanderersx34,Chasersx5,BallisticState6x2,CloseCombatx5,Personnelx12)"),
-    ("ZONEE-MISSION3", "host:gaps critters refused (Shootersx3,Wanderersx28,Chasersx5,BallisticState6x11,CloseCombatx6,Personnelx12)"),
-    ("ZONEE-MISSION4", "host:gaps critters refused (Shootersx4,Wanderersx23,Chasersx8,BallisticState6x8,CloseCombatx8,Personnelx12)"),
-    ("ZONEE-MISSION5", "host:gaps critters refused (Shootersx5,Wanderersx27,Chasersx13,BallisticState6x5,CloseCombatx4,Personnelx13)"),
+    ("ZONEE-MISSION1", "host:gaps critters refused (Shootersx4,Chasersx6,BallisticState6x17,CloseCombatx5,Personnelx12)"),
+    ("ZONEE-MISSION2", "host:gaps critters refused (Shootersx1,Chasersx5,BallisticState6x2,CloseCombatx5,Personnelx12)"),
+    ("ZONEE-MISSION3", "host:gaps critters refused (Shootersx3,Chasersx5,BallisticState6x11,CloseCombatx6,Personnelx12)"),
+    ("ZONEE-MISSION4", "host:gaps critters refused (Shootersx4,Chasersx8,BallisticState6x8,CloseCombatx8,Personnelx12)"),
+    ("ZONEE-MISSION5", "host:gaps critters refused (Shootersx5,Chasersx13,BallisticState6x5,CloseCombatx4,Personnelx13)"),
     ("ZONEE-MISSION6", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
     ("ZONEE-MISSION7", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
-    ("ZONEF-MISSION1", "host:gaps critters refused (Wanderersx12,Chasersx3,BallisticState6x43,CloseCombatx4,Personnelx9)"),
-    ("ZONEF-MISSION2", "host:gaps critters refused (Wanderersx28,BallisticState6x12,Personnelx9)"),
-    ("ZONEF-MISSION3", "host:gaps critters refused (Wanderersx24,BallisticState6x16,Personnelx9)"),
-    ("ZONEF-MISSION4", "host:gaps critters refused (Wanderersx11,BallisticState6x17,Personnelx9)"),
-    ("ZONEF-MISSION5", "host:gaps critters refused (Wanderersx42,BallisticState6x53,Personnelx19)"),
+    ("ZONEF-MISSION1", "host:gaps critters refused (Chasersx3,BallisticState6x43,CloseCombatx4,Personnelx9)"),
+    ("ZONEF-MISSION2", "host:gaps critters refused (BallisticState6x12,Personnelx9)"),
+    ("ZONEF-MISSION3", "host:gaps critters refused (BallisticState6x16,Personnelx9)"),
+    ("ZONEF-MISSION4", "host:gaps critters refused (BallisticState6x17,Personnelx9)"),
+    ("ZONEF-MISSION5", "host:gaps critters refused (BallisticState6x53,Personnelx19)"),
     ("ZONEF-MISSION6", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
     ("ZONEF-MISSION7", "direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly"),
-    ("ZONEG-MISSION1", "host:gaps critters refused (Shootersx3,Wanderersx20,Chasersx23,BallisticState6x18,CloseCombatx6,Personnelx9)"),
+    ("ZONEG-MISSION1", "host:gaps critters refused (Shootersx3,Chasersx23,BallisticState6x18,CloseCombatx6,Personnelx9)"),
 ];
 
 #[test]

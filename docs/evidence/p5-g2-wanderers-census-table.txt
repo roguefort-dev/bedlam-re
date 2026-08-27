@@ -1,0 +1,44 @@
+# p5-critter-state-g2-wanderers — the census_print_table provenance
+# (2026-08-27, worker 58b640c3 claim 1, D179; the RE-PIN evidence:
+# the WanderersxNN component dropped from every G2 refusal row; no
+# row flipped to clean — every Wanderers-hosting mission still hosts
+# another unmodeled state; ZONEA-MISSION1 unchanged host:clean).
+# Command: cargo test -p bedlam-game --test mission_load_census --
+#   --ignored --nocapture   (census_print_table, corpus-gated).
+ZONEA-MISSION1 | 25x75 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION1 | 100x100 | host | ok | ok | refused(Chasersx10,BallisticState6x9) | ok | ok | host:gaps critters refused (Chasersx10,BallisticState6x9)
+ZONEB-MISSION2 | 100x100 | host | ok | ok | refused(Shootersx3,Chasersx6,BallisticState6x5) | ok | ok | host:gaps critters refused (Shootersx3,Chasersx6,BallisticState6x5)
+ZONEB-MISSION3 | 100x100 | host | ok | ok | refused(Chasersx7,BallisticState6x12) | ok | ok | host:gaps critters refused (Chasersx7,BallisticState6x12)
+ZONEB-MISSION4 | 100x100 | host | ok | ok | refused(Shootersx1,Chasersx12,BallisticState6x21) | ok | ok | host:gaps critters refused (Shootersx1,Chasersx12,BallisticState6x21)
+ZONEB-MISSION5 | 100x100 | host | ok | ok | refused(Shootersx1,Chasersx16,BallisticState6x12) | ok | ok | host:gaps critters refused (Shootersx1,Chasersx16,BallisticState6x12)
+ZONEB-MISSION6 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEB-MISSION7 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEC-MISSION1 | 100x100 | host | ok | ok | refused(Shootersx1,Chasersx10,BallisticState6x13) | ok | ok | host:gaps critters refused (Shootersx1,Chasersx10,BallisticState6x13)
+ZONEC-MISSION2 | 100x100 | host | ok | ok | refused(Chasersx13,BallisticState6x13) | ok | ok | host:gaps critters refused (Chasersx13,BallisticState6x13)
+ZONEC-MISSION3 | 100x100 | host | ok | ok | refused(Shootersx4,Chasersx9,BallisticState6x21,CloseCombatx4) | ok | ok | host:gaps critters refused (Shootersx4,Chasersx9,BallisticState6x21,CloseCombatx4)
+ZONEC-MISSION4 | 100x100 | host | ok | ok | refused(Chasersx15,BallisticState6x23) | ok | ok | host:gaps critters refused (Chasersx15,BallisticState6x23)
+ZONEC-MISSION5 | 100x100 | host | ok | ok | refused(Shootersx1,Chasersx2,BallisticState6x22) | ok | ok | host:gaps critters refused (Shootersx1,Chasersx2,BallisticState6x22)
+ZONEC-MISSION6 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEC-MISSION7 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONED-MISSION1 | 100x100 | host | ok | ok | refused(Shootersx4,Chasersx9,BallisticState6x18) | ok | ok | host:gaps critters refused (Shootersx4,Chasersx9,BallisticState6x18)
+ZONED-MISSION2 | 100x100 | host | ok | ok | refused(Shootersx8,Chasersx7,BallisticState6x9) | ok | ok | host:gaps critters refused (Shootersx8,Chasersx7,BallisticState6x9)
+ZONED-MISSION3 | 100x100 | host | ok | ok | refused(Shootersx8,Chasersx4,BallisticState6x21) | ok | ok | host:gaps critters refused (Shootersx8,Chasersx4,BallisticState6x21)
+ZONED-MISSION4 | 100x100 | host | ok | ok | refused(Shootersx8,Chasersx4,BallisticState6x16) | ok | ok | host:gaps critters refused (Shootersx8,Chasersx4,BallisticState6x16)
+ZONED-MISSION5 | 100x100 | host | ok | ok | refused(Shootersx4,BallisticState6x17) | ok | ok | host:gaps critters refused (Shootersx4,BallisticState6x17)
+ZONED-MISSION6 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONED-MISSION7 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEE-MISSION1 | 100x100 | host | ok | ok | refused(Shootersx4,Chasersx6,BallisticState6x17,CloseCombatx5,Personnelx12) | ok | ok | host:gaps critters refused (Shootersx4,Chasersx6,BallisticState6x17,CloseCombatx5,Personnelx12)
+ZONEE-MISSION2 | 100x100 | host | ok | ok | refused(Shootersx1,Chasersx5,BallisticState6x2,CloseCombatx5,Personnelx12) | ok | ok | host:gaps critters refused (Shootersx1,Chasersx5,BallisticState6x2,CloseCombatx5,Personnelx12)
+ZONEE-MISSION3 | 100x100 | host | ok | ok | refused(Shootersx3,Chasersx5,BallisticState6x11,CloseCombatx6,Personnelx12) | ok | ok | host:gaps critters refused (Shootersx3,Chasersx5,BallisticState6x11,CloseCombatx6,Personnelx12)
+ZONEE-MISSION4 | 100x100 | host | ok | ok | refused(Shootersx4,Chasersx8,BallisticState6x8,CloseCombatx8,Personnelx12) | ok | ok | host:gaps critters refused (Shootersx4,Chasersx8,BallisticState6x8,CloseCombatx8,Personnelx12)
+ZONEE-MISSION5 | 100x100 | host | ok | ok | refused(Shootersx5,Chasersx13,BallisticState6x5,CloseCombatx4,Personnelx13) | ok | ok | host:gaps critters refused (Shootersx5,Chasersx13,BallisticState6x5,CloseCombatx4,Personnelx13)
+ZONEE-MISSION6 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEE-MISSION7 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEF-MISSION1 | 100x100 | host | ok | ok | refused(Chasersx3,BallisticState6x43,CloseCombatx4,Personnelx9) | ok | ok | host:gaps critters refused (Chasersx3,BallisticState6x43,CloseCombatx4,Personnelx9)
+ZONEF-MISSION2 | 100x100 | host | ok | ok | refused(BallisticState6x12,Personnelx9) | ok | ok | host:gaps critters refused (BallisticState6x12,Personnelx9)
+ZONEF-MISSION3 | 100x100 | host | ok | ok | refused(BallisticState6x16,Personnelx9) | ok | ok | host:gaps critters refused (BallisticState6x16,Personnelx9)
+ZONEF-MISSION4 | 100x100 | host | ok | ok | refused(BallisticState6x17,Personnelx9) | ok | ok | host:gaps critters refused (BallisticState6x17,Personnelx9)
+ZONEF-MISSION5 | 100x100 | host | ok | ok | refused(BallisticState6x53,Personnelx19) | ok | ok | host:gaps critters refused (BallisticState6x53,Personnelx19)
+ZONEF-MISSION6 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEF-MISSION7 | 100x100 | direct | ok | ok | ok | ok | ok | direct:gaps episode-slot seam cannot stage it (FULL_MASK=15: four sub-slots per stage, B2 @0x81d9a; the SELECT mission-choice shell is unmodeled) — staged directly
+ZONEG-MISSION1 | 100x25 | host | ok | ok | refused(Shootersx3,Chasersx23,BallisticState6x18,CloseCombatx6,Personnelx9) | ok | ok | host:gaps critters refused (Shootersx3,Chasersx23,BallisticState6x18,CloseCombatx6,Personnelx9)

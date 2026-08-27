@@ -5,11 +5,12 @@
 //!
 //! Scope: the E-side model of the 0x4cff98 critter bank (0x7E
 //! stride, count cell 0x46cc2c) + the .NME staging host seam + the
-//! controller subset for the CORPUS KINDS — 4 (seek steppers) and
-//! 5/6 (the shared mixed-AI body; kind 6 shares it but no corpus
-//! mission stages it). The kind 1/2/3/7 controller bodies are
-//! documented E-gaps: `stage_critters` REFUSES an .NME hosting them
-//! (fail loud — never spawn a critter whose brain is missing).
+//! controller subset for the CORPUS KINDS — 1 (the wanderers,
+//! §7j.71), 4 (seek steppers) and 5/6 (the shared mixed-AI body;
+//! kind 6 shares it but no corpus mission stages it). The kind
+//! 2/3/7 controller bodies are documented E-gaps: `stage_critters`
+//! REFUSES an .NME hosting them (fail loud — never spawn a critter
+//! whose brain is missing).
 //!
 //! Coordinate scales (§7j.23/2 + §7j.42's probe reads): x/y are
 //! Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for kinds 1/4;
@@ -133,8 +134,19 @@ pub struct CritterRecord {
     pub home_x: i32,
     pub home_y: i32,
     /// Multiplexed countdown w@+0x56 — dormant timer / seek pause /
-    /// fire cadence / chase count, per mode (§7j.42/2).
+    /// fire cadence / chase count, per mode (§7j.42/2); for kind 1
+    /// the wander countdown (§7j.71/3).
     pub countdown: i32,
+    /// DIR w@+0x58 — the kind-1 wander direction: −1 = idle,
+    /// 0..3 = walking {−y, +x, +y, −x} (§7j.71/3; the S2 loader
+    /// seeds −1).
+    pub dir: i16,
+    /// Frame word w@+0x5A — the kind-1 DIR mirror, written on every
+    /// direction pick (§7j.71/3).
+    pub frame: u16,
+    /// z-restore d@+0x4E — the kind-1 standing level z, restored on
+    /// the idle squash + the bounds re-pick (§7j.71/1,/3).
+    pub z_restore: i32,
     /// Dying counter d@+0x52 (mode 7 runs 0x28 frames).
     pub death_ctr: i32,
     /// Target robot w@+0x7A (the mode-2 fire victim; −1 = none).
@@ -168,6 +180,9 @@ impl Default for CritterRecord {
             home_x: 0,
             home_y: 0,
             countdown: 0,
+            dir: -1,
+            frame: 0,
+            z_restore: 0,
             death_ctr: 0,
             target_robot: -1,
             fuse: 0,
@@ -181,22 +196,38 @@ impl MissionSim {
     /// schedule (§7j.18) — the `critters = 1` grammar host seam
     /// (D114). The ORIGINAL loads the file natively at mission
     /// load; E stages the identical bytes. Only the sections whose
-    /// kinds the E controller models may spawn (S3 → kind 5, S4 →
-    /// kind 4); any other NON-EMPTY section is REFUSED (fail loud —
-    /// never spawn a brain the engine does not carry; ZONEA/MISSION1
-    /// hosts exactly S3+S4).
+    /// kinds the E controller models may spawn (S2 → kind 1,
+    /// S3 → kind 5, S4 → kind 4); any other NON-EMPTY section is
+    /// REFUSED (fail loud — never spawn a brain the engine does not
+    /// carry; ZONEA/MISSION1 hosts exactly S3+S4).
     ///
-    /// Spawn schedule [verified §7j.18]: S3 (state 5, 8-B recs,
-    /// w1 = probe level, w2/w3 = x/y tile): `max(d,1)` each —
+    /// Spawn schedule [verified §7j.18 + §7j.71/1]: S2 (state 1,
+    /// 10-B recs, w3/w4 = x/y tile): `d+3` each — the z SEARCH
+    /// walks the DAT volume down from level 6 for the first RAW
+    /// tile ∈ 1..3 with air above (skip the spawn when none);
+    /// x = w3·0x20+0x10, y = w4·0x20+0x10 (RAW px), z = z-restore =
+    /// L·0x20+0x1F, DIR −1, species 1, countdown =
+    /// FUN_0041ec1c(10)+10 (the section's ONLY stream draw, one per
+    /// spawned critter), hp = 200+(200·m)/27. S3 (state 5, 8-B
+    /// recs, w1 = probe level, w2/w3 = x/y tile): `max(d,1)` each —
     /// x = w2·0x2000+0xF00, y = w3·0x2000+0xF00 (Q13), z = the
     /// floor probe at level w1, mode 8, species 3, anim 5, heading
     /// 0x72, hp base 0x96. S4 (state 4, 8-B recs): `(d>>1)+2` each
     /// — x = w2·0x20+0xF, y = w3·0x20+0xF (RAW px), z = the floor
     /// probe at level w1, mode 9, species 6, heading = RandA()&3
     /// (the loader's only stream draw for these two sections), hp
-    /// base 0xC8. HP = base + (base·d)/27 for both; presence := 1;
-    /// home := spawn. Returns the staged count, or `None` when the
-    /// file hosts an unmodeled kind (the caller fails loud).
+    /// base 0xC8. **S2's hp scalar = the LINEAR MISSION m
+    /// [0x46ae8c] (§7j.64/D153) — hp = 200+(200·m)/27 [§7j.71/1,
+    /// correcting §7j.18's difficulty gloss]; the engine reads
+    /// `MissionSim::linear`** (staged by the destroy family BEFORE
+    /// critters in the canonical order; 0 when unstaged). The S3/S4
+    /// hp scalars HOLD the §7j.18 difficulty form deliberately —
+    /// the S8 canonical chain stages ZONEA S3+S4 and a scalar swap
+    /// moves its pinned T2 bytes (the alignment is queued with the
+    /// next G2 unit; §7j.71/1 pins m for every section).
+    /// presence := 1; home := spawn. Returns the staged count, or
+    /// `None` when the file hosts an unmodeled kind (the caller
+    /// fails loud).
     pub fn stage_critters(&mut self, nme: &[u8], difficulty: u32) -> Option<usize> {
         const WIDTHS: [usize; 8] = [10, 10, 8, 8, 10, 8, 6, 8];
         let mut p = 0usize;
@@ -227,12 +258,50 @@ impl MissionSim {
         // S8 (personnel/POI) is a separate bank — the poi-bank T2
         // row's own unit. Any other unmodeled section refuses.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 2 && si != 3 {
+            if n != 0 && si != 1 && si != 2 && si != 3 {
                 return None;
             }
         }
         let d = difficulty as i32;
+        // The hp scalar [0x46ae8c] = the linear mission m (§7j.71/1).
+        let m = self.linear as i32;
         let mut staged = 0usize;
+        for rec in &sections[1] {
+            // S2 (§7j.71/1): d+3 each; the z search is draw-free and
+            // runs per spawn iteration; ONE bounded pick per critter
+            // that clears the stand gate.
+            let spawns = d + 3;
+            for _ in 0..spawns {
+                if self.critters.len() >= CRITTER_SLOTS {
+                    break;
+                }
+                let tx = rec[3] as i32;
+                let ty = rec[4] as i32;
+                let Some(level) = self.wander_stand_level(tx, ty) else {
+                    continue;
+                };
+                let x = tx * 0x20 + 0x10;
+                let y = ty * 0x20 + 0x10;
+                let z = level * 0x20 + 0x1F;
+                let countdown = self.bounded_pick(10) + 10;
+                let base = 0xC8i32;
+                self.critters.push(CritterRecord {
+                    kind: 1,
+                    species: 1,
+                    hp: (base + base * m / 27) as i16,
+                    dir: -1,
+                    frame: 0,
+                    z_restore: z,
+                    x,
+                    y,
+                    z,
+                    countdown,
+                    presence: true,
+                    ..Default::default()
+                });
+                staged += 1;
+            }
+        }
         for rec in &sections[2] {
             let spawns = match d {
                 1 => (self.rand_a() & 1) as i32 + 1,
@@ -249,6 +318,12 @@ impl MissionSim {
                 self.critters.push(CritterRecord {
                     kind: 5,
                     species: 3,
+                    // The §7j.18 difficulty scalar HELD deliberately
+                    // (§7j.71/1 pins m = [0x46ae8c] for EVERY section,
+                    // but the S8 canonical chain stages ZONEA S3+S4 —
+                    // switching the scalar moves its pinned T2
+                    // critter-bank bytes; the alignment rides the next
+                    // G2 unit where a scenario justifies the re-pin).
                     hp: (base + base * d / 27) as i16,
                     mode: 8,
                     anim: 5,
@@ -279,7 +354,7 @@ impl MissionSim {
                 self.critters.push(CritterRecord {
                     kind: 4,
                     species: 6,
-                    hp: (base + base * d / 27) as i16,
+                    hp: (base + base * d / 27) as i16, // §7j.71/1 hold — see the S3 note
                     mode: 9,
                     heading,
                     presence: true,
@@ -385,12 +460,276 @@ impl MissionSim {
                 self.critters[idx].fuse -= 1;
             }
             match self.critters[idx].kind {
+                1 => self.critter_wander(idx),
                 4 => self.critter_state4(idx, respawn),
                 5 | 6 => self.critter_mixed(idx, respawn, leash),
                 // Staging refuses the other kinds (module doc).
                 _ => {}
             }
         }
+    }
+
+    /// The kind-1 WANDERER body (0x414c96) [§7j.71/2..3]. Entry
+    /// sequence: the door-tile gate FUN_004186fc is the documented
+    /// E-gap (no door-claim/variant bank mirror engine-side —
+    /// byte[0x4796d5+30·tile] of the §7j.12 type-DB rows); then the
+    /// suicide-bomb trigger; then the substep machine. Species ≡ 1
+    /// for S2 wanderers and nothing re-stamps it.
+    fn critter_wander(&mut self, idx: usize) {
+        // FUN_00417e2f [§7j.71/2]: nearest robot within 0x30 px →
+        // explode (presence := 0, 8 iterations of {3 jitter draws +
+        // 1× debris KIND 1 + two bounded-pick(3) splash tile draws +
+        // the splash row}, delay = counter>>1) and SKIP the body —
+        // the explicit `mov eax,1` return convention.
+        let (x, y, z) = {
+            let c = &self.critters[idx];
+            (c.x, c.y, c.z)
+        };
+        let (_, dist) = self.nearest_robot(x, y);
+        if dist < 0x30 {
+            self.critters[idx].presence = false;
+            for i in 0..8 {
+                let jz = z + (self.rand_a() & 0xF) as i32;
+                let jy = y + (self.rand_a() & 0x3F) as i32 - 0x1F;
+                let jx = x + (self.rand_a() & 0x3F) as i32 - 0x1F;
+                let _ = self.stage_debris(jx, jy, jz, 1, i >> 1, -1);
+                let sy = self.bounded_pick(3) + (y >> 5) - 1;
+                let sx = self.bounded_pick(3) + (x >> 5) - 1;
+                let sz = (z >> 5) + 1;
+                let _ = self.stage_splash(sx, sy, sz, (i >> 1) as u16);
+            }
+            return;
+        }
+        let species = self.critters[idx].species as i32;
+        let mut substep = 0i32;
+        while substep < species {
+            // HEAD (0x414f5f): the countdown decrements FIRST.
+            self.critters[idx].countdown -= 1;
+            if self.critters[idx].countdown > 0 {
+                if self.critters[idx].dir < 0 {
+                    // The IDLE SQUASH (0x4151a5): the pause between
+                    // walks lasts exactly ONE substep after the dec —
+                    // the 8..15/12..27 re-pick constants are squashed
+                    // to 1 here (§7j.71/3).
+                    let zr = self.critters[idx].z_restore;
+                    let c = &mut self.critters[idx];
+                    c.countdown = 1;
+                    c.z = zr;
+                } else {
+                    // WALK: the DIR table 0x412f08 (0x4151e8).
+                    let dir = self.critters[idx].dir as i32;
+                    self.wander_step(idx, dir);
+                }
+            } else if self.critters[idx].dir >= 0 {
+                // WALK-END (0x414d30): one draw.
+                let pause = (self.rand_a() & 7) as i32 + 8;
+                let c = &mut self.critters[idx];
+                c.dir = -1;
+                c.countdown = pause;
+            } else {
+                // The PICK (0x414f89): countdown := (RandA&0xF)+0xA
+                // (draw 1); the 25% gate (draw 2) → random 4-way
+                // (draw 3) else toward the nearest robot (no draws);
+                // then the frame/anim mirror (both paths).
+                let pause = (self.rand_a() & 0xF) as i32 + 0xA;
+                let gate = self.rand_a();
+                let dir = if gate & 3 == 0 {
+                    (self.rand_a() & 3) as i32
+                } else {
+                    self.wander_toward(idx)
+                };
+                let c = &mut self.critters[idx];
+                c.countdown = pause;
+                c.dir = dir as i16;
+                c.frame = dir as u16;
+            }
+            substep += 1;
+        }
+    }
+
+    /// One kind-1 walk step (the DIR table cases 0x414fb9/0x414d56/
+    /// 0x414e40/0x4150af) [§7j.71/3]: ±6 RAW px on one axis, the
+    /// z-band death gate, the stepped-axis map-bounds gate, then the
+    /// 8-sample wall probe at the stepped cell. The death path does
+    /// NOT stop the case (the substep loop never re-checks presence).
+    fn wander_step(&mut self, idx: usize, dir: i32) {
+        let (x, y, z, zr) = {
+            let c = &self.critters[idx];
+            (c.x, c.y, c.z, c.z_restore)
+        };
+        // The z-band gate (z < 0 ∨ z ≥ 0x100 → FUN_00418250).
+        if !(0..0x100).contains(&z) {
+            self.wander_die(idx);
+        }
+        let (nx, ny) = match dir {
+            0 => (x, y - 6),
+            1 => (x + 6, y),
+            2 => (x, y + 6),
+            _ => (x - 6, y),
+        };
+        // The stepped axis carries the map bound ([0x4eddec]·0x20
+        // for x, [0x4eddf0]·0x20 for y — §7j.71/3); the other axis
+        // is NOT checked on this path, faithful.
+        let (w, h) = self.terrain.size();
+        let in_bounds = if dir == 1 || dir == 3 {
+            (0..w * 0x20).contains(&nx)
+        } else {
+            (0..h * 0x20).contains(&ny)
+        };
+        if !in_bounds {
+            // Out of map bounds (0x414da2): re-pick + z restore.
+            let pause = (self.rand_a() & 0xF) as i32 + 0xC;
+            let c = &mut self.critters[idx];
+            c.dir = -1;
+            c.countdown = pause;
+            c.z = zr;
+            return;
+        }
+        if self.wander_probe(nx, ny, zr) {
+            // Commit (0x414e00/0x414ef9/0x415078/0x415171): the
+            // stepped coordinate only; z unchanged.
+            let c = &mut self.critters[idx];
+            if dir == 1 || dir == 3 {
+                c.x = nx;
+            } else {
+                c.y = ny;
+            }
+        } else {
+            // Probe blocked (0x414e0f): re-pick, NO z restore.
+            let pause = (self.rand_a() & 0xF) as i32 + 0xC;
+            let c = &mut self.critters[idx];
+            c.dir = -1;
+            c.countdown = pause;
+        }
+    }
+
+    /// FUN_00418250 — the kind-1 death path [§7j.71/6]: mode 7 +
+    /// presence 0 ALWAYS; the debris row only when the RAW-px x/y
+    /// clear the TILE-width/height bounds (the asm compares px vs
+    /// [0x4eddec]/[0x4eddf0] — a near-dead quirk that almost never
+    /// fires), z forced 0xFF by the original's <<8 clamp.
+    fn wander_die(&mut self, idx: usize) {
+        let (w, h) = self.terrain.size();
+        let (x, y, z) = {
+            let c = &self.critters[idx];
+            (c.x, c.y, c.z)
+        };
+        {
+            let c = &mut self.critters[idx];
+            c.mode = 7;
+            c.presence = false;
+        }
+        if (0..w).contains(&x) && (0..h).contains(&y) && (0..8).contains(&z) {
+            let _ = self.stage_debris(x, y, 0xFF, 1, 0, -1);
+        }
+    }
+
+    /// FUN_00417af2 — the toward-robot 4-way picker [§7j.71/4]:
+    /// nearest ALIVE robot in px; the y-axis wins ties (DX ≤ DY);
+    /// the cy==ry ∧ on-top degenerate lands on 0. No draws, no
+    /// difficulty.
+    fn wander_toward(&self, idx: usize) -> i32 {
+        let (cx, cy) = {
+            let c = &self.critters[idx];
+            (c.x, c.y)
+        };
+        let mut rx = 0i32;
+        let mut ry = 0i32;
+        let mut best = 10_000_000i32;
+        for r in self.robots.iter() {
+            if !r.alive {
+                continue;
+            }
+            let d = dist_octagonal((r.pos_x >> 8) - cx, (r.pos_y >> 8) - cy);
+            if d < best {
+                best = d;
+                rx = r.pos_x >> 8;
+                ry = r.pos_y >> 8;
+            }
+        }
+        let dx = (cx - rx).abs();
+        let dy = (cy - ry).abs();
+        if cy >= ry && dx <= dy {
+            0
+        } else if cy <= ry && dx <= dy {
+            2
+        } else if cx > rx {
+            3
+        } else {
+            1
+        }
+    }
+
+    /// FUN_0041f8f9 — the kind-1 wall probe [§7j.71/5]: the 8-sample
+    /// footprint (the 3×3 box minus the center, offsets ±11/+12);
+    /// per sample the bounds, the floor probe == z exactly
+    /// (FUN_0041e231 = the engine floor_z), and the RAW DAT tile
+    /// ≤ 3 (air or standable — 0xFF pads FAIL, the raw read).
+    fn wander_probe(&mut self, x: i32, y: i32, z: i32) -> bool {
+        const SAMPLES: [(i32, i32); 8] = [
+            (-11, -11),
+            (-11, 12),
+            (12, -11),
+            (12, 12),
+            (0, -11),
+            (0, 12),
+            (-11, 0),
+            (12, 0),
+        ];
+        let (w, h) = self.terrain.size();
+        for &(ox, oy) in SAMPLES.iter() {
+            let sx = x + ox;
+            let sy = y + oy;
+            if sx < 0 || sy < 0 || sx >> 5 >= w || sy >> 5 >= h {
+                return false;
+            }
+            if self.terrain.floor_z(sx, sy, z) != z {
+                return false;
+            }
+            let tile = self
+                .terrain
+                .raw_dat_byte(sx >> 5, sy >> 5, z >> 5)
+                .unwrap_or(0);
+            if tile > 3 {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The S2 loader's standing-level search [§7j.71/1]: scan the
+    /// RAW DAT volume DOWN from level 6; skip air; the first tile
+    /// ∈ 1..3 stops the scan (a >3 tile keeps scanning); the stand
+    /// gate requires the found level's tile ∈ 1..3 AND air above.
+    /// RAW bytes (0xFF pad decks are NOT standable here — no
+    /// dat_type remap).
+    fn wander_stand_level(&self, tx: i32, ty: i32) -> Option<i32> {
+        let raw = |z: i32| self.terrain.raw_dat_byte(tx, ty, z).unwrap_or(0);
+        let mut found = -1i32;
+        let mut level = 6i32;
+        while level >= 0 {
+            let t = raw(level);
+            if t == 0 {
+                level -= 1;
+                continue;
+            }
+            found = level;
+            if t <= 3 {
+                break;
+            }
+            level -= 1;
+        }
+        if found < 0 {
+            return None;
+        }
+        let t = raw(found);
+        if t == 0 || t > 3 {
+            return None;
+        }
+        if raw(found + 1) != 0 {
+            return None;
+        }
+        Some(found)
     }
 
     /// FUN_00417c00 — the nearest-ALIVE-robot probe [§7j.42/3]:
@@ -1276,6 +1615,242 @@ impl MissionSim {
 }
 
 #[cfg(test)]
+mod wanderer_tests {
+    //! The kind-1 lane (§7j.71): the S2 loader walk, the substep
+    //! machine's squash/pick/walk cycle, the wall probe, the
+    //! toward-robot picker, and the suicide trigger's draw budget.
+
+    use super::*;
+
+    /// Flat level-2 world: plane 2 solid type-1 everywhere, height
+    /// byte 0x1F everywhere (floor_z == L·0x20+0x1F at every cell —
+    /// the wander probe's equality contract holds by construction).
+    fn sim_flat(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let angles = crate::mission::AngleTable::from_thresholds(&[0u16; 64]).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5; // m = 5 → hp = 200 + 1000/27 = 237
+        sim
+    }
+
+    /// An .NME hosting exactly one S2 record (w3/w4 = the x/y tile);
+    /// every other section empty.
+    fn s2_nme(w3: u16, w4: u16) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(&0u16.to_le_bytes()); // S1 count
+        b.extend_from_slice(&1u16.to_le_bytes()); // S2 count
+        for w in [1u16, 0, 0, w3, w4] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        for _ in 0..6 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S3..S8 counts
+        }
+        b
+    }
+
+    fn push_wanderer(sim: &mut MissionSim, x: i32, y: i32, countdown: i32, dir: i16) {
+        sim.critters.push(CritterRecord {
+            kind: 1,
+            species: 1,
+            hp: 200,
+            dir,
+            countdown,
+            z: 0x5F,
+            z_restore: 0x5F,
+            x,
+            y,
+            presence: true,
+            ..Default::default()
+        });
+    }
+
+    #[test]
+    fn s2_staging_spawns_and_seeds() {
+        let mut sim = sim_flat(0xC0FFEE);
+        let staged = sim.stage_critters(&s2_nme(10, 10), 1).expect("S2 staged");
+        // difficulty 1 → d+3 = 4 wanderers on the flat level-2 world.
+        assert_eq!(staged, 4);
+        assert_eq!(sim.critters.len(), 4);
+        for c in sim.critters() {
+            assert_eq!(c.kind, 1);
+            assert_eq!(c.species, 1);
+            assert_eq!(c.dir, -1, "the S2 DIR seed");
+            assert_eq!(c.frame, 0);
+            assert_eq!(c.z, 2 * 0x20 + 0x1F);
+            assert_eq!(c.z_restore, c.z);
+            assert_eq!(c.x, 10 * 0x20 + 0x10);
+            assert_eq!(c.y, 10 * 0x20 + 0x10);
+            assert_eq!(c.hp, 200 + 200 * 5 / 27, "hp = 200+(200·m)/27, m=5");
+            assert!((10..=19).contains(&c.countdown));
+            assert!(c.presence);
+        }
+    }
+
+    #[test]
+    fn s2_staging_draw_budget_one_per_critter() {
+        let mut a = sim_flat(7);
+        let mut b = sim_flat(7);
+        a.stage_critters(&s2_nme(4, 4), 2).expect("staged");
+        // d=2 → 5 critters → exactly 5 bounded_pick(10) draws.
+        for _ in 0..5 {
+            b.bounded_pick(10);
+        }
+        assert_eq!(a.rand_a_state(), b.rand_a_state());
+    }
+
+    #[test]
+    fn s2_search_rejects_no_air_above() {
+        // A >3 special byte sits at the level directly ABOVE the
+        // first standable tile: the scan stops at level 2 (plane-2
+        // solid), but the stand gate reads level 3 ≠ 0 → reject.
+        let mut sim = sim_flat(0xABCD);
+        sim.terrain.dat_write(10, 10, 3, 7);
+        let probe = sim_flat(0xABCD);
+        let staged = sim.stage_critters(&s2_nme(10, 10), 0).expect("staged");
+        assert_eq!(staged, 0, "no air above → no spawn");
+        assert_eq!(sim.rand_a_state(), probe.rand_a_state(), "no draws");
+    }
+
+    #[test]
+    fn s2_search_continues_past_special_lands_below() {
+        // The scan SKIPS a >3 tile (level 4) and keeps going: with
+        // plane 2 cleared at the tile, it lands on a 1..3 tile at
+        // level 1 with air above.
+        let mut sim = sim_flat(0xBEEF);
+        sim.terrain.dat_write(10, 10, 2, 0);
+        sim.terrain.dat_write(10, 10, 4, 7);
+        sim.terrain.dat_write(10, 10, 1, 2);
+        let staged = sim.stage_critters(&s2_nme(10, 10), 0).expect("staged");
+        assert_eq!(staged, 3, "d=0 → 3 spawns at level 1");
+        assert_eq!(sim.critters()[0].z, 0x3F);
+    }
+
+    #[test]
+    fn idle_squash_restores_z_and_burns_no_draws() {
+        let mut sim = sim_flat(1);
+        push_wanderer(&mut sim, 0x210, 0x210, 5, -1);
+        sim.critters[0].z = 0x40; // drifted off the standing level
+        let s0 = sim.rand_a_state();
+        sim.critter_tick();
+        assert_eq!(sim.rand_a_state(), s0, "the squash path is draw-free");
+        let c = &sim.critters[0];
+        assert_eq!(c.countdown, 1, "squashed to one substep");
+        assert_eq!(c.z, 0x5F, "z := z_restore");
+        assert_eq!(c.dir, -1);
+    }
+
+    #[test]
+    fn pick_then_walk_cycle() {
+        let mut sim = sim_flat(2);
+        push_wanderer(&mut sim, 0x210, 0x210, 1, -1);
+        // Tick 1: the PICK (2 or 3 draws, no move).
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert!((0..=3).contains(&(c.dir as i32)), "a walk direction");
+        assert_eq!(c.frame as i32, c.dir as i32, "the anim mirror");
+        assert!((10..=25).contains(&c.countdown));
+        assert_eq!(c.x, 0x210);
+        assert_eq!(c.y, 0x210);
+        // Tick 2: the WALK commits ±6 RAW px on the dir axis (the
+        // flat world passes the 8-sample probe everywhere).
+        let dir = c.dir as i32;
+        let (ex, ey) = match dir {
+            0 => (0x210, 0x210 - 6),
+            1 => (0x210 + 6, 0x210),
+            2 => (0x210, 0x210 + 6),
+            _ => (0x210 - 6, 0x210),
+        };
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!((c.x, c.y), (ex, ey), "the ±6 stepper commit");
+        assert_eq!(c.dir as i32, dir, "still walking");
+    }
+
+    #[test]
+    fn walk_end_and_repick() {
+        let mut sim = sim_flat(3);
+        push_wanderer(&mut sim, 0x210, 0x210, 2, 1); // two substeps left
+        sim.critter_tick(); // countdown−− → 1 > 0 → the walk step
+        assert_eq!(sim.critters[0].x, 0x210 + 6);
+        // Next tick: countdown ≤ 0 ∧ dir ≥ 0 → WALK-END (one draw):
+        // dir := −1, countdown ∈ 8..15.
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.dir, -1);
+        assert!((8..=15).contains(&c.countdown));
+    }
+
+    #[test]
+    fn blocked_probe_repick_no_z_restore() {
+        // A 0xFF deck one tile EAST of the wanderer: the probe's +12
+        // x-offset samples read the raw 0xFF (>3) → blocked →
+        // re-pick, and z stays wherever it was (NO restore on this
+        // path). The wanderer sits at px 5·0x20+0x10 (tile 5); the
+        // east step's samples reach tile 6.
+        let mut sim = sim_flat(4);
+        sim.terrain.dat_write(6, 5, 2, 0xFF);
+        push_wanderer(&mut sim, 5 * 0x20 + 0x10, 5 * 0x20 + 0x10, 3, 1);
+        sim.critters[0].z = 0x50;
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.x, 5 * 0x20 + 0x10, "the step did not commit");
+        assert_eq!(c.dir, -1, "re-picked");
+        assert_eq!(c.z, 0x50, "no z-restore on the blocked path");
+    }
+
+    #[test]
+    fn wander_toward_tie_break_and_axes() {
+        let mut sim = sim_flat(5);
+        sim.spawn_robot((3, 3, 2)); // robot px ≈ (3·32+15, 3·32+15) = (111, 111)
+                                    // Exactly diagonal (dx == dy), critter north-west → y-axis, +y.
+        push_wanderer(&mut sim, 111 - 60, 111 - 60, 1, -1);
+        assert_eq!(sim.wander_toward(0), 2);
+        // x-dominant east → 1; x-dominant west → 3.
+        let mut sim2 = sim_flat(5);
+        sim2.spawn_robot((3, 3, 2));
+        push_wanderer(&mut sim2, 111 - 60, 111, 1, -1);
+        assert_eq!(sim2.wander_toward(0), 1);
+        push_wanderer(&mut sim2, 111 + 60, 111, 1, -1);
+        assert_eq!(sim2.wander_toward(1), 3);
+        // y-dominant south → 0 (toward = −y).
+        let mut sim3 = sim_flat(5);
+        sim3.spawn_robot((3, 3, 2));
+        push_wanderer(&mut sim3, 111, 111 + 60, 1, -1);
+        assert_eq!(sim3.wander_toward(0), 0);
+    }
+
+    #[test]
+    fn suicide_trigger_explodes_with_40_draws() {
+        let mut a = sim_flat(6);
+        let mut b = sim_flat(6);
+        a.spawn_robot((3, 3, 2));
+        b.spawn_robot((3, 3, 2)); // the spawn's variant draw, in lockstep
+        push_wanderer(&mut a, 111, 111, 9, 1); // on top of the robot
+        a.critter_tick();
+        assert!(!a.critters[0].presence, "deactivated");
+        for _ in 0..40 {
+            b.rand_a();
+        }
+        assert_eq!(a.rand_a_state(), b.rand_a_state(), "5 draws × 8");
+    }
+
+    #[test]
+    fn suicide_trigger_far_robot_wanders_on() {
+        let mut sim = sim_flat(8);
+        sim.spawn_robot((10, 10, 2)); // robot px (335, 335) — far
+        push_wanderer(&mut sim, 111, 111, 5, -1);
+        sim.critter_tick();
+        assert!(sim.critters[0].presence);
+        assert_eq!(sim.critters[0].countdown, 1, "the idle squash ran");
+    }
+}
+
+#[cfg(test)]
 mod debris_physics_tests {
     //! The critter lane of the FUN_0040de9c debris physics pass
     //! (§7j.44/4) — module-internal so the bank can be pushed
@@ -1319,6 +1894,9 @@ mod debris_physics_tests {
             home_x: x,
             home_y: y,
             countdown: 0,
+            dir: -1,
+            frame: 0,
+            z_restore: z,
             death_ctr: 0,
             target_robot: -1,
             fuse: 0,
