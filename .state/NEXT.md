@@ -5,24 +5,7 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p5-zonea-mission1-parity] [gate=p5-zonea-mission1-parity] P5
-   first zone target — ZONEA/MISSION1 to `green` per the §1
-   acceptance shape of docs/P5-ZONE-GATES.md: scripted flows
-   crash-free (S-scenario style), T1 rules evidence, differ-harness
-   structural spot check, cross-OS hash equality of our engine,
-   SAVED/OPTIONS.BDL import seam check (read-only/bounds-checked),
-   DM carve-out note. Flip ZONEA-MISSION1 disposition to green in
-   docs/P5-MISSION-LEDGER.toml IN THE SAME COMMIT as the green
-   evidence; do NOT wire a p5-zone-a gate yet (that lands when ALL of
-   ZONEA's missions are green — ZONEA has only MISSION1, so this unit
-   may wire p5-zone-a too if its evidence commands are executable and
-   the checker's cross-artifact rule stays green). PRECONDITION MET
-   (the p5-mission-load-census gap table exists: docs/P5-ZONE-GATES
-   §6, D176 — ZONEA-MISSION1 is the census's ONLY zero-gap mission,
-   so its parity work is exactly the §1 evidence, no loader gap in
-   the way). Bounds: all controls green; MANIFEST clean; no Ghidra
-   run; Nudge-Worker trailer.
-2. [READY] [id=p5-critter-state-g2-wanderers] [gate=p5-critter-state-g2-wanderers] P5
+1. [READY] [id=p5-critter-state-g2-wanderers] [gate=p5-critter-state-g2-wanderers] P5
    follow-up — the FIRST G2 critter-state unit from the census
    (docs/P5-ZONE-GATES §6.2/G2, D176): Wanderers (.NME section
    2, critter state 1 — 24 of the 26 refusing missions host it, the
@@ -42,6 +25,28 @@ renumbered queue keeps every open item claimable by number).
    census_matches_pinned_table green after the deliberate re-pin; the
    full bedlam-game suite green; fmt + clippy; gates-validator 22/22;
    MANIFEST clean before AND after; Nudge-Worker trailer.
+2. [READY] [id=ci-cross-os-repair] [gate=ci-cross-os-repair] infra
+   follow-up (queued by the D178 zone-A evidence run): the CI matrix —
+   the designed cross-OS enforcement channel for criterion 5
+   (docs/P5-ZONE-GATES §7 table row 5) — is RED repo-wide for
+   ENVIRONMENT reasons, >=100 consecutive failing runs, every failure
+   BEFORE any test executes (verified via gh on 2026-08-27): (a) the
+   ubuntu build job dies at `cargo clippy --workspace --all-targets`
+   on the alsa-sys v0.4.0 build script (cpal needs libasound2-dev +
+   pkg-config on the runner) — fix .github/workflows/ci.yml with an
+   apt install step (or make the alsa dependency optional for CI);
+   (b) the miri job dies on `mission_corpus_gate` file-isolation (a
+   corpus-gated suite that must skip cleanly without game-data — find
+   the unconditional open/stat on the skip path or set the isolation
+   error policy) — the job's charter is bedlam-core+bedlam-audio UB
+   detection, keep it that scope; (c) windows-latest only ever
+   fail-fast-cancels behind ubuntu — verify it goes green once (a)
+   lands. Evidence: a pushed commit whose ci run is green on BOTH
+   matrix legs (gh run view), restoring the ubuntu+windows enforcement
+   of hash_fixture + the determinism suites. Bounds: workflow/test-
+   skip changes only, no engine behavior change, no game-data touch,
+   MANIFEST clean, gates-validator 22/22 stays green, Nudge-Worker
+   trailer.
 3. [READY] [id=p5-select-shell-g1] [gate=p5-select-shell-g1] P5
    follow-up — the G1 SELECT mission-choice shell from the census
    (docs/P5-ZONE-GATES §6.2/G1, D176): make missions 6-7 of a
@@ -59,6 +64,10 @@ renumbered queue keeps every open item claimable by number).
    row (then documented + deliberate). Bounds: census green after the
    re-pin; bedlam-game suite green; fmt + clippy; gates-validator
    22/22; MANIFEST clean; no Ghidra run; Nudge-Worker trailer.
+   NOTE (D178): the original-save import seam (bedlam-game save.rs,
+   §7j.70) deliberately REJECTS SELECT-shaped masks (mask bits past
+   FULL_MASK) loud until this unit lands — widening that domain is
+   part of this seam's acceptance.
 4. [READY] [id=p5-zone-bin-variant-g3] [gate=p5-zone-bin-variant-g3] P5
    follow-up — the G3 zone-BIN variant RE unit from the census
    (docs/P5-ZONE-GATES §6.2/G3, D176): decide EXW-anchored whether
@@ -76,6 +85,43 @@ renumbered queue keeps every open item claimable by number).
    Bounds: census green (re-pinned only if the swap lands); MANIFEST
    clean; no Ghidra run; Nudge-Worker trailer.
 ## Done
+1. DONE (2026-08-27, worker 42041a21 claim 1, commits 94d2c8b + 70897c5,
+   both PUSHED): P5 `p5-zonea-mission1-parity` — ZONEA-MISSION1 flipped
+   GREEN (the FIRST zone-parity disposition, D178) with its executable
+   evidence + the p5-zone-a completion gate wired. (a) RE FIRST
+   (94d2c8b): RE-EXW-SIM §7j.70 pins the SAVED.BDL restore header walk
+   EXW-side (slot stride 0xB4=180, name@+0, mask dword@+8, zone SIGNED
+   word@+0xC -> 0x4edd8c @0x43c2b8, score@+0xE, money@+0x12,
+   difficulty@+0x16; empty predicate = zero dword@+0x0C; the mask
+   replay) — the 8street layout now EXW-anchored. (b) EVIDENCE +
+   FLIP + GATE (70897c5, same commit per the queue contract):
+   tests/zonea_mission1_parity.rs (the §1 criterion table executable:
+   the 8 ZONEA S-scenarios S0-S4/S6-S8 run full declared budgets
+   crash-free + two-run byte identity; T1 spot table; anchor TS
+   statics independently re-derived from the TOT header + the
+   §7j.64/D154 fresh scalars; the REAL SAVED/OPTIONS.BDL import —
+   slot 0 PLAYER/zone 2/mask 0/money 580/difficulty 1 -> stages
+   ZONEB-MISSION1, four EMPTY slots rejected — + bounded deterministic
+   fuzz; DM carve-out noted); bedlam-game save.rs = the read-only
+   bounds-checked original-save import seam (5 lib units) +
+   GameHost::import_saved_slot staging via the D51 seam; ledger
+   ZONEA-MISSION1 -> green (catalog_refs empty, legitimate); p5-zone-a
+   wired into P5 required_gates (2 offline evidence commands); checker
+   suite pin re-baselined 0/37 -> 1/37 deliberately; P5-ZONE-GATES §7
+   = the closure table; DECISIONS D178. Cross-OS honestly recorded:
+   hash_fixture + determinism verified on TWO toolchains (stable +
+   nightly, identical pins); the ubuntu+windows CI channel RED
+   repo-wide for ENVIRONMENT reasons (alsa-sys; miri isolation; >=100
+   runs, all pre-test) — repair QUEUED as item 2 (ci-cross-os-repair),
+   not a determinism finding. Verified: bedlam-game release 245/0
+   (234 + 11 new); checker OK + suite 18/18; gates-validator 22/22;
+   the bound P5 phase validation status=passed at 70897c5 under real
+   bwrap containment (both P5 gates, all 4 commands rc=0, plan_complete
+   correctly false); fmt + clippy -D warnings clean on the touched
+   crate; MANIFEST clean before AND after every corpus run; no Ghidra
+   run; no canonical-chain movement (canonical_dump_gate pins
+   re-asserted unchanged). Queued: items 1-4 above (the census G2/G1/G3
+   units unchanged + the new CI repair).
 1. DONE (2026-08-27, worker 7e59f4d7 claim 1, commit 4803d58,
    PUSHED): P5 `p5-mission-load-census` — the all-37-mission
    READ-ONLY load census through our engine loaders, sizing the zone
@@ -100,7 +146,7 @@ renumbered queue keeps every open item claimable by number).
    = B2 @0x81d9a — staged direct, load+run clean; fix = the SELECT
    shell, queued item 3), G2 critter states (26 missions refuse
    Shooters/Wanderers/Chasers/BallisticState6/CloseCombat/Personnel;
-   ZONEA-M1 + the ten 16-B empty-NME missions pass; queued item 2 =
+   ZONEA-M1 + the ten 16-B empty-NME missions pass; queued item 1 =
    Wanderers first), G3 zone-BIN variant (ZONEB-M6/ZONED-M5/ZONEE-M6
    ship mission-number .BIN banks; override rule unresolved vs EXW,
    RESEARCH-8STREET §3 — queued item 4). (c) NO loader change landed

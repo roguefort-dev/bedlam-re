@@ -1,5 +1,33 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-27 `p5-zonea-mission1-parity` COMPLETE (worker 42041a21
+    claim 1, commits 94d2c8b + 70897c5, both PUSHED): ZONEA-MISSION1
+    flipped GREEN — the FIRST zone-parity disposition (D178); zone A
+    derives 1/1 and the `p5-zone-a` completion gate is wired into P5's
+    required_gates (2 offline evidence commands; the §4 rule-5
+    cross-artifact check green). RE FIRST: RE-EXW-SIM §7j.70 pins the
+    SAVED.BDL restore header walk EXW-side (stride 0xB4=180; name@+0,
+    mask dword@+8, zone SIGNED word@+0xC, score@+0xE, money@+0x12,
+    difficulty@+0x16; empty predicate zero-dword@+0x0C; mask replay) —
+    the 8street layout re-anchored. ENGINE: bedlam-game save.rs = the
+    read-only bounds-checked original-save import seam + GameHost::
+    import_saved_slot (stages via the D51 seam; money/score/
+    difficulty returned, nothing written). EVIDENCE: tests/
+    zonea_mission1_parity.rs — the §1 criterion table executable (8
+    ZONEA S-scenarios full-budget crash-free + two-run byte identity;
+    T1 spot table; anchor TS statics independently re-derived from the
+    TOT header; the REAL SAVED/OPTIONS.BDL import + bounded fuzz; DM
+    carve-out noted). Cross-OS honestly recorded: fixtures verified on
+    stable + nightly; the ubuntu+windows CI channel RED repo-wide for
+    ENVIRONMENT reasons (alsa-sys; miri isolation; >=100 pre-test
+    failures) — ci-cross-os-repair QUEUED (queue item 2). VERIFIED:
+    bedlam-game release 245/0; checker OK + 18/18; gates-validator
+    22/22; the bound P5 phase validation status=passed at 70897c5
+    under bwrap (both P5 gates, all commands rc=0); fmt + clippy -D
+    warnings clean on the touched crate; MANIFEST clean before AND
+    after; no Ghidra run; no canonical-chain movement. P5: 1/37
+    missions green; B-G open behind the census G1/G2/G3 classes.
+
   - 2026-08-27 `p4-phase-status-green` COMPLETE (worker eeba31cf
     claim 1, commit 972748d, PUSHED): P4 CLOSED IN THE MANIFEST —
     docs/required-gates.toml P4 status pending->green (P0-P4 green,
