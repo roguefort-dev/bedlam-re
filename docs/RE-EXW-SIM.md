@@ -10673,3 +10673,136 @@ existing stage_episode_slot seam (the 0x43c2b8 zone-cell write + the
 mask replay are precisely what that seam models, D51). No writer
 exists and none is owed for parity (new saves use the new versioned
 format per PLAN §6 P5).
+
+## 7j.71. THE KIND-1 WANDERER — the .NME S2 loader walk + the k1
+controller body (0x414c96..0x415216) + its helper family decoded
+whole (2026-08-27, worker 58b640c3 claim 1, item
+p5-critter-state-g2-wanderers; objdump-only from the committed
+ghidra-project/exw-text-objdump.txt + objdump -s table reads of
+BEDLAM.EXW + the §7j.18 loader decompile
+ghidra-project/exw-critterpoi-loader.txt — no Ghidra run; read-only
+corpus byte access with MANIFEST.sha256 clean before and after)
+[verified]
+
+Method: the k1 body + FUN_00417af2/FUN_004186fc/FUN_00418250/
+FUN_0041f8f9/FUN_0041e231/FUN_00417e2f walked instruction-by-
+instruction from the committed objdump; the DIR jump table 0x412f08
+and the 8-sample offset tables 0x4543e4/0x454404 read as raw bytes
+(objdump -s). All facts [verified] against those artifacts unless
+tagged.
+
+1. **THE S2 LOADER WALK (the §7j.18 S2 gloss made exact).** The
+   decompile's second section (10-B recs; w0 marker, w1 unused,
+   w2 unused, w3 = x tile, w4 = y tile): per record spawns
+   `[0x46cbf8]+3` (difficulty+3) each; x = w3·0x20+0x10,
+   y = w4·0x20+0x10 (RAW px — NOT Q13; the k1 steppers ±6 and the
+   bounds `width·0x20` confirm the scale); the z SEARCH walks the
+   DAT volume DOWN from level 6 at tile (w3,w4): continue while
+   tile==0, on the first non-air tile level L accept iff tile(L)
+   ∈ 1..3 (a >3 tile is remembered in iVar4 but the spawn gate
+   re-reads tile(L) and rejects it), then the STAND gate requires
+   tile(L+1)==0 (air above); z = z-restore d@+0x4E = L·0x20+0x1F.
+   NEW PINS (absent from §7j.18): **DIR w@+0x58 := 0xFFFF at
+   spawn** (a fresh wanderer is idle), anim/frame w@+0x5A := 0,
+   species w@+0x02 := 1, state w@+0x00 := 1, presence w@+0x24 := 1,
+   countdown w@+0x56 := FUN_0041ec1c(10)+10 (one bounded-pick draw
+   per spawned critter — the section's only stream draw; "scatter"
+   = FUN_0041ec1c, NOT RandA&n). **hp w@+0x06 :=
+   200 + (200·[0x46ae8c])/27 — the scalar is the LINEAR MISSION m
+   (§7j.64/D153), NOT difficulty: CORRECTS the §7j.18 gloss
+   "hp = base+(base·difficulty)/27"** (the imul census: S1 0xAF
+   @0x4165db, S2 0xC8 @0x416793, S4 0xC8 @0x416a65, S5 0x5DC
+   @0x416b7c, all ×[0x46ae8c] — the S3/S6 0x96 sites use the same
+   cell via ecx/ebp loads).
+2. **THE k1 CONTROLLER BODY** (kind table 0x412f18 case 1). Entry
+   sequence: (a) FUN_004186fc(idx) — the DOOR-TILE GATE: linear
+   index = (y>>5)·W+(x>>5) (the presence-mark geometry); index out
+   of [0, W·H) → clean; else byte[0x4796d5 + 30·index] ≠ 0 (the
+   per-tile variant/door flag, 30-B type-DB rows, §7j.12) →
+   FUN_00418250(idx) death; (b) FUN_00417e2f(idx) — the
+   SUICIDE-BOMB trigger; **return convention is EXPLICIT
+   (CORRECTS §7j.17/2's "EAX-leak" hypothesis): the far path
+   `xor eax,eax` @0x417f25 → 0 = continue wandering; the explode
+   path `mov eax,1` @0x417f1b → 1 = skip the body this frame**;
+   explode (nearest-robot octile < 0x30 px, FUN_00417c00):
+   presence := 0 + 8 iterations of {3 jitter draws
+   (z+(RandA&0xF), y+(RandA&0x3F)−0x1F, x+(RandA&0x3F)−0x1F) +
+   1× debris KIND 1 FUN_00420608 + FUN_0041ec1c(3) draw +
+   FUN_00424355 ring} = 32 draws; (c) the substep loop.
+3. **THE WANDER STATE MACHINE (species substeps per frame; species
+   ≡ 1 for S2 spawn and nothing re-stamps it).** State = the
+   (countdown w@+0x56, DIR w@+0x58) pair; DIR ∈ {0,1,2,3} = walk
+   direction, −1 = idle. Per substep, HEAD FIRST: countdown−−, then
+   - countdown > 0 ∧ DIR == −1 → the IDLE SQUASH @0x4151a5:
+     {DIR := −1, countdown := 1, z := z-restore} — the idle pause
+     lasts exactly ONE substep after the dec, so the 8..15/12..27
+     pause words below NEVER take effect as written (they are
+     squashed to 1 on their next substep) — the RUNTIME pause
+     between walks is 2 substeps total [verified asm; the
+     §7j.17 "pause 8..27" gloss describes the squashed constants];
+   - countdown > 0 ∧ DIR ∈ 0..3 → WALK: `jmp [0x412f08 + DIR·4]`
+     — the DIR table (bytes @0x412f08): **{0 → 0x414fb9 y−6,
+     1 → 0x414d56 x+6, 2 → 0x414e40 y+6, 3 → 0x4150af x−6}** —
+     the SAME 4-way convention as the mode-9 steppers/§7j.29
+     acquisition; the step attempt (one per substep):
+     z-band gate (z < 0 ∨ z ≥ 0x100 → FUN_00418250 death, and the
+     case CONTINUES — the substep loop does not re-check
+     presence); map-bounds gate on the STEPPED coordinate vs
+     [0x4eddec]·0x20 (x) / [0x4eddf0]·0x20 (y) → out: {DIR := −1,
+     countdown := (RandA&0xF)+0xC, z := z-restore} (one draw);
+     else the wall probe FUN_0041f8f9(stepped, other, z-restore)
+     — pass: COMMIT the stepped coordinate (z unchanged); fail:
+     {DIR := −1, countdown := (RandA&0xF)+0xC} (one draw, NO
+     z-restore);
+   - countdown ≤ 0 ∧ DIR ≠ −1 → WALK-END @0x414d30: {DIR := −1,
+     countdown := (RandA&7)+8} (one draw);
+   - countdown ≤ 0 ∧ DIR == −1 → the PICK @0x414f89:
+     countdown := (RandA&0xF)+0xA (draw 1); (RandA&3)==0 (draw 2)
+     → DIR := RandA()&3 (draw 3) else DIR := FUN_00417af2(idx);
+     then anim/frame w@+0x5A := DIR (both paths, @0x414d24).
+   DRAW BUDGET per substep: walk-step 0; idle-squash 0; walk-end 1;
+   pick 2 (+1 on the 25% branch).
+4. **FUN_00417af2(idx) — the toward-robot 4-way picker** (no draws,
+   no difficulty): nearest ALIVE robot (FUN_00417ba1, sentinel
+   10_000_000, robot bank +0x7C alive word); cy/ry on robot +4,
+   cx/rx on robot +0 (both >>8); **y-axis wins ties** (DX ≤ DY →
+   y): cy ≥ ry → 0 else 2; the x branch (DX > DY): cx > rx → 1
+   else 3; the cy==ry ∧ DX==0 degenerate lands on 0 (block-1 edge).
+5. **FUN_0041f8f9(x, y, z) — the WANDER WALL PROBE (8 samples,
+   returns 1 pass / 0 fail)**: sample offsets from the dword tables
+   0x4543e4 (x) / 0x454404 (y) = **(−11,−11), (−11,+12), (+12,−11),
+   (+12,+12), (0,−11), (0,+12), (−11,0), (+12,0)** (the 3×3
+   footprint minus the center); per sample: bounds (sx/sy in [0,
+   W/H·0x20)); FUN_0041e231(sx, sy, min(z,0xFF)) must return EXACTLY
+   the passed z (the floor/surface probe = the engine floor_z
+   model, FUN_0041e231 = "get_z_pos"); the DAT volume tile at
+   (sx>>5, sy>>5, z>>5) via FUN_0041eb4c must be ≤ 3 (air or
+   standable); any failure → 0.
+6. **FUN_00418250(idx) — the wanderer DEATH path** (the z-band and
+   door-tile exits): MODE w@+0x0C := 7, presence w@+0x24 := 0; iff
+   x/y/z all in bounds (x < W, y < H, z < 8 — TILE units) spawn 1×
+   debris KIND 1 at (x<<8, y<<8, z<<8) via FUN_00420608 (px→Q13);
+   the k1 body IGNORES mode entirely — the observable is
+   presence := 0 (skip next frame) + the debris row.
+7. **DIFFICULTY SCALING — there is NONE in the k1 body** (zero
+   [0x46cbf8] sites in 0x414c96..0x415216); the wanderer's
+   difficulty coupling is loader-side only (spawn count d+3) plus
+   the hp scalar above (linear mission m). The §7j.15 "12 sites in
+   0x412f34..0x41547E" census stands (they live in the k4/k56/k7
+   bodies).
+8. EPILOGUE: the k1 tail 0x4151f0 computes the presence-mark cell
+   (y>>5 row ptr + x>>5 — RAW-px scale like kind 4) and jumps the
+   shared common tail 0x413fa7 (presence-mark byte + z-settle +
+   trap re-probe — the documented no-draw E-gaps, module doc of
+   bedlam-core::critter).
+ENGINE CONSEQUENCE (landed this unit): S2 accepted by
+stage_critters (kind 1, RAW-px coords, DIR −1 spawn seed, hp =
+200+(200·m)/27 via MissionSim::linear — the S3/S4 hp scalars
+aligned to the same [0x46ae8c] pin in the same seam), the k1
+controller body + the door gate (skipped E-gap — no door-bank
+mirror engine-side; documented) + the suicide trigger + the squash
+semantics land in bedlam-core::critter; the 8-sample probe is
+modeled as floor_z(sample)==z ∧ dat_type ≤ 3 with the offset
+footprint exact. The canonical critter-bank blob is UNTOUCHED (new
+record fields dir/frame/z_restore are not serialized; no chain
+movement).
