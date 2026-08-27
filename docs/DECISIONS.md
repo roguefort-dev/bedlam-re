@@ -5993,3 +5993,47 @@ checker's cross-artifact rule stays green.
 
 ## D179 — 2026-08-27: P5 `p5-critter-state-g2-wanderers` — the FIRST G2 critter-state unit: the kind-1 Wanderer (.NME section 2) landed engine-side whole (loader walk + controller), the census re-pinned deliberately (the WanderersxNN refusal component dropped from every row, no row flipped clean), and the §7j.18 hp-scalar gloss CORRECTED to the linear mission m
 THREE decisions recorded. (1) **THE RE (§7j.71, committed BEFORE the impl per the stream-survival rule — commits 2195999 + 49aeeeb)**: the k1 controller body 0x414c96..0x415216 decoded whole from the committed objdump: the door-tile entry gate (FUN_004186fc reads the §7j.12 30-B type-DB variant byte at the presence-mark linear index — an E-gap, no engine mirror), the suicide-bomb trigger (FUN_00417e2f: nearest robot < 0x30 px → presence 0 + 8 debris/splash pairs, 5 draws each = 40; the return convention is EXPLICIT mov eax,1/xor eax,eax — CORRECTING §7j.17/2's EAX-leak hypothesis), the (countdown, DIR) substep machine with the IDLE SQUASH semantics (0x4151a5 resets the pause to 1, so the 8..15/12..27 re-pick constants never take effect — the runtime inter-walk pause is 2 substeps), the DIR jump table {0→y−6, 1→x+6, 2→y+6, 3→x−6} @0x412f08, the ±6 RAW-px steppers (kind 1 is px-scale like kind 4, NOT Q13 — the §7j.17 "±6 Q13" gloss corrected), the 8-sample wall probe FUN_0041f8f9 (footprint (−11,−11)/(−11,+12)/(+12,−11)/(+12,+12)/(0,−11)/(0,+12)/(−11,0)/(+12,0) from the 0x4543e4/0x454404 tables; floor_z==z exactly ∧ RAW DAT tile ≤ 3), the toward-robot picker FUN_00417af2 (y-axis wins ties; cx>rx→3 else 1), the death path FUN_00418250 (mode 7 + presence 0 always; the debris quirk compares px vs tile-width so it near-never fires), and the S2 loader walk made exact (DIR seed −1 at spawn — a NEW pin; one FUN_0041ec1c(10)+10 draw per spawned critter — the section's only draw; the z search = first RAW tile ∈ 1..3 scanning down from level 6 with air above). **The hp scalar for EVERY .NME section is 200-style base + base·[0x46ae8c]/27 with [0x46ae8c] = the LINEAR MISSION m (§7j.64/D153), NOT difficulty — §7j.18's "difficulty" gloss is corrected** (imul census: 0xAF/0xC8/0xC8/0x5DC all ×0x46ae8c). (2) **THE LANDING (bounded)**: stage_critters accepts S2 (kind 1, RAW-px, DIR −1, hp = 200+(200·m)/27 via MissionSim::linear — the destroy staging sets it first in the canonical order); the k1 controller lands in bedlam-core::critter (11 new unit tests: staging seeds + draw budget, z-search gates, squash/pick/walk cycle, walk-end, blocked probe, toward-robot axes, suicide 40-draw budget); three new CritterRecord fields (dir w@+0x58, frame w@+0x5A, z_restore d@+0x4E) NOT serialized in the canonical critter-bank blob → no chain movement. **The S3/S4 hp scalars HOLD the §7j.18 difficulty form deliberately**: the S8 canonical chain stages ZONEA S3+S4 and the m-swap would move its pinned T2 bytes — no scenario exercises S2, so per the queue contract NO canonical chain is touched (canonical_dump_gate 13/13 green unchanged); the S3/S4 alignment rides the next G2 unit where a scenario justifies the re-pin. (3) **THE CENSUS RE-PIN (deliberate, D28 discipline)**: `unmodeled_nme_sections` mirrors the engine acceptance set (Wanderers added); every G2 refusal row drops its WanderersxNN component; NO row flips to clean (every Wanderers-hosting mission — 24 of the 26 refusers — also hosts Chasers/BallisticState6/Personnel/etc.); the census_print_table output committed as the provenance (docs/evidence/p5-g2-wanderers-census-table.txt, all 37 rows) + P5-ZONE-GATES §6.2/G2 + §6.3 updated together. Verified: bedlam-core 88/88 (77+11 new); bedlam-game release 245/0 (census 1/1 re-pinned; canonical_dump_gate 13/13 — chains untouched; zonea_mission1_parity 6/6; determinism + differ_gate green); fmt + clippy -D warnings clean on the touched lib (the two remaining all-targets warnings pre-exist in destroy.rs/test targets); gates-validator 22/22; inspect baseline ok; MANIFEST clean before AND after every corpus run; no Ghidra run (objdump + the committed dumps only); staged paths explicit (worker 58b640c3 claim 1).
+
+## D180 — 2026-08-27: queue grammar restored a second time after the D179 completion rewrite (watchdog repair 30933) — the wrapped-gate and prose-bracket breaches; the whole-tag authoring rule now lives in AGENTS.md + the NEXT.md header every rewrite copies
+The `p5-critter-state-g2-wanderers` worker (58b640c3) finished green
+(2195999 + 49aeeeb + c60c0ba, all PUSHED) and wrote its end-of-run
+`.state/NEXT.md` rewrite — but the rewrite carried TWO grammar breaches
+in new item 2 (ballistic6), so `boundary_completion_rewrite` correctly
+refused to sanction it (nudge-agent.sh: the completion-window check
+re-parses the queue), the model died at its own finish line as a
+`preflight-mismatch`/`launch-boundary` failure, and the invalid queue
+stranded the controller (INVALID-DEADLOCKED rc=2, refusing idle/spawn)
+until this watchdog repair.
+1. THE TWO BREACHES (both in the hand-written item 2 opening/prose):
+   (a) the `[gate=p5-critter-state-g2-ballistic6]` tag hard-wrapped
+   across lines — the SAME shape as D177's incident, second recurrence;
+   (b) a prose address bracket `[0x46ae8c]` in the RIDER sentence — the
+   parser reads EVERY bracket segment in an active item as a tag
+   (TAG_RE), and a no-`=` segment fails as "unknown status/tag". The
+   parser surfaces one fail() at a time, so (b) hid behind (a).
+2. THE REPAIR (WIP adopted, not redone — the D177 precedent): only the
+   item-2 opening was rewrapped into the canonical same-line shape
+   (`[READY] [id=…] [gate=…] P5` + prose continuation, exactly the
+   previous wanderers item's shape) and the prose bracket dropped
+   (bare `0x46ae8c`, the house style of items 1/3/4). Everything else
+   in the worker's rewrite is preserved verbatim: its Done entry
+   (commits re-verified PUSHED), the renumbered queue, the new
+   ballistic6 item with the S3/S4 hp rider, and the untouched
+   Done-log bracket mentions (the Done section is never parsed).
+3. THE PREVENTION SEAM (why this recurs): D177 pinned the parser's
+   rejection (test-nudge-queue.sh) but told no AUTHOR. The rule now
+   lives where every worker reads it first: AGENTS.md workflow step 7
+   (tags stay WHOLE on the item's first numbered line, prose starts
+   same-line, brackets are never prose) + an AUTHORING RULE line in the
+   NEXT.md QUEUE CONVENTION header that each rewrite copies forward.
+4. THE FAILURE ACK: the 58b640c3 preflight-mismatch is resolved as
+   replaced-task — the failure's identity (p5-critter-state-g2-
+   wanderers) is in the Done log, absent from the active queue, and
+   its substantive work is landed+pushed; remediation = the commit
+   carrying this entry (it changes .state/NEXT.md, the postcondition
+   archive-failures requires).
+5. VERIFIED THIS RUN: nudge-free-items.py --state-v1 → RUNNABLE 1 2 3 4
+   (rc=0, all items READY id==gate); tools/test-nudge-queue.sh PASS
+   including the D177 wrapped-metadata rejection; MANIFEST clean before
+   AND after; no corpus read beyond the manifest check; no engine
+   change. (watchdog repair token llm-watchdog 30933 1787866581)

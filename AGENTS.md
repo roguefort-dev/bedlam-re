@@ -63,6 +63,11 @@ runs. Read it fully before doing anything.
 5. Update docs as you go (provenance + confidence tags for RE claims; DECISIONS.md for choices).
 6. git add (never game-data/derived), commit with a clear message, git push.
 7. Rewrite .state/NEXT.md: mark the task done (with commit hash), queue the next tasks.
+   Queue grammar (strict parser, D177/D180): every [status]/[id]/[gate]/
+   [probe]/[retry] tag stays WHOLE on the item's first numbered line,
+   prose starting same-line after the tags — never wrap inside a tag and
+   never use [...] for anything else in an active item (the parser reads
+   every bracket as a tag; a wrapped or prose bracket = INVALID-DEADLOCKED).
 8. Update .state/STATE.md if the phase/status changed.
 9. touch .state/heartbeat
 10. Stop. The nudge system will spawn the next unit.

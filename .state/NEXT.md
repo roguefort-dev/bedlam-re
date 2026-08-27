@@ -4,28 +4,13 @@ QUEUE CONVENTION (2026-08-22, D106): a completed unit's entry MOVES to
 the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
+AUTHORING RULE (D180, second recurrence after D177): every
+[status]/[id]/[gate]/[probe]/[retry] metadata tag stays WHOLE on the
+item's first numbered line, prose starting same-line after the tags —
+never wrap INSIDE a tag; the strict parser rejects it (rc=2,
+INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-critter-state-g2-wanderers] [gate=p5-critter-state-g2-wanderers] P5
-   follow-up — the FIRST G2 critter-state unit from the census
-   (docs/P5-ZONE-GATES §6.2/G2, D176): Wanderers (.NME section
-   2, critter state 1 — 24 of the 26 refusing missions host it, the
-   most common state; grammar head = bedlam-assets misc.rs
-   NmeSectionKind::Wanderers). (a) RE FIRST (objdump-only, no Ghidra
-   run): decode the EXW wander-AI family (the FUN_00416458 loader
-   walk is already anchored §7j.18; the state-1 controller + its
-   wander/sine semantics + difficulty scaling), write the RE notes as
-   a committed docs/RE-EXW-SIM §7j addendum BEFORE any engine change.
-   (b) Land the controller bounded in bedlam-core critter.rs +
-   extend stage_critters to accept the section; RE-BASELINE the
-   census pins deliberately (mission_load_census rows whose refusals
-   drop) in the same commit with the census_print_table output as the
-   provenance. (c) Do NOT touch canonical chains unless a scenario
-   exercises the section (none does today — the critters key stages
-   ZONEA-shaped content only); document any chain decision. Bounds:
-   census_matches_pinned_table green after the deliberate re-pin; the
-   full bedlam-game suite green; fmt + clippy; gates-validator 22/22;
-   MANIFEST clean before AND after; Nudge-Worker trailer.
-2. [READY] [id=ci-cross-os-repair] [gate=ci-cross-os-repair] infra
+1. [READY] [id=ci-cross-os-repair] [gate=ci-cross-os-repair] infra
    follow-up (queued by the D178 zone-A evidence run): the CI matrix —
    the designed cross-OS enforcement channel for criterion 5
    (docs/P5-ZONE-GATES §7 table row 5) — is RED repo-wide for
@@ -47,6 +32,27 @@ renumbered queue keeps every open item claimable by number).
    skip changes only, no engine behavior change, no game-data touch,
    MANIFEST clean, gates-validator 22/22 stays green, Nudge-Worker
    trailer.
+2. [READY] [id=p5-critter-state-g2-ballistic6] [gate=p5-critter-state-g2-ballistic6] P5
+   follow-up — the SECOND G2 critter-state unit:
+   BallisticState6 (.NME section 6, critter state 6 — now the most
+   common unmodeled state at 26/26 refusing missions after the
+   Wanderers landing D179). CHEAP HOP: the k5/6 shared body is
+   ALREADY LANDED engine-side (0x41367c, §7j.42/3) — the unit is the
+   S6 staging block (§7j.18: 8-B recs, ONE each, x = w2·0x2000+0xF00,
+   y = w3·0x2000+0xF00, z = probe(w1<<5), mode 8, heading 0x72,
+   species 3, anim 5, hp base 0x96 — the S3 stamps verbatim) + the
+   census re-pin (the BallisticState6xNN component drops; verify no
+   row flips clean — every host also carries Shooters/Chasers/
+   Personnel). RIDER (D179): align the S3/S4 hp scalars to the
+   0x46ae8c linear-mission m pin (§7j.71/1) IN THIS UNIT — it
+   moves the S8 canonical chain (stages ZONEA S3+S4), so RE-BASELINE
+   the S8 pinned T2 critter-bank bytes deliberately + document the
+   chain decision (this is the scenario that justifies the re-pin).
+   RE first if any S6 loader detail needs anchoring (objdump-only).
+   Bounds: census green after the re-pin; bedlam-game suite green
+   (canonical_dump_gate re-baselined deliberately); fmt + clippy;
+   gates-validator 22/22; MANIFEST clean before AND after;
+   Nudge-Worker trailer.
 3. [READY] [id=p5-select-shell-g1] [gate=p5-select-shell-g1] P5
    follow-up — the G1 SELECT mission-choice shell from the census
    (docs/P5-ZONE-GATES §6.2/G1, D176): make missions 6-7 of a
@@ -85,6 +91,47 @@ renumbered queue keeps every open item claimable by number).
    Bounds: census green (re-pinned only if the swap lands); MANIFEST
    clean; no Ghidra run; Nudge-Worker trailer.
 ## Done
+1. DONE (2026-08-27, worker 58b640c3 claim 1, commits 2195999 +
+   49aeeeb + c60c0ba, all PUSHED): P5 `p5-critter-state-g2-wanderers`
+   — the FIRST G2 critter-state unit: the kind-1 Wanderer landed
+   engine-side whole + the census re-pinned deliberately (D179,
+   §7j.71). (a) RE FIRST (2195999 + 49aeeeb, objdump-only from the
+   committed exw-text-objdump.txt + the §7j.18 loader decompile, no
+   Ghidra run): §7j.71 pins the k1 body 0x414c96..0x415216 whole —
+   the door-tile gate (FUN_004186fc, the §7j.12 type-DB variant byte
+   — documented E-gap), the suicide trigger FUN_00417e2f (nearest
+   robot < 0x30 px → presence 0 + 8 debris/splash pairs = 5 draws × 8
+   = 40; the EXPLICIT return convention correcting §7j.17/2's
+   EAX-leak hypothesis), the (countdown, DIR) substep machine with
+   the IDLE SQUASH semantics (the 8..15/12..27 re-pick constants
+   never take effect — the runtime pause is 2 substeps), the DIR
+   table @0x412f08 {0→y−6, 1→x+6, 2→y+6, 3→x−6}, the ±6 RAW-px
+   steppers (kind 1 is px-scale — the §7j.17 Q13 gloss corrected),
+   the 8-sample wall probe (footprint from 0x4543e4/0x454404;
+   floor_z==z ∧ RAW tile ≤ 3), the toward-robot picker
+   (y-axis ties), the FUN_00418250 death quirk, and the S2 loader
+   walk (DIR seed −1 — new pin; one draw per spawned critter; the
+   level-6-down z search). **The .NME hp scalar = base+base·
+   [0x46ae8c]/27 = the LINEAR MISSION m for EVERY section — §7j.18's
+   difficulty gloss corrected.** (b) THE LANDING (c60c0ba):
+   stage_critters accepts S2 (hp via MissionSim::linear); the k1
+   controller in bedlam-core::critter + 11 new unit tests; new
+   record fields dir/frame/z_restore NOT in the canonical blob. The
+   S3/S4 hp scalars HOLD difficulty deliberately (the S8 chain stages
+   ZONEA S3+S4; no scenario exercises S2 → NO canonical chain
+   movement; the alignment queued as the item-2 rider). (c) THE
+   CENSUS RE-PIN: WanderersxNN dropped from every G2 refusal row (no
+   row flipped clean — every host carries another state); the
+   census_print_table output committed as provenance
+   (docs/evidence/p5-g2-wanderers-census-table.txt) + P5-ZONE-GATES
+   §6.2/G2 + §6.3 updated. Verified: bedlam-core 88/88 (77+11);
+   bedlam-game release 245/0 (census 1/1 re-pinned,
+   canonical_dump_gate 13/13 unchanged, zonea_mission1_parity 6/6,
+   determinism + differ green); fmt + clippy -D warnings clean on
+   the touched lib; gates-validator 22/22; inspect baseline ok;
+   MANIFEST clean before AND after; Nudge-Worker trailer. Queued:
+   items 1-4 above (ci-cross-os-repair stays the head; the new
+   ballistic6 G2 hop second with the S3/S4 hp rider).
 1. DONE (2026-08-27, worker 42041a21 claim 1, commits 94d2c8b + 70897c5,
    both PUSHED): P5 `p5-zonea-mission1-parity` — ZONEA-MISSION1 flipped
    GREEN (the FIRST zone-parity disposition, D178) with its executable
