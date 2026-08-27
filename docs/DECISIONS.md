@@ -6154,3 +6154,64 @@ until this watchdog repair.
    clippy clean on the touched files (the 5 remaining workspace
    warnings pre-exist at HEAD), gates-validator 22/22 at the final
    commit, MANIFEST clean before AND after every corpus run.
+
+## D183 — 2026-08-28: P5 `p5-select-shell-g1` — the G1 SELECT mission-choice shell landed: the census G1 question answered (missions 6-7 are the MP-ONLY files — the SELECT MP write pair + the load-time +5), the sibling host seam `stage_select_mission` + the five-bit save/SELECT domain (`SELECT_FULL_MASK`) + the mission-derivation saturation landed, the census re-pinned (ten `select:clean` rows), NO canonical chain movement
+
+1. **THE RE (a5c3a71, §7j.73, objdump-only from the committed
+   exw-text-objdump.txt — no Ghidra run):** the runtime
+   mission-number source is the SELECT screen's write pair
+   {zone cell 0x4edd8c, mission cell 0x4edd88}, read from its
+   strategic-map PIXEL→ID grid. The SP arm (0x43ee48..0x43ee9d)
+   writes missions 1..5 per zone ONLY (26 hot spots = ZONEA{1} +
+   5×{B..F} = MAX_LINEAR; zone G has none — it is the
+   campaign-advance endgame); the MP arm (0x43edc2..0x43ee43)
+   writes BOTH cells from 10 list rows → {zone 2..6, mission
+   1..2}; and `build_mission_paths` @0x4467df ADDS 5 to the
+   mission cell in mode 2 — **so ZONE{B..F}/MISSION{6,7} are the
+   MP-only missions, and NO stage mask (the 4-bit B2 FULL_MASK or
+   the 5-bit EXW save shape) can ever express them: they are not
+   campaign sub-missions.** The save-restore replay tests FIVE
+   mask bits (0x43c2bf..0x43c36c, subs 1..5) — the EXW save
+   domain is `mask ⊆ 0b11111`; the 27-record completion bank
+   (0x4decae, 0x144/0xC) is the SELECT screen's own state
+   (FUN_004474ef/44751c). RE notes committed BEFORE the engine
+   change (the stream-survival rule).
+2. **THE SEAM (the landing commit):** a SIBLING of the D51
+   campaign seam, not an extension — `Episode::stage_slot`'s
+   ACCEPTED mask domain widens to `SELECT_FULL_MASK` [0,1,31×7]
+   (stage 1 keeps its single sub: ZONEA's one bank record), while
+   `Episode::complete` still walks FULL_MASK (the canonical S5
+   zone-staging semantics INTACT — verified: canonical_dump_gate
+   13/13 + differ_gate 4/4 + determinism green, NO chain moved).
+   New `SceneFsm::stage_select_mission(zone 2..=6, mission 1..=2)`
+   plants the MP write pair as staging-ONLY state (NOT in
+   scene_hash — the D31 movie pattern, pinned by test);
+   `GameHost::mission_slot()` applies the +5
+   (`SELECT_MP_FILE_OFFSET = 5`) so the pair names
+   ZONE{B..F}/MISSION{6,7} exactly as the original loads them;
+   campaign staging CLEARS the pair (the restore/advance shells
+   rewrite the cells). `mission_number_for_mask` now SATURATES at
+   5 — the SP SELECT domain — so the campaign path can never name
+   an MP file (the invariant is property-tested over the whole
+   five-bit domain).
+3. **THE D178 RIDER:** save.rs's import domain widened to
+   SELECT_FULL_MASK — a SELECT-shaped save (bit 4 = sub 5
+   complete, e.g. the full 0b11111 zone-complete mask) imports +
+   stages cleanly now; what stays rejected loud is anything past
+   bit 4 (no original writer can produce it — the bank has 27
+   records). The §7j.70 "missions-6/7 SELECT shape stays
+   rejected" note retired; the mask-0x10 rejection test became
+   the select_shape_imports acceptance + a 0x20 rejection.
+4. **THE CENSUS RE-PIN (deliberate, D28 fingerprint rule):** the
+   ten B-F missions-6/7 rows moved from the direct fallback to
+   the SELECT seam — all ten `select:clean` (empty .NME, full
+   budget, frames ok; the load column gains the `select` value).
+   The §6.1 headline gains the ten clean rows; §6.2/G1 marked
+   LANDED; §6.3/§6.4 re-baselined; the provenance artifact is
+   docs/evidence/p5-g1-select-census-table.txt.
+5. Verified: bedlam-game release 249/0 (+4 net new tests:
+   the fsm seam, the host seam + hash invariance, the save
+   SELECT-shape import; the census re-pin rides the existing
+   census_matches_pinned_table), fmt + clippy clean on the
+   touched files, MANIFEST clean before AND after every corpus
+   run, no Ghidra run.

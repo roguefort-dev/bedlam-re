@@ -22,8 +22,24 @@ pub const BOOT_TICKS: u16 = 12;
 
 /// Full-mask table verbatim from B2 @0x81d9a: completed-sub bits per
 /// stage slot. Slot 0 is empty (the boot quirk below), slot 1 has one
-/// mission, slots 2..=8 have four subs each (bits 0..=3).
+/// mission, slots 2..=8 have four subs each (bits 0..=3). This is the
+/// B2 stage-ADVANCE shape the canonical S5 campaign semantics walk
+/// (`Episode::complete` fills it to advance) — NOT the EXW save-mask
+/// domain (that is [`SELECT_FULL_MASK`], RE-EXW-SIM §7j.73: the EXW
+/// save/SELECT cadence is FIVE subs per zone = missions 1..5).
 pub const FULL_MASK: [u8; 9] = [0, 1, 15, 15, 15, 15, 15, 15, 15];
+
+/// The EXW save/SELECT sub-slot domain [RE-EXW-SIM §7j.73, verified]:
+/// the SAVED.BDL restore replays subs 1..5 per zone and tests the
+/// saved mask's bits 1/2/4/8/0x10 (0x43c2bf..0x43c36c) — five
+/// sub-slots (missions 1..5), the cadence the SELECT screen's SP arm
+/// writes. The B2 FULL_MASK above stays the stage-advance table; this
+/// is the wider ACCEPTED domain of a staged slot (a save whose player
+/// completed mission 5 of a zone carries bit 4 — the SELECT shape the
+/// import used to reject loud, D178). Bits past 0x10 are rejected:
+/// no original writer can produce them (the bank has 27 records =
+/// ZONEA{1} + 5x{B..F} + ZONEG{1}, §7j.73/5).
+pub const SELECT_FULL_MASK: [u8; 9] = [0, 1, 31, 31, 31, 31, 31, 31, 31];
 
 /// Linear mission counter ceiling: 27 linear missions 0..=26
 /// (census sec 7).
@@ -105,13 +121,16 @@ impl Episode {
     /// mission the next Mission entry stages. `linear` is left
     /// untouched (the staged fresh-slot contract; a played campaign
     /// carries its own counter — the recorded live-capture seam).
-    /// Returns false on an out-of-range stage or a mask that is not
-    /// a sub-mask of the stage's completion mask (never guess).
+    /// The accepted mask domain is the EXW save/SELECT shape
+    /// (`SELECT_FULL_MASK` — five sub bits, §7j.73; a save whose
+    /// player completed mission 5 of a zone carries bit 4). Returns
+    /// false on an out-of-range stage or a mask outside the domain
+    /// (never guess).
     pub fn stage_slot(&mut self, stage: u8, mask: u8) -> bool {
         if !(1..=MAX_STAGE).contains(&stage) {
             return false;
         }
-        let subs = FULL_MASK[stage as usize];
+        let subs = SELECT_FULL_MASK[stage as usize];
         if subs == 0 || mask & !subs != 0 {
             return false;
         }
@@ -146,6 +165,37 @@ impl Episode {
     }
 }
 
+/// The SELECT screen's mission-choice write pair — the RUNTIME
+/// mission-number source [RE-EXW-SIM §7j.73, verified]: the EXW
+/// SELECT screen (FUN_0043e7d4, EXD twin 0x50953) writes the cell
+/// pair {zone 0x4edd8c, mission 0x4edd88} directly from its
+/// strategic-map hot-spot grid. Modeled here in the MP arm's exact
+/// write shape — `{zone 2..=6, mission 1..=2}` (the 10 list rows,
+/// 0x43edc2..0x43ee43) — because the SP arm's domain (missions
+/// 1..5 per zone) is exactly what the campaign slot derives; the
+/// load-time +5 (`build_mission_paths` 0x4467df) turns the MP pair
+/// into the MISSION6/MISSION7 files. Not part of the hashed scene
+/// state: staging-only (the movie pattern — which bytes the next
+/// Mission entry loads, never a sim field).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectSlot {
+    zone: u8,
+    mission: u8,
+}
+
+impl SelectSlot {
+    /// The staged zone cell (1-based set: 2..=6 = ZONEB..=ZONEF).
+    pub fn zone(&self) -> u8 {
+        self.zone
+    }
+
+    /// The staged mission cell (1..=2 — the MP list-row value; the
+    /// +5 file offset is applied by the mission-slot derivation).
+    pub fn mission(&self) -> u8 {
+        self.mission
+    }
+}
+
 /// The scene state machine - the HASHED scene bucket (DESIGN-GAME sec 7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SceneFsm {
@@ -155,6 +205,14 @@ pub struct SceneFsm {
     /// Boot countdown, BOOT_TICKS at construction.
     boot_left: u16,
     episode: Episode,
+    /// The staged SELECT mission choice, if any (§7j.73): the
+    /// runtime {zone, mission} cell pair the SELECT screen writes —
+    /// an OVERRIDE of the campaign-derived mission slot, cleared by
+    /// campaign staging (the restore/advance shells rewrite the
+    /// cells). Staging-only state: deliberately NOT hashed (which
+    /// bytes the next Mission entry loads, never a sim field — the
+    /// D31 movie pattern).
+    select: Option<SelectSlot>,
     /// Set when a mission completion filled the stage mask; consumed by
     /// the Debrief -> Cutscene transition.
     zone_complete_pending: bool,
@@ -178,6 +236,7 @@ impl SceneFsm {
             scene_ticks: 0,
             boot_left: BOOT_TICKS,
             episode: Episode::boot(),
+            select: None,
             zone_complete_pending: false,
             prev_mouse: 0,
         }
@@ -199,9 +258,38 @@ impl SceneFsm {
     }
 
     /// Stage the campaign episode slot — the D51 host seam (W12-S5,
-    /// D108; see [`Episode::stage_slot`]).
+    /// D108; see [`Episode::stage_slot`]). Campaign staging CLEARS
+    /// any staged SELECT mission choice (§7j.73): the
+    /// campaign-advance / save-restore shells this seam stands in
+    /// for rewrite the runtime mission cells.
     pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
+        self.select = None;
         self.episode.stage_slot(stage, mask)
+    }
+
+    /// Stage the SELECT screen's mission choice — the §7j.73 host
+    /// seam standing in for the SELECT screen's MP write arm
+    /// (0x43edc2..0x43ee43): plants the runtime cell pair
+    /// `{zone 2..=6, mission 1..=2}` whose +5 file offset
+    /// (0x4467df) makes the next Mission entry load
+    /// ZONE{B..F}/MISSION{6,7} — the MP-only missions the 4/5-bit
+    /// stage mask can never express (the census G1 class). The
+    /// campaign episode {stage, mask, linear} is untouched (the
+    /// canonical S5 zone-staging semantics hold). Returns false
+    /// outside the arm's write domain (never guess).
+    pub fn stage_select_mission(&mut self, zone: u8, mission: u8) -> bool {
+        if !(2..=6).contains(&zone) || !(1..=2).contains(&mission) {
+            return false;
+        }
+        self.select = Some(SelectSlot { zone, mission });
+        true
+    }
+
+    /// The staged SELECT mission choice, if any (§7j.73) — the
+    /// runtime cell-pair override of the campaign-derived mission
+    /// slot.
+    pub fn select_slot(&self) -> Option<SelectSlot> {
+        self.select
     }
 
     /// Whether the next Debrief advance plays the zone cutscene.
@@ -462,8 +550,8 @@ mod tests {
     #[test]
     fn stage_slot_seam_validates_and_plants() {
         // W12-S5/D108: the D51 host seam plants the campaign slot
-        // (the canonical runner's `zone` key). Mask must be a
-        // sub-mask of the stage's completion mask; linear untouched.
+        // (the canonical runner's `zone` key). Mask must be inside
+        // the stage's save/SELECT domain; linear untouched.
         let mut ep = Episode::boot();
         ep.linear = 4;
         assert!(ep.stage_slot(2, 0), "stage 2 / mask 0 = ZONEB/MISSION1");
@@ -472,10 +560,16 @@ mod tests {
         assert_eq!((ep.stage(), ep.mask()), (7, 0b0111));
         assert!(!ep.stage_slot(0, 0), "stage 0 is not a slot");
         assert!(!ep.stage_slot(MAX_STAGE + 1, 0), "past the cap");
-        // Stage 1 has ONE sub (FULL_MASK[1] = 1): mask 2 is not a
-        // sub-mask of it.
+        // Stage 1 has ONE sub (ZONEA's single record, §7j.73/5):
+        // mask 2 is outside its domain.
         assert!(!ep.stage_slot(1, 2));
         assert!(ep.stage_slot(1, 1), "the full stage-1 mask");
+        // Stages 2..=8 accept the EXW five-bit save/SELECT domain
+        // (the restore tests bits 1/2/4/8/0x10, §7j.73/6) — bit 4
+        // (sub 5 complete) is the shape the import used to reject;
+        // bit 5+ is past anything an original writer can produce.
+        assert!(ep.stage_slot(2, 0b11111), "the five-bit save shape");
+        assert!(!ep.stage_slot(2, 0b10_1111), "past bit 4");
         // The planted slot drives the mission-slot selection (the
         // host.rs integration: zone letter B -> names ZONEB/...).
         let mut fsm = SceneFsm::new();
@@ -487,6 +581,43 @@ mod tests {
             )[0],
             "ZONEB/MISSION1.TOT"
         );
+    }
+
+    #[test]
+    fn select_mission_seam_plants_the_write_pair() {
+        // §7j.73: the SELECT screen's MP write arm — the pair is
+        // staging-only (never hashed scene state), untouched by the
+        // campaign episode, and cleared by campaign staging.
+        let mut fsm = SceneFsm::new();
+        assert!(fsm.stage_episode_slot(3, 0b0001));
+        let before = fsm.scene_hash();
+        assert!(fsm.stage_select_mission(4, 2));
+        assert_eq!(
+            fsm.select_slot().map(|s| (s.zone(), s.mission())),
+            Some((4, 2))
+        );
+        assert_eq!(fsm.scene_hash(), before, "staging-only state");
+        assert_eq!(
+            (
+                fsm.episode().stage(),
+                fsm.episode().mask(),
+                fsm.episode().linear()
+            ),
+            (3, 0b0001, 0),
+            "the campaign episode holds"
+        );
+        // The write domain (the arm's 10 rows): zones 2..=6,
+        // missions 1..=2 — never anything else.
+        for (zone, mission) in [(1u8, 1u8), (2, 3), (7, 1), (6, 0)] {
+            assert!(!fsm.stage_select_mission(zone, mission), "{zone}/{mission}");
+        }
+        assert_eq!(
+            fsm.select_slot().map(|s| (s.zone(), s.mission())),
+            Some((4, 2))
+        );
+        // Campaign staging clears the pair.
+        assert!(fsm.stage_episode_slot(5, 0));
+        assert_eq!(fsm.select_slot(), None);
     }
 
     #[test]

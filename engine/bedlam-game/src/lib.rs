@@ -37,12 +37,14 @@ pub use boot::{BootAttract, BootPhase};
 pub use brief::{BriefIntro, BriefPhase};
 pub use config::{GameConfig, OPTIONS_LEN, OPTIONS_NAME, VOLUME_MAX};
 pub use fsm::{
-    Episode, Scene, SceneAction, SceneFsm, BOOT_TICKS, FULL_MASK, MAX_LINEAR, MAX_STAGE,
+    Episode, Scene, SceneAction, SceneFsm, SelectSlot, BOOT_TICKS, FULL_MASK, MAX_LINEAR,
+    MAX_STAGE, SELECT_FULL_MASK,
 };
 pub use host::{ByteSink, ByteSource, GameHost};
 pub use loading::{LoadingPhase, TextRow};
 pub use mission::{
     mission_asset_names, mission_number_for_mask, robots_per_player, zone_for_stage, MissionScene,
+    SELECT_MP_FILE_OFFSET,
 };
 pub use movie::MoviePlayer;
 pub use movies::{

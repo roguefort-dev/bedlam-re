@@ -15,14 +15,16 @@
 //!
 //! The staging half goes through [`crate::fsm::SceneFsm::
 //! stage_episode_slot`] — the D51 host seam that models exactly the
-//! restore's zone-cell write + mask replay. Missions 6-7 (mask bits
-//! past FULL_MASK) stay out of the modeled episode space until the
-//! SELECT shell lands (the census G1 class, P5-ZONE-GATES §6.2); such
-//! a slot is rejected loud, never guessed.
+//! restore's zone-cell write + mask replay. The accepted mask domain
+//! is the EXW save/SELECT shape (five sub bits, `SELECT_FULL_MASK` —
+//! RE-EXW-SIM §7j.73: the restore tests bits 1/2/4/8/0x10); a mask
+//! with bits past bit 4 stays rejected loud — no original writer can
+//! produce one (the SELECT mission-choice seam, not this import,
+//! stages the MP-only missions 6-7).
 
 use bedlam_assets::bdl::parse_saved_bdl;
 
-use crate::fsm::{Episode, FULL_MASK, MAX_STAGE};
+use crate::fsm::{Episode, MAX_STAGE, SELECT_FULL_MASK};
 use crate::GameError;
 
 /// Asset name of the original save file.
@@ -70,8 +72,9 @@ fn slot_is_empty(raw: &[u8; 180]) -> bool {
 /// Every rejection is loud ([`GameError`]), never a guess: wrong file
 /// size (the assets parser), slot index out of 0..5, the EXW empty
 /// predicate, and a campaign state outside the modeled episode space
-/// (stage not in 1..=8, mask not a sub-mask of `FULL_MASK[stage]` —
-/// the missions-6/7 SELECT shape stays rejected until G1 lands).
+/// (stage not in 1..=8, mask outside the five-bit save/SELECT domain
+/// `SELECT_FULL_MASK` — §7j.73; the D178 "SELECT shape" rejection of
+/// bit 4 retired with the SELECT shell landing).
 pub fn import_saved_slot(data: &[u8], slot: usize) -> Result<SaveSlotImport, GameError> {
     if slot >= SAVED_SLOTS {
         return Err(GameError::SaveSlotIndex { slot });
@@ -88,7 +91,7 @@ pub fn import_saved_slot(data: &[u8], slot: usize) -> Result<SaveSlotImport, Gam
     let mask_word = u32::from_le_bytes([raw[0x08], raw[0x09], raw[0x0A], raw[0x0B]]);
     if !(1..=i32::from(MAX_STAGE)).contains(&zone)
         || mask_word > u32::from(u8::MAX)
-        || (mask_word as u8) & !FULL_MASK[zone as usize] != 0
+        || (mask_word as u8) & !SELECT_FULL_MASK[zone as usize] != 0
     {
         return Err(GameError::SaveSlotInvalid {
             slot,
@@ -145,7 +148,7 @@ mod tests {
         assert_eq!(import.money, 580);
         assert_eq!(import.difficulty, 1);
         // Staging through the episode seam: stage 3 mask 0b0110 is a
-        // valid sub-mask of FULL_MASK[3] = 15.
+        // valid sub-mask of the five-bit save/SELECT domain.
         let mut episode = Episode::boot();
         assert!(stage_imported_episode(&mut episode, &import));
         assert_eq!((episode.stage(), episode.mask()), (3, 0b0110));
@@ -166,8 +169,11 @@ mod tests {
     #[test]
     fn rejects_out_of_model_states() {
         // Zone past MAX_STAGE, negative zone (movsx), mask past the
-        // FULL_MASK sub-mask (the missions-6/7 SELECT shape), and the
-        // slot index bound — all loud, none guessed.
+        // five-bit save/SELECT domain (§7j.73: bits past 0x10 — no
+        // original writer can produce them), and the slot index
+        // bound — all loud, none guessed. Bit 4 (sub 5 done) is IN
+        // the domain since the SELECT shell landed (see
+        // select_shape_imports).
         assert!(matches!(
             import_saved_slot(&image_with_slot(0, 9, 0), 0),
             Err(GameError::SaveSlotInvalid { .. })
@@ -177,7 +183,7 @@ mod tests {
             Err(GameError::SaveSlotInvalid { .. })
         ));
         assert!(matches!(
-            import_saved_slot(&image_with_slot(0, 2, 0x10), 0),
+            import_saved_slot(&image_with_slot(0, 2, 0x20), 0),
             Err(GameError::SaveSlotInvalid { .. })
         ));
         assert!(matches!(
@@ -190,11 +196,30 @@ mod tests {
     }
 
     #[test]
+    fn select_shape_imports() {
+        // The SELECT shape (§7j.73): bit 4 = sub 5 complete — a save
+        // whose player finished mission 5 of a zone. The EXW restore
+        // tests five mask bits (0x43c306..0x43c36c), so the full
+        // 0b11111 zone-complete mask imports + stages cleanly; the
+        // D178 loud rejection retired with the SELECT shell landing.
+        // The mission derivation SATURATES at 5 (the SP SELECT
+        // domain — the campaign path never names an MP file).
+        let d = image_with_slot(1, 2, 0b11111);
+        let import = import_saved_slot(&d, 1).unwrap();
+        assert_eq!((import.stage, import.mask), (2, 0b11111));
+        let mut episode = Episode::boot();
+        assert!(stage_imported_episode(&mut episode, &import));
+        assert_eq!((episode.stage(), episode.mask()), (2, 0b11111));
+        assert_eq!(crate::mission::mission_number_for_mask(0b11111), 5);
+    }
+
+    #[test]
     fn every_stage_one_mask_accepts() {
-        // The full modeled space imports + stages cleanly (stage 1 is
-        // the boot/intro slot with FULL_MASK 1).
+        // The full modeled space imports + stages cleanly: the EXW
+        // five-bit save/SELECT domain per stage (stage 1 keeps its
+        // single sub — ZONEA's one record, §7j.73/5).
         for stage in 1..=MAX_STAGE {
-            for mask in 0..=FULL_MASK[stage as usize] {
+            for mask in 0..=SELECT_FULL_MASK[stage as usize] {
                 let d = image_with_slot(0, stage as u16, mask as u32);
                 let import = import_saved_slot(&d, 0).unwrap();
                 assert_eq!((import.stage, import.mask), (stage, mask));

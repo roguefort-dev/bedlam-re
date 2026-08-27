@@ -599,16 +599,28 @@ pub fn zone_for_stage(stage: u8) -> i32 {
     (i32::from(stage) - 1).clamp(0, 6)
 }
 
+/// The SELECT MP mission-file offset [RE-EXW-SIM §7j.73, verified]:
+/// `build_mission_paths` @0x4467df adds 5 to the mission cell when
+/// the mode cell [0x4edb88] reads 2 (multiplayer) — the SELECT
+/// screen's MP write pair `{zone 2..=6, mission 1..=2}` therefore
+/// loads `ZONE{B..F}/MISSION{6,7}.*`: missions 6-7 are the MP-only
+/// files, not campaign sub-missions (no stage mask can express
+/// them — the census G1 verdict).
+pub const SELECT_MP_FILE_OFFSET: i32 = 5;
+
 /// The mission number for a stage's completion mask [design; the
 /// Episode::complete lowest-unset-bit arithmetic, the same selection
 /// briefing_name_for_slot uses for the BRF letter index]: first
-/// uncompleted sub + 1.
+/// uncompleted sub + 1, SATURATED at 5 — the SP SELECT domain
+/// [RE-EXW-SIM §7j.73: the SP arm writes missions 1..5 per zone
+/// only], so the campaign path can never name an MP file (6/7 come
+/// only from the staged SELECT pair).
 pub fn mission_number_for_mask(mask: u8) -> i32 {
     let mut sub = 0u8;
     while mask >> sub & 1 != 0 {
         sub += 1;
     }
-    i32::from(sub) + 1
+    (i32::from(sub) + 1).min(5)
 }
 
 /// The mission asset names in fetch order [design chain convention:
@@ -2056,6 +2068,21 @@ mod tests {
         assert_eq!(zone_for_stage(8), 6, "endgame stays at zone G");
         assert_eq!(mission_number_for_mask(0), 1);
         assert_eq!(mission_number_for_mask(0b0111), 4);
+        // The SP SELECT domain saturates at 5 (§7j.73: the SP arm
+        // writes missions 1..5 per zone only — the campaign path
+        // can never name an MP file; 6/7 come only from the staged
+        // SELECT pair).
+        assert_eq!(mission_number_for_mask(0b1111), 5);
+        assert_eq!(mission_number_for_mask(0b11111), 5);
+        for mask in 0..=u8::MAX {
+            if mask & !0b1_1111 == 0 {
+                assert!(
+                    mission_number_for_mask(mask) <= 5,
+                    "the five-bit save domain names SP files only ({mask})"
+                );
+            }
+        }
+        assert_eq!(SELECT_MP_FILE_OFFSET, 5, "0x4467df add eax,0x5");
     }
 
     #[test]

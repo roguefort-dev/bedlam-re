@@ -409,12 +409,24 @@ impl GameHost {
         self.menu_start_score
     }
 
-    /// The mission slot the episode selects for the next Mission
-    /// entry [DESIGN-GAME sec 11; the same lowest-unset-bit arithmetic
-    /// `briefing_name_for_slot` uses]: (zone index, mission number).
-    /// The zone drives the file names, the edge family and the
-    /// robots-per-player count.
+    /// The mission slot the engine stages for the next Mission entry
+    /// — the RUNTIME mission-number source [RE-EXW-SIM §7j.73]: a
+    /// staged SELECT mission choice (the SELECT screen's MP write
+    /// pair) overrides the campaign pair, with the load-time +5
+    /// (`build_mission_paths` 0x4467df: mission cell + 5 in MP mode)
+    /// applied — `{zone 2..=6, mission 1..=2}` names
+    /// ZONE{B..F}/MISSION{6,7}, the MP-only missions. Otherwise the
+    /// campaign episode selects (zone from the stage, mission from
+    /// the mask — the same lowest-unset-bit arithmetic
+    /// `briefing_name_for_slot` uses). The zone drives the file
+    /// names, the edge family and the robots-per-player count.
     pub fn mission_slot(&self) -> (i32, i32) {
+        if let Some(select) = self.fsm.select_slot() {
+            return (
+                i32::from(select.zone()) - 1,
+                i32::from(select.mission()) + crate::mission::SELECT_MP_FILE_OFFSET,
+            );
+        }
         let episode = self.fsm.episode();
         (
             crate::mission::zone_for_stage(episode.stage()),
@@ -439,6 +451,23 @@ impl GameHost {
     /// slot (never guess).
     pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
         self.fsm.stage_episode_slot(stage, mask)
+    }
+
+    /// Stage the SELECT screen's mission choice — the §7j.73 sibling
+    /// seam of [`GameHost::stage_episode_slot`]: the host stands in
+    /// for the SELECT screen's MP write arm (0x43edc2..0x43ee43),
+    /// planting the runtime `{zone, mission}` cell pair whose +5
+    /// file offset (0x4467df) makes the next Mission entry load
+    /// ZONE{B..F}/MISSION{6,7} — the MP-only missions the stage-mask
+    /// campaign space cannot express (the census G1 class). Must run
+    /// BEFORE `mission_asset_names`/`load_mission`; campaign staging
+    /// (`stage_episode_slot`, the restore/advance stand-in) clears
+    /// it. The campaign completion semantics stay campaign-shaped
+    /// (an MP debrief is out of this seam's scope). Returns false
+    /// outside the arm's write domain — zone 2..=6, mission 1..=2
+    /// (never guess).
+    pub fn stage_select_mission(&mut self, zone: u8, mission: u8) -> bool {
+        self.fsm.stage_select_mission(zone, mission)
     }
 
     /// Import one ORIGINAL SAVED.BDL slot read-only and stage its
@@ -2277,6 +2306,61 @@ mod tests {
                                           // Stage 2 now: zone B, still MISSION1 (mask reset).
         assert_eq!(host.mission_slot(), (1, 1));
         assert_eq!(host.mission_asset_names()[3], "ZONEB/MISSIONB.CGR");
+    }
+
+    #[test]
+    fn select_mission_seam_stages_the_mp_files() {
+        // §7j.73: the SELECT screen's MP write arm {zone 2..=6,
+        // mission 1..=2} + the load-time +5 (0x4467df) — the ten
+        // MP-only missions (the census G1 class) now stage through
+        // the host seam.
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        assert!(host.stage_episode_slot(2, 0), "campaign slot first");
+        assert!(host.stage_select_mission(2, 1));
+        assert_eq!(host.mission_slot(), (1, 6), "zone cell 2 = ZONEB, 1+5 = 6");
+        assert_eq!(host.mission_asset_names()[0], "ZONEB/MISSION6.TOT");
+        assert_eq!(host.mission_asset_names()[3], "ZONEB/MISSIONB.CGR");
+        assert!(host.stage_select_mission(6, 2));
+        assert_eq!(host.mission_slot(), (5, 7));
+        assert_eq!(host.mission_asset_names()[0], "ZONEF/MISSION7.TOT");
+        // The write domain (the arm's exact rows): zones B..F,
+        // missions 1..2 — nothing else, and a rejected staging
+        // plants nothing.
+        for (zone, mission) in [(1u8, 1u8), (7, 1), (2, 0), (2, 3), (0, 1)] {
+            assert!(
+                !host.stage_select_mission(zone, mission),
+                "{zone}/{mission}"
+            );
+        }
+        assert_eq!(host.mission_slot(), (5, 7), "rejections plant nothing");
+        // Campaign staging clears the pair (the restore/advance
+        // shells rewrite the runtime cells): the episode slot
+        // selects again.
+        assert!(host.stage_episode_slot(2, 0));
+        assert_eq!(host.mission_slot(), (1, 1));
+        assert_eq!(host.mission_asset_names()[0], "ZONEB/MISSION1.TOT");
+    }
+
+    #[test]
+    fn select_mission_staging_never_touches_the_scene_hash() {
+        // The staged SELECT pair is staging-only state (§7j.73):
+        // which bytes the next Mission entry loads, never a sim
+        // field — the D31 movie pattern. The pair itself leaves the
+        // hashed scene bucket untouched, and clearing it (campaign
+        // staging) hashes exactly what campaign staging alone would
+        // hash.
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let mut plain = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let before = host.scene_hash();
+        assert!(host.stage_select_mission(3, 2));
+        assert_eq!(host.scene_hash(), before, "the SELECT pair is unhashed");
+        assert!(host.stage_episode_slot(3, 0));
+        assert!(plain.stage_episode_slot(3, 0));
+        assert_eq!(
+            host.scene_hash(),
+            plain.scene_hash(),
+            "clearing the pair hashes like plain campaign staging"
+        );
     }
 
     #[test]
