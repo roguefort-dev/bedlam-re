@@ -10868,3 +10868,119 @@ MANIFEST.sha256 clean before and after) [verified]
    staging already carries. Paths that stage destroy BEFORE
    critters (the canonical order; every census row) read the true
    derived m and stay faithful.
+
+## 7j.73. THE SELECT MISSION-CHOICE SHELL — the runtime mission-number source decoded whole: the SELECT screen write pair (the 26-hot-spot SP arm + the 10-row MP arm), the load-time +5 that makes MISSION6/7 the MP-only files, the 27-record completion bank, and the FIVE-bit save-mask domain that closes the census G1 question (2026-08-28, worker 05e14378 claim 1, item p5-select-shell-g1; objdump-only from the committed ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read; MANIFEST.sha256 clean before and after) [verified]
+
+The census G1 class (P5-ZONE-GATES §6.2) asked how the original
+selects a sub-mission past the 4-bit stage mask — the FULL_MASK=15
+table is the **B2** save shape (@0x81d9a, RESEARCH-BEDLAM2-CENSUS
+§7; a cross-binary borrow), and the question was what EXW's runtime
+actually writes. Method: instruction walks of the SELECT screen
+family (EXW entry FUN_0043e7d4 = EXD twin 0x50953, RE-EXD-MAP §2c)
+0x43eb67..0x43eedc, the restore replay 0x43c2bf..0x43c36c, the path
+builder 0x44670c..0x4467f0, and the campaign cell writers
+0x41c41c..0x41c4b9 / 0x41c9d6..0x41c9e5. All items [verified]
+against the committed objdump.
+
+1. **THE MISSION-DERIVATION BLOCK (the click handler).** Gated by
+   [0x4eddcc] != 0 ∧ [0x4edb90] == 0 (0x43ed77..0x43ed8b — a click
+   latch and a screen-mode cell). The hot id is read from a
+   PIXEL→ID grid: `eax = [0x4eddc8]·0x280 + [0x4eddc4] + esi` where
+   0x4eddc8/0x4eddc4 are the mouse y/x cells and esi = the grid
+   base ([esp+0x318] := an arena block +0xC, staged 0x43ec0a..14;
+   0x280 = 640 = the screen stride); `al = byte[eax]` = the hot-spot
+   id under the cursor (0x43ed91..0x43edb4). The write arm then
+   dispatches on `[0x4edb88]` (mode): != 2 → the SP arm, == 2 → the
+   MP arm (0x43edb9..0x43edbc).
+2. **THE SP ARM (0x43ee48..0x43ee9d) writes the MISSION cell only,
+   zone-checked — missions 1..5, never 6/7.** The id dispatch
+   (every range test [verified]):
+   - id 1 ∧ zone cell [0x4edd8c] == 1 → mission := 1 (ZONEA's one
+     mission; 0x43ee48..0x43ee60 writes [0x4edd88] := [0x4edd8c] = 1);
+   - id 2..6 ∧ zone == 2 → mission := id − 1 (ZONEB missions 1..5);
+   - id 7..0xB ∧ zone == 3 → mission := id − 6 (ZONEC 1..5);
+   - id 0xC..0x10 ∧ zone == 4 → mission := id − 0xB (ZONED 1..5);
+   - id 0x11..0x15 ∧ zone == 5 → mission := id − 0x10 (ZONEE 1..5);
+   - id 0x16..0x1A ∧ zone == 6 → mission := id − 0x15 (ZONEF 1..5).
+   Every arm writes [0x4edd88] at the shared tail 0x43eedc and
+   NEVER writes the zone cell — the SP zone stays the campaign's
+   (boot 0x41c41c..430 {zone 1, mission 1}; per-episode advance
+   mission := 1 @0x41c4ad/0x41c4b9; campaign-advance zone++ @
+   0x41c9d6..0x41c9e5, loop while episode < 7 = sets 1..7 = A..G).
+   The id domain is exactly 26 hot spots = ZONEA{1} + 5×{B..F} =
+   MAX_LINEAR (the linear counter's 26 SP missions; zone G has NO
+   hot spot — it is the campaign-advance endgame, not selectable).
+   **So SP play selects missions 1..5 per zone only; the 4-bit B2
+   stage mask and the 5-mission SP cadence agree — no SP path ever
+   writes 6 or 7.**
+3. **THE MP ARM (0x43edc2..0x43ee43) writes BOTH cells — 10 list
+   rows → {zone 2..6, mission 1..2}.** Row id (the same grid byte)
+   1..2 → zone := 2, mission := id; 3..4 → zone := 3, mission :=
+   id−2; 5..6 → zone := 4, mission := id−4; 7..8 → zone := 5,
+   mission := id−6; 9..0xA → zone := 6, mission := id−8 (the zone
+   writes 0x43edcb/0x43ede8/0x43ee18/0x43ee3d; the mission write
+   shared tail 0x43eedc). The §7h.4/§7j.64/F "mission-number→set
+   map" gloss is this arm — MP-ONLY, gated `[0x4edb88] == 2`
+   (0x43edb9), fed by the MP lobby (mode 2 write 0x43f373, zone
+   0x43f34b, mission 0x43f360).
+4. **THE LOAD-TIME +5 — MISSION6/MISSION7 ARE THE MP-ONLY FILES
+   [the G1 answer].** `build_mission_paths`@0044670c builds path1
+   `EDITOR\ZONE{chr(0x41+[0x4edd8c])}\MISSION{<n>}` with
+   `<n>` = the mission cell, EXCEPT: 0x4467ca `cmp [0x4edb88],2`;
+   0x4467df `add eax,0x5` — **in MP mode the mission FILE number is
+   the mission cell + 5** (itoa base 10 @0x4467f0, helper 0x44d291).
+   Path2 (the zone-level MISSION{X}.CGR/BIN/MIN/LNK family) uses
+   the zone letter only — unchanged. So the MP pair {zone 2..6,
+   mission 1..2} loads `ZONE{B..F}/MISSION{6,7}.*`: **missions 6-7
+   of every zone B-F are the two MULTIPLAYER missions, selected by
+   the SELECT screen's MP list arm and renamed at load; they are
+   not campaign sub-missions at all, which is why no stage mask —
+   4-bit B2 or 5-bit EXW — can ever express them.** (Consistent:
+   all ten B-F .NME files for missions 6/7 are 16-byte empties —
+   no critter scripting for human-opponent maps, P5-ZONE-GATES
+   §6.3.)
+5. **THE 27-RECORD COMPLETION BANK (the SELECT screen's own state,
+   NOT the save mask).** At 0x4decae: 0x144 bytes = **27 records**
+   of 0xC = {+0 mission/sub, +4 zone, +8 done-flag} — one per
+   linear mission (ZONEA{1} + 5×{B..F} + ZONEG{1} = 27).
+   FUN_004474ef(zone, sub) marks the matching record done
+   (0x447500..0x447517); FUN_0044751c(zone, sub) returns the record
+   index or −1 (0x44751c..0x44754f). The SELECT screen reads it for
+   the hot-spot draw state (0x43eb67..0x43ebcc: FUN_0044751c over
+   the current {zone, mission} → done ? 0 : (next ? 1 :
+   selected ? 2) — the 0/1/2 draw-state cells passed to the
+   map-overlay helper 0x440888; precisely: done≠0 or no record → 0,
+   not-done → 1, not-done ∧ record.mission == [0x4edd88] → 2).
+   The CAMPAIGN dispatch also counts
+   it (0x41c485..0x41c4ad: per-record done count of the current
+   zone).
+6. **THE SAVE MASK IS FIVE BITS (EXW), not the B2 four.** The
+   restore replay (§7j.70's walk, now instruction-exact) marks
+   subs 1..5 for EVERY zone' < current (0x43c2bf..0x43c2fb — edx
+   literals 1,2,3,4,5 into FUN_004474ef) and then tests the saved
+   mask dword's bits 0x1/0x2/0x4/0x8/**0x10** for the current zone
+   (0x43c306..0x43c36c → FUN_004474ef(zone, sub=1..5)). So the EXW
+   save-mask domain is `mask ⊆ 0b11111` per stage — FIVE sub-slots
+   (missions 1..5), matching the SP arm's 5-mission cadence; the
+   B2 table {0,1,0xF×6} is B2's own 4-sub campaign (B2's rip is
+   "missing MISSION5.* in 5 of 6 zones" — its zones ship 4 SP
+   missions; RESEARCH-BEDLAM2-CENSUS). Bits past 0x10 are never
+   read by the restore (silent no-ops); unmatched (zone, sub)
+   record lookups are no-ops too (zones A/G have only sub-1
+   records). The engine's FULL_MASK stays the stage-ADVANCE table
+   the canonical S5 semantics walk (D-keeping, deliberate); the
+   save/SELECT domain is the 5-bit shape above.
+7. **ENGINE SEAM (landed this unit):** the SELECT write pair is the
+   runtime mission source, so the host models it as a SIBLING seam
+   — `GameHost::stage_select_mission(zone 2..=6, mission 1..=2)`
+   (the MP arm's exact write domain) planting the pair; the host's
+   `mission_slot()` applies the +5 (mission.rs
+   `SELECT_MP_FILE_OFFSET = 5`) so the pair names
+   ZONE{B..F}/MISSION{6,7} exactly as the original loads them;
+   campaign staging (`stage_episode_slot`, the restore/advance
+   stand-in) clears the pair. The save-import domain widens to the
+   5-bit SELECT_FULL_MASK (save.rs; the §7j.70 "missions-6/7 SELECT
+   shape stays rejected" note retires — what stays rejected is
+   anything past bit 4, which no original writer can produce);
+   `mission_number_for_mask` saturates at 5 (the SP SELECT domain
+   is 1..=5 — the campaign path can never name an MP file).
