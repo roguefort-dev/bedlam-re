@@ -5,34 +5,41 @@ the '## Done' log at end of run - never stays in '## Now' as 'N. DONE ...'
 (the scheduler mechanically skips a first-word DONE marker, but the
 renumbered queue keeps every open item claimable by number).
 ## Now
-1. [READY] [id=p5-zone-gate-scaffold] [gate=p5-zone-gate-scaffold] P5
-   opener per PLAN §6 (per-zone parity gates) — land the per-zone
-   parity LEDGER + the first P5 required gate. (a) Enumerate the 37
-   shipped missions READ-ONLY from game-data/ (EDITOR/ZONEA
-   MISSION1; ZONEB..ZONEF MISSION1..7 each; ZONEG MISSION1;
-   sha256sum -c MANIFEST.sha256 --quiet before AND after; corpus
-   untouched). (b) Commit docs/P5-ZONE-GATES.md: the per-zone
-   acceptance shape VERBATIM from PLAN §6 P5 (all scripted flows
-   complete crash-free; T1 game rules verified against RE/8street;
-   T2 key-moment frame checks; differ-harness spot checks for
-   structure, not tick-complete; cross-OS replay hash equality of
-   OUR engine; multiplayer deathmatch carved out of the parity
-   exit; original SAVED/OPTIONS.BDL import read-only,
-   bounds-checked, fuzzed) + the per-mission disposition ledger
-   format (every mission starts pending; the original-behavior
-   catalog feeds P6 triage). (c) The machine-checkable committed
-   ledger artifact + fail-closed checker wired as the FIRST P5
-   required_gates entry in docs/required-gates.toml: the checker
-   validates ledger completeness + internal consistency (exactly
-   the 37 enumerated missions, valid zones/dispositions);
-   game-data paths must NOT appear in tracked_paths or corpus
-   (game-data is never git-tracked — the checker may read the
-   corpus read-only at runtime); per-zone completion gates land as
-   each zone closes (the P4 pattern); P5 phase status stays
-   pending until every zone closes. (d) DECISIONS.md entry for the
-   ledger format choice. Bounds: no engine change; controls green
-   (canonical_dump_gate 13/13, gates-validator 22/22); MANIFEST
-   clean; no Ghidra run; commit with the unit's own Nudge-Worker
+1. [READY] [id=p5-mission-load-census] [gate=p5-zone-gate-scaffold] P5
+   follow-up — the all-37-mission READ-ONLY load census through OUR
+   engine loaders, sizing the zone work. (a) For every one of the 37
+   ledger missions (docs/P5-MISSION-LEDGER.toml), drive the existing
+   engine load seams (the bedlam-render mission-view load path + the
+   bedlam-core loader family — the S0-S8 canonical corpus already
+   exercises ZONEA-shaped content) against the mission's runtime file
+   family (.TOT .DAT .CGR .BIN .MIN .LNK/.LNG .PAD .NME .TRT .POS .BDG
+   .MRK per FORMATS-MISSION §0.2) READ-ONLY from game-data/
+   (sha256sum -c MANIFEST.sha256 --quiet before AND after). (b) Record
+   the per-mission/per-zone GAP TABLE in docs/P5-ZONE-GATES.md §6
+   (loads clean / loads with named gaps / cannot load + why), with
+   provenance + confidence tags; RE notes committed BEFORE any loader
+   change. (c) Only then, if gaps are trivial parser-sized, land them
+   bounded; anything semantic stays queued as its own unit. (d) Update
+   the ledger ONLY if a mission is proven unloadable-by-corpus (never
+   as completion). Bounds: canonical_dump_gate 13/13 +
+   gates-validator 22/22 + p5-zone-gate-scaffold green at HEAD; no
+   canonical chain movement unless a loader change demands a
+   deliberate re-baseline (then documented); MANIFEST clean; no
+   Ghidra run; commit with the unit's own Nudge-Worker trailer.
+2. [READY] [id=p5-zonea-mission1-parity] [gate=p5-zonea-mission1-parity] P5
+   first zone target — ZONEA/MISSION1 to `green` per the §1
+   acceptance shape of docs/P5-ZONE-GATES.md: scripted flows
+   crash-free (S-scenario style), T1 rules evidence, differ-harness
+   structural spot check, cross-OS hash equality of our engine,
+   SAVED/OPTIONS.BDL import seam check (read-only/bounds-checked),
+   DM carve-out note. Flip ZONEA-MISSION1 disposition to green in
+   docs/P5-MISSION-LEDGER.toml IN THE SAME COMMIT as the green
+   evidence; do NOT wire a p5-zone-a gate yet (that lands when ALL of
+   ZONEA's missions are green — ZONEA has only MISSION1, so this unit
+   may wire p5-zone-a too if its evidence commands are executable and
+   the checker's cross-artifact rule stays green). START ONLY AFTER
+   item 1's gap table exists (its outcome shapes the work). Bounds:
+   all controls green; MANIFEST clean; no Ghidra run; Nudge-Worker
    trailer.
 ## Done
 [post-P4 note] (the five-unit P4 machine contract is fully
@@ -41,6 +48,37 @@ empty-queue path now owns the P0-P7 completion decision and P5+
 queue content is operator/controller work — superseded 2026-08-27 by
 the p4-phase-status-green item above keeping required work active
 instead of idling on the completion beacon)
+1. DONE (2026-08-27, worker 05e2d7ae claim 1, commits 953b6af +
+   5e8e78f, both PUSHED): P5 opener `p5-zone-gate-scaffold` — the
+   per-zone parity LEDGER + the first P5 required gate LANDED (D175).
+   (a) The 37 shipped missions enumerated READ-ONLY from game-data/
+   BEDLAM/EDITOR/ZONE*/MISSION*.TOT (ZONEA M1; ZONEB..F M1-7 each;
+   ZONEG M1; TOT size arithmetic 4+16·w·h self-checked: 30004/160004/
+   40004 all match; MANIFEST clean before AND after; corpus
+   untouched). (b) docs/P5-ZONE-GATES.md: the per-zone acceptance
+   shape VERBATIM from PLAN §6 P5 + the seven-criterion decomposition
+   (DM carve-out as scope, not check) + the ledger format spec. (c)
+   docs/P5-MISSION-LEDGER.toml (schema p5-mission-ledger-v1): 37
+   mission rows, ALL pending, catalog_refs reserved as the P6 triage
+   feed; zone status DERIVED, never stored. (d) The fail-closed
+   checker tools/check-p5-zone-ledger.py + the 18-case hermetic suite
+   tools/test-p5-zone-ledger.py: ledger completeness/internal
+   consistency, corpus re-enumeration pinned to the shipped zone
+   shape (drift fails loud), ledger set == corpus set, and
+   cross-artifact manifest safety (p5-zone-{a..g} gates require their
+   zone fully green; P5 status green requires 37/37 — closing the
+   empty-green-phase hole in the validator's all-gates-pass
+   semantics). (e) docs/required-gates.toml: P5 required_gates =
+   ["p5-zone-gate-scaffold"] as the FIRST entry (checker + suite);
+   NO game-data path in tracked_paths/corpus — the checker reads the
+   corpus read-only at runtime, the MANIFEST.sha256 contract. VERIFIED:
+   bound `validate-required-gates.py --phase P5` at HEAD 5e8e78f
+   status=passed (gate green under real bwrap containment, both
+   commands rc=0); checker OK 0/37; suite 18/18; gates-validator
+   22/22; canonical_dump_gate 13/13 (controls — no engine change);
+   manifest TOML re-parsed (9 gates, 8 phase rows); tools committed
+   mode 100755; no Ghidra run. Queued: p5-mission-load-census (1) +
+   p5-zonea-mission1-parity (2).
 1. DONE (2026-08-27, worker eeba31cf claim 1, commit 972748d,
    PUSHED): P4 closure bookkeeping `p4-phase-status-green` — the P4
    phase status FLIPPED pending->green in docs/required-gates.toml
