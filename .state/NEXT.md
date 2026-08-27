@@ -10,49 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-critter-state-g2-ballistic6] [gate=p5-critter-state-g2-ballistic6] P5
-   follow-up — the SECOND G2 critter-state unit:
-   BallisticState6 (.NME section 6, critter state 6 — now the most
-   common unmodeled state at 26/26 refusing missions after the
-   Wanderers landing D179). CHEAP HOP: the k5/6 shared body is
-   ALREADY LANDED engine-side (0x41367c, §7j.42/3) — the unit is the
-   S6 staging block (§7j.18: 8-B recs, ONE each, x = w2·0x2000+0xF00,
-   y = w3·0x2000+0xF00, z = probe(w1<<5), mode 8, heading 0x72,
-   species 3, anim 5, hp base 0x96 — the S3 stamps verbatim) + the
-   census re-pin (the BallisticState6xNN component drops; verify no
-   row flips clean — every host also carries Shooters/Chasers/
-   Personnel). RIDER (D179): align the S3/S4 hp scalars to the
-   0x46ae8c linear-mission m pin (§7j.71/1) IN THIS UNIT — it
-   moves the S8 canonical chain (stages ZONEA S3+S4), so RE-BASELINE
-   the S8 pinned T2 critter-bank bytes deliberately + document the
-   chain decision (this is the scenario that justifies the re-pin).
-   RE first if any S6 loader detail needs anchoring (objdump-only).
-   Bounds: census green after the re-pin; bedlam-game suite green
-   (canonical_dump_gate re-baselined deliberately); fmt + clippy;
-   gates-validator 22/22; MANIFEST clean before AND after;
-   Nudge-Worker trailer.
-2. [READY] [id=p5-select-shell-g1] [gate=p5-select-shell-g1] P5
-   follow-up — the G1 SELECT mission-choice shell from the census
-   (docs/P5-ZONE-GATES §6.2/G1, D176): make missions 6-7 of a
-   7-mission zone reachable through the engine staging seam. (a) RE
-   FIRST (objdump-only): how the original selects a sub-mission past
-   the 4-bit stage mask (the EXW SELECT screen family 0x50953 / the
-   mission-slot writes; the census pinned FULL_MASK=15 = B2 @0x81d9a
-   as the SAVE shape — find the runtime mission-number source the
-   SELECT screen writes), committed as RE notes BEFORE any engine
-   change. (b) Land the host seam bounded (a stage_episode_slot
-   extension or a sibling seam — RE decides; keep the canonical S5
-   zone-staging semantics intact), extend the census to stage B-F
-   missions 6-7 through it, re-baseline the census pins deliberately.
-   (c) No canonical chain movement unless the seam changes an emitted
-   row (then documented + deliberate). Bounds: census green after the
-   re-pin; bedlam-game suite green; fmt + clippy; gates-validator
-   22/22; MANIFEST clean; no Ghidra run; Nudge-Worker trailer.
-   NOTE (D178): the original-save import seam (bedlam-game save.rs,
-   §7j.70) deliberately REJECTS SELECT-shaped masks (mask bits past
-   FULL_MASK) loud until this unit lands — widening that domain is
-   part of this seam's acceptance.
-3. [READY] [id=p5-zone-bin-variant-g3] [gate=p5-zone-bin-variant-g3] P5
+1. [READY] [id=p5-zone-bin-variant-g3] [gate=p5-zone-bin-variant-g3] P5
    follow-up — the G3 zone-BIN variant RE unit from the census
    (docs/P5-ZONE-GATES §6.2/G3, D176): decide EXW-anchored whether
    ZONEB/MISSION6, ZONED/MISSION5, ZONEE/MISSION6 load the
@@ -68,7 +26,111 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    zone-level rule as VERIFIED and leave the engine untouched.
    Bounds: census green (re-pinned only if the swap lands); MANIFEST
    clean; no Ghidra run; Nudge-Worker trailer.
+2. [READY] [id=p5-critter-state-g2-shooters] [gate=p5-critter-state-g2-shooters] P5
+   follow-up — the NEXT G2 critter-state unit from the census
+   residue (docs/P5-ZONE-GATES §6.2/G2, D179/D182 lineage): the
+   kind-2 SHOOTERS state — the most-hosted unmodeled section
+   (ZONEB M2/M4/M5, ZONEC M1/M3/M5, ZONED M1-M5, ZONEE M1-M5,
+   ZONEF/ZONEG: 17 hosting missions beside the Chaser-only rows).
+   (a) RE FIRST (objdump-only from the committed
+   exw-critterpoi-loader.txt + exw-text-objdump.txt, no Ghidra run):
+   the .NME S1 loader walk for kind 2 (the §7j.18/§7j.71 method —
+   stamps, counts, draws, the hp scalar on the 0x46ae8c linear m
+   per the closed imul census) + the k2 controller body (the kind
+   table 0x412f18 case 2), committed as RE notes BEFORE any engine
+   change. (b) Land stage_critters section 2 acceptance + the
+   controller in bedlam-core::critter with unit tests; re-pin the
+   census (the ShootersxNN component drops; expect NO row flip
+   clean — Chasers remain on every host). Bounds: census green
+   after the re-pin; bedlam-core + bedlam-game suites green; no
+   canonical chain movement (ZONEA/M1 hosts no S1) unless a row
+   changes (then documented + deliberate); fmt + clippy;
+   gates-validator 22/22; MANIFEST clean; no Ghidra run;
+   Nudge-Worker trailer.
 ## Done
+1. DONE (2026-08-28, worker 05e14378 claim 1, commits a5c3a71 +
+   3d64ca5, both PUSHED): P5 `p5-select-shell-g1` — the G1 SELECT
+   mission-choice shell LANDED: missions 6-7 of zones B-F (the ten
+   MP-only missions) stage through the engine, the census G1 class
+   CLOSED. (a) RE FIRST (a5c3a71, §7j.73, objdump-only from the
+   committed exw-text-objdump.txt — no Ghidra run): the runtime
+   mission-number source = the SELECT screen's write pair
+   {zone 0x4edd8c, mission 0x4edd88} read from its strategic-map
+   PIXEL→ID grid — the SP arm (0x43ee48..0x43ee9d) writes missions
+   1..5 per zone ONLY (26 hot spots = ZONEA{1} + 5×{B..F} =
+   MAX_LINEAR; zone G is the campaign-advance endgame, no hot
+   spot), the MP arm (0x43edc2..0x43ee43) writes BOTH cells from
+   10 list rows → {zone 2..6, mission 1..2}, and
+   build_mission_paths @0x4467df ADDS 5 to the mission cell in
+   mode 2 — **missions 6-7 are the MP-ONLY files, NOT campaign
+   sub-missions: no stage mask can ever express them (the G1
+   answer)**. The save-restore replay tests FIVE mask bits
+   (0x43c2bf..0x43c36c, subs 1..5) — the EXW save domain is
+   0b11111 (the B2 FULL_MASK=15 table is B2's own 4-sub campaign);
+   the 27-record completion bank (0x4decae, 0x144/0xC — one
+   record per linear mission) is the SELECT screen's own state
+   (FUN_004474ef/44751c). (b) ENGINE (3d64ca5): the SIBLING seam
+   GameHost::stage_select_mission (the MP write pair domain
+   zone 2..=6, mission 1..=2 — never guess) + mission_slot applies
+   the +5 (SELECT_MP_FILE_OFFSET); the pair is staging-ONLY state
+   (NOT in scene_hash — the D31 pattern, pinned by test) and
+   campaign staging CLEARS it; Episode::stage_slot's accepted
+   domain widened to SELECT_FULL_MASK [0,1,31×7] while
+   Episode::complete still walks FULL_MASK (canonical S5 semantics
+   INTACT); mission_number_for_mask saturates at 5 (the SP SELECT
+   domain — the campaign path can never name an MP file,
+   property-tested); save.rs widened (the D178 rider): bit-4 masks
+   import + stage, bits past 0x10 stay rejected loud. (c) CENSUS
+   RE-PIN (deliberate, D28): the ten B-F missions-6/7 rows moved
+   from the direct fallback to the SELECT seam — all select:clean
+   (provenance docs/evidence/p5-g1-select-census-table.txt);
+   P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined (G1 LANDED, the
+   headline gains the ten clean rows); D183. Verified: bedlam-game
+   release 249/0 (+4 net new tests; canonical_dump_gate 13/13 +
+   differ_gate 4/4 + determinism green — NO canonical chain moved),
+   bedlam-core 154/0, diffharness 103/0, fmt + clippy clean on the
+   touched crate, gates-validator 22/22, inspect baseline ok (1069
+   files), MANIFEST clean before AND after every corpus run, no
+   Ghidra run. Queued: items 1-2 above (the G3 BIN variant is the
+   new head; the G2 Shooters unit second).
+1. DONE (2026-08-28, worker b03463e5 claim 1, commits e590bd6 +
+   715a066 + 0aa7cf0, all PUSHED): P5 `p5-critter-state-g2-ballistic6`
+   — the SECOND G2 critter-state unit: BallisticState6 landed
+   engine-side through the shared k5/6 body + the D179 RIDER (the
+   S3/S4 hp scalars aligned to the linear mission m) + the deliberate
+   S8 chain re-baseline (D182, §7j.72). (a) RE FIRST (e590bd6,
+   decompile-only from the COMMITTED exw-critterpoi-loader.txt — no
+   Ghidra run): §7j.72 walks the S6 staging block exact — ONE per
+   8-B record at EVERY difficulty (no inner spawn loop, the S3/S7
+   multiplier preambles absent), ZERO stream draws, the S3 stamps
+   verbatim (kind 6, species 3, mode 8, anim 5, heading 0x72, the
+   w1-level floor probe, countdown 0), no home stamps, hp
+   0x96+(m·0x96)/0x1B on the SAME 0x46ae8c cell — the §7j.71/1 imul
+   census now closes: EVERY section reads m, none difficulty.
+   (b) ENGINE (same commit): stage_critters accepts section 6 (the
+   E S3 block verbatim, kind 6, ONE draw-free spawn; the 5|6 dispatch
+   arm predates it from W12-S8) + the S3/S4 scalar swap to
+   MissionSim::linear; 3 new unit tests (d=3/m=5 proves hp 177/237
+   where the difficulty form said 166/222; m=0 gives the base).
+   (c) CENSUS + GATES (715a066): the BallisticState6xNN component
+   dropped from all 26 hosting refusal rows, NO row flipped clean
+   (every host still carries Shooters/Chasers/CloseCombat/Personnel;
+   ZONEA-MISSION1 stays the sole clean row); the print-table output
+   committed as docs/evidence/p5-g2-ballistic6-census-table.txt; the
+   S8 canonical chain re-baselined deliberately (canonical_dump_gate
+   corpus_s8 + differ_gate's S8 row, 10c78a7144cf6d3d ->
+   bac6a3053cedfebd — S8 stages no destroy so m=0 and the staged hp
+   moved 155/207 -> 150/200; the 0-when-unstaged class D179 accepted
+   for S2, documented §7j.72/4; the death-timeline inequality asserts
+   survived unmoved); P5-ZONE-GATES 6.2/G2 + 6.3 + 6.4 re-baselined;
+   0aa7cf0 is the fmt pass on the new tests. Verified: bedlam-core
+   release 155/0 (18 critter tests), bedlam-game release 245/0
+   (census + canonical_dump_gate 13/13 + differ_gate 4/4),
+   diffharness 103/0, fmt clean, clippy clean on touched files
+   (the 5 remaining workspace warnings pre-exist), gates-validator
+   22/22 + the bound P5 phase validation status=passed at 0aa7cf0,
+   MANIFEST clean before AND after every corpus run. Queued: items
+   1-2 above (the G1 SELECT shell is the new head).
 1. DONE (2026-08-28, worker 0e1d4854 claim 1, commits 177c953 +
    a18d9c3 + a168d69, all PUSHED): infra `ci-cross-os-repair` — the
    CI matrix REPAIRED GREEN on BOTH legs + miri + diffharness (run

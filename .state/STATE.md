@@ -1,5 +1,60 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-select-shell-g1` COMPLETE (worker 05e14378 claim
+    1, commits a5c3a71 + 3d64ca5, both PUSHED): the G1 SELECT
+    mission-choice shell LANDED — the census G1 class CLOSED: the
+    ten MP-only missions 6-7 of zones B-F stage through the engine
+    (GameHost::stage_select_mission, the MP write pair {zone 2..=6,
+    mission 1..=2} + the load-time +5 SELECT_MP_FILE_OFFSET; staging-
+    only state, cleared by campaign staging). RE FIRST (§7j.73,
+    objdump-only, no Ghidra): the SP SELECT arm writes missions 1..5
+    per zone only (26 hot spots = MAX_LINEAR); the MP arm + the
+    build_mission_paths +5 @0x4467df make MISSION6/7 the MP-only
+    files — no stage mask can ever express them; the EXW save mask
+    is FIVE bits (SELECT_FULL_MASK; the restore tests 1/2/4/8/0x10)
+    — the B2 FULL_MASK=15 is B2's own 4-sub shape and stays the
+    stage-advance table (canonical S5 semantics INTACT — no chain
+    moved). The D178 rider: SELECT-shaped saves (bit 4) import +
+    stage; bits past 0x10 stay loud. mission_number_for_mask
+    saturates at 5 (the campaign path never names an MP file).
+    Census re-pin: the ten rows select:clean (provenance
+    docs/evidence/p5-g1-select-census-table.txt); P5-ZONE-GATES
+    §6.1/§6.2/§6.3/§6.4 re-baselined; D183. Verified: bedlam-game
+    release 249/0 (canonical_dump_gate 13/13 + differ_gate 4/4 +
+    determinism green), bedlam-core 154/0, diffharness 103/0, fmt +
+    clippy clean on the touched crate, gates-validator 22/22,
+    inspect baseline ok, MANIFEST clean before AND after every
+    corpus run. P5: 1/37 missions green (11/37 load clean); G2
+    residue = Shooters/Chasers/CloseCombat + the S8 personnel bank;
+    the G3 BIN-variant RE unit is the next head, the G2 Shooters
+    unit second.
+
+  - 2026-08-28 `p5-critter-state-g2-ballistic6` COMPLETE (worker
+    b03463e5 claim 1, commits e590bd6 + 715a066 + 0aa7cf0, all
+    PUSHED): the SECOND G2 critter-state unit — BallisticState6
+    (.NME section 6) staged engine-side through the shared k5/6
+    body + the D179 RIDER landed (the S3/S4 hp scalars aligned to
+    the 0x46ae8c linear mission m, §7j.72) + the S8 canonical chain
+    re-baselined DELIBERATELY (10c78a7144cf6d3d →
+    bac6a3053cedfebd — S8 stages no destroy so m = 0 and the
+    staged hp moved 155/207 → 150/200; the 0-when-unstaged class
+    D179 accepted for S2, documented §7j.72/4; canonical_dump_gate
+    corpus_s8 + differ_gate's S8 row, pins + comments together).
+    RE FIRST from the COMMITTED exw-critterpoi-loader decompile (no
+    Ghidra run): the S6 block walked exact — ONE per record at
+    every difficulty, ZERO draws, the S3 stamps verbatim, hp on the
+    same m cell (the §7j.71/1 imul census closes). Census re-pin:
+    the BallisticState6xNN component dropped from all 26 hosting
+    rows, NO row flipped clean (provenance
+    docs/evidence/p5-g2-ballistic6-census-table.txt); P5-ZONE-GATES
+    §6.2/G2 + §6.3 + §6.4 re-baselined; D182. Verified: bedlam-core
+    release 155/0, bedlam-game release 245/0, diffharness 103/0,
+    fmt + clippy clean on touched files, gates-validator 22/22 +
+    the bound P5 phase validation status=passed at 0aa7cf0,
+    MANIFEST clean before AND after every corpus run. P5: 1/37
+    missions green; G2 residue = Shooters/Chasers/CloseCombat +
+    the S8 personnel bank; the G1 SELECT shell is the next head.
+
   - 2026-08-28 `ci-cross-os-repair` COMPLETE (worker 0e1d4854 claim 1,
     commits 177c953 + a18d9c3 + a168d69, all PUSHED): the CI matrix
     GREEN on BOTH legs + miri + diffharness for the first time in
