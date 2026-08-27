@@ -1792,9 +1792,11 @@ mod wanderer_tests {
             assert_eq!(staged, 3, "one each at d={d}");
             assert_eq!(sim.critters.len(), 3);
             assert_eq!(sim.rand_a_state(), probe.rand_a_state(), "no draws");
-            let expected_z =
-                sim.terrain
-                    .floor_z((10 * 0x2000 + 0xF00) >> 8, (12 * 0x2000 + 0xF00) >> 8, 2 * 32);
+            let expected_z = sim.terrain.floor_z(
+                (10 * 0x2000 + 0xF00) >> 8,
+                (12 * 0x2000 + 0xF00) >> 8,
+                2 * 32,
+            );
             for c in sim.critters() {
                 assert_eq!(c.kind, 6);
                 assert_eq!(c.species, 3);
@@ -1879,8 +1881,14 @@ mod wanderer_tests {
         // d=3 → S3 spawns max(3,1) = 3, S4 spawns (3>>1)+2 = 3.
         let k5: Vec<i16> = sim.critters()[..3].iter().map(|c| c.hp).collect();
         let k4: Vec<i16> = sim.critters()[3..].iter().map(|c| c.hp).collect();
-        assert!(k5.iter().all(|&h| h == 177), "kind-5 hp m-scaled (got {k5:?})");
-        assert!(k4.iter().all(|&h| h == 237), "kind-4 hp m-scaled (got {k4:?})");
+        assert!(
+            k5.iter().all(|&h| h == 177),
+            "kind-5 hp m-scaled (got {k5:?})"
+        );
+        assert!(
+            k4.iter().all(|&h| h == 237),
+            "kind-4 hp m-scaled (got {k4:?})"
+        );
         // Unstaged linear (m = 0 — the S8 scenario's deliberate
         // no-destroy class, §7j.72/4): the base exactly.
         let mut sim0 = sim_flat(0x7A11);
