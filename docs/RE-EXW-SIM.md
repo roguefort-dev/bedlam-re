@@ -10601,3 +10601,75 @@ plane table rides the derived id `static-yline-zbase#zbase`).**
 anchor counts gain cgr/bin/lnk/yline/zbase (+5) on every TS-bearing
 scenario. Zero canonical-chain movement (plan-only infra, the
 S0-12a/D152 class).
+
+## 7j.70. THE SAVED.BDL RESTORE HEADER WALK — the slot grammar EXW-anchored at the instruction level (stride/name/mask/zone/score/money/difficulty offsets + the empty-slot predicate), retiring the 8street-layout citation for the P5 save-import seam (2026-08-27, worker 42041a21 claim 1, item p5-zonea-mission1-parity; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run; read-only byte probe of the shipped game-data/BEDLAM/SAVED.BDL + OPTIONS.BDL with MANIFEST.sha256 clean before and after) [verified]
+
+The P5 zone acceptance (PLAN §6 P5 / P5-ZONE-GATES §1 criterion 6)
+requires the ORIGINAL SAVED/OPTIONS.BDL import to be read-only,
+bounds-checked and fuzzed. The 180-B slot layout was previously only
+8street-cited ([CPP] save.cpp / [ASM] save_game — RESEARCH-8STREET
+§2 `.BDL` row); the 8street policy demands EXW re-anchoring before
+it can back an engine seam. Decode of the save-load restore arm (the
+name-entry jump-table case at 0x43c258, slot dispatch 0x43c26e):
+
+```
+43c26e: imul eax, edx, 0xb4      ; slot stride = 0xB4 = 180 bytes
+43c274: mov  edx, 0x4eae58       ; the 5-slot staging buffer (5*180=900)
+43c27b: mov  eax, [edx+0xc]      ; dword@slot+0xC
+43c283: test eax,eax; je 43c558  ; ZERO -> the EMPTY-slot exit arm
+43c289: mov  ecx,8; mov edi,0x4e444c; mov esi,edx
+43c295: call 0x44745e            ; memcpy(name_cell, slot+0, 8)   name @+0x00
+43c2a2: add  edi,8               ; cursor := slot+8
+43c2b6: mov  esi,[edi]           ; mask  = dword @+0x08
+43c2b3: movsx eax,WORD [eax]     ; zone  = SIGNED word @+0x0C (slot+0xC)
+43c2b8: mov  ds:0x4edd8c,eax     ; ZONE cell := zone (the §7j.64/F writer)
+43c371..383: score = dword @+0x0E -> 0x4dd40c
+43c390..395: money = dword @+0x12 -> 0x46ae70
+43c3a0..a6: difficulty = movsx word @+0x16 -> 0x46cbf8
+43c3ae..: the 7x7-word weapon row walk @+0x18.. (the §7j.64/B4 decode,
+          player-type-indexed imul 0x62), then the 0x1C-stride chassis
+          row (0x4deafc, §7j.67 boundary) — already pinned, not re-walked
+```
+
+VERIFIED facts pinned by this walk:
+- SLOT GRAMMAR (EXW, addresses above): stride 0xB4 (180); name 8 B at
+  +0x00; completed-missions bitmask dword at +0x08; zone SIGNED word
+  at +0x0C; hiscore/score dword at +0x0E; money dword at +0x12;
+  difficulty SIGNED word at +0x16; weapon rows from +0x18. This
+  independently CONFIRMS the 8street header offsets — now anchored,
+  no longer cited.
+- EMPTY-SLOT PREDICATE: the restore tests the DWORD at +0x0C (the
+  zone word widens to a dword read) against zero and branches to the
+  0x43c558 exit arm — a slot whose zone dword is zero is NEVER
+  restored (the shipped file's four "EMPTY" slots are exactly this
+  shape: name "EMPTY", all-zero payload).
+- MASK SEMANTICS: after the zone cell write, the arm replays
+  completion zone-by-zone (0x43c2bf..0x43c2fb: FUN_004474ef(zone',
+  sub=1..5) for every zone' < zone), then for the CURRENT zone marks
+  exactly the set bits of the saved mask (0x43c306..0x43c36c: tests
+  si&1/2/4/8/0x10 -> FUN_004474ef(zone, sub)). I.e. the mask is the
+  CURRENT stage's completed-sub bitmask — entering zone N implies all
+  subs of zones < N complete. Our Episode {stage, mask} models this
+  exactly (fsm.rs stage_slot validation: stage 1..=8, mask ⊆
+  FULL_MASK[stage]); the restore's zone cell is our stage value
+  verbatim (zone cell fresh = 1 = ZONEA, §7j.64/B).
+- SHIPPED CORPUS (read-only probe, MANIFEST-clean): SAVED.BDL = 900 B
+  = 5 x 180 exactly (the stride arithmetic closes on the real file);
+  slot 0 = "PLAYER", mask 0, zone 2 (-> ZONEB), score 0xA40B, money
+  0x244 (580), difficulty 1; slots 1..4 = "EMPTY" + zero payload (the
+  empty predicate holds). OPTIONS.BDL = 41 B (backbuffer 1, actionpan
+  1, language 0, cd_audio 2, name "Player", volume 75, code_no_title
+  1, midi 1, sound 1, installdrive 'C') — the typed import
+  (bedlam-game config.rs over assets bdl.rs) is already the reader;
+  volume 75 <= 100 keeps the domain check clean on the real bytes.
+
+ENGINE CONSEQUENCE (landed this unit, bedlam-game save.rs): the
+original-save import seam is the bounded header walk above —
+exactly-900 length check, slot index < 5, the EXW empty predicate,
+signed-word zone in 1..=8 with mask ⊆ FULL_MASK[zone] (never guess),
+money/score/difficulty RETURNED not staged (sim-side per DESIGN-GAME
+sec 3, the §7j.64 cell census), and the staging itself through the
+existing stage_episode_slot seam (the 0x43c2b8 zone-cell write + the
+mask replay are precisely what that seam models, D51). No writer
+exists and none is owed for parity (new saves use the new versioned
+format per PLAN §6 P5).
