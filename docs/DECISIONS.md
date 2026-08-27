@@ -6106,3 +6106,51 @@ until this watchdog repair.
    bedlam-core release 151/0 (incl. the two new pins), fmt + clippy
    -D warnings clean on the touched lib, gates-validator 22/22,
    MANIFEST clean before AND after every corpus run.
+
+## D182 — 2026-08-28: P5 `p5-critter-state-g2-ballistic6` — the SECOND G2 critter-state unit: BallisticState6 (.NME section 6) staged engine-side through the already-landed k5/6 shared body, the census re-pinned (the BallisticState6xNN component dropped, no row flipped clean), and the D179 RIDER landed — the S3/S4 hp scalars aligned to the 0x46ae8c linear-mission m with the S8 canonical chain re-baselined deliberately
+1. RE FIRST (§7j.72, decompile-only from the COMMITTED
+   exw-critterpoi-loader.txt — no Ghidra run): the S6 staging block
+   walked exact — ONE critter per 8-B record at EVERY difficulty
+   (no inner spawn loop; the S3/S7 multiplier preambles and their
+   RandA draws absent), ZERO stream draws, the S3 stamps verbatim
+   (kind 6, species 3, mode 8, anim 5, heading 0x72, the w1-level
+   floor probe FUN_0041e411(x>>8,y>>8,w1<<5), countdown 0), no home
+   stamps (only S5 writes +0x42/+0x46), hp = 0x96+(m·0x96)/0x1B on
+   the SAME [0x46ae8c] cell — closing the §7j.71/1 imul census:
+   EVERY section's scalar is the linear mission m, none difficulty.
+2. ENGINE (bedlam-core::critter): `stage_critters` accepts section
+   6 — the E S3 block verbatim with kind 6 and ONE draw-free spawn
+   (the k5/6 dispatch arm `5 | 6` predates it from W12-S8; home =
+   spawn rides the E S3 convention). 3 new unit tests (the
+   one-each/draw-free/stamps pin at d=0 and d=3, the file-order
+   S2→S3→S4→S6 staging, the scalar proof: d=3/m=5 → hp 177/237
+   where the difficulty form said 166/222, m=0 → the base).
+3. THE CENSUS RE-PIN (the D28 fingerprint rule): BallisticState6xNN
+   dropped from all 26 hosting rows; NO row flipped clean (every
+   host also carries Shooters/Chasers/CloseCombat/Personnel;
+   ZONEA-MISSION1 stays the sole clean row). The print-table output
+   committed as provenance (docs/evidence/
+   p5-g2-ballistic6-census-table.txt); P5-ZONE-GATES §6.2/G2 + the
+   §6.3 table + the §6.4 rollup re-baselined together.
+4. THE CHAIN DECISION (the scenario the D179 queue item named as
+   justifying the re-pin): S8 stages ZONEA S3+S4 under
+   `critters = 1` with NO `destroy = 1`, and `MissionSim::linear`
+   is destroy-staged → m = 0 there → the staged hp drops 155→150
+   (kind-5) / 207→200 (kind-4) and the S8 chain moves:
+   canonical_dump_gate corpus_s8 + differ_gate's S8 row
+   10c78a7144cf6d3d -> bac6a3053cedfebd (both re-baselined in this
+   unit's commits, pins + assert comments updated together). The
+   ORIGINAL at ZONEA/M1 reads the derived cell (clamp to 1) → hp
+   155/207; the divergence is S8's own deliberate no-destroy
+   staging — the same "0 when unstaged" class D179 accepted for S2,
+   documented §7j.72/4. Paths staging destroy before critters (the
+   canonical order, every census row) read the true m. The S8
+   death-timeline asserts survived as inequalities (diving ≥ 8 at
+   f39, dormant == diving at f120) — only the chain + hp equality
+   pins moved.
+5. Verified: bedlam-core release 155/0 (18 critter tests), bedlam-
+   game release 245/0 (canonical_dump_gate 13/13 re-pinned,
+   differ_gate 4/4, census green), diffharness 103/0, fmt clean,
+   clippy clean on the touched files (the 5 remaining workspace
+   warnings pre-exist at HEAD), gates-validator 22/22 at the final
+   commit, MANIFEST clean before AND after every corpus run.

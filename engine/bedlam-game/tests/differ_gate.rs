@@ -602,8 +602,12 @@ fn s0_s1_cross_and_double_run() {
         // 1 S1-class row-level finding — zero field gaps (the 0x68
         // records fabricate through the same bare-span T2 form; the
         // critter bank through the 23-leaf 0x7E projection; the
-        // effect rows through the 8-leaf 0x20 walk).
-        ("S8", 121u64, "10c78a7144cf6d3d", 1u64),
+        // effect rows through the 8-leaf 0x20 walk). Chain
+        // RE-PINNED at the BallisticState6 landing (D182, §7j.72/4:
+        // the S3/S4 hp scalars moved to the linear mission m; S8
+        // stages no destroy → m = 0 → hp 150/200):
+        // 10c78a7144cf6d3d → bac6a3053cedfebd.
+        ("S8", 121u64, "bac6a3053cedfebd", 1u64),
     ] {
         let src = fs::read_to_string(scen_path(id)).unwrap();
         let e_run = run_canonical(&src, &root).unwrap();

@@ -2157,7 +2157,12 @@ fn corpus_s8_critter_engagement() {
     assert_eq!(run.bytes, run_b.bytes, "byte-identical double run");
     // Chain pin (the fingerprint discipline, D28: moves only on a
     // deliberate engine/dump change, re-baselined loudly).
-    assert_eq!(run.manifest.chain_digest, "10c78a7144cf6d3d");
+    // RE-PINNED at the BallisticState6 landing (D182, §7j.72/4 —
+    // the D179 rider): the S3/S4 hp scalars swapped difficulty for
+    // the linear mission m, and S8 stages NO destroy → linear
+    // unstaged → m = 0 → the staged hp dropped 155→150 (kind-5)
+    // and 207→200 (kind-4). 10c78a7144cf6d3d → bac6a3053cedfebd.
+    assert_eq!(run.manifest.chain_digest, "bac6a3053cedfebd");
 
     let dump = decode_dump(&run.bytes).expect("S8 dump verifies");
     assert_eq!(dump.header.scenario, "S8");
@@ -2196,19 +2201,21 @@ fn corpus_s8_critter_engagement() {
     // All ACTIVE from frame 0 (neither ZONEA family spawns
     // dormant): kind-5 engage-family modes (the anchor snapshot
     // sits AFTER the first controller pass — the near pack has
-    // already transitioned/fired once), kind-4 mode 9, hp scaled
-    // base+base·1/27 = 155/207 (the §7j.42 difficulty staging).
+    // already transitioned/fired once), kind-4 mode 9, hp =
+    // base+base·m/27 with m = 0 (S8 stages no destroy → linear
+    // unstaged — the §7j.72/4 re-baseline; the difficulty form
+    // said 155/207) → 150/200 exactly.
     for i in 0..7 {
         let mode = critter_field(b, i, 8, 2);
         assert!(
             matches!(mode, 2 | 3 | 8),
             "kind-5 engage-family mode (got {mode})"
         );
-        assert_eq!(critter_field(b, i, 6, 2), 155, "kind-5 hp 150+150/27");
+        assert_eq!(critter_field(b, i, 6, 2), 150, "kind-5 hp 150 (m=0)");
     }
     for i in 7..17 {
         assert_eq!(critter_field(b, i, 8, 2), 9, "kind-4 mode 9");
-        assert_eq!(critter_field(b, i, 6, 2), 207, "kind-4 hp 200+200/27");
+        assert_eq!(critter_field(b, i, 6, 2), 200, "kind-4 hp 200 (m=0)");
     }
 
     // The fire cycle: 0x68 records appear in the ALIASED
