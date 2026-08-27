@@ -6037,3 +6037,40 @@ until this watchdog repair.
    including the D177 wrapped-metadata rejection; MANIFEST clean before
    AND after; no corpus read beyond the manifest check; no engine
    change. (watchdog repair token llm-watchdog 30933 1787866581)
+
+## D181 — 2026-08-27: infra `ci-cross-os-repair` — the CI matrix RED-for-environment state repaired (ubuntu alsa + miri file-isolation), restoring the designed cross-OS enforcement channel for P5-ZONE-GATES §7 row 5
+1. VERDICT (re-verified via gh before touching anything, run 33116062233
+   and >=100 prior): every failure is BEFORE any test executes, both
+   causes environmental, neither a code/determinism finding. (a) The
+   ubuntu build leg dies at `cargo clippy --workspace --all-targets`
+   in the alsa-sys v0.4.0 build script — cpal (a bedlam-shell dep) on
+   Linux needs the ALSA headers + pkg-config, which ubuntu-latest does
+   not preinstall. (b) The miri job dies at the FIRST filesystem probe
+   in bedlam-core's corpus-gated suites: under Miri's default file
+   isolation, `open`/`stat` are ABORTING unsupported operations, so the
+   skip paths themselves (fs::read in mission_corpus_gate, is_dir in
+   the static_* differentials) never get to return their clean
+   NotFound->skip result. (c) The windows leg was never its own
+   failure — it compiles through clippy and gets fail-fast-cancelled
+   behind ubuntu every run.
+2. THE FIX (workflow-only, zero engine/test-code change, commit carries
+   this entry): .github/workflows/ci.yml gains (a) a Linux-only
+   `sudo apt-get install -y libasound2-dev pkg-config` step in the
+   build matrix before the cargo commands, and (b)
+   `MIRIFLAGS: -Zmiri-isolation-error=warn` on the miri step — the
+   warn policy turns isolated file ops into clean syscall errors, so
+   the corpus probes return Err/None/false and the suites skip exactly
+   as they do on any corpus-less checkout. Chosen over cfg!(miri)
+   guards in 9 test files: one line vs churn, identical semantics
+   (miri's charter is UB detection over the unit suites — corpus IO
+   never runs there), and it keeps the normal cargo-test skip paths
+   byte-identical for dev machines and the matrix leg.
+3. VERIFIED LOCALLY BEFORE PUSH: a clean clone of HEAD (no game-data,
+   exactly a CI checkout) — fmt OK, clippy --workspace --all-targets
+   OK, and `cargo test --workspace` green (every corpus-gated suite
+   skips cleanly); `MIRIFLAGS=-Zmiri-isolation-error=warn cargo
+   +nightly miri test -p bedlam-core -p bedlam-audio` green end to
+   end (mission_corpus_gate + all static_* differentials skip via the
+   warn-policy error returns; the unit suites all pass). The pushed
+   run's green matrix (both legs) is the in-repo evidence recorded in
+   NEXT.md.

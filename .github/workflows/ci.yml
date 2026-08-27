@@ -13,6 +13,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # cpal (bedlam-shell's audio out) builds alsa-sys on Linux; its
+      # build script needs the ALSA headers + pkg-config to probe the
+      # library. Without this step every ubuntu matrix leg died at
+      # clippy --workspace --all-targets before any test executed
+      # (>=100 consecutive red runs, ci-cross-os-repair evidence).
+      - name: install alsa headers (linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
@@ -47,4 +57,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
+      # bedlam-core's corpus-gated suites probe game-data on their SKIP
+      # paths (std::fs::read in mission_corpus_gate, Path::is_dir in the
+      # static_* differentials). Under Miri's default file isolation those
+      # probes abort as unsupported operations; the warn policy turns the
+      # probe syscall into a clean Err so the suites skip exactly as they
+      # do on any corpus-less checkout. The job's charter stays UB
+      # detection over the bedlam-core+bedlam-audio suites - corpus IO
+      # (miri-hostile, multi-minute) never runs here (ci-cross-os-repair).
       - run: cargo +nightly miri test -p bedlam-core -p bedlam-audio
+        env:
+          MIRIFLAGS: -Zmiri-isolation-error=warn
