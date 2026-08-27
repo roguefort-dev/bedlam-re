@@ -175,3 +175,125 @@ completion stays controller-owned.
    severity, gameplay-coupling) is a separate committed P5 artifact per PLAN
    §6; `catalog_refs` values are its entry ids, so the catalog feeds P6
    triage directly from the mission ledger.
+
+---
+
+## 6. The all-37-mission load-census GAP TABLE (unit `p5-mission-load-census`, D176)
+
+**Provenance:** unit `p5-mission-load-census` (D176), run 2026-08-27 at
+HEAD `6355fba`. Every one of the 37 ledger missions was driven through
+OUR engine load seams READ-ONLY from `game-data/BEDLAM`:
+`GameHost::stage_episode_slot` + `GameHost::load_mission` (the
+canonical mission-view load seam: Terrain + AngleTable +
+`MissionView::from_mission_bytes` + MapOverlay + MRK spawns) where the
+episode slot reaches the mission, `MissionScene::stage` + the claim
+bank directly where it cannot; then the destroy family
+(.BDG/.POS/.TRT via `stage_destroy_family`), the pickup surface (.TOT
+via `stage_pickup_surface` + the hazard stamper), the critter family
+(.NME via `stage_critters`), the bedlam-assets parser family over
+every runtime file (grid16/grid8/pad/mrk/pos/trt/nme/bdg + the zone
+min/lnk/lng/cgr/bin family), and a short scripted frame run (FSM
+Boot→Mission + 9 frames host-side, activate + 8 × tick/present
+direct-side; panics caught and reported). The executable artifact is
+`engine/bedlam-game/tests/mission_load_census.rs`
+(`census_matches_pinned_table` — corpus-gated, pins the table below;
+`census_print_table --ignored --nocapture` prints the full columns).
+`sha256sum -c MANIFEST.sha256 --quiet` clean BEFORE and AFTER; no
+Ghidra run; no corpus write.
+
+**Confidence tags:** every row is VERIFIED by the executable census
+(machine-derived, deterministic, re-runnable). The three gap CLASSES
+are the census verdict (D176); G3's override rule is LIKELY
+(corpus + RESEARCH-8STREET §3 — the 8street reference is NOT evidence
+until re-anchored to EXW, per the 8street policy).
+
+### 6.1 Headline
+
+**ALL 37 missions LOAD through our engine.** Zero load failures, zero
+parser refusals, zero frame-run panics. The destroy family, the pickup
+surface and every parser accept all 37 missions' runtime file
+families. The only mission that loads with ZERO gaps is
+`ZONEA-MISSION1` — exactly the mission the S0–S8 canonical corpus
+exercises. Every other mission loads with named gaps, all of them
+SEMANTIC (engine scope), none parser-sized. The ledger is therefore
+UNCHANGED: no mission is unloadable-by-corpus, so no disposition
+moves (dispositions flip only on zone-parity evidence, §3/§5).
+
+### 6.2 The three named gap classes
+
+| Class | Kind | Missions | Content | Sizing |
+|-------|------|----------|---------|--------|
+| G1 | episode-slot seam (semantic) | 10: all zones B–F missions 6–7 | `GameHost::stage_episode_slot` cannot stage them: `FULL_MASK` pins FOUR sub-slots per stage (B2 @0x81d9a, RE-pinned; mask ⊆ 0b1111), so a slot can derive missions 1–5 only. The census staged them DIRECTLY (`MissionScene::stage` + claim bank — the `load_mission` body verbatim); they load and run clean. The fix is the SELECT mission-choice shell (the original's sub-mission picker), its own unit. | one shell-modeling unit + wiring |
+| G2 | critter family scope (semantic) | 26: zones B–F missions 1–5 (25) + ZONEG-MISSION1 | `.NME` hosts critter sections the controller does not model (`stage_critters` accepts MixedState5 + SeekSteppers only, §7j.42/6): the refusals name Shooters (state 2), Wanderers (1), Chasers (3), BallisticState6, CloseCombat (7), and the personnel/POI bank (S8). ZONEA-MISSION1 passes (MixedState5x6 + SeekSteppersx5 — the modeled slice); the ten 16-byte all-zero .NME missions (all B–F missions 6/7) pass trivially. Not parser-sized: each critter state is AI modeling, its own unit(s). | per-state units; per-mission counts in §6.3 |
+| G3 | zone-BIN variant naming (RE open) | 3: ZONEB-MISSION6, ZONED-MISSION5, ZONEE-MISSION6 | The corpus ships mission-number terrain banks `ZONEB/MISSION6.BIN`, `ZONED/MISSION5.BIN`, `ZONEE/MISSION6.BIN` beside the zone-level `MISSION{L}.BIN`; our fetch always builds `MISSION{L}.BIN` (`mission_asset_names`). The census loaded those missions with the zone-level bank (loads + frames clean). The override rule is the open RESEARCH-8STREET §3 question — unresolved against EXW; if the original swaps the bank per mission, our terrain sprites for those three missions are wrong until then. Its own RE unit. | one RE unit (EXW-anchored) |
+
+### 6.3 Per-mission table (the census output, pinned)
+
+`load` = the load seam that staged the mission (host = episode-slot +
+`load_mission`; direct = `MissionScene::stage`, G1). `destroy`/`pickup`/
+`parsers`/`frames` are ok for ALL 37 rows (§6.1) and omitted; `critter
+gap` names the refused .NME sections (G2).
+
+| Mission | Dims | Load | Critter gap (refused sections) |
+|---------|------|------|-------------------------------|
+| ZONEA-MISSION1 | 25×75 | host | — (clean) |
+| ZONEB-MISSION1 | 100×100 | host | Wanderersx24, Chasersx10, BallisticState6x9 |
+| ZONEB-MISSION2 | 100×100 | host | Shootersx3, Wanderersx22, Chasersx6, BallisticState6x5 |
+| ZONEB-MISSION3 | 100×100 | host | Wanderersx18, Chasersx7, BallisticState6x12 |
+| ZONEB-MISSION4 | 100×100 | host | Shootersx1, Wanderersx13, Chasersx12, BallisticState6x21 |
+| ZONEB-MISSION5 | 100×100 | host | Shootersx1, Wanderersx28, Chasersx16, BallisticState6x12 |
+| ZONEB-MISSION6 | 100×100 | direct (G1) | — (empty .NME; G3: MISSION6.BIN variant) |
+| ZONEB-MISSION7 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEC-MISSION1 | 100×100 | host | Shootersx1, Wanderersx13, Chasersx10, BallisticState6x13 |
+| ZONEC-MISSION2 | 100×100 | host | Wanderersx22, Chasersx13, BallisticState6x13 |
+| ZONEC-MISSION3 | 100×100 | host | Shootersx4, Wanderersx18, Chasersx9, BallisticState6x21, CloseCombatx4 |
+| ZONEC-MISSION4 | 100×100 | host | Wanderersx19, Chasersx15, BallisticState6x23 |
+| ZONEC-MISSION5 | 100×100 | host | Shootersx1, Wanderersx12, Chasersx2, BallisticState6x22 |
+| ZONEC-MISSION6 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEC-MISSION7 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONED-MISSION1 | 100×100 | host | Shootersx4, Wanderersx33, Chasersx9, BallisticState6x18 |
+| ZONED-MISSION2 | 100×100 | host | Shootersx8, Wanderersx20, Chasersx7, BallisticState6x9 |
+| ZONED-MISSION3 | 100×100 | host | Shootersx8, Wanderersx2, Chasersx4, BallisticState6x21 |
+| ZONED-MISSION4 | 100×100 | host | Shootersx8, Wanderersx2, Chasersx4, BallisticState6x16 |
+| ZONED-MISSION5 | 100×100 | host | Shootersx4, Wanderersx12, BallisticState6x17 |
+| ZONED-MISSION6 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONED-MISSION7 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEE-MISSION1 | 100×100 | host | Shootersx4, Wanderersx18, Chasersx6, BallisticState6x17, CloseCombatx5, Personnelx12 |
+| ZONEE-MISSION2 | 100×100 | host | Shootersx1, Wanderersx34, Chasersx5, BallisticState6x2, CloseCombatx5, Personnelx12 |
+| ZONEE-MISSION3 | 100×100 | host | Shootersx3, Wanderersx28, Chasersx5, BallisticState6x11, CloseCombatx6, Personnelx12 |
+| ZONEE-MISSION4 | 100×100 | host | Shootersx4, Wanderersx23, Chasersx8, BallisticState6x8, CloseCombatx8, Personnelx12 |
+| ZONEE-MISSION5 | 100×100 | host | Shootersx5, Wanderersx27, Chasersx13, BallisticState6x5, CloseCombatx4, Personnelx13 |
+| ZONEE-MISSION6 | 100×100 | direct (G1) | — (empty .NME; G3: MISSION6.BIN variant) |
+| ZONEE-MISSION7 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEF-MISSION1 | 100×100 | host | Wanderersx12, Chasersx3, BallisticState6x43, CloseCombatx4, Personnelx9 |
+| ZONEF-MISSION2 | 100×100 | host | Wanderersx28, BallisticState6x12, Personnelx9 |
+| ZONEF-MISSION3 | 100×100 | host | Wanderersx24, BallisticState6x16, Personnelx9 |
+| ZONEF-MISSION4 | 100×100 | host | Wanderersx11, BallisticState6x17, Personnelx9 |
+| ZONEF-MISSION5 | 100×100 | host | Wanderersx42, BallisticState6x53, Personnelx19 |
+| ZONEF-MISSION6 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEF-MISSION7 | 100×100 | direct (G1) | — (empty .NME) |
+| ZONEG-MISSION1 | 100×25 | host | Shootersx3, Wanderersx20, Chasersx23, BallisticState6x18, CloseCombatx6, Personnelx9 |
+
+Dims cross-check: every TOT header matches the §2 zone table
+(25×75 / 100×100 / 100×25) — a second, independent re-derivation of
+the §2 size arithmetic (VERIFIED).
+
+### 6.4 Per-zone rollup (zone-work sizing)
+
+| Zone | Missions | Load | G1 | G2 critter states to model | G3 |
+|------|----------|------|----|---------------------------|----|
+| A | 1 | 1 host | 0 | none (clean) | — |
+| B | 7 | 5 host + 2 direct | 2 | Shooters (M2,M4,M5), Wanderers, Chasers, BallisticState6 | MISSION6.BIN |
+| C | 7 | 5 host + 2 direct | 2 | Shooters (M1,M3,M5), Wanderers, Chasers, BallisticState6, CloseCombat (M3) | — |
+| D | 7 | 5 host + 2 direct | 2 | Shooters, Wanderers, Chasers, BallisticState6 | MISSION5.BIN |
+| E | 7 | 5 host + 2 direct | 2 | Shooters, Wanderers, Chasers, BallisticState6, CloseCombat, Personnel | MISSION6.BIN |
+| F | 7 | 5 host + 2 direct | 2 | Wanderers, Chasers (M1), BallisticState6, CloseCombat (M1), Personnel | — |
+| G | 1 | 1 host | 0 | Shooters, Wanderers, Chasers, BallisticState6, CloseCombat, Personnel | — |
+
+The load/parse layer needs NO work for any zone: zone parity work is
+the G1 SELECT shell, the G2 critter states (+ the S8 personnel/POI
+bank), and the G3 BIN-variant RE — all queued as their own units
+(`.state/NEXT.md`). The census test stays as the regression guard:
+any loader change that flips a row fails
+`census_matches_pinned_table` until deliberately re-baselined (the D28
+fingerprint rule).

@@ -5818,3 +5818,63 @@ evidence lands).
    canonical_dump_gate 13/13 (controls — no engine change, docs/tools
    only); MANIFEST clean before AND after; no Ghidra run; no corpus
    write. (worker 05e2d7ae claim 1)
+
+## D176 — 2026-08-27: P5 `p5-mission-load-census` — the all-37-mission READ-ONLY load census VERDICT: every mission loads; the zone work is three named SEMANTIC gap classes (G1 episode-slot/SELECT shell, G2 critter states, G3 zone-BIN variant RE), none parser-sized; ledger unchanged
+
+Context: the P5 opener (D175) queued the load census as the sizing
+step before any zone-parity work: drive OUR engine load seams (the
+bedlam-render mission-view load path + the bedlam-core/bedlam-assets
+loader family — the seams the S0–S8 canonical corpus already exercises
+on ZONEA-shaped content) against every one of the 37 ledger missions'
+runtime file family (FORMATS-MISSION §0.2), READ-ONLY, and record the
+per-mission/per-zone GAP TABLE (docs/P5-ZONE-GATES.md §6) BEFORE any
+loader change.
+
+1. THE EXECUTABLE CENSUS (engine/bedlam-game/tests/
+   mission_load_census.rs, corpus-gated, deterministic): per mission —
+   the canonical 25-name fetch + GameHost::load_mission through
+   stage_episode_slot where the slot reaches the mission
+   (MissionScene::stage + claim bank directly where it cannot), then
+   the destroy family (BDG/POS/TRT), the pickup surface (TOT), the
+   critter family (NME), the full bedlam-assets parser family over
+   every runtime file, and a scripted frame run (FSM Boot→Mission + 9
+   frames host-side; activate + 8 tick/present direct-side; panics
+   CAUGHT and recorded as gaps). The pinned table
+   (census_matches_pinned_table) is the §6 doc table's machine form —
+   D28 fingerprint discipline; census_print_table --ignored prints the
+   full columns.
+
+2. THE VERDICT (VERIFIED): ALL 37 LOAD — zero load failures, zero
+   parser refusals, zero frame-run panics; destroy/pickup/parsers/frames
+   ok on every row; every TOT header re-derives the §2 dims table
+   independently. ZONEA-MISSION1 is the only zero-gap mission (the
+   canonical corpus's own mission). No mission is unloadable-by-corpus
+   → the ledger stays 37×pending (dispositions flip only on
+   zone-parity evidence).
+
+3. THE THREE GAP CLASSES (all SEMANTIC, none parser-sized → nothing
+   landed this unit; all queued as their own units):
+   a. G1 episode-slot seam (10 missions: B–F missions 6–7): FULL_MASK
+      pins four sub-slots per stage (B2 @0x81d9a), so stage_episode_slot
+      derives missions 1–5 only; the census staged 6–7 DIRECTLY (the
+      load_mission body verbatim minus the host) — they load and run
+      clean. Fix = the SELECT mission-choice shell, one unit.
+   b. G2 critter family scope (26 missions: B–F M1–5 + ZONEG-M1):
+      .NME hosts states the controller refuses (§7j.42/6 accepts
+      MixedState5+SeekSteppers only) — Shooters/Wanderers/Chasers/
+      BallisticState6/CloseCombat/Personnel; ZONEA-M1 passes (the
+      modeled slice), the ten 16-byte all-zero .NME missions (B–F
+      M6/M7) pass trivially. Per-state AI units.
+   c. G3 zone-BIN variant naming (3 missions: ZONEB-M6, ZONED-M5,
+      ZONEE-M6): the corpus ships mission-number terrain banks beside
+      the zone-level MISSION{L}.BIN; our fetch always builds the
+      zone-level name. Override rule = the open RESEARCH-8STREET §3
+      question, unresolved against EXW (LIKELY, not VERIFIED). One
+      EXW-anchored RE unit.
+
+4. VERIFIED THIS RUN: census 1/1 (pinned 37 rows) + the ignored print
+   probe; canonical_dump_gate 13/13; bedlam-game release suite 234/0;
+   fmt + clippy clean on the touched crate; MANIFEST clean before AND
+   after; no Ghidra run; no corpus write; no canonical-chain movement
+   (test-only addition). (worker 7e59f4d7 claim 1, item
+   p5-mission-load-census)
