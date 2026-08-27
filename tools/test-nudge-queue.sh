@@ -283,6 +283,18 @@ write_queue <<'EOF'
 EOF
 expect_invalid "rejects malformed metadata" 'malformed|id'
 
+# A metadata tag hard-wrapped across lines (gate= on the item's first line,
+# the value's tail on the next) is not canonical single-token metadata: the
+# 2026-08-27 INVALID-DEADLOCKED stall was exactly this shape, and it must
+# keep failing closed instead of scheduling a mangled identity.
+write_queue <<'EOF'
+## Now
+1. [READY] [id=wrapped-gate] [gate=p5-zone-gate-
+   scaffold] wrapped metadata tag across lines
+## Backlog
+EOF
+expect_invalid "rejects metadata tag wrapped across lines" 'malformed metadata'
+
 # WAITING-AUTOMATIC is fully machine-owned and bounded. Either timeout or an
 # absolute deadline bounds it; retry and timeout durations are positive.
 for missing in probe retry bound; do

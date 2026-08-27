@@ -5878,3 +5878,35 @@ loader change.
    after; no Ghidra run; no corpus write; no canonical-chain movement
    (test-only addition). (worker 7e59f4d7 claim 1, item
    p5-mission-load-census)
+
+## D177 — 2026-08-27: queue grammar restored after the transport-killed end-of-run rewrite (watchdog repair 3644831) — wrapped `[gate=…]` tags and shared umbrella gate ids are the two recurring INVALID-DEADLOCKED shapes; follow-up units keep id==gate
+
+The `p5-mission-load-census` worker (7e59f4d7) finished green (4803d58
+PUSHED) but a transport error killed its session between the end-of-run
+`.state/NEXT.md` rewrite and the commit, stranding an uncommitted queue
+that the strict parser rejected (rc=2 → controller refused idle/spawn for
+~6.5 h, the second INVALID-DEADLOCKED of this class after 6355fba).
+
+1. THE TWO GRAMMAR BREACHES (both introduced by hand-wrapping the item
+   opening): (a) item 2's `[gate=p5-zone-gate-scaffold]` tag hard-wrapped
+   across lines — metadata tags are single-token by
+   tools/nudge-free-items.py METADATA_RE, and the canonical
+   status/id/gate prefix must sit same-line on the numbered line; (b)
+   items 2–4 all carried `[gate=p5-zone-gate-scaffold]`, breaching the
+   duplicate-gate rule (:458) — the queue gate tag is per-item IDENTITY
+   (the claim binds id+gate), not the required-gates umbrella.
+2. THE RULE (same as 6355fba, now pinned by a regression case in
+   tools/test-nudge-queue.sh): every active item gets its OWN gate id,
+   self-named id==gate (p5-critter-state-g2-wanderers,
+   p5-select-shell-g1, p5-zone-bin-variant-g3), and the gate tag is
+   never line-wrapped. The umbrella gate a unit must keep green stays
+   in its Bounds prose, not in its identity tag.
+3. WIP ADOPTED, NOT REDONE: the interrupted rewrite's content is
+   preserved verbatim (census done entry, the renumbered queue, the
+   successor items 2–4 from the census gap classes G1/G2/G3); only the
+   three item-opening lines were rewrapped/regated. The pre-P4 Done-log
+   history the rewrite trimmed stays in git at 4803d58.
+4. VERIFIED THIS RUN: `nudge-free-items.py --state-v1` → RUNNABLE 1 2 3 4
+   (rc=0); tools/test-nudge-queue.sh PASS including the new
+   wrapped-metadata rejection; MANIFEST clean before AND after; no
+   corpus read beyond the manifest check; no engine change.
