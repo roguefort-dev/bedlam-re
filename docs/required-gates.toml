@@ -28,7 +28,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 [[phase]]
 id = "P5"
 status = "pending"
-required_gates = ["p5-zone-gate-scaffold"]
+required_gates = ["p5-zone-gate-scaffold", "p5-zone-a"]
 
 [[phase]]
 id = "P6"
@@ -161,3 +161,31 @@ commands = [
   ["/usr/bin/python3", "tools/test-p5-zone-ledger.py"],
 ]
 tracked_paths = ["docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "tools/check-p5-zone-ledger.py", "tools/test-p5-zone-ledger.py", "docs/required-gates.toml"]
+
+# p5-zone-a — the ZONEA completion gate (P5-ZONE-GATES §7, D178):
+# ZONEA's only mission (ZONEA-MISSION1, the canonical corpus's own)
+# flipped green in the same commit as this executable evidence — the
+# §1 acceptance shape per criterion. Command 1 = the bedlam-game
+# evidence: zonea_mission1_parity (the per-criterion aggregation
+# gate: S-flow crash-free completion, T1 spot rules, the independent
+# structural spot check, the §7j.70 SAVED/OPTIONS import seam over
+# the real shipped files + bounded fuzz, the replay-stitch identity)
+# + canonical_dump_gate (the pinned per-scenario chain digests) +
+# differ_gate (the cross-channel structural spot check) +
+# mission_scene_gate (the T2 key-moment frame/palette pins) +
+# determinism (rate-invariance replay identity). Command 2 = the
+# bedlam-core evidence: hash_fixture (the cross-OS replay-hash pins)
+# + mission_corpus_gate (the T1 loader/rules oracles on the real
+# ZONEA bytes). game-data is never git-tracked: no corpus path in
+# tracked_paths/corpus (read-only runtime reads, the MANIFEST
+# contract). The full §7 criterion table incl. the DM carve-out note
+# and the cross-OS channel status lives in docs/P5-ZONE-GATES.md §7.
+[[gate]]
+id = "p5-zone-a"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zonea_mission1_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "mission_scene_gate", "--test", "determinism"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "hash_fixture", "--test", "mission_corpus_gate"],
+]
+tracked_paths = ["engine/bedlam-game/tests/zonea_mission1_parity.rs", "engine/bedlam-game/src/save.rs", "engine/bedlam-game/src/host.rs", "engine/bedlam-game/src/lib.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "engine/bedlam-game/tests/canonical_dump_gate.rs", "engine/bedlam-game/tests/differ_gate.rs", "engine/bedlam-game/tests/mission_scene_gate.rs", "engine/bedlam-game/tests/determinism.rs", "engine/bedlam-core/tests/hash_fixture.rs", "engine/bedlam-core/tests/mission_corpus_gate.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml", "docs/RE-EXW-SIM.md"]
+corpus = ["tools/diffharness/scenarios/S0.scen", "tools/diffharness/scenarios/S1.scen", "tools/diffharness/scenarios/S2.scen", "tools/diffharness/scenarios/S3.scen", "tools/diffharness/scenarios/S4.scen", "tools/diffharness/scenarios/S6.scen", "tools/diffharness/scenarios/S7.scen", "tools/diffharness/scenarios/S8.scen"]

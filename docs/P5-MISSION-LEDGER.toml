@@ -15,7 +15,7 @@ schema = "p5-mission-ledger-v1"
 id = "ZONEA-MISSION1"
 zone = "A"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]

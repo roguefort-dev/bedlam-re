@@ -30,6 +30,7 @@ use crate::menu::{MenuAction, TitleMenu};
 use crate::mission::MissionScene;
 use crate::movie::MoviePlayer;
 use crate::music::{self, MusicPump};
+use crate::save::SaveSlotImport;
 use crate::GameError;
 
 /// Injected read side of every asset the game consumes. The hermetic
@@ -438,6 +439,36 @@ impl GameHost {
     /// slot (never guess).
     pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
         self.fsm.stage_episode_slot(stage, mask)
+    }
+
+    /// Import one ORIGINAL SAVED.BDL slot read-only and stage its
+    /// campaign state (PLAN §6 P5 save seam; RE-EXW-SIM §7j.70).
+    /// This is the engine's model of the original's save-load
+    /// restore arm: the header walk (bounds-checked: exact 900-B
+    /// file, slot < 5, the EXW zero-dword@+0x0C empty predicate,
+    /// zone/mask inside the modeled episode space) plus the staging
+    /// through the D51 seam — the zone-cell write and the mask replay
+    /// are exactly what [`GameHost::stage_episode_slot`] models.
+    /// `score`/`money`/`difficulty` are RETURNED, never staged
+    /// (sim-side cells per DESIGN-GAME sec 3, the §7j.64 census); the
+    /// import never writes anything back (new saves use the new
+    /// versioned format).
+    pub fn import_saved_slot(
+        &mut self,
+        data: &[u8],
+        slot: usize,
+    ) -> Result<SaveSlotImport, GameError> {
+        let import = crate::save::import_saved_slot(data, slot)?;
+        if !self.fsm.stage_episode_slot(import.stage, import.mask) {
+            // Unreachable: the import domain is exactly the staging
+            // domain (save.rs validates against the same tables).
+            return Err(GameError::SaveSlotInvalid {
+                slot,
+                zone: i32::from(import.stage),
+                mask: u32::from(import.mask),
+            });
+        }
+        Ok(import)
     }
 
     /// Stage the mission (DESIGN-GAME sec 11) from the corpus bytes

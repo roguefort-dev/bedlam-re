@@ -31,6 +31,7 @@ pub mod mission;
 pub mod movie;
 pub mod movies;
 pub mod music;
+pub mod save;
 
 pub use boot::{BootAttract, BootPhase};
 pub use brief::{BriefIntro, BriefPhase};
@@ -49,6 +50,9 @@ pub use movies::{
     logo_name, shop_name, title_name, Region, BRIEFING_DROP_NAME,
 };
 pub use music::{build_script, track_name, MusicPump, ScriptMeta, ScriptTerminal};
+pub use save::{
+    import_saved_slot, stage_imported_episode, SaveSlotImport, SAVED_LEN, SAVED_NAME, SAVED_SLOTS,
+};
 
 /// Serialization tag of the hashed scene-state view (DESIGN-GAME sec 7).
 pub const SCENE_HASH_TAG: &[u8; 4] = b"BDLG";
@@ -95,6 +99,18 @@ pub enum GameError {
         what: &'static str,
         reason: &'static str,
     },
+    /// Original SAVED.BDL slot index outside 0..5 (the staging buffer
+    /// holds exactly five slots, RE-EXW-SIM §7j.70).
+    #[error("save slot index {slot} out of range 0..5")]
+    SaveSlotIndex { slot: usize },
+    /// Original SAVED.BDL slot is empty — the EXW restore's zero
+    /// dword@+0x0C predicate (the 0x43c558 exit arm, §7j.70).
+    #[error("save slot {slot} is empty (dword@+0x0C == 0)")]
+    SaveSlotEmpty { slot: usize },
+    /// Original SAVED.BDL slot carries a campaign state outside the
+    /// modeled episode space (zone signed word or mask dword; §7j.70).
+    #[error("save slot {slot} campaign state zone {zone}/mask {mask:#x} is outside the modeled episode space")]
+    SaveSlotInvalid { slot: usize, zone: i32, mask: u32 },
 }
 
 #[cfg(test)]

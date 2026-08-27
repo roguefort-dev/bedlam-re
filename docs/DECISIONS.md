@@ -5910,3 +5910,83 @@ that the strict parser rejected (rc=2 → controller refused idle/spawn for
    (rc=0); tools/test-nudge-queue.sh PASS including the new
    wrapped-metadata rejection; MANIFEST clean before AND after; no
    corpus read beyond the manifest check; no engine change.
+
+## D178 — 2026-08-27: P5 `p5-zonea-mission1-parity` — ZONEA-MISSION1 flipped green (the FIRST zone-parity disposition) with its executable evidence + the `p5-zone-a` completion gate wired; the SAVED/OPTIONS.BDL original-import seam landed EXW-anchored (§7j.70); the CI cross-OS channel honestly recorded RED-for-environment with a queued repair
+
+Context: the queue head (the p5-mission-load-census follow-up) —
+ZONEA/MISSION1 to green per the P5-ZONE-GATES §1 acceptance shape,
+the ledger flip IN THE SAME COMMIT as the evidence, and (ZONEA having
+exactly one mission) the option to wire `p5-zone-a` when the
+checker's cross-artifact rule stays green.
+
+1. THE SAVE SEAM (engine, bounded): bedlam-game save.rs = the
+   original SAVED.BDL import, anchored by the fresh RE-EXW-SIM
+   §7j.70 decode of the restore arm (slot stride 0xB4=180, name@+0,
+   mask dword@+8, zone SIGNED word@+0xC -> the 0x4edd8c write, score
+   @+0xE, money@+0x12, difficulty@+0x16; empty predicate = zero
+   dword@+0x0C; the mask replay marks prior zones fully complete then
+   the current zone's bits) — the 8street layout is now EXW-anchored,
+   no longer cited. READ-ONLY + bounds-checked by construct (exact
+   900 B, slot < 5, empty predicate, zone 1..=8 with mask a sub-mask
+   of FULL_MASK[zone] — never guess; the missions-6/7 SELECT shape
+   stays rejected loud until G1 lands). GameHost::import_saved_slot
+   stages through the D51 seam (exactly the restore's zone-cell +
+   mask-replay effect); money/score/difficulty are RETURNED
+   (sim-side, DESIGN-GAME sec 3). No writer exists or is owed (new
+   saves use the new versioned format, PLAN §6 P5).
+
+2. THE EVIDENCE (tests, the p5-zone-a gate commands):
+   zonea_mission1_parity.rs — the per-criterion aggregation: the 8
+   ZONEA S-scenarios run their FULL declared budgets crash-free with
+   two-run byte identity; the T1 spot table (FULL_MASK @0x81d9a, the
+   first-unset-bit selection, the 4000-500d economy seed, the 25-name
+   fetch chain); the anchor TS statics re-derived INDEPENDENTLY from
+   the TOT header + the §7j.64/D154 fresh scalars; the REAL
+   SAVED/OPTIONS.BDL import (slot 0 "PLAYER"/zone 2/mask 0/money
+   580/difficulty 1 -> stages ZONEB-MISSION1; the four EMPTY slots
+   rejected; OPTIONS volume 75/name "Player") + bounded deterministic
+   fuzz (header bit-flip sweeps, truncations, size attacks — Ok/Err
+   only). canonical_dump_gate (pinned chains), differ_gate (structural
+   spot check), mission_scene_gate (T2 key-moment frames), determinism
+   + hash_fixture (replay-hash pins, verified on TWO toolchains:
+   stable + nightly, identical) and mission_corpus_gate (T1 deep
+   rules) run as the gate's commands.
+
+3. THE HONEST CROSS-OS RECORD (criterion 5): the CI matrix
+   (ubuntu+windows) is the designed cross-OS enforcement channel but
+   is RED repo-wide for ENVIRONMENT reasons predating this unit
+   (>=100 consecutive failures: alsa-sys needs libasound2-dev on the
+   ubuntu runner's clippy/build step; the miri job trips file
+   isolation on a corpus-gated bedlam-core suite; every failure lands
+   BEFORE any test executes — windows only ever fail-fast-cancels).
+   NOT a determinism finding: the hashed state is integer-only,
+   little-endian by format contract, float-free. The machine evidence
+   this unit pins is the fixtures + cross-toolchain equality; the CI
+   channel repair is QUEUED as its own unit (ci-cross-os-repair), not
+   silently counted.
+
+4. THE DM CARVE-OUT (criterion 7): noted, not checked — DM is
+   mode-level (same maps under netplay; no DM map variants exist in
+   the corpus). The carve-out's checkable legs (map loads; local SP
+   semantics) are criteria 1-2's evidence.
+
+5. THE FLIP + WIRING: docs/P5-MISSION-LEDGER.toml ZONEA-MISSION1 ->
+   green (catalog_refs empty: zero divergences observed; legitimate
+   per the §3 rule) IN THE SAME COMMIT as the evidence; p5-zone-a
+   wired into P5's required_gates with the two evidence commands
+   (checker rule 5 green: zone A fully green). P5 stays pending
+   (1/37; B-G open behind the G1/G2/G3 census classes).
+
+6. VERIFIED THIS RUN: zonea_mission1_parity 6/6; bedlam-game release
+   245/0 (234 + 5 save.rs units + 6 evidence tests); canonical_dump /
+   differ / mission_scene / determinism / hash_fixture /
+   mission_corpus_gate individually green in gate form
+   (--release --locked --offline); fmt + clippy -D warnings clean on
+   the touched crate (the 7 workspace clippy notes are pre-existing
+   bedlam-core test-file lints under clippy 1.97, untouched files);
+   checker OK (ZONEA 1/1 green); gates-validator suite 22/22 + the
+   bound P5 phase validation green at the flip commit; MANIFEST clean
+   before AND after every corpus-touching run; no Ghidra run; no
+   canonical-chain movement (new evidence only re-asserts existing
+   pins; the S-flows' chains are pinned once, in canonical_dump_gate).
+   (worker 42041a21 claim 1, item p5-zonea-mission1-parity)

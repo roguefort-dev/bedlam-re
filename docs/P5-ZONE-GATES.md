@@ -297,3 +297,47 @@ bank), and the G3 BIN-variant RE — all queued as their own units
 any loader change that flips a row fails
 `census_matches_pinned_table` until deliberately re-baselined (the D28
 fingerprint rule).
+
+---
+
+## 7. Zone A closure — ZONEA-MISSION1 green (D178)
+
+**Provenance:** unit `p5-zonea-mission1-parity` (D178), run 2026-08-27
+at HEAD `94d2c8b`+ (the RE-note commit; the evidence lands with the
+flip). Zone A has exactly ONE mission (§2), so the zone closure and
+the mission disposition are the same fact: `ZONEA-MISSION1` flips
+`green` in `docs/P5-MISSION-LEDGER.toml` IN THE SAME COMMIT as this
+evidence, and the `p5-zone-a` completion gate is wired into
+`docs/required-gates.toml` (the §4 rule-5 cross-artifact check stays
+green: zone A is fully green the moment the flip lands).
+
+**The §1 criterion table, per criterion** (every command below is in
+the `p5-zone-a` gate, executable offline under the validator's bwrap
+containment):
+
+| # | Criterion | Evidence (machine) | Status |
+|---|-----------|--------------------|--------|
+| 1 | scripted flows crash-free | `zonea_mission1_parity::zonea_scripted_flows_complete_crash_free`: every ZONEA-shaped S-scenario — S0 (boot→mission), S1 (400-frame passive), S2 (order→walk), S3 (weapon fire), S4 (destroy family), S6 (extraction), S7 (platform dynamics), S8 (critter engagement) — runs its full declared frame budget through the canonical runner; the W3 dump verifies; two runs byte-identical. The per-scenario CHAIN digests are additionally pinned in `canonical_dump_gate` (a gate command). S5/S5B/S5C are ZONEB's pickup corridors — zone B's evidence, not A's. | GREEN |
+| 2 | T1 rules vs RE/8street | The deep oracle suites run as gate commands: `mission_corpus_gate` (loader/climb/order/snap rules on the real ZONEA bytes), plus the spot table `zonea_t1_rules_spot` (the B2 @0x81d9a FULL_MASK table, the first-unset-bit mission selection, the §7j.64/C economy seed 4000−500·d, the 25-name fetch chain) and `zonea_structural_spot_check` (the anchor TS statics re-derived INDEPENDENTLY from the TOT header bytes + the §7j.64/D154 fresh-campaign scalars). The full D145–D164 static differential set remains the P4 `s0-dispositions` gate (all-RE oracles; unchanged). | GREEN |
+| 3 | perceptual frame checks at key moments (T2) | Diagnostic band per §0b: thresholds + owner feel sign-off, never pixel-exact gates. Machine stand-ins at the key moments: `mission_scene_gate` spawn/mid-walk frame-hash pins + the GAMEPAL fold pins (palette identity, 254/256 non-black) — a gate command. Owner feel sign-off stays the operator diagnostic process (not machine-checkable, not a gate). | GREEN (machine band) — sign-off tracked as operator diagnostic |
+| 4 | differ structural spot-check | `differ_gate` (the cross-channel differ on the real S0/S1 dumps: PASS-WITH-NOTES with exactly the budgeted findings, zero structural findings) + `zonea_mission1_parity::zonea_structural_spot_check` (structural contract: anchor frame, monotone frame_no, record count = declared budget + 1). Not tick-complete by design (§0b). | GREEN |
+| 5 | cross-OS replay hash equality (OUR engine) | The replay-hash fixtures run as gate commands: `hash_fixture` (600-tick fixed script, 13 milestone StateHash pins + the FNV-1a chain `0x760d221bec3b3b99`) + the `determinism` suites (15/60/240 Hz rate invariance + pure-FSM replay identity) + `zonea_replay_stitch_is_stable`. Verified this run on TWO TOOLCHAINS (stable + nightly, identical pins). The cross-OS channel is the ubuntu+windows CI matrix (`cargo test --workspace`, `.github/workflows/ci.yml`) — currently RED repo-wide for ENVIRONMENT reasons predating this unit (alsa-sys needs libasound2-dev on ubuntu; the miri job trips file-isolation on a corpus-gated suite; ≥100 consecutive runs, every failure before any test executes) — a queued CI-repair unit, NOT a determinism finding: the hashed state is integer-only, little-endian by format contract, float-free (Miri-clean), so the pinned chains are OS-invariant by construction with CI as the enforcement channel. | GREEN (fixtures + cross-toolchain); CI channel repair queued |
+| 6 | original SAVED/OPTIONS.BDL import read-only, bounds-checked, fuzzed | RE-EXW-SIM §7j.70 pins the restore grammar EXW-side (this was 8street-cited before). Engine: `bedlam-game save.rs` — the bounds-checked header walk (exact 900 B, slot < 5, the EXW zero-dword@+0x0C empty predicate, zone/mask inside the modeled episode space, never guess) + `GameHost::import_saved_slot` staging through the D51 seam; money/score/difficulty RETURNED (sim-side), nothing ever written back. Tests: the real shipped files (slot 0 = "PLAYER"/zone 2/mask 0/money 580/difficulty 1 → stages ZONEB-MISSION1; four EMPTY slots rejected loud; OPTIONS 41 B → volume 75, name "Player") + bounded deterministic fuzz (full header bit-flip sweep per slot, truncations, size attacks, random images; OPTIONS bit-flip sweep through the typed view) — Ok/Err only, never a panic. | GREEN |
+| 7 | DM carve-out | A carve-out, not a check: deathmatch is MODE-level (the same maps under netplay; ZONEA-MISSION1 hosts no DM-only content — the corpus has no DM map variant, FORMATS-MISSION §0). The carve-out legs that ARE checked: the map loads (criterion 1's flows stage it) and local SP semantics are correct (criteria 1-2). Full DM/netplay = future work, out of the parity exit. | NOTED |
+
+**Ledger:** `ZONEA-MISSION1` → `green`, `catalog_refs = []` (no
+original-behavior divergences observed on this mission; a green
+mission may legitimately carry zero refs, §3). Zone A status derives
+green (1/1).
+
+**Gate wiring:** `p5-zone-a` joins P5's `required_gates` (after
+`p5-zone-gate-scaffold`) carrying the zone's evidence commands:
+
+1. `/usr/bin/cargo test --release --locked --offline -p bedlam-game
+   --test zonea_mission1_parity --test canonical_dump_gate --test
+   differ_gate --test mission_scene_gate --test determinism`
+2. `/usr/bin/cargo test --release --locked --offline -p bedlam-core
+   --test hash_fixture --test mission_corpus_gate`
+
+P5 stays `pending` (1/37 missions green; B–G open — the G1/G2/G3 gap
+classes of §6.2 are their queued units).
