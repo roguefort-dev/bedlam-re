@@ -1,0 +1,11 @@
+# Cross-OS line-ending policy (D181, ci-cross-os-repair): store AND
+# check out LF everywhere. The windows-latest runner defaults to
+# core.autocrlf=true, which rewrote committed text artifacts to CRLF
+# at checkout — include_str! then embedded the CRLF bytes and the
+# diffharness s*_plan_matches_committed_artifact pins failed on the
+# first windows test run (run 33122184098) while the generated plans
+# are LF. eol=lf overrides autocrlf on every platform, making the
+# byte-exact artifact comparisons OS-invariant. No tracked file
+# carries CR in the index (verified: git grep -lI $'\r' HEAD is
+# empty at a18d9c3), so no renormalization is needed.
+* text=auto eol=lf
