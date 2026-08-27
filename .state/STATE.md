@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `ci-cross-os-repair` COMPLETE (worker 0e1d4854 claim 1,
+    commits 177c953 + a18d9c3 + a168d69, all PUSHED): the CI matrix
+    GREEN on BOTH legs + miri + diffharness for the first time in
+    >=100 runs (run 33123147228) — the cross-OS enforcement channel
+    for P5-ZONE-GATES §7 row 5 RESTORED (row now GREEN). The repair
+    validated the channel immediately: the first windows test run
+    caught the debris seq-table pointer-identity bug (every release
+    build walked table 0 for all kinds; fixed by content equality,
+    S4 pin re-baselined deliberately 1357af61ef082cb5 ->
+    21520352000ca4bf, two regression pins landed) and the CRLF
+    artifact-compare class (repo-wide .gitattributes eol=lf). Local
+    verification: corpus-less workspace 759/0 then 761/0 in an
+    autocrlf=true CRLF-simulating clone; bedlam-game release 245/0,
+    diffharness 103/0, bedlam-core 151/0; gates-validator 22/22; the
+    bound P5 phase validation passed at a18d9c3; MANIFEST clean
+    before and after. D181 records the arc. P5 continues: 1/37
+    missions green; the census G2 head (ballistic6 + the S3/S4 hp
+    rider) is the next unit.
+
   - 2026-08-27 `p5-zonea-mission1-parity` COMPLETE (worker 42041a21
     claim 1, commits 94d2c8b + 70897c5, both PUSHED): ZONEA-MISSION1
     flipped GREEN — the FIRST zone-parity disposition (D178); zone A

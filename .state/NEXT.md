@@ -10,29 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=ci-cross-os-repair] [gate=ci-cross-os-repair] infra
-   follow-up (queued by the D178 zone-A evidence run): the CI matrix —
-   the designed cross-OS enforcement channel for criterion 5
-   (docs/P5-ZONE-GATES §7 table row 5) — is RED repo-wide for
-   ENVIRONMENT reasons, >=100 consecutive failing runs, every failure
-   BEFORE any test executes (verified via gh on 2026-08-27): (a) the
-   ubuntu build job dies at `cargo clippy --workspace --all-targets`
-   on the alsa-sys v0.4.0 build script (cpal needs libasound2-dev +
-   pkg-config on the runner) — fix .github/workflows/ci.yml with an
-   apt install step (or make the alsa dependency optional for CI);
-   (b) the miri job dies on `mission_corpus_gate` file-isolation (a
-   corpus-gated suite that must skip cleanly without game-data — find
-   the unconditional open/stat on the skip path or set the isolation
-   error policy) — the job's charter is bedlam-core+bedlam-audio UB
-   detection, keep it that scope; (c) windows-latest only ever
-   fail-fast-cancels behind ubuntu — verify it goes green once (a)
-   lands. Evidence: a pushed commit whose ci run is green on BOTH
-   matrix legs (gh run view), restoring the ubuntu+windows enforcement
-   of hash_fixture + the determinism suites. Bounds: workflow/test-
-   skip changes only, no engine behavior change, no game-data touch,
-   MANIFEST clean, gates-validator 22/22 stays green, Nudge-Worker
-   trailer.
-2. [READY] [id=p5-critter-state-g2-ballistic6] [gate=p5-critter-state-g2-ballistic6] P5
+1. [READY] [id=p5-critter-state-g2-ballistic6] [gate=p5-critter-state-g2-ballistic6] P5
    follow-up — the SECOND G2 critter-state unit:
    BallisticState6 (.NME section 6, critter state 6 — now the most
    common unmodeled state at 26/26 refusing missions after the
@@ -53,7 +31,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    (canonical_dump_gate re-baselined deliberately); fmt + clippy;
    gates-validator 22/22; MANIFEST clean before AND after;
    Nudge-Worker trailer.
-3. [READY] [id=p5-select-shell-g1] [gate=p5-select-shell-g1] P5
+2. [READY] [id=p5-select-shell-g1] [gate=p5-select-shell-g1] P5
    follow-up — the G1 SELECT mission-choice shell from the census
    (docs/P5-ZONE-GATES §6.2/G1, D176): make missions 6-7 of a
    7-mission zone reachable through the engine staging seam. (a) RE
@@ -74,7 +52,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    §7j.70) deliberately REJECTS SELECT-shaped masks (mask bits past
    FULL_MASK) loud until this unit lands — widening that domain is
    part of this seam's acceptance.
-4. [READY] [id=p5-zone-bin-variant-g3] [gate=p5-zone-bin-variant-g3] P5
+3. [READY] [id=p5-zone-bin-variant-g3] [gate=p5-zone-bin-variant-g3] P5
    follow-up — the G3 zone-BIN variant RE unit from the census
    (docs/P5-ZONE-GATES §6.2/G3, D176): decide EXW-anchored whether
    ZONEB/MISSION6, ZONED/MISSION5, ZONEE/MISSION6 load the
@@ -91,6 +69,45 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Bounds: census green (re-pinned only if the swap lands); MANIFEST
    clean; no Ghidra run; Nudge-Worker trailer.
 ## Done
+1. DONE (2026-08-28, worker 0e1d4854 claim 1, commits 177c953 +
+   a18d9c3 + a168d69, all PUSHED): infra `ci-cross-os-repair` — the
+   CI matrix REPAIRED GREEN on BOTH legs + miri + diffharness (run
+   33123147228 at a168d69, verified via gh run view; the ubuntu+windows
+   enforcement of the determinism/replay suites restored — the windows
+   leg runs and passes them on MSVC). (a) 177c953: the two
+   ENVIRONMENT fixes — a Linux-only apt step (libasound2-dev +
+   pkg-config) so the alsa-sys build script survives on ubuntu, and
+   MIRIFLAGS=-Zmiri-isolation-error=warn so the corpus-gated suites'
+   skip probes return clean errors instead of aborting under miri
+   isolation (verified locally: corpus-less clone 759/0 + all 8
+   corpus binaries green under the warn policy; miri GREEN on CI
+   33122184098/33123147228). (b) a18d9c3: the first-ever windows test
+   run caught a REAL engine bug the channel existed to catch —
+   stage_debris resolved the seq-table index by std::ptr::eq with an
+   .unwrap_or(0) fallback, and a release-profile probe proved the
+   pointer match NEVER succeeds in release builds (all 20 kinds walked
+   table 0; debug passed by constant-merge luck; the canonical S4 pin
+   had encoded the bug). Fixed by content equality + expect, two
+   regression pins landed (per-kind staged index + per-kind terminator
+   walk), and the S4 chain re-baselined DELIBERATELY
+   (canonical_dump_gate + differ_gate, 1357af61ef082cb5 ->
+   21520352000ca4bf — the one canonical chain movement, in the same
+   commit as the fix, D181 items 4-6). Verified: bedlam-game release
+   245/0, diffharness 103/0, bedlam-core release 151/0. (c) a168d69:
+   the CRLF class — 11 diffharness s*_plan_matches_committed_artifact
+   pins failed on windows ONLY from autocrlf rewriting committed
+   artifacts at checkout (include_str! embedded CRLF); fixed by a
+   repo-wide .gitattributes eol=lf policy (zero CR blobs tracked, no
+   renormalization), verified in an autocrlf=true clone (LF checkout,
+   corpus-less workspace 761/0). Bookkeeping: P5-ZONE-GATES §7 row 5
+   -> GREEN (fixtures + cross-toolchain + CI matrix); D181 records the
+   whole arc. Bounds check: workflow + test-policy changes plus the
+   one bounded engine correctness fix the acceptance criterion forced
+   (documented, pinned, re-baselined); no game-data touch; MANIFEST
+   clean before AND after every corpus run; gates-validator 22/22;
+   bound P5 phase validation status=passed at a18d9c3; no Ghidra run.
+   Queued: items 1-3 above (ballistic6 stays the head with its S3/S4
+   hp rider).
 1. DONE (2026-08-27, worker 58b640c3 claim 1, commits 2195999 +
    49aeeeb + c60c0ba, all PUSHED): P5 `p5-critter-state-g2-wanderers`
    — the FIRST G2 critter-state unit: the kind-1 Wanderer landed
