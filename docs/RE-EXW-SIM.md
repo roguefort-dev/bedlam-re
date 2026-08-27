@@ -10725,10 +10725,16 @@ tagged.
    `xor eax,eax` @0x417f25 → 0 = continue wandering; the explode
    path `mov eax,1` @0x417f1b → 1 = skip the body this frame**;
    explode (nearest-robot octile < 0x30 px, FUN_00417c00):
-   presence := 0 + 8 iterations of {3 jitter draws
-   (z+(RandA&0xF), y+(RandA&0x3F)−0x1F, x+(RandA&0x3F)−0x1F) +
-   1× debris KIND 1 FUN_00420608 + FUN_0041ec1c(3) draw +
-   FUN_00424355 ring} = 32 draws; (c) the substep loop.
+   presence := 0 + 8 iterations (delay = counter>>1) of {3 jitter
+   draws (z+(RandA&0xF), y+(RandA&0x3F)−0x1F, x+(RandA&0x3F)−0x1F)
+   + 1× debris KIND 1 FUN_00420608 (draw-free, deterministic
+   max-age allocator) + TWO FUN_0041ec1c(3) draws (the splash
+   y/x tile picks: y = pick+y_tile−1, x = pick+x_tile−1,
+   z = z_tile+1) + the FUN_00424355 SPLASH stager (draw-free)} =
+   5 draws × 8 = 40 draws; (c) the substep loop. [CORRECTED
+   in-place 2026-08-27: the first write of this item counted 4
+   draws/iteration — it missed the second FUN_0041ec1c site
+   @0x417ef8.]
 3. **THE WANDER STATE MACHINE (species substeps per frame; species
    ≡ 1 for S2 spawn and nothing re-stamps it).** State = the
    (countdown w@+0x56, DIR w@+0x58) pair; DIR ∈ {0,1,2,3} = walk
