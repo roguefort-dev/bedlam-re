@@ -1097,7 +1097,16 @@ fn corpus_s4_destroy_family() {
     let run = run_canonical(&s4, &root).expect("S4 canonical run");
     assert_eq!(run.manifest.frame_count, 49);
     assert_eq!(
-        run.manifest.chain_digest, "1357af61ef082cb5",
+        // RE-BASELINED (D181, ci-cross-os-repair): the old pin
+        // 1357af61ef082cb5 encoded the stage_debris pointer-identity
+        // fallback bug — in release builds std::ptr::eq NEVER matched
+        // (probe at 177c953: all 20 kinds -> table 0), so every
+        // non-table-0 debris kind silently walked DEBRIS_SEQ_TABLES[0].
+        // The content-equality fix restores each kind's own §7j.11
+        // table on every platform/profile; this digest is the
+        // corrected walk.
+        run.manifest.chain_digest,
+        "21520352000ca4bf",
         "engine/dump behavior drift: re-baseline deliberately with a commit saying why"
     );
     let run_b = run_canonical(&s4, &root).expect("S4 canonical re-run");

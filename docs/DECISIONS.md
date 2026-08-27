@@ -6074,3 +6074,35 @@ until this watchdog repair.
    warn-policy error returns; the unit suites all pass). The pushed
    run's green matrix (both legs) is the in-repo evidence recorded in
    NEXT.md.
+4. THE WINDOWS LEG THEN CAUGHT A REAL ENGINE BUG (the channel working
+   as designed, first windows test run ever): run 33120043475 failed
+   EXACTLY ONE test — destroy_gate's k7 debris walk ("freed at the -1
+   terminator"), passing on ubuntu in the same run. ROOT CAUSE:
+   stage_debris resolved the staged seq-table INDEX by std::ptr::eq
+   against DEBRIS_SEQ_TABLES with an `.unwrap_or(0)` fallback; rustc
+   gives NO guarantee the slice returned by debris_kind_config is
+   pointer-identical to the array entry. A release-profile probe at
+   177c953 (worktree, all 20 kinds staged, read debris_bank().table)
+   returned table 0 FOR EVERY KIND — the pointer match NEVER succeeds
+   in release builds, on Linux too. Debug builds passed (k7 included)
+   only by constant-merging luck, and the canonical S4 pin
+   (1357af61ef082cb5) had silently encoded the buggy all-table-0 walk.
+   Windows-msvc debug simply didn't merge either — exposing in CI what
+   every release build had been doing all along.
+5. THE ENGINE FIX (commit carrying this addendum): content equality
+   (`.position(|t| *t == table)` + expect) — all 11 tables are
+   pairwise distinct, so content IS the deterministic identity; each
+   kind again walks its OWN §7j.11 table on every platform and
+   profile. Two regression pins added in destroy.rs
+   (debris_table_index_tests): the staged per-kind table index, and
+   the per-kind terminator walk (frees exactly at len-1 ticks, the
+   sole -1 sitting at each table's last index).
+6. DELIBERATE RE-BASELINE (the one canonical chain movement, both
+   pins in the same commit as the fix): canonical_dump_gate
+   corpus_s4_destroy_family digest and differ_gate's S4 row
+   1357af61ef082cb5 -> 21520352000ca4bf — the corrected walk.
+   Verified: bedlam-game release 245/0 (the D179 baseline count,
+   S4/S0-S8/determinism/zonea/census all green), diffharness 103/0,
+   bedlam-core release 151/0 (incl. the two new pins), fmt + clippy
+   -D warnings clean on the touched lib, gates-validator 22/22,
+   MANIFEST clean before AND after every corpus run.

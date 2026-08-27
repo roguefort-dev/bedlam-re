@@ -1429,10 +1429,22 @@ impl MissionSim {
         let slot = slot.unwrap_or(min_slot);
         self.debris_seq += 1;
         let (table, phys, init, scorch) = debris_kind_config(kind);
+        // Resolve the staged table INDEX by CONTENT, never by
+        // std::ptr::eq: rustc/LLVM does not guarantee that the slice
+        // returned from debris_kind_config and the entry inside
+        // DEBRIS_SEQ_TABLES are the SAME constant blob — on
+        // windows-msvc they are distinct allocations, the pointer
+        // match fails, and the old `.unwrap_or(0)` fallback silently
+        // walked table 0 (13 entries) for kinds whose real table is
+        // shorter (k7: 7) — the first windows matrix leg ever to
+        // run tests failed exactly there (D181, run 33120043475).
+        // All 11 tables have pairwise-distinct contents, so content
+        // equality is the deterministic identity.
         let table_idx = DEBRIS_SEQ_TABLES
             .iter()
-            .position(|t| std::ptr::eq(*t, table))
-            .unwrap_or(0) as u8;
+            .position(|t| *t == table)
+            .expect("debris_kind_config returns a DEBRIS_SEQ_TABLES entry")
+            as u8;
         self.debris[slot] = DebrisRecord {
             active: true,
             x: x_q5,
@@ -2351,5 +2363,78 @@ mod claim_seam_tests {
         b.stage_claim_bank(1, 2);
         assert!(b.claim_bank().iter().all(|&v| v == 0), "A/M2: no rect case");
         assert!(b.stage_splash(2, 51, 0, 0), "re-staged zero: splash passes");
+    }
+}
+
+#[cfg(test)]
+mod debris_table_index_tests {
+    //! D181 (ci-cross-os-repair): the staged seq-table INDEX pin for
+    //! EVERY kind. stage_debris resolved the index by pointer
+    //! identity (`std::ptr::eq` + an `.unwrap_or(0)` fallback), which
+    //! silently walked table 0 for every kind whose constant slice
+    //! was not pointer-identical to the DEBRIS_SEQ_TABLES entry —
+    //! exactly what happened on windows-msvc (run 33120043475: the
+    //! k7 walk took 13 ticks, not 7). These pins hold the
+    //! kind→table mapping cross-OS so any future divergence fails
+    //! on ANY matrix leg, not only the one that got lucky with
+    //! constant merging.
+
+    use super::{debris_seq_table, MissionSim, DEBRIS_SEQ_TABLES};
+    use crate::mission::{AngleTable, Terrain};
+
+    fn sim() -> MissionSim {
+        let terrain =
+            Terrain::from_parts(32, 32, vec![0u8; 8 * 32 * 32], Vec::new()).expect("terrain");
+        let angles = AngleTable::from_thresholds(&[0u16; 64]).expect("thresholds");
+        MissionSim::new(terrain, angles, 0xDEAD_BEEF)
+    }
+
+    #[test]
+    fn staged_table_index_is_pinned_for_every_kind() {
+        for kind in 1..=20i32 {
+            let expected = DEBRIS_SEQ_TABLES
+                .iter()
+                .position(|t| *t == debris_seq_table(kind))
+                .expect("every kind maps into DEBRIS_SEQ_TABLES");
+            let mut s = sim();
+            assert!(
+                s.stage_debris(4 * 0x20 + 0x10, 4 * 0x20 + 0x10, 0x20, kind, 0, -1),
+                "kind {kind} stages"
+            );
+            assert_eq!(
+                s.debris_bank()[0].table as usize,
+                expected,
+                "kind {kind} stages DEBRIS_SEQ_TABLES[{expected}]"
+            );
+        }
+    }
+
+    #[test]
+    fn every_kind_frees_exactly_at_its_table_terminator() {
+        // The walk shape the windows leg caught (k7): with delay 0,
+        // tick c leaves anim == c, so the record walks while
+        // table[c] != -1 and frees exactly at c == len-1 (the sole
+        // terminator entry sits at the last index of every table).
+        // One tick per sprite entry: none earlier, none later.
+        for kind in 1..=20i32 {
+            let table = debris_seq_table(kind);
+            let len = table.len();
+            let mut s = sim();
+            assert!(s.stage_debris(4 * 0x20 + 0x10, 4 * 0x20 + 0x10, 0x20, kind, 0, -1));
+            for c in 1..len - 1 {
+                s.debris_tick();
+                assert!(
+                    s.debris_bank()[0].active,
+                    "kind {kind} still walking at tick {c} of {}",
+                    len - 1
+                );
+            }
+            s.debris_tick();
+            assert!(
+                !s.debris_bank()[0].active,
+                "kind {kind} freed at the -1 terminator (tick {})",
+                len - 1
+            );
+        }
     }
 }

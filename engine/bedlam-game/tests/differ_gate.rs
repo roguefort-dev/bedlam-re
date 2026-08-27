@@ -548,7 +548,10 @@ fn s0_s1_cross_and_double_run() {
         // D162 subset-form projections and compares cross-channel
         // too, so the lane keeps exactly the 1 S1-class row-level
         // finding.
-        ("S4", 49u64, "1357af61ef082cb5", 1u64),
+        // ("S4", 49u64, "1357af61ef082cb5", 1u64) — re-baselined
+        // D181: the old digest encoded the release-profile debris
+        // table-0 fallback (see canonical_dump_gate corpus_s4).
+        ("S4", 49u64, "21520352000ca4bf", 1u64),
         // W12-S5 (DESIGN §7 S5 row, D108): the ZONEB scenarios carry
         // no T3 tier (nothing fires/dies/explodes in the walks), so
         // the debris/splash rows never ride — exactly the 1 S1-class
