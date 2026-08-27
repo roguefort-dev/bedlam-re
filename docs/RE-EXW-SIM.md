@@ -10813,5 +10813,58 @@ with the offset footprint exact. The S3/S4 hp scalars HOLD the
 ZONEA S3+S4 and the m-scalar swap would move its pinned T2
 critter-bank bytes — no scenario exercises S2, so no chain is
 touched (the queue contract); the alignment rides the next G2
-unit. The canonical critter-bank blob is UNTOUCHED (new record
-fields dir/frame/z_restore are not serialized; no chain movement).
+unit (§7j.72/3 — landed there 2026-08-28). The canonical
+critter-bank blob is UNTOUCHED (new record fields dir/frame/
+z_restore are not serialized; no chain movement).
+
+## 7j.72. THE BALLISTIC-STATE-6 LOADER BLOCK + THE S3/S4 HP-SCALAR
+ALIGNMENT (2026-08-28, worker b03463e5 claim 1, item
+p5-critter-state-g2-ballistic6; decompile-only from the COMMITTED
+ghidra-project/exw-critterpoi-loader.txt — the §7j.18 dump — no
+Ghidra run; corpus bytes read only by the census/gate test runs,
+MANIFEST.sha256 clean before and after) [verified]
+
+1. **THE S6 STAGING BLOCK walked exact** (the fourth staged section
+   of the FUN_00416458 schedule, file order S1..S8): per 8-B record
+   — **NO inner spawn loop** (ONE critter per record at EVERY
+   difficulty: the S3/S7 multiplier preambles and their RandA draws
+   are absent) and **NO stream draws of any kind** (zero RandA /
+   FUN_0041ec1c sites in the block). Stamps: x d@+0x36 =
+   w2·0x2000+0xF00, y d@+0x3A = w3·0x2000+0xF00 (Q13), z d@+0x3E =
+   FUN_0041e411(x>>8, y>>8, w1<<5) — the floor probe, the S3 call
+   shape verbatim; the 8 octile dists w@+0x60..+0x6E = the
+   direction-table probes (0x4543e4/0x454404) at the spawn z (the
+   same loop as S3); kind w@+0x00 = 6, species w@+0x02 = 3, mode
+   w@+0x0C = 8, anim w@+0x0E = 5, heading d@+0x10 = 0x72, presence
+   w@+0x24 = 1, countdown w@+0x56 = 0 — **the S3 stamps verbatim**
+   with the kind word 6. NO home stamps (only S5 writes
+   +0x42/+0x46/+0x4A).
+2. **hp w@+0x06 = 0x96 + ([0x46ae8c]·0x96)/0x1B** — the same
+   linear-mission m cell §7j.71/1 pinned for every section (here a
+   plain DAT_0046ae8c load; 0x96 = 150, 0x1B = 27). This is the
+   last hp site the §7j.18 difficulty gloss covered; with it the
+   imul census closes: EVERY section's scalar is [0x46ae8c].
+3. **ENGINE CONSEQUENCE (landed this unit)**: `stage_critters`
+   accepts .NME section 6 (kind 6 → the shared k5/6 mixed body,
+   already landed §7j.42/3 — the dispatch arm `5 | 6` predates the
+   staging); the block mirrors the E S3 staging verbatim with kind
+   6 and ONE draw-free spawn. The E `home_x/home_y = spawn`
+   convention rides S3's (the ORIGINAL leaves home zeroed for
+   S3/S6 — the E leash seam's documented convention, unchanged).
+4. **THE S3/S4 SCALAR ALIGNMENT (the D179 rider landed)**: S3/S4 hp
+   now read the same m (`MissionSim::linear`) as S2 — the §7j.18
+   difficulty hold retired. CHAIN DECISION (deliberate re-baseline,
+   the scenario the D179 queue item named): the S8 canonical
+   scenario stages ZONEA S3+S4 under `critters = 1` with NO
+   `destroy = 1`, and `linear` is destroy-staged → **m = 0 there**
+   → the staged hp drops 155→150 (kind-5) and 207→200 (kind-4) and
+   the S8 canonical chain moves (canonical_dump_gate corpus_s8 +
+   differ_gate's S8 row re-baselined in the same commits). The
+   ORIGINAL at ZONEA/M1 reads the derived cell clamp(5·(zone−2)+
+   mission−1, 1, 26) = 1 → hp 155/207; the divergence is the S8
+   scenario's own deliberate no-destroy staging (its header's
+   empty-bank note) — the same "0 when unstaged" class D179
+   accepted for S2, and the same asymmetry its destroy-family
+   staging already carries. Paths that stage destroy BEFORE
+   critters (the canonical order; every census row) read the true
+   derived m and stay faithful.

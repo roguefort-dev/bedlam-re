@@ -7,10 +7,10 @@
 //! stride, count cell 0x46cc2c) + the .NME staging host seam + the
 //! controller subset for the CORPUS KINDS — 1 (the wanderers,
 //! §7j.71), 4 (seek steppers) and 5/6 (the shared mixed-AI body;
-//! kind 6 shares it but no corpus mission stages it). The kind
-//! 2/3/7 controller bodies are documented E-gaps: `stage_critters`
-//! REFUSES an .NME hosting them (fail loud — never spawn a critter
-//! whose brain is missing).
+//! §7j.72 landed the S6 staging — 26 corpus missions host it). The
+//! kind 2/3/7 controller bodies are documented E-gaps:
+//! `stage_critters` REFUSES an .NME hosting them (fail loud — never
+//! spawn a critter whose brain is missing).
 //!
 //! Coordinate scales (§7j.23/2 + §7j.42's probe reads): x/y are
 //! Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for kinds 1/4;
@@ -197,14 +197,14 @@ impl MissionSim {
     /// (D114). The ORIGINAL loads the file natively at mission
     /// load; E stages the identical bytes. Only the sections whose
     /// kinds the E controller models may spawn (S2 → kind 1,
-    /// S3 → kind 5, S4 → kind 4); any other NON-EMPTY section is
-    /// REFUSED (fail loud — never spawn a brain the engine does not
-    /// carry; ZONEA/MISSION1 hosts exactly S3+S4).
+    /// S3 → kind 5, S4 → kind 4, S6 → kind 6); any other NON-EMPTY
+    /// section is REFUSED (fail loud — never spawn a brain the
+    /// engine does not carry; ZONEA/MISSION1 hosts exactly S3+S4).
     ///
-    /// Spawn schedule [verified §7j.18 + §7j.71/1]: S2 (state 1,
-    /// 10-B recs, w3/w4 = x/y tile): `d+3` each — the z SEARCH
-    /// walks the DAT volume down from level 6 for the first RAW
-    /// tile ∈ 1..3 with air above (skip the spawn when none);
+    /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72]: S2
+    /// (state 1, 10-B recs, w3/w4 = x/y tile): `d+3` each — the z
+    /// SEARCH walks the DAT volume down from level 6 for the first
+    /// RAW tile ∈ 1..3 with air above (skip the spawn when none);
     /// x = w3·0x20+0x10, y = w4·0x20+0x10 (RAW px), z = z-restore =
     /// L·0x20+0x1F, DIR −1, species 1, countdown =
     /// FUN_0041ec1c(10)+10 (the section's ONLY stream draw, one per
@@ -216,15 +216,17 @@ impl MissionSim {
     /// — x = w2·0x20+0xF, y = w3·0x20+0xF (RAW px), z = the floor
     /// probe at level w1, mode 9, species 6, heading = RandA()&3
     /// (the loader's only stream draw for these two sections), hp
-    /// base 0xC8. **S2's hp scalar = the LINEAR MISSION m
-    /// [0x46ae8c] (§7j.64/D153) — hp = 200+(200·m)/27 [§7j.71/1,
-    /// correcting §7j.18's difficulty gloss]; the engine reads
-    /// `MissionSim::linear`** (staged by the destroy family BEFORE
-    /// critters in the canonical order; 0 when unstaged). The S3/S4
-    /// hp scalars HOLD the §7j.18 difficulty form deliberately —
-    /// the S8 canonical chain stages ZONEA S3+S4 and a scalar swap
-    /// moves its pinned T2 bytes (the alignment is queued with the
-    /// next G2 unit; §7j.71/1 pins m for every section).
+    /// base 0xC8. S6 (state 6, 8-B recs): ONE each at EVERY
+    /// difficulty — the S3 stamps verbatim with kind 6 (mode 8,
+    /// species 3, anim 5, heading 0x72, the w1-level floor probe,
+    /// hp base 0x96) and NO stream draws (§7j.72/1). **EVERY
+    /// section's hp scalar = the LINEAR MISSION m [0x46ae8c]
+    /// (§7j.64/D153, §7j.71/1, §7j.72/2) — hp = base+(base·m)/27;
+    /// the engine reads `MissionSim::linear`** (staged by the
+    /// destroy family BEFORE critters in the canonical order; 0
+    /// when unstaged — the S8 chain re-baseline decision, §7j.72/4:
+    /// S8 stages no destroy, so its m = 0 and the pinned T2
+    /// critter-bank bytes moved 155/207 → 150/200 deliberately).
     /// presence := 1; home := spawn. Returns the staged count, or
     /// `None` when the file hosts an unmodeled kind (the caller
     /// fails loud).
@@ -258,7 +260,7 @@ impl MissionSim {
         // S8 (personnel/POI) is a separate bank — the poi-bank T2
         // row's own unit. Any other unmodeled section refuses.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 1 && si != 2 && si != 3 {
+            if n != 0 && si != 1 && si != 2 && si != 3 && si != 5 {
                 return None;
             }
         }
@@ -318,13 +320,11 @@ impl MissionSim {
                 self.critters.push(CritterRecord {
                     kind: 5,
                     species: 3,
-                    // The §7j.18 difficulty scalar HELD deliberately
-                    // (§7j.71/1 pins m = [0x46ae8c] for EVERY section,
-                    // but the S8 canonical chain stages ZONEA S3+S4 —
-                    // switching the scalar moves its pinned T2
-                    // critter-bank bytes; the alignment rides the next
-                    // G2 unit where a scenario justifies the re-pin).
-                    hp: (base + base * d / 27) as i16,
+                    // §7j.72/2 + /4: the scalar is the linear
+                    // mission m [0x46ae8c] — the §7j.71/1 hold
+                    // retired by the D179 rider (every section's
+                    // imul site reads the same cell).
+                    hp: (base + base * m / 27) as i16,
                     mode: 8,
                     anim: 5,
                     heading: 0x72,
@@ -354,7 +354,7 @@ impl MissionSim {
                 self.critters.push(CritterRecord {
                     kind: 4,
                     species: 6,
-                    hp: (base + base * d / 27) as i16, // §7j.71/1 hold — see the S3 note
+                    hp: (base + base * m / 27) as i16, // §7j.72/4 — see the S3 note
                     mode: 9,
                     heading,
                     presence: true,
@@ -367,6 +367,35 @@ impl MissionSim {
                 });
                 staged += 1;
             }
+        }
+        for rec in &sections[5] {
+            // S6 (§7j.72/1): ONE each at EVERY difficulty — no inner
+            // spawn loop, NO stream draws (the decompile's block has
+            // zero RandA/FUN_0041ec1c sites); the S3 stamps verbatim
+            // with the kind word 6 (the shared k5/6 mixed body).
+            if self.critters.len() >= CRITTER_SLOTS {
+                break;
+            }
+            let x = rec[2] as i32 * 0x2000 + 0xF00;
+            let y = rec[3] as i32 * 0x2000 + 0xF00;
+            let base = 0x96i32;
+            let z = self.terrain.floor_z(x >> 8, y >> 8, rec[1] as i32 * 32);
+            self.critters.push(CritterRecord {
+                kind: 6,
+                species: 3,
+                hp: (base + base * m / 27) as i16, // §7j.72/2 — the m cell, as every section
+                mode: 8,
+                anim: 5,
+                heading: 0x72,
+                presence: true,
+                x,
+                y,
+                z,
+                home_x: x,
+                home_y: y,
+                ..Default::default()
+            });
+            staged += 1;
         }
         Some(staged)
     }
@@ -1728,6 +1757,137 @@ mod wanderer_tests {
         let staged = sim.stage_critters(&s2_nme(10, 10), 0).expect("staged");
         assert_eq!(staged, 3, "d=0 → 3 spawns at level 1");
         assert_eq!(sim.critters()[0].z, 0x3F);
+    }
+
+    /// An .NME hosting `n` S6 records (w1 = probe level, w2/w3 =
+    /// x/y tile); every other section empty.
+    fn s6_nme(n: u16, w1: u16, w2: u16, w3: u16) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(&0u16.to_le_bytes()); // S1
+        b.extend_from_slice(&0u16.to_le_bytes()); // S2
+        b.extend_from_slice(&0u16.to_le_bytes()); // S3
+        b.extend_from_slice(&0u16.to_le_bytes()); // S4
+        b.extend_from_slice(&0u16.to_le_bytes()); // S5
+        b.extend_from_slice(&n.to_le_bytes()); // S6 count
+        for _ in 0..n {
+            for w in [1u16, w1, w2, w3] {
+                b.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        b.extend_from_slice(&0u16.to_le_bytes()); // S7
+        b.extend_from_slice(&0u16.to_le_bytes()); // S8
+        b
+    }
+
+    #[test]
+    fn s6_staging_one_each_draw_free_s3_stamps() {
+        // §7j.72/1: ONE per record at EVERY difficulty, ZERO stream
+        // draws, the S3 stamps verbatim with the kind word 6.
+        for d in [0u32, 3] {
+            let mut sim = sim_flat(0x5EED);
+            let probe = sim_flat(0x5EED);
+            let staged = sim
+                .stage_critters(&s6_nme(3, 2, 10, 12), d)
+                .expect("S6 staged");
+            assert_eq!(staged, 3, "one each at d={d}");
+            assert_eq!(sim.critters.len(), 3);
+            assert_eq!(sim.rand_a_state(), probe.rand_a_state(), "no draws");
+            let expected_z =
+                sim.terrain
+                    .floor_z((10 * 0x2000 + 0xF00) >> 8, (12 * 0x2000 + 0xF00) >> 8, 2 * 32);
+            for c in sim.critters() {
+                assert_eq!(c.kind, 6);
+                assert_eq!(c.species, 3);
+                assert_eq!(c.mode, 8);
+                assert_eq!(c.anim, 5);
+                assert_eq!(c.heading, 0x72);
+                assert_eq!(c.x, 10 * 0x2000 + 0xF00);
+                assert_eq!(c.y, 12 * 0x2000 + 0xF00);
+                assert_eq!(c.home_x, c.x, "the E S3 home convention (§7j.72/3)");
+                assert_eq!(c.home_y, c.y);
+                assert_eq!(c.countdown, 0, "w@+0x56 = 0");
+                // m = 5 (sim_flat) → hp = 150 + 750/27 = 177.
+                assert_eq!(c.hp, 150 + 150 * 5 / 27);
+                assert!(c.presence);
+                // z = the floor probe at level w1 on the flat world.
+                assert_eq!(c.z, expected_z);
+            }
+        }
+    }
+
+    #[test]
+    fn s6_mixed_with_modeled_sections_preserves_file_order() {
+        // S2 → S3 → S4 → S6 in file order: an .NME with one record
+        // each of S2/S3/S4/S6 stages the sections in order (d=1:
+        // 4 wanderers, 1..2 kind-5, 2 kind-4, 1 kind-6).
+        let mut b = Vec::new();
+        b.extend_from_slice(&0u16.to_le_bytes()); // S1
+        b.extend_from_slice(&1u16.to_le_bytes()); // S2
+        for w in [1u16, 0, 0, 6, 6] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&1u16.to_le_bytes()); // S3
+        for w in [1u16, 2, 10, 10] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&1u16.to_le_bytes()); // S4
+        for w in [1u16, 2, 10, 10] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&0u16.to_le_bytes()); // S5
+        b.extend_from_slice(&1u16.to_le_bytes()); // S6
+        for w in [1u16, 2, 10, 10] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&0u16.to_le_bytes()); // S7
+        b.extend_from_slice(&0u16.to_le_bytes()); // S8
+        let mut sim = sim_flat(0x600D);
+        let staged = sim.stage_critters(&b, 1).expect("staged");
+        let kinds: Vec<u16> = sim.critters().iter().map(|c| c.kind).collect();
+        let k5 = kinds.iter().filter(|&&k| k == 5).count();
+        assert!((1..=2).contains(&k5), "d=1 → the S3 RandA&1+1 roll");
+        let mut expected = vec![1u16; 4]; // S2: d+3 wanderers first
+        expected.extend((0..k5).map(|_| 5)); // S3 after S2
+        expected.extend([4, 4]); // S4 after S3
+        expected.push(6); // S6 last (file order)
+        assert_eq!(staged, expected.len());
+        assert_eq!(kinds, expected);
+    }
+
+    #[test]
+    fn s3_s4_hp_scalars_read_linear_m_not_difficulty() {
+        // §7j.72/4 (the D179 rider): the S3/S4 hp scalar is the
+        // linear mission m — NOT difficulty. d=3, m=5: hp
+        // 150+150·5/27 = 177 and 200+200·5/27 = 237 (the difficulty
+        // form would say 166/222).
+        let mut b = Vec::new();
+        b.extend_from_slice(&0u16.to_le_bytes()); // S1
+        b.extend_from_slice(&0u16.to_le_bytes()); // S2
+        b.extend_from_slice(&1u16.to_le_bytes()); // S3
+        for w in [1u16, 2, 10, 10] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&1u16.to_le_bytes()); // S4
+        for w in [1u16, 2, 10, 10] {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        for _ in 0..4 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S5..S8
+        }
+        let mut sim = sim_flat(0x7A11);
+        sim.stage_critters(&b, 3).expect("staged");
+        // d=3 → S3 spawns max(3,1) = 3, S4 spawns (3>>1)+2 = 3.
+        let k5: Vec<i16> = sim.critters()[..3].iter().map(|c| c.hp).collect();
+        let k4: Vec<i16> = sim.critters()[3..].iter().map(|c| c.hp).collect();
+        assert!(k5.iter().all(|&h| h == 177), "kind-5 hp m-scaled (got {k5:?})");
+        assert!(k4.iter().all(|&h| h == 237), "kind-4 hp m-scaled (got {k4:?})");
+        // Unstaged linear (m = 0 — the S8 scenario's deliberate
+        // no-destroy class, §7j.72/4): the base exactly.
+        let mut sim0 = sim_flat(0x7A11);
+        sim0.linear = 0;
+        sim0.stage_critters(&b, 3).expect("staged");
+        assert_eq!(sim0.critters()[0].hp, 150, "m=0 → base hp (kind 5)");
+        assert_eq!(sim0.critters()[3].hp, 200, "m=0 → base hp (kind 4)");
     }
 
     #[test]
