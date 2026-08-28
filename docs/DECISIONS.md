@@ -8210,3 +8210,91 @@ fmt + clippy clean on bedlam-shell (the one pre-existing D210
 test warning untouched); workspace cargo check clean; MANIFEST
 clean before AND after the corpus-reading smoke (the gate reads
 no corpus); no Ghidra run.
+
+## D216 — 2026-08-28: P6 `p6-hd-asset-research` — the HD asset pipeline RESEARCH opener (docs/RESEARCH-HD-ASSET-PIPELINE.md refreshed with every external pin re-verified against PRIMARY sources + the machine-checkable hd-asset-pins-v1 registry, the hd-pack-manifest-v1 provenance/manifest schema design, the five-family gate criteria design, the runtime resolution seam sketch, and the isolated+hardware-profiled posture), wired as the TWELFTH P6 required gate with a bounded OFFLINE checker over the committed doc (the e0bc7fb scaffold pattern)
+
+CONTEXT: PLAN §6 "Optional HD asset pipeline (D21; external pack,
+never bundled originals or derivatives in git)" names its own
+prerequisite — "exact package/model pins come from
+docs/RESEARCH-HD-ASSET-PIPELINE.md" — and the resolution QoL work
+(D215) left this doc as the queue head. A groundwork draft existed
+from 2026-08-18 (commit 861aebe, the D21-era survey); this unit
+ADOPTED it (preserved, no reset) and REFRESHED it against primary
+sources with the web tools: a transport/network failure is the
+structured failure outcome, never a thinner doc.
+
+DECISION (the gate design): the research deliverable is graded the
+same way every P6 contract is graded — by a machine-checkable
+artifact + a fail-closed offline checker + a hermetic tamper suite
+wired as a required gate. (a) THE DOC keeps its human-readable form
+but embeds the MACHINE-CHECKABLE pin registry as a fenced toml
+block (schema hd-asset-pins-v1): every pin carries kind/role/
+version/url/retrieved (+license/sha256/note/categories), and the
+checker enforces first-party https hosts (github.com,
+raw.githubusercontent.com, huggingface.co, docs.comfy.org),
+retrieval dates inside the verification window (>= 2026-08-01, <=
+today), a license on EVERY model pin, VERIFIED licenses on PRIMARY
+model pins (an explicit "unverified" license may never be a
+primary — this is what demotes SD2-inpainting, whose model card
+returned 401/login-gated first-hand on 2026-08-28), a note on
+every deferred pin, and category coverage: each of the four PLAN
+categories — background-outpaint, sprite-upscale, tile-texture-
+upscale, portrait-ui — needs >= 1 PRIMARY model pin and
+background-outpaint additionally >= 1 fallback, plus the required
+comfyui/comfy-cli primary tool pins. (b) THE CHECKER
+(tools/check-p6-hd-asset-research.py) also pins the doc's
+STRUCTURE: the ten required section headers (incl. the four
+category sections), the plan-boundary sentences verbatim (git
+carries only workflows/recipes/masks/hashes/manifests/provenance;
+generated images live in an external HD-pack directory; outputs
+without recorded provenance are excluded from shipping; the
+runtime falls back to the original asset; the engine renders all
+text, controls, click targets and gameplay information; both
+schema ids), and the cross-artifact manifest wiring (the gate
+defined, in the P6 list, running the checker, tracking the doc).
+Sentence matching is whitespace-normalized so markdown wrapping
+cannot break the contract (the tamper suite proves wrapped copies
+cannot survive). (c) THE RESEARCH CONTENT: pins re-verified
+first-hand 2026-08-28 — ComfyUI v0.34.0 (GPL-3.0 at the tag;
+PyTorch >= 2.7 since v0.32.0) with v0.33.1 fallback; comfy-cli
+v1.18.0 (v1.17.0 moved API-workflow validation) with v1.16.0
+fallback; Arctic Helper v0.2.9 (Apache-2.0, sha256 recorded);
+FLUX.1-Fill-dev (gated, non-commercial, own-words color-shift/
+edge-line limitations); Real-ESRGAN x2plus + x4plus_anime_6B zoo
+URLs; SwinIR Apache-2.0 + the 003_realSR checkpoint; the
+Comfy-Org SeedVR2 repackage (Apache-2.0, core-native since PR
+#14424, exact variant filenames); SDXL base openrail++ research-
+only; the PORTRAITS/UI category surveyed with GFPGAN v1.4
+(documented identity drift, deferred) and CodeFormer (NTU S-Lab
+non-commercial — excluded from distributable packs) — plus the
+hd-pack-manifest-v1 schema (source/recipe/generation/runtime/
+model/output/review groups; the in-git mirror carries ids+hashes
+never pixels), the five-family gate criteria design (provenance,
+dimensions, alpha integrity, seam quality, perceptual thresholds;
+fail-closed evidence-first), and the runtime seam sketch (stable
+logical asset ID; ALWAYS-silent fallback to originals on any miss/
+mismatch; engine-rendered text/controls/click targets/gameplay
+information; a platform option OUT of ModeConfig per D200;
+ENHANCED-mode only, parity untouched). BOUNDS KEPT: RESEARCH ONLY
+— no generated assets, no engine change, no new binary RE claims
+(external citations carry their own provenance), catalog stays
+EMPTY, no Ghidra run; the doc records research, the checker reads
+ONLY committed docs (no corpus key, no writable, offline).
+
+VERIFIED (first-hand, this unit): checker OK against the committed
+doc + manifest (10 model + 5 tool + 2 workflow-template pins; all
+four categories covered; primary/fallback/deferred/bootstrap
+discipline; structure + boundary sentences + wiring); the tamper
+suite 27/27 (each structural rule proven to fail loudly: missing
+doc/section/category-section/sentences, missing registry, duplicate
+pin, model-without-license, unverified-license-primary, non-first-
+party URL, future + stale retrieval dates, unknown pin key,
+deferred-without-note, model-without-categories, tool-with-
+categories, category-without-primary (BOTH sprite primaries
+demoted), outpaint-without-fallback, missing comfy-cli pin, gate
+unwired/gate-block-missing/not-running-checker/not-tracking-doc,
+missing manifest; plus the real-repo pin); check-p6-behavior-
+catalog OK (catalog still empty, R6 satisfied with the twelfth
+gate) + its suite 30/30; gates-validator suite 22/22; MANIFEST
+clean before and after (the gate reads no corpus); no engine or
+workspace Rust change (nothing to fmt/clippy beyond baseline).
