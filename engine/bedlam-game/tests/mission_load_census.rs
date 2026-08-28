@@ -195,9 +195,10 @@ fn stage_pickup(scene: &mut MissionScene, tot: &[u8], zone: i32) -> Result<(), S
 
 /// Name the .NME sections `stage_critters` refuses (every non-empty
 /// section other than Wanderers/MixedState5/SeekSteppers/
-/// BallisticState6 — the kind-1 landing §7j.71 added Wanderers and
-/// the kind-6 landing §7j.72 added BallisticState6 to the modeled
-/// set).
+/// BallisticState6/Shooters/Chasers — the kind-1 landing §7j.71
+/// added Wanderers, the kind-6 landing §7j.72 added
+/// BallisticState6, the kind-2 landing §7j.74 added Shooters and
+/// the kind-3 landing §7j.75 added Chasers to the modeled set).
 fn unmodeled_nme_sections(nme: &[u8]) -> Vec<String> {
     let parsed = assets::misc::parse_nme(nme);
     parsed
@@ -211,6 +212,7 @@ fn unmodeled_nme_sections(nme: &[u8]) -> Vec<String> {
                         | assets::misc::NmeSectionKind::Wanderers
                         | assets::misc::NmeSectionKind::MixedState5
                         | assets::misc::NmeSectionKind::SeekSteppers
+                        | assets::misc::NmeSectionKind::Chasers
                         | assets::misc::NmeSectionKind::BallisticState6
                 );
                 (*count != 0 && !modeled).then(|| format!("{kind:?}x{count}"))
@@ -575,55 +577,61 @@ fn run_census() -> Vec<Row> {
 /// commit message saying why (the D28 fingerprint rule).
 const PINNED: &[(&str, &str)] = &[
     ("ZONEA-MISSION1", "host:clean"),
-    ("ZONEB-MISSION1", "host:gaps critters refused (Chasersx10)"),
-    ("ZONEB-MISSION2", "host:gaps critters refused (Chasersx6)"),
-    ("ZONEB-MISSION3", "host:gaps critters refused (Chasersx7)"),
-    ("ZONEB-MISSION4", "host:gaps critters refused (Chasersx12)"),
-    ("ZONEB-MISSION5", "host:gaps critters refused (Chasersx16)"),
+    // The Chasers landing (§7j.75/D186) dropped the ChasersxNN
+    // component from every row and FLIPPED the twelve Chasers-only
+    // hosts clean (ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4) —
+    // the queue's "expect no row flips clean unless a host carries
+    // no other unmodeled state" carve-out, deliberate + documented
+    // (the Shooters unit's ZONED-M5 precedent, D185).
+    ("ZONEB-MISSION1", "host:clean"),
+    ("ZONEB-MISSION2", "host:clean"),
+    ("ZONEB-MISSION3", "host:clean"),
+    ("ZONEB-MISSION4", "host:clean"),
+    ("ZONEB-MISSION5", "host:clean"),
     ("ZONEB-MISSION6", "select:clean"),
     ("ZONEB-MISSION7", "select:clean"),
-    ("ZONEC-MISSION1", "host:gaps critters refused (Chasersx10)"),
-    ("ZONEC-MISSION2", "host:gaps critters refused (Chasersx13)"),
+    ("ZONEC-MISSION1", "host:clean"),
+    ("ZONEC-MISSION2", "host:clean"),
     (
         "ZONEC-MISSION3",
-        "host:gaps critters refused (Chasersx9,CloseCombatx4)",
+        "host:gaps critters refused (CloseCombatx4)",
     ),
-    ("ZONEC-MISSION4", "host:gaps critters refused (Chasersx15)"),
-    ("ZONEC-MISSION5", "host:gaps critters refused (Chasersx2)"),
+    ("ZONEC-MISSION4", "host:clean"),
+    ("ZONEC-MISSION5", "host:clean"),
     ("ZONEC-MISSION6", "select:clean"),
     ("ZONEC-MISSION7", "select:clean"),
-    ("ZONED-MISSION1", "host:gaps critters refused (Chasersx9)"),
-    ("ZONED-MISSION2", "host:gaps critters refused (Chasersx7)"),
-    ("ZONED-MISSION3", "host:gaps critters refused (Chasersx4)"),
-    ("ZONED-MISSION4", "host:gaps critters refused (Chasersx4)"),
+    ("ZONED-MISSION1", "host:clean"),
+    ("ZONED-MISSION2", "host:clean"),
+    ("ZONED-MISSION3", "host:clean"),
+    ("ZONED-MISSION4", "host:clean"),
     ("ZONED-MISSION5", "host:clean"),
     ("ZONED-MISSION6", "select:clean"),
     ("ZONED-MISSION7", "select:clean"),
     (
         "ZONEE-MISSION1",
-        "host:gaps critters refused (Chasersx6,CloseCombatx5,Personnelx12)",
+        "host:gaps critters refused (CloseCombatx5,Personnelx12)",
     ),
     (
         "ZONEE-MISSION2",
-        "host:gaps critters refused (Chasersx5,CloseCombatx5,Personnelx12)",
+        "host:gaps critters refused (CloseCombatx5,Personnelx12)",
     ),
     (
         "ZONEE-MISSION3",
-        "host:gaps critters refused (Chasersx5,CloseCombatx6,Personnelx12)",
+        "host:gaps critters refused (CloseCombatx6,Personnelx12)",
     ),
     (
         "ZONEE-MISSION4",
-        "host:gaps critters refused (Chasersx8,CloseCombatx8,Personnelx12)",
+        "host:gaps critters refused (CloseCombatx8,Personnelx12)",
     ),
     (
         "ZONEE-MISSION5",
-        "host:gaps critters refused (Chasersx13,CloseCombatx4,Personnelx13)",
+        "host:gaps critters refused (CloseCombatx4,Personnelx13)",
     ),
     ("ZONEE-MISSION6", "select:clean"),
     ("ZONEE-MISSION7", "select:clean"),
     (
         "ZONEF-MISSION1",
-        "host:gaps critters refused (Chasersx3,CloseCombatx4,Personnelx9)",
+        "host:gaps critters refused (CloseCombatx4,Personnelx9)",
     ),
     ("ZONEF-MISSION2", "host:gaps critters refused (Personnelx9)"),
     ("ZONEF-MISSION3", "host:gaps critters refused (Personnelx9)"),
@@ -636,7 +644,7 @@ const PINNED: &[(&str, &str)] = &[
     ("ZONEF-MISSION7", "select:clean"),
     (
         "ZONEG-MISSION1",
-        "host:gaps critters refused (Chasersx23,CloseCombatx6,Personnelx9)",
+        "host:gaps critters refused (CloseCombatx6,Personnelx9)",
     ),
 ];
 

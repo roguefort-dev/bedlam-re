@@ -6,11 +6,12 @@
 //! Scope: the E-side model of the 0x4cff98 critter bank (0x7E
 //! stride, count cell 0x46cc2c) + the .NME staging host seam + the
 //! controller subset for the CORPUS KINDS — 1 (the wanderers,
-//! §7j.71), 2 (the sine-walk shooters, §7j.74), 4 (seek steppers)
-//! and 5/6 (the shared mixed-AI body; §7j.72 landed the S6 staging
-//! — 26 corpus missions host it). The kind 3/7 controller bodies
-//! are documented E-gaps: `stage_critters` REFUSES an .NME hosting
-//! them (fail loud — never spawn a critter whose brain is missing).
+//! §7j.71), 2 (the sine-walk shooters, §7j.74), 3 (the chasers,
+//! §7j.75), 4 (seek steppers) and 5/6 (the shared mixed-AI body;
+//! §7j.72 landed the S6 staging — 26 corpus missions host it). The
+//! kind 7 controller body is a documented E-gap: `stage_critters`
+//! REFUSES an .NME hosting it (fail loud — never spawn a critter
+//! whose brain is missing).
 //!
 //! Coordinate scales (§7j.23/2 + §7j.42's probe reads + §7j.74/4):
 //! x/y are Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for
@@ -90,6 +91,11 @@ const CLOSE_BAND: i32 = 0x60;
 /// The engage hold-band ceiling (0x80 px): inside it the mode-8 →
 /// mode-2 transition fires (§7j.42/7).
 const HOLD_BAND: i32 = 0x80;
+/// The kind-3 mode-3/0xA walk-pattern dword table 0x454b48
+/// (§7j.75/6 — raw DGROUP bytes): indexed by the live countdown
+/// 1..9 (0 is never read — the aim sets 9 first); step on
+/// {2,3,7,8,9} = 6 steps per 10 frames.
+const CHASER_WALK_TABLE: [i32; 10] = [0, 0, 1, 1, 0, 0, 0, 1, 1, 1];
 
 /// One critter record — the modeled subset of the 0x7E-stride
 /// frame [§7j.17 item 1, field names per §7j.42/1].
@@ -115,6 +121,11 @@ pub struct CritterRecord {
     /// Heading d@+0x10 — DUAL-PURPOSE (§7j.29): the wander/aim
     /// heading 0..255, or the 2-bit SEEK direction 0..3 in mode 9.
     pub heading: i32,
+    /// The wake-heading cell d@+0x14 — the kind-3 preserved spawn
+    /// heading (S5's w1<<6; the dormant teleport restores it to
+    /// heading 20 frames before waking, §7j.75/2b). NOT
+    /// serialized.
+    pub spawn_heading: i32,
     /// Presence w@+0x24 — 0 skips the critter whole (main loop).
     pub presence: bool,
     /// The attack-target triple d@+0x2A/+0x2E/+0x32 — the mode-8→2
@@ -135,6 +146,11 @@ pub struct CritterRecord {
     /// Home x/y d@+0x42/+0x46 (spawn x/y).
     pub home_x: i32,
     pub home_y: i32,
+    /// Home z d@+0x4A — S5 is the ONE section that stamps it
+    /// (§7j.75/1; the dormant teleport restores z from it); the
+    /// other kinds leave it 0. NOT serialized (the §7j.71
+    /// dir/frame/z_restore convention).
+    pub home_z: i32,
     /// Multiplexed countdown w@+0x56 — dormant timer / seek pause /
     /// fire cadence / chase count, per mode (§7j.42/2); for kind 1
     /// the wander countdown (§7j.71/3).
@@ -146,6 +162,11 @@ pub struct CritterRecord {
     /// Frame word w@+0x5A — the kind-1 DIR mirror, written on every
     /// direction pick (§7j.71/3).
     pub frame: u16,
+    /// The pathfinder wall-follow sector w@+0x5E (kind 3,
+    /// §7j.75/4): 0x00 = −y, 0x40 = +x, 0x80 = +y, 0xC0 = −x;
+    /// every blocked-path exit copies it into heading. NOT
+    /// serialized.
+    pub seek_sector: u16,
     /// z-restore d@+0x4E — the kind-1 standing level z, restored on
     /// the idle squash + the bounds re-pick (§7j.71/1,/3).
     pub z_restore: i32,
@@ -186,15 +207,18 @@ impl Default for CritterRecord {
             z: 0,
             home_x: 0,
             home_y: 0,
+            home_z: 0,
             countdown: 0,
             dir: -1,
             frame: 0,
+            seek_sector: 0,
             z_restore: 0,
             death_ctr: 0,
             variant: 0,
             target_robot: -1,
             fuse: 0,
             facing: 0,
+            spawn_heading: 0,
         }
     }
 }
@@ -205,10 +229,10 @@ impl MissionSim {
     /// (D114). The ORIGINAL loads the file natively at mission
     /// load; E stages the identical bytes. Only the sections whose
     /// kinds the E controller models may spawn (S1 → kind 2, S2 →
-    /// kind 1, S3 → kind 5, S4 → kind 4, S6 → kind 6); any other
-    /// NON-EMPTY section is REFUSED (fail loud — never spawn a
-    /// brain the engine does not carry; ZONEA/MISSION1 hosts
-    /// exactly S3+S4).
+    /// kind 1, S3 → kind 5, S4 → kind 4, S5 → kind 3, S6 →
+    /// kind 6); any other NON-EMPTY section is REFUSED (fail loud —
+    /// never spawn a brain the engine does not carry;
+    /// ZONEA/MISSION1 hosts exactly S3+S4).
     ///
     /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72 + §7j.74/1]:
     /// S1 (state 2, 10-B recs, w1 = spawn base, w2 = variant flag,
@@ -233,7 +257,14 @@ impl MissionSim {
     /// — x = w2·0x20+0xF, y = w3·0x20+0xF (RAW px), z = the floor
     /// probe at level w1, mode 9, species 6, heading = RandA()&3
     /// (the loader's only stream draw for these two sections), hp
-    /// base 0xC8. S6 (state 6, 8-B recs): ONE each at EVERY
+    /// base 0xC8. S5 (state 3, 10-B recs, w1 = heading scalar,
+    /// w2 = probe level, w3/w4 = x/y tile): ONE each at EVERY
+    /// difficulty — x = w3·0x2000+0xF00, y = w4·0x2000+0xF00
+    /// (Q13), z = the floor probe at level w2, home x/y/z staged
+    /// (the ONE home-stamping section), heading = w1<<6 at +0x10
+    /// AND the +0x14 wake-heading cell, species 8 (the spawn
+    /// grace), MODE 0, target −1, hp base 0x5DC, NO stream draws
+    /// (§7j.75/1). S6 (state 6, 8-B recs): ONE each at EVERY
     /// difficulty — the S3 stamps verbatim with kind 6 (mode 8,
     /// species 3, anim 5, heading 0x72, the w1-level floor probe,
     /// hp base 0x96) and NO stream draws (§7j.72/1). **EVERY
@@ -277,7 +308,7 @@ impl MissionSim {
         // S8 (personnel/POI) is a separate bank — the poi-bank T2
         // row's own unit. Any other unmodeled section refuses.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 5 {
+            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 4 && si != 5 {
                 return None;
             }
         }
@@ -433,6 +464,42 @@ impl MissionSim {
                 staged += 1;
             }
         }
+        for rec in &sections[4] {
+            // S5 (§7j.75/1): ONE each at EVERY difficulty — no
+            // inner spawn loop, NO stream draws (zero RandA/
+            // FUN_0041ec1c sites in the block); the ONE section
+            // that stamps home (x/y AND z), the spawn heading
+            // w1<<6 at BOTH heading d@+0x10 and the wake-heading
+            // cell d@+0x14, species 8 (the spawn-grace counter —
+            // NOT a substep count for kind 3), MODE 0
+            // (awake-idle), target −1, hp base 0x5DC (1500).
+            if self.critters.len() >= CRITTER_SLOTS {
+                break;
+            }
+            let x = rec[3] as i32 * 0x2000 + 0xF00;
+            let y = rec[4] as i32 * 0x2000 + 0xF00;
+            let base = 0x5DCi32;
+            let heading = (rec[1] as i32) << 6;
+            let z = self.terrain.floor_z(x >> 8, y >> 8, rec[2] as i32 * 32);
+            self.critters.push(CritterRecord {
+                kind: 3,
+                species: 8,
+                hp: (base + base * m / 27) as i16, // §7j.75/1 — the m cell, as every section
+                mode: 0,
+                heading,
+                spawn_heading: heading,
+                presence: true,
+                x,
+                y,
+                z,
+                home_x: x,
+                home_y: y,
+                home_z: z,
+                target_robot: -1,
+                ..Default::default()
+            });
+            staged += 1;
+        }
         for rec in &sections[5] {
             // S6 (§7j.72/1): ONE each at EVERY difficulty — no inner
             // spawn loop, NO stream draws (the decompile's block has
@@ -556,6 +623,7 @@ impl MissionSim {
             match self.critters[idx].kind {
                 1 => self.critter_wander(idx),
                 2 => self.critter_shooter(idx),
+                3 => self.critter_chaser(idx, respawn),
                 4 => self.critter_state4(idx, respawn),
                 5 | 6 => self.critter_mixed(idx, respawn, leash),
                 // Staging refuses the other kinds (module doc).
@@ -950,6 +1018,400 @@ impl MissionSim {
                 vz: dirz >> 5,
             };
         }
+    }
+
+    /// The kind-3 CHASER body (0x4145c1) [§7j.75/2] — runs ONCE
+    /// per frame with NO substep loop (species is NOT a substep
+    /// count for kind 3; its three roles: the 8-frame spawn grace
+    /// (the R2 gate), the 0x20 return-home walk budget (R1/R4),
+    /// and the wake clear — §7j.75/3). The whole chain is
+    /// DRAW-FREE (§7j.75/8). Order: the target-liveness flip →
+    /// the dormant/dying early exits → the species decrement →
+    /// the 4-rule distance ladder → the mode bodies (a ladder
+    /// flip runs the new body the SAME frame — the dispatch
+    /// re-reads the mode word).
+    fn critter_chaser(&mut self, idx: usize, respawn: i32) {
+        // (a) Target liveness (0x4145c1): a set target whose robot
+        // is dead → awake-idle (mode 8), countdown 0, target −1 —
+        // BEFORE the mode dispatch (dormant/dying included).
+        let target = self.critters[idx].target_robot;
+        if target >= 0 {
+            let dead = !self
+                .robots
+                .get(target as usize)
+                .map(|r| r.alive)
+                .unwrap_or(false);
+            if dead {
+                let c = &mut self.critters[idx];
+                c.mode = 8;
+                c.countdown = 0;
+                c.target_robot = -1;
+            }
+        }
+        match self.critters[idx].mode {
+            0xB => {
+                // (b) DORMANT (0x41460d): the difficulty delay
+                // table; the TELEPORT-HOME block on the frame the
+                // counter EXACTLY equals delay−0x14 (§7j.75/2b) —
+                // heading := the +0x14 spawn heading, x/y/z :=
+                // home (the re-materialize 20 frames before the
+                // wake).
+                if self.critters[idx].countdown < respawn {
+                    self.critters[idx].countdown += 1;
+                    if self.critters[idx].countdown == respawn - 0x14 {
+                        let c = &mut self.critters[idx];
+                        c.heading = c.spawn_heading;
+                        c.x = c.home_x;
+                        c.y = c.home_y;
+                        c.z = c.home_z;
+                    }
+                    return;
+                }
+                // WAKE (0x414649): hp FLAT 1500 (no m scalar),
+                // species cleared (can approach immediately).
+                let c = &mut self.critters[idx];
+                c.presence = true;
+                c.countdown = 0;
+                c.species = 0;
+                c.mode = 8;
+                c.hp = 0x5DC;
+                return;
+            }
+            7 => {
+                // (c) DYING (0x4146f3): 0x28 frames → dormant (the
+                // death counter is not reset — the k5/6 shape).
+                let c = &mut self.critters[idx];
+                c.hp = 0;
+                c.death_ctr += 1;
+                if c.death_ctr >= 0x28 {
+                    c.mode = 0xB;
+                    c.countdown = 0;
+                }
+                return;
+            }
+            _ => {}
+        }
+        // (d) The species decrement (0x414731) — floor at 0.
+        if self.critters[idx].species > 0 {
+            self.critters[idx].species -= 1;
+        }
+        // (e) The distance ladder (0x41474e): ONE nearest-alive
+        // probe (FUN_00417c00: idx 0 / dist 10_000_000 sentinel
+        // when none) + the home leash (octile on the >>8'd home
+        // deltas); four rules IN ORDER, each reading the LIVE
+        // mode word.
+        let (x, y) = (self.critters[idx].x, self.critters[idx].y);
+        let (robot, dist) = self.nearest_robot(x >> 8, y >> 8);
+        let leash = dist_octagonal(
+            (self.critters[idx].home_x >> 8) - (x >> 8),
+            (self.critters[idx].home_y >> 8) - (y >> 8),
+        );
+        // R1 (0x4147ce): dist > 200 ∧ mode 2 → return home (the
+        // 0x20 walk budget stamps SPECIES, not countdown —
+        // §7j.75/2e).
+        if dist > 0xC8 && self.critters[idx].mode == 2 {
+            let c = &mut self.critters[idx];
+            c.mode = 0xA;
+            c.countdown = 0;
+            c.species = 0x20;
+            c.target_robot = -1;
+        }
+        // R2 (0x41481f): species == 0 (the spawn grace) ∧
+        // dist < 200 ∧ leash < 400 ∧ mode ∉ {3,2} → approach.
+        if self.critters[idx].species == 0
+            && dist < 0xC8
+            && leash < 0x190
+            && self.critters[idx].mode != 3
+            && self.critters[idx].mode != 2
+        {
+            let c = &mut self.critters[idx];
+            c.mode = 3;
+            c.target_robot = robot as i16;
+            c.countdown = 0;
+        }
+        // R3 (0x41487e): dist < 100 ∧ mode ≠ 2 → attack.
+        if dist < 0x64 && self.critters[idx].mode != 2 {
+            let c = &mut self.critters[idx];
+            c.mode = 2;
+            c.target_robot = robot as i16;
+            c.countdown = 0;
+        }
+        // R4 (0x4148c1): leash ≥ 400 ∧ mode ≠ 10 → return home
+        // (a mode-3 chaser past the leash flips mid-chase).
+        if leash >= 0x190 && self.critters[idx].mode != 0xA {
+            let c = &mut self.critters[idx];
+            c.mode = 0xA;
+            c.countdown = 0;
+            c.species = 0x20;
+            c.target_robot = -1;
+        }
+        // (f..i) The mode bodies — the dispatch re-reads the mode.
+        match self.critters[idx].mode {
+            3 => {
+                // APPROACH (0x41492b): re-aim every 9 frames (the
+                // 8-sector snap at the LIVE robot position), step
+                // on the walk table, countdown−− AFTER the read.
+                if self.critters[idx].countdown == 0 {
+                    self.critters[idx].countdown = 9;
+                    self.critters[idx].heading = self.chaser_aim_robot(idx);
+                }
+                let cd = self.critters[idx].countdown.clamp(0, 9) as usize;
+                if CHASER_WALK_TABLE[cd] != 0 {
+                    self.chaser_step(idx);
+                }
+                self.critters[idx].countdown -= 1;
+            }
+            2 => {
+                // ATTACK (0x4149eb): the 5-frame aim cycle
+                // (0→1→2→3→4→0 wrap), then fire EVERY frame while
+                // a 0x4cc654 slot is free (§7j.75/2g — the §7j.17
+                // ">4 shots" gloss is this wrap, not a gate).
+                if self.critters[idx].countdown == 0 {
+                    self.critters[idx].heading = self.chaser_aim_robot(idx);
+                }
+                self.critters[idx].countdown += 1;
+                if self.critters[idx].countdown > 3 {
+                    self.critters[idx].countdown = 0;
+                }
+                if let Some(slot) = self.enemy_free_slot() {
+                    self.spawn_chaser_projectile(idx, slot);
+                }
+            }
+            0xA => {
+                // RETURN-HOME (0x414bbc): the same 9-frame aim
+                // cycle at HOME, the same walk table.
+                if self.critters[idx].countdown == 0 {
+                    self.critters[idx].countdown = 9;
+                    self.critters[idx].heading = self.chaser_aim_home(idx);
+                }
+                let cd = self.critters[idx].countdown.clamp(0, 9) as usize;
+                if CHASER_WALK_TABLE[cd] != 0 {
+                    self.chaser_step(idx);
+                }
+                self.critters[idx].countdown -= 1;
+            }
+            // Modes 0/8 — awake-idle: only the ladder acts.
+            _ => {}
+        }
+    }
+
+    /// The 8-sector snap (§7j.75/2f): `((angle+0xF)&0xFF)>>5&7)<<5`
+    /// — the +15 half-sector rounding; headings land on
+    /// {0,0x20,…,0xE0}.
+    fn chaser_snap(&self, angle: i32) -> i32 {
+        ((((angle + 0xF) & 0xFF) >> 5) & 7) << 5
+    }
+
+    /// The mode-3/2 re-aim at the LIVE target-robot position
+    /// (FUN_00425498 with ebx/ecx = robot x/y, §7j.75/2f). An
+    /// unset/gone target keeps the heading (unreachable via the
+    /// ladder invariant; defensive).
+    fn chaser_aim_robot(&self, idx: usize) -> i32 {
+        let t = self.critters[idx].target_robot;
+        if t < 0 {
+            return self.critters[idx].heading;
+        }
+        let (Some(c), Some(r)) = (self.critters.get(idx), self.robots.get(t as usize)) else {
+            return self.critters[idx].heading;
+        };
+        self.chaser_snap(self.angles.angle_byte(r.pos_x - c.x, r.pos_y - c.y) as i32)
+    }
+
+    /// The mode-0xA re-aim at home (§7j.75/2h).
+    fn chaser_aim_home(&self, idx: usize) -> i32 {
+        let c = &self.critters[idx];
+        self.chaser_snap(self.angles.angle_byte(c.home_x - c.x, c.home_y - c.y) as i32)
+    }
+
+    /// The mode-2 fire (§7j.75/2g): projectile 0x67 at the LIVE
+    /// robot position with the FULL 3-D octile-normalized
+    /// velocity — the 0x68 lane's exact math (§7j.42/7): dist =
+    /// max(octile(dx,dy),1), vx/vy = d·0x800/dist, vz =
+    /// dz·0x8000/max(octile(dist<<4,dz<<4),1); z stamp
+    /// (z+0x10)<<8; no jitter, no range gate (the ladder owns
+    /// the bands).
+    fn spawn_chaser_projectile(&mut self, idx: usize, slot: usize) {
+        let t = self.critters[idx].target_robot;
+        if t < 0 {
+            return;
+        }
+        let Some(r) = self.robots.get(t as usize) else {
+            return;
+        };
+        let c = &self.critters[idx];
+        let dx = (r.pos_x >> 8) - (c.x >> 8);
+        let dy = (r.pos_y >> 8) - (c.y >> 8);
+        let dz = (r.z + 4) - (c.z + 0x10);
+        let dist = {
+            let d0 = dist_octagonal(dx, dy);
+            if d0 == 0 {
+                1
+            } else {
+                d0
+            }
+        };
+        let vx = dx * 0x800 / dist;
+        let vy = dy * 0x800 / dist;
+        let den2 = {
+            let d = dist_octagonal(dist * 0x10, dz * 0x10);
+            if d == 0 {
+                1
+            } else {
+                d
+            }
+        };
+        let vz = dz * 0x8000 / den2;
+        let (x, y, z) = (c.x, c.y, c.z);
+        self.enemy_bank[slot] = EnemyProjectile {
+            kind: 0x67,
+            x,
+            y,
+            z: (z + 0x10) << 8,
+            vx,
+            vy,
+            vz,
+        };
+    }
+
+    /// FUN_0041571c — the kind-3 pathfinder step (§7j.75/4). The
+    /// open path: x/y += cos/sin(heading)>>5 behind the walk
+    /// gate, the sector word := (heading+0x20)&0xC0 (heading
+    /// UNCHANGED). Blocked: the WALL-FOLLOW ladder on the sector
+    /// word — each arm retries its own ±0x200 Q13 axis move (no
+    /// sector write on the keep), then the two perpendicular
+    /// candidates in the original's key order (the −y/+y arms key
+    /// on the HEADING arg ≥ 0x80; the +x/−x arms key on the sin
+    /// component > 0x80); EVERY blocked exit copies sector →
+    /// heading (0x415b44). The 8-sample gate + the FUN_0040f277
+    /// z-settle tail are the documented no-draw E-gap family
+    /// (module doc) — the modeled gate is the landed-kinds
+    /// approximation (bounds + the center floor band).
+    fn chaser_step(&mut self, idx: usize) {
+        let heading = (self.critters[idx].heading & 0xFF) as u16;
+        let (dx, dy) = match (
+            self.angles.sine_word(heading),
+            self.angles
+                .sine_word(((heading as i32 - 0x40) & 0xFF) as u16),
+        ) {
+            (Some(c), Some(s)) => ((c as i16 as i32) >> 5, (s as i16 as i32) >> 5),
+            _ => return,
+        };
+        if self.walk_gate(idx, dx, dy) {
+            let c = &mut self.critters[idx];
+            c.x += dx;
+            c.y += dy;
+            c.seek_sector = ((heading as i32 + 0x20) & 0xFF & 0xC0) as u16;
+            return; // the open path keeps the aim heading
+        }
+        // The wall-follow ladder (0x415afa): per arm the KEEP move
+        // (own axis, ±0x200 Q13, no sector write) + the two
+        // PERPENDICULAR candidates in the original's key order —
+        // the −y/+y arms key on the HEADING arg (≥ 0x80 → the −x
+        // side first), the +x/−x arms on the SIN component
+        // (> 0x80 → +y first) [the two key forms are literal asm].
+        let sector = self.critters[idx].seek_sector;
+        let h = heading as i32;
+        let try_axis = |dx: i32, dy: i32, sector: Option<u16>, sim: &mut Self| -> bool {
+            if sim.walk_gate(idx, dx, dy) {
+                let c = &mut sim.critters[idx];
+                c.x += dx;
+                c.y += dy;
+                if let Some(s) = sector {
+                    c.seek_sector = s;
+                }
+                true
+            } else {
+                false
+            }
+        };
+        type LadderMove = (i32, i32, u16);
+        let ladder: Option<((i32, i32), LadderMove, LadderMove)> = match sector {
+            0x00 => Some((
+                (0, -0x200),
+                if h >= 0x80 {
+                    (-0x200, 0, 0xC0)
+                } else {
+                    (0x200, 0, 0x40)
+                },
+                if h >= 0x80 {
+                    (0x200, 0, 0x40)
+                } else {
+                    (-0x200, 0, 0xC0)
+                },
+            )),
+            0x40 => Some((
+                (0x200, 0),
+                if dy > 0x80 {
+                    (0, 0x200, 0x80)
+                } else {
+                    (0, -0x200, 0x00)
+                },
+                if dy > 0x80 {
+                    (0, -0x200, 0x00)
+                } else {
+                    (0, 0x200, 0x80)
+                },
+            )),
+            0x80 => Some((
+                (0, 0x200),
+                if h >= 0x80 {
+                    (-0x200, 0, 0xC0)
+                } else {
+                    (0x200, 0, 0x40)
+                },
+                if h >= 0x80 {
+                    (0x200, 0, 0x40)
+                } else {
+                    (-0x200, 0, 0xC0)
+                },
+            )),
+            0xC0 => Some((
+                (-0x200, 0),
+                if dy > 0x80 {
+                    (0, 0x200, 0x80)
+                } else {
+                    (0, -0x200, 0x00)
+                },
+                if dy > 0x80 {
+                    (0, -0x200, 0x00)
+                } else {
+                    (0, 0x200, 0x80)
+                },
+            )),
+            // Any other sector value: no move (the dispatch gaps).
+            _ => None,
+        };
+        if let Some(((kx, ky), p1, p2)) = ladder {
+            if !try_axis(kx, ky, None, self) && !try_axis(p1.0, p1.1, Some(p1.2), self) {
+                try_axis(p2.0, p2.1, Some(p2.2), self);
+            }
+        }
+        // The 0x415b44 copy — every blocked exit.
+        let s = self.critters[idx].seek_sector as i32;
+        self.critters[idx].heading = s;
+    }
+
+    /// FUN_0040cc27(idx, dx, dy) — the shared TRY-MOVE gate,
+    /// modeled as the documented 8-sample-probe E-gap
+    /// approximation (§7j.75/5): map bounds + the center floor
+    /// band at the candidate cell. The original probes the
+    /// 8-sample footprint against the FIRST corner-z word w@+0x60
+    /// with a |Δ| ≤ 4 band and SETTLES z to the center floor on
+    /// pass — the landed kinds' model (bounds + ≤ 3 band, no
+    /// z-settle); open flat ground passes on both channels.
+    fn walk_gate(&mut self, idx: usize, dx: i32, dy: i32) -> bool {
+        let (x, y, z) = {
+            let c = &self.critters[idx];
+            (c.x, c.y, c.z)
+        };
+        let nx = x + dx;
+        let ny = y + dy;
+        let (w, h) = self.terrain.size();
+        if nx < 0 || ny < 0 || nx >> 13 >= w || ny >> 13 >= h {
+            return false;
+        }
+        let floor = self.terrain.floor_z(nx >> 8, ny >> 8, z);
+        (z - floor).abs() <= 3
     }
 
     /// The kind-4 body (the seek steppers, 0x414079) [§7j.42/2]:
@@ -1538,9 +2000,9 @@ impl MissionSim {
     /// mode-6 dive, asm 0x4137e3..0x413804).
     fn critter_step_heading(&mut self, idx: usize, heading: i32) {
         let heading = (heading & 0xFF) as u16;
-        let (x, y, z) = {
+        let (x, y) = {
             let c = &self.critters[idx];
-            (c.x, c.y, c.z)
+            (c.x, c.y)
         };
         // SIGNED word reads (the table is i16; the u16 view loses
         // the sign for headings past 0x80/0xC0).
@@ -1552,19 +2014,12 @@ impl MissionSim {
             (Some(c), Some(s)) => ((c as i16 as i32) >> 6, (s as i16 as i32) >> 6),
             _ => return,
         };
-        let nx = x + dx;
-        let ny = y + dy;
-        let (w, h) = self.terrain.size();
-        if nx < 0 || ny < 0 || nx >> 13 >= w || ny >> 13 >= h {
-            return;
-        }
-        let floor = self.terrain.floor_z(nx >> 8, ny >> 8, z);
-        if (z - floor).abs() > 3 {
+        if !self.walk_gate(idx, dx, dy) {
             return;
         }
         let c = &mut self.critters[idx];
-        c.x = nx;
-        c.y = ny;
+        c.x = x + dx;
+        c.y = y + dy;
     }
 
     /// Step along the record's own heading field.
@@ -2243,6 +2698,9 @@ mod debris_physics_tests {
             fuse: 0,
             facing: 0,
             variant: 0,
+            home_z: 0,
+            spawn_heading: 0,
+            seek_sector: 0,
         });
     }
 
@@ -2688,5 +3146,417 @@ mod shooter_tests {
         let s0 = sim.rand_a_state();
         sim.critter_tick();
         assert_eq!(sim.rand_a_state(), s0, "presence 0 → no draws");
+    }
+}
+
+#[cfg(test)]
+mod chaser_tests {
+    //! The kind-3 lane (§7j.75): the S5 loader walk (ONE each,
+    //! draw-free, the home stamps, the dual heading stamp) and the
+    //! chaser body (the species triple role, the 4-rule distance
+    //! ladder, the 8-sector snap aim, the every-frame 0x67 fire,
+    //! the walk table, the wall-follow ladder, the dormant
+    //! teleport + wake, the dying wrap).
+
+    use super::*;
+
+    fn sim_flat(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let angles = crate::mission::AngleTable::from_thresholds(&[0u16; 64]).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5; // m = 5 → S5 hp = 1500 + 7500/27 = 1777
+        sim
+    }
+
+    fn sim_sine(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let mut words = vec![0i16; 256];
+        for (a, w) in words.iter_mut().enumerate() {
+            *w = ((a as f64 * core::f64::consts::PI / 128.0).sin() * 32767.0).round() as i16;
+        }
+        let angles = crate::mission::AngleTable::from_sintable_words(&words).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5;
+        sim
+    }
+
+    fn push_robot(sim: &mut MissionSim, x: i32, y: i32, z: i32, alive: bool) {
+        sim.robots.push(crate::mission::Robot {
+            pos_x: x,
+            pos_y: y,
+            z,
+            state: 0,
+            dir_byte: 0,
+            facing: crate::mission::FACING_NONE,
+            anim: 0,
+            variant: 0,
+            probe_z: [z as u16; 8],
+            stop_dist: 0,
+            target: None,
+            alive,
+            drop_countdown: 0,
+            hp: 5000,
+            armor: 0,
+            hit_flash: 0,
+            alarm: 0,
+            alarm_ctr: 0,
+            shield: 0,
+            shield_charges: 0,
+            shield_boost: 0,
+            battery: 0,
+            armor_pool: 0,
+            kind: 0,
+            death_flag: 0,
+            weapons: [crate::weapon::WeaponSlot::default(); 7],
+            weapon_mask: 0,
+        });
+    }
+
+    /// An .NME hosting `n` S5 records (w1 = heading scalar, w2 =
+    /// probe level, w3/w4 = x/y tile); every other section empty.
+    fn s5_nme(n: u16, w1: u16, w2: u16, w3: u16, w4: u16) -> Vec<u8> {
+        let mut b = Vec::new();
+        for _ in 0..4 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S1..S4
+        }
+        b.extend_from_slice(&n.to_le_bytes()); // S5 count
+        for _ in 0..n {
+            for w in [1u16, w1, w2, w3, w4] {
+                b.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        for _ in 0..3 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S6..S8
+        }
+        b
+    }
+
+    fn push_chaser(sim: &mut MissionSim, x: i32, y: i32, z: i32) {
+        sim.critters.push(CritterRecord {
+            kind: 3,
+            species: 0,
+            hp: 1500,
+            mode: 0,
+            x,
+            y,
+            z,
+            home_x: x,
+            home_y: y,
+            home_z: z,
+            heading: 0x40,
+            spawn_heading: 0x80,
+            presence: true,
+            ..Default::default()
+        });
+    }
+
+    #[test]
+    fn s5_staging_one_each_draw_free_with_home_stamps() {
+        // §7j.75/1: ONE per record at EVERY difficulty (no spawn
+        // loop), ZERO stream draws, home x/y/z staged, the w1<<6
+        // heading at BOTH +0x10 and the +0x14 cell, species 8,
+        // MODE 0, hp 1500+(1500·m)/27.
+        let mut sim = sim_flat(0x5DC);
+        let staged = sim
+            .stage_critters(&s5_nme(2, 3, 2, 10, 12), 3)
+            .expect("S5 staged");
+        assert_eq!(staged, 2, "one each — the difficulty cell is dead");
+        for c in sim.critters() {
+            assert_eq!(c.kind, 3);
+            assert_eq!(c.species, 8, "the spawn-grace counter");
+            assert_eq!(c.mode, 0, "awake-idle, NOT 8");
+            assert_eq!(c.target_robot, -1);
+            assert_eq!(c.x, 10 * 0x2000 + 0xF00);
+            assert_eq!(c.y, 12 * 0x2000 + 0xF00);
+            assert_eq!(c.home_x, c.x, "S5 is the ONE home-stamping section");
+            assert_eq!(c.home_y, c.y);
+            assert_eq!(c.home_z, c.z, "home z staged too");
+            assert_eq!(c.heading, 3 << 6, "w1<<6");
+            assert_eq!(c.spawn_heading, 3 << 6, "the +0x14 wake-heading cell");
+            assert_eq!(c.hp, (1500 + 1500 * 5 / 27) as i16, "m = 5");
+            assert!(c.presence);
+            assert_eq!(c.countdown, 0);
+        }
+        // Draw-free: the stream did not move.
+        let mut probe = sim_flat(0x5DC);
+        probe
+            .stage_critters(&s5_nme(2, 3, 2, 10, 12), 3)
+            .expect("staged");
+        assert_eq!(sim.rand_a_state(), probe.rand_a_state());
+    }
+
+    #[test]
+    fn chaser_spawn_grace_then_approach() {
+        // R2 is gated on species == 0 (§7j.75/2e): the fresh 8 does
+        // 8 frames of awake-idle (mode 0), then the approach fires.
+        let mut sim = sim_sine(9);
+        // Robot 4 tiles east = 128 px: the 100..200 approach band.
+        push_robot(
+            &mut sim,
+            14 * 0x2000 + 0xF00,
+            10 * 0x2000 + 0xF00,
+            0x5F,
+            true,
+        );
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].species = 8;
+        for _ in 0..7 {
+            sim.critter_tick();
+            assert_eq!(sim.critters[0].mode, 0, "the grace");
+        }
+        sim.critter_tick(); // 8th: species hits 0 → R2 → mode 3
+        let c = &sim.critters[0];
+        assert_eq!(c.mode, 3);
+        assert_eq!(c.target_robot, 0);
+        assert_eq!(c.countdown, 8, "aim-set 9, stepped (table[9]), dec → 8");
+        assert_eq!(c.heading, 0x40, "the east snap");
+        assert_eq!(c.species, 0);
+    }
+
+    #[test]
+    fn chaser_close_band_fires_067_every_frame() {
+        // R3: dist < 100 → mode 2; the body fires 0x67 EVERY frame
+        // with the LIVE-robot 3-D octile velocity (§7j.75/2g); the
+        // countdown cycles 1,2,3,0 (the 5-frame re-aim cycle).
+        let mut sim = sim_sine(11);
+        // Robot 2 tiles east = 64 px.
+        push_robot(
+            &mut sim,
+            12 * 0x2000 + 0xF00,
+            10 * 0x2000 + 0xF00,
+            0x5F,
+            true,
+        );
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        let mut countdowns = Vec::new();
+        for k in 0..5 {
+            sim.critter_tick();
+            let c = &sim.critters[0];
+            assert_eq!(c.mode, 2);
+            countdowns.push(c.countdown);
+            // exactly k+1 bolts of 0x67 after k+1 frames
+            assert_eq!(
+                sim.enemy_bank.iter().filter(|p| p.kind == 0x67).count(),
+                k + 1
+            );
+        }
+        assert_eq!(countdowns, vec![1, 2, 3, 0, 1], "the aim cycle wrap");
+        let p = sim.enemy_bank.iter().find(|p| p.kind == 0x67).unwrap();
+        assert_eq!(p.x, 10 * 0x2000 + 0xF00, "the critter x stamp");
+        assert_eq!(p.y, 10 * 0x2000 + 0xF00);
+        assert_eq!(p.z, (0x5F + 0x10) << 8, "the (z+0x10)<<8 stamp");
+        // dx = 64 px east, dist = 64 → vx = 64·0x800/64 = 0x800.
+        assert_eq!(p.vx, 0x800);
+        assert_eq!(p.vy, 0);
+        assert!(p.vz < 0, "the robot center offset: dz = (z+4)−(z+0x10) < 0");
+    }
+
+    #[test]
+    fn chaser_target_death_flips_idle_before_all_else() {
+        // The head check (§7j.75/2a) runs BEFORE the mode dispatch:
+        // even a dying chaser whose target died goes awake-idle.
+        let mut sim = sim_sine(12);
+        push_robot(&mut sim, 30 * 0x2000, 30 * 0x2000, 0x5F, false); // dead, far
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].mode = 7;
+        sim.critters[0].death_ctr = 10;
+        sim.critters[0].target_robot = 0;
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.mode, 8, "the awake-idle flip");
+        assert_eq!(c.target_robot, -1);
+        assert_eq!(c.countdown, 0);
+    }
+
+    #[test]
+    fn chaser_break_and_leash_flip_return_home() {
+        // R1 (dist > 200 ∧ mode 2) and R4 (leash ≥ 400) both stamp
+        // MODE 10 + species 0x20 (the walk budget) + target −1 +
+        // countdown 0 (§7j.75/2e — the 32 is NOT the countdown).
+        let mut sim = sim_sine(13);
+        // Robot 7 tiles east = 224 px > 200.
+        push_robot(
+            &mut sim,
+            17 * 0x2000 + 0xF00,
+            10 * 0x2000 + 0xF00,
+            0x5F,
+            true,
+        );
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].mode = 2;
+        sim.critters[0].target_robot = 0;
+        sim.critters[0].countdown = 2;
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.mode, 0xA);
+        assert_eq!(c.species, 0x20, "the return walk budget");
+        assert_eq!(
+            c.countdown, 8,
+            "aim-at-home fired the same frame: 0 → 9, step, dec"
+        );
+        assert_eq!(c.target_robot, -1);
+        // R4: a mode-3 chaser past the leash flips home mid-chase.
+        let mut sim2 = sim_sine(13);
+        push_chaser(&mut sim2, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim2.critters[0].x = 25 * 0x2000; // 15 tiles east of home (465 px)
+        sim2.critters[0].mode = 3;
+        sim2.critters[0].countdown = 5;
+        sim2.critter_tick();
+        let c = &sim2.critters[0];
+        assert_eq!(c.mode, 0xA);
+        assert_eq!(c.species, 0x20);
+        assert_eq!(c.target_robot, -1);
+    }
+
+    #[test]
+    fn chaser_walk_cycle_six_steps_per_ten() {
+        // The walk table [0,0,1,1,0,0,0,1,1,1] (§7j.75/6): steps on
+        // countdown {9,8,7,3,2} — 6 open-path steps of
+        // cos(0x40)>>5 = 32767>>5 = 1023 Q13 per 10 frames.
+        let mut sim = sim_sine(14);
+        push_robot(
+            &mut sim,
+            14 * 0x2000 + 0xF00,
+            10 * 0x2000 + 0xF00,
+            0x5F,
+            true,
+        );
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].mode = 3;
+        sim.critters[0].countdown = 9;
+        sim.critters[0].target_robot = 0;
+        let x0 = sim.critters[0].x;
+        for _ in 0..10 {
+            sim.critter_tick();
+            assert_eq!(sim.critters[0].mode, 3, "the 100..200 band holds");
+        }
+        assert_eq!(sim.critters[0].x - x0, 6 * 1023, "6 steps of 1023");
+        assert_eq!(sim.critters[0].countdown, 8, "the cycle position");
+        assert_eq!(sim.critters[0].heading, 0x40, "the east snap holds");
+    }
+
+    #[test]
+    fn chaser_blocked_path_wall_follow_ladder() {
+        // §7j.75/4: the open step west runs off the map edge (the
+        // bounds gate) → the wall-follow ladder: sector 0xC0's keep
+        // (−0x200, 0) is ALSO out of bounds → the perpendicular −y
+        // candidate passes (dy == 0 ≤ 0x80 → −y first), the sector
+        // word := 0x00, and heading := the sector (the 0x415b44
+        // copy).
+        let mut sim = sim_sine(15);
+        push_chaser(&mut sim, 0x10, 10 * 0x2000 + 0xF00, 0x5F); // tile 0: west is out
+        sim.critters[0].mode = 3;
+        sim.critters[0].countdown = 9;
+        sim.critters[0].heading = 0xC0; // west
+        sim.critters[0].seek_sector = 0xC0;
+        let (x0, y0) = (sim.critters[0].x, sim.critters[0].y);
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.x, x0, "no west move");
+        assert_eq!(c.y, y0 - 0x200, "the −y perpendicular");
+        assert_eq!(c.seek_sector, 0x00);
+        assert_eq!(c.heading, 0x00, "heading := the sector on the blocked path");
+    }
+
+    #[test]
+    fn chaser_open_path_updates_sector_not_heading() {
+        // §7j.75/4: the open path stamps the sector word
+        // (heading+0x20)&0xC0 and KEEPS the aim heading.
+        let mut sim = sim_sine(16);
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].mode = 3;
+        sim.critters[0].countdown = 9;
+        sim.critters[0].heading = 0x40;
+        sim.critters[0].seek_sector = 0xC0;
+        sim.critters[0].x += 1023; // keep off the aim path's start
+        let x0 = sim.critters[0].x;
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.x, x0 + 1023, "the open-path step");
+        assert_eq!(c.seek_sector, 0x40, "(0x40+0x20)&0xC0");
+        assert_eq!(c.heading, 0x40, "the aim is kept");
+    }
+
+    #[test]
+    fn chaser_dormant_teleport_then_wake() {
+        // §7j.75/2b: at EXACTLY delay−0x14 the dormant chaser
+        // teleports home (heading := the +0x14 spawn heading); at
+        // delay it wakes with hp FLAT 1500 and species cleared.
+        let mut sim = sim_sine(17);
+        sim.difficulty = 2; // respawn delay 600
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        let (hx, hy, hz) = (
+            sim.critters[0].home_x,
+            sim.critters[0].home_y,
+            sim.critters[0].home_z,
+        );
+        let c = &mut sim.critters[0];
+        c.mode = 0xB;
+        c.countdown = 0;
+        c.x = 20 * 0x2000; // displaced
+        c.y = 20 * 0x2000;
+        c.z = 0x10;
+        c.heading = 0x00;
+        for k in 1..=580 {
+            sim.critter_tick();
+            assert_eq!(sim.critters[0].countdown, k);
+        }
+        let c = &sim.critters[0];
+        assert_eq!((c.x, c.y, c.z), (hx, hy, hz), "the teleport at delay−20");
+        assert_eq!(c.heading, 0x80, "the spawn-heading restore");
+        assert_eq!(c.mode, 0xB, "still dormant");
+        for _ in 581..=601 {
+            sim.critter_tick();
+        }
+        let c = &sim.critters[0];
+        assert_eq!(c.mode, 8, "the wake");
+        assert_eq!(c.hp, 0x5DC, "FLAT 1500 — no m scalar on wake");
+        assert_eq!(c.species, 0);
+        assert_eq!(c.countdown, 0);
+    }
+
+    #[test]
+    fn chaser_dying_40_frames_then_dormant() {
+        let mut sim = sim_sine(18);
+        push_chaser(&mut sim, 10 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F);
+        sim.critters[0].mode = 7;
+        for _ in 0..39 {
+            sim.critter_tick();
+            assert_eq!(sim.critters[0].mode, 7);
+            assert_eq!(sim.critters[0].hp, 0);
+        }
+        sim.critter_tick(); // 40th
+        assert_eq!(sim.critters[0].mode, 0xB);
+        assert_eq!(sim.critters[0].countdown, 0);
+    }
+
+    #[test]
+    fn chaser_whole_chain_draw_free() {
+        // §7j.75/8: the whole k3 chain consumes ZERO stream draws —
+        // staging, ladder, walk, fire, dormancy alike.
+        let mut a = sim_sine(19);
+        a.stage_critters(&s5_nme(1, 3, 2, 10, 10), 2)
+            .expect("staged");
+        push_robot(&mut a, 12 * 0x2000 + 0xF00, 10 * 0x2000 + 0xF00, 0x5F, true);
+        a.critters[0].species = 0; // skip the grace
+        let s0 = a.rand_a_state();
+        for _ in 0..20 {
+            a.critter_tick();
+        }
+        assert_eq!(a.rand_a_state(), s0, "the k3 chain is draw-free");
+        assert!(
+            a.enemy_bank.iter().any(|p| p.kind == 0x67),
+            "the chaser engaged"
+        );
     }
 }

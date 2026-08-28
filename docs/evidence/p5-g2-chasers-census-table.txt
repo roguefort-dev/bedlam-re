@@ -1,0 +1,57 @@
+# The P5 all-37-mission load census RE-PINNED — the kind-3 CHASERS
+# landing (item p5-critter-state-g2-chasers-r2, §7j.75/D186,
+# 2026-08-28)
+
+Provenance: the `census_print_table --ignored --nocapture` output
+of engine/bedlam-game/tests/mission_load_census.rs at this unit's
+engine commit (worker bc51a491 claim 1). The Chasers landing
+dropped the `ChasersxNN` component from EVERY hosting row and
+FLIPPED the twelve Chasers-ONLY hosts clean — ZONEB M1-5,
+ZONEC M1/M2/M4/M5, ZONED M1-4 (the queue's "no row flips clean
+unless a host carries no other unmodeled state" carve-out,
+deliberate + documented; the D185 Shooters/ZONED-M5 precedent).
+24/37 missions now load clean (was 12). The G2 residue narrows to
+CloseCombat (kind 7 — ZONEC-M3, ZONEE M1-5, ZONEF-M1, ZONEG-M1)
++ the S8 personnel/POI bank (13 missions); the ledger stays 1/37
+(dispositions flip only on zone-parity evidence, §6.1).
+
+mission | dims | load | destroy | pickup | critters | parsers | frames | summary
+ZONEA-MISSION1 | 25x75 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION1 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION2 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION3 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION4 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION5 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEB-MISSION6 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEB-MISSION7 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEC-MISSION1 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEC-MISSION2 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEC-MISSION3 | 100x100 | host | ok | ok | refused(CloseCombatx4) | ok | ok | host:gaps critters refused (CloseCombatx4)
+ZONEC-MISSION4 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEC-MISSION5 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONEC-MISSION6 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEC-MISSION7 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONED-MISSION1 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONED-MISSION2 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONED-MISSION3 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONED-MISSION4 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONED-MISSION5 | 100x100 | host | ok | ok | ok | ok | ok | host:clean
+ZONED-MISSION6 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONED-MISSION7 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEE-MISSION1 | 100x100 | host | ok | ok | refused(CloseCombatx5,Personnelx12) | ok | ok | host:gaps critters refused (CloseCombatx5,Personnelx12)
+ZONEE-MISSION2 | 100x100 | host | ok | ok | refused(CloseCombatx5,Personnelx12) | ok | ok | host:gaps critters refused (CloseCombatx5,Personnelx12)
+ZONEE-MISSION3 | 100x100 | host | ok | ok | refused(CloseCombatx6,Personnelx12) | ok | ok | host:gaps critters refused (CloseCombatx6,Personnelx12)
+ZONEE-MISSION4 | 100x100 | host | ok | ok | refused(CloseCombatx8,Personnelx12) | ok | ok | host:gaps critters refused (CloseCombatx8,Personnelx12)
+ZONEE-MISSION5 | 100x100 | host | ok | ok | refused(CloseCombatx4,Personnelx13) | ok | ok | host:gaps critters refused (CloseCombatx4,Personnelx13)
+ZONEE-MISSION6 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEE-MISSION7 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEF-MISSION1 | 100x100 | host | ok | ok | refused(CloseCombatx4,Personnelx9) | ok | ok | host:gaps critters refused (CloseCombatx4,Personnelx9)
+ZONEF-MISSION2 | 100x100 | host | ok | ok | refused(Personnelx9) | ok | ok | host:gaps critters refused (Personnelx9)
+ZONEF-MISSION3 | 100x100 | host | ok | ok | refused(Personnelx9) | ok | ok | host:gaps critters refused (Personnelx9)
+ZONEF-MISSION4 | 100x100 | host | ok | ok | refused(Personnelx9) | ok | ok | host:gaps critters refused (Personnelx9)
+ZONEF-MISSION5 | 100x100 | host | ok | ok | refused(Personnelx19) | ok | ok | host:gaps critters refused (Personnelx19)
+ZONEF-MISSION6 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEF-MISSION7 | 100x100 | select | ok | ok | ok | ok | ok | select:clean
+ZONEG-MISSION1 | 100x25 | host | ok | ok | refused(CloseCombatx6,Personnelx9) | ok | ok | host:gaps critters refused (CloseCombatx6,Personnelx9)
+test census_print_table ... ok
+

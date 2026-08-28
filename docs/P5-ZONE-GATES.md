@@ -222,8 +222,11 @@ SELECT-shell landing, §6.2/§7j.73: their .NME files are 16-byte
 empties — no critter scripting for human-opponent
 maps), and — since the G2 Shooters landing (§7j.74/D185) —
 `ZONED-MISSION5`, the first campaign mission to stage clean beside
-ZONEA-M1 (its .NME hosted Shooters only). Every other mission loads
-with named gaps, all of them SEMANTIC (engine scope), none
+ZONEA-M1 (its .NME hosted Shooters only), and — since the G2
+Chasers landing (§7j.75/D186) — the twelve Chasers-only hosts
+(ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4): **24 of 37 missions
+now load with ZERO gaps**. Every other mission loads with named
+gaps, all of them SEMANTIC (engine scope), none
 parser-sized. The ledger is therefore
 UNCHANGED: no mission is unloadable-by-corpus, so no disposition
 moves (dispositions flip only on zone-parity evidence, §3/§5).
@@ -233,7 +236,7 @@ moves (dispositions flip only on zone-parity evidence, §3/§5).
 | Class | Kind | Missions | Content | Sizing |
 |-------|------|----------|---------|--------|
 | G1 | episode-slot seam (semantic) | 10: all zones B–F missions 6–7 | **RESOLVED 2026-08-28** (`p5-select-shell-g1`, D183, RE-EXW-SIM §7j.73): the missions are MP-ONLY — no stage mask ever expressed them. The SELECT screen's MP write arm (0x43edc2..0x43ee43) writes `{zone 2..6, mission 1..2}` and `build_mission_paths` @0x4467df adds 5 at load → `ZONE{B..F}/MISSION{6,7}.*`. Landed as the sibling seam `GameHost::stage_select_mission` (the +5 = `SELECT_MP_FILE_OFFSET`); the census stages all ten through it (`select:clean` rows); the save-import mask domain widened to the EXW five-bit save/SELECT shape (`SELECT_FULL_MASK`, the restore tests bits 1/2/4/8/0x10 — the D178 loud bit-4 rejection retired) and `mission_number_for_mask` saturates at 5 (the SP SELECT domain — the campaign path can never name an MP file). | LANDED |
-| G2 | critter family scope (semantic) | 25: zones B–F missions 1–5 (24 — ZONED-MISSION5 flipped clean) + ZONEG-MISSION1 | `.NME` hosts critter sections the controller does not model (`stage_critters` accepts Shooters + Wanderers + MixedState5 + SeekSteppers + BallisticState6 — the kind-1 Wanderers landing §7j.71/D179, the kind-6 BallisticState6 landing §7j.72/D182 and the kind-2 Shooters landing §7j.74/D185 grew the set past §7j.42/6's MixedState5+SeekSteppers): the refusals now name Chasers (3), CloseCombat (7), and the personnel/POI bank (S8) — Wanderers (1), BallisticState6 (6) and Shooters (2) NO LONGER refuse (the 2026-08-27/28 re-pins dropped them from every row; **the Shooters re-pin flipped ZONED-MISSION5 CLEAN — it hosted Shooters ONLY, the one host with no other unmodeled state; the queue's "no row flips clean" expectation was falsified by that row, documented + deliberate**). ZONEA-MISSION1 passes (MixedState5x6 + SeekSteppersx5 — the modeled slice); the ten 16-byte all-zero .NME missions (all B–F missions 6/7) pass trivially. Not parser-sized: each critter state is AI modeling, its own unit(s). | per-state units; per-mission counts in §6.3 |
+| G2 | critter family scope (semantic) | 13: ZONEC-M3, ZONEE M1–5, ZONEF M1–5, ZONEG-M1 | `.NME` hosts critter sections the controller does not model (`stage_critters` accepts Shooters + Wanderers + Chasers + MixedState5 + SeekSteppers + BallisticState6 — the kind-1 Wanderers landing §7j.71/D179, the kind-6 BallisticState6 landing §7j.72/D182, the kind-2 Shooters landing §7j.74/D185 and the kind-3 Chasers landing §7j.75/D186 grew the set past §7j.42/6's MixedState5+SeekSteppers): the refusals now name CloseCombat (7) and the personnel/POI bank (S8) — Wanderers (1), BallisticState6 (6), Shooters (2) and Chasers (3) NO LONGER refuse (the 2026-08-27/28 re-pins dropped them from every row; **the Chasers re-pin flipped TWELVE Chasers-only hosts CLEAN — ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4 — the hosts whose only unmodeled section was Chasers; the same carve-out the Shooters unit's ZONED-M5 row falsified first, documented + deliberate**). ZONEA-MISSION1 passes (MixedState5x6 + SeekSteppersx5 — the modeled slice); the ten 16-byte all-zero .NME missions (all B–F missions 6/7) pass trivially. Not parser-sized: each critter state is AI modeling, its own unit(s). | per-state units; per-mission counts in §6.3 |
 | G3 | zone-BIN variant naming (RESOLVED) | 3: ZONEB-MISSION6, ZONED-MISSION5, ZONEE-MISSION6 | **RESOLVED 2026-08-28 — NO SWAP (`p5-zone-bin-variant-g3`, D184, RE-EXW-SIM §7c.9):** the corpus ships mission-number terrain banks `ZONEB/MISSION6.BIN`, `ZONED/MISSION5.BIN`, `ZONEE/MISSION6.BIN` beside the zone-level `MISSION{L}.BIN`, but the EXW NEVER opens them — `build_mission_paths` @0x44670c builds path2 (the `.CGR/.BIN/.MIN/.LNG/.LNK` base) as `EDITOR\ZONE{L}\MISSION{L}` unconditionally (zone letter twice, no itoa, no conditional), both `.BIN` concat sites (load_mission @0x41dcbc + the brief twin FUN_0044661b @0x446644) sit on path2, a whole-image string census finds no other mission-path builder, and the EXD twin agrees. Data corroboration: only zone-level `.MIN` ship (16× the zone-BIN counts, never the variant counts); ZONEB M6 ≡ ZONED M5 byte-identical (a shared dev bank). Our `mission_asset_names` zone-level rule is VERIFIED CORRECT — engine untouched, census NOT re-pinned (the loads were already zone-level and green); the three variant files are editor-side residue. | CLOSED (no engine change) |
 
 ### 6.3 Per-mission table (the census output, pinned)
@@ -270,47 +273,57 @@ the map-bounds drop gate + the 5-draw spawn budget) dropped the
 ZONED-MISSION5 CLEAN (its only unmodeled section — the queue's "no
 row flips clean" expectation falsified by this one row, documented
 + deliberate); the provenance is
-docs/evidence/p5-g2-shooters-census-table.txt.
+docs/evidence/p5-g2-shooters-census-table.txt. RE-PINNED A FIFTH
+TIME 2026-08-28 (p5-critter-state-g2-chasers-r2, D186): the
+Chasers landing (§7j.75 — kind 3 staged through the
+distance-ladder body: the species triple role, the 4-rule ladder,
+the 8-sector snap aim, the every-frame 0x67 fire, the walk table
+[0,0,1,1,0,0,0,1,1,1], the wall-follow ladder, hp 1500+(1500·m)/27,
+the whole chain draw-free) dropped the `ChasersxNN` component from
+all 17 hosting rows and FLIPPED the twelve Chasers-ONLY hosts CLEAN
+(ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4 — 24/37 load clean);
+the provenance is
+docs/evidence/p5-g2-chasers-census-table.txt.
 
 | Mission | Dims | Load | Critter gap (refused sections) |
 |---------|------|------|-------------------------------|
 | ZONEA-MISSION1 | 25×75 | host | — (clean) |
-| ZONEB-MISSION1 | 100×100 | host | Chasersx10 |
-| ZONEB-MISSION2 | 100×100 | host | Chasersx6 |
-| ZONEB-MISSION3 | 100×100 | host | Chasersx7 |
-| ZONEB-MISSION4 | 100×100 | host | Chasersx12 |
-| ZONEB-MISSION5 | 100×100 | host | Chasersx16 |
+| ZONEB-MISSION1 | 100×100 | host | — (clean — the Chasers landing §7j.75/D186) |
+| ZONEB-MISSION2 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEB-MISSION3 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEB-MISSION4 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEB-MISSION5 | 100×100 | host | — (clean — §7j.75/D186) |
 | ZONEB-MISSION6 | 100×100 | select | — (empty .NME; G3 resolved D184: variant BIN runtime-dead) |
 | ZONEB-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEC-MISSION1 | 100×100 | host | Chasersx10 |
-| ZONEC-MISSION2 | 100×100 | host | Chasersx13 |
-| ZONEC-MISSION3 | 100×100 | host | Chasersx9, CloseCombatx4 |
-| ZONEC-MISSION4 | 100×100 | host | Chasersx15 |
-| ZONEC-MISSION5 | 100×100 | host | Chasersx2 |
+| ZONEC-MISSION1 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEC-MISSION2 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEC-MISSION3 | 100×100 | host | CloseCombatx4 |
+| ZONEC-MISSION4 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONEC-MISSION5 | 100×100 | host | — (clean — §7j.75/D186) |
 | ZONEC-MISSION6 | 100×100 | select | — (empty .NME) |
 | ZONEC-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONED-MISSION1 | 100×100 | host | Chasersx9 |
-| ZONED-MISSION2 | 100×100 | host | Chasersx7 |
-| ZONED-MISSION3 | 100×100 | host | Chasersx4 |
-| ZONED-MISSION4 | 100×100 | host | Chasersx4 |
+| ZONED-MISSION1 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONED-MISSION2 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONED-MISSION3 | 100×100 | host | — (clean — §7j.75/D186) |
+| ZONED-MISSION4 | 100×100 | host | — (clean — §7j.75/D186) |
 | ZONED-MISSION5 | 100×100 | host | — (clean — the Shooters landing §7j.74/D185; G3 resolved D184: variant BIN runtime-dead) |
 | ZONED-MISSION6 | 100×100 | select | — (empty .NME) |
 | ZONED-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEE-MISSION1 | 100×100 | host | Chasersx6, CloseCombatx5, Personnelx12 |
-| ZONEE-MISSION2 | 100×100 | host | Chasersx5, CloseCombatx5, Personnelx12 |
-| ZONEE-MISSION3 | 100×100 | host | Chasersx5, CloseCombatx6, Personnelx12 |
-| ZONEE-MISSION4 | 100×100 | host | Chasersx8, CloseCombatx8, Personnelx12 |
-| ZONEE-MISSION5 | 100×100 | host | Chasersx13, CloseCombatx4, Personnelx13 |
+| ZONEE-MISSION1 | 100×100 | host | CloseCombatx5, Personnelx12 |
+| ZONEE-MISSION2 | 100×100 | host | CloseCombatx5, Personnelx12 |
+| ZONEE-MISSION3 | 100×100 | host | CloseCombatx6, Personnelx12 |
+| ZONEE-MISSION4 | 100×100 | host | CloseCombatx8, Personnelx12 |
+| ZONEE-MISSION5 | 100×100 | host | CloseCombatx4, Personnelx13 |
 | ZONEE-MISSION6 | 100×100 | select | — (empty .NME; G3 resolved D184: variant BIN runtime-dead) |
 | ZONEE-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEF-MISSION1 | 100×100 | host | Chasersx3, CloseCombatx4, Personnelx9 |
+| ZONEF-MISSION1 | 100×100 | host | CloseCombatx4, Personnelx9 |
 | ZONEF-MISSION2 | 100×100 | host | Personnelx9 |
 | ZONEF-MISSION3 | 100×100 | host | Personnelx9 |
 | ZONEF-MISSION4 | 100×100 | host | Personnelx9 |
 | ZONEF-MISSION5 | 100×100 | host | Personnelx19 |
 | ZONEF-MISSION6 | 100×100 | select | — (empty .NME) |
 | ZONEF-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEG-MISSION1 | 100×25 | host | Chasersx23, CloseCombatx6, Personnelx9 |
+| ZONEG-MISSION1 | 100×25 | host | CloseCombatx6, Personnelx9 |
 
 Dims cross-check: every TOT header matches the §2 zone table
 (25×75 / 100×100 / 100×25) — a second, independent re-derivation of
@@ -321,12 +334,12 @@ the §2 size arithmetic (VERIFIED).
 | Zone | Missions | Load | G1 | G2 critter states to model | G3 |
 |------|----------|------|----|---------------------------|----|
 | A | 1 | 1 host | 0 | none (clean) | — |
-| B | 7 | 5 host + 2 select | landed (D183) | Chasers — Wanderers landed (D179), Shooters LANDED (D185, M2/M4/M5) | resolved: no swap (D184) |
-| C | 7 | 5 host + 2 select | landed (D183) | Chasers, CloseCombat (M3) — Wanderers landed (D179), Shooters LANDED (D185, M1/M3/M5) | — |
-| D | 7 | 5 host + 2 select | landed (D183) | Chasers (M5 clean — Shooters-only host) — Wanderers landed (D179), Shooters LANDED (D185) | resolved: no swap (D184) |
-| E | 7 | 5 host + 2 select | landed (D183) | Chasers, CloseCombat, Personnel — Wanderers landed (D179), Shooters LANDED (D185) | resolved: no swap (D184) |
-| F | 7 | 5 host + 2 select | landed (D183) | Wanderers, Chasers (M1), CloseCombat (M1), Personnel | — |
-| G | 1 | 1 host | 0 | Chasers, CloseCombat, Personnel — Wanderers landed (D179), Shooters LANDED (D185) | — |
+| B | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186, M1-5) | resolved: no swap (D184) |
+| C | 7 | 6 clean + 1 gapped | landed (D183) | CloseCombat (M3) — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186, M1/M2/M4/M5) | — |
+| D | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185, M5), Chasers LANDED (D186, M1-4) | resolved: no swap (D184) |
+| E | 7 | 2 clean + 5 gapped | landed (D183) | CloseCombat, Personnel — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186) | resolved: no swap (D184) |
+| F | 7 | 2 clean + 5 gapped | landed (D183) | CloseCombat (M1), Personnel — Wanderers landed (D179), Chasers LANDED (D186, M1) | — |
+| G | 1 | 1 host | 0 | CloseCombat, Personnel — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186) | — |
 
 The load/parse layer needs NO work for any zone: zone parity work is
 the G2 critter states (+ the S8 personnel/POI bank) — queued as their
