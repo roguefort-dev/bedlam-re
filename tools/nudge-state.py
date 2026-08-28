@@ -1258,6 +1258,17 @@ def complete_from_head(arguments: list[str]) -> None:
         # checkout without the tracked manifest has no declarations (and
         # the validator fails closed on its own terms in that case).
         gates_manifest_path = checkout / "docs" / "required-gates.toml"
+        # The wrapper budget must cover the validator's OWN bounded
+        # contract, never truncate it: validate-required-gates.py runs
+        # every command of a gate with that gate's declared
+        # timeout_seconds, so the sealed worst case is the sum of
+        # len(commands) * timeout_seconds across gates plus a fixed floor
+        # for sealing and the per-command-boundary corpus revalidation. A
+        # flat outer cap below that sum kills a legitimately bounded run
+        # (the 2026-08-28 completion-missing churn: a 1800s wrapper cap vs
+        # an 82680s declared bound) and the controller can never emit
+        # plan-complete-v1.
+        validation_budget = 1800
         if gates_manifest_path.is_file():
             gates_manifest = tomllib.loads(
                 gates_manifest_path.read_text(encoding="utf-8")
@@ -1268,6 +1279,17 @@ def complete_from_head(arguments: list[str]) -> None:
                     if writable_path.is_absolute() or ".." in writable_path.parts:
                         raise ValueError(f"unsafe writable path in required-gates: {relative}")
                     (checkout / writable_path).mkdir(mode=0o700, parents=True, exist_ok=True)
+                declared = gate.get("timeout_seconds")
+                commands = gate.get("commands")
+                if commands is None and "command" in gate:
+                    commands = [gate["command"]]
+                if (isinstance(declared, bool) or not isinstance(declared, int)
+                        or not isinstance(commands, list)):
+                    # The sealed validator fail-closes on malformed bounds
+                    # itself (its report records the rejection); the wrapper
+                    # floor keeps the run bounded regardless.
+                    continue
+                validation_budget += len(commands) * declared
 
         # The copied validation basis is read-only; writable outputs live outside it.
         for current_root, directories, files in os.walk(checkout, topdown=False):
@@ -1285,7 +1307,7 @@ def complete_from_head(arguments: list[str]) -> None:
         result = subprocess.run(
             [str(validator), "--root", str(checkout), "--report", str(temporary_report),
              "--completion-output", str(temporary_completion)],
-            stdin=subprocess.DEVNULL, timeout=1800, check=False,
+            stdin=subprocess.DEVNULL, timeout=validation_budget, check=False,
             env={"HOME": "/tmp/opencode", "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
         )
         required_gates_sha256 = hashlib.sha256(

@@ -81,6 +81,27 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    regression suite); the structured failure is adjudicated
    required-empty per D232 — the resulting required queue IS empty
    and stays empty.
+   NOTE (watchdog repair 1787949148, D233): the completion-missing
+   failure recorded at 22:02:27Z was NOT a gates failure — the
+   controller's terminal completion validation was KILLED BY ITS
+   OWN WRAPPER CAP: complete-from-head ran the sealed HEAD
+   validator under a flat 1800s subprocess timeout while the
+   validator's own bounded contract for this manifest is the sum
+   of len(commands) x timeout_seconds = 82680s across the 37
+   gates (every command of a gate runs with the gate's declared
+   timeout_seconds; cold per-command cargo targets make hours of
+   wall time legitimate). Two attempts died at exactly 1800s
+   (f56pann5 at 22:02:26, vasjoy4_ at 22:52:27) each recording
+   completion-missing — pure churn, the loop could never emit
+   plan-complete-v1. Fixed in the repair commit: the wrapper
+   budget is now DERIVED from the sealed manifest (1800s floor +
+   the declared per-command bound, 84480s at this HEAD), so the
+   outer cap can never truncate a legitimately bounded run; the
+   per-gate bounds, containment, and fail-closed semantics are
+   untouched. The structured failure is adjudicated required-empty
+   per D233 — the required queue IS empty and stays empty; the
+   controller's next complete-from-head run owns the global
+   verdict exactly as the completion contract demands.
 
 2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +

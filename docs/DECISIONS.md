@@ -10075,3 +10075,77 @@ validation owns every global claim; with the false rate-limit
 failure acknowledged required-empty, nothing re-spawns workers and
 the fixed bounded validator's verdict for this invocation is the
 controller's alone.
+
+## D233 — 2026-08-28: autonomy/watchdog — the TENTH repair, a CONTROLLER-side budget bug: the terminal completion validation (complete-from-head) ran the sealed HEAD validator under a FLAT 1800s wrapper timeout while the validator's own bounded contract for the required-gates manifest is the sum of len(commands) x timeout_seconds = 82680s across the 37 gates — every legitimately bounded run was killed at exactly 30 min and recorded completion-missing, so the loop could NEVER emit plan-complete-v1; fixed by DERIVING the wrapper budget from the sealed manifest itself (1800s floor + the declared per-command bound = 84480s at this HEAD); the structured failure adjudicated required-empty (the second required-empty adjudication, after D232)
+
+(a) THE DIAGNOSIS, mechanical: the required queue emptied at
+89905f3 (D231/D232) and P0-P7 are all green in
+docs/required-gates.toml, so every nudge cycle enters the terminal
+branch: REQUIRED-QUEUE-EMPTY -> complete-from-head seals a
+read-only HEAD checkout in /tmp/opencode and runs
+tools/validate-required-gates.py over ALL 37 gates with
+--completion-output. The 22:02:26 controller log carries the raw
+evidence — subprocess.TimeoutExpired after 1800 seconds on the
+sealed validator — and each dead attempt records a
+completion-missing automation failure. The arithmetic is the bug:
+validate-required-gates.py applies each gate's declared
+timeout_seconds PER COMMAND (42 cargo commands total), each
+command compiles COLD in a fresh per-command bwrap target scratch
+(run_command mkdtemps a new target every time, by containment
+design), so the honest sealed worst case is
+sum(len(commands) x timeout_seconds) = 82680s — the wrapper's flat
+1800s cap sits 46x below the contract it is wrapping. Live
+confirmation during the repair: attempt vasjoy4_ (started 22:22:27)
+observed mid-run making forward progress gate by gate (s0-
+dispositions' cargo battery advancing scratch by scratch), not
+hung — merely budgeted 30 minutes for a ~hours job, doomed to die
+at 22:52:27 exactly like f56pann5 died at 22:02:26. No gate ever
+failed; no gate ever RAN to its own bound.
+
+(b) THE FIX (tools/nudge-state.py, complete_from_head): the
+wrapper budget must COVER the validator's own bounded contract,
+never truncate it. The sealed checkout's required-gates.toml is
+already parsed (for the writable pre-creates); the same parse now
+also accumulates validation_budget = 1800 (fixed floor for
+sealing, corpus binding, and the per-command-boundary corpus
+revalidation) + sum over gates of len(commands) x
+timeout_seconds, skipping malformed declarations exactly as the
+sealed validator fail-closes on them itself. The subprocess.run
+timeout uses the derived budget. Nothing else moves: per-gate
+bounds (1..1800 each, MAX_TIMEOUT), bwrap containment, fail-closed
+semantics, the completion-basis re-checks, and the
+plan-complete-v1 emission are untouched — the change only stops
+the wrapper from killing a run the manifest itself declares
+legitimate. The budget stays FINITE and manifest-derived (a
+manifest cannot grow it past its own declared per-gate bounds);
+with no manifest at HEAD the floor alone applies (1800s) and the
+sealed validator rejects the checkout fast on its own terms.
+
+(c) THE ADJUDICATION: the live structured failure
+(controller-1787947347-2010692-completion-missing, kind
+completion-missing, id automation-state, gate automatic-repair,
+ordinal 1) is resolved required-empty — the required queue IS
+empty and stays empty (the completion contract keeps it so); the
+failure was never a work failure, it was the wrapper's own
+timeout. The remediation_commit is THIS repair commit (it carries
+the queue NOTE recording the adjudication, establishing the
+required-empty postcondition the archive-failures validator
+re-checks against the live queue).
+
+VERIFIED first-hand: python3 -m py_compile clean; the derived
+budget recomputed independently over the live manifest =
+84480s (1800 + 82680); the strict queue parser rc=0
+REQUIRED-QUEUE-EMPTY on the rewritten queue; sibling suites green
+AFTER the edit — test-automation-failure-watchdog (the
+archive-failures/ack machinery this repair's ack flows through)
+and test-validate-required-gates (22/22, the validator contract
+untouched); MANIFEST.sha256 clean before and after (no corpus
+read by this repair).
+
+POSTCONDITION for the loop: the controller's next
+REQUIRED-QUEUE-EMPTY cycle runs complete-from-head under the
+derived budget; with every gate green the sealed validator is
+expected to finish in hours of legitimate cold-compile wall time
+and emit plan-complete-v1, which accept-completion alone may
+consummate. Workers stay unspawned; no queue item appears; the
+global verdict remains the controller's alone.
