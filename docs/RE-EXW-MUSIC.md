@@ -301,3 +301,59 @@ Bonus (cross-ref RE-EXW-PACER.md): SetPaletteRGB sets word@004ee9b6
 surface when it is 1, then clears it - the fade -> present handshake.
 
 Still open: (d) W1>1 multi-channel layout untested (all shipped files W1=1).
+
+## 7. The volume surfaces — bus-split re-anchor for the P6 volume mixers [collected 2026-08-28; every fact re-anchored to its owning verified section, NO new claims]
+
+The P6 QoL volume-mixers unit (PLAN §6 "volume mixers") needs the
+original's audio BUS structure pinned in one place before any platform
+knob is designed. Collected re-anchor (all facts below already carry
+their [verified]/[high confidence] tags where they were first proven):
+
+- **ONE shared master gain word, not a per-bus pair.** The lo word of
+  dword 004ee9b4 (`g_music_master_vol`, scale 0..127) is written ONLY
+  by FUN_0044c630(ax) — called from exactly two UI volume paths,
+  FUN_0044771c (mission shell) and FUN_0043a144 (the other screen's
+  path) [RE-EXW-MUSIC sec 6, EXW high confidence]. The hi word is the
+  palette re-attach flag (surf-confirm addendum, sec 6).
+- **The mission-shell stepper** (RE-EXW-INPUT sec 5 [verified]):
+  Up/Down arrows = music volume −5/+5, clamp 0..100 on
+  g_music_volume @004ddb2c, applied as `vol >> 1` through the master
+  setter (so the 0..100 UI range maps onto master 0..50); repeat
+  gated by counter DAT_0046ae88 < 0x12 (set 0x14 on fire).
+- **The SAME master product scales EVERY voice, music and SFX
+  alike.** SubVoiceStart@0044c4a8 applies
+  `SetVolume = ((master * volume) / 0x30 - 0x7f) * 0x7d0 >> 7` per
+  buffer, and SubVoiceStart is reached from BOTH the music path
+  (MusicPump -> MrsTriggerNote -> SubVoiceFind -> SubVoiceStart) and
+  the SFX path (FUN_0044c8c4 -> SubVoiceStart directly) [sec 6,
+  EXW high confidence; DESIGN-AUDIO fact 3]. So the shipped game's
+  "music volume" stepper is a WHOLE-MIX master: it scales SFX notes
+  exactly as much as music notes.
+- **Spawn-snapshot semantic.** SetVolume happens at voice START only;
+  a stepper change affects future spawns, and sounding buffers ring
+  out at their old level [sec 6; preserved in the E mixer, which
+  documents "affects future note spawns only" on
+  `set_master_volume`]. The movie PCM stream is the one surface whose
+  gain follows the knob live (D31).
+- **The ONLY sfx-side separation is an on/off gate, never a gain.**
+  sfx-master-gate 0x4ede58 is set/cleared only at 0x43a198/0x43a1b1
+  inside FUN_0043a144 — registry-driven, fresh value 1 (D134,
+  RE-EXW-SIM S0-12 row). A mute flag, not a volume.
+
+**Conclusion (the design-resting negative, by collection):** the
+shipped EXW exposes NO music/sfx GAIN split — one shared master bus
+scales the entire voice mix, plus one sfx mute gate. A per-bus
+music/sfx volume selection is therefore a MODERN platform addition,
+and its shipped default must equal the original's single-bus mix
+exactly (the E engine mirrors the single bus faithfully: one
+`Mixer::set_master_volume` knob scaling all voices + the live-gain
+PCM stream, so a platform per-bus gain can only ever apply on the
+device-bound copy AFTER the engine mix — the mixed parity stream
+itself must stay byte-identical under every knob setting).
+
+Provenance: collected 2026-08-28 by the p6-volume-mixers item-1
+worker (claim lock-v2, session 1b994336) from the already-committed
+verified sections RE-EXW-MUSIC sec 6, RE-EXW-INPUT sec 5, RE-EXW-SIM
+S0-12 (D134), RE-EXW-TICK addr table and DESIGN-AUDIO fact 3 / D31.
+Confidence: high (nothing new is claimed; this section only
+cross-references).
