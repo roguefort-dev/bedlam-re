@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode", "p6-window-modes", "p6-volume-mixers"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode", "p6-window-modes", "p6-volume-mixers", "p6-save-slots"]
 
 [[phase]]
 id = "P7"
@@ -847,3 +847,49 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/audio.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "engine/bedlam-shell/src/lib.rs", "docs/RE-EXW-MUSIC.md", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-save-slots — the P6 QoL unit (PLAN §6 "QoL: window modes,
+# vsync control, volume mixers, save slots + metadata + opt-in
+# autosave" — the SAVE SLOTS + METADATA + OPT-IN AUTOSAVE sentence,
+# the next QoL list item after the landed D208 vsync control, D210
+# window modes and D212 volume mixers): the save-slot selection,
+# the slot metadata presentation and the OPT-IN autosave policy at
+# the platform level (engine/bedlam-shell/src/save.rs `SaveSlotId`
+# + `SaveSlotMetadata`/`SaveSlotRow`/`summarize_saved_bdl` +
+# `save_level_text`/`slot_menu_line` + `AutosavePolicy`, carried as
+# `WindowOptions::save_slot`/`WindowOptions::autosave`). D200
+# layering: PLATFORM knobs OUT of ModeConfig with NO purist
+# arbitration — QoL presentation/policy over the engine's
+# ALREADY-LANDED import-only save seam (bedlam-game save.rs, the
+# sec-7j.70 grammar, unchanged). The surface is RE-ANCHORED FIRST
+# (docs/RE-EXW-SAVE.md, committed before the implementation): the
+# EXW persistence is REGISTRY-BACKED (value "SAVEGAME" 0x384 = the
+# whole 5x180 image; the "<dir>SAVED.BDL<name>" path build is dead
+# leftover code), the writer is the save screen FUN_004446938
+# (campaign-shell SAVE button, SINGLE-PLAYER only, armed flag,
+# between missions), and the exhaustive writer census shows exactly
+# TWO user-initiated SAVEGAME writers — THE SHIPPED GAME NEVER
+# AUTOSAVES — so `AutosavePolicy::default()` = Off at every layer
+# (pinned by `autosave_is_never_the_default`) and the opt-in's gate
+# mirrors the original's own (`should_autosave`: single-player AND
+# campaign boundary only). The metadata presentation is
+# byte-faithful (FUN_004473cd: " " + zone letter + one digit per
+# set mask bit; the menu-3 line = name space-padded to 8 + the
+# level text; "EMPTY" rows; broken images stay loud GameErrors).
+# BOUNDS KEPT: the surface lands INERT — no engine write seam, no
+# engine file change (the new versioned save format writer is
+# future config-not-state work per the D201 posture); the sim, the
+# ModeConfig and every hash untouched by construction (pinned by
+# `save_surface_never_touches_the_sim_config`: bit-identical
+# host_sim_config under every knob setting); the binary's
+# --save-slot/--autosave noted + ignored headless; catalog stays
+# EMPTY (a plan-named QoL unit is not a catalog entry). Command
+# hermetic: --release --locked --offline, no corpus key, no
+# writable.
+[[gate]]
+id = "p6-save-slots"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/save.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "engine/bedlam-shell/src/lib.rs", "docs/RE-EXW-SAVE.md", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]

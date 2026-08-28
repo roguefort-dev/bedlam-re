@@ -365,6 +365,52 @@ binary's `--music PCT`/`--sfx PCT` select the starting levels
 (bedlam-shell only); the catalog stays empty (a plan-named QoL
 unit is not a catalog entry).
 
+**Implementation status (D213, 2026-08-28, gate `p6-save-slots`):
+the QoL save slots + metadata + opt-in autosave — PLAN §6
+"QoL: window modes, vsync control, volume mixers, save slots +
+metadata + opt-in autosave" (vsync control landed as D208, window
+modes as D210, volume mixers as D212; this is the next list
+item).**
+THE SAVE-SLOT SELECTION + METADATA PRESENTATION + OPT-IN
+AUTOSAVE POLICY at the platform level
+(`engine/bedlam-shell/src/save.rs`: `SaveSlotId` +
+`SaveSlotMetadata`/`SaveSlotRow`/`summarize_saved_bdl` +
+`save_level_text`/`slot_menu_line` + `AutosavePolicy`, carried as
+`WindowOptions::save_slot`/`WindowOptions::autosave`). D200
+layering holds with NO purist arbitration: QoL presentation and
+platform policy over the engine's ALREADY-LANDED import-only save
+seam (bedlam-game save.rs, the sec-7j.70 grammar — READ side
+byte-faithful, unchanged in this unit), the knobs stay OUT of
+`ModeConfig`, and the surface lands INERT (the D201 seam
+precedent: it selects and describes, it does not write — the new
+versioned save FORMAT writer is future engine work and lands
+config-not-state when it does; the original-format SAVED.BDL
+stays import-only, no writer owed or allowed for parity). THE
+SURFACE IS RE-ANCHORED FIRST (docs/RE-EXW-SAVE.md, committed
+before the implementation): the EXW persistence is REGISTRY-BACKED
+(value "SAVEGAME" 0x384 = the whole 5x180 image; the
+"<dir>SAVED.BDL<name>" path build inside the save screen is dead
+leftover code), the writer is the save screen FUN_004446938
+(reached only from the campaign-shell SAVE button — single-player
+0x4edb88==0, click, armed flag 0x4eae54, between missions), and
+the exhaustive writer census shows exactly TWO user-initiated
+SAVEGAME writers — THE SHIPPED GAME NEVER AUTOSAVES — so
+`AutosavePolicy::default()` = Off at every layer (pinned by
+`autosave_is_never_the_default`) and the opt-in's gate mirrors
+the original's own (`should_autosave`: single-player AND campaign
+boundary only — never mid-mission, never coop/h2h). The metadata
+presentation is BYTE-FAITHFUL: FUN_004473cd's level text (" " +
+zone letter + one digit '1'..'5' per set mask bit), the menu-3
+line construction (name space-padded to 8 + the level text),
+"EMPTY" rows for the empty predicate, and loud `GameError`
+rejections for broken images. BOUNDS KEPT: no engine change
+(bedlam-shell only); the sim, the ModeConfig and every hash
+untouched by construction (pinned by
+`save_surface_never_touches_the_sim_config`); the binary's
+`--save-slot N`/`--autosave` noted + ignored headless; the
+catalog stays empty (a plan-named QoL unit is not a catalog
+entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
