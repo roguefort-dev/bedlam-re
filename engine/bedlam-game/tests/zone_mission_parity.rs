@@ -5,18 +5,20 @@
 //! mission. The suite carries ONE `ZoneSpec` per CLOSED zone and
 //! runs every closed zone's evidence on every run (a zone's
 //! disposition unit APPENDS its spec — the closed set never loses
-//! its executable evidence, and every `p5-zone-{b..f}` gate runs
+//! its executable evidence, and every `p5-zone-{b..g}` gate runs
 //! this same suite): zone B (§8, D192), zone C (§9, D193),
-//! zone D (§10, D195), zone E (§11, D196) and zone F (§12, D197).
-//! Missions 1–5 stage through the CAMPAIGN episode-slot seam (the
+//! zone D (§10, D195), zone E (§11, D196), zone F (§12, D197)
+//! and zone G (§13, D199 — the LAST ledger disposition). Missions
+//! 1–5 stage through the CAMPAIGN episode-slot seam (the
 //! completion mask whose first-uncompleted sub is the mission),
 //! missions 6–7 — the MP-only files — through the SELECT
-//! write-pair seam (§7j.73/D183). Per criterion, this file's
-//! machine-checkable half:
+//! write-pair seam (§7j.73/D183); zone G ships mission 1 alone,
+//! so every G flow rides the campaign seam. Per criterion, this
+//! file's machine-checkable half:
 //!
 //! | §1 | Criterion | This file's leg |
 //! |----|-----------|-----------------|
-//! | 1 | scripted flows complete crash-free | `zone_scripted_flows_complete_crash_free` — every closed zone's committed flows (zone B: S5/S5B/S5C at MISSION1; zones C, D, E and F: NONE — no committed .scen stages them, the generated battery IS the whole leg) PLUS a generated per-mission battery (boot→mission, passive steady-state, full-staging destroy+pickup+platforms+critters) for EVERY mission of EVERY closed zone: full declared frame budget, dump verifies, two-run byte identity |
+//! | 1 | scripted flows complete crash-free | `zone_scripted_flows_complete_crash_free` — every closed zone's committed flows (zone B: S5/S5B/S5C at MISSION1; zones C, D, E, F and G: NONE — no committed .scen stages them, the generated battery IS the whole leg) PLUS a generated per-mission battery (boot→mission, passive steady-state, full-staging destroy+pickup+platforms+critters) for EVERY mission of EVERY closed zone: full declared frame budget, dump verifies, two-run byte identity |
 //! | 2 | T1 rules vs RE | `zone_t1_rules_spot` (the shared selection/economy arithmetic + the per-zone/per-mission fetch chain, the zone-level CGR/BIN/LNK pin of D184) + `zone_anchor_ts_statics_rederived_from_tot` (the anchor TS/T0 statics re-derived INDEPENDENTLY from the TOT header bytes + the §7j.64 formula, never the engine's own output) |
 //! | 3 | perceptual frame checks (T2, diagnostic band) | the machine band is the two-run anchor/frame byte identity of criterion 1 (identical transcripts at the key moments); thresholds + owner feel sign-off stay the operator diagnostic process, never a pixel-exact gate |
 //! | 4 | differ structural spot-check | the structural contract inside criterion 1's decode (anchor frame 0, monotone frame_no, record count = declared budget + 1, the scenario id riding the header); the cross-channel differ itself is the differ_gate gate command (ZONEA dumps); not tick-complete by design (§0b) |
@@ -76,8 +78,16 @@ struct ZoneSpec {
 /// instantiation, shipping NO mission-number variant bank at all
 /// (the only zone-F .BIN is the zone-level MISSIONF.BIN), so the
 /// D184 no-swap pin carries no variant caveat and linear = m+19
-/// has M7 exactly TOUCHING the clamp ceiling 26 without a bite).
-/// A later zone's unit APPENDS its
+/// has M7 exactly TOUCHING the clamp ceiling 26 without a bite;
+/// §13 = G, D199 — the FIFTH pure instantiation and the LAST
+/// ledger disposition: the census-pinned NON-SQUARE mission
+/// (100×25, TOT 40004 B), ONE mission through the campaign seam
+/// alone — zone G's zone cell 7 lies OUTSIDE the SELECT write
+/// arm's 2..=6 domain (no MP files ship for G, §7j.73), so the
+/// SELECT-seam legs below are guarded on the zone's own mission
+/// range; like F it ships NO variant bank (only the zone-level
+/// MISSIONG.BIN), and linear = m+24 puts M1 = 25 one BELOW the
+/// clamp ceiling). A later zone's unit APPENDS its
 /// spec; the tests below iterate the list and read nothing else
 /// zone-specific.
 const ZONES: &[ZoneSpec] = &[
@@ -110,6 +120,12 @@ const ZONES: &[ZoneSpec] = &[
         missions: 1..=7,
         committed: &[],
         dims: (100, 100),
+    },
+    ZoneSpec {
+        letter: 'G',
+        missions: 1..=1,
+        committed: &[],
+        dims: (100, 25),
     },
 ];
 
@@ -301,7 +317,8 @@ fn zone_scripted_flows_complete_crash_free() {
     }
     for zone in ZONES {
         // The zone's committed flows (staged at mission 1; zones C,
-        // D, E and F carry NONE — the battery below is their whole leg).
+        // D, E, F and G carry NONE — the battery below is their
+        // whole leg).
         for id in zone.committed {
             let src = fs::read_to_string(scen_path(id)).unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_flow_completes(id, &src, declared_frames(id));
@@ -458,7 +475,12 @@ fn zone_t1_rules_spot() {
         // The staging seams themselves (the host arms the flows ride):
         // campaigns 1..=5 stage through the completion mask; 6..=7
         // through the SELECT write pair; the pair's domain rejects
-        // loud; campaign staging CLEARS the pair (§7j.73).
+        // loud; campaign staging CLEARS the pair (§7j.73). The MP
+        // legs are guarded on the zone's OWN mission range: only the
+        // seven-mission zones B..=F ship missions 6..=7, and zone G
+        // (mission 1 alone) has its zone cell 7 OUTSIDE the write
+        // arm's 2..=6 domain — the SELECT pair can never stage a
+        // zone-G file (the §7j.73 five-bit mask census).
         let stage = u8::try_from(zone_index(zone) + 1).expect("stage");
         for mission in 1u8..=5 {
             let mut host = host();
@@ -479,7 +501,12 @@ fn zone_t1_rules_spot() {
             );
         }
         let zone_cell = stage; // the SELECT write arm's 1-based zone cell
-        for (cell, file) in [(1u8, 6u8), (2, 7)] {
+        let mp_files: Vec<(u8, u8)> = [(1u8, 6u8), (2u8, 7u8)]
+            .into_iter()
+            .filter(|&(_, file)| zone.missions.contains(&file))
+            .collect();
+        for (cell, file) in &mp_files {
+            let (cell, file) = (*cell, *file);
             let mut host = host();
             assert!(host.stage_select_mission(zone_cell, cell));
             assert_eq!(
@@ -501,8 +528,11 @@ fn zone_t1_rules_spot() {
                 assert!(!host.stage_select_mission(bad.0, bad.1), "{bad:?} rejects");
             }
             // Campaign staging clears the staged pair: the slot returns
-            // to the campaign arithmetic.
-            assert!(host.stage_select_mission(zone_cell, 2));
+            // to the campaign arithmetic (zones shipping the MP files
+            // only — zone G stages nothing through the pair).
+            if !mp_files.is_empty() {
+                assert!(host.stage_select_mission(zone_cell, 2));
+            }
             assert!(host.stage_episode_slot(stage, 0));
             assert_eq!(host.mission_slot(), (zone_index(zone), 1));
         }
