@@ -13,9 +13,13 @@
 //!   selection, D205). `--uncapped` requests the P6 optional
 //!   uncapped present (a platform presentation option, PLAN §6
 //!   "vsync-locked ... or uncapped"; honored only under the modern
-//!   pacing arm - `--classic` pins vsync).
+//!   pacing arm - `--classic` pins vsync). `--fullscreen` /
+//!   `--borderless` select the P6 QoL window mode (PLAN §6 "QoL:
+//!   window modes"; default = a decorated window exactly as
+//!   shipped; the exclusive-style fullscreen is best-effort; F11
+//!   toggles at runtime).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -24,7 +28,7 @@ use std::process::ExitCode;
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
-use bedlam_shell::window::{run_window, Vsync, WindowOptions};
+use bedlam_shell::window::{run_window, Vsync, WindowMode, WindowOptions};
 
 const DEFAULT_GFX: &str = "game-data/BEDLAM";
 
@@ -33,6 +37,8 @@ fn main() -> ExitCode {
     let mut window = false;
     let mut classic = false;
     let mut uncapped = false;
+    let mut fullscreen = false;
+    let mut borderless = false;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -40,6 +46,8 @@ fn main() -> ExitCode {
             "--window" | "-w" => window = true,
             "--classic" | "-c" => classic = true,
             "--uncapped" | "-u" => uncapped = true,
+            "--fullscreen" | "-f" => fullscreen = true,
+            "--borderless" | "-b" => borderless = true,
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -48,7 +56,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -59,6 +67,17 @@ fn main() -> ExitCode {
                     "              P6 platform option; honored only in the modern pacing arm --"
                 );
                 println!("              --classic pins vsync; ignored headless)");
+                println!(
+                    "  --fullscreen: window host opens exclusive-style fullscreen (P6 QoL window"
+                );
+                println!(
+                    "                mode, best-effort: borderless when no exclusive video mode;"
+                );
+                println!("                default = windowed; F11 toggles; ignored headless)");
+                println!(
+                    "  --borderless: window host opens borderless fullscreen (P6 QoL window mode;"
+                );
+                println!("                default = windowed; F11 toggles; ignored headless)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -104,12 +123,34 @@ fn main() -> ExitCode {
         if uncapped {
             opts.vsync = Vsync::Uncapped;
         }
+        // P6 QoL window modes (PLAN §6 "QoL: window modes"): a
+        // PLATFORM presentation option (D200 layering — outside
+        // ModeConfig, NO purist arbitration: the original was a
+        // fullscreen DOS exclusive with no windowed mode to
+        // preserve, so both pacing arms accept the selection
+        // identically and it selects nothing in the host). Default
+        // = windowed exactly as shipped; `--borderless` /
+        // `--fullscreen` select the fullscreen shapes (exclusive
+        // best-effort); F11 toggles at runtime.
+        if fullscreen {
+            opts.window_mode = WindowMode::Fullscreen;
+        }
+        if borderless {
+            opts.window_mode = WindowMode::Borderless;
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
             // The headless path owns no present surface; the option
             // is a no-op there (noted, never fatal).
             eprintln!("bedlam-shell: --uncapped is a window-present option; ignored headless");
+        }
+        if fullscreen || borderless {
+            // Same posture for the window-mode options: no window,
+            // no chrome to select.
+            eprintln!(
+                "bedlam-shell: --fullscreen/--borderless are window-host options; ignored headless"
+            );
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {

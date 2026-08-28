@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode", "p6-window-modes"]
 
 [[phase]]
 id = "P7"
@@ -745,6 +745,56 @@ tracked_paths = ["engine/bedlam-game/src/host.rs", "engine/bedlam-core/src/sim.r
 # corpus key, no writable.
 [[gate]]
 id = "p6-uncapped-present-mode"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-window-modes — the P6 QoL unit (PLAN §6 "QoL: window modes,
+# vsync control, volume mixers, save slots + metadata + opt-in
+# autosave" — the WINDOW MODES presentation option, direct sibling
+# of the landed D208 vsync option; vsync control is DONE): the
+# window-mode selection at the platform level (engine/bedlam-shell/
+# src/window.rs `WindowMode` + `WindowOptions::window_mode` —
+# WINDOWED default, exactly as shipped / BORDERLESS
+# borderless-fullscreen / exclusive-style FULLSCREEN best-effort).
+# D200 layering: a PLATFORM KNOB OUT of ModeConfig with NO purist
+# arbitration this time — the visible window chrome never touches
+# the sim; the original was a fullscreen DOS exclusive with no
+# windowed mode to preserve, so both pacing arms accept the
+# selection identically and the selection selects NOTHING in the
+# host (pinned by `window_mode_selection_never_touches_the_sim_
+# or_the_hashed_trajectory`: the derived SimConfig is bit-identical
+# and the same pump script = identical executed ticks, sim tick
+# count, state hash, scene hash and frame parity hash; the
+# present-gate/alpha answers are option-invariant per
+# `window_mode_option_never_changes_the_gate_answers`). The winit
+# fullscreen target is a PURE function under test, hermetic, no
+# window needed (`fullscreen_target` over plain `VideoModeChoice`
+# data: Windowed -> None; Borderless -> Borderless; Fullscreen ->
+# the best-effort exclusive pick `pick_exclusive_mode` — largest
+# area, then highest refresh, then highest depth, a total order so
+# the pick is list-order-independent — else the HONEST borderless
+# degradation, noted at configure time, never fatal). The runtime
+# F11 toggle stays bounded: a PLATFORM/window-manager key OUTSIDE
+# both control schemes, intercepted in the event handler BEFORE
+# the mapper so it never reaches ShellInput (`is_window_toggle_key`
+# = F11 only, and it maps to nothing in either scheme —
+# `f11_is_the_only_platform_toggle_key_and_is_dead_to_both_schemes`)
+# with the pure transition `toggle_fullscreen_target` (leaving
+# always -> windowed; entering -> the selection's preferred shape)
+# and ONE shared impure binder (`apply_fullscreen`) for the window
+# build and the toggle. BOUNDS KEPT: the swapchain follows the
+# EXISTING Resized reconfigure path only; the shell fixed-step
+# clock/pump contract and the hashed trajectory stay untouched;
+# test surface = the ONE selection, all three shapes (both mode
+# arms only as the option-invariant control), never the feature
+# cross-product; the catalog stays EMPTY (a plan-named QoL unit is
+# not a catalog entry). Command hermetic: --release --locked
+# --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-window-modes"
 timeout_seconds = 1800
 commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],

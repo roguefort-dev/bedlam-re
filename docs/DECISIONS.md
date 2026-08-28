@@ -7749,3 +7749,93 @@ human-only token lint scans the FULL item prose including
 continuation lines, and the only safe worker finish is the strict
 parser run BEFORE the bookkeeping commit. This worker announced
 that run and its transport died before it could execute it.
+
+## D210 — 2026-08-28: P6/QoL `p6-window-modes` — the window-mode selection (a platform presentation option OUT of ModeConfig with NO purist arbitration: both pacing arms accept it identically and it selects nothing in the host; the winit fullscreen target is a pure function over plain data; F11 is a platform-only toggle outside both control schemes), wired as the EIGHTH P6 required gate
+
+CONTEXT: PLAN §6 P6 QoL names the list "window modes, vsync
+control, volume mixers, save slots + metadata + opt-in autosave".
+Vsync control landed as D208 (the seventh gate); this unit lands
+WINDOW MODES, the direct sibling knob. No new RE: nothing new is
+claimed about the binary — the original was a fullscreen DOS
+exclusive with no windowed mode to preserve, which is exactly WHY
+no purist arbitration exists here (there is no original
+window-chrome behavior for the classic arm to preserve, and the
+window chrome never touches the sim).
+
+DECISIONS:
+
+1. The window mode is a PRESENTATION OPTION at the PLATFORM
+   level, NOT a purist axis: `WindowOptions::window_mode`
+   (`WindowMode::Windowed` default — the decorated window exactly
+   as shipped / `Borderless` borderless-fullscreen / `Fullscreen`
+   exclusive-style best-effort), selected by the binary's
+   `--fullscreen` / `--borderless` (noted + ignored headless, the
+   same posture as `--uncapped`). D200 layering holds — the knob
+   stays OUT of `ModeConfig` — and UNLIKE vsync there is NO
+   arbitration function at all: `fullscreen_target` reads the
+   selection alone, never the mode. The selection selects NOTHING
+   in the host: the derived `SimConfig` is bit-identical and the
+   whole hashed trajectory (executed ticks, sim tick count, state
+   hash, scene hash, frame parity hash) is option-invariant
+   (pinned by
+   `window_mode_selection_never_touches_the_sim_or_the_hashed_
+   trajectory`), and the present-gate/alpha answers are
+   option-invariant in BOTH pacing arms
+   (`window_mode_option_never_changes_the_gate_answers`).
+2. THE WINIT FULLSCREEN TARGET is a PURE function under test,
+   hermetic (no window needed): `fullscreen_target(WindowMode,
+   &[VideoModeChoice]) -> Option<FullscreenTarget>` over PLAIN
+   DATA (`VideoModeChoice` is the hermetic view of a winit
+   `VideoModeHandle`; `FullscreenTarget` is the shape selection
+   Borderless/Exclusive(choice)). Windowed → None (exactly as
+   shipped); Borderless → Borderless regardless of candidates (no
+   mode switch involved); Fullscreen → the best-effort exclusive
+   pick else the HONEST borderless degradation — an empty
+   candidate list (absent monitor) degrades, never fails (noted
+   at configure time, never fatal — the same best-effort posture
+   as the D208 surface mapping). The pick itself
+   (`pick_exclusive_mode`) is largest area, then highest refresh,
+   then highest bit depth — a TOTAL order, so the pick is
+   independent of the candidate list order; no refresh preference
+   is invented (the pacing arms already present correctly at any
+   refresh, D205).
+3. THE F11 RUNTIME TOGGLE is bounded and PLATFORM-ONLY: F11 is a
+   window-manager key OUTSIDE both control schemes — the handler
+   intercepts it BEFORE the mapper, so it NEVER reaches
+   `ShellInput`. Pinned both directions: structurally by the
+   interception (`is_window_toggle_key` = F11 and nothing else)
+   and semantically by
+   `f11_is_the_only_platform_toggle_key_and_is_dead_to_both_
+   schemes` — the modern default `Bindings` table binds nothing at
+   F11 and the classic fixed table (the original EXW scheme,
+   RE-EXW-INPUT §6) maps nothing at F11, so even a forwarding bug
+   could not make it sim input. The transition is pure
+   (`toggle_fullscreen_target`: leaving fullscreen ALWAYS returns
+   to windowed; entering uses the selection's preferred shape — a
+   WINDOWED selection enters BORDERLESS per the desktop F11
+   convention), and the impure half is ONE shared binder
+   (`apply_fullscreen`) used by both the window build and the
+   toggle, so the two sites' shapes can never disagree. Bounds:
+   the swapchain follows the EXISTING `Resized` reconfigure path
+   only; the shell fixed-step clock/pump contract and the hashed
+   trajectory stay untouched.
+4. GATE: `p6-window-modes` wired as the EIGHTH P6 required gate —
+   command = bedlam-shell --lib, --release --locked --offline,
+   hermetic. Test surface = the ONE selection, all three shapes
+   (both mode arms only as the option-invariant control), never
+   the feature cross-product; the catalog stays EMPTY (a
+   plan-named QoL unit is not a catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 65/0 (+7: the
+shipped windowed default, the pure target mapping incl. the honest
+degradation, the best-effort exclusive pick + order independence,
+the no-arbitration sim/trajectory pin across all three options,
+the option-invariant gate answers both arms, the F11 toggle
+transition, and the F11-only/dead-to-both-schemes pin); the binary
+--help/--fullscreen/--borderless wiring checked first-hand (help
+text, the headless ignore note, the headless smoke hashes
+unchanged); controls green: gates-validator suite, catalog
+checker + suite (below); canonical chains unmoved
+(zone_mission_parity 5/5, canonical_dump_gate 13/13, determinism
+4/4); fmt + clippy clean on bedlam-shell (the only touched crate);
+MANIFEST clean before AND after every corpus read; no Ghidra run.

@@ -74,6 +74,27 @@
 //! offers it, else the honest Fifo fallback (best-effort platform
 //! knob, noted at configure time, never fatal).
 //!
+//! P6 WINDOW MODES (the p6-window-modes unit, PLAN §6 QoL "window
+//! modes"): the window-mode selection ([`WindowOptions::
+//! window_mode`], [`WindowMode`]) — WINDOWED (default, exactly as
+//! shipped) / BORDERLESS borderless-fullscreen / exclusive-style
+//! FULLSCREEN best-effort. D200 layering with NO purist
+//! arbitration this time (unlike [`Vsync`]): the visible window
+//! chrome never touches the sim — the original was a fullscreen
+//! DOS exclusive with no windowed mode to preserve — so BOTH
+//! pacing arms accept the selection identically and the selection
+//! selects NOTHING in the host (it never reaches `ModeConfig`,
+//! `SimConfig` or any hash). The winit fullscreen target is a PURE
+//! function under test ([`fullscreen_target`] over plain
+//! [`VideoModeChoice`] data — hermetic, no window needed); the
+//! impure half is ONE binder ([`apply_fullscreen`]) shared by the
+//! window build and the F11 runtime toggle. F11 is a PLATFORM/
+//! window-manager key OUTSIDE both control schemes: it is
+//! intercepted at the event handler BEFORE the mapper and NEVER
+//! reaches [`ShellInput`]. Bounds: the swapchain follows the
+//! existing `Resized` reconfigure path only; the fixed-step
+//! clock/pump contract and the hashed trajectory stay untouched.
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -102,7 +123,9 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::keyboard::PhysicalKey;
+use winit::monitor::VideoModeHandle;
+use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::audio::{AudioDevice, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
@@ -157,6 +180,165 @@ pub enum Vsync {
     Uncapped,
 }
 
+/// The platform-level window-mode option (P6 QoL unit
+/// `p6-window-modes`, PLAN §6 "QoL: window modes, ..."): a
+/// PRESENTATION OPTION under the D200 layering — window chrome is a
+/// platform knob and stays OUT of [`ModeConfig`]. NO purist
+/// arbitration this time (unlike [`Vsync`]): the original was a
+/// fullscreen DOS exclusive with no windowed mode to preserve, so
+/// the visible window chrome never touches the sim — BOTH pacing
+/// arms accept the selection identically and the selection selects
+/// NOTHING in the host (never `SimConfig`, never hashed; a window
+/// mode change is a window-run concern, like vsync a new window
+/// run).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WindowMode {
+    /// A decorated window at the configured inner size (DEFAULT —
+    /// exactly the shipped shape: this is what the host has always
+    /// opened).
+    #[default]
+    Windowed,
+    /// Borderless fullscreen: the window covers the current monitor
+    /// (compositor-managed; no mode switch).
+    Borderless,
+    /// Exclusive-style fullscreen, BEST-EFFORT: an exclusive video
+    /// mode when the current monitor offers one, else the honest
+    /// borderless degradation (noted, never fatal — the same
+    /// best-effort posture as the vsync surface mapping).
+    Fullscreen,
+}
+
+/// A video mode as PLAIN DATA — the hermetic view of a winit
+/// `VideoModeHandle` (the live handle exists only with a window,
+/// so every selection function below carries these instead and the
+/// binder resolves one back to a handle at the window site).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoModeChoice {
+    pub width: u32,
+    pub height: u32,
+    /// winit's millihertz refresh rate (60000 = 60 Hz).
+    pub refresh_millihertz: u32,
+    pub bit_depth: u16,
+}
+
+impl VideoModeChoice {
+    /// The plain-data view of a live winit video mode (the impure
+    /// half — only meaningful at the window site).
+    fn of(mode: &VideoModeHandle) -> VideoModeChoice {
+        let size = mode.size();
+        VideoModeChoice {
+            width: size.width,
+            height: size.height,
+            refresh_millihertz: mode.refresh_rate_millihertz(),
+            bit_depth: mode.bit_depth(),
+        }
+    }
+
+    fn area(&self) -> u32 {
+        self.width.saturating_mul(self.height)
+    }
+}
+
+/// The winit fullscreen target as PURE selection data (which
+/// fullscreen shape to request — the binder turns it into a live
+/// `winit::window::Fullscreen` at the window site).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FullscreenTarget {
+    /// `Fullscreen::Borderless` on the window's current monitor.
+    Borderless,
+    /// `Fullscreen::Exclusive` at the chosen video mode.
+    Exclusive(VideoModeChoice),
+}
+
+/// The BEST-EFFORT exclusive video-mode pick (pure): largest area,
+/// then highest refresh, then highest bit depth — a total order, so
+/// the pick is INDEPENDENT of the candidate list order. The largest
+/// area is the monitor's native resolution in practice, and the
+/// pacing arms already present correctly at any refresh (D205), so
+/// no refresh preference is invented here.
+fn pick_exclusive_mode(candidates: &[VideoModeChoice]) -> Option<VideoModeChoice> {
+    candidates.iter().copied().max_by(|a, b| {
+        (
+            a.area(),
+            a.refresh_millihertz,
+            a.bit_depth,
+            a.width,
+            a.height,
+        )
+            .cmp(&(
+                b.area(),
+                b.refresh_millihertz,
+                b.bit_depth,
+                b.width,
+                b.height,
+            ))
+    })
+}
+
+/// PURE: the winit fullscreen target for the window-mode selection
+/// — the function under test, hermetic (plain data in, plain data
+/// out; no window needed). [`WindowMode::Windowed`] maps to `None`
+/// (exactly as shipped — the selection changes nothing until
+/// asked); [`WindowMode::Borderless`] maps to
+/// [`FullscreenTarget::Borderless`] regardless of candidates (no
+/// mode switch is involved); [`WindowMode::Fullscreen`] maps to the
+/// best-effort exclusive pick, else the HONEST borderless
+/// degradation (an empty candidate list degrades rather than
+/// failing — best-effort, never fatal). NO purist arbitration: this
+/// reads the window-mode selection alone, never [`ModeConfig`].
+fn fullscreen_target(mode: WindowMode, candidates: &[VideoModeChoice]) -> Option<FullscreenTarget> {
+    match mode {
+        WindowMode::Windowed => None,
+        WindowMode::Borderless => Some(FullscreenTarget::Borderless),
+        WindowMode::Fullscreen => Some(
+            pick_exclusive_mode(candidates).map_or(FullscreenTarget::Borderless, |choice| {
+                FullscreenTarget::Exclusive(choice)
+            }),
+        ),
+    }
+}
+
+/// PURE: the fullscreen shape the F11 toggle ENTERS when the window
+/// is currently windowed — the selection's preferred fullscreen
+/// target. A WINDOWED selection still enters BORDERLESS on F11 (the
+/// desktop F11 convention: the toggle must do something sensible
+/// from every selection); BORDERLESS re-enters borderless;
+/// FULLSCREEN enters its best-effort exclusive shape. Toggling OFF
+/// always returns to windowed (`None`).
+fn preferred_fullscreen(mode: WindowMode, candidates: &[VideoModeChoice]) -> FullscreenTarget {
+    match mode {
+        WindowMode::Windowed | WindowMode::Borderless => FullscreenTarget::Borderless,
+        WindowMode::Fullscreen => {
+            fullscreen_target(mode, candidates).unwrap_or(FullscreenTarget::Borderless)
+        }
+    }
+}
+
+/// PURE: the F11 toggle transition — the fullscreen target to apply
+/// given whether the window is fullscreen RIGHT NOW (leaving →
+/// `None` = windowed; entering → the selection's preferred shape).
+fn toggle_fullscreen_target(
+    mode: WindowMode,
+    candidates: &[VideoModeChoice],
+    fullscreen_now: bool,
+) -> Option<FullscreenTarget> {
+    if fullscreen_now {
+        None
+    } else {
+        Some(preferred_fullscreen(mode, candidates))
+    }
+}
+
+/// Whether a physical key is the PLATFORM window-mode toggle
+/// (P6 QoL): F11 and nothing else. The toggle is a WINDOW-MANAGER
+/// key OUTSIDE both control schemes — the handler intercepts it
+/// before the mapper, so it NEVER reaches [`ShellInput`]; the
+/// pin below additionally shows it maps to nothing in either
+/// scheme, so even a forwarding bug could not make it sim input.
+fn is_window_toggle_key(key: PhysicalKey) -> bool {
+    matches!(key, PhysicalKey::Code(winit::keyboard::KeyCode::F11))
+}
+
 /// Window host options.
 #[derive(Debug, Clone)]
 pub struct WindowOptions {
@@ -192,6 +374,16 @@ pub struct WindowOptions {
     /// arbitrates ([`effective_vsync`]): honored only under the
     /// modern Decoupled arm; the classic arm pins locked.
     pub vsync: Vsync,
+    /// The platform-level window-mode option (P6 QoL, PLAN §6
+    /// "QoL: window modes"; D200 layering — a platform knob, OUT
+    /// of `ModeConfig`, with NO purist arbitration): default
+    /// [`WindowMode::Windowed`], the decorated window exactly as
+    /// shipped. [`WindowMode::Borderless`] /
+    /// [`WindowMode::Fullscreen`] select the fullscreen shapes
+    /// ([`fullscreen_target`]); F11 toggles at runtime. The
+    /// selection selects nothing in the host — it never reaches
+    /// the sim config or any hash.
+    pub window_mode: WindowMode,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -215,6 +407,7 @@ impl WindowOptions {
             present: PresentConfig::default(),
             mode: ModeConfig::default(),
             vsync: Vsync::default(),
+            window_mode: WindowMode::default(),
             auto_exit_after: None,
         }
     }
@@ -422,6 +615,43 @@ fn wgpu_like_srgb(format: &bedlam_platform::wgpu::TextureFormat) -> bool {
     format.is_srgb()
 }
 
+/// The video modes of the window's CURRENT monitor as plain data
+/// (the hermetic selection input, collected at the window site —
+/// absent monitor yields the empty list, which the selection
+/// degrades from, never fails on).
+fn monitor_video_choices(window: &Window) -> Vec<VideoModeChoice> {
+    window
+        .current_monitor()
+        .map(|m| m.video_modes().map(|v| VideoModeChoice::of(&v)).collect())
+        .unwrap_or_default()
+}
+
+/// Bind the PURE fullscreen target to LIVE winit handles — the ONE
+/// impure half of the window-mode selection, shared by the window
+/// build and the F11 toggle (both go through here, so the shapes
+/// can never disagree). `None` leaves/keeps the window windowed.
+/// The exclusive binding degrades honestly to borderless when the
+/// chosen mode is gone by resolve time (noted, never fatal).
+fn apply_fullscreen(window: &Window, target: Option<FullscreenTarget>) {
+    let monitor = window.current_monitor();
+    let fullscreen = target.map(|t| match t {
+        FullscreenTarget::Borderless => Fullscreen::Borderless(monitor),
+        FullscreenTarget::Exclusive(choice) => match monitor
+            .as_ref()
+            .and_then(|m| m.video_modes().find(|v| VideoModeChoice::of(v) == choice))
+        {
+            Some(mode) => Fullscreen::Exclusive(mode),
+            None => {
+                eprintln!(
+                    "bedlam-shell: exclusive video mode unavailable; using borderless fullscreen (best-effort)"
+                );
+                Fullscreen::Borderless(monitor)
+            }
+        },
+    });
+    window.set_fullscreen(fullscreen);
+}
+
 /// The live window half (everything that only exists once a window
 /// does). Built once, inside resumed().
 ///
@@ -460,6 +690,24 @@ impl WindowHost {
             )
             .map_err(|e| ShellError::Window(e.to_string()))?;
         let window = Arc::new(window);
+
+        // P6 window modes (p6-window-modes): apply the platform
+        // selection's fullscreen target BEFORE the surface is
+        // sized, so the swapchain starts at the fullscreen extent
+        // (any later extent change arrives as a Resized event —
+        // the existing reconfigure path, nothing new). The
+        // exclusive request degrades honestly (noted, never
+        // fatal).
+        let video_choices = monitor_video_choices(&window);
+        if opts.window_mode == WindowMode::Fullscreen
+            && fullscreen_target(opts.window_mode, &video_choices)
+                == Some(FullscreenTarget::Borderless)
+        {
+            eprintln!(
+                "bedlam-shell: no exclusive video mode on this monitor; using borderless fullscreen (best-effort)"
+            );
+        }
+        apply_fullscreen(&window, fullscreen_target(opts.window_mode, &video_choices));
 
         let instance = bedlam_platform::wgpu::Instance::default();
         // The Arc is the owned window handle that gives the surface
@@ -727,6 +975,29 @@ impl ApplicationHandler for ShellApp {
             }
             WindowEvent::RedrawRequested => self.present(),
             WindowEvent::KeyboardInput { event, .. } => {
+                // P6 QoL window-mode toggle (p6-window-modes): F11
+                // is a PLATFORM/window-manager key OUTSIDE both
+                // control schemes — intercepted HERE, before the
+                // mapper, so it NEVER reaches ShellInput. The
+                // toggle moves only the window chrome through the
+                // SAME binder the window build used; the extent
+                // change arrives as a Resized event (the existing
+                // reconfigure path), and nothing about the
+                // clock/pump contract or the host moves.
+                if is_window_toggle_key(event.physical_key) {
+                    if event.state == ElementState::Pressed {
+                        if let Some(g) = self.gfx.as_ref() {
+                            let choices = monitor_video_choices(&g.window);
+                            let target = toggle_fullscreen_target(
+                                self.opts.window_mode,
+                                &choices,
+                                g.window.fullscreen().is_some(),
+                            );
+                            apply_fullscreen(&g.window, target);
+                        }
+                    }
+                    return;
+                }
                 // The scheme-aware physical->semantic path (P6 D204:
                 // the control-scheme arm selects the mapping policy).
                 // Escape is a GAME key (operator 2026-08-23): it must
@@ -1372,6 +1643,367 @@ mod uncapped_present_tests {
             host.frame().parity_hash(),
             direct,
             "drift-free: present history never enters the frame"
+        );
+    }
+}
+
+#[cfg(test)]
+mod window_mode_tests {
+    //! The P6 window-modes pins (`p6-window-modes`, PLAN §6 QoL
+    //! "window modes"): a PLATFORM presentation option (D200
+    //! layering — OUT of ModeConfig) with NO purist arbitration
+    //! (the original was a fullscreen DOS exclusive with no
+    //! windowed mode to preserve, so both pacing arms accept the
+    //! selection identically and it selects NOTHING in the host).
+    //! The winit fullscreen target is a PURE function over plain
+    //! data — hermetic, no window needed — and the F11 toggle is a
+    //! platform key OUTSIDE both control schemes, never reaching
+    //! ShellInput. The shell fixed-step clock/pump contract and the
+    //! hashed trajectory stay untouched. Test surface = the ONE
+    //! selection, all three shapes (both mode arms appear only in
+    //! the option-invariant controls), never the feature
+    //! cross-product; the catalog stays EMPTY (a plan-named QoL
+    //! unit is not a catalog entry).
+    use super::*;
+    use crate::input::{Bindings, ControlScheme};
+    use bedlam_core::input::InputFrame;
+    use bedlam_core::mode::ModeConfig;
+    use winit::keyboard::KeyCode;
+
+    fn opts_with(window_mode: WindowMode) -> WindowOptions {
+        let mut opts = WindowOptions::new("test-install");
+        opts.window_mode = window_mode;
+        opts
+    }
+
+    fn host_for(opts: &WindowOptions) -> GameHost {
+        GameHost::new(
+            &GameConfig::default(),
+            &host_sim_config(opts),
+            [[0u8, 0, 0]; 256],
+        )
+    }
+
+    fn mode_1920x1080_60_32() -> VideoModeChoice {
+        VideoModeChoice {
+            width: 1920,
+            height: 1080,
+            refresh_millihertz: 60_000,
+            bit_depth: 32,
+        }
+    }
+
+    /// A plausible monitor list: several sizes/refreshes/depths.
+    fn monitor_choices() -> Vec<VideoModeChoice> {
+        vec![
+            VideoModeChoice {
+                width: 1280,
+                height: 1024,
+                refresh_millihertz: 75_000,
+                bit_depth: 32,
+            },
+            VideoModeChoice {
+                width: 1920,
+                height: 1080,
+                refresh_millihertz: 60_000,
+                bit_depth: 24,
+            },
+            mode_1920x1080_60_32(),
+            VideoModeChoice {
+                width: 1920,
+                height: 1080,
+                refresh_millihertz: 144_000,
+                bit_depth: 32,
+            },
+        ]
+    }
+
+    /// The shipped default: the window-mode option starts WINDOWED —
+    /// the decorated window at the configured inner size exactly as
+    /// before this unit (the option changes nothing until asked),
+    /// and WINDOWED never requests a fullscreen target even on a
+    /// monitor with modes to offer.
+    #[test]
+    fn window_mode_defaults_to_the_shipped_windowed() {
+        assert_eq!(WindowMode::default(), WindowMode::Windowed);
+        assert_eq!(
+            WindowOptions::new("test-install").window_mode,
+            WindowMode::Windowed
+        );
+        assert_eq!(
+            fullscreen_target(WindowMode::Windowed, &monitor_choices()),
+            None
+        );
+    }
+
+    /// THE PURE TARGET MAPPING (hermetic, no window): Windowed ->
+    /// None; Borderless -> Borderless regardless of candidates (no
+    /// mode switch is involved); Fullscreen -> the best-effort
+    /// exclusive pick, degrading HONESTLY to borderless when the
+    /// monitor offers no modes (or is absent — the empty list).
+    /// No purist arbitration: the answer is independent of
+    /// ModeConfig by construction (the function never sees one).
+    #[test]
+    fn fullscreen_target_maps_the_selection_purely() {
+        let choices = monitor_choices();
+        assert_eq!(fullscreen_target(WindowMode::Windowed, &choices), None);
+        for candidates in [&choices[..], &[][..]] {
+            assert_eq!(
+                fullscreen_target(WindowMode::Borderless, candidates),
+                Some(FullscreenTarget::Borderless),
+                "borderless needs no video mode"
+            );
+        }
+        assert_eq!(
+            fullscreen_target(WindowMode::Fullscreen, &choices),
+            Some(FullscreenTarget::Exclusive(VideoModeChoice {
+                width: 1920,
+                height: 1080,
+                refresh_millihertz: 144_000,
+                bit_depth: 32
+            }))
+        );
+        assert_eq!(
+            fullscreen_target(WindowMode::Fullscreen, &[]),
+            Some(FullscreenTarget::Borderless),
+            "honest degradation, never fatal"
+        );
+    }
+
+    /// The BEST-EFFORT exclusive pick: largest area, then highest
+    /// refresh, then highest bit depth — and a TOTAL order, so the
+    /// pick is independent of the candidate list order (every
+    /// permutation picks the same mode).
+    #[test]
+    fn exclusive_pick_is_largest_area_then_refresh_then_depth() {
+        let best = VideoModeChoice {
+            width: 2560,
+            height: 1440,
+            refresh_millihertz: 60_000,
+            bit_depth: 24,
+        };
+        let mut choices = monitor_choices();
+        choices.push(best);
+        assert_eq!(pick_exclusive_mode(&choices), Some(best));
+        // Refresh breaks an area tie.
+        assert_eq!(
+            pick_exclusive_mode(&[
+                VideoModeChoice {
+                    width: 1920,
+                    height: 1080,
+                    refresh_millihertz: 60_000,
+                    bit_depth: 32
+                },
+                VideoModeChoice {
+                    width: 1920,
+                    height: 1080,
+                    refresh_millihertz: 144_000,
+                    bit_depth: 24
+                },
+            ]),
+            Some(VideoModeChoice {
+                width: 1920,
+                height: 1080,
+                refresh_millihertz: 144_000,
+                bit_depth: 24
+            })
+        );
+        // Depth breaks an area+refresh tie.
+        assert_eq!(
+            pick_exclusive_mode(&[
+                mode_1920x1080_60_32(),
+                VideoModeChoice {
+                    width: 1920,
+                    height: 1080,
+                    refresh_millihertz: 60_000,
+                    bit_depth: 24
+                }
+            ]),
+            Some(mode_1920x1080_60_32())
+        );
+        // Order independence: every permutation of the list picks
+        // the same mode (a pure selection must not see list order).
+        let mut shuffled = choices.clone();
+        shuffled.rotate_left(2);
+        assert_eq!(
+            pick_exclusive_mode(&shuffled),
+            pick_exclusive_mode(&choices)
+        );
+        assert_eq!(pick_exclusive_mode(&[]), None);
+    }
+
+    /// The selection is PRESENTATION-BUCKET ONLY (D17 b, the
+    /// no-arbitration pin): it lives in `WindowOptions` and never
+    /// enters `ModeConfig`/`SimConfig`, so the derived host config
+    /// is bit-identical and the SAME pump script through hosts
+    /// built under every window mode yields the identical
+    /// executed-tick sequence, sim tick count, state hash, scene
+    /// hash AND frame parity hash — window chrome cannot touch the
+    /// hashed trajectory.
+    #[test]
+    fn window_mode_selection_never_touches_the_sim_or_the_hashed_trajectory() {
+        let windowed = opts_with(WindowMode::Windowed);
+        let borderless = opts_with(WindowMode::Borderless);
+        let fullscreen = opts_with(WindowMode::Fullscreen);
+        assert_eq!(host_sim_config(&windowed), host_sim_config(&borderless));
+        assert_eq!(
+            host_sim_config(&windowed),
+            host_sim_config(&fullscreen),
+            "the selection never reaches the sim config"
+        );
+
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut hosts = [
+            host_for(&windowed),
+            host_for(&borderless),
+            host_for(&fullscreen),
+        ];
+        let mut executed = [Vec::new(), Vec::new(), Vec::new()];
+        for (i, &dt) in script.iter().cycle().take(30).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            for (host, log) in hosts.iter_mut().zip(executed.iter_mut()) {
+                log.push(host.pump_frame(dt, &input));
+            }
+        }
+        for host in &hosts[1..] {
+            assert_eq!(executed[1], executed[0], "same executed ticks");
+            assert_eq!(
+                host.driver().sim().tick_index(),
+                hosts[0].driver().sim().tick_index()
+            );
+            assert_eq!(
+                host.driver().sim().state_hash(),
+                hosts[0].driver().sim().state_hash()
+            );
+            assert_eq!(host.scene_hash(), hosts[0].scene_hash());
+            assert_eq!(host.frame().parity_hash(), hosts[0].frame().parity_hash());
+        }
+    }
+
+    /// GATE ANSWERS are option-invariant: the window-mode selection
+    /// lives entirely upstream of the host (never in
+    /// `ModeConfig`), so both pacing arms' present-gate and alpha
+    /// answers are IDENTICAL under every window mode — window
+    /// chrome decides where the image appears, never WHAT the gate
+    /// answers.
+    #[test]
+    fn window_mode_option_never_changes_the_gate_answers() {
+        for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let mut opts = [
+                WindowMode::Windowed,
+                WindowMode::Borderless,
+                WindowMode::Fullscreen,
+            ]
+            .map(|wm| {
+                let mut o = opts_with(wm);
+                o.mode = mode;
+                o
+            });
+            let mut hosts = [host_for(&opts[0]), host_for(&opts[1]), host_for(&opts[2])];
+            let mut clock = FixedStepClock::host();
+            for dt in [4u32, 0, 4, 3, 0, 4] {
+                clock.advance(4_166_666);
+                for host in &mut hosts {
+                    host.pump_frame(dt, &InputFrame::default());
+                }
+                assert_eq!(
+                    present_due(&hosts[1]),
+                    present_due(&hosts[0]),
+                    "{mode:?} dt {dt}"
+                );
+                assert_eq!(
+                    present_due(&hosts[2]),
+                    present_due(&hosts[0]),
+                    "{mode:?} dt {dt}"
+                );
+                assert_eq!(
+                    present_camera_alpha(&hosts[1], &clock),
+                    present_camera_alpha(&hosts[0], &clock),
+                    "{mode:?} dt {dt}"
+                );
+            }
+        }
+    }
+
+    /// THE F11 TOGGLE TRANSITION (pure): leaving fullscreen always
+    /// returns to windowed (`None`, from every selection); entering
+    /// uses the selection's PREFERRED shape — a WINDOWED selection
+    /// enters BORDERLESS (the desktop F11 convention: the toggle
+    /// must do something sensible from every selection), BORDERLESS
+    /// re-enters borderless, FULLSCREEN enters its best-effort
+    /// exclusive shape (degrading honestly on an empty list).
+    #[test]
+    fn toggle_target_enters_the_preferred_shape_and_leaves_to_windowed() {
+        let choices = monitor_choices();
+        for mode in [
+            WindowMode::Windowed,
+            WindowMode::Borderless,
+            WindowMode::Fullscreen,
+        ] {
+            assert_eq!(
+                toggle_fullscreen_target(mode, &choices, true),
+                None,
+                "{mode:?}: leaving always returns to windowed"
+            );
+        }
+        assert_eq!(
+            toggle_fullscreen_target(WindowMode::Windowed, &choices, false),
+            Some(FullscreenTarget::Borderless)
+        );
+        assert_eq!(
+            toggle_fullscreen_target(WindowMode::Borderless, &choices, false),
+            Some(FullscreenTarget::Borderless)
+        );
+        assert_eq!(
+            toggle_fullscreen_target(WindowMode::Fullscreen, &choices, false),
+            fullscreen_target(WindowMode::Fullscreen, &choices)
+        );
+        // The degradation composes into the toggle too.
+        assert_eq!(
+            toggle_fullscreen_target(WindowMode::Fullscreen, &[], false),
+            Some(FullscreenTarget::Borderless)
+        );
+    }
+
+    /// F11 is the ONLY platform toggle key, and it is DEAD to both
+    /// control schemes: the handler intercepts it before the
+    /// mapper (never reaching ShellInput), and this pin closes the
+    /// other direction too — even if it were forwarded, the modern
+    /// default Bindings table binds it to nothing and the classic
+    /// fixed table (the original EXW scheme, RE-EXW-INPUT §6:
+    /// keyboard = hotkeys/volume/pause/any-key only) maps nothing
+    /// at F11 — the toggle can never become sim input.
+    #[test]
+    fn f11_is_the_only_platform_toggle_key_and_is_dead_to_both_schemes() {
+        assert!(is_window_toggle_key(PhysicalKey::Code(KeyCode::F11)));
+        for key in [
+            KeyCode::F10,
+            KeyCode::F12,
+            KeyCode::Escape,
+            KeyCode::KeyW,
+            KeyCode::AltLeft,
+        ] {
+            assert!(!is_window_toggle_key(PhysicalKey::Code(key)), "{key:?}");
+        }
+        let f11 = PhysicalKey::Code(KeyCode::F11);
+        assert_eq!(Bindings::modern_default().get(f11), None);
+        assert_eq!(
+            ControlScheme::Modern.map_key(f11, &Bindings::modern_default()),
+            None
+        );
+        assert_eq!(
+            ControlScheme::Classic.map_key(f11, &Bindings::modern_default()),
+            None,
+            "classic ignores the table and the original binds no F11"
         );
     }
 }

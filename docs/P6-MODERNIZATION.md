@@ -272,6 +272,54 @@ contract is untouched (each pump is still the same fixed dt; the
 clock simply banks smaller deltas). The catalog stays empty (a
 plan-named present unit is not a catalog entry).
 
+**Implementation status (D210, 2026-08-28, gate
+`p6-window-modes`): the QoL window-mode selection — PLAN §6
+"QoL: window modes, vsync control, ..." (vsync control landed as
+D208; this is the sibling knob).**
+A PRESENTATION OPTION at the platform level
+(`engine/bedlam-shell/src/window.rs`: `WindowOptions::window_mode`,
+`WindowMode::Windowed`/`Borderless`/`Fullscreen`, default =
+WINDOWED — the decorated window exactly as shipped; the binary's
+`--fullscreen`/`--borderless` select the shapes, noted + ignored
+headless). D200 layering holds with NO purist arbitration this
+time (unlike vsync): window chrome is a platform knob and stays
+OUT of `ModeConfig` — and the original was a fullscreen DOS
+exclusive with no windowed mode to preserve, so both pacing arms
+accept the selection identically and the selection selects
+NOTHING in the host (pinned by
+`window_mode_selection_never_touches_the_sim_or_the_hashed_
+trajectory`: the derived `SimConfig` is bit-identical and the
+same pump script = identical executed ticks, sim tick count,
+state hash, scene hash and frame parity hash; the present-gate
+and alpha answers are option-invariant per
+`window_mode_option_never_changes_the_gate_answers`). The winit
+fullscreen target is a PURE function under test, hermetic — no
+window needed (`fullscreen_target` over plain `VideoModeChoice`
+data): Windowed → `None`; Borderless → borderless (no mode
+switch involved); Fullscreen → the best-effort exclusive pick
+(`pick_exclusive_mode`: largest area, then highest refresh, then
+highest bit depth — a TOTAL order, so the pick is independent of
+the candidate list order), else the HONEST borderless degradation
+(noted at configure time, never fatal — the same best-effort
+posture as the vsync surface mapping). The runtime F11 toggle
+stays bounded and PLATFORM-ONLY: F11 is a window-manager key
+OUTSIDE both control schemes, intercepted in the event handler
+BEFORE the mapper so it NEVER reaches `ShellInput` (pinned by
+`f11_is_the_only_platform_toggle_key_and_is_dead_to_both_schemes`:
+F11 is the only toggle key, and it maps to nothing in either
+scheme — the modern default table binds nothing at F11, the
+classic fixed table is the original EXW scheme which binds no
+F11), the transition is pure (`toggle_fullscreen_target`: leaving
+fullscreen always returns to windowed; entering uses the
+selection's preferred shape — a WINDOWED selection enters
+BORDERLESS per the desktop F11 convention), and the impure half
+is ONE shared binder (`apply_fullscreen`) used by both the window
+build and the toggle, so the shapes can never disagree. Bounds:
+the swapchain follows the EXISTING `Resized` reconfigure path
+only; the shell fixed-step clock/pump contract and the hashed
+trajectory stay untouched. The catalog stays empty (a plan-named
+QoL unit is not a catalog entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -414,7 +462,15 @@ Per the D175 pattern the contract lands before any behavior change:
   --release --locked --offline, hermetic — the platform
   vsync-option suite: the policy selection both arms, the pure wgpu
   PresentMode mapping, the option-invariant gate answers, the
-  uncapped loop-shape coherence pin, and the trajectory pin).
+  uncapped loop-shape coherence pin, and the trajectory pin). The
+  QoL window-mode gate `p6-window-modes` landed 2026-08-28 as the
+  EIGHTH P6 required gate (D210; command = bedlam-shell --lib,
+  --release --locked --offline, hermetic — the platform
+  window-mode suite: the shipped windowed default, the pure
+  fullscreen-target mapping + the best-effort exclusive pick, the
+  no-arbitration sim/trajectory pin, the option-invariant gate
+  answers, the F11 toggle transition + the key-dead-to-both-schemes
+  pin).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 
