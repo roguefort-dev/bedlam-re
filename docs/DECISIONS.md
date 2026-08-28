@@ -6762,3 +6762,41 @@ VERIFIED: strict parser rc=0 RUNNABLE 1 at the bookkeeping commit;
 check-p5-zone-ledger 15/37 with ZONEC 7/7; zone_mission_parity
 5/5; the nudge-queue parser suite green; MANIFEST clean before and
 after every corpus read; no Ghidra run.
+
+## D195 (2026-08-28, p5-zone-d-disposition): ZONE D CLOSED — the
+THIRD 7-mission zone flips green (the ledger 22/37). The unit is
+the FIRST PURE ZONES-APPEND disposition (the shape every remaining
+zone E/F/G takes): no harness change, no grammar change, no engine
+change — the suite-append commit 681db03 adds the D spec (letter D,
+missions 1..=7, dims 100x100, committed flows NONE — no committed
+.scen stages zone D) and nothing else; the flip commit lands the §10
+table, the ledger rows, the p5-zone-d gate and the 15/37->22/37
+test-pin re-baseline together (the §5 cross-artifact rule, the D28
+fingerprint discipline). Zone-D-distinct fact: M5 carries the G3
+variant bank ZONED/MISSION5.BIN — re-verified byte-identical to
+ZONEB/MISSION6.BIN (the D184 twin), RUNTIME-DEAD editor residue
+under the no-swap verdict, so it adds NO evidence leg beyond the
+zone-level fetch-chain assert (criterion 2's EDITOR\ZONED\MISSIOND.*
+pin). Evidence: the generated battery IS the whole criterion-1 leg
+— P5DM1A..P5DM7C all 21 flows full declared budgets, dumps verify,
+two-run byte identity; NO engine gap surfaced on any ZONED mission
+(the stopping condition did not trigger); the anchor statics
+re-derived from each TOT header (100x100, 160004 B — all seven) +
+the §7j.64 formula (zone D: linear = clamp(5*2+m-1, 1, 26) = m+9,
+M1..M7 = 10..16, no clamp bite); the T1 spot table per zone (FULL_MASK
+arithmetic, start_score, the 25-name fetch chain, the seam domains
+at stage/zone-cell 4 incl. campaign-clears-select); criterion 6
+stays FILE-LEVEL (the shipped slot-0 campaign IS ZONEB/MISSION1).
+P5-ZONE-GATES §10 documents the per-criterion table; the ledger
+flips ZONED-MISSION1..7 green (catalog_refs = []); the p5-zone-d
+gate joins P5 required_gates (13 gates); the ledger test pin
+re-baselined 15/37 to 22/37 + the ZONED 7/7 line (deliberate, same
+commit). Verified: zone_mission_parity 5/5 (three zones, 16.07s),
+bedlam-game suites green (canonical_dump_gate 13/13 — ZERO canonical
+chain movement; differ_gate 4/4; determinism; census 37/37
+unchanged), bedlam-core + diffharness green, fmt + clippy clean,
+check-p5-zone-ledger OK + hermetic suite 18/18, gates-validator
+suite 22/22 + the HEAD-bound battery all-green at the flip commit
+(13 gates), MANIFEST clean before AND after every corpus read, no
+Ghidra run. The remaining zones E/F/G are pure ZONES-append units
+in the §9/§10 shape.

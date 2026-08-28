@@ -108,43 +108,43 @@ catalog_refs = []
 id = "ZONED-MISSION1"
 zone = "D"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION2"
 zone = "D"
 mission = 2
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION3"
 zone = "D"
 mission = 3
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION4"
 zone = "D"
 mission = 4
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION5"
 zone = "D"
 mission = 5
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION6"
 zone = "D"
 mission = 6
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONED-MISSION7"
 zone = "D"
 mission = 7
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]
