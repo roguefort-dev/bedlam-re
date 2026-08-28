@@ -215,19 +215,14 @@ anchor, the 8street reference superseded).
 **ALL 37 missions LOAD through our engine.** Zero load failures, zero
 parser refusals, zero frame-run panics. The destroy family, the pickup
 surface and every parser accept all 37 missions' runtime file
-families. The missions that load with ZERO gaps are `ZONEA-MISSION1`
-— exactly the mission the S0–S8 canonical corpus exercises — the ten
-MP-only missions 6-7 of zones B-F (all `select:clean` since the G1
-SELECT-shell landing, §6.2/§7j.73: their .NME files are 16-byte
-empties — no critter scripting for human-opponent
-maps), and — since the G2 Shooters landing (§7j.74/D185) —
-`ZONED-MISSION5`, the first campaign mission to stage clean beside
-ZONEA-M1 (its .NME hosted Shooters only), and — since the G2
-Chasers landing (§7j.75/D186) — the twelve Chasers-only hosts
-(ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4): **24 of 37 missions
-now load with ZERO gaps**. Every other mission loads with named
-gaps, all of them SEMANTIC (engine scope), none
-parser-sized. The ledger is therefore
+families. **Since the G2 PERSONNEL/POI landing (§7j.77/D191) ALL 37
+missions load with ZERO gaps** — the eleven Personnel-hosting rows
+(ZONEE M1-5, ZONEF M1-5, ZONEG M1) flipped clean on top of the G1
+SELECT shell (the ten MP-only missions 6-7 of zones B-F, all
+`select:clean` since D183 — their .NME files are 16-byte empties),
+the G2 Shooters landing (ZONED-M5, D185), the G2 Chasers landing
+(the twelve Chasers-only hosts, D186) and the G2 CloseCombat landing
+(ZONEC-M3, D189). The ledger is therefore
 UNCHANGED: no mission is unloadable-by-corpus, so no disposition
 moves (dispositions flip only on zone-parity evidence, §3/§5).
 
@@ -236,7 +231,7 @@ moves (dispositions flip only on zone-parity evidence, §3/§5).
 | Class | Kind | Missions | Content | Sizing |
 |-------|------|----------|---------|--------|
 | G1 | episode-slot seam (semantic) | 10: all zones B–F missions 6–7 | **RESOLVED 2026-08-28** (`p5-select-shell-g1`, D183, RE-EXW-SIM §7j.73): the missions are MP-ONLY — no stage mask ever expressed them. The SELECT screen's MP write arm (0x43edc2..0x43ee43) writes `{zone 2..6, mission 1..2}` and `build_mission_paths` @0x4467df adds 5 at load → `ZONE{B..F}/MISSION{6,7}.*`. Landed as the sibling seam `GameHost::stage_select_mission` (the +5 = `SELECT_MP_FILE_OFFSET`); the census stages all ten through it (`select:clean` rows); the save-import mask domain widened to the EXW five-bit save/SELECT shape (`SELECT_FULL_MASK`, the restore tests bits 1/2/4/8/0x10 — the D178 loud bit-4 rejection retired) and `mission_number_for_mask` saturates at 5 (the SP SELECT domain — the campaign path can never name an MP file). | LANDED |
-| G2 | critter family scope (semantic) | 13: ZONEC-M3, ZONEE M1–5, ZONEF M1–5, ZONEG-M1 | `.NME` hosts critter sections the controller does not model (`stage_critters` accepts Shooters + Wanderers + Chasers + MixedState5 + SeekSteppers + BallisticState6 + CloseCombat — the kind-1 Wanderers landing §7j.71/D179, the kind-6 BallisticState6 landing §7j.72/D182, the kind-2 Shooters landing §7j.74/D185, the kind-3 Chasers landing §7j.75/D186 and the kind-7 CloseCombat landing §7j.76/D189 grew the set past §7j.42/6's MixedState5+SeekSteppers): the refusals now name the personnel/POI bank (S8) ALONE — Wanderers (1), BallisticState6 (6), Shooters (2), Chasers (3) and CloseCombat (7) NO LONGER refuse (the 2026-08-27/28 re-pins dropped them from every row; the Chasers re-pin flipped TWELVE Chasers-only hosts CLEAN and **the CloseCombat re-pin flipped ZONEC-M3 — the ONE CloseCombat-only host (no Personnel) — making the G2 refusal set exactly the 12 Personnel rows; the queue's "every CloseCombat host also carries Personnel" expectation was wrong for that row, documented + deliberate**). ZONEA-MISSION1 passes (MixedState5x6 + SeekSteppersx5 — the modeled slice); the ten 16-byte all-zero .NME missions (all B–F missions 6/7) pass trivially. Not parser-sized: each critter state is AI modeling, its own unit(s). | per-state units; per-mission counts in §6.3 |
+| G2 | critter family scope (semantic) | 13: ZONEC-M3, ZONEE M1–5, ZONEF M1–5, ZONEG-M1 | **RESOLVED 2026-08-28 (`p5-personnel-poi-s8`, D191, RE-EXW-SIM §7j.77) — ALL CLASSES LANDED, G2 EMPTY:** the .NME sections the controller does not model ran out — Wanderers (kind 1, §7j.71/D179), BallisticState6 (6, §7j.72/D182), Shooters (2, §7j.74/D185), Chasers (3, §7j.75/D186) and CloseCombat (7, §7j.76/D189) had already dropped their components from every row, and the S8 PERSONNEL/POI landing staged the last one: the separate 0x4dabdc bank (four POIs per 8-B record, the exact three-draw schedule — x/y in-tile scatter RandA&0x1F + heading RandA&7, the w1-level floor probe, state 1 IDLE, hp the literal 0x32 with NO m-scalar) + the controller subset (the z re-settle + nearest-exit prologue, the idle/settle/walk-out 1/16 machine with the robot aim, the flee/escape lane over the host-staged exit seam — the counter, the 0x32 panic cell, the elevator dwell reset, +5000 — and the panic tail) + the FUN_0040dc1b damage-lane seam. The §7j.18 seed list was corrected in the same unit (the +4/+6 store transposition: personnel spawn IDLE, not ESCAPE). The eleven hosting rows (ZONEE M1-5, ZONEF M1-5, ZONEG M1) all FLIPPED CLEAN — 37/37 load clean. | LANDED (D191) |
 | G3 | zone-BIN variant naming (RESOLVED) | 3: ZONEB-MISSION6, ZONED-MISSION5, ZONEE-MISSION6 | **RESOLVED 2026-08-28 — NO SWAP (`p5-zone-bin-variant-g3`, D184, RE-EXW-SIM §7c.9):** the corpus ships mission-number terrain banks `ZONEB/MISSION6.BIN`, `ZONED/MISSION5.BIN`, `ZONEE/MISSION6.BIN` beside the zone-level `MISSION{L}.BIN`, but the EXW NEVER opens them — `build_mission_paths` @0x44670c builds path2 (the `.CGR/.BIN/.MIN/.LNG/.LNK` base) as `EDITOR\ZONE{L}\MISSION{L}` unconditionally (zone letter twice, no itoa, no conditional), both `.BIN` concat sites (load_mission @0x41dcbc + the brief twin FUN_0044661b @0x446644) sit on path2, a whole-image string census finds no other mission-path builder, and the EXD twin agrees. Data corroboration: only zone-level `.MIN` ship (16× the zone-BIN counts, never the variant counts); ZONEB M6 ≡ ZONED M5 byte-identical (a shared dev bank). Our `mission_asset_names` zone-level rule is VERIFIED CORRECT — engine untouched, census NOT re-pinned (the loads were already zone-level and green); the three variant files are editor-side residue. | CLOSED (no engine change) |
 
 ### 6.3 Per-mission table (the census output, pinned)
@@ -293,7 +288,13 @@ all 8 hosting rows and FLIPPED ZONEC-MISSION3 CLEAN (the one
 CloseCombat-ONLY host — 25/37 load clean; the queue's "every host
 also carries Personnel" expectation wrong for this row, documented
 + deliberate); the provenance is
-docs/evidence/p5-g2-closecombat-census-table.txt.
+docs/evidence/p5-g2-closecombat-census-table.txt. RE-PINNED A SEVENTH
+TIME 2026-08-28 (p5-personnel-poi-s8, D191): the S8 PERSONNEL/POI
+landing (§7j.77 — the poi bank + the controller subset, the separate
+0x4dabdc bank with the exact three-draw schedule) dropped the
+`PersonnelxNN` component from all 11 hosting rows and FLIPPED EVERY
+ONE CLEAN — 37/37 load clean, G2 EMPTY; the provenance is
+docs/evidence/p5-g2-personnel-census-table.txt.
 
 | Mission | Dims | Load | Critter gap (refused sections) |
 |---------|------|------|-------------------------------|
@@ -319,21 +320,21 @@ docs/evidence/p5-g2-closecombat-census-table.txt.
 | ZONED-MISSION5 | 100×100 | host | — (clean — the Shooters landing §7j.74/D185; G3 resolved D184: variant BIN runtime-dead) |
 | ZONED-MISSION6 | 100×100 | select | — (empty .NME) |
 | ZONED-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEE-MISSION1 | 100×100 | host | Personnelx12 |
-| ZONEE-MISSION2 | 100×100 | host | Personnelx12 |
-| ZONEE-MISSION3 | 100×100 | host | Personnelx12 |
-| ZONEE-MISSION4 | 100×100 | host | Personnelx12 |
-| ZONEE-MISSION5 | 100×100 | host | Personnelx13 |
+| ZONEE-MISSION1 | 100×100 | host | — (clean — the S8 Personnel landing §7j.77/D191) |
+| ZONEE-MISSION2 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEE-MISSION3 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEE-MISSION4 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEE-MISSION5 | 100×100 | host | — (clean — §7j.77/D191) |
 | ZONEE-MISSION6 | 100×100 | select | — (empty .NME; G3 resolved D184: variant BIN runtime-dead) |
 | ZONEE-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEF-MISSION1 | 100×100 | host | Personnelx9 |
-| ZONEF-MISSION2 | 100×100 | host | Personnelx9 |
-| ZONEF-MISSION3 | 100×100 | host | Personnelx9 |
-| ZONEF-MISSION4 | 100×100 | host | Personnelx9 |
-| ZONEF-MISSION5 | 100×100 | host | Personnelx19 |
+| ZONEF-MISSION1 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEF-MISSION2 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEF-MISSION3 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEF-MISSION4 | 100×100 | host | — (clean — §7j.77/D191) |
+| ZONEF-MISSION5 | 100×100 | host | — (clean — §7j.77/D191) |
 | ZONEF-MISSION6 | 100×100 | select | — (empty .NME) |
 | ZONEF-MISSION7 | 100×100 | select | — (empty .NME) |
-| ZONEG-MISSION1 | 100×25 | host | Personnelx9 |
+| ZONEG-MISSION1 | 100×25 | host | — (clean — §7j.77/D191) |
 
 Dims cross-check: every TOT header matches the §2 zone table
 (25×75 / 100×100 / 100×25) — a second, independent re-derivation of
@@ -347,14 +348,17 @@ the §2 size arithmetic (VERIFIED).
 | B | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186, M1-5) | resolved: no swap (D184) |
 | C | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186, M1/M2/M4/M5), CloseCombat LANDED (D189, M3) | — |
 | D | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185, M5), Chasers LANDED (D186, M1-4) | resolved: no swap (D184) |
-| E | 7 | 2 clean + 5 gapped | landed (D183) | Personnel — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186), CloseCombat LANDED (D189) | resolved: no swap (D184) |
-| F | 7 | 2 clean + 5 gapped | landed (D183) | Personnel — Wanderers landed (D179), Chasers LANDED (D186, M1), CloseCombat LANDED (D189, M1) | — |
-| G | 1 | 1 host | 0 | Personnel — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186), CloseCombat LANDED (D189) | — |
+| E | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186), CloseCombat LANDED (D189), Personnel LANDED (D191) | resolved: no swap (D184) |
+| F | 7 | 7 clean (5 host + 2 select) | landed (D183) | none — Wanderers landed (D179), Chasers LANDED (D186, M1), CloseCombat LANDED (D189, M1), Personnel LANDED (D191) | — |
+| G | 1 | 1 host (clean) | 0 | none — Wanderers landed (D179), Shooters LANDED (D185), Chasers LANDED (D186), CloseCombat LANDED (D189), Personnel LANDED (D191) | — |
 
-The load/parse layer needs NO work for any zone: zone parity work is
-the S8 personnel/POI bank alone — the LAST G2 residue, queued as its
-own unit (`.state/NEXT.md`); the G1 SELECT shell LANDED (D183, §6.2 — the ten MP missions stage through
-`stage_select_mission`). The census test stays as the regression guard:
+The load/parse layer needs NO work for any zone and NO mission
+carries a gap: every G2 class LANDED (the S8 personnel/POI bank was
+the last, D191) and the G1 SELECT shell LANDED (D183, §6.2 — the ten
+MP missions stage through `stage_select_mission`). Zone parity work
+continues per PLAN §6 as the per-zone DISPOSITION evidence (the §7
+ZONEA pattern: criterion tables + ledger flips + gate wiring), not
+loader work. The census test stays as the regression guard:
 any loader change that flips a row fails
 `census_matches_pinned_table` until deliberately re-baselined (the D28
 fingerprint rule).
@@ -401,8 +405,8 @@ green (1/1).
    --test hash_fixture --test mission_corpus_gate`
 
 P5 stays `pending` (1/37 missions green — the zone-parity ledger;
-25/37 LOAD clean per the §6 census after the CloseCombat landing —
-B–G open: the G2 residue of §6.2 is the queued units; G1 LANDED
-2026-08-28 D183, the Shooters class LANDED 2026-08-28 D185, the
-Chasers class LANDED 2026-08-28 D186, the CloseCombat class LANDED
-2026-08-28 D189).
+37/37 LOAD clean per the §6 census after the S8 Personnel landing —
+B–G open on the DISPOSITION side only: every G2 class LANDED (G1
+2026-08-28 D183, Shooters D185, Chasers D186, CloseCombat D189,
+Personnel D191 — G2 EMPTY); the per-zone parity evidence is the
+queued unit family).

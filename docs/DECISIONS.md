@@ -6596,3 +6596,56 @@ rc 0); the dead claim 1-owner.claim is left for the wrapper's
 reaper (workers never touch claim files). Queue grammar kept
 strict: no prose brackets in the surviving active item, tags
 whole on the first line.
+
+## D191 (2026-08-28, p5-personnel-poi-s8): the S8 PERSONNEL/POI bank
+LANDED — the LAST G2 census class; G2 EMPTY, 37/37 load clean
+
+The unit closed the census G2 tail end-to-end in three commits
+(5219569 RE + b80aa45 engine/census + this bookkeeping). (1) RE
+FIRST (§7j.77, objdump-only from the committed loader decompile +
+exw-text-objdump.txt — no Ghidra run): the .NME S8 loader walk made
+exact AND the §7j.18/1 seed list CORRECTED — the 2026-08-21 reading
+transposed the +4/+6 stores; the asm (0x417076/0x41707e) seeds
+STATE 1 = IDLE (personnel do NOT spawn in state 5 ESCAPE), the dead
+angle seed 5 sits at +6, and +2's 0x32 is the HP word (the
+FUN_0040dc1b damage lane decrements it; death → state 6 panic with
+ONE RandB draw for the death sound). The whole controller
+FUN_00412a98 body: the per-frame prologue (z re-settle + the
+nearest-exit scan writing the [esp] distance cell), the head 1/16
+flee lane (exit within 0x180 + PHASE 2), the idle/settle/walk-out
+machine (the 0xC0 split, the 1/16 gates, the nearest-robot settle
+aim), the flee walk (exit re-aim sector<<5, the walker, the 10000
+never-expire sentinel, the abort-to-idle), the 0x10 arrival →
+ESCAPE (timer −1, 10 ticks) → the award (active 0, [0x4eba0c]++,
+[0x4eba10] 0x32, exit dwell reset, FUN_00448b80(5000)), the 6→7
+panic tail, and the walker FUN_00415b6c whole (the ≤4 floor gate —
+NOT the critter walk_gate's 3 — plus the quadrant ladder). Corpus
+census: ELEVEN hosting files (the queue prose's "13 missions" was
+an arithmetic slip), 125 records → 500 POIs. (2) ENGINE (b80aa45):
+crate::poi — the PoiRecord bank + the section-8 staging (three
+RandA draws per POI: x/y in-tile scatter + heading, the w1-level
+floor probe, hp the literal 0x32 with NO m-scalar — the ONE .NME
+bank without the formula), the controller subset under the SAME
+critter-family arm (MissionShell 0x447fe6 adjacency), the
+host-staged 5-slot exit seam (the §7j.19 controller-read subset),
+the damage-lane seam, +5000 through the score-pending fold; 15 unit
+tests; the bank NOT hashed (the W6 split). E-GAPS documented: the
+RandB sound pick, both SFX, the death effect, the MissionShell
+banner countdown, the animator, and the blast-debris CALLER of the
+damage lane (0x40e158 — the debris bank has no behavior tick
+engine-side). (3) CENSUS RE-PIN (deliberate, D28): the
+PersonnelxNN component dropped from all 11 rows (ZONEE M1-5,
+ZONEF M1-5, ZONEG M1) and EVERY ONE FLIPPED CLEAN — CloseCombat had
+already landed (D189) so Personnel was each row's last unmodeled
+section; 37/37 load clean; the ledger stays 1/37 green (dispositions
+flip only on zone-parity evidence); provenance
+docs/evidence/p5-g2-personnel-census-table.txt. ZERO canonical
+chain movement (ZONEA/M1 hosts no S8 section — verified by the
+byte-exact 8-section walk): canonical_dump_gate + differ_gate +
+determinism green. P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined.
+Verified: bedlam-core 201 tests green (15 new), bedlam-game 20
+suites green, fmt + clippy clean on the touched crates, gates-
+validator 22/22, inspect baseline ok (1069 files), MANIFEST clean
+before AND after every corpus read, no Ghidra run. Zone parity work
+continues per PLAN §6 as per-zone DISPOSITION evidence (the §7
+ZONEA pattern).

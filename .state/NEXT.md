@@ -10,34 +10,83 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-personnel-poi-s8] [gate=p5-personnel-poi-s8] P5
-   follow-up — the LAST G2 residue unit after CloseCombat (the
-   §6.2 census tail): the S8 PERSONNEL/POI bank (the PersonnelxNN
-   census component; hosts ZONEE-M1..M5, ZONEF-M1..M5, ZONEG-M1 —
-   13 missions). (a) RE FIRST (objdump-only from the committed
-   exw-critterpoi-loader.txt + exw-text-objdump.txt, no Ghidra
-   run): the .NME S8 loader walk (8-B records → 4 POIs each, the
-   §7j.18/1 S8 gloss made exact — the count reset @0x416f6e, the
-   per-POI scatter draws, z probe, the seeds {active 1, timer
-   0x32, state 5 ESCAPE, heading RandA&7}, hp NONE — the POI bank
-   0x4dabdc stride 0x1E carries no hp word) + the POI controller
-   FUN_00412a98 body (§7j.17 item 3: states 1 idle / 2 settle /
-   3 walk-out FUN_00415b6c / 4 flee-to-exit / 5 ESCAPE / 6·7
-   panic; the escape lane cell 0x4eba0c++ + cell 0x4eba10=0x32 +
-   FUN_00448b80(5000) — the score/seam surface the canonical T0
-   rows watch), committed as RE notes BEFORE any engine change.
-   (b) Land a poi bank + stage_critters section 8 acceptance + a
-   modeled controller subset in bedlam-core with unit tests;
-   re-pin the census (the PersonnelxNN component drops from all
-   13 rows; expect row flips clean ONLY where CloseCombat already
-   landed — i.e. none before the CloseCombat unit runs; if
-   CloseCombat ran first, ZONEE/ZONEF/ZONEG rows may flip —
-   then documented + deliberate). Bounds: census green after the
-   re-pin; bedlam-core + bedlam-game suites green; no canonical
-   chain movement unless a row changes (then documented +
-   deliberate); fmt + clippy; gates-validator 22/22; MANIFEST
-   clean; no Ghidra run; Nudge-Worker trailer.
+1. [READY] [id=p5-zone-b-disposition] [gate=p5-zone-b-disposition] P5
+   follow-up — G2 is EMPTY, the census is 37/37 load clean, and the
+   zone-parity work continues per PLAN §6 as per-zone DISPOSITION
+   evidence (the P5-ZONE-GATES §7 ZONEA pattern): ZONEB first. (a)
+   GENERALIZE the parity harness: lift the zonea_mission1_parity
+   shape to a per-zone/per-mission parameterized suite (the §7
+   criterion table executable for ANY ledger mission — scripted
+   S-scenario full-budget crash-free runs with two-run byte
+   identity on the zone's campaign missions M1-5 through the
+   episode-slot seam and M6-7 through the SELECT seam, the T1 spot
+   table + anchor TS statics re-derived from the zone's TOT
+   headers, the structural spot checks). (b) LAND the ZONEB
+   evidence: the criterion table for all seven missions documented
+   in P5-ZONE-GATES §8 (new), the ledger flips
+   ZONEB-MISSION1..MISSION7 to green WITH the cross-artifact rule
+   (the flip and its evidence in the same commit), and the
+   p5-zone-b gate wired into docs/required-gates.toml P5
+   required_gates (offline evidence commands only, the §4 rule-5
+   pattern). Bounds: bedlam-core + bedlam-game suites green; the
+   census stays 37/37; zero canonical chain movement; fmt +
+   clippy; gates-validator 22/22; MANIFEST clean; no Ghidra run;
+   Nudge-Worker trailer. If the harness generalization surfaces a
+   REAL engine gap on a ZONEB mission, stop at the structured
+   finding — the gap becomes its own unit, the ledger stays
+   unchanged, and the failure artifact records it.
 ## Done
+1. DONE (2026-08-28, worker 0ecf083b claim 1, commits 5219569 +
+   b80aa45 + this bookkeeping commit, all PUSHED): P5
+   `p5-personnel-poi-s8` — the
+   S8 PERSONNEL/POI bank LANDED and G2 CLOSED (D191; 37/37 load
+   clean — the ALL-CLEAN census). (a) RE FIRST (5219569, §7j.77,
+   objdump-only from the committed exw-critterpoi-loader.txt +
+   exw-text-objdump.txt — no Ghidra run): the .NME S8 loader walk
+   made exact AND the §7j.18/1 seed list CORRECTED — the
+   2026-08-21 reading TRANSPOSED the +4/+6 stores (the asm
+   0x417076/0x41707e seeds STATE 1 = IDLE, the dead angle seed 5
+   at +6, and +2's 0x32 is the HP word — personnel do NOT spawn
+   in state 5 ESCAPE); the controller FUN_00412a98 whole (the
+   z re-settle + nearest-exit scan prologue with the per-frame
+   [esp] distance cell, the head 1/16 flee lane exit < 0x180
+   ∧ PHASE 2, the idle/settle/walk-out machine with the 0xC0
+   split + the nearest-robot settle aim, the flee walk with the
+   exit re-aim + the 10000 never-expire sentinel + the
+   abort-to-idle, the 0x10 arrival → 10-tick ESCAPE → the award
+   active 0 + 0x4eba0c++ + 0x4eba10 = 0x32 + the exit dwell reset
+   + FUN_00448b80(5000), the 6→7 panic tail), the walker
+   FUN_00415b6c whole (the ≤4 floor gate — NOT the critter
+   walk_gate's 3 — + the quadrant ladder), the damage lane
+   FUN_0040dc1b (hp −= dmg; death → state 6 + ONE RandB sound
+   draw + the FUN_00420608 effect, the E-gaps named), and the
+   corpus census: ELEVEN hosting files (the queue prose's 13 was
+   a slip), 125 records → 500 POIs, ZONEA/M1 hosts none. (b)
+   ENGINE + CENSUS (b80aa45): crate::poi — the PoiRecord bank +
+   the section-8 staging with the exact three-draw schedule (x/y
+   in-tile scatter RandA&0x1F + heading RandA&7, the w1-level
+   floor probe, hp the literal 0x32 with NO m-scalar — the ONE
+   .NME bank without the formula) + the controller subset under
+   the critter-family arm (MissionShell 0x447fe6 adjacency) + the
+   host-staged 5-slot exit seam (the §7j.19 controller-read
+   subset) + the damage-lane seam + the +5000 score-pending fold;
+   15 unit tests (bedlam-core 201 green); stage_critters accepts
+   section 8; the CENSUS RE-PIN (deliberate, D28): the
+   PersonnelxNN component dropped from all 11 rows (ZONEE M1-5,
+   ZONEF M1-5, ZONEG M1) and EVERY ONE FLIPPED CLEAN — CloseCombat
+   had already landed so Personnel was each row's last unmodeled
+   section; provenance
+   docs/evidence/p5-g2-personnel-census-table.txt. ZERO canonical
+   chain movement (canonical_dump_gate + differ_gate +
+   determinism green; ZONEA/M1's S8 count is 0 — verified by the
+   byte-exact 8-section walk). Verified: bedlam-game 20 suites
+   green, fmt + clippy clean on the touched crates,
+   gates-validator 22/22, inspect baseline ok (1069 files),
+   MANIFEST clean before AND after every corpus read, no Ghidra
+   run. P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined; D191.
+   Queued: the ZONEB disposition unit as the new head (the
+   per-zone parity evidence family, PLAN §6 / P5-ZONE-GATES §7
+   pattern).
 1. DONE (2026-08-28, worker 7c028ff1 claim 1, commits 533eaac +
    0ab42a3 + 1e18478, pushed by watchdog repair 2797116): P5
    `p5-critter-state-g2-closecombat` — the G2 CLOSE-COMBAT state

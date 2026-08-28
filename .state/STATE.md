@@ -1,5 +1,51 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-personnel-poi-s8` COMPLETE (worker 0ecf083b claim
+    1, commits 5219569 + b80aa45 + the bookkeeping commit, all
+    PUSHED): the LAST G2 critter-state unit — the S8 PERSONNEL/POI
+    bank LANDED and **G2 is EMPTY: 37/37 missions load clean** (D191).
+    RE FIRST (§7j.77, objdump-only from the committed
+    exw-critterpoi-loader.txt + exw-text-objdump.txt, no Ghidra
+    run): the .NME S8 loader walk made exact AND the §7j.18/1 seed
+    list CORRECTED — the 2026-08-21 reading TRANSPOSED the +4/+6
+    stores; the asm seeds STATE 1 = IDLE (personnel do NOT spawn in
+    state 5 ESCAPE), the dead angle seed 5 rides +6, and +2's 0x32
+    is the HP word (the FUN_0040dc1b damage lane; death → state 6
+    panic + ONE RandB sound draw). The controller FUN_00412a98
+    whole: the z re-settle + nearest-exit scan prologue ([esp] =
+    the exit distance, refreshed per frame), the head 1/16 flee
+    lane (exit < 0x180 ∧ PHASE 2), the idle/settle/walk-out machine
+    (the 0xC0 split, the nearest-robot settle aim), the flee walk
+    (the exit re-aim, the walker, the 10000 sentinel), the 0x10
+    arrival → 10-tick ESCAPE → the award (active 0, [0x4eba0c]++,
+    [0x4eba10] = 0x32, exit dwell reset, FUN_00448b80(5000)), the
+    6→7 panic tail, the walker FUN_00415b6c whole (the ≤4 floor
+    gate + the quadrant ladder), and the corpus census: ELEVEN
+    hosting files (the queue's "13 missions" was a prose slip).
+    ENGINE (b80aa45): crate::poi — the bank + the section-8 staging
+    (three RandA draws per POI: x/y scatter RandA&0x1F + heading
+    RandA&7, the w1-level floor probe, hp the literal 0x32 with NO
+    m-scalar — the ONE .NME bank without the formula), the
+    controller subset under the critter-family arm (0x447fe6
+    adjacency), the host-staged 5-slot exit seam, the damage-lane
+    seam, +5000 through the score-pending fold; 15 unit tests; NOT
+    hashed (the W6 split). CENSUS RE-PIN (deliberate, D28): the
+    PersonnelxNN component dropped from all 11 rows (ZONEE M1-5,
+    ZONEF M1-5, ZONEG M1) and EVERY ONE FLIPPED CLEAN — CloseCombat
+    had already landed, so Personnel was each row's last unmodeled
+    section; 37/37 load clean; the ledger stays 1/37 green;
+    provenance docs/evidence/p5-g2-personnel-census-table.txt;
+    P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined; D191. Verified:
+    bedlam-core 201 tests green (15 new), bedlam-game 20 suites
+    green with ZERO canonical chain movement (canonical_dump_gate +
+    differ_gate + determinism green — ZONEA/M1 hosts no S8
+    section), fmt + clippy clean on the touched crates,
+    gates-validator 22/22, inspect baseline ok (1069 files),
+    MANIFEST clean before AND after every corpus read, no Ghidra
+    run. P5 continues per PLAN §6: the per-zone DISPOSITION
+    evidence (the §7 ZONEA pattern) is the queued unit family —
+    ZONEB first.
+
   - 2026-08-28 `p5-critter-state-g2-shooters` COMPLETE (worker
     5ee1c0ce claim 1, commits 199373a + cb3a3f5, both PUSHED): the
     THIRD G2 critter-state unit — the kind-2 SHOOTERS state LANDED
