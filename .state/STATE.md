@@ -1,5 +1,54 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-control-scheme-surface` COMPLETE (worker e56b4ef6
+    claim 1, commit b4babe3, PUSHED): THE CONTROL-SCHEME AXIS'S
+    FIRST CONSUMER — THE INPUT MAPPING POLICY AT THE PLATFORM/INPUT
+    SEAM (D204, the D201 seam's second axis-consumer unit; PLAN §6
+    "Modern controls"). ControlScheme (Modern/Classic) in
+    engine/bedlam-shell/src/input.rs, selected from the immutable
+    mode via ControlScheme::for_mode (the control-scheme arm only;
+    timing-lock never moves it — axis independence pinned). MODERN
+    = the remappable Bindings table (the D38 seam table as data:
+    WASD + arrows move, 1-4 weapon hotkeys, Escape, Space/Enter
+    advance; bind/unbind/replace), WHEEL -> ZOOM (presentation-
+    bucket accumulator via ShellInput::take_zoom, never the sim
+    input; replaces the provisional D38 wheel->Up/Down mapping) and
+    the default GAMEPAD map (dpad moves, South fires, East backs,
+    Start confirms; analog conversion deliberately absent). CLASSIC
+    = the FIXED original EXW scheme re-anchored verified
+    RE-EXW-INPUT secs 5-7: keyboard = hotkeys/volume/pause/any-key
+    ONLY, gameplay pointing is the mouse, Left/Right arrows dead
+    3-way, ESC the ONE original binding in the current slot set
+    (digits/M/Space/P join with the P2e engine-side button map —
+    never invented, D50), wheel + gamepad DEAD (the sec 7 control
+    model is exactly KeyEvent/MouseEvent/CursorPos), Bindings
+    ignored (no original rebinding). SEAM INERTNESS GENERALIZED:
+    the scheme maps physical input to the game-semantic InputFrame
+    BEFORE the sim — same frames = same trajectory in both arms
+    (host pin control_scheme_mapping_never_touches_the_hashed_
+    buckets with buttons bit 0 held), arms differ UPSTREAM (the
+    same W-hold stream -> UP|WEAPON2 vs movement-neutral frames);
+    the MOUSE PATH is scheme-invariant; the window path routes
+    through the scheme-aware set_physical_key (selection
+    default-modern until the platform plumbing unit). Catalog stays
+    EMPTY. Gate p6-control-scheme-surface wired as the FOURTH P6
+    required_gates entry (commands = bedlam-shell --lib +
+    bedlam-game --lib, hermetic). Verified first-hand:
+    bedlam-shell --lib 42/0 (+9), bedlam-game --lib 148/0 (+1),
+    bedlam-core --lib 147/0; controls green: canonical_dump_gate
+    13/13 ZERO canonical-chain movement (the parity paths feed
+    InputFrame directly, upstream of the mapper),
+    zone_mission_parity 5/5, determinism 4/4, differ_gate 4/4,
+    bedlam-core determinism + hash_fixture green;
+    check-p6-behavior-catalog OK + suite OK; gates-validator OK;
+    workspace cargo check clean; fmt + clippy clean on touched
+    crates; the bounded --phase P6 verdict at b4babe3
+    status=passed, ALL 4 P6 GATES GREEN every command rc=0 (report
+    .state/p6-controlscheme-gates-report.json, head-bound
+    b4babe3931b2); MANIFEST clean before AND after; no Ghidra run.
+    Queued: the present-loop platform wiring as the new head (it
+    also selects the shell mapper's scheme from the plumbed mode).
+
   - 2026-08-28 `p6-timing-lock-surface` COMPLETE (worker 458a7e98
     claim 1, commit c225c81, PUSHED): THE TIMING-LOCK AXIS'S FIRST
     REAL CONSUMER — PRESENT PACING AT THE HOST/PRESENT SEAM (D203,

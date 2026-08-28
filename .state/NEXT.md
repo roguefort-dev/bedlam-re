@@ -10,36 +10,93 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-control-scheme-surface] [gate=p6-control-scheme-surface] P6
-   axis-consumer unit #2 per PLAN §6 + D201 — the control-scheme purist
-   axis consumer at the platform/input layer (modern = WASD + 1-4
-   weapon hotkeys + full remap + wheel zoom + gamepad; classic = the
-   original scheme), mapping physical input to the existing
-   game-semantic InputFrame BEFORE the sim so the sim hash is
-   scheme-independent by construction (same InputFrame = same
-   trajectory in both arms — the seam-inertness property D201 pinned
-   generalizes). Bounds: no canonical-chain movement; test surface =
-   the ONE purist toggle, both arms; catalog stays EMPTY; wire gate
-   p6-control-scheme-surface as the FOURTH P6 required_gates entry
-   behind the three standing gates; fmt + clippy; gates-validator
-   green; MANIFEST clean; no Ghidra run; own Nudge-Worker trailer.
-2. [READY] [id=p6-present-loop-wiring] [gate=p6-present-loop-wiring] P6
-   platform unit per PLAN §6 + the D203 scope note — wire the present
-   seam's consumer into the real platform loop: route the immutable
-   ModeConfig through the bedlam-shell host config into GameHost
-   construction (classic/modern selectable at the platform level) and
-   make the window present loop honor GameHost::should_present (the
-   timing-lock pacing policy: modern presents every vsync, classic
-   holds the previous image on zero-tick frames). The shell fixed-step
-   clock/pump contract and the hashed trajectory stay untouched — no
-   canonical-chain movement, no harness change. Bounds: test surface
-   stays the ONE purist toggle both arms where practical; catalog
-   stays EMPTY; wire gate p6-present-loop-wiring as the FIFTH P6
-   required_gates entry; fmt + clippy on touched crates;
+1. [READY] [id=p6-present-loop-wiring] [gate=p6-present-loop-wiring] P6
+   platform unit per PLAN §6 + the D203/D204 scope notes — wire the
+   present seam's consumer into the real platform loop: route the
+   immutable ModeConfig through the bedlam-shell host config into
+   GameHost construction (classic/modern selectable at the platform
+   level) and make the window present loop honor GameHost::
+   should_present (the timing-lock pacing policy: modern presents
+   every vsync, classic holds the previous image on zero-tick
+   frames); the shell input seam selects its ControlScheme from the
+   same plumbed mode (the D204 consumer's platform selection — the
+   mapper itself is landed). The shell fixed-step clock/pump
+   contract and the hashed trajectory stay untouched — no
+   canonical-chain movement, no harness change. Bounds: test
+   surface stays the ONE purist toggle both arms where practical;
+   catalog stays EMPTY; wire gate p6-present-loop-wiring as the
+   FIFTH P6 required_gates entry; fmt + clippy on touched crates;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+1. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+   PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
+   the control-scheme purist axis's FIRST CONSUMER at the
+   PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
+   the INPUT MAPPING POLICY, never the frame contract.
+   (a) bedlam-shell/src/input.rs: ControlScheme (Modern/Classic)
+   selected from the immutable mode via ControlScheme::for_mode
+   (the control-scheme arm only; the timing-lock arm never moves
+   it — axis independence pinned). MODERN maps physical keys
+   through the caller's remappable Bindings table (the D38 seam
+   table as data: WASD + arrows move, 1-4 weapon hotkeys, Escape,
+   Space/Enter advance — full remap: bind/unbind/replace), maps
+   the WHEEL to ZOOM (a presentation-bucket accumulator consumed
+   via ShellInput::take_zoom, NEVER the sim input; replaces the
+   provisional D38 wheel->Up/Down mapping) and maps the default
+   GAMEPAD table (dpad moves, South fires, East backs, Start
+   confirms; analog-stick conversion deliberately absent — future
+   modern work, never classic). CLASSIC is the FIXED original EXW
+   scheme, re-anchored verified RE-EXW-INPUT secs 5-7: keyboard =
+   hotkeys/volume/pause/any-key ONLY, gameplay pointing is the
+   mouse, Left/Right arrows dead 3-way — among the game-semantic
+   slots this seam carries ESC is the ONE original key binding;
+   the original digits/M/Space/P semantics target slots the seam
+   does not model yet and join with the P2e engine-side button
+   map (never invented, D50); wheel + gamepad DEAD in classic
+   (the sec 7 control model is exactly KeyEvent/MouseEvent/
+   CursorPos); the classic arm IGNORES Bindings (the original
+   offered no rebinding). (b) SEAM INERTNESS GENERALIZED (the D201
+   property at the mapping boundary): the scheme maps physical
+   input to the game-semantic InputFrame BEFORE the sim — the
+   frame is the whole contract, so the same InputFrame = the same
+   trajectory in BOTH arms, pinned host-side by
+   control_scheme_mapping_never_touches_the_hashed_buckets
+   (bedlam-game; same frame script with buttons bit 0 held — the
+   placeholder payload's hash-visible movement bit — yields the
+   identical executed ticks, tick count, state hash and scene hash
+   in both arms), while the arms differ UPSTREAM (pinned at the
+   shell seam: the same W-hold/click stream maps to UP|WEAPON2
+   frames in modern, movement-neutral frames in classic — the
+   consumer is real, not inert). The MOUSE PATH is scheme-INVARIANT
+   (the original is mouse-driven; modern keeps it). Wheel zoom is
+   presentation-bucket ONLY (the D17 b shape). CONFIG-NOT-STATE
+   unchanged: FORMAT_VERSION 1, no hash pin moves. (c) The window
+   path routes through the scheme-aware ShellInput::
+   set_physical_key (the seam is live; the selection is
+   default-modern until the p6-present-loop-wiring platform unit
+   routes the plumbed mode into it). (d) GATE:
+   p6-control-scheme-surface wired as the FOURTH P6 required_gates
+   entry — commands = bedlam-shell --lib + bedlam-game --lib, both
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-shell --lib 42/0 (+9 scheme tests; was 33/0 + 1
+   pre-existing ignored), bedlam-game --lib 148/0 (+1), bedlam-core
+   --lib 147/0 untouched; controls green: canonical_dump_gate
+   13/13 (ZERO canonical-chain movement — the parity paths feed
+   InputFrame directly, upstream of the mapper), zone_mission_
+   parity 5/5, determinism 4/4, differ_gate 4/4, bedlam-core
+   determinism 12/0 + hash_fixture green; check-p6-behavior-
+   catalog OK (catalog still empty, R6 satisfied with the fourth
+   gate) + suite OK; gates-validator suite OK; workspace cargo
+   check clean; fmt + clippy clean on the touched crates; MANIFEST
+   clean before AND after every corpus read; the bounded --phase
+   P6 validator verdict at b4babe3: status=passed, ALL 4 P6 GATES
+   GREEN, every command rc=0 under bwrap containment (report
+   .state/p6-controlscheme-gates-report.json, head-bound to
+   b4babe3931b2); no Ghidra run. Queued: the present-loop platform
+   wiring as the new head (it also selects the shell mapper's
+   scheme from the plumbed mode).
+2. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
