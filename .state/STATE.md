@@ -1,5 +1,47 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-d-disposition` COMPLETE (worker 34b13b42
+    claim 1, commits 681db03 + 6c14940 + the bookkeeping commit, all
+    PUSHED): ZONE D CLOSED — the THIRD 7-mission zone flips green
+    (the ledger 22/37; D195) and the disposition lands as the FIRST
+    PURE ZONES-APPEND (the shape E/F/G take: no harness, grammar, or
+    engine change). (1) THE APPEND (681db03): the ZONED ZoneSpec
+    joined the closed-zone LIST in zone_mission_parity.rs (letter D,
+    missions 1..=7, dims 100x100, committed flows NONE — no
+    committed .scen stages zone D) and nothing else; the battery at
+    that state: P5DM1A..P5DM7C all 21 flows full declared budgets,
+    dumps verify, two-run byte identity — NO engine gap surfaced on
+    any ZONED mission; zones B (21 + the committed S5/S5B/S5C) and
+    C (21) re-verified in place. (2) THE FLIP (6c14940, the §5
+    cross-artifact rule): the ledger flips ZONED-MISSION1..7 green
+    (catalog_refs = []); P5-ZONE-GATES §10 documents the
+    per-criterion table (the §9 pattern) — the anchor statics
+    re-derived from each TOT header (100x100, 160004 B — all seven)
+    + the §7j.64 formula (zone D: linear = clamp(5·(4−2)+m−1, 1, 26)
+    = m+9, M1..M7 = 10..16 no clamp bite); the T1 spot table
+    (FULL_MASK arithmetic, start_score, the 25-name fetch chain with
+    the D184 zone-level `EDITOR\ZONED\MISSIOND.*` pin — the G3
+    variant ZONED/MISSION5.BIN re-verified byte-identical to
+    ZONEB/MISSION6.BIN, runtime-dead editor residue, NO extra leg —
+    the seam domains at stage/zone-cell 4 incl.
+    campaign-clears-select); criterion 6 stays FILE-LEVEL (the
+    shipped slot-0 campaign IS ZONEB/MISSION1); the p5-zone-d gate
+    joins P5 required_gates (13 gates); the ledger test pin
+    re-baselined 15/37 to 22/37 + the ZONED 7/7 line (deliberate,
+    same commit); D195. Verified: zone_mission_parity 5/5 (three
+    zones, 16.24s), bedlam-game suites green (canonical_dump_gate
+    13/13 — ZERO canonical chain movement; differ_gate 4/4;
+    determinism; census 37/37 unchanged), bedlam-core 201/0,
+    diffharness 104/0, fmt + clippy clean (the bedlam-core
+    claim-bank test warnings pre-exist from D151, untouched),
+    check-p5-zone-ledger OK 22/37 + hermetic suite 18/18,
+    gates-validator suite 22/22 + the HEAD-bound battery all-green
+    at 6c14940 (13 gates), MANIFEST clean before AND after every
+    corpus read, no Ghidra run. P5 continues per PLAN §6: ZONEE
+    next (a pure ZONES-append unit in the §10 shape — 7x 100x100
+    TOTs verified, the THIRD G3 variant bank ZONEE/MISSION6.BIN,
+    linear = m+14), then F/G close the ledger.
+
   - 2026-08-28 `p5-zone-c-disposition` COMPLETE (worker 4016c154
     claim 1, commits f4ab798 + the flip commit + the bookkeeping
     commit, all PUSHED): ZONE C CLOSED — the SECOND 7-mission zone
