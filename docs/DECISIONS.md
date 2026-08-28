@@ -9815,3 +9815,177 @@ test-automation-failure-watchdog, test-llm-watchdog,
 test-autonomy-remaining-gaps all PASS; strict queue parser rc=0
 RUNNABLE 1 before and after; MANIFEST.sha256 clean before and after
 (no corpus read by this repair).
+
+## D231 — 2026-08-28: P7 phase-close `p7-phase-close` — the SURVEYED verdict (every PLAN §6 P7 sentence walked and dispositioned against the p7-ports-map-v1 registry: gate-green landed vs EXPLICITLY excluded by the plan's own external-conditions sentence — nothing silently dropped), P7 status flipped green in docs/required-gates.toml (P0–P7 ALL green; a phase run still forces plan_complete false exactly as designed), the bound phase verdict re-emitted at the flip commit (.state/P7-COMPLETE phase-complete-v1, producer required-gates-validator, ALL 7 P7 GATES GREEN)
+
+CONTEXT: the LAST P7 engineering deliverable closed at 9437ac7 (D229,
+the seventh — macos-universal2-ci; the bounded validator verdict
+status=passed, report .state/p7-macosuniversal2-gates-report.json,
+ALL 7 P7 GATES GREEN), so P7's remaining work is the phase-close
+bookkeeping ONLY — the p6-phase-close/d01a7b7 (D220) +
+p5-phase-close/f608207 + p4-phase-status-green/972748d pattern. The
+queue item carries the SAME added duty D220 had: the flip must be a
+SURVEYED verdict, not a rubber stamp — walk the PLAN §6 P7 surface
+sentence by sentence against the registry (landed vs EXPLICITLY
+excluded, nothing silently dropped). The survey:
+
+- LINUX NATIVE + FLATPAK (sentence 1, first clause): LANDED as TWO
+  engineering rows. `linux-native` (gate `p7-ci-artifacts`, D222) —
+  the release-shaped Linux artifact is the release binary the ci.yml
+  build matrix's ubuntu-latest leg uploads on every push
+  (bedlam-shell-linux-x86_64, if-no-files-found: error, engine binary
+  only, unsigned; Linux is the dev platform and an existing per-push
+  leg, so the landing is the ARTIFACT, not the toolchain — the row's
+  own plan_anchor reading). `flatpak-manifest` (gate
+  `p7-flatpak-manifest`, D225) — packaging/dev.roguefort.bedlam.yml
+  (app-id dev.roguefort.bedlam, runtime org.freedesktop.Platform 24.08
+  PINNED, the CLOSED five-token finish-args surface, one
+  simple-buildsystem module installing exactly one binary + one
+  desktop entry, the corpus skip-list floor) +
+  packaging/dev.roguefort.bedlam.desktop (no Icon — no asset ever,
+  D21) + the ci.yml flatpak job that builds THIS manifest and exports
+  the UNSIGNED single-file bundle per push.
+- WINDOWS INSTALLER (sentence 1, second clause): LANDED. The
+  `windows-installer` row (gate `p7-windows-installer`, D227) —
+  packaging/bedlam-shell.nsi (the CLOSED-grammar NSIS definition:
+  $PROGRAMFILES64\Bedlam + admin + CRCCheck force, exactly two staged
+  engine-only File sources, the ARP registration, one Start-Menu
+  shortcut, the exact-inverse uninstall) +
+  packaging/windows-installer-README.txt (the engine-only
+  supply-your-own boundary) + the ci.yml windows-installer job
+  (makensis with working-directory: packaging, strict
+  if-no-files-found: error upload). Authenticode stays the
+  `signing-keys` exclusion.
+- MACOS UNIVERSAL2 THROUGH AUTOMATED CI (sentence 1, third clause):
+  LANDED. The `macos-universal2-ci` row (gate
+  `p7-macos-universal2-ci`, D229) — .github/workflows/
+  macos-universal2.yml: the SCHEDULED macos-universal2 job (weekly
+  off-peak cron + workflow_dispatch, deliberately NO
+  push/pull_request trigger), both targets
+  (aarch64-apple-darwin + x86_64-apple-darwin), the lipo -create join
+  into ONE Mach-O, the strict bounded upload — engine binary only,
+  unsigned, no test/golden ride-along. The hosted runner itself is
+  the `macos-runner-availability` exclusion (the runner is external;
+  the gate grades the committed definition hermetically).
+- RUNNER, SIGNING, AND PUBLICATION AVAILABILITY ARE EXTERNAL
+  CONDITIONS AND DO NOT BLOCK ENGINEERING COMPLETION (sentence 2):
+  HONORED AS THE JOIN DISCIPLINE, recorded as the registry's three
+  EXTERNAL-CONDITIONAL rows (R8: each carries a note, never status,
+  never a gate) — `macos-runner-availability` (PLAN §3 records the
+  same posture: goldens never run on macOS CI; no push is ever gated
+  on a macOS runner existing), `signing-keys` (Authenticode /
+  notarization / GPG identities are owner-held secrets; UNSIGNED is
+  the honest engineering output — every artifact row says so), and
+  `publication-stores` (the Flathub review queue and any store page
+  are owner-gated distribution). The teeth are mechanical, not
+  prose: an engineering row closes ONLY by its proving gate (R2) and
+  NO P7 gate requires a store, a key, or a runner (re-verified this
+  unit: none of the seven gate blocks carries a corpus key, a
+  writable path, or any credential; all grade committed definitions
+  or hermetic batteries offline).
+- CI ARTIFACTS PER PUSH (sentence 3): LANDED. The
+  `ci-artifacts-per-push` row (gate `p7-ci-artifacts`, D222) — the
+  per-push upload steps inside the existing ci.yml matrix
+  (ubuntu-latest + windows-latest on every push and pull request,
+  actions/upload-artifact@v4 with if-no-files-found: error + 14-day
+  retention; the artifact is the engine binary only, never game-data,
+  never assets, unsigned, no credential; the macOS leg joins when a
+  runner exists).
+- CDDA: USER-SUPPLIED ORIGINAL TRACKS (WAV/CD), OPTIONAL LOCAL LOSSY
+  CACHE GENERATED ON FIRST RUN — NEVER REDISTRIBUTED (sentence 4):
+  LANDED. The `cdda-user-supply` row (gate `p7-cdda-user-supply`,
+  D223) — engine/bedlam-shell/src/cdda.rs: the documented lookup
+  (--music-dir / BEDLAM_MUSIC_DIR, then $XDG_DATA_HOME/bedlam/music,
+  then the install dir; BEDLAM0N.WAV then TRACK0N.WAV for CD tracks
+  02..08, case-insensitive), the SILENT MISS posture (music silent +
+  one stderr note, never fatal), and the optional local lossy cache
+  (IMA ADPCM 4:1, dependency-free integer math) generated on first
+  run into the user-owned cache home, keyed by source identity
+  (length + FNV-1a-64), write-then-rename, guarded against game-data/
+  and any git work tree, never redistributed. Git stays engine-only;
+  no track or derivative is ever committed.
+- STEAMDECK DEFAULTS STRETCH (sentence 5): LANDED. The
+  `steamdeck-default` row (gate `p7-steamdeck-default`, D224) — the
+  recorded PLATFORM PROFILE over the landed D215 scale surface:
+  the DMI sysfs identity read once at window startup (board_vendor
+  "Valve" AND product_name "Jupiter"/"Galileo", trimmed +
+  case-insensitive, both fields required, FAIL-CLOSED to Generic on
+  anything else), the default scale arm becoming the EXPLICIT
+  ASPECT-DISTORTING Stretch this project landed (whole 640x480 frame
+  onto the whole 1280x800 panel edge to edge — no bars, no crop),
+  the filter default Nearest everywhere, the --scale/--filter words
+  always winning, and every other machine keeping Integer + Nearest
+  bit-for-bit (PresentConfig::default() unchanged; the sim untouched
+  — the platform knob rides OUTSIDE ModeConfig, D200 layering).
+- THE §12 MILESTONE GATE ("P7 (gate: 3-OS artifacts)"): SATISFIED BY
+  THE SAME THREE ROWS — the 3-OS artifact surface is the per-push
+  Linux release binary (linux-native), the Windows installer
+  (windows-installer), and the macOS universal2 artifact
+  (macos-universal2-ci); all three landed as committed definitions
+  with their CI builds, unsigned, the runner/store/key legs
+  explicitly excluded by the plan's own sentence 2.
+
+EXPLICITLY DEFERRED (each by the plan's own text or a recorded
+decision — the complement the survey exists to make honest):
+1. THE THREE EXTERNAL-CONDITIONAL EXCLUSIONS THEMSELVES — a hosted
+   macOS runner, signing identities, and store publication can never
+   be "landed" by engineering work (R8: they carry no status and no
+   gate); they are recorded, not dropped.
+2. THE FIRST LIVE EXECUTIONS OF THE EXTERNAL RUNNERS — a hosted
+   macOS runner (and any store-side build) may need ordinary CI
+   fixes on first live run; that is the exclusion's own content, and
+   the gates deliberately grade the committed definitions hermetically
+   (D229's recorded posture).
+3. P8 (BEDLAM 2: ABSOLUTE BEDLAM) IS OUTSIDE THIS CLOSE — the
+   required-gates manifest enumerates exactly P0–P7 (its own
+   validation rule), so P7 green IS the end of the required queue;
+   PLAN §6 P8 remains future work per the plan's own ordering
+   (post-P5, opportunistic), NOT a silently dropped P7 item. The
+   controller's completion machinery (fresh bounded validation of
+   the full manifest once the active queue is empty) owns every
+   global claim from here — no worker ever asserts it.
+
+DECISION: the flip is a SURVEYED verdict on that record — every PLAN
+§6 P7 sentence is gate-green landed or explicitly excluded above,
+nothing silently dropped — so docs/required-gates.toml P7 status
+flips pending->green (P0–P7 ALL green for the first time; a bounded
+`--phase P7` run still reports plan_complete false exactly as
+designed, and the GLOBAL verdict stays the controller's alone), and
+the bound phase verdict is re-emitted AT THE FLIP COMMIT with the
+exact P4/P5/P6-shaped command:
+/usr/bin/python3 tools/validate-required-gates.py --root . --report
+.state/p7-phaseclose-gates-report.json --phase P7 --phase-output
+.state/P7-COMPLETE (ALL 7 P7 GATES GREEN at the flip commit;
+.state/P7-COMPLETE = phase-complete-v1 re-bound to the flip commit +
+the manifest sha256, producer=required-gates-validator, emitted by
+the validator itself). The commit carrying this decision IS the flip
+commit, so the verdict binds to it.
+
+BOUNDS KEPT: no engine code, no gate-command changes, no registry
+edit (the registry already stood 7 landed / 0 pending at 9437ac7 —
+verified before the flip), no CI change, no new dependency; docs
+only (this decision + the one-line manifest flip); the tracked tree
+stays clean through the whole HEAD-bound battery (the D193/D194
+lesson — STATE.md/NEXT.md edits parked until after the verdict);
+own Nudge-Worker trailer; no Ghidra run; MANIFEST clean before AND
+after (no P7 gate reads the corpus; the battery's in-command
+re-checks guard it regardless).
+
+VERIFIED (first-hand, this unit): the survey anchors re-checked
+in-tree (packaging/dev.roguefort.bedlam.yml + .desktop,
+packaging/bedlam-shell.nsi + packaging/windows-installer-README.txt,
+.github/workflows/macos-universal2.yml + the ci.yml artifact /
+flatpak / windows-installer jobs, engine/bedlam-shell/src/cdda.rs,
+engine/bedlam-shell/src/platform.rs + the Stretch arm in
+engine/bedlam-platform/src/scale.rs); tools/check-p7-ports-map.py OK
+BEFORE the flip (7 engineering, 7 landed, 0 pending + 3 recorded
+exclusions) AND AFTER (the R6 rule satisfied by the flip: green with
+zero unfinished engineering); tools/test-p7-ports-map.py 29/29 and
+tools/test-validate-required-gates.py 22/22 before and after the
+manifest edit; the bounded --phase P7 validator verdict AT THE FLIP
+COMMIT: status=passed, ALL 7 P7 GATES GREEN, every command rc=0
+under bwrap containment, plan_complete false, .state/P7-COMPLETE
+phase-complete-v1 bound to the flip commit (report
+.state/p7-phaseclose-gates-report.json); the strict queue parser
+rc=0 on the rewritten NEXT.md; MANIFEST.sha256 clean before and
+after.

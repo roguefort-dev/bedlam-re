@@ -37,7 +37,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 
 [[phase]]
 id = "P7"
-status = "pending"
+status = "green"
 required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest", "p7-windows-installer", "p7-macos-universal2-ci"]
 
 [[gate]]
