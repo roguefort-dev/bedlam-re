@@ -10,21 +10,66 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
-   phase-close bookkeeping — every engineering deliverable in
-   docs/P7-PORTS.md §3 is NOW landed with its proving gate (the
-   D221 R6 surveyable flip is satisfiable; the p5/p6 phase-close
-   pattern): the surveyed verdict walking every PLAN §6 P7
-   sentence against the registry (landed vs explicitly excluded,
-   nothing silently dropped), the P7 status flip pending->green
-   in docs/required-gates.toml, and the bound --phase P7 verdict
-   re-emitted at the flip commit (--phase-output
-   .state/P7-COMPLETE). The LAST engineering row
-   p7-macos-universal2-ci landed at 9437ac7 (ALL 7 P7 GATES
-   GREEN, 7 landed / 0 pending), so this close is claimable NOW.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
+1. DONE (2026-08-28, claim 1 — commit 97fb49e by worker
+   78919433, PUSHED, plus this bookkeeping commit): P7
+   PHASE-CLOSE BOOKKEEPING `p7-phase-close` — the SURVEYED VERDICT
+   + the STATUS FLIP + the BOUND VERDICT ARTIFACT (D231; the
+   d01a7b7 P6 / f608207 P5 / 972748d P4 phase-close pattern).
+   (a) THE SURVEY (DECISIONS.md D231, carried by the flip commit
+   97fb49e): every PLAN §6 P7 sentence walked against the
+   p7-ports-map-v1 registry — Linux native + Flatpak (rows
+   linux-native D222 + flatpak-manifest D225), Windows installer
+   (D227), macOS universal2 through automated CI (D229), the
+   external-conditions sentence honored as the JOIN DISCIPLINE
+   (the three recorded exclusions macos-runner-availability /
+   signing-keys / publication-stores — R8 rows carrying a note,
+   never a gate; re-verified: none of the seven P7 gate blocks
+   requires a store, a key, or a runner — no corpus key, no
+   writable, no credential anywhere), CI artifacts per push
+   (D222), the CDDA user-supply sentence (D223), SteamDeck
+   defaults stretch (D224), plus the §12 milestone gate "3-OS
+   artifacts" (the same three OS rows) — every sentence
+   gate-green landed or EXPLICITLY excluded, nothing silently
+   dropped; P8 recorded OUTSIDE the required-gates authority
+   (the manifest enumerates exactly P0-P7; PLAN §6 P8 stays
+   future work per the plan's own ordering). (b) THE FLIP:
+   docs/required-gates.toml P7 status pending->green — P0-P7
+   ALL GREEN for the first time; a bounded phase run still
+   forces plan_complete false exactly as designed and the GLOBAL
+   verdict stays the controller's alone. (c) THE BOUND VERDICT
+   re-emitted AT the flip commit with the exact P4/P5/P6-shaped
+   command: /usr/bin/python3 tools/validate-required-gates.py
+   --root . --report .state/p7-phaseclose-gates-report.json
+   --phase P7 --phase-output .state/P7-COMPLETE — status=passed,
+   ALL 7 P7 GATES GREEN, every command rc=0 under bwrap
+   containment, .state/P7-COMPLETE phase-complete-v1 re-bound to
+   97fb49e (producer required-gates-validator, emitted by the
+   validator itself). VERIFIED first-hand: check-p7-ports-map OK
+   before AND after the flip (7 engineering, 7 landed, 0 pending +
+   3 recorded exclusions — the R6 rule satisfied: green with zero
+   unfinished engineering); test-p7-ports-map 29/29 and
+   test-validate-required-gates 22/22 before and after the
+   manifest edit; the survey anchors re-checked in-tree
+   (packaging/dev.roguefort.bedlam.yml + .desktop,
+   packaging/bedlam-shell.nsi + windows-installer-README.txt,
+   .github/workflows/macos-universal2.yml + the ci.yml artifact /
+   flatpak / windows-installer jobs, engine/bedlam-shell/src/
+   cdda.rs, engine/bedlam-shell/src/platform.rs + the Stretch arm
+   in engine/bedlam-platform/src/scale.rs); the tracked tree
+   stayed clean through the whole HEAD-bound battery (STATE.md /
+   NEXT.md edits parked until after the verdict); MANIFEST clean
+   before and after (no P7 gate reads the corpus; no Ghidra run,
+   no engine change, no gate-command change, no registry edit —
+   the registry already stood 7 landed / 0 pending at 9437ac7).
+   THE REQUIRED QUEUE IS NOW EMPTY: every P0-P7 phase is green in
+   the manifest and no required item remains; the controller's
+   fixed bounded offline validation over docs/required-gates.toml
+   owns every global completion claim from here (workers never
+   assert it — the completion contract).
+
+2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +
    LAST engineering deliverable `p7-macos-universal2-ci` — the
    SCHEDULED macOS UNIVERSAL2 CI JOB DEFINITION per PLAN §6 P7

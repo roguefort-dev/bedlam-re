@@ -1,5 +1,61 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-phase-close` COMPLETE (worker 78919433
+    claim 1, commit 97fb49e, PUSHED, plus this bookkeeping
+    commit): P7 CLOSED IN THE MANIFEST — docs/required-gates.toml
+    P7 status pending->green, so P0-P7 ARE ALL GREEN FOR THE FIRST
+    TIME (a bounded --phase run still forces plan_complete false
+    exactly as designed; the GLOBAL verdict stays the
+    controller's alone). THE SURVEYED VERDICT (DECISIONS.md D231,
+    carried by the flip commit 97fb49e): every PLAN section 6 P7
+    sentence walked against the p7-ports-map-v1 registry —
+    gate-green LANDED: Linux native + Flatpak (linux-native +
+    flatpak-manifest rows, D222/D225 — the per-push ubuntu
+    release-binary artifact + the committed flatpak-builder
+    manifest, pinned runtime, closed finish-args, never-bundle
+    skip floor, its CI bundle job), Windows installer (D227 — the
+    closed-grammar NSIS definition + README + the makensis CI
+    job), macOS universal2 through automated CI (D229 — the
+    scheduled both-slice + lipo job, no push trigger, no test
+    ride-along), CI artifacts per push (D222 — the ci.yml matrix
+    upload steps, engine binary only, unsigned), the CDDA
+    user-supply sentence (D223 — cdda.rs lookup + silent miss +
+    the identity-keyed user-owned IMA-ADPCM cache, never
+    redistributed), SteamDeck defaults stretch (D224 — the DMI
+    profile + the explicit Stretch arm over the D215 surface,
+    generic default untouched), and the section 12 milestone gate
+    "3-OS artifacts" (the same three OS rows); EXPLICITLY
+    EXCLUDED by the plan's own external-conditions sentence: the
+    three recorded registry exclusions macos-runner-availability,
+    signing-keys, publication-stores (R8 rows with a note, never
+    a gate — re-verified: no P7 gate requires a store, a key, or
+    a runner), plus the first live runner executions riding the
+    same exclusions; P8 recorded OUTSIDE the required-gates
+    authority (the manifest enumerates exactly P0-P7) — nothing
+    silently dropped. THE BOUND VERDICT re-emitted AT the flip
+    commit: /usr/bin/python3 tools/validate-required-gates.py
+    --root . --report .state/p7-phaseclose-gates-report.json
+    --phase P7 --phase-output .state/P7-COMPLETE — ALL 7 P7
+    GATES GREEN at 97fb49e (report status=passed, bounded,
+    offline, containment bwrap-unshare-net-pid-ro, every command
+    rc=0, plan_complete false; .state/P7-COMPLETE
+    phase-complete-v1 re-bound to the flip commit, producer
+    required-gates-validator, emitted by the validator itself).
+    Pre-flip first-hand checks: check-p7-ports-map OK before AND
+    after (7 engineering, 7 landed, 0 pending + 3 recorded
+    exclusions — R6 satisfied by the flip); test-p7-ports-map
+    29/29 + test-validate-required-gates 22/22 before and after
+    the manifest edit; the survey anchors re-checked in-tree; the
+    tracked tree stayed clean through the whole HEAD-bound battery
+    (STATE.md/NEXT.md edits parked until after); MANIFEST clean
+    before and after (no P7 gate reads the corpus); no Ghidra
+    run, no engine change, no registry edit. THE REQUIRED QUEUE
+    IS NOW EMPTY: no required item remains — the controller's
+    fixed bounded offline validation over docs/required-gates.toml
+    owns every global completion claim from here (workers never
+    assert it; PLAN-COMPLETE is never trusted as later-run
+    input).
+
   - 2026-08-28 `p7-macos-universal2-ci` COMPLETE (worker c60dbcd6
     claim 1, commit 9437ac7, PUSHED, plus this bookkeeping
     commit): P7's SEVENTH + LAST ENGINEERING DELIVERABLE — the
