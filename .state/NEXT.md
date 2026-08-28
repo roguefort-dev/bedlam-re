@@ -10,30 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
-   SteamDeck deliverable per PLAN §6 P7 "SteamDeck defaults stretch"
-   + docs/P7-PORTS.md §5 (the D221 contract, row steamdeck-default):
-   the recorded PLATFORM-PROFILE default over the landed D215 scale
-   surface. (a) The platform profile: identify the SteamDeck class
-   at startup (the identification mechanism recorded in the
-   registry note when it lands) and override the default
-   PresentConfig scale to FILL-THE-PANEL on the 1280x800 16:10
-   panel — the user-visible posture the contract pins: the panel is
-   filled edge to edge by default, never pillarboxed bars; generic
-   platforms keep Integer + Nearest bit-for-bit (the D215 pin
-   scaling_defaults_to_the_shipped_integer_nearest must stay
-   green). (b) D200 layering: a platform knob OUT of ModeConfig,
-   both pacing arms accept it, it selects NOTHING in the sim —
-   pinned by a trajectory/hash invariance test over the profile
-   selection, and the CLI --scale/--filter overrides still win.
-   (c) Flip the registry row landed with the proving gate; wire
-   p7-steamdeck-default as the next P7 required_gates entry
-   (bedlam-shell --lib style, hermetic, no corpus). BOUNDS:
-   bedlam-shell/platform only; controls green before AND after;
-   MANIFEST clean; commit with the unit's own Nudge-Worker
-   trailer.
-
-2. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
+1. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
    Flatpak deliverable per PLAN §6 P7 "Linux native + Flatpak" +
    docs/P7-PORTS.md §2 (row flatpak-manifest): the committed
    Flatpak build manifest + its CI build definition; Flathub
@@ -44,7 +21,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    green before AND after; commit with the unit's own
    Nudge-Worker trailer.
 
-3. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
+2. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
    Windows deliverable per PLAN §6 P7 "Windows installer" +
    docs/P7-PORTS.md §2 (row windows-installer): the committed
    installer definition built by the artifact job; Authenticode
@@ -54,7 +31,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    work, no engine change; controls green before AND after; commit
    with the unit's own Nudge-Worker trailer.
 
-4. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
+3. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
    macOS deliverable per PLAN §6 P7 "macOS universal2 through
    automated CI" + docs/P7-PORTS.md §2 (row macos-universal2-ci):
    the committed universal2 aarch64+x86_64 CI job definition that
@@ -67,7 +44,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    checker work, no engine change; controls green before AND
    after; commit with the unit's own Nudge-Worker trailer.
 
-5. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
+4. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
    phase-close bookkeeping once EVERY engineering deliverable in
    docs/P7-PORTS.md §3 is landed with its proving gate (the D221
    R6 surveyable flip — the p5/p6 phase-close pattern): the
@@ -77,10 +54,94 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    docs/required-gates.toml, and the bound --phase P7 verdict
    re-emitted at the flip commit (--phase-output
    .state/P7-COMPLETE). This item is claimable ONLY after items
-   1-4 are done.
+   1-3 are done.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 1dfd775 by worker d9aaa029,
+1. DONE (2026-08-28, claim 1 — commit 0daf3a7 by worker 3d906dad,
+   PUSHED, plus this bookkeeping commit): P7 FOURTH engineering
+   deliverable `p7-steamdeck-default` — the STEAMDECK
+   PLATFORM-PROFILE DEFAULT per PLAN §6 P7 "SteamDeck defaults
+   stretch" + docs/P7-PORTS.md §5 (the D221 contract, row
+   steamdeck-default; implementation D224; the registry row
+   flipped landed in the SAME commit naming the new FOURTH P7
+   required gate per the R2 rule). (a) THE PROFILE
+   (engine/bedlam-shell/src/platform.rs, NEW; bedlam-shell only):
+   the SteamDeck class identified ONCE at window startup from the
+   DMI sysfs identity — /sys/devices/virtual/dmi/id board_vendor
+   "Valve" AND product_name "Jupiter" (the 1280x800 LCD deck) or
+   "Galileo" (the 1280x800 OLED deck), trimmed + case-insensitive,
+   BOTH fields required, FAIL-CLOSED to Generic on any other
+   identity, missing files or a non-sysfs platform (the env is
+   deliberately never consulted: STEAMDECK=1 is a Steam-session
+   fact, not hardware); read-only, best-effort, never fatal; the
+   identification mechanism is RECORDED in the registry row's note
+   per the §5 contract. (b) THE ARM — the contract's second
+   branch, recorded: the EXPLICIT ASPECT-DISTORTING STRETCH arm
+   landed as a fourth ScaleMode in bedlam-platform scale.rs (the
+   WHOLE frame onto the WHOLE target — no bars, no crop; Fill was
+   NOT chosen: its centered crop hides the top and bottom of the
+   game's own 480 rows); CLI word "stretch" joins the fail-closed
+   domain integer|fit|fill|stretch; on the SteamDeck class the
+   default PresentConfig scale becomes Stretch with one stderr
+   note (the --scale override hint); generic platforms keep
+   Integer + Nearest bit-for-bit (PresentConfig::default()
+   untouched — the D215 pin
+   scaling_defaults_to_the_shipped_integer_nearest stays green);
+   the explicit --scale ALWAYS wins; the filter default stays
+   Nearest on every platform (the contract overrides the scale arm
+   only). (c) PARITY BOUNDS pinned by test (D200): the profile is
+   OUT of ModeConfig, both pacing arms accept it identically
+   (pinned by profile_selection_never_changes_the_gate_answers),
+   and it selects NOTHING in the sim — identical sim config,
+   executed ticks, tick count, state hash, scene hash AND frame
+   parity hash under every class x CLI-word combination (pinned by
+   profile_selection_never_touches_the_sim_or_the_hashed_
+   trajectory); the palette expansion stays VgaExpand::Original;
+   the headless path never probes DMI (flags noted + ignored
+   exactly as before). (d) THE GATE: p7-steamdeck-default wired as
+   the FOURTH P7 required_gates entry — command 1 = the hermetic
+   bedlam-shell --lib battery (145/0 + 1 pre-existing ignored;
+   +7 platform tests: the Valve+Jupiter/Galileo identification
+   incl. casing/whitespace variance, every fail-closed shape incl.
+   missing/empty fields + near-miss products, the best-effort DMI
+   reader over a real scratch dir, the per-class defaults, the
+   CLI-wins rule over the full 2x4 domain, the fill-the-panel
+   geometry on 1280x800 (Stretch whole frame + whole panel,
+   Integer the 320 px pillarbox bars the contract forbids, Fill
+   the crop not chosen), the only-the-default pin; +2 window
+   invariance tests; the D215 suite extended 3x2 -> 4x2 in place;
+   +1 bedlam-platform integration test: the Stretch geometry
+   pins); command 2 = check-p7-ports-map (the flip + join). No
+   corpus key, no writable, no network, no device, no display.
+   (e) THE FLIP (same commit): §5 the LANDED paragraph; §6 the
+   landed-since note; the ports-map suite re-baselined
+   deliberately (real-repo pin 4 landed / 3 pending + the landed
+   line; the honest fixture wiring p7-steamdeck-default; the
+   forward-shape test flipping flatpak-manifest at 5 landed /
+   2 pending) — 29/29. Verified first-hand: fmt + clippy clean on
+   both touched crates (the one pre-existing D210 test warning
+   untouched); the binary wiring first-hand (help text incl. the
+   stretch word, the bogus-word + missing-value rejections at
+   exit 2, the headless ignore note) AND the headless smoke
+   EXACTLY at the recorded baseline (scene 696adb1cd110e062 /
+   parity cce30c983b97b16d / audio 110400/158092) under --scale
+   stretch; the WINDOW host end to end on the live display under
+   --scale stretch (exit 0; no profile note on this Generic
+   desktop — the note fires only on the deck class, pinned by the
+   pure tests); controls green: canonical_dump_gate 13/13,
+   determinism 4/4, zone_mission_parity 5/5 (ZERO canonical-chain
+   movement), check-p6-behavior-catalog OK before AND after,
+   test-validate-required-gates 22/22 after the manifest edit;
+   MANIFEST clean before and after every corpus read; the bounded
+   --phase P7 validator verdict at 0daf3a7: status=passed, ALL 4
+   P7 GATES GREEN, every command rc=0 under bwrap containment
+   (report .state/p7-steamdeck-gates-report.json, head-bound to
+   0daf3a7d8811). Queued: the Flatpak build manifest + CI
+   definition as the new head (the next pending registry row in
+   contract order), then the Windows installer, universal2, and
+   the P7 phase close.
+
+2. DONE (2026-08-28, claim 1 — commit 1dfd775 by worker d9aaa029,
    PUSHED, plus this bookkeeping commit): P7 SECOND ENGINEERING
    deliverable `p7-cdda-user-supply` — the CDDA USER-SUPPLY +
    LOCAL-CACHE surface per PLAN §6 P7 "CDDA: user-supplied original
@@ -166,7 +227,8 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    as the new head (the next registry row in contract order), then
    Flatpak, the Windows installer, universal2 and the P7 phase
    close.
-2. DONE (2026-08-28, claim 1 — commit af9cac1 by worker cf6544eb,
+
+3. DONE (2026-08-28, claim 1 — commit af9cac1 by worker cf6544eb,
    PUSHED, plus this bookkeeping commit): P7 first engineering
    deliverable `p7-ci-artifacts` — the PER-PUSH CI ARTIFACT JOBS per
    PLAN §6 P7 "CI artifacts per push" + docs/P7-PORTS.md §2/§3
@@ -234,7 +296,8 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    report.json, head-bound to af9cac1e5597). Queued: the CDDA
    user-supply + local-cache unit as the new head (the next registry
    row in contract order).
-3. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
+
+4. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
    PUSHED, plus this bookkeeping commit): P7 opener
    `p7-ports-scaffold` — THE PORTS/PACKAGING DELIVERABLE-MAP
    CONTRACT wired as the FIRST P7 required gate (D221; the
@@ -315,7 +378,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    SteamDeck, Flatpak, installer and universal2 units, then the
    P7 phase close.
 
-1. DONE (2026-08-28, claim 1 — commit d01a7b7 by worker 7486871a,
+5. DONE (2026-08-28, claim 1 — commit d01a7b7 by worker 7486871a,
    PUSHED, plus this bookkeeping commit): P6 phase-close
    bookkeeping `p6-phase-close` — THE SURVEYED VERDICT + the P6
    phase status FLIPPED pending->green in docs/required-gates.toml
@@ -361,7 +424,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    p5-phase-close/0c81387 pattern): p7-ports-scaffold per PLAN
    section 6, so required work stays active.
 
-1. DONE (2026-08-28, claim 1 — commits 2b521d1 + eb4981f by worker
+6. DONE (2026-08-28, claim 1 — commits 2b521d1 + eb4981f by worker
    73e5e9a2, both PUSHED): P6 QoL FEEL-PROXY benchmark unit
    `p6-frame-pacing-benchmark` — the plan's own closing instrument
    of the QoL sentence per PLAN §6 "An automated scheduled CI
@@ -455,7 +518,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head (the surveyed status flip + the phase-complete-v1 verdict
    artifact, the 972748d/f608207 precedent).
 
-1. DONE (2026-08-28, claim 1 — commits ca915fd + 24daf9f by
+7. DONE (2026-08-28, claim 1 — commits ca915fd + 24daf9f by
    worker b3083e9c, both PUSHED): P6 ENHANCED native-render OPENER
    `p6-enhanced-native-render` — the resolution bullet's big
    remaining half per PLAN §6 "ENHANCED mode is explicitly non-parity
@@ -520,16 +583,16 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    the thirteenth gate) + its suite 30/30; gates-validator suite
    22/22; fmt + clippy clean on the touched crates (the one
    pre-existing D210 test warning untouched); workspace cargo check
-   clean; MANIFEST clean before AND after every corpus read; the
+   clean; MANIFEST clean before and after every corpus read; the
    bounded --phase P6 validator verdict at 24daf9f: status=passed,
    ALL 13 P6 GATES GREEN, every command rc=0 under bwrap containment
-   (report .state/p6-enhancednative-gates-report.json, head-bound to
-   24daf9fe937f); no Ghidra run. Queued: the QoL feel-proxy scheduled
-   frame-pacing benchmark as the new head (the plan's own closing
-   instrument of the QoL sentence, the last unlanded plan-named P6
-   piece before the phase exit).
+   (report .state/p6-enhancednative-gates-report.json, head-bound
+   to 24daf9fe937f); no Ghidra run. Queued: the QoL feel-proxy
+   scheduled frame-pacing benchmark as the new head (the plan's own
+   closing instrument of the QoL sentence, the last unlanded
+   plan-named P6 piece before the phase exit).
 
-1. DONE (2026-08-28, claim 1 — commits 4975281 + d63c82f by worker
+8. DONE (2026-08-28, claim 1 — commits 4975281 + d63c82f by worker
    b9f4e384, both PUSHED): P6 HD asset pipeline RESEARCH opener
    `p6-hd-asset-research` — docs/RESEARCH-HD-ASSET-PIPELINE.md, the
    plan's OWN named prerequisite ("exact package/model pins come from
@@ -587,7 +650,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    the four manifest-wiring tampers; + the real-repo pin);
    check-p6-behavior-catalog OK (catalog still empty, R6 satisfied with
    the twelfth gate) + its suite 30/30; gates-validator suite 22/22;
-   MANIFEST clean before AND after (the gate reads no corpus); the
+   MANIFEST clean before and after (the gate reads no corpus); the
    bounded --phase P6 validator verdict at d63c82f: status=passed, ALL
    12 P6 GATES GREEN, every command rc=0 under bwrap containment
    (report .state/p6-hdasset-gates-report.json, head-bound to
@@ -596,8 +659,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    generated assets, catalog stays EMPTY. Queued: the ENHANCED
    native-render opener as the new head (the resolution bullet's big
    remaining half, design inputs from this doc's §5.A/§8).
-
-2. DONE (2026-08-28, claim 1 — commits 017a0f4 + 78c87ed by
+9. DONE (2026-08-28, claim 1 — commits 017a0f4 + 78c87ed by
    worker 8754d532, both PUSHED): P6 resolution-independence unit
    `p6-scaling-options` — the SCALING SELECTION per PLAN §6
    "Resolution independence + GPU rendering ... (nearest/integer
@@ -671,7 +733,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    native-render half of the resolution bullet stays the
    bullet's big remaining piece, a separately scoped unit).
 
-2. DONE (2026-08-28, claim 1 — commits 63d58ac + bece1cf + 9b2599f
+10. DONE (2026-08-28, claim 1 — commits 63d58ac + bece1cf + 9b2599f
    by worker bd07c7b6, all PUSHED): P6 QoL unit `p6-save-slots` —
    the SAVE SLOTS + METADATA + OPT-IN AUTOSAVE sentence per PLAN
    §6 "QoL: ... save slots + metadata + opt-in autosave"
@@ -762,7 +824,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bedlam-platform ScaleMode/FilterMode — the QoL list is
    complete, so the queue advances to the resolution bullet's
    last small piece).
-3. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
+11. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
    by worker 1b994336, all PUSHED): P6 QoL unit
    `p6-volume-mixers` — the VOLUME MIXERS presentation option per
    PLAN §6 "QoL: window modes, vsync control, volume mixers, ..."
@@ -834,7 +896,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    1b42327); no Ghidra run. Queued: the QoL save slots + metadata
    + opt-in autosave sentence as the new head (window modes, vsync
    control and volume mixers now DONE).
-4. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
+12. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
    PUSHED): P6 QoL unit `p6-window-modes` — the WINDOW MODES
    presentation option per PLAN §6 "QoL: window modes, vsync
    control, ..." (implementation D210), the direct sibling of the
@@ -903,7 +965,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    rewritten queue); the structured transport failure was
    adjudicated replaced-task per the D206 checklist (all four
    items green, D211) and item 1 above stands untouched, READY.
-5. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+13. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
    the remaining half of the PLAN §6 present sentence ("vsync-
@@ -969,7 +1031,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
    no Ghidra run. Queued: the QoL window-modes platform unit as
    the new head (PLAN §6 QoL list order — vsync control now DONE).
-6. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+14. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames
@@ -1053,7 +1115,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    no Ghidra run. Queued: the optional uncapped present mode as the
    new head (the same PLAN §6 sentence's remaining half — vsync-
    locked at any refresh OR uncapped, logic fixed in both).
-7. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+15. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -1109,7 +1171,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-8. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+16. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -1176,7 +1238,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-9. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+17. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -1222,7 +1284,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-10. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+18. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -1268,7 +1330,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-11. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+19. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -1311,7 +1373,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-12. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+20. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -1335,7 +1397,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-13. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+21. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition

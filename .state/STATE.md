@@ -1,5 +1,54 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-steamdeck-default` COMPLETE (worker 3d906dad
+    claim 1, commit 0daf3a7, PUSHED, plus this bookkeeping
+    commit): P7's FOURTH ENGINEERING DELIVERABLE — the STEAMDECK
+    PLATFORM-PROFILE DEFAULT (D224; PLAN §6 P7 "SteamDeck defaults
+    stretch" + P7-PORTS §5, the registry row flipped landed naming
+    the new FOURTH P7 required gate in the same commit per the R2
+    rule). engine/bedlam-shell/src/platform.rs (NEW) + the explicit
+    aspect-distorting Stretch arm as a fourth ScaleMode in
+    bedlam-platform (bedlam-shell/platform only, no engine change):
+    (a) the IDENTIFICATION recorded in the registry note — the DMI
+    sysfs identity read once at window startup
+    (/sys/devices/virtual/dmi/id board_vendor "Valve" AND
+    product_name "Jupiter" (LCD) / "Galileo" (OLED), trimmed +
+    case-insensitive, both required, FAIL-CLOSED to Generic
+    otherwise; the env is never consulted); read-only, never
+    fatal; headless never probes. (b) the DEFAULT — on the
+    SteamDeck class the default PresentConfig scale becomes the
+    fill-the-panel Stretch (whole frame onto the whole 1280x800
+    panel, no bars, no crop; Fill NOT chosen — its centered crop
+    hides the top and bottom of the game's own 480 rows), one
+    stderr note, CLI --scale always wins, filter default stays
+    Nearest; generic platforms keep Integer + Nearest bit-for-bit
+    (PresentConfig::default() untouched, the D215 pin stays
+    green). (c) parity bounds pinned by test — D200 layering, OUT
+    of ModeConfig, both pacing arms accept it identically, nothing
+    in the sim (identical sim config, executed ticks, tick count,
+    state/scene/frame-parity hashes under every class x CLI
+    combination); the headless smoke EXACTLY at the recorded
+    baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d /
+    audio 110400/158092) under --scale stretch. THE GATE:
+    p7-steamdeck-default = the hermetic bedlam-shell --lib battery
+    (145/0 + 1 pre-existing ignored; +7 platform + 2 window tests)
+    + check-p7-ports-map (the flip + join; 7 engineering, 4
+    landed, 3 pending; suite re-baselined 29/29). Verified
+    first-hand: the window host end to end under --scale stretch
+    (exit 0, no profile note on this generic desktop); controls
+    green (canonical_dump_gate 13/13, zone_mission_parity 5/5,
+    determinism 4/4, catalog checker OK before AND after,
+    gates-validator 22/22, fmt + clippy clean); MANIFEST clean
+    before and after every corpus read; the bounded --phase P7
+    verdict at 0daf3a7: status=passed, ALL 4 P7 GATES GREEN,
+    every command rc=0 under bwrap containment (report
+    .state/p7-steamdeck-gates-report.json, head-bound to
+    0daf3a7d8811); no engine change to bedlam-game/bedlam-core, no
+    new dependency, no Ghidra run, no new RE. Queue head is now
+    p7-flatpak-manifest (the Flatpak build manifest + its CI build
+    definition), with the Windows installer, universal2 and the
+    P7 phase close queued behind.
+
   - 2026-08-28 `p7-cdda-user-supply` COMPLETE (worker d9aaa029
     claim 1, commit 1dfd775, PUSHED, plus this bookkeeping
     commit): P7's SECOND ENGINEERING DELIVERABLE — the CDDA
