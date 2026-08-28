@@ -1,6 +1,53 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-b-disposition` COMPLETE (worker 2a33d196 claim
+    1, commits 2980e8b + 6ba8aae + the bookkeeping commit, all PUSHED):
+    ZONE B CLOSED — the FIRST 7-mission zone flips green (the ledger
+    8/37; D192) and the zone-parity harness GENERALIZED to any ledger
+    mission. (1) GENERALIZATION (2980e8b): the D178 ZONEA shape lifted
+    to a ZoneSpec-parameterized suite
+    (engine/bedlam-game/tests/zone_mission_parity.rs — letter, mission
+    range, committed flows, TOT dims); the scenario grammar gained the
+    v1.8 `mission = 1..=7` header key (requires `zone`; 6..7 pinned to
+    zones B..F, the SELECT write-arm domain; fail-loud
+    range/duplicate/pairing gates + parser tests + the dbx-plan
+    `_e_staging` seam note) and the canonical runner's staging arm
+    selects the seam per §7j.73: campaigns 1..=5 through the episode
+    slot at the completion mask whose first-uncompleted sub is exactly
+    the mission (mask (1<<(m-1))-1), the MP files 6..=7 through the
+    SELECT write pair ALONE (stage_select_mission — campaign staging
+    would clear it). (2) ZONEB EVIDENCE + FLIP (6ba8aae, the §5
+    cross-artifact rule): all seven missions' criterion-1 battery
+    (boot + 120-frame passive + 48-frame full-staging
+    destroy+pickup+platforms+critters; full declared budgets, dumps
+    verify, two-run byte identity) + the committed ZONEB flows
+    S5/S5B/S5C re-run; the anchor TS/T0 statics re-derived from each
+    TOT header (100x100, 160004 B) + the §7j.64 formula (linear =
+    clamp(n-1,1,26) — M1/M2 both floor at 1); the T1 spot table
+    (FULL_MASK arithmetic, start_score, the per-mission fetch chain
+    with the D184 zone-level CGR/BIN/LNK pin, the seam domains incl.
+    campaign-clears-select); the shipped SAVED.BDL slot-0 campaign =
+    ZONEB/MISSION1 import + bounded fuzz; the DM carve-out
+    LOAD-BEARING on M6/M7 (the MP-only files). P5-ZONE-GATES §8
+    documents the per-criterion table; the ledger flips
+    ZONEB-MISSION1..7 green (catalog_refs = []); the p5-zone-b gate
+    joins P5 required_gates; the ledger test pin re-baselined 1/37 to
+    8/37 (deliberate, same commit). Verified: bedlam-game 21 suites
+    green (canonical_dump_gate 13/13 — ZERO canonical chain movement;
+    differ_gate 4/4; determinism; census 37/37 unchanged;
+    zonea_mission1_parity 6/6; zone_mission_parity 5/5), bedlam-core +
+    diffharness green incl. the new parser tests, fmt + clippy clean,
+    check-p5-zone-ledger OK + hermetic suite 18/18, the HEAD-bound
+    gates validator battery at 6ba8aae: ALL 11 executed gates passed
+    (incl. p5-zone-b's both commands rc=0; the global report's
+    plan_complete=false is the pending P5-P7 semantics, not a gate
+    failure), inspect baseline ok (1069 files), MANIFEST clean before
+    AND after every corpus read, no Ghidra run. P5 continues per PLAN
+    §6: ZONEC next (a pure ZoneSpec instantiation), then D/E/F/G close
+    the ledger.
+
   - 2026-08-28 `p5-personnel-poi-s8` COMPLETE (worker 0ecf083b claim
+
     1, commits 5219569 + b80aa45 + the bookkeeping commit, all
     PUSHED): the LAST G2 critter-state unit — the S8 PERSONNEL/POI
     bank LANDED and **G2 is EMPTY: 37/37 missions load clean** (D191).

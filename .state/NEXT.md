@@ -10,327 +10,71 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-zone-b-disposition] [gate=p5-zone-b-disposition] P5
-   follow-up — G2 is EMPTY, the census is 37/37 load clean, and the
-   zone-parity work continues per PLAN §6 as per-zone DISPOSITION
-   evidence (the P5-ZONE-GATES §7 ZONEA pattern): ZONEB first. (a)
-   GENERALIZE the parity harness: lift the zonea_mission1_parity
-   shape to a per-zone/per-mission parameterized suite (the §7
-   criterion table executable for ANY ledger mission — scripted
-   S-scenario full-budget crash-free runs with two-run byte
-   identity on the zone's campaign missions M1-5 through the
-   episode-slot seam and M6-7 through the SELECT seam, the T1 spot
-   table + anchor TS statics re-derived from the zone's TOT
-   headers, the structural spot checks). (b) LAND the ZONEB
-   evidence: the criterion table for all seven missions documented
-   in P5-ZONE-GATES §8 (new), the ledger flips
-   ZONEB-MISSION1..MISSION7 to green WITH the cross-artifact rule
-   (the flip and its evidence in the same commit), and the
-   p5-zone-b gate wired into docs/required-gates.toml P5
-   required_gates (offline evidence commands only, the §4 rule-5
-   pattern). Bounds: bedlam-core + bedlam-game suites green; the
-   census stays 37/37; zero canonical chain movement; fmt +
-   clippy; gates-validator 22/22; MANIFEST clean; no Ghidra run;
-   Nudge-Worker trailer. If the harness generalization surfaces a
-   REAL engine gap on a ZONEB mission, stop at the structured
-   finding — the gap becomes its own unit, the ledger stays
-   unchanged, and the failure artifact records it.
+1. [READY] [id=p5-zone-c-disposition] [gate=p5-zone-c-disposition] P5
+   follow-up — ZONE B is CLOSED (8/37 green, D192) and the disposition
+   family continues through the GENERALIZED harness (2980e8b: grammar
+   v1.8 mission key + the ZoneSpec-parameterized suite): ZONEC next, a
+   pure instantiation unit. (a) LAND the ZONEC evidence: instantiate
+   the ZoneSpec const in engine/bedlam-game/tests/zone_mission_parity.rs
+   for zone C (letter C, missions 1-7, dims 100x100, committed flows
+   NONE — no committed .scen stages zone C, so the generated per-mission
+   battery IS the whole criterion-1 leg; M1-5 through the episode-slot
+   mask seam, M6-7 through the SELECT seam), document the §9 criterion
+   table in P5-ZONE-GATES (new section, the §8 pattern), flip
+   ZONEC-MISSION1..MISSION7 to green WITH the cross-artifact rule (the
+   flip and its evidence in the same commit), re-baseline the ledger
+   test pin 8/37 to 15/37 in the SAME commit (the D28 fingerprint
+   discipline, D192 precedent), and wire the p5-zone-c gate into
+   docs/required-gates.toml P5 required_gates (offline evidence
+   commands only). Bounds: bedlam-core + bedlam-game suites green; the
+   census stays 37/37; zero canonical chain movement; fmt + clippy;
+   the gates validator all-green (24 gates); MANIFEST clean; no Ghidra
+   run; Nudge-Worker trailer. If the battery surfaces a REAL engine gap
+   on a ZONEC mission, stop at the structured finding — the gap becomes
+   its own unit, the ledger stays unchanged, and the failure artifact
+   records it.
 ## Done
-1. DONE (2026-08-28, worker 0ecf083b claim 1, commits 5219569 +
-   b80aa45 + this bookkeeping commit, all PUSHED): P5
-   `p5-personnel-poi-s8` — the
-   S8 PERSONNEL/POI bank LANDED and G2 CLOSED (D191; 37/37 load
-   clean — the ALL-CLEAN census). (a) RE FIRST (5219569, §7j.77,
-   objdump-only from the committed exw-critterpoi-loader.txt +
-   exw-text-objdump.txt — no Ghidra run): the .NME S8 loader walk
-   made exact AND the §7j.18/1 seed list CORRECTED — the
-   2026-08-21 reading TRANSPOSED the +4/+6 stores (the asm
-   0x417076/0x41707e seeds STATE 1 = IDLE, the dead angle seed 5
-   at +6, and +2's 0x32 is the HP word — personnel do NOT spawn
-   in state 5 ESCAPE); the controller FUN_00412a98 whole (the
-   z re-settle + nearest-exit scan prologue with the per-frame
-   [esp] distance cell, the head 1/16 flee lane exit < 0x180
-   ∧ PHASE 2, the idle/settle/walk-out machine with the 0xC0
-   split + the nearest-robot settle aim, the flee walk with the
-   exit re-aim + the 10000 never-expire sentinel + the
-   abort-to-idle, the 0x10 arrival → 10-tick ESCAPE → the award
-   active 0 + 0x4eba0c++ + 0x4eba10 = 0x32 + the exit dwell reset
-   + FUN_00448b80(5000), the 6→7 panic tail), the walker
-   FUN_00415b6c whole (the ≤4 floor gate — NOT the critter
-   walk_gate's 3 — + the quadrant ladder), the damage lane
-   FUN_0040dc1b (hp −= dmg; death → state 6 + ONE RandB sound
-   draw + the FUN_00420608 effect, the E-gaps named), and the
-   corpus census: ELEVEN hosting files (the queue prose's 13 was
-   a slip), 125 records → 500 POIs, ZONEA/M1 hosts none. (b)
-   ENGINE + CENSUS (b80aa45): crate::poi — the PoiRecord bank +
-   the section-8 staging with the exact three-draw schedule (x/y
-   in-tile scatter RandA&0x1F + heading RandA&7, the w1-level
-   floor probe, hp the literal 0x32 with NO m-scalar — the ONE
-   .NME bank without the formula) + the controller subset under
-   the critter-family arm (MissionShell 0x447fe6 adjacency) + the
-   host-staged 5-slot exit seam (the §7j.19 controller-read
-   subset) + the damage-lane seam + the +5000 score-pending fold;
-   15 unit tests (bedlam-core 201 green); stage_critters accepts
-   section 8; the CENSUS RE-PIN (deliberate, D28): the
-   PersonnelxNN component dropped from all 11 rows (ZONEE M1-5,
-   ZONEF M1-5, ZONEG M1) and EVERY ONE FLIPPED CLEAN — CloseCombat
-   had already landed so Personnel was each row's last unmodeled
-   section; provenance
-   docs/evidence/p5-g2-personnel-census-table.txt. ZERO canonical
-   chain movement (canonical_dump_gate + differ_gate +
-   determinism green; ZONEA/M1's S8 count is 0 — verified by the
-   byte-exact 8-section walk). Verified: bedlam-game 20 suites
-   green, fmt + clippy clean on the touched crates,
-   gates-validator 22/22, inspect baseline ok (1069 files),
-   MANIFEST clean before AND after every corpus read, no Ghidra
-   run. P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined; D191.
-   Queued: the ZONEB disposition unit as the new head (the
-   per-zone parity evidence family, PLAN §6 / P5-ZONE-GATES §7
-   pattern).
-1. DONE (2026-08-28, worker 7c028ff1 claim 1, commits 533eaac +
-   0ab42a3 + 1e18478, pushed by watchdog repair 2797116): P5
-   `p5-critter-state-g2-closecombat` — the G2 CLOSE-COMBAT state
-   LANDED (the census CloseCombat class CLOSED with ONE deliberate
-   row flip, D189). (a) RE FIRST (533eaac, §7j.76, objdump-only
-   from the committed exw-critterpoi-loader.txt +
-   exw-text-objdump.txt — no Ghidra run): the .NME S7 loader walk
-   made exact (the d-cascade spawn count, ONE section-level roll
-   before the record loop, x/y tile·0x2000+0xF00 Q13, z FIXED 0xDF
-   Q5 with no floor probe, heading via FUN_0041ec1c(0xFF) the only
-   per-critter draw, MODE 3 active from frame 0, species 1, hp
-   2500+(2500·m)/27) + the k7 body 0x412f52..0x41367c whole (the
-   5-frame dying despawn, the mode-6 ballistic knock triple with
-   the fall-rate ramp and the floor landing staging 8 debris + 5
-   claim-gated splash tiles + 24 effect rows, the mode-5 knock
-   drift, the FLAT sticky-dist 0x320 engage gate correcting the
-   k5/6-leash gloss, the ±1 steer, the cos/sin>>6 move, the
-   two-conjunct point-blank 0x50 fire gate at the idx-staggered
-   0x1F/0xF/0x7 cadence, projectile 0x69 with z literal 6 and TTL
-   0x18, the 6-frame recharge; draw-free approach). (b) ENGINE
-   (0ab42a3): stage_critters section 7 + the k7 body in
-   bedlam-core::critter with 11 unit tests (50 critter tests
-   green); the weapon-to-critter hit lane kind-7 specialization;
-   the per-record d-cascade staging rider keeping the canonical
-   chain byte-identical (the asm's section-level roll recorded,
-   the re-baseline queued as its own unit). (c) CENSUS RE-PIN
-   (1e18478, D28/D189): the CloseCombatxNN component dropped from
-   all 8 hosting rows AND ZONEC-MISSION3 flipped clean — the one
-   CloseCombat-ONLY host (CloseCombatx4, no Personnel), documented
-   + deliberate (the D185/D187 precedent); 25/37 load clean; the
-   G2 residue = the S8 personnel/POI bank ALONE; ledger 1/37
-   green; provenance docs/evidence/p5-g2-closecombat-census-
-   table.txt; P5-ZONE-GATES §6.2/§6.3/§6.4 re-baselined; D189.
-   END-OF-RUN NOTE: the worker died at a provider transport
-   timeout (client_rc=124, progress=1) immediately after the
-   re-pin commit and BEFORE its validator battery, queue rewrite,
-   and push; the retry worker e264f8b5 died the same way while
-   re-reading state. Watchdog repair 2797116 adopted the three
-   commits verbatim, verified the focused battery green at
-   1e18478 (bedlam-game: mission_load_census
-   census_matches_pinned_table ok, canonical_dump_gate +
-   differ_gate + determinism + mission_scene_gate 3/3 +
-   zonea_mission1_parity 6/6; bedlam-core: hash_fixture +
-   mission_corpus_gate 4/4 — full battery exit 0), MANIFEST
-   clean, completed this queue rewrite, and pushed (D190).
-   Queued: the S8 personnel/POI unit as the new head (after it,
-   G2 is empty and the zone-parity gate work continues per
-   PLAN §6).
-1. DONE (2026-08-28, worker bc51a491 claim 1, commits c0c8279 +
-   542ec3f + ac7445a, all PUSHED): P5 `p5-critter-state-g2-chasers-r2`
-   — the G2 CHASERS state LANDED (the census Chasers class CLOSED
-   with TWELVE deliberate row flips, D187). (a) RE FIRST (c0c8279,
-   §7j.75, objdump-only from the committed exw-critterpoi-loader.txt +
-   exw-text-objdump.txt + raw DGROUP table reads (0x454b48 walk
-   table, 0x454edc delays) — no Ghidra run): the S5 loader walk made
-   exact — ONE each at every difficulty, ZERO draws (the first
-   critter section with no per-load AND no per-frame stream draws),
-   x/y = tile·0x2000+0xF00 Q13, z = the floor probe at level w2,
-   the 8 corner-z words, home x/y/z staged (the ONE home-stamping
-   section), the w1<<6 heading at BOTH +0x10 and the +0x14
-   wake-heading cell (CORRECTS the §7j.18 "+0x12" gloss), species
-   8, MODE 0, hp 1500+(1500·m)/27; the k3 body 0x4145c1..0x414c96 —
-   NO substep loop, the species TRIPLE ROLE (the 8-frame spawn
-   grace gating ladder rule R2, the 0x20 return-home walk budget
-   stamped by R1/R4 — NOT countdown, the wake clear), the
-   target-liveness flip BEFORE the mode dispatch, the dormant
-   TELEPORT-HOME at exactly delay−0x14 (heading := the +0x14 cell),
-   the wake hp FLAT 1500, the 4-rule distance ladder exact, the
-   8-sector snap aims, the walk table [0,0,1,1,0,0,0,1,1,1] =
-   6 steps/10 frames, the EVERY-FRAME 0x67 fire with the
-   live-robot 3-D octile velocity (the ">4 shots" gloss = the
-   5-frame aim wrap), the pathfinder FUN_0041571c whole — the
-   open sine-step + the WALL-FOLLOW ladder on the record word
-   w@+0x5E with every blocked exit copying sector → heading; the
-   gate FUN_0041e9a2 reads its z from the FIRST CORNER word
-   (+0x60) and settles z on pass. (b) ENGINE (542ec3f):
-   stage_critters accepts section 5 + the k3 body in
-   bedlam-core::critter with 11 unit tests; the shared walk_gate
-   refactor (critter_step_heading behavior-identical); the new
-   home_z/spawn_heading/seek_sector record fields NOT serialized —
-   ZERO chain movement (canonical_dump_gate 13/13 + differ_gate
-   4/4 + determinism green). (c) CENSUS RE-PIN (deliberate, D28):
-   the ChasersxNN component dropped from all 17 hosting rows AND
-   the twelve Chasers-ONLY hosts FLIPPED CLEAN — ZONEB M1-5,
-   ZONEC M1/M2/M4/M5, ZONED M1-4 (24/37 load clean, was 12; the
-   queue's no-flip carve-out exercised at scale, documented +
-   deliberate; provenance docs/evidence/p5-g2-chasers-census-
-   table.txt); G2 residue = CloseCombat + the S8 personnel bank
-   (13 missions); the ledger stays 1/37 green; P5-ZONE-GATES
-   §6.1/§6.2/§6.3/§6.4 re-baselined; D187. Verified: bedlam-core
-   release suites green (114 lib incl. 11 new), bedlam-game
-   release green (census re-pinned; canonical_dump_gate 13/13 +
-   differ_gate 4/4 + determinism green), fmt + clippy clean on
-   the touched files (the destroy.rs/static-claim-test warnings
-   pre-exist), gates-validator 22/22, inspect baseline ok (1069
-   files), MANIFEST clean before AND after every corpus read, no
-   Ghidra run. Queued: the CloseCombat unit as the new head + the
-   S8 personnel/POI unit second (after it, G2 is empty and the
-   zone-parity gate work continues per PLAN §6).
-1. DONE (2026-08-28, worker 5ee1c0ce claim 1, commits 199373a +
-   cb3a3f5, both PUSHED): P5 `p5-critter-state-g2-shooters` — the
-   G2 SHOOTERS state LANDED (the census Shooters class CLOSED with
-   ONE deliberate row flip, D185). (a) RE FIRST (199373a, §7j.74,
-   objdump-only from the committed exw-critterpoi-loader.txt +
-   exw-text-objdump.txt — no Ghidra run, no corpus read): the .NME
-   S1 loader walk made exact — spawn count w1+d CLAMPED >=1, two
-   scatter(5) draws per attempt, the MAP-BOUNDS DROP GATE (a NEW
-   pin: out-of-map attempts leave no critter but consume both
-   draws), the stamps (species 1, z FIXED 0xC000 Q13, heading 0,
-   anim RandA&7, variant pick(4)+3 NEGATED by the w2 flag, hp
-   0xAF+(m·0xAF)/27 at the 0x4165db imul site, the dead +0x72
-   timer stamp (RandA&0x1F)−0xF), draw budget 2/dropped attempt +
-   5/landed critter; the k2 controller body 0x415216..0x415466 —
-   species substeps, the heading precession by the SIGNED variant,
-   the (cos/sin·0x14)>>8 sine walk (no bounds gate/wall probe/z
-   change), the 1/128 SQUAWK pulse gate (FUN_0043a48e draw-free,
-   the 0x4152bd reader identified) + the 1/4 fire gate (RandA&3==0
-   — CORRECTS §7j.17's "every 4th substep"), the fire arm (the
-   bounded robot-slot pick over 0x46ccbc + the +0x7C alive gate,
-   FUN_0041286f pinned as the FIRST-FREE 0x4cc654 allocator, the
-   ±0x1F00 jitter aim, the 2-D octile range gate 300−(2−d)·0x40
-   with dz DEAD for the gate, the 0x65 stamp with the RAW
-   direction>>5 velocity — NOT normalized); the kind-2 z cell is
-   Q13 (the documented exception to the record's Q5-z rule). (b)
-   ENGINE (cb3a3f5): stage_critters accepts section 1 + the k2
-   body in bedlam-core::critter with 10 unit tests; the variant
-   record field NOT serialized (no blob change) and no canonical
-   scenario stages S1 — ZERO chain movement. (c) CENSUS RE-PIN
-   (deliberate, D28): the ShootersxNN component dropped from all
-   17 hosting rows AND ZONED-MISSION5 FLIPPED CLEAN — the one host
-   whose only unmodeled section was Shootersx4 (the queue's "no
-   row flips clean" expectation falsified by that row, documented
-   + deliberate; provenance docs/evidence/p5-g2-shooters-census-
-   table.txt); G2 residue = Chasers + CloseCombat + the S8
-   personnel bank (25 missions); 12/37 load clean, the ledger
-   stays 1/37 green; P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4
-   re-baselined; D185. Verified: bedlam-core + bedlam-game release
-   suites green (canonical_dump_gate 13/13 + differ_gate 4/4 +
-   determinism green); fmt + clippy clean on the touched crates;
-   gates-validator 22/22; inspect baseline ok (1069 files);
-   MANIFEST clean before AND after every corpus read; no Ghidra
-   run. Queued: items 1-2 above (the Chasers unit is the new head;
-   the CloseCombat unit second — after it, the S8 personnel bank
-   is the last G2 class).
-1. DONE (2026-08-28, worker cef2f815 claim 1, commits 51933bd +
-   d4f7609, both PUSHED): P5 `p5-zone-bin-variant-g3` — the G3
-   zone-BIN variant RE unit CLOSED with a NO-SWAP verdict (D184):
-   the EXW runtime ALWAYS loads the zone-level MISSION{L}.BIN —
-   the three shipped mission-number variant banks
-   (ZONEB/MISSION6.BIN, ZONED/MISSION5.BIN, ZONEE/MISSION6.BIN)
-   are runtime-dead editor residue. (a) RE FIRST (51933bd, §7c.9,
-   objdump-only from the committed exw/exd-text-objdump.txt — no
-   Ghidra run): build_mission_paths@0x44670c..0x446907 walked
-   whole — path2@0x4dca8c (the .CGR/.BIN/.MIN/.LNG/.LNK base) =
-   EDITOR\ + ZONE + chr(0x40+[0x4edd8c]) + \MISSION +
-   chr(0x40+[0x4edd8c]): the zone letter appended TWICE, NO itoa,
-   NO conditional (the function's only branch stays the G1/D183 +5
-   on path1's mission number when [0x4edb88]==2); the .BIN
-   consumers are exactly TWO, both on path2, both builder-fresh
-   (load_mission@0x41dcbc tag 0x4587e8 + the brief-reload twin
-   FUN_0044661b@0x446644 tag 0x45979a, tags byte-read from the
-   PE); the joined name lives in the concat-private 0x40-B buffer
-   0x4dca4c (one 3×0x40 family, only concat@0x41dbed touches it);
-   a complete 29-site path-buffer census (path1 = .TOT/.DAT/.PAD +
-   .MRK/.NME/.TRT/.POS/.BDG + the GAMEGFX\BRF_{L}{level} movie
-   scratch + the save-path reuse; path2 = the five family tags
-   only) + a whole-image ASCII string census (NO hardcoded
-   ZONE?\MISSIONn.* literal anywhere; the 8street boot check
-   EDITOR/ZONEA/MISSIONA.BIN is reconstruction-side, not an EXW
-   literal); the EXD twin agrees (load block 0x2e5c3, builder
-   0x58606, .BIN on path2 0x92f34, tag table byte-verified at
-   linear 0x862a9 = file 0x9eaa9 delta -0x18800, builder tail
-   letter-only into the epilogue jmp 0x51d12). Data corroboration
-   (read-only, MANIFEST clean before AND after): only zone-level
-   .MIN ship, each 16× the ZONE-level BIN count (B 1872 / D 1450 /
-   E 1455 — never the variant counts 1443/1443/1120; a swap would
-   desync the minimap walk); ZONEB/MISSION6.BIN ≡
-   ZONED/MISSION5.BIN byte-identical (sha256 5735b08a3e08853e...,
-   2,189,466 B, count 1443 — a shared dev/deathmatch bank);
-   ZONEE/MISSION6.BIN (1,508,806 B, count 1120) likewise distinct
-   from MISSIONE.BIN (1,968,763 B, count 1455). (b) VERDICT =
-   NOT a swap: engine UNTOUCHED (mission_asset_names'
-   {ZONE{L}/MISSION{L}.BIN} rule VERIFIED correct as-is); census
-   NOT re-pinned (the loads were already zone-level and green; the
-   G3 mention was a docs-side open flag). (c) PROPAGATION
-   (d4f7609): RESEARCH-8STREET OPEN QUESTIONS #3 ANSWERED + the
-   §1.0/§1.1/§7 8street glosses corrected (the "loaded only when
-   the mission has its own" gloss was wrong — superseded by the
-   EXW anchor per the 8street policy); FORMATS-MISSION §0.2 (the
-   zone-level-only rule) + §23 (the MIN count corroboration);
-   P5-ZONE-GATES §6.2/G3 CLOSED (no engine change) + §6.3 row
-   notes + §6.4 rollup + the confidence tags; DECISIONS D184.
-   Verified: gates-validator 22/22; no Rust change (fmt/clippy
-   N/A); MANIFEST clean before AND after every corpus read; no
-   Ghidra run; no ledger or canonical-chain movement (docs-only
-   unit). Queued: the G2 Shooters unit as the new head + the G2
-   Chasers unit second (both consumed above).
-1. DONE (2026-08-28, worker 05e14378 claim 1, commits a5c3a71 +
-   3d64ca5, both PUSHED): P5 `p5-select-shell-g1` — the G1 SELECT
-   mission-choice shell LANDED: missions 6-7 of zones B-F (the ten
-   MP-only missions) stage through the engine, the census G1 class
-   CLOSED. (a) RE FIRST (a5c3a71, §7j.73, objdump-only from the
-   committed exw-text-objdump.txt — no Ghidra run): the runtime
-   mission-number source = the SELECT screen's write pair
-   {zone 0x4edd8c, mission 0x4edd88} read from its strategic-map
-   PIXEL→ID grid — the SP arm (0x43ee48..0x43ee9d) writes missions
-   1..5 per zone ONLY (26 hot spots = ZONEA{1} + 5×{B..F} =
-   MAX_LINEAR; zone G is the campaign-advance endgame, no hot
-   spot), the MP arm (0x43edc2..0x43ee43) writes BOTH cells from
-   10 list rows → {zone 2..6, mission 1..2}, and
-   build_mission_paths @0x4467df ADDS 5 to the mission cell in
-   mode 2 — **missions 6-7 are the MP-ONLY files, NOT campaign
-   sub-missions: no stage mask can ever express them (the G1
-   answer)**. The save-restore replay tests FIVE mask bits
-   (0x43c2bf..0x43c36c, subs 1..5) — the EXW save domain is
-   0b11111 (the B2 FULL_MASK=15 table is B2's own 4-sub campaign);
-   the 27-record completion bank (0x4decae, 0x144/0xC — one
-   record per linear mission) is the SELECT screen's own state
-   (FUN_004474ef/44751c). (b) ENGINE (3d64ca5): the SIBLING seam
-   GameHost::stage_select_mission (the MP write pair domain
-   zone 2..=6, mission 1..=2 — never guess) + mission_slot applies
-   the +5 (SELECT_MP_FILE_OFFSET); the pair is staging-ONLY state
-   (NOT in scene_hash — the D31 pattern, pinned by test) and
-   campaign staging CLEARS it; Episode::stage_slot's accepted
-   domain widened to SELECT_FULL_MASK [0,1,31×7] while
-   Episode::complete still walks FULL_MASK (canonical S5 semantics
-   INTACT); mission_number_for_mask saturates at 5 (the SP SELECT
-   domain — the campaign path can never name an MP file,
-   property-tested); save.rs widened (the D178 rider): bit-4 masks
-   import + stage, bits past 0x10 stay rejected loud. (c) CENSUS
-   RE-PIN (deliberate, D28): the ten B-F missions-6/7 rows moved
-   from the direct fallback to the SELECT seam — all select:clean
-   (provenance docs/evidence/p5-g1-select-census-table.txt);
-   P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined (G1 LANDED, the
-   headline gains the ten clean rows); D183. Verified: bedlam-game
-   release 249/0 (+4 net new tests; canonical_dump_gate 13/13 +
-   differ_gate 4/4 + determinism green — NO canonical chain moved),
-   bedlam-core 154/0, diffharness 103/0, fmt + clippy clean on the
-   touched crate, gates-validator 22/22, inspect baseline ok (1069
-   files), MANIFEST clean before AND after every corpus run, no
-   Ghidra run. Queued: the G3 BIN-variant RE head + the G2
-   Shooters unit (both consumed above). Watchdog repair 1007791
-   (2026-08-28): this worker was grace-killed at the 240s boundary
-   while re-verifying a51d4f2 — the gates-validator battery runs
-   after the bookkeeping commit by contract — so the repair landed
-   the push, archived the false preflight-mismatch failure, and
-   widened the boundary grace 240 to 900 in this repair commit.
+1. DONE (2026-08-28, worker 2a33d196 claim 1, commits 2980e8b +
+   6ba8aae + this bookkeeping commit, all PUSHED): P5
+   `p5-zone-b-disposition` — ZONE B CLOSED: the FIRST 7-mission zone
+   flips green (the ledger 8/37; D192). (a) GENERALIZE (2980e8b): the
+   D178 ZONEA parity shape lifted to a per-zone/per-mission
+   PARAMETERIZED suite — engine/bedlam-game/tests/zone_mission_parity.rs
+   (ZoneSpec: letter, mission range, committed flows, TOT dims) — so
+   the P5-ZONE-GATES §1 criterion table is executable for ANY ledger
+   mission; the scenario grammar gained the v1.8 `mission = 1..=7`
+   header key (requires `zone`; 6..7 pinned to zones B..F — the SELECT
+   write-arm domain; fail-loud range/duplicate/pairing gates + parser
+   tests + the dbx-plan `_e_staging` seam note), and the canonical
+   runner's staging arm selects the seam per the §7j.73 finding:
+   campaigns 1..=5 through the episode slot at the completion mask
+   whose first-uncompleted sub is exactly the mission (mask
+   (1<<(m-1))-1), the MP files 6..=7 through the SELECT write pair
+   ALONE (stage_select_mission — campaign staging would clear it).
+   (b) LAND THE ZONEB EVIDENCE (6ba8aae, the cross-artifact rule): all
+   seven missions' battery — boot + 120-frame passive + 48-frame
+   full-staging (destroy+pickup+platforms+critters) — full declared
+   budgets, dumps verify, two-run byte identity; the committed ZONEB
+   flows S5/S5B/S5C re-run; the anchor TS/T0 statics re-derived from
+   each TOT header (100x100, 160004 B) + the §7j.64 formula (linear =
+   clamp(n-1,1,26) — M1/M2 both floor at 1); the T1 spot table
+   (FULL_MASK arithmetic, start_score, the per-mission 25-name fetch
+   chain with the D184 zone-level CGR/BIN/LNK pin, the seam domains
+   incl. campaign-clears-select); the shipped SAVED.BDL slot-0 campaign
+   = ZONEB/MISSION1 import + bounded fuzz; the DM carve-out
+   LOAD-BEARING on M6/M7 (the MP-only files: maps load through the
+   SELECT seam + local SP semantics re-derived). P5-ZONE-GATES §8
+   documents the per-criterion table; the ledger flips
+   ZONEB-MISSION1..7 green (catalog_refs = []); the p5-zone-b gate
+   joins P5 required_gates; the ledger test pin re-baselined 1/37 to
+   8/37 + the ZONEB 7/7 line (deliberate, same commit); D192. Verified:
+   bedlam-game 21 suites green (canonical_dump_gate 13/13 — ZERO
+   canonical chain movement; differ_gate 4/4; determinism; census 37/37
+   unchanged; zonea_mission1_parity 6/6; zone_mission_parity 5/5),
+   bedlam-core + diffharness green incl. the new parser tests, fmt +
+   clippy clean on the touched crates, check-p5-zone-ledger OK +
+   hermetic suite 18/18, the HEAD-bound gates validator battery green
+   at 6ba8aae, inspect baseline ok (1069 files), MANIFEST clean before
+   AND after every corpus read, no Ghidra run. Queued: the ZONEC
+   disposition unit as the new head (the pure ZoneSpec instantiation;
+   after it ZONED, ZONEE, ZONEF, ZONEG close the ledger).
