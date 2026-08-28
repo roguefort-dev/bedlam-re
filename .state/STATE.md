@@ -1,5 +1,45 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-modernization-scaffold` COMPLETE (worker 6e45232f
+    claim 1, commit e0bc7fb, PUSHED): THE P6 CONTRACT SCAFFOLD
+    LANDED (D200, the D175 pattern — the machine-checkable contract
+    BEFORE any behavior change it grades; no engine change, no
+    harness change, no Ghidra run). (1) THE DECISION SURFACE:
+    docs/P6-MODERNIZATION.md pins the ModeConfig seam + the
+    bug-triage rubric VERBATIM from PLAN §6 (crash/data-loss fixed
+    everywhere; gameplay-coupled classic-preserves/modern-fixes;
+    cosmetic fixed in modern; fixed = rubric applied mechanically +
+    regression evidence, not vibes), the catalog format spec, and
+    the seeding policy; D200 makes the seam binding — ONE immutable
+    ModeConfig injected at sim construction, classic = a small
+    purist toggle set (timing lock, control scheme, preserved
+    catalog entries) only, test surface = the purist toggles never
+    the feature cross-product, presentation options are NOT mode
+    toggles (display rate never enters the sim). (2) THE CATALOG:
+    docs/P6-BEHAVIOR-CATALOG.toml (schema p6-behavior-catalog-v1)
+    seeds EMPTY — the honest post-P5 state (37/37 green, all
+    catalog_refs empty); entries land only on recorded evidence
+    with a repro (observed = original | divergence). (3) THE GATE:
+    tools/check-p6-behavior-catalog.py + the 30-case hermetic suite
+    wired as the FIRST P6 required gate (rubric-as-code, evidence +
+    toggle discipline, the BIDIRECTIONAL ledger catalog_refs join,
+    manifest scaffold-first + P6-green rules; reads ONLY committed
+    docs, no corpus read). Verified first-hand: checker OK (0
+    entries, 37 ledger ids, 0 refs resolve); suite 30/30;
+    gates-validator 22/22; check-p5-zone-ledger OK 37/37; controls
+    green BEFORE (HEAD 0c81387) AND AFTER (e0bc7fb):
+    zone_mission_parity 5/5 + canonical_dump_gate 13/13; the
+    bounded --phase P6 verdict at e0bc7fb = status passed, both
+    gate commands rc=0 under bwrap containment; MANIFEST clean
+    before and after every corpus read; zero canonical-chain
+    movement. Queued: the p6-modeconfig-seam engine unit as the new
+    head.
+
+- Phase: P6 UNDERWAY (the contract scaffold green at e0bc7fb, D200;
+  the p6-modeconfig-seam engine unit queued as the head). P0-P5
+  GREEN (P5 flipped f608207, .state/P5-COMPLETE; ledger 37/37,
+  D199). P7 pending; plan_complete false.
+
   - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6
     claim 1, commit f608207, PUSHED): P5 CLOSED IN THE MANIFEST —
     docs/required-gates.toml P5 status pending->green (P0-P5
@@ -23,11 +63,6 @@
     first unit queued = p6-modernization-scaffold, the
     ModeConfig + triage-rubric catalog opener (the D175
     scaffold pattern).
-
-- Phase: P5 GREEN (manifest flip f608207 with the bound verdict re-emitted
-  there — all 8 P5 gates green, .state/P5-COMPLETE; the mission ledger
-  37/37, D199). P6 UNDERWAY (p6-modernization-scaffold queued). P7
-  pending; plan_complete false.
 
   - 2026-08-28 `p5-zone-g-disposition` COMPLETE (worker ebf6cfca
     claim 1, commits 0829187 + 65505ea + the bookkeeping commit,
