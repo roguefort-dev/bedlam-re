@@ -27,7 +27,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 
 [[phase]]
 id = "P5"
-status = "pending"
+status = "green"
 required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c", "p5-zone-d", "p5-zone-e", "p5-zone-f", "p5-zone-g"]
 
 [[phase]]
