@@ -6,8 +6,8 @@
 //! runs every closed zone's evidence on every run (a zone's
 //! disposition unit APPENDS its spec — the closed set never loses
 //! its executable evidence, and every `p5-zone-{b..f}` gate runs
-//! this same suite): zone B (§8, D192), zone C (§9, D193) and
-//! zone D (§10, D195).
+//! this same suite): zone B (§8, D192), zone C (§9, D193),
+//! zone D (§10, D195) and zone E (§11, D196).
 //! Missions 1–5 stage through the CAMPAIGN episode-slot seam (the
 //! completion mask whose first-uncompleted sub is the mission),
 //! missions 6–7 — the MP-only files — through the SELECT
@@ -16,7 +16,7 @@
 //!
 //! | §1 | Criterion | This file's leg |
 //! |----|-----------|-----------------|
-//! | 1 | scripted flows complete crash-free | `zone_scripted_flows_complete_crash_free` — every closed zone's committed flows (zone B: S5/S5B/S5C at MISSION1; zones C and D: NONE — no committed .scen stages them, the generated battery IS the whole leg) PLUS a generated per-mission battery (boot→mission, passive steady-state, full-staging destroy+pickup+platforms+critters) for EVERY mission of EVERY closed zone: full declared frame budget, dump verifies, two-run byte identity |
+//! | 1 | scripted flows complete crash-free | `zone_scripted_flows_complete_crash_free` — every closed zone's committed flows (zone B: S5/S5B/S5C at MISSION1; zones C, D and E: NONE — no committed .scen stages them, the generated battery IS the whole leg) PLUS a generated per-mission battery (boot→mission, passive steady-state, full-staging destroy+pickup+platforms+critters) for EVERY mission of EVERY closed zone: full declared frame budget, dump verifies, two-run byte identity |
 //! | 2 | T1 rules vs RE | `zone_t1_rules_spot` (the shared selection/economy arithmetic + the per-zone/per-mission fetch chain, the zone-level CGR/BIN/LNK pin of D184) + `zone_anchor_ts_statics_rederived_from_tot` (the anchor TS/T0 statics re-derived INDEPENDENTLY from the TOT header bytes + the §7j.64 formula, never the engine's own output) |
 //! | 3 | perceptual frame checks (T2, diagnostic band) | the machine band is the two-run anchor/frame byte identity of criterion 1 (identical transcripts at the key moments); thresholds + owner feel sign-off stay the operator diagnostic process, never a pixel-exact gate |
 //! | 4 | differ structural spot-check | the structural contract inside criterion 1's decode (anchor frame 0, monotone frame_no, record count = declared budget + 1, the scenario id riding the header); the cross-channel differ itself is the differ_gate gate command (ZONEA dumps); not tick-complete by design (§0b) |
@@ -69,9 +69,12 @@ struct ZoneSpec {
 /// flows, the generated per-mission battery is the whole
 /// criterion-1 leg; §10 = D, D195 — the SECOND pure instantiation,
 /// carrying the G3 variant bank ZONED/MISSION5.BIN as runtime-dead
-/// editor residue, the D184 no-swap pin). A later zone's unit
-/// APPENDS its spec; the tests below iterate the list and read
-/// nothing else zone-specific.
+/// editor residue, the D184 no-swap pin; §11 = E, D196 — the THIRD
+/// pure instantiation, carrying its OWN distinct G3 variant bank
+/// ZONEE/MISSION6.BIN — again runtime-dead editor residue under
+/// the same D184 no-swap pin). A later zone's unit APPENDS its
+/// spec; the tests below iterate the list and read nothing else
+/// zone-specific.
 const ZONES: &[ZoneSpec] = &[
     ZoneSpec {
         letter: 'B',
@@ -87,6 +90,12 @@ const ZONES: &[ZoneSpec] = &[
     },
     ZoneSpec {
         letter: 'D',
+        missions: 1..=7,
+        committed: &[],
+        dims: (100, 100),
+    },
+    ZoneSpec {
+        letter: 'E',
         missions: 1..=7,
         committed: &[],
         dims: (100, 100),
@@ -280,8 +289,8 @@ fn zone_scripted_flows_complete_crash_free() {
         return;
     }
     for zone in ZONES {
-        // The zone's committed flows (staged at mission 1; zones C
-        // and D carry NONE — the battery below is their whole leg).
+        // The zone's committed flows (staged at mission 1; zones C,
+        // D and E carry NONE — the battery below is their whole leg).
         for id in zone.committed {
             let src = fs::read_to_string(scen_path(id)).unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_flow_completes(id, &src, declared_frames(id));
