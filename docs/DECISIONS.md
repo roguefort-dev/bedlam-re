@@ -7479,3 +7479,42 @@ untouched.
    P6 GATES GREEN (report .state/p6-presentloop-gates-report.json,
    head-bound); no Ghidra run.
    (worker 2a90eb65 claim 1, unit p6-present-loop-wiring)
+
+## D206 — 2026-08-28: autonomy/watchdog — the FIRST post-completion client-error adjudication: a structured `client-error` failure whose task is FULLY landed (substantive commit PUSHED + parser-green completion rewrite on disk) is ADJUDICATED replaced-task, never re-run
+
+Worker 2a90eb65 finished `p6-present-loop-wiring` completely —
+9a96a60 PUSHED with its own Nudge-Worker trailer, the queue
+rewritten parser-clean (rc=0, new head
+`p6-high-refresh-interpolation`), the STATE.md bookkeeping landed
+in 26e936a, the final summary printed — and THEN the model client
+exited rc=1 (the known API transport death class). The wrapper
+correctly recorded a structured failure (kind `client-error`,
+gate `p6-present-loop-wiring`, repair required) and paused the
+loop; nothing about the TASK was incomplete.
+
+THE BINDING REPAIR CHECKLIST (all four verified first-hand before
+acknowledging, and any miss means an actual repair instead):
+
+1. The failed gate's substantive commit exists and is PUSHED with
+   the failing worker's own trailer (9a96a60).
+2. The queue on disk IS the worker's completion rewrite: its
+   sha256 equals the failure record's `queue_after`
+   (115e8739...) and the strict parser accepts it (rc=0) with
+   required work still active.
+3. The failure artifact still matches the trigger snapshot
+   identity (name/device/inode/sha256/ordinal/id/gate —
+   archive-failures hard-links exactly that inode, so a replaced
+   file can never be acknowledged).
+4. The resolution is `replaced-task`: the failed (ordinal, id,
+   gate) triple is absent from the active queue — the successor
+   task has replaced it — so the remediation commit is the repair
+   commit that re-affirms the queue postcondition, and
+   `.state/llm-watchdog-failure-ack.json` (schema
+   nudge-failure-ack-v1) binds to exactly that commit.
+
+NEVER: re-run the task, revert, or rewrite the dead worker's
+queue — that manufactures duplicate work and destroys a green
+completion. A client death AFTER the completion rewrite is
+transport debris, not lost work; the D198 kill-window lesson is
+the mirror case (worker died BEFORE its bookkeeping, so the
+repair completes the bookkeeping instead).

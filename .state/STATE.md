@@ -38,7 +38,13 @@
     5 P6 GATES GREEN every command rc=0 (report
     .state/p6-presentloop-gates-report.json); no Ghidra run.
     Queued: the high-refresh camera/scroll interpolation as the
-    new head.
+    new head. NOTE (watchdog repair 1787913801, D206): the
+    worker's model client exited rc=1 AFTER this entry's
+    completion rewrite — a post-completion transport death, no
+    work lost (9a96a60 + the bookkeeping both PUSHED, parser
+    rc=0 on the rewritten queue); the structured client-error
+    failure was adjudicated replaced-task and the loop resumes
+    on the queued head.
 
   - 2026-08-28 `p6-control-scheme-surface` COMPLETE (worker e56b4ef6
     claim 1, commit b4babe3, PUSHED): THE CONTROL-SCHEME AXIS'S

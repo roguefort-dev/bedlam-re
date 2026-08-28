@@ -85,6 +85,12 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-presentloop-gates-report.json, head-bound to
    9a96a60); no Ghidra run. Queued: the high-refresh
    camera/scroll interpolation as the new head.
+   NOTE (watchdog repair 1787913801, D206): the worker's model
+   client exited rc=1 AFTER this completion rewrite — a
+   post-completion transport death, no work lost (9a96a60 + this
+   bookkeeping both PUSHED, strict parser rc=0 on the rewritten
+   queue); the structured client-error failure was adjudicated
+   replaced-task and item 1 above stands untouched, READY.
 2. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
