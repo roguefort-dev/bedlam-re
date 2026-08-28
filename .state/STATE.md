@@ -1,5 +1,55 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-high-refresh-interpolation` COMPLETE (worker
+    ceafd198 claim 1, commits fe5bf72 + 37aaddf, both PUSHED): THE
+    COMPOSITION POLICY OF THE MODERN DECOUPLED PRESENT (D207, PLAN
+    §6 "the frame is composed from latest state + camera/scroll
+    interpolation"). RE FIRST: docs/RE-EXW-CAMERA.md (fe5bf72,
+    committed BEFORE the implementation) — the camera/scroll traffic
+    collected (Q5 pair 004edde4/8; tick-boundary writers robots()
+    recenter 0x40b875..0x40b8c5 + FUN_004245c9 chase override;
+    frame-path readers FUN_00403938/FUN_00401107) + the NEGATIVE: no
+    sub-tick camera interpolation exists in the decoded original
+    (Q5 is sub-PIXEL within integer tick updates, never sub-TICK).
+    Implementation (37aaddf): (a) bedlam-game host.rs —
+    presentation-bucket prev_sim endpoint staged per executed tick
+    (D17 b: never hashed/serialized; Sim Clone derive for exactly
+    this), render_now -> render_with(prev, alpha) with the PUMP path
+    still pure parity (prev None, alpha 0 — zero canonical-chain
+    movement), recompose(alpha) re-rendering from LATEST state with
+    the camera lerped (prev -> cur)·alpha — CAMERA/SCROLL ONLY
+    (sprites stay grid-quantized; sub-pixel blitter stays
+    default-off), gated by camera_interpolation() = Decoupled arm
+    ONLY (classic frame-locked arm NO-OP: presents only post-tick,
+    the original shape); non-scene planes interpolation-invariant by
+    construction. (b) bedlam-shell — FixedStepClock::fraction()
+    (banked_ns / PUMP_PERIOD_NS saturated; the one float in the
+    integer clock, presentation-side only) + present_camera_alpha at
+    the present site feeding GameHost::recompose before every
+    upload: zero-tick high-refresh frames carry the interpolated
+    camera sweep; 60 Hz steady state reads 1.0 = the parity camera,
+    so the modern arm adds NO latency on the original display
+    class. BOUNDS KEPT: clock/pump contract + hashed trajectory
+    untouched (pinned host-side by
+    camera_interpolation_never_touches_the_hashed_buckets +
+    platform-side by
+    present_site_recompose_never_touches_the_hashed_trajectory).
+    GATE: p6-high-refresh-interpolation wired as the SIXTH P6
+    required_gates entry (bedlam-game --lib + bedlam-shell --lib,
+    --release --locked --offline). Verified: bedlam-game 152/0 (+4),
+    bedlam-shell 52/0 (+5), bedlam-core 147/0 + hash_fixture +
+    mission_corpus_gate, bedlam-render determinism 12/0,
+    canonical_dump_gate 13/13, determinism 4/4, differ_gate 4/4,
+    zone_mission_parity 5/5 (ZERO canonical-chain movement),
+    check-p6-behavior-catalog OK (catalog EMPTY) + suite 30/30,
+    gates-validator suite 22/22, fmt + clippy clean, MANIFEST clean
+    before AND after every corpus read, --phase P6 validator at
+    37aaddf: status=passed, ALL 6 P6 GATES GREEN every command rc=0
+    (report .state/p6-highrefresh-gates-report.json, head-bound to
+    37aaddf); no Ghidra run. Queued: the optional uncapped present
+    mode as the new head (the same PLAN §6 sentence's remaining
+    half).
+
   - 2026-08-28 `p6-present-loop-wiring` COMPLETE (worker 2a90eb65
     claim 1, commit 9a96a60, PUSHED): THE MODE PLUMBED THROUGH THE
     SHELL HOST CONFIG INTO BOTH PLATFORM CONSUMERS + THE WINDOW

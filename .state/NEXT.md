@@ -10,32 +10,117 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-high-refresh-interpolation] [gate=p6-high-refresh-interpolation] P6
-   present-quality unit per PLAN §6 "time-based simulation" — the
-   camera/scroll interpolation of the modern decoupled present:
-   zero-tick high-refresh host frames currently recompose from
-   latest state only (the D203/D205 shape); this unit lands the
-   PLAN §6 composition policy — interpolate CAMERA/SCROLL ONLY
-   between the last executed logic tick and the present (the
-   accumulator fraction), NEVER sprite positions (grid-quantized
-   1996 sprites had no sub-pixel positions; interpolating them
-   manufactures motion the original never showed; the sub-pixel
-   blitter stays default-off and out of scope), classic arm
-   unchanged (the frame-locked pacing presents only after a tick —
-   nothing to interpolate). RE first: decode where the EXW
-   scroll/camera state lives in the frame path, write committed RE
-   notes anchored to EXW/EXD addresses, then implement as a
-   presentation-bucket policy selected from the timing-lock arm of
-   the plumbed mode. Bounds: the shell fixed-step clock/pump
-   contract and the hashed trajectory stay untouched — no
-   canonical-chain movement, no harness change; test surface stays
-   the ONE purist toggle both arms where practical; catalog stays
-   EMPTY; wire gate p6-high-refresh-interpolation as the SIXTH P6
-   required_gates entry; fmt + clippy on touched crates;
-   gates-validator green; MANIFEST clean; no Ghidra run; own
+1. [READY] [id=p6-uncapped-present-mode] [gate=p6-uncapped-present-mode] P6
+   present-quality unit #2 per PLAN §6 "time-based simulation ... vsync-
+   locked present at any refresh (60/120/144/240/360Hz+) or uncapped,
+   while the logic stays fixed at the original tick rate" — the OPTIONAL
+   UNCAPPED present mode, sibling of the landed D207 interpolation
+   policy: a PRESENTATION OPTION at the platform level (D200 layering —
+   vsync is a platform knob, presentation options stay OUT of
+   ModeConfig; default stays the vsync-locked Fifo present exactly as
+   shipped). The unit lands the policy selection + the loop shape:
+   uncapped applies ONLY under the modern Decoupled pacing arm (an
+   uncapped loop presents as fast as the loop runs, every present
+   recomposing from latest state + the D207 interpolated camera at the
+   clock accumulator fraction — coherent frames by construction); the
+   classic FrameLocked arm declines it (the visible refresh follows
+   the fixed logic tick, never the display rate — uncapped is
+   nonsensical there and the arm pins vsync-locked). Bounds: the shell
+   fixed-step clock/pump contract and the hashed trajectory stay
+   untouched — no canonical-chain movement, no harness change; test
+   surface stays the ONE purist toggle both arms where practical
+   (policy selection + gate answers pinned hermetically, no window
+   needed, the winit/wgpu PresentMode mapping is a pure function under
+   test); catalog stays EMPTY; wire gate p6-uncapped-present-mode as
+   the SEVENTH P6 required_gates entry; fmt + clippy on touched
+   crates; gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+1. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+   ceafd198, both PUSHED): P6 present-quality unit
+   `p6-high-refresh-interpolation` — the composition policy of the
+   modern decoupled present per PLAN §6 "Most high-refresh frames
+   carry zero new logic ticks; the frame is composed from latest
+   state + camera/scroll interpolation" (implementation D207). (a) RE
+   FIRST: docs/RE-EXW-CAMERA.md committed BEFORE the implementation
+   (fe5bf72) — the EXW camera/scroll traffic collected with every
+   fact re-anchored to EXW/EXD addresses and cross-referenced to the
+   owning committed section (the Q5 pixel pair 004edde4/8 with
+   camTile>>5 to 004ddb24/28 and the iso sprite math x>>8−cam; the
+   scroll-source cursor pair 004eddc4/8 via ScrollUpdate 00425ab9
+   clamp 9..631 x 9..463 with the EXD mickeys twin; the tick-boundary
+   writers — the robots() recenter 0x40b875..0x40b8c5 at
+   (cursor−240)·v/480 per axis and the FUN_004245c9 chase-camera
+   override; the frame-path readers — FUN_00403938 the viewport
+   renderer and FUN_00401107 the present fine-offsets) PLUS the one
+   new claim the policy rests on: NO sub-tick camera interpolation
+   exists anywhere in the decoded original (the Q5 fixed point is
+   sub-PIXEL precision within integer tick updates, never sub-TICK;
+   the zoom Q16 magnifier scales an already-rendered backbuffer). (b)
+   bedlam-game host.rs: the presentation-bucket prev_sim endpoint
+   staged in pump_frame (a clone of the sim as of the pump BEFORE the
+   last executed tick batch; zero-tick pumps keep the previous
+   endpoint; D17 b — never advanced, never hashed, never serialized;
+   Sim gains a Clone derive for exactly this, documented
+   presentation-snapshots-only, FORMAT_VERSION and every P5 pin
+   byte-stable), render_now split into render_with(prev, alpha) with
+   the PUMP path still the PURE parity configuration (prev None,
+   alpha 0 — zero canonical-chain movement), and recompose(alpha)
+   re-rendering the presented frame from LATEST state with the camera
+   lerped (prev -> cur) · alpha — INTERPOLATE CAMERA/SCROLL ONLY
+   (sprites stay grid-quantized; the sub-pixel blitter stays
+   default-off and out of scope), gated by camera_interpolation() =
+   the Decoupled arm ONLY: the CLASSIC frame-locked arm is a NO-OP
+   (it presents only after a tick — the exact tick-state camera of
+   the original, nothing to interpolate); movie/loading/boot/brief/
+   menu planes REPLACE the scene pipeline so presented non-scene
+   planes are interpolation-invariant by construction. (c)
+   bedlam-shell: FixedStepClock::fraction() — the ACCUMULATOR
+   FRACTION of the pending logic tick (banked_ns / PUMP_PERIOD_NS,
+   saturated 0..=1; the one float in the integer clock,
+   presentation-side only) + PUMP_PERIOD_NS const; window.rs
+   present_camera_alpha pairs the gate host with the clock fraction
+   and the present site feeds it to GameHost::recompose BEFORE the
+   upload — zero-tick high-refresh frames now carry the interpolated
+   camera sweep, while the 60 Hz steady state banks exactly the floor
+   period so fraction 1.0 = the parity camera: the modern arm adds NO
+   latency on the original display class and the sweep only becomes
+   visible when the display outpaces the fixed tick rate. (d) BOUNDS
+   KEPT: the shell fixed-step clock/pump contract and the hashed
+   trajectory untouched — pinned host-side by
+   camera_interpolation_never_touches_the_hashed_buckets (same pump
+   script with the modern arm recomposing at the clock fractions =
+   identical executed ticks, tick count, state hash, scene hash) and
+   platform-side by
+   present_site_recompose_never_touches_the_hashed_trajectory; the
+   frame parity hash DELIBERATELY may diverge on the modern arm after
+   a recompose (the interpolated camera IS the feature — the pump
+   path re-renders parity regardless). (e) GATE:
+   p6-high-refresh-interpolation wired as the SIXTH P6 required_gates
+   entry — commands = bedlam-game --lib + bedlam-shell --lib, both
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-game --lib 152/0 (+4: policy selection both arms + the
+   axis-independence control, recompose modern-only with alpha
+   endpoints and purity, recompose inert before the first executed
+   tick, the Determinism-Charter hash pin), bedlam-shell --lib 52/0
+   (+5: three fraction pins — the 240 Hz quarter sweep, the 60 Hz
+   steady 1.0, endpoint saturation — and the two present-site pins —
+   the arm selection and the hashed-trajectory pin), bedlam-core
+   --lib 147/0 (Clone derive only) + hash_fixture + mission_corpus_
+   gate green, bedlam-render determinism 12/0; controls green:
+   canonical_dump_gate 13/13, determinism 4/4, differ_gate 4/4,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement);
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+   with the sixth gate) + suite 30/30; gates-validator suite 22/22;
+   fmt + clippy clean on the touched crates; MANIFEST clean before
+   AND after every corpus read; the bounded --phase P6 validator
+   verdict at 37aaddf: status=passed, ALL 6 P6 GATES GREEN, every
+   command rc=0 under bwrap containment (report
+   .state/p6-highrefresh-gates-report.json, head-bound to 37aaddf);
+   no Ghidra run. Queued: the optional uncapped present mode as the
+   new head (the same PLAN §6 sentence's remaining half — vsync-
+   locked at any refresh OR uncapped, logic fixed in both).
+2. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -91,7 +176,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-2. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+3. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -158,7 +243,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-3. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+4. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -204,7 +289,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-4. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+5. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -220,8 +305,8 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    must not collide; from_id fails closed). (b) INJECTION: the mode
    rides SimConfig.mode into Sim::new, is carried privately, and is
    read-only at Sim::mode()/SimDriver::mode()/GameHost::mode() — no
-   setter at any layer. CONFIG-NOT-STATE: not hashed, not serialized
-   (FORMAT_VERSION unchanged, STATE_LEN + every P5 hash pin
+   setter at any layer. CONFIG-NOT-STATE: not hashed, not
+   serialized (FORMAT_VERSION unchanged, STATE_LEN + every P5 hash pin
    byte-stable); a restore ADOPTS the expected SimConfig's mode.
    Presentation/platform options stay OUTSIDE (no Hz/vsync/resolution
    knob enters ModeConfig or the sim in any arm). The seam lands
@@ -250,7 +335,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-5. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+6. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -293,7 +378,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-6. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+7. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -317,7 +402,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-7. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+8. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
