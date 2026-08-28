@@ -1,5 +1,48 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-c-disposition` COMPLETE (worker 4016c154
+    claim 1, commits f4ab798 + the flip commit + the bookkeeping
+    commit, all PUSHED): ZONE C CLOSED — the SECOND 7-mission zone
+    flips green (the ledger 15/37; D193) and the zone-parity
+    harness carries the CLOSED-ZONE LIST. (1) HARNESS SHAPE
+    (f4ab798): the D192 single-ZONE-const suite lifted to
+    `ZONES: &[ZoneSpec]` (B then C) — a zone's disposition unit
+    APPENDS its spec and the closed set never loses its executable
+    evidence (a per-zone const re-instantiation would strand the
+    earlier `p5-zone-{b..}` gates on a suite that no longer
+    exercises them; both gates run the same command over the same
+    file). (2) ZONEC EVIDENCE + FLIP (the cross-artifact rule, same
+    commit): the FIRST PURE instantiation — zone C ships NO
+    committed .scen flows (verified by scenarios grep), so the
+    generated per-mission battery IS the whole criterion-1 leg: all
+    21 flows (P5CM1A..P5CM7C — boot, 120-frame passive, 48-frame
+    full-staging destroy+pickup+platforms+critters) full declared
+    budgets, dumps verify, two-run byte identity — NO engine gap
+    surfaced on any ZONEC mission; the anchor TS/T0 statics
+    re-derived from each TOT header (100×100, 160004 B — all seven)
+    + the §7j.64 formula (zone C: linear = m+4); the T1 spot table
+    per zone (FULL_MASK arithmetic, start_score, the 25-name fetch
+    chain with the D184 zone-level pin `EDITOR\ZONEC\MISSIONC.*`,
+    the seam domains at stage/zone-cell 3 incl.
+    campaign-clears-select); the criterion-6 SAVED/OPTIONS import
+    tests stay FILE-LEVEL (the shipped slot-0 campaign IS
+    ZONEB/MISSION1 — hardcoded to zone B; the zone-C campaign
+    staging rides criterion 2's seam legs). P5-ZONE-GATES §9
+    documents the per-criterion table; the ledger flips
+    ZONEC-MISSION1..7 green (catalog_refs = []); the p5-zone-c gate
+    joins P5 required_gates (12 gates); the ledger test pin
+    re-baselined 8/37 to 15/37 + the ZONEC 7/7 line (deliberate,
+    same commit). Verified: zone_mission_parity 5/5 (both zones,
+    10.85s), bedlam-game suites green (canonical_dump_gate 13/13 —
+    ZERO canonical chain movement; differ_gate 4/4; determinism;
+    census 37/37 unchanged), bedlam-core 201/0, diffharness 104/0,
+    fmt + clippy clean, check-p5-zone-ledger OK + hermetic suite
+    18/18, gates-validator suite 22/22 + the HEAD-bound battery
+    all-green at the flip commit, inspect baseline ok (1069 files),
+    MANIFEST clean before AND after every corpus read, no Ghidra
+    run. P5 continues per PLAN §6: ZONED next (a pure ZONES-append
+    unit in the §9 shape), then E/F/G close the ledger.
+
   - 2026-08-28 `p5-zone-b-disposition` COMPLETE (worker 2a33d196 claim
     1, commits 2980e8b + 6ba8aae + the bookkeeping commit, all PUSHED):
     ZONE B CLOSED — the FIRST 7-mission zone flips green (the ledger

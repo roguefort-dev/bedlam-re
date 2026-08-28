@@ -6735,3 +6735,30 @@ clippy clean, check-p5-zone-ledger OK + hermetic suite 18/18, the
 gates validator all-green at the flip commit, MANIFEST clean
 before and after every corpus read, no Ghidra run. The remaining
 zones D..G are pure ZONES-append units in the §9 shape.
+
+## D194 — 2026-08-28: autonomy `preflight-mismatch` + `INVALID-DEADLOCKED` (watchdog repair 3709375): the zone-C worker 4016c154 landed both task commits (f4ab798 + dcfdcc8) and WROTE its end-of-run queue rewrite, then died at a transport error before the bookkeeping commit and the push — the controller saw the launch boundary change (preflight-mismatch, reason launch-boundary) AND the rewritten queue fail the strict parser (rc=2), refusing idle/spawn
+FOUR facts recorded. (1) THE DEADLOCK: the worker's completion
+rewrite carried the prose bracket `&[ZoneSpec]` inside the ACTIVE
+item — the third recurrence of the D177/D180 class (a Rust slice
+type copied into queue prose; the strict parser reads every bracket
+as a tag and rejects `unknown status/tag [ZoneSpec]`). With rc=2
+the controller refuses to spawn, so the loop stalls with a valid,
+finished task and an unclaimable queue. (2) THE REPAIR (D190
+pattern, adopted verbatim): fix the single bracket to
+`(ZoneSpec-slice)` — no other byte of the rewrite touched — restore
+the worker's parked STATE.md edit (/tmp/opencode/STATE.md.p5c,
+saved when the HEAD-bound validator battery required a clean
+tracked-path tree), land the bookkeeping commit, push the two
+stranded task commits with it, and archive the failure
+replaced-task (identity (1, p5-zone-c-disposition,
+p5-zone-c-disposition) absent from the resulting queue — its
+successor p5-zone-d-disposition is the head item). (3) THE LESSON
+(D180 restated, now third recurrence): queue prose NEVER carries
+square brackets — not Rust types (`&[ZoneSpec]`), not arrays
+(`[]`), not optional markers; the Done section tolerates them, the
+active item does not. Workers writing queue text that quotes Rust
+signatures must paraphrase slice/array types parenthetically. (4)
+VERIFIED: strict parser rc=0 RUNNABLE 1 at the bookkeeping commit;
+check-p5-zone-ledger 15/37 with ZONEC 7/7; zone_mission_parity
+5/5; the nudge-queue parser suite green; MANIFEST clean before and
+after every corpus read; no Ghidra run.
