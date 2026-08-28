@@ -800,3 +800,50 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-volume-mixers — the P6 QoL unit (PLAN §6 "QoL: window modes,
+# vsync control, volume mixers, save slots + metadata + opt-in
+# autosave" — the VOLUME MIXERS presentation option, the next QoL
+# list item after the landed D208 vsync control and D210 window
+# modes): the per-bus volume selection (music/sfx) at the platform
+# level (engine/bedlam-shell/src/audio.rs `VolumeMixers` +
+# `WindowOptions::volume`). D200 layering: a PLATFORM knob OUT of
+# ModeConfig with NO purist arbitration — audio is presentation
+# bucket (D17 b: the mixed stream never reaches a hash) and the
+# original's own volume stepper is an un-hashed host audio action.
+# The bus split is RE-ANCHORED FIRST (docs/RE-EXW-MUSIC sec 7,
+# committed before the implementation): the shipped EXW has ONE
+# shared master bus — the "music volume" stepper (g_music_volume
+# 0..100 -> >>1 -> master 0..50, FUN_0044c630) scales music AND sfx
+# voices through the same SubVoiceStart master product, the only
+# sfx-side separation being the registry sfx-master-gate mute — so
+# a per-bus music/sfx selection is a MODERN platform addition whose
+# DEFAULT = the shipped mix exactly (`VolumeMixers::SHIPPED` = both
+# buses FULL: unity Q8 gain, the device-bound stream bit-identical,
+# pinned by `shipped_mixers_feed_the_engine_stream_bit_exactly`).
+# THE GAIN APPLICATION SITE is the shell audio path ONLY — the
+# AudioFeed fill/watermark site scales the DEVICE-BOUND copy after
+# `GameHost::render_audio`, composed multiplicatively on the
+# un-split engine bus (each knob alone behaves exactly like the
+# original's own whole-mix stepper); the engine's mixed parity
+# stream, the sim and every hash are untouched under ANY knob
+# setting (pinned by
+# `volume_mixers_never_touch_the_engine_stream` +
+# `volume_selection_never_touches_the_sim_config`). The bounded
+# runtime key set (PageUp/PageDown = music, BracketRight/
+# BracketLeft = sfx, the original's own +/-5 step and 0..100 clamp)
+# is PLATFORM-ONLY: intercepted in the event handler BEFORE the
+# mapper, never reaching ShellInput, all four keys dead to both
+# control schemes (`volume_keys_are_platform_only_and_dead_to_
+# both_schemes`); the binary's --music/--sfx select the starting
+# levels (noted + ignored headless). BOUNDS KEPT: no engine change
+# (bedlam-shell only); catalog stays EMPTY (a plan-named QoL unit
+# is not a catalog entry). Command hermetic: --release --locked
+# --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-volume-mixers"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/audio.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "engine/bedlam-shell/src/lib.rs", "docs/RE-EXW-MUSIC.md", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]

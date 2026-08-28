@@ -46,7 +46,10 @@ pub mod headless;
 pub mod input;
 pub mod window;
 
-pub use audio::{AudioDevice, AudioFeed, StreamFacts, PUMP_FRAMES, RING_CAP_FRAMES, TARGET_FRAMES};
+pub use audio::{
+    AudioDevice, AudioFeed, StreamFacts, VolumeLevel, VolumeMixers, PUMP_FRAMES, RING_CAP_FRAMES,
+    TARGET_FRAMES,
+};
 pub use chain::{scene_assets, stage_boot, stage_scene, ChainConfig};
 pub use clock::FixedStepClock;
 pub use headless::{

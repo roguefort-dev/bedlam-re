@@ -127,7 +127,7 @@ use winit::keyboard::PhysicalKey;
 use winit::monitor::VideoModeHandle;
 use winit::window::{Fullscreen, Window, WindowId};
 
-use crate::audio::{AudioDevice, TARGET_FRAMES};
+use crate::audio::{AudioDevice, VolumeMixers, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
@@ -339,6 +339,61 @@ fn is_window_toggle_key(key: PhysicalKey) -> bool {
     matches!(key, PhysicalKey::Code(winit::keyboard::KeyCode::F11))
 }
 
+/// One bounded runtime volume adjustment (P6 QoL volume mixers,
+/// D212): which bus moves and which way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VolumeAdjust {
+    MusicUp,
+    MusicDown,
+    SfxUp,
+    SfxDown,
+}
+
+impl VolumeAdjust {
+    /// The ORIGINAL'S OWN stepper step (RE-EXW-INPUT sec 5: the EXW
+    /// mission-shell Up/Down arrows move g_music_volume by ±5 on a
+    /// 0..100 clamp) — the modern platform keys keep the same step
+    /// and clamp.
+    pub(crate) fn step(self) -> i8 {
+        match self {
+            VolumeAdjust::MusicUp | VolumeAdjust::SfxUp => 5,
+            VolumeAdjust::MusicDown | VolumeAdjust::SfxDown => -5,
+        }
+    }
+}
+
+/// PURE: the bounded P6 QoL volume-key set (D212) — PageUp/PageDown
+/// adjust the MUSIC bus, BracketRight/BracketLeft the SFX bus, and
+/// NOTHING else is a volume key. PLATFORM-ONLY keys OUTSIDE both
+/// control schemes: the handler intercepts them BEFORE the mapper,
+/// so they NEVER reach [`ShellInput`]; the pin below additionally
+/// shows all four map to nothing in either scheme, so even a
+/// forwarding bug could not make them sim input (the F11 posture).
+fn volume_adjust_key(key: PhysicalKey) -> Option<VolumeAdjust> {
+    use winit::keyboard::KeyCode as K;
+    match key {
+        PhysicalKey::Code(K::PageUp) => Some(VolumeAdjust::MusicUp),
+        PhysicalKey::Code(K::PageDown) => Some(VolumeAdjust::MusicDown),
+        PhysicalKey::Code(K::BracketRight) => Some(VolumeAdjust::SfxUp),
+        PhysicalKey::Code(K::BracketLeft) => Some(VolumeAdjust::SfxDown),
+        _ => None,
+    }
+}
+
+/// Apply one bounded adjustment to a selection (PURE — a change is a
+/// new value, never a host mutation): the music and sfx buses step
+/// independently, each clamped 0..=100 the original's own way.
+fn volume_mixers_stepped(mixers: VolumeMixers, adj: VolumeAdjust) -> VolumeMixers {
+    match adj {
+        VolumeAdjust::MusicUp | VolumeAdjust::MusicDown => {
+            mixers.with_music(mixers.music().stepped(adj.step()))
+        }
+        VolumeAdjust::SfxUp | VolumeAdjust::SfxDown => {
+            mixers.with_sfx(mixers.sfx().stepped(adj.step()))
+        }
+    }
+}
+
 /// Window host options.
 #[derive(Debug, Clone)]
 pub struct WindowOptions {
@@ -384,6 +439,19 @@ pub struct WindowOptions {
     /// selection selects nothing in the host — it never reaches
     /// the sim config or any hash.
     pub window_mode: WindowMode,
+    /// The platform-level per-bus volume selection (P6 QoL volume
+    /// mixers, PLAN §6 "QoL: ... volume mixers"; D200 layering — a
+    /// PLATFORM knob, OUT of `ModeConfig`, with NO purist
+    /// arbitration: audio is presentation bucket, D17 b). Default
+    /// [`VolumeMixers::SHIPPED`] = both buses FULL = the shipped mix
+    /// exactly — the device-bound stream is bit-identical at the
+    /// default, and the engine's mixed parity stream is NEVER
+    /// touched by any setting (the gain applies at the
+    /// [`crate::audio::AudioFeed::fill_from`] watermark site only).
+    /// The binary's `--music`/`--sfx` select the starting levels;
+    /// PageUp/PageDown and BracketRight/BracketLeft adjust at
+    /// runtime.
+    pub volume: VolumeMixers,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -408,6 +476,7 @@ impl WindowOptions {
             mode: ModeConfig::default(),
             vsync: Vsync::default(),
             window_mode: WindowMode::default(),
+            volume: VolumeMixers::SHIPPED,
             auto_exit_after: None,
         }
     }
@@ -560,6 +629,17 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
                 "bedlam-shell: audio output {} Hz, {} ch, {}",
                 facts.rate, facts.channels, facts.format
             );
+            // P6 QoL volume mixers (D212): the platform selection
+            // enters HERE and only here — the feed's gain site. The
+            // engine stream and every hash are untouched.
+            if dev.mixers() != opts.volume {
+                dev.set_mixers(opts.volume);
+                eprintln!(
+                    "bedlam-shell: volume music {}%, sfx {}%",
+                    opts.volume.music().percent(),
+                    opts.volume.sfx().percent()
+                );
+            }
             let feed = dev.feed().clone();
             if let Err(err) = feed.fill_from(&mut host, TARGET_FRAMES) {
                 eprintln!("bedlam-shell: audio prefill failed ({err}); continuing");
@@ -994,6 +1074,30 @@ impl ApplicationHandler for ShellApp {
                                 g.window.fullscreen().is_some(),
                             );
                             apply_fullscreen(&g.window, target);
+                        }
+                    }
+                    return;
+                }
+                // P6 QoL volume mixers (D212): PageUp/PageDown and
+                // BracketRight/BracketLeft are PLATFORM keys OUTSIDE
+                // both control schemes — intercepted HERE, before the
+                // mapper, so they NEVER reach ShellInput (the F11
+                // posture; pinned dead to both schemes by test). The
+                // adjustment touches ONLY the audio feed's device-
+                // bound gain: not the host, not the input queue, not
+                // any hash. No device means nothing to adjust.
+                if let Some(adj) = volume_adjust_key(event.physical_key) {
+                    if event.state == ElementState::Pressed {
+                        if let Some(dev) = self.audio.as_ref() {
+                            let mixers = volume_mixers_stepped(dev.mixers(), adj);
+                            if mixers != dev.mixers() {
+                                dev.set_mixers(mixers);
+                                eprintln!(
+                                    "bedlam-shell: volume music {}%, sfx {}%",
+                                    mixers.music().percent(),
+                                    mixers.sfx().percent()
+                                );
+                            }
                         }
                     }
                     return;
@@ -2005,6 +2109,103 @@ mod window_mode_tests {
             None,
             "classic ignores the table and the original binds no F11"
         );
+    }
+
+    /// THE P6 QoL VOLUME-KEY SET (D212): four keys and nothing else,
+    /// all PLATFORM-ONLY — the handler intercepts them before the
+    /// mapper, so they never reach ShellInput, and this pin shows
+    /// all four map to nothing in either scheme (the F11 posture),
+    /// so even a forwarding bug could not make them sim input. The
+    /// ORIGINAL volume keys (Up/Down arrows, RE-EXW-INPUT sec 5)
+    /// are deliberately NOT platform keys — they are scheme keys in
+    /// the original and stay there.
+    #[test]
+    fn volume_keys_are_platform_only_and_dead_to_both_schemes() {
+        use winit::keyboard::KeyCode as K;
+        let cases = [
+            (K::PageUp, VolumeAdjust::MusicUp),
+            (K::PageDown, VolumeAdjust::MusicDown),
+            (K::BracketRight, VolumeAdjust::SfxUp),
+            (K::BracketLeft, VolumeAdjust::SfxDown),
+        ];
+        for (code, adj) in cases {
+            let key = PhysicalKey::Code(code);
+            assert_eq!(volume_adjust_key(key), Some(adj), "{code:?}");
+            assert_eq!(Bindings::modern_default().get(key), None, "{code:?}");
+            assert_eq!(
+                ControlScheme::Modern.map_key(key, &Bindings::modern_default()),
+                None,
+                "{code:?} unbound in the modern default table"
+            );
+            assert_eq!(
+                ControlScheme::Classic.map_key(key, &Bindings::modern_default()),
+                None,
+                "classic ignores the table and the original binds no {code:?}"
+            );
+        }
+        for key in [
+            KeyCode::ArrowUp,
+            KeyCode::ArrowDown,
+            KeyCode::F11,
+            KeyCode::Escape,
+            KeyCode::KeyW,
+        ] {
+            assert_eq!(
+                volume_adjust_key(PhysicalKey::Code(key)),
+                None,
+                "{key:?} is not a volume key"
+            );
+        }
+    }
+
+    /// The bounded runtime stepping: the ORIGINAL'S OWN ±5 step on a
+    /// 0..=100 clamp (RE-EXW-INPUT sec 5: the EXW mission-shell
+    /// stepper moves g_music_volume by ±5, clamped), buses
+    /// independent, value semantics (a step returns a new
+    /// selection, never mutates).
+    #[test]
+    fn volume_stepping_is_the_original_step_and_clamp() {
+        assert_eq!(VolumeAdjust::MusicUp.step(), 5);
+        assert_eq!(VolumeAdjust::MusicDown.step(), -5);
+        let shipped = VolumeMixers::SHIPPED;
+        let down = volume_mixers_stepped(shipped, VolumeAdjust::MusicDown);
+        assert_eq!(down.music().percent(), 95);
+        assert_eq!(down.sfx().percent(), 100, "buses step independently");
+        assert_eq!(shipped.music().percent(), 100, "value semantics");
+        // Clamp at both ends: 100 -> (21 downs) -> 0 -> stays 0.
+        let muted = (0..21).fold(shipped, |m, _| {
+            volume_mixers_stepped(m, VolumeAdjust::MusicDown)
+        });
+        assert_eq!(muted.music().percent(), 0);
+        let still = volume_mixers_stepped(muted, VolumeAdjust::MusicDown);
+        assert_eq!(still.music().percent(), 0, "clamped at 0");
+        let top = volume_mixers_stepped(muted, VolumeAdjust::MusicUp);
+        assert_eq!(top.music().percent(), 5);
+        // SFX arms symmetric, music untouched.
+        let sfx = volume_mixers_stepped(shipped, VolumeAdjust::SfxDown);
+        assert_eq!(sfx.sfx().percent(), 95);
+        assert_eq!(sfx.music().percent(), 100);
+    }
+
+    /// The platform default is the SHIPPED MIX exactly, and the
+    /// selection selects NOTHING in the sim (D212 bounds, the
+    /// D210 no-arbitration shape): the derived SimConfig is
+    /// bit-identical under any volume selection — the knob lives
+    /// only in the shell audio path (pinned feed-side in
+    /// `volume_mixers_never_touch_the_engine_stream`).
+    #[test]
+    fn volume_selection_never_touches_the_sim_config() {
+        let dir = std::path::PathBuf::from("gfx");
+        let mut opts = WindowOptions::new(&dir);
+        assert_eq!(opts.volume, VolumeMixers::SHIPPED);
+        let baseline = host_sim_config(&opts);
+        opts.volume = VolumeMixers::new(0, 0);
+        assert_eq!(
+            host_sim_config(&opts),
+            baseline,
+            "the volume selection never reaches the sim config"
+        );
+        assert_eq!(opts.volume.stream_gain_q8(), 0);
     }
 }
 

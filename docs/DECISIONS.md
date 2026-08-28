@@ -7892,3 +7892,96 @@ THE BINDING CHECKLIST, verified first-hand before acknowledging
 NEVER (unchanged from D206/D209): re-run the task, revert, or
 rewrite the dead worker's queue. A provider death AFTER a green
 completion rewrite is transport debris, not lost work.
+
+## D212 — 2026-08-28: P6/QoL `p6-volume-mixers` — the per-bus volume selection (a platform knob OUT of ModeConfig with NO purist arbitration, re-anchored on the original's ONE shared master bus: the gain applies at the shell feed site on the device-bound copy only, composed multiplicatively — each knob alone is the original's own whole-mix stepper; the bounded runtime key set is platform-only and dead to both schemes), wired as the NINTH P6 required gate
+
+CONTEXT: PLAN §6 P6 QoL names the list "window modes, vsync
+control, volume mixers, save slots + metadata + opt-in autosave".
+Vsync landed as D208, window modes as D210; this unit lands VOLUME
+MIXERS. RE FIRST: the bus split is re-anchored in a committed
+artifact BEFORE the implementation (docs/RE-EXW-MUSIC sec 7 — a
+COLLECTION of already-verified facts, no new claims): the shipped
+EXW has ONE shared master bus. The mission-shell stepper
+(RE-EXW-INPUT sec 5) moves g_music_volume 0..100 in ±5 steps and
+applies `vol>>1` through FUN_0044c630 into the master word
+004ee9b4 (scale 0..127); that master scales EVERY voice — music
+script notes AND sfx RAW voices ride the same SubVoiceStart master
+product — and the only sfx-side separation in the original is the
+registry sfx-master-gate (0x4ede58, D134), an on/off MUTE, never a
+gain. So the original's "music volume" slider is a WHOLE-MIX
+master, and a per-bus music/sfx selection is a MODERN platform
+addition whose default must equal the shipped single-bus mix
+exactly.
+
+DECISIONS:
+
+1. The volume mixers are a PLATFORM KNOB OUT of `ModeConfig`
+   (D200 layering) with NO purist arbitration: audio is
+   presentation bucket (D17 b — the mixed stream never reaches a
+   hash), the knob never consults the mode, and both pacing arms
+   accept it identically. `VolumeLevel` (0..=100 percent, the
+   original's own UI domain, clamped like the original) x
+   `VolumeMixers { music, sfx }` (default `SHIPPED` = both FULL)
+   in bedlam-shell/src/audio.rs, carried as
+   `WindowOptions::volume`; the binary's `--music PCT`/`--sfx PCT`
+   select the starting levels (noted + ignored headless, the
+   --fullscreen posture).
+2. THE GAIN APPLICATION SITE is the shell audio path ONLY — the
+   `AudioFeed::fill_from` watermark site scales the DEVICE-BOUND
+   copy after `GameHost::render_audio`, Q8 integer math (unity 256
+   at the shipped default = an EXACT bit-identical passthrough,
+   pinned by `shipped_mixers_feed_the_engine_stream_bit_exactly`;
+   gain never exceeds unity, so no clamp can be owed). Because the
+   engine bus is faithfully UN-SPLIT (one
+   `Mixer::set_master_volume` scaling all voices + the live-gain
+   PCM stream), the per-bus pair composes MULTIPLICATIVELY on the
+   shared stream — the honest composition: each knob ALONE
+   reproduces the original's own whole-mix stepper behavior
+   exactly, and a true engine-side bus split (the instrument
+   domain is already disjoint, D42.7) stays future engine work,
+   out of this unit's bounds (no engine change; bedlam-shell
+   only). The engine's mixed parity stream (the audio determinism
+   gate), the sim and every hash are untouched under ANY knob
+   setting — pinned by `volume_mixers_never_touch_the_engine_
+   stream` (host renders knob-invariant before AND after
+   non-unity fills) and `volume_selection_never_touches_the_sim_
+   config` (bit-identical derived SimConfig), and checked
+   end-to-end: the headless smoke stays at the recorded baseline
+   (scene 696adb1cd110e062, parity cce30c983b97b16d, audio
+   110400/158092) under `--music 50 --sfx 0`.
+3. THE BOUNDED RUNTIME KEY SET (the F11 posture): PageUp/PageDown
+   step the music bus ±5 and BracketRight/BracketLeft the sfx bus
+   — the original's own step and 0..=100 clamp (RE-EXW-INPUT sec
+   5) — as PLATFORM keys OUTSIDE both control schemes, intercepted
+   in the event handler BEFORE the mapper so they NEVER reach
+   `ShellInput`; pinned by
+   `volume_keys_are_platform_only_and_dead_to_both_schemes` (the
+   four keys and nothing else, unbound in the modern default table
+   and dead in the classic fixed scheme — the ORIGINAL volume keys
+   Up/Down deliberately stay scheme keys, not platform keys). A
+   mid-run adjustment applies to FUTURE fills only
+   (`runtime_mixers_adjust_applies_to_future_fills_only`); the
+   adjustment note is a stderr line, never fatal.
+4. GATE: `p6-volume-mixers` wired as the NINTH P6 required gate —
+   command = bedlam-shell --lib, --release --locked --offline,
+   hermetic. Test surface = the ONE selection (domain, Q8 edges,
+   composition, the shipped-default bit-exact pin, the invariance
+   pins, the runtime-adjust pin, the key set), never the feature
+   cross-product; the catalog stays EMPTY (a plan-named QoL unit
+   is not a catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 75/0 (+10: 7
+audio — the level domain/Q8 conversion, the shared-bus
+composition, the unity bit-exact identity sweep, the scale/mute
+math, the shipped-default engine-stream pin, the knob-invariance
+pin, the future-fills-only pin; 3 window — the platform-only key
+set dead to both schemes, the original step/clamp, the sim-config
+invariance; was 65/0 + 1 pre-existing ignored); the binary
+--help/--music/--sfx wiring checked first-hand (help text, the
+headless ignore note, the baseline hashes unchanged); controls
+green: canonical_dump_gate 13/13, determinism 4/4 + bedlam-core
+12/12, zone_mission_parity 5/5 (ZERO canonical-chain movement);
+fmt + clippy clean on bedlam-shell (the one `let mut opts` test
+warning pre-exists from D210, untouched); workspace cargo check
+clean; MANIFEST clean before AND after every corpus read; no
+Ghidra run.

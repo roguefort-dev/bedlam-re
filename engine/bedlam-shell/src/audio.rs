@@ -46,6 +46,14 @@
 //! - Sample format conversion goes through cpal's `Sample`
 //!   conversions (dasp); no floating point exists on the produce
 //!   path, only inside the device callback.
+//! - Volume mixers (P6 QoL, D212): a per-bus (music/sfx) platform
+//!   selection, default = the shipped mix exactly, applied by
+//!   [`AudioFeed::fill_from`] on the DEVICE-BOUND copy only - the
+//!   engine's mixed parity stream is never touched (audio is D17
+//!   bucket b). The original had ONE shared master bus
+//!   (RE-EXW-MUSIC sec 7 re-anchor), so the pair composes
+//!   multiplicatively on the un-split stream: each knob alone
+//!   behaves exactly like the original's own whole-mix stepper.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -311,6 +319,158 @@ impl FrameStepper {
     }
 }
 
+/// Unity Q8 gain (256): the shipped level — the device-bound stream
+/// passes through UNMODIFIED (bit-exact), pinned by test.
+pub(crate) const GAIN_UNITY_Q8: u16 = 256;
+
+/// One audio bus's volume selection, 0..=100 percent of the shipped
+/// level (P6 QoL volume mixers, PLAN §6 "volume mixers"; D212). The
+/// domain is the ORIGINAL'S OWN UI domain, re-anchored: the EXW
+/// mission-shell stepper clamps g_music_volume 0..100 in ±5 steps
+/// (RE-EXW-INPUT sec 5). 100 = [`VolumeLevel::FULL`] = the shipped
+/// mix exactly; 0 mutes the bus.
+///
+/// D200 layering: a PLATFORM knob, OUT of `ModeConfig`, with NO
+/// purist arbitration — audio is presentation bucket (D17 b: the
+/// mixed stream never reaches a hash), and both pacing arms accept
+/// the selection identically (the knob never consults the mode).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VolumeLevel(u8);
+
+impl Default for VolumeLevel {
+    /// The default is the SHIPPED level (FULL), never 0 — a fresh
+    /// platform must sound exactly like the original.
+    fn default() -> VolumeLevel {
+        VolumeLevel::FULL
+    }
+}
+
+impl VolumeLevel {
+    /// The shipped level: unity gain, the exact original mix.
+    pub const FULL: VolumeLevel = VolumeLevel(100);
+
+    /// A percent-of-shipped selection; values above 100 clamp (the
+    /// original's own 0..100 clamp, RE-EXW-INPUT sec 5).
+    pub fn new(percent: u8) -> VolumeLevel {
+        VolumeLevel(percent.min(100))
+    }
+
+    /// The selected percent (0..=100).
+    pub fn percent(self) -> u8 {
+        self.0
+    }
+
+    /// The original's own stepper shape (RE-EXW-INPUT sec 5): ±5 on
+    /// a 0..=100 clamp. PURE — a level change is a new value, never
+    /// a mutation of the host or any hash.
+    pub fn stepped(self, delta: i8) -> VolumeLevel {
+        let v = i16::from(self.0) + i16::from(delta);
+        VolumeLevel(v.clamp(0, 100) as u8)
+    }
+
+    /// The Q8 gain of this level: round((pct * 256) / 100), unity
+    /// (256) exactly at 100, 0 at 0. Integer math only.
+    fn gain_q8(self) -> u16 {
+        (u16::from(self.0) * 256 + 50) / 100
+    }
+}
+
+/// The per-bus volume selection (music / sfx) — the P6 QoL volume
+/// mixers (PLAN §6 "QoL: ... volume mixers"; D212). Default
+/// [`VolumeMixers::SHIPPED`] = both buses FULL = the shipped mix
+/// EXACTLY: the applied stream gain is unity and the device-bound
+/// audio is bit-identical to the engine mix (pinned by test).
+///
+/// APPLICATION SITE (the honest bus split, RE-EXW-MUSIC sec 7): the
+/// shipped EXW has ONE shared master bus — the original's own
+/// "music volume" stepper scaled the ENTIRE mix (music and SFX
+/// voices ride the same SubVoiceStart master product) — and the E
+/// engine mirrors that single bus faithfully (one
+/// `Mixer::set_master_volume` knob). A per-bus GAIN split therefore
+/// cannot exist inside the un-split engine stream, and this unit
+/// changes no engine code: each bus's gain applies on the
+/// DEVICE-BOUND copy at the feed/watermark site only, composed
+/// multiplicatively (Q8) — so each knob alone behaves exactly like
+/// the original's own whole-mix stepper, and only the shipped
+/// default is bit-exact by construction. The engine's mixed parity
+/// stream (the determinism gate, D17 b) is NEVER touched by any
+/// knob setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VolumeMixers {
+    music: VolumeLevel,
+    sfx: VolumeLevel,
+}
+
+impl Default for VolumeMixers {
+    /// The default is the SHIPPED mix (both buses FULL), never 0 —
+    /// a fresh platform must sound exactly like the original.
+    fn default() -> VolumeMixers {
+        VolumeMixers::SHIPPED
+    }
+}
+
+impl VolumeMixers {
+    /// The shipped mix: both buses at FULL (unity).
+    pub const SHIPPED: VolumeMixers = VolumeMixers {
+        music: VolumeLevel::FULL,
+        sfx: VolumeLevel::FULL,
+    };
+
+    /// A per-bus selection from two percents (each clamps 0..=100).
+    pub fn new(music_percent: u8, sfx_percent: u8) -> VolumeMixers {
+        VolumeMixers {
+            music: VolumeLevel::new(music_percent),
+            sfx: VolumeLevel::new(sfx_percent),
+        }
+    }
+
+    /// The music bus selection.
+    pub fn music(self) -> VolumeLevel {
+        self.music
+    }
+
+    /// The SFX bus selection.
+    pub fn sfx(self) -> VolumeLevel {
+        self.sfx
+    }
+
+    /// A copy with a new music selection (value semantics: a change
+    /// is a new selection, never a mutation).
+    pub fn with_music(self, music: VolumeLevel) -> VolumeMixers {
+        VolumeMixers { music, ..self }
+    }
+
+    /// A copy with a new SFX selection.
+    pub fn with_sfx(self, sfx: VolumeLevel) -> VolumeMixers {
+        VolumeMixers { sfx, ..self }
+    }
+
+    /// The Q8 gain actually applied to the device-bound stream: the
+    /// two bus gains composed multiplicatively — the honest
+    /// composition for a shared (un-split) engine bus, where each
+    /// knob alone reproduces the original's whole-mix stepper
+    /// exactly. SHIPPED composes to unity (256) with no rounding
+    /// residue.
+    pub fn stream_gain_q8(self) -> u16 {
+        ((u32::from(self.music.gain_q8()) * u32::from(self.sfx.gain_q8()) + 128) >> 8) as u16
+    }
+}
+
+/// Scale interleaved i16 frames by a Q8 gain (256 = unity). PURE and
+/// stateless per sample, so it is chunking-invariant; unity is an
+/// EXACT passthrough (the shipped default leaves the device-bound
+/// bytes bit-identical). The gain never exceeds unity, so the scaled
+/// magnitude can never leave i16 — no clamp needed. Rounding is
+/// round-to-nearest with ties toward +inf, the module convention.
+pub(crate) fn apply_stream_gain(frames: &mut [i16], gain_q8: u16) {
+    if gain_q8 == GAIN_UNITY_Q8 {
+        return; // exact identity: the shipped mix passes through
+    }
+    for s in frames.iter_mut() {
+        *s = ((i32::from(*s) * i32::from(gain_q8) + 128) >> 8) as i16;
+    }
+}
+
 /// The state shared with the device callback.
 #[derive(Debug)]
 pub(crate) struct FeedState {
@@ -330,6 +490,14 @@ pub struct AudioFeed {
     /// [`AudioFeed::fill_from`] renders nothing. Sticky - a feed
     /// never wakes back up (a dropped stream is gone for good).
     alive: Arc<AtomicBool>,
+    /// P6 QoL volume mixers (D212): shared with the window event
+    /// handler so the bounded runtime key set can adjust the
+    /// selection while the loop keeps filling. Read once per fill
+    /// and applied on the DEVICE-BOUND copy only — the engine's
+    /// mixed stream is never touched by any setting. The device
+    /// callback never reads this (it drains the already-scaled
+    /// ring), so the realtime path stays lock-free of it.
+    mixers: Arc<Mutex<VolumeMixers>>,
 }
 
 impl AudioFeed {
@@ -340,7 +508,22 @@ impl AudioFeed {
                 step: FrameStepper::new(src_rate, dst_rate),
             })),
             alive: Arc::new(AtomicBool::new(true)),
+            mixers: Arc::new(Mutex::new(VolumeMixers::SHIPPED)),
         }
+    }
+
+    /// The current per-bus volume selection (P6 QoL; default
+    /// [`VolumeMixers::SHIPPED`]).
+    pub fn mixers(&self) -> VolumeMixers {
+        *self.mixers.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Select the per-bus volume at runtime (the bounded key/CLI
+    /// surface): the NEXT fill applies it to the frames it renders.
+    /// Poison-tolerant like every lock here — a panicking adjuster
+    /// must not break the audio path.
+    pub fn set_mixers(&self, mixers: VolumeMixers) {
+        *self.mixers.lock().unwrap_or_else(|p| p.into_inner()) = mixers;
     }
 
     /// Silence this feed forever (the [`AudioDevice`] drop path).
@@ -372,6 +555,12 @@ impl AudioFeed {
     /// ring is already at target, or the feed is dead - a dropped
     /// device never consumes more). A render error propagates - the
     /// caller decides whether that is fatal (it is not, for audio).
+    ///
+    /// P6 QoL volume mixers (D212): the rendered frames are scaled
+    /// by the current [`VolumeMixers`] BEFORE the ring push — the
+    /// one and only gain application site. The engine's
+    /// `render_audio` output is identical under every knob setting
+    /// (pinned by test); only this device-bound copy scales.
     pub fn fill_from(&self, host: &mut GameHost, target: usize) -> Result<usize, GameError> {
         if self.is_quiet() {
             return Ok(0);
@@ -382,6 +571,7 @@ impl AudioFeed {
         }
         let mut scratch = vec![0i16; deficit * 2];
         let mixed = host.render_audio(&mut scratch)?;
+        apply_stream_gain(&mut scratch[..mixed * 2], self.mixers().stream_gain_q8());
         let mut state = self.lock();
         let taken = state.ring.push_frames(&scratch[..mixed * 2]);
         debug_assert_eq!(taken, mixed);
@@ -524,6 +714,19 @@ impl AudioDevice {
     /// The producer handle (clone the Arc out for split-borrow sites).
     pub fn feed(&self) -> &AudioFeed {
         &self.feed
+    }
+
+    /// The current per-bus volume selection (P6 QoL volume mixers,
+    /// D212; delegates to the feed so the window event handler and
+    /// the fill site can never disagree).
+    pub fn mixers(&self) -> VolumeMixers {
+        self.feed.mixers()
+    }
+
+    /// Select the per-bus volume at runtime (the bounded key/CLI
+    /// surface; the next fill applies it).
+    pub fn set_mixers(&self, mixers: VolumeMixers) {
+        self.feed.set_mixers(mixers)
     }
 
     /// The opened device shape (diagnostics).
@@ -1071,5 +1274,218 @@ mod tests {
             TARGET_FRAMES - left,
             TARGET_FRAMES
         );
+    }
+
+    /// THE VOLUME-LEVEL DOMAIN (D212): the original's own UI domain
+    /// re-anchored (RE-EXW-INPUT sec 5: g_music_volume 0..100,
+    /// ±5 steps, clamped) and its exact Q8 conversion — unity (256)
+    /// at FULL, silence at 0.
+    #[test]
+    fn volume_level_domain_and_q8_conversion() {
+        assert_eq!(VolumeLevel::FULL.percent(), 100);
+        assert_eq!(VolumeLevel::default(), VolumeLevel::FULL);
+        assert_eq!(VolumeLevel::new(150).percent(), 100, "clamped");
+        assert_eq!(VolumeLevel::new(7).percent(), 7);
+        assert_eq!(VolumeLevel::FULL.gain_q8(), GAIN_UNITY_Q8);
+        assert_eq!(VolumeLevel::new(0).gain_q8(), 0);
+        assert_eq!(VolumeLevel::new(50).gain_q8(), 128);
+        assert_eq!(VolumeLevel::new(75).gain_q8(), 192);
+        assert_eq!(VolumeLevel::new(25).gain_q8(), 64);
+        // The original's own step and clamp.
+        assert_eq!(VolumeLevel::new(98).stepped(5).percent(), 100);
+        assert_eq!(VolumeLevel::new(2).stepped(-5).percent(), 0);
+        assert_eq!(VolumeLevel::new(50).stepped(5).percent(), 55);
+        assert_eq!(VolumeLevel::new(50).stepped(-5).percent(), 45);
+    }
+
+    /// The per-bus pair composes on the SHARED engine bus (D212; the
+    /// honest bus split, RE-EXW-MUSIC sec 7: the shipped EXW has one
+    /// master scaling music AND sfx, so each knob alone is a
+    /// whole-mix scale — exactly the original stepper's behavior —
+    /// and SHIPPED composes to unity with no rounding residue).
+    #[test]
+    fn volume_mixers_compose_the_shared_bus_gain() {
+        assert_eq!(VolumeMixers::SHIPPED.stream_gain_q8(), GAIN_UNITY_Q8);
+        assert_eq!(VolumeMixers::default(), VolumeMixers::SHIPPED);
+        assert_eq!(VolumeMixers::new(50, 100).stream_gain_q8(), 128);
+        assert_eq!(VolumeMixers::new(100, 50).stream_gain_q8(), 128);
+        assert_eq!(VolumeMixers::new(50, 50).stream_gain_q8(), 64);
+        assert_eq!(VolumeMixers::new(0, 100).stream_gain_q8(), 0);
+        assert_eq!(VolumeMixers::new(100, 0).stream_gain_q8(), 0);
+        // Constructors + value semantics.
+        let m = VolumeMixers::new(30, 40);
+        assert_eq!((m.music().percent(), m.sfx().percent()), (30, 40));
+        assert_eq!(m.with_music(VolumeLevel::new(60)).music().percent(), 60);
+        assert_eq!(m.with_music(VolumeLevel::new(60)).sfx().percent(), 40);
+        assert_eq!(m.music().percent(), 30, "value semantics: m unchanged");
+        // Clamped construction.
+        assert_eq!(
+            VolumeMixers::new(200, 200),
+            VolumeMixers::SHIPPED,
+            "both buses clamp at the shipped ceiling"
+        );
+    }
+
+    /// Unity is an EXACT identity: the shipped default leaves the
+    /// device-bound bytes bit-identical (pinned over the whole i16
+    /// range, both full-scale ends included).
+    #[test]
+    fn apply_stream_gain_is_exact_identity_at_unity() {
+        let mut frames: Vec<i16> = Vec::new();
+        let mut x = 0i32;
+        while x <= i16::MAX as i32 {
+            frames.push(x as i16);
+            frames.push((x as i16).wrapping_neg());
+            x += 997; // a coprime stride sweeps signs and magnitudes
+        }
+        frames.push(i16::MAX);
+        frames.push(i16::MIN);
+        let before = frames.clone();
+        apply_stream_gain(&mut frames, GAIN_UNITY_Q8);
+        assert_eq!(frames, before, "unity gain = bit-exact passthrough");
+    }
+
+    /// The scale math at non-unity gains: halving, muting, round to
+    /// nearest with ties toward +inf (the module convention), and
+    /// the scaled magnitude NEVER exceeds the source (the gain is
+    /// attenuation-only, like the DirectSound domain itself).
+    #[test]
+    fn apply_stream_gain_scales_and_mutes() {
+        let mut frames = vec![0i16, 1, 2, 3, -1, -2, -3, 100, -100, i16::MAX, i16::MIN];
+        apply_stream_gain(&mut frames, 0);
+        assert!(frames.iter().all(|&s| s == 0), "gain 0 = exact silence");
+
+        let mut frames = vec![0i16, 1, 2, 3, -1, -2, -3, 100, -100];
+        apply_stream_gain(&mut frames, 128);
+        assert_eq!(frames[0], 0);
+        assert_eq!(frames[1], 1, "1 * 0.5 rounds up to 1 (ties +inf)");
+        assert_eq!(frames[2], 1);
+        assert_eq!(frames[3], 2);
+        assert_eq!(frames[4], 0, "-1 * 0.5 rounds toward +inf to 0");
+        assert_eq!(frames[5], -1);
+        assert_eq!(frames[6], -1);
+        assert_eq!(frames[7], 50);
+        assert_eq!(frames[8], -50);
+
+        let mut frames = vec![100i16, -100, 7];
+        apply_stream_gain(&mut frames, 192); // 75%
+        assert_eq!(frames[0], 75);
+        assert_eq!(frames[1], -75);
+        assert_eq!(frames[2], 5, "7 * 0.75 = 5.25 -> 5");
+    }
+
+    /// A fresh host fixture with two known PCM frames queued (the
+    /// same pinned values as the device-edge tests: u8 128 = exact
+    /// silence, u8 200 -> 7200 at the default config master).
+    fn pcm_host() -> GameHost {
+        let mut host = GameHost::new(
+            &bedlam_game::GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0u8, 0, 0]; 256],
+        );
+        host.mixer_mut()
+            .queue_pcm_u8(&[128, 200, 200, 128])
+            .unwrap();
+        host
+    }
+
+    /// THE SHIPPED-DEFAULT PIN (D212): the default mixers feed the
+    /// ENGINE stream bit-exactly — the ring holds exactly what a
+    /// direct `render_audio` produced from an identically-built
+    /// host.
+    #[test]
+    fn shipped_mixers_feed_the_engine_stream_bit_exactly() {
+        let mut direct = pcm_host();
+        let mut engine = vec![0i16; 4];
+        let n = direct.render_audio(&mut engine).unwrap();
+        assert_eq!(n, 2);
+
+        let mut host = pcm_host();
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        assert_eq!(feed.mixers(), VolumeMixers::SHIPPED, "feed default");
+        assert_eq!(feed.fill_from(&mut host, 2).unwrap(), 2);
+        let st = feed.lock();
+        assert_eq!(st.ring.peek_frame(0), Some([engine[0], engine[1]]));
+        assert_eq!(st.ring.peek_frame(1), Some([engine[2], engine[3]]));
+    }
+
+    /// THE BOUNDS PIN (D212): the knobs scale ONLY the device-bound
+    /// copy — the host's own mixed stream (the audio determinism
+    /// gate, D17 b byte-identity) is invariant under any mixer
+    /// setting, before AND after non-unity fills.
+    #[test]
+    fn volume_mixers_never_touch_the_engine_stream() {
+        // Control: the engine stream of an untouched host.
+        let mut direct = pcm_host();
+        let mut e1 = vec![0i16; 2];
+        let mut e2 = vec![0i16; 2];
+        direct.render_audio(&mut e1).unwrap();
+        direct.render_audio(&mut e2).unwrap();
+
+        // A muted feed still consumes the SAME engine frames.
+        let mut host = pcm_host();
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        feed.set_mixers(VolumeMixers::new(0, 0));
+        assert_eq!(feed.fill_from(&mut host, 1).unwrap(), 1);
+        {
+            let st = feed.lock();
+            assert_eq!(st.ring.peek_frame(0), Some([0, 0]), "device copy muted");
+        }
+        // ...and a half-scale feed renders chunk 1 at half scale...
+        let mut host = pcm_host();
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        feed.set_mixers(VolumeMixers::new(50, 100));
+        assert_eq!(feed.fill_from(&mut host, 1).unwrap(), 1);
+        {
+            let st = feed.lock();
+            let expect = |s: i16| ((i32::from(s) * 128 + 128) >> 8) as i16;
+            assert_eq!(st.ring.peek_frame(0), Some([expect(e1[0]), expect(e1[1])]));
+        }
+        // ...while the HOST's own next render stays exactly the
+        // control's chunk 2: the knob never perturbed the engine.
+        let mut e2b = vec![0i16; 2];
+        host.render_audio(&mut e2b).unwrap();
+        assert_eq!(e2b, e2, "the engine stream is knob-invariant");
+    }
+
+    /// The bounded runtime surface: a mid-stream adjustment applies
+    /// to FUTURE fills only — frames already buffered keep their
+    /// level (the ring holds no surprises; the shell loop's steady
+    /// 16 ms refills make the change audible within one watermark).
+    #[test]
+    fn runtime_mixers_adjust_applies_to_future_fills_only() {
+        // Every queued frame non-silent (u8 200), so a kept level is
+        // distinguishable from an adjusted one.
+        let mk = || {
+            let mut host = GameHost::new(
+                &bedlam_game::GameConfig::default(),
+                &bedlam_core::sim::SimConfig::default(),
+                [[0u8, 0, 0]; 256],
+            );
+            host.mixer_mut().queue_pcm_u8(&[200; 6]).unwrap();
+            host
+        };
+        let feed = AudioFeed::new(64, SAMPLE_RATE, SAMPLE_RATE);
+        let mut host = mk();
+        assert_eq!(feed.fill_from(&mut host, 4).unwrap(), 4);
+        // The callback analog consumes half the buffered frames (the
+        // device would; the fill only tops up toward the target).
+        feed.lock().ring.pop_frames(2);
+        feed.set_mixers(VolumeMixers::new(0, 100));
+        let mut host2 = mk();
+        assert_eq!(feed.fill_from(&mut host2, 4).unwrap(), 2);
+        let st = feed.lock();
+        // Frames 0..2 rendered BEFORE the adjust keep their level;
+        // the top-up 2..4 renders after it, muted.
+        for i in 0..2 {
+            assert_eq!(
+                st.ring.peek_frame(i),
+                Some([7200, 7200]),
+                "buffered frame {i} keeps its level"
+            );
+        }
+        for i in 2..4 {
+            assert_eq!(st.ring.peek_frame(i), Some([0, 0]), "muted after adjust");
+        }
     }
 }

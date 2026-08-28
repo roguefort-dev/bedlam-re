@@ -17,9 +17,13 @@
 //!   `--borderless` select the P6 QoL window mode (PLAN §6 "QoL:
 //!   window modes"; default = a decorated window exactly as
 //!   shipped; the exclusive-style fullscreen is best-effort; F11
-//!   toggles at runtime).
+//!   toggles at runtime). `--music PCT` / `--sfx PCT` select the
+//!   P6 QoL volume mixers' starting levels (PLAN §6 "QoL: ...
+//!   volume mixers"; a platform per-bus selection, default 100 =
+//!   the shipped mix exactly; PageUp/PageDown and
+//!   BracketRight/BracketLeft adjust at runtime).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -39,6 +43,8 @@ fn main() -> ExitCode {
     let mut uncapped = false;
     let mut fullscreen = false;
     let mut borderless = false;
+    let mut music: Option<u8> = None;
+    let mut sfx: Option<u8> = None;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -48,6 +54,20 @@ fn main() -> ExitCode {
             "--uncapped" | "-u" => uncapped = true,
             "--fullscreen" | "-f" => fullscreen = true,
             "--borderless" | "-b" => borderless = true,
+            "--music" => match args.next().and_then(|v| v.parse().ok()) {
+                Some(p) => music = Some(p),
+                None => {
+                    eprintln!("bedlam-shell: --music needs a percent 0..=100");
+                    return ExitCode::from(2);
+                }
+            },
+            "--sfx" => match args.next().and_then(|v| v.parse().ok()) {
+                Some(p) => sfx = Some(p),
+                None => {
+                    eprintln!("bedlam-shell: --sfx needs a percent 0..=100");
+                    return ExitCode::from(2);
+                }
+            },
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -56,7 +76,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -78,6 +98,18 @@ fn main() -> ExitCode {
                     "  --borderless: window host opens borderless fullscreen (P6 QoL window mode;"
                 );
                 println!("                default = windowed; F11 toggles; ignored headless)");
+                println!("  --music PCT: window host starts the music bus at PCT percent of the");
+                println!("               shipped mix (P6 QoL volume mixers, 0..=100, clamped;");
+                println!(
+                    "               default 100 = shipped; PageUp/PageDown adjust; ignored headless)"
+                );
+                println!(
+                    "  --sfx PCT: window host starts the SFX bus at PCT percent of the shipped"
+                );
+                println!("             mix (P6 QoL volume mixers, 0..=100, clamped; default 100 =");
+                println!(
+                    "             shipped; BracketRight/BracketLeft adjust; ignored headless)"
+                );
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -138,6 +170,23 @@ fn main() -> ExitCode {
         if borderless {
             opts.window_mode = WindowMode::Borderless;
         }
+        // P6 QoL volume mixers (PLAN §6 "QoL: ... volume mixers"): a
+        // PLATFORM per-bus selection (D200 layering — outside
+        // ModeConfig, NO purist arbitration: audio is presentation
+        // bucket, D17 b). Default = the shipped mix exactly; the
+        // gain applies at the audio feed's device-bound copy only —
+        // the engine's mixed parity stream and every hash are
+        // untouched by any setting (RE-EXW-MUSIC sec 7 re-anchor).
+        if let Some(pct) = music {
+            opts.volume = opts
+                .volume
+                .with_music(bedlam_shell::audio::VolumeLevel::new(pct));
+        }
+        if let Some(pct) = sfx {
+            opts.volume = opts
+                .volume
+                .with_sfx(bedlam_shell::audio::VolumeLevel::new(pct));
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
@@ -151,6 +200,13 @@ fn main() -> ExitCode {
             eprintln!(
                 "bedlam-shell: --fullscreen/--borderless are window-host options; ignored headless"
             );
+        }
+        if music.is_some() || sfx.is_some() {
+            // Same posture for the volume mixers: the headless path
+            // owns no audio device, so there is no device-bound copy
+            // to scale — and CRITICALLY the engine's mixed stream
+            // (the determinism gate) must never see the knobs.
+            eprintln!("bedlam-shell: --music/--sfx are window-host options; ignored headless");
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {
