@@ -1,5 +1,47 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-timing-lock-surface` COMPLETE (worker 458a7e98
+    claim 1, commit c225c81, PUSHED): THE TIMING-LOCK AXIS'S FIRST
+    REAL CONSUMER — PRESENT PACING AT THE HOST/PRESENT SEAM (D203,
+    the D201 seam's first axis-consumer unit). PresentPacing in
+    engine/bedlam-game/src/host.rs — Decoupled (modern: the
+    accumulator-driven present, every host frame presentable,
+    zero-tick high-refresh frames included) vs FrameLocked (classic:
+    the ORIGINAL frame-locked present-coupled pacing, [verified
+    RE-EXW-PACER §3 / D16 — one sim/render frame per display flip,
+    no software frame clock]: presentable only when the pump executed
+    at least one logic tick). GameHost::present_pacing() reads the
+    timing-lock arm of the IMMUTABLE mode (a POLICY, never a Hz);
+    GameHost::should_present() is the platform's per-host-frame
+    present gate (boot frame presentable in both arms); a private
+    last_pump_ticks field feeds it — presentation bucket only (D17
+    b), never the sim/state/scene hash. The logic tick stays FIXED
+    at the original rate in BOTH arms; display rate never enters the
+    sim or the state hash, pinned by
+    timing_lock_pacing_never_touches_the_hashed_buckets (same pump
+    script = identical executed ticks, sim tick count, state hash,
+    scene hash in both arms while should_present differs — the
+    consumer is real, not inert). The D17 accumulator is
+    pacing-policy-neutral in every arm. Catalog stays EMPTY (a
+    plan-named axis unit is not a catalog entry); platform loop
+    wiring deferred to the queued present-loop unit (D203 scope
+    note). Gate p6-timing-lock-surface wired as the THIRD P6
+    required_gates entry (R6 keeps the scaffold first; commands =
+    bedlam-game --lib + bedlam-core --lib, hermetic). Verified
+    first-hand: bedlam-game --lib 147/0 (+5 pacing tests),
+    bedlam-core --lib 147/0; controls green BEFORE (clean HEAD
+    c942bd9) AND AFTER: canonical_dump_gate 13/13 ZERO canonical-
+    chain movement, zone_mission_parity 5/5, determinism 4/4,
+    bedlam-core determinism + hash_fixture green;
+    check-p6-behavior-catalog OK + suite 30/30; gates-validator
+    22/22; workspace cargo check clean; fmt + clippy clean on
+    touched crates; the bounded --phase P6 verdict at c225c81
+    status=passed, all 3 P6 gates green every command rc=0 (report
+    .state/p6-timinglock-gates-report.json, head-bound c225c819f516);
+    MANIFEST clean before AND after; no Ghidra run. Queued: the
+    control-scheme axis consumer as the new head, the present-loop
+    platform wiring second.
+
   - 2026-08-28 `p6-modeconfig-seam` COMPLETE (worker 21604df0
     claim 1, commit 9d39368, PUSHED): THE MODECONFIG SEAM
     IMPLEMENTED (D201, the D200 contract's first engine unit). ONE
@@ -72,10 +114,11 @@
     head.
 
 - Phase: P6 UNDERWAY (the contract scaffold green at e0bc7fb, D200;
-  the ModeConfig seam green at 9d39368, D201; the
-  p6-timing-lock-surface axis-consumer unit queued as the head).
-  P0-P5 GREEN (P5 flipped f608207, .state/P5-COMPLETE; ledger 37/37,
-  D199). P7 pending; plan_complete false.
+  the ModeConfig seam green at 9d39368, D201; the timing-lock axis
+  consumer green at c225c81, D203; the p6-control-scheme-surface
+  axis-consumer unit queued as the head). P0-P5 GREEN (P5 flipped
+  f608207, .state/P5-COMPLETE; ledger 37/37, D199). P7 pending;
+  plan_complete false.
 
   - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6
     claim 1, commit f608207, PUSHED): P5 CLOSED IN THE MANIFEST —

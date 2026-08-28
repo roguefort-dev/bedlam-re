@@ -10,27 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-timing-lock-surface] [gate=p6-timing-lock-surface] P6
-   axis-consumer unit #1 per PLAN §6 + D201 — give the timing-lock
-   purist axis its FIRST real consumer at the HOST/PRESENT seam only
-   (modern arm = accumulator-driven present decoupled from tick rate,
-   classic arm = the original frame-locked present-coupled pacing),
-   while the logic tick stays FIXED at the original rate in BOTH arms
-   and display rate NEVER enters the sim or the state hash
-   (Determinism Charter; the D17 accumulator in bedlam-core/src/
-   frame.rs already quantizes host dt — the unit selects the pacing
-   POLICY from host.mode() per D201, never a Hz). Bounds: no
-   canonical-chain movement (canonical_dump_gate 13/13,
-   zone_mission_parity 5/5, determinism green before AND after — the
-   modern default must stay byte-identical); test surface = the ONE
-   purist toggle, both arms, never the feature cross-product; the
-   catalog stays EMPTY (no entry without recorded evidence + repro);
-   wire the completion gate p6-timing-lock-surface as the THIRD P6
-   required_gates entry (R6 keeps the scaffold first); fmt + clippy
-   on touched crates; gates-validator suite green; MANIFEST clean
-   before and after any corpus read; no Ghidra run; commit with the
-   unit's own Nudge-Worker trailer.
-2. [READY] [id=p6-control-scheme-surface] [gate=p6-control-scheme-surface] P6
+1. [READY] [id=p6-control-scheme-surface] [gate=p6-control-scheme-surface] P6
    axis-consumer unit #2 per PLAN §6 + D201 — the control-scheme purist
    axis consumer at the platform/input layer (modern = WASD + 1-4
    weapon hotkeys + full remap + wheel zoom + gamepad; classic = the
@@ -41,10 +21,71 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    generalizes). Bounds: no canonical-chain movement; test surface =
    the ONE purist toggle, both arms; catalog stays EMPTY; wire gate
    p6-control-scheme-surface as the FOURTH P6 required_gates entry
-   behind item 1's gate; fmt + clippy; gates-validator green;
-   MANIFEST clean; no Ghidra run; own Nudge-Worker trailer.
+   behind the three standing gates; fmt + clippy; gates-validator
+   green; MANIFEST clean; no Ghidra run; own Nudge-Worker trailer.
+2. [READY] [id=p6-present-loop-wiring] [gate=p6-present-loop-wiring] P6
+   platform unit per PLAN §6 + the D203 scope note — wire the present
+   seam's consumer into the real platform loop: route the immutable
+   ModeConfig through the bedlam-shell host config into GameHost
+   construction (classic/modern selectable at the platform level) and
+   make the window present loop honor GameHost::should_present (the
+   timing-lock pacing policy: modern presents every vsync, classic
+   holds the previous image on zero-tick frames). The shell fixed-step
+   clock/pump contract and the hashed trajectory stay untouched — no
+   canonical-chain movement, no harness change. Bounds: test surface
+   stays the ONE purist toggle both arms where practical; catalog
+   stays EMPTY; wire gate p6-present-loop-wiring as the FIFTH P6
+   required_gates entry; fmt + clippy on touched crates;
+   gates-validator green; MANIFEST clean; no Ghidra run; own
+   Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+1. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+   PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
+   timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
+   seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
+   selects the PRESENT PACING POLICY, never a Hz. (a) engine/
+   bedlam-game/src/host.rs: PresentPacing — Decoupled (the modern
+   accumulator-driven present: every host frame presentable,
+   zero-tick high-refresh frames included, the shape the shell clock
+   bedlam-shell/src/clock.rs feeds) and FrameLocked (the ORIGINAL
+   frame-locked present-coupled pacing, RE-anchored [verified,
+   RE-EXW-PACER §3 / D16: one sim/render frame per display flip, no
+   software frame clock — the FUN_0043d00b loop pass and its
+   PresentEnd are ONE event, g_frame_count++ exactly once per flip]:
+   a host frame is presentable only when it executed >= 1 logic
+   tick). (b) GameHost::present_pacing() reads the timing-lock arm of
+   the IMMUTABLE mode; GameHost::should_present() is the gate the
+   platform present loop asks each host frame (the boot frame is
+   presentable in both arms); a private last_pump_ticks field (D17 b)
+   feeds the gate — presentation bucket only, it can never reach the
+   sim, the state hash or the scene hash. (c) the LOGIC TICK STAYS
+   FIXED at the original rate in BOTH arms; display rate NEVER enters
+   the sim or the state hash (Determinism Charter), pinned by
+   timing_lock_pacing_never_touches_the_hashed_buckets (same pump
+   script = identical executed-tick sequence, sim tick count, state
+   hash and scene hash in both arms while should_present differs —
+   the consumer is real, not inert); the D17 accumulator is
+   pacing-policy-neutral in every arm (SimDriver doc). Test surface =
+   the ONE purist toggle, both arms (control-scheme only as the
+   axis-independence control), never the feature cross-product; the
+   catalog stays EMPTY. (d) GATE: p6-timing-lock-surface wired as the
+   THIRD P6 required_gates entry (R6 keeps the scaffold first) —
+   commands = bedlam-game --lib + bedlam-core --lib, both --release
+   --locked --offline, hermetic. Verified first-hand: bedlam-game
+   --lib 147/0 (+5 pacing tests), bedlam-core --lib 147/0; controls
+   green BEFORE at clean HEAD c942bd9 AND AFTER: canonical_dump_gate
+   13/13 (ZERO canonical-chain movement), zone_mission_parity 5/5,
+   determinism 4/4, bedlam-core determinism 12/0 + hash_fixture
+   green; check-p6-behavior-catalog OK (catalog empty, R6 satisfied
+   with the third gate) + suite 30/30; gates-validator suite 22/22;
+   workspace cargo check clean; fmt + clippy clean on the touched
+   crates; MANIFEST clean before AND after every corpus read; the
+   bounded --phase P6 validator verdict at c225c81: status=passed,
+   all 3 P6 gates green, every command rc=0 (report
+   .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
+   no Ghidra run. Queued: the control-scheme axis consumer as the new
+   head, the present-loop platform wiring second.
+2. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -90,7 +131,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-2. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+3. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -133,7 +174,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-3. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+4. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -157,7 +198,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-4. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+5. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
