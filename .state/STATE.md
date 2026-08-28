@@ -1,5 +1,48 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-ci-artifacts` COMPLETE (worker cf6544eb
+    claim 1, commit af9cac1, PUSHED, plus this bookkeeping
+    commit): P7's FIRST ENGINEERING DELIVERABLE — the PER-PUSH CI
+    ARTIFACT JOBS (D222; PLAN §6 P7 "CI artifacts per push" +
+    P7-PORTS §2 rows ci-artifacts-per-push + linux-native, both
+    flipped landed naming the new SECOND P7 required gate in the
+    same commit per the R2 rule). THE WORKFLOW (.github/workflows/
+    ci.yml): two actions/upload-artifact@v4 steps inside the
+    EXISTING build matrix — every push uploads the release binary
+    per leg (ubuntu-latest -> target/release/bedlam-shell as
+    bedlam-shell-linux-x86_64 = the linux-native deliverable;
+    windows-latest -> target/release/bedlam-shell.exe as
+    bedlam-shell-windows-x86_64), each gated on its runner.os,
+    if-no-files-found: error, retention-days 14; the artifact is
+    the ENGINE BINARY ONLY (never game-data/assets, nothing
+    corpus-derived) and UNSIGNED — no credential, no store, no
+    runner dependency (the D221 signing-keys exclusion; the macOS
+    leg joins with macos-universal2-ci); least-privilege
+    permissions: contents: read (the frame-pacing.yml pattern).
+    THE GATE: tools/check-p7-ci-artifacts.py — fail-closed,
+    hermetic, offline over the COMMITTED definition (a
+    stdlib-only YAML-subset reader, the D216 no-deps family
+    posture) proving the per-push trigger, the ONE release-matrix
+    job (cargo build --release on BOTH legs), the two gated
+    binary uploads (action pinned @v4, exact paths,
+    if-no-files-found: error), and NO SIGNING MATERIAL (8
+    denylisted tokens case-insensitive anywhere incl. comments);
+    suite 22/22 (every rule fails loudly; minimal-synthetic +
+    real-repo pins; the wrong-job upload refusal);
+    check-p7-ports-map re-run as gate command 2 (7 engineering,
+    2 landed naming p7-ci-artifacts) with its own suite
+    re-baselined deliberately 29/29; test-validate-required-gates
+    22/22 after the manifest edit; check-p6-behavior-catalog OK
+    before AND after; MANIFEST clean (no corpus read); the
+    bounded --phase P7 verdict at af9cac1: status=passed, ALL 2
+    P7 GATES GREEN, every command rc=0 under bwrap containment
+    (report .state/p7-ciartifacts-gates-report.json, head-bound
+    to af9cac1e5597); no engine change, no installer byte, no
+    Ghidra run, no new RE. Queue head is now p7-cdda-user-supply
+    (the §4 contract: user-supply lookup + silent miss + the
+    user-owned local lossy cache), with SteamDeck, Flatpak,
+    installer, universal2 and the P7 phase close queued behind.
+
   - 2026-08-28 `p7-ports-scaffold` COMPLETE (worker 5c84290c
     claim 1, commit 8fd0739, PUSHED, plus this bookkeeping
     commit): P7 OPENED — THE PORTS/PACKAGING DELIVERABLE-MAP
@@ -741,9 +784,12 @@
     head.
 
 - Phase: P7 UNDERWAY (the p7-ports-scaffold contract landed 8fd0739
-  as the FIRST P7 required gate, D221; the remaining engineering
-  deliverables queued; runner, signing, and publication availability
-  are external conditions per PLAN). P0-P6 GREEN (P6 flipped d01a7b7
+  as the FIRST P7 required gate, D221; the first engineering
+  deliverable p7-ci-artifacts landed af9cac1 as the SECOND gate,
+  D222 — registry rows ci-artifacts-per-push + linux-native landed,
+  5 engineering rows pending; runner, signing, and publication
+  availability are external conditions per PLAN). P0-P6 GREEN (P6
+  flipped d01a7b7
   with the bound verdict re-emitted there — ALL 14 P6 gates green,
   .state/P6-COMPLETE phase-complete-v1; the D220 survey: every PLAN
   section 6 P6 bullet gate-green landed or explicitly deferred,

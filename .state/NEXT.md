@@ -10,37 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-ci-artifacts] [gate=p7-ci-artifacts] P7 first
-   engineering deliverable per PLAN §6 P7 "CI artifacts per push" +
-   docs/P7-PORTS.md §2/§3 (the D221 contract's registry rows
-   ci-artifacts-per-push + linux-native): the per-push CI ARTIFACT
-   JOBS. (a) The workflow work: extend .github/workflows/ci.yml (or a
-   sibling artifacts workflow triggered on push) with artifact-upload
-   jobs that build the release binary per push on the EXISTING
-   ubuntu-latest + windows-latest matrix legs (Linux native + the
-   Windows build artifact; the macOS leg joins with the
-   macos-universal2-ci unit when a runner exists — D221 exclusion
-   discipline: NO store, NO signing key, NO runner dependency may
-   enter this unit). (b) The contract work: flip the registry rows
-   ci-artifacts-per-push + linux-native to landed with their proving
-   gate in the SAME commit (the D221 R2 rule — landed exactly when
-   the gate is named; update the rows' notes with what the artifact
-   actually is). (c) The gate: p7-ci-artifacts as the SECOND P7
-   required_gates entry behind p7-ports-scaffold — commands = a
-   fail-closed offline checker over the workflow definition (the
-   jobs exist, trigger per push, upload artifacts, no signing
-   material) +
-   tools/check-p7-ports-map.py (the registry flip) + the hermetic
-   suite, all offline; tracked_paths carry the workflow + the doc +
-   the tools + the manifest. BOUNDS: CI/workflow + checker work
-   only, no engine change, no packaging BUILD of installers (the
-   binary artifact is cargo build --release, already green in ci);
-   no corpus; controls green before AND after
-   (check-p6-behavior-catalog + the gates-validator suite +
-   test-validate-required-gates on the manifest edit); MANIFEST
-   clean; commit with the unit's own Nudge-Worker trailer.
-
-2. [READY] [id=p7-cdda-user-supply] [gate=p7-cdda-user-supply] P7
+1. [READY] [id=p7-cdda-user-supply] [gate=p7-cdda-user-supply] P7
    CDDA deliverable per PLAN §6 P7 + docs/P7-PORTS.md §4 (the D221
    contract, row cdda-user-supply): the USER-SUPPLY + LOCAL-CACHE
    surface in the shell/platform layer. (a) The documented LOOKUP
@@ -64,7 +34,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    after every corpus read; commit with the unit's own
    Nudge-Worker trailer.
 
-3. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
+2. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
    SteamDeck deliverable per PLAN §6 P7 "SteamDeck defaults stretch"
    + docs/P7-PORTS.md §5 (the D221 contract, row steamdeck-default):
    the recorded PLATFORM-PROFILE default over the landed D215 scale
@@ -87,7 +57,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    MANIFEST clean; commit with the unit's own Nudge-Worker
    trailer.
 
-4. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
+3. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
    Flatpak deliverable per PLAN §6 P7 "Linux native + Flatpak" +
    docs/P7-PORTS.md §2 (row flatpak-manifest): the committed
    Flatpak build manifest + its CI build definition; Flathub
@@ -98,7 +68,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    green before AND after; commit with the unit's own
    Nudge-Worker trailer.
 
-5. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
+4. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
    Windows deliverable per PLAN §6 P7 "Windows installer" +
    docs/P7-PORTS.md §2 (row windows-installer): the committed
    installer definition built by the artifact job; Authenticode
@@ -108,7 +78,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    work, no engine change; controls green before AND after; commit
    with the unit's own Nudge-Worker trailer.
 
-6. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
+5. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
    macOS deliverable per PLAN §6 P7 "macOS universal2 through
    automated CI" + docs/P7-PORTS.md §2 (row macos-universal2-ci):
    the committed universal2 aarch64+x86_64 CI job definition that
@@ -121,7 +91,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    checker work, no engine change; controls green before AND
    after; commit with the unit's own Nudge-Worker trailer.
 
-7. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
+6. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
    phase-close bookkeeping once EVERY engineering deliverable in
    docs/P7-PORTS.md §3 is landed with its proving gate (the D221
    R6 surveyable flip — the p5/p6 phase-close pattern): the
@@ -131,10 +101,78 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    docs/required-gates.toml, and the bound --phase P7 verdict
    re-emitted at the flip commit (--phase-output
    .state/P7-COMPLETE). This item is claimable ONLY after items
-   1-6 are done.
+   1-5 are done.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
+1. DONE (2026-08-28, claim 1 — commit af9cac1 by worker cf6544eb,
+   PUSHED, plus this bookkeeping commit): P7 first engineering
+   deliverable `p7-ci-artifacts` — the PER-PUSH CI ARTIFACT JOBS per
+   PLAN §6 P7 "CI artifacts per push" + docs/P7-PORTS.md §2/§3
+   (implementation D222; the D221 registry rows ci-artifacts-per-push
+   + linux-native). (a) THE WORKFLOW (.github/workflows/ci.yml): two
+   actions/upload-artifact@v4 steps inside the EXISTING build matrix —
+   every push uploads the release binary from each leg (ubuntu-latest
+   -> target/release/bedlam-shell as artifact bedlam-shell-linux-x86_64,
+   THE linux-native deliverable; windows-latest ->
+   target/release/bedlam-shell.exe as bedlam-shell-windows-x86_64), each
+   gated on its runner.os, each if-no-files-found: error (a missing
+   binary fails the build, never an empty artifact), retention-days 14
+   (bounded so per-push artifacts do not accumulate at the 90-day
+   default); the artifact is the ENGINE BINARY ONLY (never game-data,
+   never assets, nothing corpus-derived) and UNSIGNED — no credential,
+   no store, no runner dependency (the D221 signing-keys exclusion; the
+   macOS leg joins with macos-universal2-ci when a runner exists); a
+   top-level permissions: contents: read joins the file (least
+   privilege, the frame-pacing.yml pattern). (b) THE GATE:
+   p7-ci-artifacts wired as the SECOND P7 required_gates entry behind
+   the scaffold — command 1 = tools/check-p7-ci-artifacts.py, the
+   fail-closed offline checker over the COMMITTED workflow definition:
+   it parses ci.yml with a STDLIB-ONLY YAML-SUBSET READER (the D216
+   no-deps family posture; tabs in indentation, unterminated flow
+   sequences, unparsable lines and trailing content are all parse
+   errors — the file that ships is the file that is graded) and proves
+   the four contracted properties: PER-PUSH TRIGGER (top-level
+   on.push), THE RELEASE MATRIX (exactly one job running cargo build
+   --release on BOTH ubuntu-latest + windows-latest), THE UPLOADS
+   (both steps live in that job, action pinned @v4, non-empty names,
+   exact binary paths, if-no-files-found: error), and NO SIGNING
+   MATERIAL (8 denylisted credential/code-signing tokens — secrets,
+   signtool, codesign, notarytool, notariz*, osslsigncode,
+   authenticode, gpg — matched case-insensitively anywhere in the file,
+   comments included); command 2 re-runs check-p7-ports-map (the
+   registry flip + gate join); command 3 = the 22-case hermetic
+   fail-closed suite (every rule proven to fail loudly incl. the
+   push-trigger removal, the matrix-leg removal, the build-step
+   removal, both upload-step removals, the WRONG-JOB upload refusal,
+   the @v3 downgrade, the gating removal, the path/name/if-no-files
+   tampers, the secrets/signtool/comment injections, and four parse
+   failures; plus the minimal-synthetic pass and the real-repo pin).
+   (c) THE CONTRACT FLIP (same commit, the R2 rule — the single-commit
+   8fd0739 pattern chosen over the split 78c87ed pattern precisely so
+   R4 is never red between halves): rows ci-artifacts-per-push +
+   linux-native landed naming gate p7-ci-artifacts, notes rewritten to
+   what the artifact actually is; §6 gained the landed-gate note;
+   check-p7-ports-map prints the landed-rows line; its suite
+   re-baselined deliberately (the real-repo pin (2 landed, 5 pending) +
+   the honest-fixture default manifest now wiring p7-ci-artifacts + the
+   forward-shape test at 3 landed / 4 pending). (d) BOUNDS KEPT: no
+   engine change (no Rust file touched), no installer byte (the
+   artifact is the already-green cargo build --release), the macOS leg
+   excluded, the gate reads only committed files (no corpus key, no
+   writable), no Ghidra run, no new RE. Verified first-hand: checker OK
+   on the real workflow (3 jobs, push trigger, build matrix, both
+   uploads, 8 denylisted tokens absent); suite 22/22; check-p7-ports-map
+   OK (7 engineering, 2 landed naming p7-ci-artifacts, gate join +
+   scaffold-first verified) + its suite 29/29 after the re-baseline;
+   test-validate-required-gates 22/22 after the manifest edit;
+   check-p6-behavior-catalog OK before AND after; MANIFEST clean (the
+   unit reads no corpus); the bounded --phase P7 validator verdict at
+   af9cac1: status=passed, ALL 2 P7 GATES GREEN, every command rc=0
+   under bwrap containment (report .state/p7-ciartifacts-gates-
+   report.json, head-bound to af9cac1e5597). Queued: the CDDA
+   user-supply + local-cache unit as the new head (the next registry
+   row in contract order).
+2. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
    PUSHED, plus this bookkeeping commit): P7 opener
    `p7-ports-scaffold` — THE PORTS/PACKAGING DELIVERABLE-MAP
    CONTRACT wired as the FIRST P7 required gate (D221; the
