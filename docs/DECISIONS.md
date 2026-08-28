@@ -6472,3 +6472,33 @@ the touched files (the destroy.rs/static-claim-test warnings
 pre-exist), gates-validator 22/22, inspect baseline ok (1069
 files), MANIFEST clean before AND after every corpus read, no
 Ghidra run (worker bc51a491 claim 1, commits c0c8279 + 542ec3f).
+
+
+## D188 — 2026-08-28: autonomy `queue-grammar-prose-bracket-3` — the THIRD strict-grammar breach in a completion rewrite (watchdog repair 2157361): the Chasers worker's step-7 rewrite carried memory-cell notation as prose brackets — `[0x4eba0c]++ + [0x4eba10]=0x32` inside the S8 item body — and the parser (`item 2: unknown status/tag [0x4eba0c]`, rc=2 INVALID-DEADLOCKED) refused every subsequent spawn; the false launch-boundary preflight-mismatch on bc51a491 is archived replaced-task
+
+The worker bc51a491 finished `p5-critter-state-g2-chasers-r2`
+SUBSTANTIVELY (c0c8279 + 542ec3f + ac7445a, all pushed; HEAD ==
+origin/main at repair time) — its step-7 queue rewrite is the dirty
+WIP this repair adopts byte-for-byte except for the four bracket
+characters. The queue-sha the failure record captured as
+`queue_after` (95715352…ac65) is exactly that rewrite, so the
+preflight-mismatch evidence ("queue changed after model start") is
+the completion bookkeeping itself, not corruption — the same false
+shape as watchdog repair 1007791 (b0059c4 grace widening); the
+actual defect is only the bracket grammar. Remediation: debracket
+the two memory cells in the S8 item (`cell 0x4eba0c++ + cell
+0x4eba10=0x32`, meaning verbatim), leaving the two READY items and
+the whole Done log untouched; the failure (bc51a491…json, device
+52, inode 6569728, sha256 dedfef8e…fff35, ordinal 1,
+id/gate p5-critter-state-g2-chasers-r2) is archived replaced-task
+— the completed identity left `## Now` for the Done log, its
+successors (closecombat head, S8 personnel second) stay READY and
+claimable. Rule reaffirmed (D177/D180 and the NEXT.md header every
+rewrite copies): in an ACTIVE item every `[` must open a canonical
+tag — RE address notation must stay bracket-free (bare `0x…`,
+`cell 0x…`, `word 0x…`); brackets remain free prose ONLY under
+`## Done`/`## Backlog`. Verified this run: strict parser rc=0
+(`RUNNABLE 1 2`) before commit and after; item-v2 identities match
+the intended heads; failure-snapshot record matches the live
+artifact byte-for-byte; failure-watchdog harness contract green;
+no game-data touch, no Rust change (fmt/clippy N/A).

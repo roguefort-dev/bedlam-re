@@ -10,40 +10,14 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-critter-state-g2-chasers-r2] [gate=p5-critter-state-g2-chasers-r2] P5
-   follow-up — the FOLLOWING G2 critter-state unit from the census
-   residue (docs/P5-ZONE-GATES §6.2/G2): the kind-3 CHASERS state
-   (the ChasersxNN census component; hosts beside Shooters on
-   ZONEB/ZONEC/ZONEE and as the sole refuser on rows where the
-   Shooters unit leaves it last). (a) RE FIRST (objdump-only from
-   the committed exw-critterpoi-loader.txt + exw-text-objdump.txt,
-   no Ghidra run): the .NME S5 loader walk for kind 3 (the
-   §7j.18/§7j.71/§7j.72 method — stamps, counts, draws, the hp
-   scalar on the 0x46ae8c linear m per the closed imul census) +
-   the k3 controller body (the kind table 0x412f18 case 3),
-   committed as RE notes BEFORE any engine change. (b) Land
-   stage_critters section 5 acceptance + the controller in
-   bedlam-core::critter with unit tests; re-pin the census (the
-   ChasersxNN component drops; expect NO row flip clean unless a
-   host carries no other unmodeled state — then documented +
-   deliberate). Bounds: census green after the re-pin; bedlam-core
-   + bedlam-game suites green; no canonical chain movement
-   (ZONEA/M1 hosts no S5) unless a row changes (then documented +
-   deliberate); fmt + clippy; gates-validator 22/22; MANIFEST
-   clean; no Ghidra run; Nudge-Worker trailer.
-   Re-issued 2026-08-28 by watchdog repair 1671051: the first issue
-   (id p5-critter-state-g2-chasers) died to a provider HTTP 502 at
-   zero progress — worker fa32df63, transport kind, no commit, no
-   queue change; scope and bounds unchanged, only the identity
-   renewed for the archive contract.
-2. [READY] [id=p5-critter-state-g2-closecombat] [gate=p5-critter-state-g2-closecombat] P5
+1. [READY] [id=p5-critter-state-g2-closecombat] [gate=p5-critter-state-g2-closecombat] P5
    follow-up — the NEXT G2 critter-state unit after the Chasers
    unit (docs/P5-ZONE-GATES §6.2/G2 residue): the kind-7
    CLOSE-COMBAT state (the CloseCombatxNN census component; hosts
    ZONEC-M3, ZONEE-M1..M5, ZONEF-M1, ZONEG-M1). (a) RE FIRST
    (objdump-only from the committed exw-critterpoi-loader.txt +
    exw-text-objdump.txt, no Ghidra run): the .NME S7 loader walk
-   for kind 7 (6-B records, the §7j.18/§7j.71/§7j.74 method —
+   for kind 7 (6-B records, the §7j.18/§7j.71/§7j.75 method —
    stamps, counts, draws, the hp scalar 0x9C4 on the 0x46ae8c
    linear m) + the k7 controller body (the kind table 0x412f18
    case 7 — the §7j.42 k7 gloss: steer + sin/cos move, engage
@@ -53,12 +27,92 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    the controller in bedlam-core::critter with unit tests; re-pin
    the census (the CloseCombatxNN component drops; expect NO row
    flip clean unless a host carries no other unmodeled state —
+   then documented + deliberate; every CloseCombat host also
+   carries Personnel today, so the expectation should HOLD this
+   time). Bounds: census green after the re-pin; bedlam-core +
+   bedlam-game suites green; no canonical chain movement
+   (ZONEA/M1 hosts no S7) unless a row changes (then documented +
+   deliberate); fmt + clippy; gates-validator 22/22; MANIFEST
+   clean; no Ghidra run; Nudge-Worker trailer.
+2. [READY] [id=p5-personnel-poi-s8] [gate=p5-personnel-poi-s8] P5
+   follow-up — the LAST G2 residue unit after CloseCombat (the
+   §6.2 census tail): the S8 PERSONNEL/POI bank (the PersonnelxNN
+   census component; hosts ZONEE-M1..M5, ZONEF-M1..M5, ZONEG-M1 —
+   13 missions). (a) RE FIRST (objdump-only from the committed
+   exw-critterpoi-loader.txt + exw-text-objdump.txt, no Ghidra
+   run): the .NME S8 loader walk (8-B records → 4 POIs each, the
+   §7j.18/1 S8 gloss made exact — the count reset @0x416f6e, the
+   per-POI scatter draws, z probe, the seeds {active 1, timer
+   0x32, state 5 ESCAPE, heading RandA&7}, hp NONE — the POI bank
+   0x4dabdc stride 0x1E carries no hp word) + the POI controller
+   FUN_00412a98 body (§7j.17 item 3: states 1 idle / 2 settle /
+   3 walk-out FUN_00415b6c / 4 flee-to-exit / 5 ESCAPE / 6·7
+   panic; the escape lane cell 0x4eba0c++ + cell 0x4eba10=0x32 +
+   FUN_00448b80(5000) — the score/seam surface the canonical T0
+   rows watch), committed as RE notes BEFORE any engine change.
+   (b) Land a poi bank + stage_critters section 8 acceptance + a
+   modeled controller subset in bedlam-core with unit tests;
+   re-pin the census (the PersonnelxNN component drops from all
+   13 rows; expect row flips clean ONLY where CloseCombat already
+   landed — i.e. none before the CloseCombat unit runs; if
+   CloseCombat ran first, ZONEE/ZONEF/ZONEG rows may flip —
    then documented + deliberate). Bounds: census green after the
    re-pin; bedlam-core + bedlam-game suites green; no canonical
-   chain movement (ZONEA/M1 hosts no S7) unless a row changes
-   (then documented + deliberate); fmt + clippy; gates-validator
-   22/22; MANIFEST clean; no Ghidra run; Nudge-Worker trailer.
+   chain movement unless a row changes (then documented +
+   deliberate); fmt + clippy; gates-validator 22/22; MANIFEST
+   clean; no Ghidra run; Nudge-Worker trailer.
 ## Done
+1. DONE (2026-08-28, worker bc51a491 claim 1, commits c0c8279 +
+   542ec3f + ac7445a, all PUSHED): P5 `p5-critter-state-g2-chasers-r2`
+   — the G2 CHASERS state LANDED (the census Chasers class CLOSED
+   with TWELVE deliberate row flips, D187). (a) RE FIRST (c0c8279,
+   §7j.75, objdump-only from the committed exw-critterpoi-loader.txt +
+   exw-text-objdump.txt + raw DGROUP table reads (0x454b48 walk
+   table, 0x454edc delays) — no Ghidra run): the S5 loader walk made
+   exact — ONE each at every difficulty, ZERO draws (the first
+   critter section with no per-load AND no per-frame stream draws),
+   x/y = tile·0x2000+0xF00 Q13, z = the floor probe at level w2,
+   the 8 corner-z words, home x/y/z staged (the ONE home-stamping
+   section), the w1<<6 heading at BOTH +0x10 and the +0x14
+   wake-heading cell (CORRECTS the §7j.18 "+0x12" gloss), species
+   8, MODE 0, hp 1500+(1500·m)/27; the k3 body 0x4145c1..0x414c96 —
+   NO substep loop, the species TRIPLE ROLE (the 8-frame spawn
+   grace gating ladder rule R2, the 0x20 return-home walk budget
+   stamped by R1/R4 — NOT countdown, the wake clear), the
+   target-liveness flip BEFORE the mode dispatch, the dormant
+   TELEPORT-HOME at exactly delay−0x14 (heading := the +0x14 cell),
+   the wake hp FLAT 1500, the 4-rule distance ladder exact, the
+   8-sector snap aims, the walk table [0,0,1,1,0,0,0,1,1,1] =
+   6 steps/10 frames, the EVERY-FRAME 0x67 fire with the
+   live-robot 3-D octile velocity (the ">4 shots" gloss = the
+   5-frame aim wrap), the pathfinder FUN_0041571c whole — the
+   open sine-step + the WALL-FOLLOW ladder on the record word
+   w@+0x5E with every blocked exit copying sector → heading; the
+   gate FUN_0041e9a2 reads its z from the FIRST CORNER word
+   (+0x60) and settles z on pass. (b) ENGINE (542ec3f):
+   stage_critters accepts section 5 + the k3 body in
+   bedlam-core::critter with 11 unit tests; the shared walk_gate
+   refactor (critter_step_heading behavior-identical); the new
+   home_z/spawn_heading/seek_sector record fields NOT serialized —
+   ZERO chain movement (canonical_dump_gate 13/13 + differ_gate
+   4/4 + determinism green). (c) CENSUS RE-PIN (deliberate, D28):
+   the ChasersxNN component dropped from all 17 hosting rows AND
+   the twelve Chasers-ONLY hosts FLIPPED CLEAN — ZONEB M1-5,
+   ZONEC M1/M2/M4/M5, ZONED M1-4 (24/37 load clean, was 12; the
+   queue's no-flip carve-out exercised at scale, documented +
+   deliberate; provenance docs/evidence/p5-g2-chasers-census-
+   table.txt); G2 residue = CloseCombat + the S8 personnel bank
+   (13 missions); the ledger stays 1/37 green; P5-ZONE-GATES
+   §6.1/§6.2/§6.3/§6.4 re-baselined; D187. Verified: bedlam-core
+   release suites green (114 lib incl. 11 new), bedlam-game
+   release green (census re-pinned; canonical_dump_gate 13/13 +
+   differ_gate 4/4 + determinism green), fmt + clippy clean on
+   the touched files (the destroy.rs/static-claim-test warnings
+   pre-exist), gates-validator 22/22, inspect baseline ok (1069
+   files), MANIFEST clean before AND after every corpus read, no
+   Ghidra run. Queued: the CloseCombat unit as the new head + the
+   S8 personnel/POI unit second (after it, G2 is empty and the
+   zone-parity gate work continues per PLAN §6).
 1. DONE (2026-08-28, worker 5ee1c0ce claim 1, commits 199373a +
    cb3a3f5, both PUSHED): P5 `p5-critter-state-g2-shooters` — the
    G2 SHOOTERS state LANDED (the census Shooters class CLOSED with
