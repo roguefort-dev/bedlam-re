@@ -10,39 +10,143 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-frame-pacing-benchmark] [gate=p6-frame-pacing-benchmark] P6 QoL
-   FEEL-PROXY benchmark unit per PLAN §6 "Game-feel proxies:
-   input-to-present ≤ 1 original frame; animation cadence matches at
-   the active display refresh (validated 60–240Hz+); no stutter
-   under p95 frame-time budget at that refresh. An automated
-   scheduled CI benchmark checks 240Hz frame pacing against a pinned
-   hardware profile and thresholds; an unavailable profile creates no
-   task and only excludes that platform attestation" — the plan's own
-   closing instrument of the QoL sentence, still unlanded after the
-   D208/D210/D212/D213 knobs and the D215/D217 resolution pair (the
-   repo's CI exists as push/PR only, .github/workflows/ci.yml, no
-   schedule yet). BOUNDED SCOPE, one unit: (a) the FRAME-PACING
-   BENCHMARK HARNESS — the pure cadence math (the FixedStepClock
-   pump/present arithmetic: pumps due per measured delta, present-gate
-   answers, the recompose alpha cadence at 240Hz) under hermetic test,
-   plus a bounded measurement binary or example that runs the same
-   pieces against a wall clock ONLY on a matching profile; (b) the
-   PINNED HARDWARE PROFILE as committed data (machine class, refresh,
-   p95 thresholds) with the UNAVAILABLE-PROFILE POSTURE mechanical:
-   the benchmark skips clean (exit 0, an explicit no-attestation
-   note), never a false red, never a task; (c) the SCHEDULED CI
-   WIRING — a cron-triggered workflow whose pacing job is a no-op
-   when the profile is unavailable (the plan sentence verbatim);
-   (d) evidence in docs (P6-MODERNIZATION.md status paragraph +
-   DECISIONS entry), the gate wired as the FOURTEENTH P6
-   required_gates entry over the hermetic suite (the 78c87ed
-   pattern: gate block with the implementation, phase list second).
-   BOUNDS: no engine change unless the harness needs a read-only
-   seam; the hashed trajectory untouched; no corpus read by the gate;
-   catalog stays EMPTY (a plan-named QoL instrument is not a catalog
-   entry); no new RE; own Nudge-Worker trailer; no Ghidra run.
+1. [READY] [id=p6-phase-close] [gate=p6-phase-close] P6
+   phase-close bookkeeping unit (the p5-phase-close/f608207 +
+   p4-phase-status-green/972748d pattern) — ALL 14 P6 GATES GREEN
+   at eb4981f (the bounded validator verdict, report
+   .state/p6-framepacing-gates-report.json), so P6's remaining
+   work is the PHASE-CLOSE ONLY: first the ONE bounded survey duty
+   — walk the PLAN sec 6 P6 acceptance surface bullet by bullet
+   and record in DECISIONS.md which bullets are gate-green landed
+   (ModeConfig seam D200/D201; time-based simulation +
+   high-refresh present + uncapped + camera interpolation
+   D17/D203-D208; modern controls D204; the triage rubric +
+   catalog contract D200 with the catalog deliberately EMPTY — the
+   P5 ledger's catalog_refs are all empty, so no entry is owed;
+   resolution independence + scaling D215 + the ENHANCED opener
+   D217; the HD asset pipeline RESEARCH D216; the QoL list
+   D208/D210/D212/D213; the feel-proxy benchmark instrument D219)
+   versus EXPLICITLY deferred by plan text or decision (the
+   extended viewport = a separately FLAGGED gameplay change, never
+   a silent default; the sub-pixel blitter = a default-off later
+   option per PLAN; HD-pack runtime consumption = future work per
+   D216 — the plan's own "Optional HD asset pipeline" with its
+   named prerequisite doc landed; Smacker native decode +
+   GPU-scale — verify the landed bedlam-smk present path covers
+   the plan sentence and record the anchor), so the flip is a
+   surveyed verdict, not a rubber stamp; then flip the P6 phase
+   status pending->green in docs/required-gates.toml (P0-P6 green,
+   P7 pending; plan_complete stays false exactly as designed),
+   commit, then re-emit the bound phase verdict at the flip commit
+   with the exact P4/P5-shaped command: /usr/bin/python3
+   tools/validate-required-gates.py --root . --report
+   .state/p6-gates-report.json --phase P6 --phase-output
+   .state/P6-COMPLETE (ALL 14 P6 GATES GREEN at the flip commit;
+   .state/P6-COMPLETE phase-complete-v1 re-bound to the flip
+   commit, producer required-gates-validator, emitted by the
+   validator itself). BOUNDS: no engine code, no gate-command
+   changes, no catalog seeding, no CI change; the survey + the
+   flip + the verdict artifact + the STATE.md head entry; the
+   tracked tree stays clean through the whole HEAD-bound battery
+   (STATE.md/NEXT.md edits parked until after); own Nudge-Worker
+   trailer; no Ghidra run; MANIFEST clean before/after any corpus
+   read.
 
 ## Done
+1. DONE (2026-08-28, claim 1 — commits 2b521d1 + eb4981f by worker
+   73e5e9a2, both PUSHED): P6 QoL FEEL-PROXY benchmark unit
+   `p6-frame-pacing-benchmark` — the plan's own closing instrument
+   of the QoL sentence per PLAN §6 "An automated scheduled CI
+   benchmark checks 240Hz frame pacing against a pinned hardware
+   profile and thresholds; an unavailable profile creates no task
+   and only excludes that platform attestation" (implementation
+   D219), the last unlanded plan-named P6 piece before the phase
+   exit. (a) THE HERMETIC HALF (NEW bedlam-shell pacing.rs):
+   CadenceDriver::frame replays a delta trace — measured or
+   synthetic frame deltas — through the EXACT present-loop
+   arithmetic (FixedStepClock::advance answers pumps due, each due
+   pump runs the fixed dt through GameHost::pump_frame with neutral
+   input, then the loop's OWN crate-visible window::present_due /
+   window::present_camera_alpha answer — the two pure-delegation
+   visibilities the harness needed, zero behavior change — and the
+   presenting frame recomposes at the accumulator fraction in the
+   present site's order gate/alpha/recompose), summarized into the
+   feel-proxy metric families: pump cadence (pumps per delta,
+   dropped pumps), present-gate answers, the recompose alpha
+   cadence at 240Hz, and the nearest-rank p95 frame-time
+   percentile. THE LOOP-SHAPE FACT the replay pins (found
+   first-hand while landing the tests): a zero-PUMP frame never
+   calls pump_frame, so the gate INHERITS the last pump's answer —
+   after the first tick it answers YES on every frame in BOTH
+   arms; the classic arm's frame-locked hold lands at CONTENT
+   level (exactly one NEW image per executed tick — 59 of 240
+   frames at 240Hz — unchanged frames re-presented), the alpha
+   cadence is the arm-visible difference. Trajectory-neutral
+   across arms (identical pump/tick totals, tick index, state
+   hash, scene hash — the D203 property re-pinned at the harness
+   boundary) and deterministic. (b) THE PINNED HARDWARE PROFILE as
+   committed data (PacingProfile/PINNED_240HZ: id
+   pinned-240hz-desk-v1, machine class = operator desktop 240Hz
+   vsync-locked display, p95 budget 5_208_333 ns = exactly 1.25
+   display periods, 2400 bounded samples = 10s of cadence); the
+   UNAVAILABLE-PROFILE POSTURE is mechanical and PURE (profile_for
+   exact-matches the declared BEDLAM_PACING_PROFILE identity —
+   nothing probes hardware, so CI runners and stray machines can
+   never produce a false attestation; benchmark_report — the
+   measurement binary's entire behavior except the wall-clock loop
+   — answers skip-clean: exit 0 + an explicit no-attestation note,
+   never a false red, never a task). (c) THE BOUNDED MEASUREMENT
+   (NEW examples/frame-pacing.rs, profile-gated): the SAME driver
+   against a wall clock as a 240Hz-CADENCE PROXY (sleep to the
+   next display-period boundary, measure the pacing path, feed the
+   measured inter-frame delta exactly as about_to_wait does); the
+   display's own vsync wait is the one piece a surface-less
+   benchmark cannot include — said plainly in the docs; exit 1
+   exists ONLY on a matched machine whose thresholds failed (p95
+   over budget OR dropped pumps — the anti-spiral clamp firing IS
+   stutter). (d) THE SCHEDULED CI WIRING (NEW
+   .github/workflows/frame-pacing.yml): daily cron 03:23 UTC +
+   workflow_dispatch + path-filtered push/PR (continuously
+   verified without running on every change); the pacing job runs
+   the example — hosted runners never declare the profile, so the
+   scheduled job exercises exactly the skip-clean posture; the
+   240Hz attestation fires only on the pinned machine's runner.
+   BOUNDS KEPT: no engine change (bedlam-shell only); the hashed
+   trajectory untouched (bare hosts, no corpus asset ever staged);
+   the gate reads no corpus; catalog stays EMPTY (a plan-named
+   instrument is not a catalog entry); no new RE (every cited
+   original fact already landed: RE-EXW-PACER §3, RE-EXW-CAMERA
+   §5); no Ghidra run. GATE: p6-frame-pacing-benchmark wired as
+   the FOURTEENTH P6 required_gates entry (implementation + docs +
+   gate block 2b521d1; phase list eb4981f — the 78c87ed pattern)
+   — commands = bedlam-shell --lib + the example's skip-clean run
+   (no env profile under containment -> exit 0 + note), both
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-shell --lib 116/0 (+12 pacing tests; was 104/0 + 1
+   pre-existing ignored); the measurement binary BOTH paths
+   (unavailable: exit 0 + the no-attestation note; matched
+   diagnostic run on the dev machine: 2400 bounded frames in
+   10.1s, p95 4_207_023 ns within the 5_208_333 budget, 600 ticks
+   = exactly the 60Hz sim cadence inside the 240Hz proxy, VERDICT
+   ATTESTED exit 0 — a diagnostic, not a committed attestation);
+   controls green: canonical_dump_gate 13/13, determinism 4/4,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement), the
+   headless smoke EXACTLY at the recorded baseline (scene
+   696adb1cd110e062 / parity cce30c983b97b16d / audio
+   110400/158092); check-p6-behavior-catalog OK (catalog still
+   empty, R6 satisfied with the fourteenth gate) + its suite
+   rc=0; gates-validator suite rc=0; fmt + clippy clean on the
+   touched crate (the one pre-existing D210 test warning
+   untouched); workspace cargo check clean; the workflow YAML
+   parsed (pyyaml, triggers/jobs verified); MANIFEST clean before
+   AND after every corpus read; the bounded --phase P6 validator
+   verdict at eb4981f: status=passed, ALL 14 P6 GATES GREEN, every
+   command rc=0 under bwrap containment (report
+   .state/p6-framepacing-gates-report.json, head-bound to
+   eb4981f). Queued: the P6 phase-close bookkeeping unit as the new
+   head (the surveyed status flip + the phase-complete-v1 verdict
+   artifact, the 972748d/f608207 precedent).
+
 1. DONE (2026-08-28, claim 1 — commits ca915fd + 24daf9f by
    worker b3083e9c, both PUSHED): P6 ENHANCED native-render OPENER
    `p6-enhanced-native-render` — the resolution bullet's big

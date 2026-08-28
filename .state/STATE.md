@@ -1,5 +1,52 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-frame-pacing-benchmark` COMPLETE (worker 73e5e9a2
+    claim 1, commits 2b521d1 + eb4981f, both PUSHED): P6 QoL
+    FEEL-PROXY benchmark unit (D219) — the plan's own closing
+    instrument of the QoL sentence, wired as the FOURTEENTH P6
+    required gate, ALL 14 P6 GATES GREEN at eb4981f (bounded
+    validator verdict status=passed, report
+    .state/p6-framepacing-gates-report.json head-bound to
+    eb4981fd067d, every command rc=0 under bwrap containment). The
+    hermetic half (bedlam-shell pacing.rs, 12 tests, --lib 116/0):
+    CadenceDriver replays a delta trace through the EXACT
+    present-loop arithmetic (clock advance -> due pumps ->
+    GameHost::pump_frame -> the loop's OWN crate-visible
+    present_due/present_camera_alpha -> recompose at the
+    accumulator fraction), summarized into the feel-proxy metrics
+    (pump cadence incl. dropped pumps, present-gate answers, the
+    240Hz recompose alpha cadence, the nearest-rank p95 frame-time
+    percentile); the pinned LOOP-SHAPE FACT: a zero-PUMP frame
+    inherits the last pump's gate answer — post-first-tick YES in
+    both arms, the classic hold is CONTENT-level (one NEW image per
+    executed tick, 59/240 at 240Hz), the alpha cadence is the
+    arm-visible difference; trajectory-neutral across arms and
+    deterministic. The pinned hardware profile as committed data
+    (PINNED_240HZ: pinned-240hz-desk-v1, 240Hz, p95 budget
+    5_208_333 ns = 1.25 periods, 2400 bounded samples) with the
+    unavailable-profile posture PURE and mechanical (exact-match on
+    the declared BEDLAM_PACING_PROFILE; skip-clean = exit 0 + an
+    explicit no-attestation note — never a false red, never a
+    task). The bounded measurement (examples/frame-pacing.rs,
+    profile-gated): the same driver against a wall clock as a
+    240Hz-cadence proxy, exit 1 only on a matched machine that
+    failed thresholds; both paths verified first-hand (unavailable:
+    exit 0 + note; matched diagnostic: 2400 frames / 10.1s, p95
+    4_207_023 ns, 600 ticks = the 60Hz sim cadence, ATTESTED). The
+    scheduled CI wiring (.github/workflows/frame-pacing.yml): daily
+    cron 03:23 UTC + dispatch + path-filtered push/PR; hosted
+    runners never declare the profile, so the scheduled job
+    exercises exactly the skip-clean posture. BOUNDS KEPT: no
+    engine change; the hashed trajectory untouched; the gate reads
+    no corpus; catalog stays EMPTY; no new RE; no Ghidra run.
+    Controls green: canonical_dump_gate 13/13, determinism 4/4,
+    zone_mission_parity 5/5, headless smoke at the recorded
+    baseline, catalog checker OK + suites rc=0, fmt/clippy clean
+    (the pre-existing D210 warning untouched), MANIFEST clean
+    before AND after. Queued: the P6 phase-close bookkeeping unit
+    as the READY head (the surveyed status flip + the
+    phase-complete-v1 verdict artifact, the 972748d/f608207
+    precedent).
   - 2026-08-28 `p6-enhanced-native-render` COMPLETE (worker b3083e9c
     claim 1, commits ca915fd + 24daf9f, both PUSHED): P6 ENHANCED
     native-render OPENER (D217) — the THIRTEENTH P6 required gate, ALL
