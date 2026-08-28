@@ -240,7 +240,17 @@ IDLE_POLL=${NUDGE_IDLE_POLL:-5}
 # at their own finish line -- every completed+pushed unit was recorded as a
 # preflight-mismatch failure because the 200ms self-exit grace cannot cover
 # a real client shutdown).
-BOUNDARY_GRACE=${NUDGE_BOUNDARY_GRACE:-240}
+# (watchdog repair 2026-08-28, second recurrence, token 1007791: 240s still
+# cannot cover the CONTRACT-required post-rewrite work. The gates-validator
+# battery must run at the final clean HEAD -- i.e. AFTER the step-7
+# bookkeeping commit -- and takes minutes under bwrap; worker 05e14378
+# finished p5-select-shell-g1 green (a5c3a71 + 3d64ca5 + a51d4f2), rewrote
+# the queue, and was grace-killed mid-validator at exactly 240s, recording
+# a false preflight-mismatch and stranding the push. An actively-logging
+# completer must never get a shorter leash than a hung silent client: the
+# grace now equals IDLE_LIMIT, and reap_idle_model still bounds a truly
+# hung client by log silence inside the grace loop.)
+BOUNDARY_GRACE=${NUDGE_BOUNDARY_GRACE:-900}
 reaped=0
 boundary_failure=0
 termination_sent=0

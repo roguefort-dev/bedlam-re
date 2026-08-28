@@ -92,7 +92,12 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    touched crate, gates-validator 22/22, inspect baseline ok (1069
    files), MANIFEST clean before AND after every corpus run, no
    Ghidra run. Queued: items 1-2 above (the G3 BIN variant is the
-   new head; the G2 Shooters unit second).
+   new head; the G2 Shooters unit second). Watchdog repair 1007791
+   (2026-08-28): this worker was grace-killed at the 240s boundary
+   while re-verifying a51d4f2 — the gates-validator battery runs
+   after the bookkeeping commit by contract — so the repair landed
+   the push, archived the false preflight-mismatch failure, and
+   widened the boundary grace 240 to 900 in this repair commit.
 1. DONE (2026-08-28, worker b03463e5 claim 1, commits e590bd6 +
    715a066 + 0aa7cf0, all PUSHED): P5 `p5-critter-state-g2-ballistic6`
    — the SECOND G2 critter-state unit: BallisticState6 landed
