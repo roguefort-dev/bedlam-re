@@ -11066,3 +11066,135 @@ against the committed objdump.
    anything past bit 4, which no original writer can produce);
    `mission_number_for_mask` saturates at 5 (the SP SELECT domain
    is 1..=5 — the campaign path can never name an MP file).
+
+## 7j.74. THE KIND-2 SHOOTER — the .NME S1 loader walk + the k2
+controller body (0x415216..0x415466) + its helper family decoded
+whole (2026-08-28, worker 5ee1c0ce claim 1, item
+p5-critter-state-g2-shooters; objdump-only from the committed
+ghidra-project/exw-text-objdump.txt + the §7j.18 loader decompile
+ghidra-project/exw-critterpoi-loader.txt — no Ghidra run, no
+corpus read) [verified]
+
+Method: the S1 block 0x4164b0..0x41664b and the k2 body
+0x415216..0x415466 walked instruction-by-instruction from the
+committed objdump; the helpers FUN_0041eb65/FUN_0041eb77/
+FUN_0041ebf8/FUN_0041286f re-walked whole. All facts [verified]
+against those artifacts unless tagged.
+
+1. **THE S1 LOADER WALK (the §7j.18 S1 gloss made exact).** The
+   decompile's first section (10-B recs; w0 marker, w1 spawn
+   base, w2 flag, w3 = x tile, w4 = y tile):
+   - spawn count := **w1 + [0x46cbf8] (difficulty), clamped to ≥ 1
+     at 0x4164eb..0x4164f6** [NEW pin — the §7j.18 gloss named the
+     sum but not the clamp]; then per ATTEMPT, in draw order:
+   - **draw 1** FUN_0041ec1c(5) → x d@+0x36 := (w3 + pick − 2)·
+     0x2000 (Q13; the caller's edx carries w3, `sar edx,0x10`
+     @0x416510, the callee preserves it — the decompile's
+     CONCAT22 second arg is a register-carry artifact); **draw 2**
+     the same for y d@+0x3A := (w4 + pick − 2)·0x2000 (jitter
+     −2..+2 tiles per axis);
+   - **THE MAP-BOUNDS DROP GATE** [NEW pin, absent from §7j.18]:
+     x ≤ 0 ∨ x>>0xD ≥ [0x4eddec] (map W) ∨ y ≤ 0 ∨ y>>0xD ≥
+     [0x4eddf0] (map H) → the attempt is DROPPED (0x416558..
+     0x416580: `jle`/`jge` to the inner-loop increment) — NO
+     critter, count NOT incremented, but both scatter draws are
+     already consumed;
+   - on pass, the stamps (order as written): species w@+0x02 := 1,
+     z d@+0x3E := 0xC000 (FIXED — 6 levels in the record's Q13 z
+     convention; see /4 below), heading d@+0x10 := 0, **draw 3**
+     anim w@+0x5A := RandA()&7 (0x4165a5..0x4165ba — the `xor
+     dh,ah` idiom zeroes the high byte: net RandA&7), presence
+     w@+0x24 := 1, **draw 4** variant d@+0x18 :=
+     FUN_0041ec1c(4)+3 ∈ [3,7), **hp w@+0x06 := 0xAF +
+     ([0x46ae8c]·0xAF)/27** (the imul site @0x4165db — the §7j.71/1
+     census's S1 row; signed idiv, m = the linear mission cell),
+     state w@+0x00 := 2, **draw 5** timer w@+0x72 :=
+     (RandA()&0x1F)−0xF ∈ [−15,+15] (0x41660f..0x41662b), then
+     iff w2 ≠ 0 the variant d@+0x18 is NEGATED (0x416632..
+     0x41663f), count++.
+   - **DRAW BUDGET: 2 per dropped attempt, 5 per landed critter.**
+2. **THE k2 CONTROLLER BODY** (kind table 0x412f18 case 2; entered
+   per frame per critter with ebp := idx·0x7E). The substep count
+   = the record's species word (0x415239..0x415248 reads the
+   dword@+0x00 high word — the SAME "species = substeps/frame"
+   convention as the k4/k5/6 bodies, §7j.42/2; S1 stamps 1 and
+   nothing re-stamps it). Per substep, in order:
+   - anim w@+0x5A := (anim+1)&0xF (0x41524e..0x41525a);
+   - **heading d@+0x10 := (heading + variant)&0xFF** (0x415261..
+     0x415274) — the variant IS the curve rate: a positive variant
+     turns one way, a NEGATIVE (w2-flagged) variant the other;
+   - the SINE WALK: x += (FUN_0041eb65(heading)·0x14)>>8 and
+     y += (FUN_0041eb77(heading)·0x14)>>8 (0x41527a..0x4152ac,
+     `imul 0x14; sar 8`) — NO bounds gate, NO wall probe, NO
+     z change (the k2 body never touches d@+0x3E after staging);
+   - **the SFX pulse** (0x4152b2..0x4152d6): ONE RandA draw ALWAYS;
+     (RandA&0x7F)==0 → FUN_0043a48e(eax=[0x4edffc] the SQUAWK
+     voice-base, ebx=x>>8, ecx=y>>8, edx=0, stack 2) — the §7j.30
+     census's 0x4152bd reader identified; the play itself draws
+     NOTHING (verified: zero RandA/FUN_0041ec1c sites inside
+     0x43a48e) and is the T4 E-gap engine-side;
+   - **the fire gate** (0x4152db..0x4152e2): ONE RandA draw ALWAYS;
+     (RandA&3)≠0 → 3/4 of substeps end here [CORRECTS the §7j.17
+     "every 4th substep" gloss — it is a per-substep 1/4 CHANCE,
+     the same RandA-gate form as the k1/k7 bodies];
+   - the fire attempt: pick := FUN_0041ec1c([0x46ccbc]) — a
+     bounded pick over the ROBOT COUNT cell (the 12-slot 0xA8-
+     stride bank 0x4c69e4, count [0x46ccbc], D129); skip if the
+     robot's alive word @+0x7C == 0 (0x4152f8..0x415307); slot :=
+     FUN_0041286f — **the FIRST-FREE scan of the 50×0x22
+     projectile bank 0x4cc654** (0x41286f..0x412895: word@+0 == 0
+     → its index; full → −1 → skip) [NEW pin: FUN_0041286f's
+     identity — it is the shared 0x4cc654 allocator, twin of the
+     mode-2/0x68 lane's engine `enemy_free_slot`];
+   - the aim: dirx := robot.x@+0 − x + ((RandA()&0x3F)·0x100 −
+     0x1F00), diry := robot.y@+4 − y + ((RandA()&0x3F)·0x100 −
+     0x1F00) (two more draws — the ±31/±32-px Q13 jitter ≈ ±1
+     tile), dirz := (robot.z@+8 << 8) − z (robot z is Q5, D123;
+     the critter z is Q13 here — see /4);
+   - the RANGE GATE: dist := max(FUN_0041ebf8(dirx, diry), 1) >> 8
+     (px) < **0x12C − (2−[0x46cbf8])·0x40** = 172/236/300/364/428
+     for d=0..4 (0x4153d7..0x4153f1). **FUN_0041ebf8(x,y) is the
+     2-D OCTILE max(|x|,|y|)+min/2 — the dz is DEAD for the gate**
+     (the body computes dirz into ecx but the helper never reads
+     it; dirz only feeds the velocity stamp) [NEW pin].
+   - the STAMP (in range): projectile slot {w@+0x00 := 0x65
+     (§7j.17's "shooter 0x65"), d@+0x02 := the critter x,
+     d@+0x06 := y, d@+0x0A := z (Q13 — 6 levels at spawn),
+     d@+0x0E/+0x12/+0x16 := dirx>>5 / diry>>5 / dirz>>5} — the
+     velocity is the RAW direction >>5, NOT octile-normalized
+     (closer targets → slower bolts; unlike the mode-2 0x68
+     lane's dx·0x800/dist form, §7j.42/7).
+   - **DRAW BUDGET per substep: 2 always (the two gates) + 1 pick
+     + 2 jitter on the 1/4 arm = 2 or 5; the walk itself is
+     draw-free.**
+3. **THE HELPERS.** FUN_0041eb65(h) = `i16[*[0x46cbd0] + (h&0xFF)]`
+   and FUN_0041eb77(h) = the same word at `(h−0x40)&0xFF` — the
+   shared 256-word cos/sin table pair (cos(h−0x40) = sin) the
+   engine models as `sine_word`; FUN_0041ebf8(x,y) =
+   max(|x|,|y|) + min(|x|,|y|)/2 (2-D octile); FUN_0041286f = the
+   first-free 0x4cc654 slot scan (index or −1).
+4. **THE k2 Z SCALE IS Q13 — an exception to the module's "z is
+   Q5 for every kind" rule.** The S1 z stamp 0xC000 is 6 levels
+   in Q13 (0x2000/level), the projectile z stamp passes it through
+   RAW, and the dirz math shifts the robot's Q5 z up by 8 to meet
+   it (0x4153c4..0x4153cc). The kind-4/5/6 z cells stay Q5 (the
+   (z+0x10)<<8 spawn convention); the kind-1 z is Q5-by-value
+   (L·0x20+0x1F, the RAW-px family). The k2 body never re-derives
+   z (no floor probe), so the scale only matters at staging, the
+   dirz arithmetic, and the projectile stamp — all pinned above.
+5. **DIFFICULTY COUPLING — loader-side only** (spawn count w1+d,
+   and the RANGE GATE 300−(2−d)·64 inside the body; zero other
+   [0x46cbf8] sites in 0x415216..0x415466). The hp scalar is the
+   linear mission m (the closed imul census — S1's 0x4165db was
+   its first-cited site).
+ENGINE CONSEQUENCE (landed this unit): S1 accepted by
+stage_critters (kind 2, species 1, Q13 coords incl. z 0xC000,
+variant ±(pick(4)+3) by the w2 flag, anim RandA&7, timer
+(RandA&0x1F)−0xF at +0x72, hp = 175+(175·m)/27, the bounds-drop
+gate with the 2-draw attempt budget); the k2 body lands as the
+sine-walk + the two always-draw gates + the 1/4 aimed 0x65 fire
+(the squawk play is the T4 E-gap — the GATE draw is consumed
+faithfully). No canonical scenario stages S1 (the S8 scenario
+stages ZONEA S3+S4 only) → no chain movement. The canonical
+critter-bank blob is UNTOUCHED (the new `variant` record field is
+not serialized — the §7j.71 dir/frame/z_restore convention).
