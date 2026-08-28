@@ -6563,3 +6563,36 @@ docs/evidence/p5-g2-closecombat-census-table.txt; P5-ZONE-GATES
 kind flips to 6, w@+0x78 := 1, 3 falling gibs + 1× k0xD + CACODETH
 + bounty +1000) stays the documented unlanded §7j.24 subset
 alongside k1/k2/k3, as does the 0x69 beam TICK/impact (§7j.50).
+
+## D190 — 2026-08-28: autonomy `transport-death-end-of-run` (watchdog repair 2797116): the CloseCombat worker 7c028ff1 completed all three task commits (533eaac + 0ab42a3 + 1e18478) and then died at a provider transport timeout (client_rc=124, progress=1) BEFORE the gates battery, the queue rewrite, and the push; the retry worker e264f8b5 died identically while re-reading state — the repair adopts the commits verbatim, finishes the end-of-run bookkeeping, and archives the transport failure replaced-task
+
+FOUR facts recorded. (1) THE STALL: two consecutive provider
+transport deaths left a fully-landed task unrecorded — HEAD at
+1e18478 with a queue still offering the same item, three unpushed
+commits, and a structured nudge-failure-v1 artifact (kind
+transport, queue_unchanged true). No task-side defect existed:
+the worker's own log shows the census re-pin commit landing, then
+the transport cut. (2) THE ADOPTION: the repair changes NO engine
+code — it adopts 533eaac/0ab42a3/1e18478 as the task's completion
+(D189 already records the landing decisions), re-verifies the
+focused release battery at 1e18478 (bedlam-game:
+mission_load_census census_matches_pinned_table ok +
+canonical_dump_gate + differ_gate + determinism +
+mission_scene_gate + zonea_mission1_parity; bedlam-core:
+hash_fixture + mission_corpus_gate — full battery exit 0),
+confirms MANIFEST clean, rewrites the queue (the CloseCombat item
+moves to Done; the S8 personnel/POI item becomes the head), and
+pushes 4913a65..1e18478 plus this repair commit. (3) THE CONTRACT
+NOTE: per the 05e14378 precedent, the gates-validator battery runs
+AFTER the bookkeeping commit — the repair runs it at its own
+clean head; the earlier validator complaint at 0ab42a3 (required
+tracked path differs from HEAD) was the dirty-tree precondition,
+not a gate failure. (4) THE ARCHIVE: the failure artifact
+7c028ff1-976c-4676-b09e-1539318d6a36.json is acknowledged
+replaced-task with remediation_commit equal to this repair commit
+(the commit that carries the NEXT.md rewrite establishing the
+postcondition: ordinal 1 is p5-personnel-poi-s8, strict parser
+rc 0); the dead claim 1-owner.claim is left for the wrapper's
+reaper (workers never touch claim files). Queue grammar kept
+strict: no prose brackets in the surviving active item, tags
+whole on the first line.
