@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = []
+required_gates = ["p7-ports-scaffold"]
 
 [[gate]]
 id = "trigger-address"
@@ -1069,3 +1069,40 @@ commands = [
   ["/usr/bin/cargo", "run", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--example", "frame-pacing"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/pacing.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/examples/frame-pacing.rs", ".github/workflows/frame-pacing.yml", "docs/P6-MODERNIZATION.md", "docs/DECISIONS.md", "docs/required-gates.toml"]
+
+# p7-ports-scaffold — the P7 opener per PLAN §6 (D221, the D175
+# p5-zone-gate-scaffold / D200 p6-modernization-scaffold pattern: the
+# machine-checkable contract lands BEFORE any packaging work it
+# grades). Artifacts: the P7 decision surface (docs/P7-PORTS.md —
+# the scope map VERBATIM from PLAN §6 P7, the deliverable map
+# splitting the surface into ENGINEERING deliverables (linux-native,
+# flatpak-manifest, windows-installer, macos-universal2-ci,
+# ci-artifacts-per-push, cdda-user-supply, steamdeck-default)
+# versus EXTERNAL-CONDITIONAL items (macos-runner-availability,
+# signing-keys, publication-stores — recorded as exclusions exactly
+# like the P4 live-capture diagnostics, so P7 gates grade only the
+# engineering), the CDDA user-supply + local-cache contract, and the
+# SteamDeck stretch platform default over the landed D215 scale
+# surface) + the embedded machine-checkable registry (schema
+# p7-ports-map-v1: every engineering deliverable pending or landed,
+# landed exactly when its proving gate is named — the R2 evidence
+# discipline; exclusions never carry status/gate). The checker is
+# fail-closed over the registry discipline, the fixed
+# engineering/exclusion coverage sets, the gate join (a named proving
+# gate must exist AND sit in the P7 phase list), and cross-artifact
+# safety with this manifest (P7 gates start with this scaffold; P7
+# status green requires every engineering deliverable landed — no
+# premature phase flip). The registry seeds all-pending by decision
+# (D221: the honest scaffold state; deliverables flip to landed only
+# with their proving gate). The checker reads ONLY committed docs —
+# no corpus key, no game-data path in tracked_paths (hermetic,
+# PATH-free under bwrap). Command 2 is the checker's fail-closed
+# hermetic test suite.
+[[gate]]
+id = "p7-ports-scaffold"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+  ["/usr/bin/python3", "tools/test-p7-ports-map.py"],
+]
+tracked_paths = ["docs/P7-PORTS.md", "tools/check-p7-ports-map.py", "tools/test-p7-ports-map.py", "docs/required-gates.toml"]
