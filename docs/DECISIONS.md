@@ -9160,3 +9160,101 @@ to the new gate block); check-p6-behavior-catalog.py OK (P6 green,
 zero open entries) BEFORE AND AFTER; the bounded --phase P7
 validator verdict at the landing commit: ALL 3 P7 GATES GREEN
 under bwrap containment (report .state/p7-cdda-gates-report.json).
+
+## D224 — 2026-08-28: P7 `p7-steamdeck-default` — the FOURTH P7 ENGINEERING deliverable (PLAN §6 P7 "SteamDeck defaults stretch" + the P7-PORTS §2 row steamdeck-default / §5 contract): the RECORDED PLATFORM-PROFILE default over the landed D215 scale surface (a new bedlam-shell module + the explicit aspect-distorting Stretch arm as a fourth ScaleMode in bedlam-platform), graded hermetically by the bedlam-shell --lib battery, with the registry row flipped landed in the SAME commit naming the new FOURTH P7 required gate (the D221 R2 rule)
+
+CONTEXT: D221 pinned the §5 contract (a platform PROFILE default,
+not a mode toggle: D200 layering — the knob is OUT of ModeConfig,
+both pacing arms accept it, it selects nothing in the sim; the
+generic default stays the shipped posture; the identification
+mechanism is the delivering unit's to record) and D215 landed the
+scale surface (ScaleMode Integer/Fit/Fill + FilterMode consumed by
+the parity pipeline's GPU scale path). BOUNDS fixed by the queue
+item: bedlam-shell/platform only, no engine change to bedlam-game/
+bedlam-core, controls green before AND after, MANIFEST clean around
+every corpus read, the headless smoke at its recorded baseline. No
+new RE owed (the original was a fixed 640x480 DOS framebuffer — a
+MODERN platform surface over landed code; the SteamDeck DMI
+identity is modern hardware fact, not EXW fact).
+
+DECISION: (a) THE IDENTIFICATION (engine/bedlam-shell/src/
+platform.rs, NEW; recorded in the registry row's note per the §5
+contract): the SteamDeck class is the hardware's own DMI identity,
+read ONCE at window startup from the standard sysfs tree
+(/sys/devices/virtual/dmi/id) — board_vendor "Valve" AND
+product_name "Jupiter" (the 1280x800 LCD deck) or "Galileo" (the
+1280x800 OLED deck), matched trimmed + case-insensitively, BOTH
+fields required; everything else — any other vendor or product,
+missing files, a platform with no sysfs DMI tree — classifies
+FAIL-CLOSED as Generic (PlatformFacts::from_dmi_dir is read-only,
+best-effort, never fatal). The env is deliberately NOT consulted:
+STEAMDECK=1 is a Steam-session fact, not a hardware fact, and a
+desktop exporting it is not a SteamDeck. The headless path never
+probes DMI (it owns no surface; the --scale/--filter flags note +
+ignore exactly as before). (b) THE ARM — the contract's second
+branch, recorded: this unit lands the EXPLICIT ASPECT-DISTORTING
+STRETCH arm (a fourth ScaleMode in bedlam-platform scale.rs: the
+WHOLE frame onto the WHOLE target — dest rect = the full target,
+uv = the full frame, the absolute cursor inverse of Integer/Fit),
+NOT the Fill crop: Fill fills the panel but CENTER-CROPS the frame
+(hiding the top and bottom of the game's own 480 rows — Fill's uv
+sub-rect on 1280x800 crops ~17 percent), while Stretch shows every
+game row with the 4:3-to-16:10 aspect absorbed by the non-uniform
+scale. The plan's own word is "stretch"; the choice is recorded in
+the registry row's note. The CLI domain gains the word (fail-closed
+integer|fit|fill|stretch) so the arm is selectable on ANY machine
+and overridable on a SteamDeck — the explicit --scale word ALWAYS
+wins over the profile default (startup_scale_selection), and the
+filter default stays Nearest on every platform (the contract
+overrides the scale arm only). (c) THE DEFAULT POSTURE: on the
+SteamDeck class the startup scale becomes Stretch with one stderr
+note (the profile default + the --scale override hint); on every
+other machine NOTHING changes — PlatformClass::default() is
+Generic, profile_default_scale(Generic) = Integer, and the generic
+default round-trips PresentConfig::default() bit-for-bit (the D215
+pin scaling_defaults_to_the_shipped_integer_nearest stays green;
+no PresentConfig default was touched). (d) PARITY BOUNDS pinned by
+test (the D200/D215 shape): the profile selects NOTHING beyond the
+default of the already-landed scale knob — bit-identical sim
+config and identical executed ticks, tick count, state hash, scene
+hash AND frame parity hash under every class x CLI-word combination
+(profile_selection_never_touches_the_sim_or_the_hashed_
+trajectory); the present-gate + camera-alpha answers are identical
+under the profile selection in BOTH pacing arms
+(profile_selection_never_changes_the_gate_answers); the palette
+expansion stays VgaExpand::Original under every selection. (e) THE
+GATE: p7-steamdeck-default wired as the FOURTH P7 required_gates
+entry — command 1 = the hermetic bedlam-shell --lib battery (145/0
++ 1 pre-existing ignored; +7 platform tests: the Valve+Jupiter/
+Galileo identification incl. casing/whitespace variance, every
+fail-closed shape incl. missing/empty fields + near-miss products,
+the best-effort DMI reader over a real scratch dir, the per-class
+defaults, the CLI-wins rule over the full 2x4 domain, the
+fill-the-panel geometry on 1280x800 (Stretch = whole frame + whole
+panel, Integer = the 320 px pillarbox bars the contract forbids,
+Fill = the crop this unit did not choose), the only-the-default
+pin; +2 window tests: the trajectory/hash invariance + the
+both-arms gate-answer invariance; +1 bedlam-platform integration
+test: the Stretch geometry pins; the D215 suite extended 3x2 -> 4x2
+in place); command 2 = check-p7-ports-map (the flip + join). No
+corpus key, no writable, no network, no device, no display.
+VERIFIED first-hand: fmt + clippy clean on both touched crates
+(the one pre-existing D210 test warning untouched); the binary
+wiring (help text incl. the stretch word + the SteamDeck default
+note, the bogus-word + missing-value rejections at exit 2, the
+headless ignore note) and the headless smoke EXACTLY at the
+recorded baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d
+/ audio 110400/158092) under --scale stretch; the WINDOW host end
+to end on the live display under --scale stretch (exit 0, no
+profile note on this Generic desktop — the note fires only on the
+deck class, pinned by the pure tests); controls green: canonical_
+dump_gate 13/13, determinism 4/4, zone_mission_parity 5/5 (ZERO
+canonical-chain movement), check-p6-behavior-catalog OK before AND
+after; test-validate-required-gates 22/22 after the manifest edit;
+check-p7-ports-map OK (7 engineering, 4 landed) + its suite 29/29
+after the deliberate re-baseline (the real-repo pin 4 landed /
+3 pending, the honest fixture wiring p7-steamdeck-default, the
+forward-shape test flipping flatpak-manifest at 5/2); MANIFEST
+clean before and after every corpus read; the bounded --phase P7
+validator verdict at the landing commit: ALL 4 P7 GATES GREEN
+under bwrap containment.

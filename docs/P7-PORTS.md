@@ -217,9 +217,9 @@ note = "LANDED with p7-cdda-user-supply: engine/bedlam-shell/src/cdda.rs — the
 id = "steamdeck-default"
 kind = "engineering"
 plan_anchor = "SteamDeck defaults stretch"
-status = "pending"
-gate = ""
-note = "The section 5 platform-profile default: fill-the-panel on the 1280x800 16:10 panel, recorded over the landed D215 scale surface; the generic default stays Integer + Nearest."
+status = "landed"
+gate = "p7-steamdeck-default"
+note = "LANDED with p7-steamdeck-default: the RECORDED platform profile over the landed D215 scale surface — identification = the DMI sysfs identity read once at window startup (/sys/devices/virtual/dmi/id: board_vendor 'Valve' AND product_name 'Jupiter' (the 1280x800 LCD deck) or 'Galileo' (the 1280x800 OLED deck), trimmed + case-insensitive, both fields required, FAIL-CLOSED to Generic on any other identity, missing files, or a non-sysfs platform; the env is deliberately not consulted); on the SteamDeck class the default PresentConfig scale becomes the EXPLICIT ASPECT-DISTORTING Stretch arm this unit lands (the whole 640x480 frame onto the whole panel edge to edge — no bars, no crop; Fill was NOT chosen because its centered crop hides the top and bottom of the game's own 480 rows), the filter default stays Nearest on every platform, and the explicit --scale/--filter words always win; every other machine keeps Integer + Nearest bit-for-bit (the D215 default is untouched, PresentConfig::default() is unchanged); engine/bedlam-shell/src/platform.rs + the Stretch arm in bedlam-platform scale.rs; the profile selects nothing in the sim (D200 layering, pinned by the trajectory/hash invariance test)."
 
 # ---- EXTERNAL-CONDITIONAL items (recorded exclusions, never gates) -----
 
@@ -350,6 +350,42 @@ scale path):
   recognized) is the delivering unit's scope; the identification must
   be recorded when it lands.
 
+**LANDED (unit `p7-steamdeck-default`, D224):** the contract above
+is the shipped surface. The IDENTIFICATION is the hardware's own
+DMI identity, read ONCE at window startup from the standard sysfs
+tree (`engine/bedlam-shell/src/platform.rs`): `board_vendor` =
+"Valve" AND `product_name` = "Jupiter" (the 1280x800 LCD deck) or
+"Galileo" (the 1280x800 OLED deck), matched trimmed and
+case-insensitively; BOTH fields are required and everything else —
+any other vendor or product, missing files, a platform with no
+sysfs DMI tree — classifies FAIL-CLOSED as Generic (the env is
+deliberately not consulted: `STEAMDECK=1` is a Steam-session fact,
+not a hardware fact; a desktop exporting it is not a SteamDeck).
+The probe is read-only and never fatal. The ARM this unit lands and
+records is the explicit aspect-distorting `Stretch` (the second
+branch §5 allows): the WHOLE 640x480 frame maps onto the WHOLE
+panel edge to edge — no bars, no crop (the `Fill` arm was not
+chosen: it fills the panel but center-crops, hiding the top and
+bottom of the game's own 480 rows). The new arm rides the landed
+D215 surface as a fourth `ScaleMode` (whole frame / whole target
+geometry; the full-frame uv of Integer/Fit; the absolute cursor
+inverse of Integer/Fit), selectable by the same `--scale stretch`
+word (fail-closed domain `integer|fit|fill|stretch`), so a user on
+ANY machine can ask for it and a SteamDeck user can still ask for
+Integer bars — the CLI word always wins. On a SteamDeck the
+startup notes the profile default on stderr
+(`--scale` override hint included); the filter default stays
+Nearest on every platform (the contract overrides the scale arm
+only). PARITY BOUNDS pinned by test: the profile is a platform
+knob OUT of `ModeConfig` (D200) that both pacing arms accept
+identically; the sim config, executed ticks, tick count, state
+hash, scene hash AND frame parity hash are identical under every
+class/CLI combination; the headless path never probes DMI (it owns
+no surface; the flags note + ignore exactly as before); and the
+generic default is `PresentConfig::default()` bit-for-bit — the
+D215 pin `scaling_defaults_to_the_shipped_integer_nearest` stays
+green (generic platforms keep the shipped Integer + Nearest).
+
 ## 6. Gate wiring (the first P7 required gate) + the gate shape the phase closes on
 
 Per the D175 pattern the contract lands before any packaging work:
@@ -403,6 +439,19 @@ and regeneration, the containment guards, and the sim-config
 invariance), command 2 re-runs `tools/check-p7-ports-map.py` (the
 registry flip + gate join). The registry row `cdda-user-supply`
 flipped `landed` in the same commit (R2).
+
+**Landed since (unit p7-steamdeck-default, D224):** the FOURTH P7
+gate `p7-steamdeck-default` proves the §5 contract over the landed
+platform-profile surface (`engine/bedlam-shell/src/platform.rs` +
+the Stretch arm in the bedlam-platform scale surface) — command 1
+is the hermetic `bedlam-shell --lib` battery (the DMI
+identification incl. every fail-closed shape, the profile default
+per class, the CLI-wins rule, the fill-the-panel geometry on the
+1280x800 panel, the trajectory/hash + both-arms gate-answer
+invariance over the profile selection), command 2 re-runs
+`tools/check-p7-ports-map.py` (the registry flip + gate join). The
+registry row `steamdeck-default` flipped `landed` in the same
+commit (R2).
 
 ## 7. P7 acceptance surface (pointer, not re-statement)
 

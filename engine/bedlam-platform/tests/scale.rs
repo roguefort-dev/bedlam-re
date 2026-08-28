@@ -52,7 +52,7 @@ fn fill_crops_uv() {
 /// Non-fill modes sample the full source.
 #[test]
 fn non_fill_uv_full() {
-    for m in [ScaleMode::Integer, ScaleMode::Fit] {
+    for m in [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Stretch] {
         assert_eq!(uv_rect(m, 640, 480, 1920, 1080), [0.0, 0.0, 1.0, 1.0]);
     }
     // Degenerate dims: full uv, zero rect.
@@ -61,6 +61,30 @@ fn non_fill_uv_full() {
         [0.0, 0.0, 1.0, 1.0]
     );
     let r = scale_rect(ScaleMode::Integer, 640, 480, 0, 480);
+    assert_eq!((r.w, r.h), (0, 0));
+}
+
+/// Stretch covers the WHOLE target with the WHOLE frame — the P7
+/// SteamDeck fill-the-panel arm (docs/P7-PORTS.md §5): on the 16:10
+/// 1280x800 panel the 4:3 canonical frame maps edge to edge (no bars,
+/// no crop — the aspect is absorbed by the non-uniform scale, unlike
+/// Fill which crops the centered aspect sub-rect). Zero-size targets
+/// keep the zero-rect guard.
+#[test]
+fn stretch_fills_the_panel_with_the_whole_frame() {
+    let r = scale_rect(ScaleMode::Stretch, 640, 480, 1280, 800);
+    assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 1280, 800));
+    assert_eq!(
+        uv_rect(ScaleMode::Stretch, 640, 480, 1280, 800),
+        [0.0, 0.0, 1.0, 1.0]
+    );
+    // Same target as Fill, different uv: Fill crops, Stretch never does.
+    let fill_uv = uv_rect(ScaleMode::Fill, 640, 480, 1280, 800);
+    assert!(
+        fill_uv[1] > 0.0 && fill_uv[3] < 1.0,
+        "fill crops vertically"
+    );
+    let r = scale_rect(ScaleMode::Stretch, 640, 480, 0, 800);
     assert_eq!((r.w, r.h), (0, 0));
 }
 

@@ -78,6 +78,7 @@ pub mod headless;
 pub mod input;
 pub mod native;
 pub mod pacing;
+pub mod platform;
 pub mod save;
 pub mod window;
 

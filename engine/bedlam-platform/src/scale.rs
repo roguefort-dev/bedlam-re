@@ -27,6 +27,11 @@ pub enum ScaleMode {
     /// Fill the whole target, cropping the centered source sub-rect
     /// whose aspect matches the target.
     Fill,
+    /// Stretch the WHOLE frame onto the WHOLE target: a non-uniform
+    /// scale (aspect not preserved, no crop) — every source pixel is
+    /// shown and every target pixel is covered. The P7 SteamDeck
+    /// profile default's fill-the-panel arm (docs/P7-PORTS.md §5).
+    Stretch,
 }
 
 /// Pixel filtering for the parity blit.
@@ -98,7 +103,7 @@ pub fn scale_rect(mode: ScaleMode, sw: u32, sh: u32, dw: u32, dh: u32) -> Rect {
                 ((sh as f64) * s).round() as u32,
             )
         }
-        ScaleMode::Fill => (dw, dh),
+        ScaleMode::Fill | ScaleMode::Stretch => (dw, dh),
     };
     let w = w.min(dw);
     let h = h.min(dh);
@@ -111,8 +116,8 @@ pub fn scale_rect(mode: ScaleMode, sw: u32, sh: u32, dw: u32, dh: u32) -> Rect {
 }
 
 /// Source uv sub-rect [u0, v0, u1, v1] sampled for the given mode: the
-/// full frame for Integer/Fit; the centered aspect-cropped sub-rect for
-/// Fill. v = 0 is frame row 0 (top).
+/// full frame for Integer/Fit/Stretch; the centered aspect-cropped
+/// sub-rect for Fill. v = 0 is frame row 0 (top).
 pub fn uv_rect(mode: ScaleMode, sw: u32, sh: u32, dw: u32, dh: u32) -> [f32; 4] {
     match mode {
         ScaleMode::Fill if sw > 0 && sh > 0 && dw > 0 && dh > 0 => {

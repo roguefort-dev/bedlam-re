@@ -26,12 +26,18 @@
 //!   "QoL: ... save slots + metadata + opt-in autosave"; D213;
 //!   default 1) and `--autosave` OPTS IN to the autosave policy —
 //!   never the default: the shipped game never autosaves
-//!   (RE-EXW-SAVE). `--scale MODE` (`integer`/`fit`/`fill`) and
-//!   `--filter MODE` (`nearest`/`linear`) select the P6 resolution-
+//!   (RE-EXW-SAVE). `--scale MODE`
+//!   (`integer`/`fit`/`fill`/`stretch`) and `--filter MODE`
+//!   (`nearest`/`linear`) select the P6 resolution-
 //!   independence scaling (PLAN §6 "GPU-scales it (nearest/integer
 //!   default; fit/fill/smooth options)"; D215; a PURE platform
 //!   presentation mapping over the already-landed bedlam-platform
-//!   scale surface; default = integer + nearest exactly as shipped).
+//!   scale surface; default = integer + nearest exactly as shipped,
+//!   EXCEPT the P7 SteamDeck platform profile (PLAN §6 "SteamDeck
+//!   defaults stretch"; D224; the DMI-identified SteamDeck class
+//!   defaults to the fill-the-panel `stretch`; an explicit word
+//!   always wins; every other machine keeps the shipped default
+//!   bit-for-bit).
 //!   `--presentation MODE` (`parity`/`enhanced`) selects the P6
 //!   frame-presentation path (PLAN §6 "ENHANCED mode is explicitly
 //!   non-parity and renders supported world/UI passes natively";
@@ -59,6 +65,7 @@ use bedlam_platform::scale::{FilterMode, ScaleMode};
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
+use bedlam_shell::platform;
 use bedlam_shell::save::{AutosavePolicy, SaveSlotId};
 use bedlam_shell::window::{
     filter_mode_from_cli, presentation_mode_from_cli, run_window, scale_mode_from_cli,
@@ -131,7 +138,7 @@ fn main() -> ExitCode {
             "--scale" => match args.next().and_then(|w| scale_mode_from_cli(&w)) {
                 Some(mode) => scale = Some(mode),
                 None => {
-                    eprintln!("bedlam-shell: --scale needs integer|fit|fill");
+                    eprintln!("bedlam-shell: --scale needs integer|fit|fill|stretch");
                     return ExitCode::from(2);
                 }
             },
@@ -205,8 +212,14 @@ fn main() -> ExitCode {
                 println!(
                     "                integer (largest integer scale, bars - default) | fit (whole"
                 );
-                println!("                frame inside, bars) | fill (whole target, cropped) (P6");
-                println!("                resolution independence; ignored headless)");
+                println!("                frame inside, bars) | fill (whole target, cropped) |");
+                println!(
+                    "                stretch (whole frame onto the whole target - the SteamDeck"
+                );
+                println!(
+                    "                profile default) (P6 resolution independence + P7 SteamDeck;"
+                );
+                println!("                ignored headless)");
                 println!(
                     "  --filter MODE: window host samples the scaled frame MODE = nearest (the"
                 );
@@ -341,18 +354,33 @@ fn main() -> ExitCode {
             opts.autosave = AutosavePolicy::On(opts.save_slot);
         }
         // P6 resolution independence (PLAN §6 "GPU-scales it
-        // (nearest/integer default; fit/fill/smooth options)"): the
-        // SCALING SELECTION is a PURE platform presentation mapping
-        // over the already-landed bedlam-platform scale surface —
-        // OUT of ModeConfig (D200 layering), NO purist arbitration
-        // (the original was a fixed 640x480 DOS framebuffer with no
+        // (nearest/integer default; fit/fill/smooth options)") + the
+        // P7 STEAMDECK PLATFORM PROFILE (PLAN §6 "SteamDeck defaults
+        // stretch", docs/P7-PORTS.md §5, D224): the SCALING
+        // SELECTION is a PURE platform presentation mapping over the
+        // already-landed bedlam-platform scale surface — OUT of
+        // ModeConfig (D200 layering), NO purist arbitration (the
+        // original was a fixed 640x480 DOS framebuffer with no
         // scaling mode to preserve, so both pacing arms accept it
         // identically) and it selects NOTHING in the host beyond the
-        // PresentConfig the GPU scale path consumes. Defaults in,
-        // defaults out: no flags = Integer + Nearest = the shipped
-        // posture bit-for-bit.
-        opts.present =
-            scaling_present_config(scale.unwrap_or_default(), filter.unwrap_or_default());
+        // PresentConfig the GPU scale path consumes. The startup
+        // scale is the CLI word when given, else the PLATFORM
+        // PROFILE default (the SteamDeck class identified once from
+        // the DMI identity — valve board + jupiter/galileo product,
+        // fail-closed to Generic: Integer + Nearest = the shipped
+        // posture bit-for-bit on every other machine; the SteamDeck
+        // default is the fill-the-panel Stretch). The filter default
+        // stays Nearest on every platform; an explicit --scale ALWAYS
+        // wins.
+        let profile = platform::detect_platform();
+        let startup_scale = platform::startup_scale_selection(profile, scale);
+        if scale.is_none() && profile == platform::PlatformClass::SteamDeck {
+            eprintln!(
+                "bedlam-shell: SteamDeck platform profile: defaulting --scale to stretch \
+                 (fill the panel; --scale overrides)"
+            );
+        }
+        opts.present = scaling_present_config(startup_scale, filter.unwrap_or_default());
         // P6 ENHANCED native render (PLAN §6 "ENHANCED mode is
         // explicitly non-parity and renders supported world/UI
         // passes natively"): the frame-presentation selection is a

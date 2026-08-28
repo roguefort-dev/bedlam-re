@@ -139,6 +139,23 @@
 //! a separately FLAGGED gameplay change per PLAN, never a silent
 //! default.
 //!
+//! P7 STEAMDECK PLATFORM PROFILE (the p7-steamdeck-default unit,
+//! PLAN §6 "SteamDeck defaults stretch"; docs/P7-PORTS.md §5,
+//! D224): the platform class identified at startup
+//! ([`crate::platform`] — the DMI identity, Valve board +
+//! Jupiter/Galileo product, fail-closed to Generic) selects ONLY
+//! the DEFAULT of the [`WindowOptions::present`] scale knob: on a
+//! SteamDeck the default becomes the fill-the-panel
+//! [`ScaleMode::Stretch`] (the whole frame onto the whole
+//! 1280x800 panel — no bars, no crop); every other machine keeps
+//! Integer + Nearest bit-for-bit (the D215 default is untouched).
+//! The user's `--scale`/`--filter` words keep their exact landed
+//! semantics and an explicit word ALWAYS wins. D200 layering with
+//! NO purist arbitration: the profile is a platform knob OUT of
+//! [`ModeConfig`], both pacing arms accept it identically, and it
+//! selects NOTHING in the sim — the sim config and every hash are
+//! identical under every class/CLI combination.
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -390,8 +407,8 @@ fn is_window_toggle_key(key: PhysicalKey) -> bool {
 }
 
 /// PURE: the binary's `--scale` word over the full domain —
-/// `integer` / `fit` / `fill` -> [`ScaleMode`]. Fail-closed: any
-/// other word is `None` and the binary exits 2 (a presentation
+/// `integer` / `fit` / `fill` / `stretch` -> [`ScaleMode`]. Fail-closed:
+/// any other word is `None` and the binary exits 2 (a presentation
 /// knob never guesses; the same posture as `--save-slot`'s domain
 /// rejection).
 pub fn scale_mode_from_cli(word: &str) -> Option<ScaleMode> {
@@ -399,6 +416,7 @@ pub fn scale_mode_from_cli(word: &str) -> Option<ScaleMode> {
         "integer" => Some(ScaleMode::Integer),
         "fit" => Some(ScaleMode::Fit),
         "fill" => Some(ScaleMode::Fill),
+        "stretch" => Some(ScaleMode::Stretch),
         _ => None,
     }
 }
@@ -1120,6 +1138,8 @@ struct ShellApp {
 /// Bars clamp to the frame edge. None for a degenerate rect or the
 /// Fill mode (Fill crops the source - its inverse needs the uv rect
 /// and is out of scope; relative aiming is used there instead).
+/// Stretch maps the WHOLE frame onto the WHOLE target, so it
+/// inverts absolutely like Integer/Fit (no crop, no bars).
 fn cursor_to_game(
     px: f64,
     py: f64,
@@ -2650,17 +2670,22 @@ mod scaling_option_tests {
         )
     }
 
-    /// The full 3x2 selection cross product through the composed
+    /// The full 4x2 selection cross product through the composed
     /// PURE mapping (the binary's only route into `present`).
     fn selections() -> Vec<PresentConfig> {
-        [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Fill]
-            .into_iter()
-            .flat_map(|scale| {
-                [FilterMode::Nearest, FilterMode::Linear]
-                    .into_iter()
-                    .map(move |filter| scaling_present_config(scale, filter))
-            })
-            .collect()
+        [
+            ScaleMode::Integer,
+            ScaleMode::Fit,
+            ScaleMode::Fill,
+            ScaleMode::Stretch,
+        ]
+        .into_iter()
+        .flat_map(|scale| {
+            [FilterMode::Nearest, FilterMode::Linear]
+                .into_iter()
+                .map(move |filter| scaling_present_config(scale, filter))
+        })
+        .collect()
     }
 
     /// The shipped default: Integer + Nearest — the option changes
@@ -2690,9 +2715,10 @@ mod scaling_option_tests {
         assert_eq!(scale_mode_from_cli("integer"), Some(ScaleMode::Integer));
         assert_eq!(scale_mode_from_cli("fit"), Some(ScaleMode::Fit));
         assert_eq!(scale_mode_from_cli("fill"), Some(ScaleMode::Fill));
+        assert_eq!(scale_mode_from_cli("stretch"), Some(ScaleMode::Stretch));
         assert_eq!(filter_mode_from_cli("nearest"), Some(FilterMode::Nearest));
         assert_eq!(filter_mode_from_cli("linear"), Some(FilterMode::Linear));
-        for word in ["smooth", "INTEGER", "int", "", "linear ", "0"] {
+        for word in ["smooth", "INTEGER", "int", "", "linear ", "0", "Stretch"] {
             assert_eq!(scale_mode_from_cli(word), None, "scale word {word:?}");
         }
         for word in ["smooth", "bilinear", "NEAREST", "", "nearest;"] {
@@ -2700,14 +2726,19 @@ mod scaling_option_tests {
         }
     }
 
-    /// THE PURE MAPPING: the composed config covers exactly the 3x2
+    /// THE PURE MAPPING: the composed config covers exactly the 4x2
     /// selection cross product and touches ONLY the two knob fields
     /// — the 6-to-8 bit palette expansion stays the parity
     /// `VgaExpand::Original` under every selection, so the canonical
     /// 640x480 indexed frame + palette ride unchanged.
     #[test]
     fn scaling_selection_is_a_pure_present_config_mapping() {
-        for scale in [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Fill] {
+        for scale in [
+            ScaleMode::Integer,
+            ScaleMode::Fit,
+            ScaleMode::Fill,
+            ScaleMode::Stretch,
+        ] {
             for filter in [FilterMode::Nearest, FilterMode::Linear] {
                 let cfg = scaling_present_config(scale, filter);
                 assert_eq!(cfg.scale, scale);
@@ -2816,7 +2847,9 @@ mod scaling_option_tests {
     /// needs the uv rect, so absolute cursor mapping is unavailable
     /// under Fill and relative aiming is used instead): pin it over
     /// the whole selection — None under Fill regardless of filter,
-    /// an exact absolute mapping under Integer/Fit.
+    /// an exact absolute mapping under Integer/Fit/Stretch (Stretch
+    /// maps the whole frame onto the whole target, so it inverts
+    /// absolutely like the bar modes).
     #[test]
     fn fill_scaling_cursor_is_relative_only_and_filter_invariant() {
         for cfg in selections() {
@@ -2832,7 +2865,140 @@ mod scaling_option_tests {
                     assert_eq!(
                         cursor_to_game(960.0, 540.0, 1920, 1080, &cfg),
                         Some((320, 240)),
-                        "integer/fit map absolutely (the filter never matters)"
+                        "integer/fit/stretch map absolutely (the filter never matters)"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The P7 SteamDeck PLATFORM PROFILE is PRESENTATION-BUCKET
+    /// ONLY (D224, the queue's invariance pin over the profile
+    /// selection): the startup mapping (profile class + CLI word ->
+    /// default scale -> [`scaling_present_config`]) lives entirely
+    /// upstream of the host, so the derived host config is
+    /// bit-identical and the SAME pump script through hosts built
+    /// under the Generic default, the SteamDeck default AND the
+    /// CLI-override combinations yields the identical
+    /// executed-tick sequence, sim tick count, state hash, scene
+    /// hash AND frame parity hash — the profile cannot touch the
+    /// hashed trajectory.
+    #[test]
+    fn profile_selection_never_touches_the_sim_or_the_hashed_trajectory() {
+        use crate::platform::{profile_default_scale, startup_scale_selection, PlatformClass};
+        // Every class x CLI-word combination the startup can compose.
+        let cases: Vec<ScaleMode> = [
+            (PlatformClass::Generic, None),
+            (PlatformClass::SteamDeck, None),
+            (PlatformClass::SteamDeck, Some(ScaleMode::Integer)),
+            (PlatformClass::SteamDeck, Some(ScaleMode::Fit)),
+            (PlatformClass::SteamDeck, Some(ScaleMode::Fill)),
+            (PlatformClass::Generic, Some(ScaleMode::Stretch)),
+        ]
+        .into_iter()
+        .map(|(class, cli)| startup_scale_selection(class, cli))
+        .collect();
+        // The profile defaults are exactly the two pinned arms.
+        assert_eq!(
+            profile_default_scale(PlatformClass::Generic),
+            cases[0],
+            "generic default stays Integer"
+        );
+        assert_eq!(
+            profile_default_scale(PlatformClass::SteamDeck),
+            cases[1],
+            "steamdeck default is the fill-the-panel stretch"
+        );
+
+        let opts_all = cases
+            .into_iter()
+            .map(|scale| {
+                let mut opts = WindowOptions::new("test-install");
+                opts.present = scaling_present_config(scale, FilterMode::default());
+                opts
+            })
+            .collect::<Vec<_>>();
+        for opts in &opts_all[1..] {
+            assert_eq!(
+                host_sim_config(&opts_all[0]),
+                host_sim_config(opts),
+                "the profile never reaches the sim config"
+            );
+        }
+
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+        let mut executed = vec![Vec::new(); hosts.len()];
+        for (i, &dt) in script.iter().cycle().take(30).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            for (host, log) in hosts.iter_mut().zip(executed.iter_mut()) {
+                log.push(host.pump_frame(dt, &input));
+            }
+        }
+        for (i, host) in hosts.iter().enumerate().skip(1) {
+            assert_eq!(executed[i], executed[0], "same executed ticks");
+            assert_eq!(
+                host.driver().sim().tick_index(),
+                hosts[0].driver().sim().tick_index()
+            );
+            assert_eq!(
+                host.driver().sim().state_hash(),
+                hosts[0].driver().sim().state_hash()
+            );
+            assert_eq!(host.scene_hash(), hosts[0].scene_hash());
+            assert_eq!(host.frame().parity_hash(), hosts[0].frame().parity_hash());
+        }
+    }
+
+    /// PROFILE GATE ANSWERS are option-invariant (the D200 pin, the
+    /// queue's "both pacing arms accept it" requirement): the
+    /// profile-derived present defaults live entirely upstream of
+    /// the host, so the present-gate and alpha answers are
+    /// IDENTICAL under the Generic and SteamDeck defaults in the
+    /// modern AND the classic arm.
+    #[test]
+    fn profile_selection_never_changes_the_gate_answers() {
+        use crate::platform::{startup_scale_selection, PlatformClass};
+        for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let opts_all = [
+                startup_scale_selection(PlatformClass::Generic, None),
+                startup_scale_selection(PlatformClass::SteamDeck, None),
+                startup_scale_selection(PlatformClass::SteamDeck, Some(ScaleMode::Integer)),
+            ]
+            .into_iter()
+            .map(|scale| {
+                let mut opts = WindowOptions::new("test-install");
+                opts.present = scaling_present_config(scale, FilterMode::default());
+                opts.mode = mode;
+                opts
+            })
+            .collect::<Vec<_>>();
+            let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+            let mut clock = FixedStepClock::host();
+            for dt in [4u32, 0, 4, 3, 0, 4] {
+                clock.advance(4_166_666);
+                for host in &mut hosts {
+                    host.pump_frame(dt, &InputFrame::default());
+                }
+                for (i, host) in hosts.iter().enumerate().skip(1) {
+                    assert_eq!(
+                        present_due(host),
+                        present_due(&hosts[0]),
+                        "{mode:?} dt {dt} profile case {i}"
+                    );
+                    assert_eq!(
+                        present_camera_alpha(host, &clock),
+                        present_camera_alpha(&hosts[0], &clock),
+                        "{mode:?} dt {dt} profile case {i}"
                     );
                 }
             }

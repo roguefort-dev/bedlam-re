@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default"]
 
 [[gate]]
 id = "trigger-address"
@@ -1175,3 +1175,43 @@ commands = [
   ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/cdda.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P7-PORTS.md", "docs/required-gates.toml"]
+
+# p7-steamdeck-default — the FOURTH P7 engineering deliverable per
+# PLAN §6 "SteamDeck defaults stretch" (docs/P7-PORTS.md §2 row
+# steamdeck-default + §5, flipped landed with this same commit per
+# the D221 R2 rule; implementation D224): the RECORDED
+# PLATFORM-PROFILE default over the landed D215 scale surface
+# (bedlam-shell/platform only, no engine change). (a) the
+# IDENTIFICATION recorded in the registry row's note: the DMI sysfs
+# identity read once at window startup
+# (/sys/devices/virtual/dmi/id board_vendor 'Valve' AND
+# product_name 'Jupiter' (LCD) or 'Galileo' (OLED), trimmed +
+# case-insensitive, both required, FAIL-CLOSED to Generic otherwise;
+# the env is never consulted), read-only, never fatal. (b) the
+# DEFAULT: on the SteamDeck class the default PresentConfig scale
+# becomes the explicit aspect-distorting Stretch arm this unit lands
+# (the whole frame onto the whole 1280x800 panel edge to edge — no
+# bars, no crop); generic platforms keep Integer + Nearest
+# bit-for-bit (PresentConfig::default() untouched, the D215 pin
+# stays green); the CLI --scale/--filter words always win. (c)
+# PARITY BOUNDS pinned by test: D200 layering — the profile is OUT
+# of ModeConfig, both pacing arms accept it identically, it selects
+# NOTHING in the sim (identical sim config, executed ticks, tick
+# count, state hash, scene hash AND frame parity hash under every
+# class/CLI combination); the headless path never probes DMI
+# (flags noted + ignored exactly as before; the smoke stays at its
+# recorded baseline). Command 1 is the hermetic bedlam-shell --lib
+# battery (the DMI identification incl. every fail-closed shape,
+# the profile default per class, the CLI-wins rule, the
+# fill-the-panel geometry, the trajectory/hash + both-arms
+# gate-answer invariance); command 2 re-runs the registry checker
+# (the flip + gate join). No network, no device, no display, no
+# corpus key, no writable.
+[[gate]]
+id = "p7-steamdeck-default"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+]
+tracked_paths = ["engine/bedlam-shell/src/platform.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "engine/bedlam-platform/src/scale.rs", "engine/bedlam-platform/tests/scale.rs", "docs/P7-PORTS.md", "docs/required-gates.toml"]
