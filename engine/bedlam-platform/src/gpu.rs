@@ -186,19 +186,40 @@ pub struct ParityPipeline {
     uv_buf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     palette_uploaded: bool,
+    plane_w: u32,
+    plane_h: u32,
 }
 
 impl ParityPipeline {
-    /// Create the pipeline for a target with the given color format.
+    /// Create the canonical pipeline (the 640x480 parity plane) for
+    /// a target with the given color format — the landed behavior,
+    /// unchanged.
     pub fn new(gpu: &ParityGpu, target_format: wgpu::TextureFormat) -> ParityPipeline {
+        ParityPipeline::with_plane(gpu, target_format, CANON_W, CANON_H)
+    }
+
+    /// Create the same palette-expand pipeline for an ARBITRARY
+    /// indexed plane size (the P6 ENHANCED native-pass shape: a UI
+    /// plane of presentation-authored dimensions drawn through the
+    /// SAME already-landed path — indices + palette + params + uv
+    /// and one fullscreen-triangle draw). Zero dimensions are
+    /// clamped to 1 (wgpu rejects empty textures).
+    pub fn with_plane(
+        gpu: &ParityGpu,
+        target_format: wgpu::TextureFormat,
+        plane_w: u32,
+        plane_h: u32,
+    ) -> ParityPipeline {
+        let plane_w = plane_w.max(1);
+        let plane_h = plane_h.max(1);
         let device = gpu.device().clone();
         let queue = gpu.queue().clone();
 
         let index_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("bedlam parity indices"),
             size: wgpu::Extent3d {
-                width: CANON_W,
-                height: CANON_H,
+                width: plane_w,
+                height: plane_h,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -349,6 +370,8 @@ impl ParityPipeline {
             uv_buf,
             bind_group,
             palette_uploaded: false,
+            plane_w,
+            plane_h,
         }
     }
 
@@ -356,6 +379,10 @@ impl ParityPipeline {
     /// frame.palette_dirty or on the first upload (the 004ee9b6
     /// handshake analog - presentation re-uploads, render just flags).
     pub fn upload_frame(&mut self, frame: &Frame) {
+        debug_assert_eq!(
+            frame.indices.len(),
+            self.plane_w as usize * self.plane_h as usize
+        );
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.index_tex,
@@ -366,18 +393,57 @@ impl ParityPipeline {
             &frame.indices[..],
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(CANON_W),
-                rows_per_image: Some(CANON_H),
+                bytes_per_row: Some(self.plane_w),
+                rows_per_image: Some(self.plane_h),
             },
             wgpu::Extent3d {
-                width: CANON_W,
-                height: CANON_H,
+                width: self.plane_w,
+                height: self.plane_h,
                 depth_or_array_layers: 1,
             },
         );
         if frame.palette_dirty || !self.palette_uploaded {
+            self.upload_palette(&frame.palette);
+        }
+    }
+
+    /// Upload raw indices + palette for a NON-frame plane (the P6
+    /// ENHANCED native-pass shape): `indices.len()` must equal the
+    /// plane's w*h and `palette` is the game palette the plane's
+    /// indices reference (the canonical frame's own palette — a
+    /// native UI pass shares the game's colors, it never invents
+    /// any). Both upload unconditionally: a UI plane is small and
+    /// rebuilt per present.
+    pub fn upload_indexed(&mut self, indices: &[u8], palette: &[[u8; 3]; 256]) {
+        debug_assert_eq!(indices.len(), self.plane_w as usize * self.plane_h as usize);
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.index_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            indices,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.plane_w),
+                rows_per_image: Some(self.plane_h),
+            },
+            wgpu::Extent3d {
+                width: self.plane_w,
+                height: self.plane_h,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.upload_palette(palette);
+    }
+
+    /// Pack + upload the 6-bit palette entries (the shared tail of
+    /// [`Self::upload_frame`] and [`Self::upload_indexed`]).
+    fn upload_palette(&mut self, palette: &[[u8; 3]; 256]) {
+        {
             let mut packed = [0u32; 256];
-            for (i, c) in frame.palette.iter().enumerate() {
+            for (i, c) in palette.iter().enumerate() {
                 packed[i] = u32::from(c[0] & 0x3f)
                     | (u32::from(c[1] & 0x3f) << 6)
                     | (u32::from(c[2] & 0x3f) << 12);
@@ -405,8 +471,8 @@ impl ParityPipeline {
                     depth_or_array_layers: 1,
                 },
             );
-            self.palette_uploaded = true;
         }
+        self.palette_uploaded = true;
     }
 
     /// Encode one present into a returned command buffer: clear to
@@ -441,6 +507,66 @@ impl ParityPipeline {
         {
             let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("bedlam parity pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_viewport(
+                rect.x as f32,
+                rect.y as f32,
+                rect.w as f32,
+                rect.h as f32,
+                0.0,
+                1.0,
+            );
+            rpass.draw(0..3, 0..1);
+        }
+        enc.finish()
+    }
+
+    /// Encode one NATIVE-pass present into a returned command
+    /// buffer: the plane drawn into an EXPLICIT device-pixel rect
+    /// (the responsive layout owns the geometry — no scale_rect is
+    /// consulted), sampling the WHOLE plane (uv 0..1: a UI plane is
+    /// authored at its own resolution, never cropped). The caller
+    /// submits. A zero-size rect yields an empty buffer (no draw)
+    /// rather than an invalid viewport — the `draw` convention.
+    pub fn draw_rect(
+        &mut self,
+        target: &wgpu::TextureView,
+        rect: crate::scale::Rect,
+        cfg: &PresentConfig,
+    ) -> wgpu::CommandBuffer {
+        let mut enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("bedlam native pass"),
+            });
+        if rect.w == 0 || rect.h == 0 {
+            return enc.finish();
+        }
+        self.queue
+            .write_buffer(&self.params_buf, 0, &params_bytes(cfg));
+        let mut uvb = [0u8; 16];
+        uvb[0..4].copy_from_slice(&0.0f32.to_le_bytes());
+        uvb[4..8].copy_from_slice(&0.0f32.to_le_bytes());
+        uvb[8..12].copy_from_slice(&1.0f32.to_le_bytes());
+        uvb[12..16].copy_from_slice(&1.0f32.to_le_bytes());
+        self.queue.write_buffer(&self.uv_buf, 0, &uvb);
+        {
+            let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("bedlam native pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: target,
                     depth_slice: None,

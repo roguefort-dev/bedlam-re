@@ -32,22 +32,30 @@
 //!   default; fit/fill/smooth options)"; D215; a PURE platform
 //!   presentation mapping over the already-landed bedlam-platform
 //!   scale surface; default = integer + nearest exactly as shipped).
+//!   `--presentation MODE` (`parity`/`enhanced`) selects the P6
+//!   frame-presentation path (PLAN §6 "ENHANCED mode is explicitly
+//!   non-parity and renders supported world/UI passes natively";
+//!   D217; PARITY default = the shipped GPU-scaled canonical frame
+//!   exactly; ENHANCED = the responsive 16:10-master /
+//!   16:9-safe-region layout + the first native pass; ignored
+//!   headless).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use bedlam_platform::layout::PresentationMode;
 use bedlam_platform::scale::{FilterMode, ScaleMode};
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
 use bedlam_shell::save::{AutosavePolicy, SaveSlotId};
 use bedlam_shell::window::{
-    filter_mode_from_cli, run_window, scale_mode_from_cli, scaling_present_config, Vsync,
-    WindowMode, WindowOptions,
+    filter_mode_from_cli, presentation_mode_from_cli, run_window, scale_mode_from_cli,
+    scaling_present_config, Vsync, WindowMode, WindowOptions,
 };
 
 const DEFAULT_GFX: &str = "game-data/BEDLAM";
@@ -65,6 +73,7 @@ fn main() -> ExitCode {
     let mut autosave = false;
     let mut scale: Option<ScaleMode> = None;
     let mut filter: Option<FilterMode> = None;
+    let mut presentation: Option<PresentationMode> = None;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -116,6 +125,13 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             },
+            "--presentation" => match args.next().and_then(|w| presentation_mode_from_cli(&w)) {
+                Some(mode) => presentation = Some(mode),
+                None => {
+                    eprintln!("bedlam-shell: --presentation needs parity|enhanced");
+                    return ExitCode::from(2);
+                }
+            },
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -124,7 +140,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -181,6 +197,22 @@ fn main() -> ExitCode {
                     "                 parity pixels - default) | linear (smooth) (P6 resolution"
                 );
                 println!("                 independence; ignored headless)");
+                println!(
+                    "  --presentation MODE: window host composes MODE = parity (the canonical"
+                );
+                println!(
+                    "                       frame GPU-scaled over the whole target - default, the"
+                );
+                println!(
+                    "                       shipped posture) | enhanced (the responsive 16:10-"
+                );
+                println!(
+                    "                       master / 16:9-safe-region layout; the canonical frame"
+                );
+                println!("                       fits the safe region and supported passes render");
+                println!(
+                    "                       natively; explicitly non-parity; P6; ignored headless)"
+                );
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -287,6 +319,16 @@ fn main() -> ExitCode {
         // posture bit-for-bit.
         opts.present =
             scaling_present_config(scale.unwrap_or_default(), filter.unwrap_or_default());
+        // P6 ENHANCED native render (PLAN §6 "ENHANCED mode is
+        // explicitly non-parity and renders supported world/UI
+        // passes natively"): the frame-presentation selection is a
+        // PLATFORM presentation knob (D200 layering — OUT of
+        // ModeConfig, NO purist arbitration: both pacing arms
+        // accept it identically and it selects nothing in the sim).
+        // Default = PARITY, the shipped posture bit-for-bit.
+        if let Some(mode) = presentation {
+            opts.presentation = mode;
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
@@ -325,6 +367,14 @@ fn main() -> ExitCode {
             // SOURCE, untouched by any selection (goldens stay
             // resolution-agnostic).
             eprintln!("bedlam-shell: --scale/--filter are window-host options; ignored headless");
+        }
+        if presentation.is_some() {
+            // Same posture for the presentation selection: the
+            // headless path owns no surface, so there is no
+            // composition to select — the canonical frame + palette
+            // it hashes are byte-identical under either mode (the
+            // ENHANCED composition is presentation-bucket only).
+            eprintln!("bedlam-shell: --presentation is a window-host option; ignored headless");
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {

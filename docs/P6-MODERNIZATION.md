@@ -458,6 +458,75 @@ surface over landed code, zero new binary claims); no engine
 change (bedlam-shell only); the catalog stays empty (a plan-named
 resolution unit is not a catalog entry).
 
+**Implementation status (D217, 2026-08-28, gate
+`p6-enhanced-native-render`): the ENHANCED native-render OPENER —
+the resolution bullet's big remaining half per PLAN §6 "ENHANCED
+mode is explicitly non-parity and renders supported world/UI
+passes natively; bespoke responsive layouts target 16:9 and 16:10
+(16:10 authoring master with 16:9 safe region), while other aspect
+ratios fit/letterbox/pillarbox" (design inputs:
+docs/RESEARCH-HD-ASSET-PIPELINE.md §5.A + §8, the
+p6-hd-asset-research prerequisite).** (a) THE PRESENTATION-MODE
+SELECTION at the platform level: `PresentationMode`
+(Parity/Enhanced, default PARITY = the shipped posture exactly) in
+the NEW `bedlam_platform::layout`, carried as
+`WindowOptions.presentation`; the binary's `--presentation
+parity|enhanced` selects it through the fail-closed
+`presentation_mode_from_cli` (exit 2 on any other word), noted +
+ignored headless (the headless path owns no surface and hashes the
+SOURCE frame — smoke verified at the recorded baseline under
+`--presentation enhanced`). D200 layering with NO purist
+arbitration (the D215 posture): the knob stays OUT of
+`ModeConfig`, BOTH pacing arms accept it identically
+(`presentation_option_never_changes_the_gate_answers`), and it
+selects NOTHING in the sim — never `SimConfig`, never a hash. (b)
+THE FIRST NATIVE PASS — the choice and why: the smallest HONEST
+pass is the **mission-identity strip**, a palette-indexed UI plane
+rendered AT PRESENTATION RESOLUTION through the
+already-landed parity-pipeline path (`ParityPipeline::with_plane`
++ `upload_indexed` + `draw_rect`: the SAME indices+palette+params
+pipeline over an arbitrary plane size, drawn into an explicit
+device-pixel rect) into the responsive layout's LEFT pillarbox
+margin INSIDE the safe region, Mission scenes only. Every input is
+already-landed game-owned data — the identity bytes (zone letter +
+mission number, the RE-EXW-SAVE FUN_004473cd semantics over
+`GameHost::mission_slot`), the glyphs (the LANDED pub
+`bedlam_render::ui_bank` drawer, FUN_00402884 + the FUN_00408913
+advances, RE-EXW-SIM sec 6c.8c), the text color (the game's own
+sidebar color 0x24, asm 0x4084f8) and the palette (the canonical
+frame's own) — ZERO new binary claims, ZERO invented pixels, never
+over game pixels (the margin is presentation matte), and the
+margins OUTSIDE the safe region stay untouched for the future
+HD-pack seam (§8). The SMLFONT.BIN fetch rides the existing corpus
+source once, cached; a miss disables the strip (noted, never
+fatal); the headless path never fetches it. Integer-scaled glyphs
+(2x replicate) keep the strip pixel-crisp. (c) THE RESPONSIVE
+LAYOUT CONTRACT as data (pure, `bedlam_platform::layout`): the
+16:10 authoring master (1920x1200), the centered 16:9 safe region
+on ANY target (the largest centered ≤16:9 rect — 16:9 full-bleed,
+wider pillarboxed, taller letterboxed), the world rect REUSING the
+landed `scale_rect(Fit)` shape inside the safe region (the Fill
+crop never applies — the frame is never cropped in the responsive
+layout), the side margins, and the ABSOLUTE cursor inverse
+`layout_cursor_to_game` (the click targets live in the responsive
+layout, §8; no Fill-style relative-only case). (d) PARITY BOUNDS
+pinned: `host_sim_config` bit-identical and the same pump script =
+identical executed ticks, tick count, state hash, scene hash AND
+frame parity hash under either selection, plus the canonical frame
+indices + palette BYTE-IDENTICAL
+(`presentation_selection_never_touches_the_sim_or_the_hashed_
+trajectory`); the Parity present path runs the landed calls
+unchanged (the composition decision `frame_draw_rect` answers the
+landed `scale_rect` under Parity); controls green before AND after
+(canonical_dump_gate 13/13, determinism 4/4, zone_mission_parity
+5/5 — zero canonical-chain movement; goldens stay canonical-frame
+based and resolution-agnostic). OUT OF SCOPE (future separately
+scoped units): the extended viewport (a separately FLAGGED
+gameplay change per PLAN — never a silent default), Smacker native
+decode, further world passes, any HD-pack consumption (the runtime
+seam stays future work per D216). The catalog stays empty (a
+plan-named presentation unit is not a catalog entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is

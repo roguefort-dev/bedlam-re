@@ -8298,3 +8298,98 @@ catalog OK (catalog still empty, R6 satisfied with the twelfth
 gate) + its suite 30/30; gates-validator suite 22/22; MANIFEST
 clean before and after (the gate reads no corpus); no engine or
 workspace Rust change (nothing to fmt/clippy beyond baseline).
+
+## D217 — 2026-08-28: P6 `p6-enhanced-native-render` — the ENHANCED native-render OPENER (the presentation-mode selection Parity/Enhanced as a platform knob OUT of ModeConfig; the responsive layout contract as pure data — 16:10 authoring master, centered 16:9 safe region, world reusing the landed Fit shape; the FIRST native pass = the mission-identity strip through the already-landed parity-pipeline path over the game's own glyphs/color/palette, zero new binary claims), wired as the THIRTEENTH P6 required gate
+
+CONTEXT: PLAN §6 "Resolution independence + GPU rendering (D9/D20/
+D21)" — the resolution bullet's big remaining half after the D215
+scaling selection and the p6-hd-asset-research prerequisite (its
+§8 seam sketch + §5.A layout contract are this unit's design
+inputs). The bounded scope was fixed by the queue item: (a) the
+presentation-mode selection, (b) the FIRST supported native
+world/UI pass, (c) the responsive layout contract as data, (d) the
+parity bounds pinned by tests; the extended viewport, Smacker
+native decode, further world passes and HD-pack consumption stay
+OUT (separately scoped future units — D216 keeps the runtime seam
+future work).
+
+DECISION: (a) THE SELECTION is `PresentationMode` (Parity default
+= the shipped posture exactly / Enhanced) in the NEW
+`bedlam_platform::layout`, carried as `WindowOptions.presentation`,
+selected by the binary's `--presentation parity|enhanced`
+(fail-closed exit 2, noted + ignored headless — the D215 posture
+verbatim: OUT of ModeConfig per D200, NO purist arbitration, both
+pacing arms accept it identically, it selects NOTHING in the sim).
+(b) THE FIRST NATIVE PASS — the choice, and why this one: the
+smallest HONEST pass is the MISSION-IDENTITY STRIP, a
+palette-indexed UI plane at presentation resolution in the
+responsive layout's left pillarbox margin (inside the safe region,
+Mission scenes only). Every pass that the ENGINE bakes into the
+canonical frame (sidebar, score strip, cursor, menus) cannot go
+native without either rewriting the canonical frame (forbidden by
+the parity bounds) or double-drawing over scaled pixels (ghosting)
+— so the honest first pass must be ADDITIVE in the layout's own
+margin, and its every input must be game-owned landed data: the
+identity bytes (zone letter + mission number, the RE-EXW-SAVE
+FUN_004473cd semantics over `GameHost::mission_slot`), the glyphs
+(the LANDED pub `bedlam_render::ui_bank` drawer — FUN_00402884
+glyph fill + the FUN_00408913 advances, RE-EXW-SIM sec 6c.8c), the
+color (the game's own sidebar text color 0x24) and the palette
+(the canonical frame's own). ZERO new binary claims, ZERO invented
+pixels, never over game pixels; the margins OUTSIDE the safe
+region stay untouched for the future HD-pack seam (§5.A/§8:
+engine-rendered text lives INSIDE the safe region). The GPU shape
+reuses the landed pipeline itself (`ParityPipeline::with_plane` +
+`upload_indexed` + `draw_rect` — the same indices+palette+params
+path over an arbitrary plane size, drawn into an explicit rect);
+the SMLFONT.BIN fetch rides the existing corpus source once,
+cached, and a miss disables the strip (noted, never fatal — the
+D208 best-effort posture); the headless path never fetches it.
+(c) THE LAYOUT CONTRACT is pure data in `bedlam_platform::layout`:
+the 16:10 authoring master (1920x1200), the centered 16:9 safe
+region on ANY target (largest centered ≤16:9 rect — 16:9
+full-bleed, wider pillarboxed, taller letterboxed: the
+fit/letterbox/pillarbox rule), the world rect REUSING the landed
+`scale_rect(Fit)` (the existing PresentConfig shape; the Fill crop
+never applies — the frame is never cropped in the responsive
+layout), the side margins, and the ABSOLUTE cursor inverse
+`layout_cursor_to_game` (the click targets live in the responsive
+layout per §8). (d) THE PARITY BOUNDS are unit-pinned:
+bit-identical derived SimConfig + identical executed ticks, tick
+count, state hash, scene hash AND frame parity hash under either
+selection, PLUS the canonical frame indices + palette
+byte-identical; the Parity present path runs the landed calls
+unchanged (the pure decision fn `frame_draw_rect` answers the
+landed `scale_rect` under Parity); goldens stay canonical-frame
+based and resolution-agnostic.
+
+BOUNDS KEPT: no bedlam-game/bedlam-core change (bedlam-platform +
+bedlam-shell only); zero new binary claims (every RE fact cited is
+already landed and anchored); the catalog stays EMPTY (a
+plan-named presentation unit is not a catalog entry); no Ghidra
+run; the gate reads no corpus (bedlam-shell --lib is hermetic).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 104/0 (+12:
+7 enhanced-native — the shipped Parity default, the fail-closed
+CLI words, the master/safe-region geometry over five aspect
+classes + degenerates, the world-rect Fit reuse + the never-crop
+pin + the margins, the absolute cursor mapping with clamps, the
+trajectory + canonical-frame byte-identity pin, the both-arms
+gate-answer invariance; 5 native — the identity bytes incl.
+clamps, the mission-scene gating over every scene, the strip
+build with the EXW advance arithmetic at 2x replication over a
+synth bank, the missing-glyph fail-closed, the strip placement
+fit/omit; was 92/0 + 1 pre-existing ignored); bedlam-game --lib
+152/0 + bedlam-core --lib 147/0 untouched; controls green:
+canonical_dump_gate 13/13, determinism 4/4, zone_mission_parity
+5/5 (ZERO canonical-chain movement); the headless smoke EXACTLY
+at the recorded baseline (scene 696adb1cd110e062 / parity
+cce30c983b97b16d / audio 110400/158092) first-hand under
+`--presentation enhanced`, with the headless ignore note; the
+binary --presentation wiring checked first-hand (help text, exit 2
+on the bogus word AND the missing value); check-p6-behavior-
+catalog OK (catalog still empty, R6 satisfied with the thirteenth
+gate) + its suite 30/30; gates-validator suite 22/22; fmt + clippy
+clean on the touched crates (the one pre-existing D210 test
+warning untouched); workspace cargo check clean; MANIFEST clean
+before AND after every corpus read.

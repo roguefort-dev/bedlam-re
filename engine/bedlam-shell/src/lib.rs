@@ -31,6 +31,12 @@
 //!   ModeConfig (D200), grounded in docs/RE-EXW-SAVE.md over the
 //!   engine's import-only save seam. Inert by design until the new
 //!   versioned save format writer lands (config-not-state, D201).
+//! - [`native`]: the FIRST native ENHANCED pass (P6 opener, D217):
+//!   the mission-identity strip — a pure palette-indexed UI-plane
+//!   builder over the game's own SMLFONT glyphs, drawn at
+//!   presentation resolution into the responsive layout's left
+//!   margin by the window present site (ENHANCED mode only; the
+//!   canonical frame rides byte-identical underneath).
 //! - [`chain`]: the D31-D37 asset wiring - which corpus files each
 //!   scene needs and the staging calls that hand them to
 //!   [`bedlam_game::GameHost`] (the host never loads by itself).
@@ -50,6 +56,7 @@ pub mod chain;
 pub mod clock;
 pub mod headless;
 pub mod input;
+pub mod native;
 pub mod save;
 pub mod window;
 

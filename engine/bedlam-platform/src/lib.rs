@@ -8,12 +8,14 @@
 //! here (DESIGN-RENDER sec 8); the canonical frame itself never
 //! changes with resolution or mode.
 //!
-//! ENHANCED path (D20/D21): RESERVED, not implemented in this
-//! skeleton. Native-output-resolution world/UI passes land
-//! incrementally in later units, always non-parity and UI-flagged,
-//! sharing sim + assets with parity mode. Enhanced layouts are
-//! authored 16:10 with a 16:9 safe region; widescreen viewport stays a
-//! separate explicit option.
+//! ENHANCED path (D20/D21, opened P6): the responsive-layout
+//! composition ([`layout`]) — the canonical frame fits into the
+//! centered 16:9 safe region of the 16:10 authoring master while
+//! supported world/UI passes render at native output resolution,
+//! always non-parity and presentation-flagged, sharing sim + assets
+//! with parity mode. Enhanced layouts are authored 16:10 with a
+//! 16:9 safe region; the widescreen viewport (showing more map)
+//! stays a separate explicit gameplay option.
 //!
 //! Boundary rules (D12/D17, enforced by construction): this crate
 //! consumes bedlam-render Frames only, never bedlam-core; resolution,
@@ -25,9 +27,14 @@
 #![forbid(unsafe_code)]
 
 pub mod gpu;
+pub mod layout;
 pub mod scale;
 
 pub use gpu::{ParityGpu, ParityPipeline};
+pub use layout::{
+    authoring_master, layout_cursor_to_game, master_safe_region, responsive_frame, safe_region,
+    world_margins, PresentationMode, ResponsiveFrame, MASTER_H, MASTER_W,
+};
 pub use scale::{scale_rect, uv_rect, FilterMode, PresentConfig, Rect, ScaleMode};
 
 /// Re-export so hosts and tests need no direct wgpu dependency pin.

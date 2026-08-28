@@ -115,6 +115,30 @@
 //! expansion policy is not a knob and stays `VgaExpand::Original`
 //! under every selection).
 //!
+//! P6 ENHANCED NATIVE RENDER (the p6-enhanced-native-render unit,
+//! PLAN §6 "ENHANCED mode is explicitly non-parity and renders
+//! supported world/UI passes natively; bespoke responsive layouts
+//! target 16:9 and 16:10 (16:10 authoring master with 16:9 safe
+//! region), while other aspect ratios fit/letterbox/pillarbox"):
+//! the PRESENTATION-MODE SELECTION ([`WindowOptions::
+//! presentation`], [`PresentationMode`]) — PARITY (default, the
+//! shipped posture exactly: the whole target is the canonical
+//! frame GPU-scaled per the scale selection) / ENHANCED (the
+//! responsive composition: the frame FITS into the centered 16:9
+//! safe region of the 16:10 authoring master through
+//! [`responsive_frame`], the first native pass renders at
+//! presentation resolution in the left margin). D200 layering with
+//! NO purist arbitration (the D215 posture): the knob is OUT of
+//! [`ModeConfig`], both pacing arms accept it identically, and it
+//! selects NOTHING in the sim — the canonical 640x480 indexed
+//! frame + palette and every hash are byte-identical under either
+//! selection. The FIRST native pass is the MISSION-IDENTITY STRIP
+//! ([`crate::native`]): the game's own identity bytes, glyphs,
+//! text color and palette, never invented pixels, never over game
+//! pixels. The extended viewport (showing more map) stays OUT —
+//! a separately FLAGGED gameplay change per PLAN, never a silent
+//! default.
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -135,8 +159,9 @@ use std::time::{Duration, Instant};
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_core::sim::SimConfig;
-use bedlam_game::{GameConfig, GameError, GameHost, Scene};
-use bedlam_platform::scale::{scale_rect, FilterMode, PresentConfig, ScaleMode};
+use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, Scene};
+use bedlam_platform::layout::{layout_cursor_to_game, responsive_frame, PresentationMode};
+use bedlam_platform::scale::{scale_rect, FilterMode, PresentConfig, Rect, ScaleMode};
 use bedlam_platform::{ParityGpu, ParityPipeline};
 use bedlam_render::{VgaExpand, CANON_H, CANON_W};
 use winit::application::ApplicationHandler;
@@ -152,6 +177,9 @@ use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
 use crate::input::{map_mouse_button, ControlScheme, ShellInput};
+use crate::native::{
+    build_identity_strip, strip_slot_for, NativeStripPlane, SMLFONT_NAME, STRIP_SCALE,
+};
 use crate::save::{AutosavePolicy, SaveSlotId};
 
 /// Shell-level failures (window/surface/GPU init + propagated game
@@ -407,6 +435,35 @@ pub fn scaling_present_config(scale: ScaleMode, filter: FilterMode) -> PresentCo
     }
 }
 
+/// PURE: the binary's `--presentation` word — `parity` (the shipped
+/// posture default: the whole target is the canonical frame
+/// GPU-scaled per the scale selection) / `enhanced` (the responsive
+/// layout composition + the native passes) -> [`PresentationMode`].
+/// Fail-closed like the scale/filter words (the `--save-slot`
+/// domain posture: a presentation knob never guesses).
+pub fn presentation_mode_from_cli(word: &str) -> Option<PresentationMode> {
+    match word {
+        "parity" => Some(PresentationMode::Parity),
+        "enhanced" => Some(PresentationMode::Enhanced),
+        _ => None,
+    }
+}
+
+/// PURE: where the canonical 640x480 frame lands on a `w` x `h`
+/// target — the composition decision the present site consults
+/// (P6 ENHANCED opener). PARITY keeps the LANDED
+/// [`scale_rect`] path over the whole target exactly as shipped
+/// (the `draw` path — including the Fill uv crop); ENHANCED uses
+/// the responsive layout's WORLD rect (the frame fits whole inside
+/// the centered 16:9 safe region — the Fill crop never applies
+/// there, the frame is never cropped in the responsive layout).
+fn frame_draw_rect(presentation: PresentationMode, cfg: &PresentConfig, w: u32, h: u32) -> Rect {
+    match presentation {
+        PresentationMode::Parity => scale_rect(cfg.scale, CANON_W, CANON_H, w, h),
+        PresentationMode::Enhanced => responsive_frame(w, h).world,
+    }
+}
+
 /// One bounded runtime volume adjustment (P6 QoL volume mixers,
 /// D212): which bus moves and which way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -556,6 +613,22 @@ pub struct WindowOptions {
     /// reach the sim, a hash, or any file. The binary's `--autosave`
     /// opts in.
     pub autosave: AutosavePolicy,
+    /// The platform-level frame-presentation selection (P6 ENHANCED
+    /// native render opener, PLAN §6 "PARITY mode keeps the
+    /// canonical 640x480 indexed frame + palette and GPU-scales it
+    /// ... ENHANCED mode is explicitly non-parity and renders
+    /// supported world/UI passes natively"): PARITY (default — the
+    /// shipped posture exactly, the whole target is the canonical
+    /// frame GPU-scaled per `present`) or ENHANCED (the responsive
+    /// 16:10-master / 16:9-safe-region layout + the native passes,
+    /// starting with the mission-identity strip). D200 layering
+    /// with NO purist arbitration (the D215 posture): the knob is
+    /// OUT of `ModeConfig`, both pacing arms accept it identically,
+    /// and it selects NOTHING in the host — the canonical frame +
+    /// palette and every hash are byte-identical under either
+    /// selection (the headless path owns no surface, so the binary
+    /// notes + ignores the flag there).
+    pub presentation: PresentationMode,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -583,6 +656,7 @@ impl WindowOptions {
             volume: VolumeMixers::SHIPPED,
             save_slot: SaveSlotId::FIRST,
             autosave: AutosavePolicy::Off,
+            presentation: PresentationMode::default(),
             auto_exit_after: None,
         }
     }
@@ -764,6 +838,7 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
         scene: Scene::Boot,
         input,
         clock: FixedStepClock::host(),
+        smlfont: None,
         gfx: None,
         audio,
         exit_deadline: None,
@@ -855,6 +930,14 @@ struct WindowHost {
     surface: bedlam_platform::wgpu::Surface<'static>,
     gpu: ParityGpu,
     pipeline: ParityPipeline,
+    /// The ENHANCED native-pass plane pipeline (P6 opener): a
+    /// palette-indexed UI plane of the strip's own dimensions,
+    /// built through the SAME landed parity-pipeline path. None
+    /// until the first strip; rebuilt only when the strip's
+    /// dimensions change (the plane size is fixed at texture
+    /// creation — identity text changes are the only resize
+    /// trigger, rare by construction).
+    ui: Option<(u32, u32, ParityPipeline)>,
     surface_cfg: bedlam_platform::wgpu::SurfaceConfiguration,
     cursor: Option<PhysicalPosition<f64>>,
     last_frame: Instant,
@@ -938,6 +1021,7 @@ impl WindowHost {
             surface,
             gpu,
             pipeline,
+            ui: None,
             surface_cfg,
             cursor: None,
             last_frame: Instant::now(),
@@ -968,6 +1052,12 @@ struct ShellApp {
     scene: Scene,
     input: ShellInput,
     clock: FixedStepClock,
+    /// The ENHANCED native pass's SMLFONT bank cache (P6 opener):
+    /// `None` = not fetched yet, `Some(None)` = fetched and missing
+    /// (the strip stays disabled, noted once, never fatal — the
+    /// best-effort platform posture). The headless path never
+    /// populates it (it owns no present surface).
+    smlfont: Option<Option<Vec<u8>>>,
     /// The audio output (step 2, D40), absent when no device
     /// exists - the shell runs silent then, never fatal. Dropped
     /// BEFORE `gfx` (declaration order).
@@ -1048,17 +1138,30 @@ impl ShellApp {
     }
 
     /// The real cursor in game space, when the window knows both the
-    /// cursor position and the surface size.
+    /// cursor position and the surface size. PARITY inverts the
+    /// scale-rect mapping ([`cursor_to_game`]); ENHANCED inverts the
+    /// responsive layout's WORLD rect instead (P6 opener — the
+    /// click targets live in the responsive layout,
+    /// RESEARCH-HD-ASSET-PIPELINE §8; the layout never crops the
+    /// frame, so the mapping is always absolute, never Fill's
+    /// relative-only case).
     fn game_cursor_target(&self) -> Option<(i32, i32)> {
         let g = self.gfx.as_ref()?;
         let pos = g.cursor?;
-        cursor_to_game(
-            pos.x,
-            pos.y,
-            g.surface_cfg.width,
-            g.surface_cfg.height,
-            &self.opts.present,
-        )
+        match self.opts.presentation {
+            PresentationMode::Parity => cursor_to_game(
+                pos.x,
+                pos.y,
+                g.surface_cfg.width,
+                g.surface_cfg.height,
+                &self.opts.present,
+            ),
+            PresentationMode::Enhanced => layout_cursor_to_game(
+                pos.x,
+                pos.y,
+                &responsive_frame(g.surface_cfg.width, g.surface_cfg.height),
+            ),
+        }
     }
 
     /// Upload + present the canonical frame (PARITY path, D20).
@@ -1091,6 +1194,33 @@ impl ShellApp {
         if let Some(alpha) = present_camera_alpha(&self.host, &self.clock) {
             self.host.recompose(alpha);
         }
+        // P6 ENHANCED NATIVE RENDER (the opener): the composition
+        // decision is made BEFORE the surface borrow so the strip
+        // staging (which may fetch the SMLFONT bank through the
+        // source) never fights it. PARITY runs the landed path
+        // EXACTLY as before (the whole target is the canonical
+        // frame GPU-scaled per the scale selection — bit-for-bit
+        // the same calls). ENHANCED composes the responsive layout:
+        // the canonical frame FITS whole into the centered 16:9
+        // safe region (the Fill crop never applies) and the first
+        // native pass — the mission-identity strip — renders at
+        // presentation resolution in the left margin. Both
+        // compositions read the SAME engine frame: the canonical
+        // 640x480 indexed frame + palette are byte-identical under
+        // either selection (presentation-bucket only, D17 b).
+        let enhanced = self.opts.presentation == PresentationMode::Enhanced;
+        let layout = enhanced
+            .then(|| {
+                self.gfx
+                    .as_ref()
+                    .map(|g| responsive_frame(g.surface_cfg.width, g.surface_cfg.height))
+            })
+            .flatten();
+        let strip = enhanced.then(|| self.stage_native_strip()).flatten();
+        let strip_target = match (&strip, &layout) {
+            (Some(plane), Some(frame)) => crate::native::strip_rect(frame, plane.w, plane.h),
+            _ => None,
+        };
         let Some(g) = self.gfx.as_mut() else {
             return;
         };
@@ -1109,14 +1239,92 @@ impl ShellApp {
         let view = surface_texture
             .texture
             .create_view(&bedlam_platform::wgpu::TextureViewDescriptor::default());
-        let buffer = g.pipeline.draw(
-            &view,
-            g.surface_cfg.width,
-            g.surface_cfg.height,
-            &self.opts.present,
-        );
-        g.gpu.queue().submit([buffer]);
+        match enhanced {
+            false => {
+                // PARITY: the landed present path, unchanged.
+                let buffer = g.pipeline.draw(
+                    &view,
+                    g.surface_cfg.width,
+                    g.surface_cfg.height,
+                    &self.opts.present,
+                );
+                g.gpu.queue().submit([buffer]);
+            }
+            true => {
+                // ENHANCED: the frame into the layout's world rect
+                // (the composition decision fn — the Fill crop never
+                // applies, the frame fits whole inside the safe
+                // region), then the native strip pass over the matte
+                // margin. The frame's filter + palette-expansion
+                // still ride the presentation config (the strip
+                // keeps Nearest + the SAME expansion so the colors
+                // agree exactly).
+                let world = frame_draw_rect(
+                    self.opts.presentation,
+                    &self.opts.present,
+                    g.surface_cfg.width,
+                    g.surface_cfg.height,
+                );
+                let mut buffers = vec![g.pipeline.draw_rect(&view, world, &self.opts.present)];
+                if let (Some(plane), Some(rect)) = (&strip, strip_target) {
+                    let stale =
+                        g.ui.as_ref()
+                            .is_none_or(|(pw, ph, _)| *pw != plane.w || *ph != plane.h);
+                    if stale {
+                        g.ui = Some((
+                            plane.w,
+                            plane.h,
+                            ParityPipeline::with_plane(
+                                &g.gpu,
+                                g.surface_cfg.format,
+                                plane.w,
+                                plane.h,
+                            ),
+                        ));
+                    }
+                    if let Some((_, _, ui)) = g.ui.as_mut() {
+                        ui.upload_indexed(&plane.indices, &self.host.frame().palette);
+                        let cfg = PresentConfig {
+                            scale: ScaleMode::Integer,
+                            filter: FilterMode::Nearest,
+                            expand: self.opts.present.expand,
+                        };
+                        buffers.push(ui.draw_rect(&view, rect, &cfg));
+                    }
+                }
+                g.gpu.queue().submit(buffers);
+            }
+        }
         surface_texture.present();
+    }
+
+    /// Stage the ENHANCED mission-identity strip (P6 opener): the
+    /// pure plane build gated on the mission scene + the slot the
+    /// engine answers, over the cached SMLFONT bank. Presentation
+    /// bucket ONLY — reads the host, never mutates it.
+    fn stage_native_strip(&mut self) -> Option<NativeStripPlane> {
+        let slot = strip_slot_for(self.host.scene(), self.host.mission_slot())?;
+        let bank = self.smlfont_bytes()?;
+        build_identity_strip(bank, slot.0, slot.1, STRIP_SCALE)
+    }
+
+    /// The SMLFONT.BIN bytes through the existing corpus source
+    /// (fetched once, cached; a miss disables the strip with one
+    /// note — best-effort platform surface, never fatal).
+    fn smlfont_bytes(&mut self) -> Option<&[u8]> {
+        if self.smlfont.is_none() {
+            let fetched = match self.source.load(SMLFONT_NAME) {
+                Ok(bytes) => Some(bytes),
+                Err(err) => {
+                    eprintln!(
+                        "bedlam-shell: {SMLFONT_NAME} unavailable; the ENHANCED identity strip is disabled ({err})"
+                    );
+                    None
+                }
+            };
+            self.smlfont = Some(fetched);
+        }
+        self.smlfont.as_ref().and_then(|fetched| fetched.as_deref())
     }
 }
 
@@ -2600,5 +2808,384 @@ mod cursor_tests {
             (my + i32::from(dy)).clamp(0, 479),
         );
         assert_eq!(moved, target);
+    }
+}
+
+#[cfg(test)]
+mod enhanced_native_tests {
+    //! The p6-enhanced-native-render unit (D217): the ENHANCED
+    //! presentation-mode selection, the responsive layout contract,
+    //! and the first native pass's bounds. Every pin below is the
+    //! no-arbitration posture (the D215 shape): a platform
+    //! presentation knob OUT of ModeConfig that selects nothing in
+    //! the host — the canonical 640x480 indexed frame + palette and
+    //! every hash are byte-identical under either selection (a
+    //! plan-named presentation unit is not a catalog entry).
+    use super::*;
+    use bedlam_core::input::InputFrame;
+    use bedlam_core::mode::ModeConfig;
+    use bedlam_platform::layout::{
+        authoring_master, master_safe_region, safe_region, world_margins, ResponsiveFrame,
+    };
+
+    fn opts_with(presentation: PresentationMode) -> WindowOptions {
+        let mut opts = WindowOptions::new("test-install");
+        opts.presentation = presentation;
+        opts
+    }
+
+    fn host_for(opts: &WindowOptions) -> GameHost {
+        GameHost::new(
+            &GameConfig::default(),
+            &host_sim_config(opts),
+            [[0u8, 0, 0]; 256],
+        )
+    }
+
+    /// The shipped default: PARITY — the option changes NOTHING
+    /// until asked (the parity present path runs the exact calls it
+    /// always has), and every other WindowOptions field is
+    /// default-identical under either selection.
+    #[test]
+    fn presentation_defaults_to_the_shipped_parity() {
+        assert_eq!(
+            WindowOptions::new("test-install").presentation,
+            PresentationMode::Parity
+        );
+        let parity = WindowOptions::new("test-install");
+        let mut enhanced = WindowOptions::new("test-install");
+        enhanced.presentation = PresentationMode::Enhanced;
+        // The knob selects nothing else: the derived host config is
+        // the same object either way.
+        assert_eq!(host_sim_config(&parity), host_sim_config(&enhanced));
+        assert_eq!(parity.present, enhanced.present);
+        assert_eq!(parity.mode, enhanced.mode);
+    }
+
+    /// The CLI words cover the full domain and FAIL CLOSED: every
+    /// word maps to exactly one mode, anything else is None (the
+    /// binary exits 2 — a presentation knob never guesses).
+    #[test]
+    fn presentation_cli_words_map_the_domain_and_fail_closed() {
+        assert_eq!(
+            presentation_mode_from_cli("parity"),
+            Some(PresentationMode::Parity)
+        );
+        assert_eq!(
+            presentation_mode_from_cli("enhanced"),
+            Some(PresentationMode::Enhanced)
+        );
+        for word in ["native", "PARITY", "enh", "", "enhanced ", "1"] {
+            assert_eq!(presentation_mode_from_cli(word), None, "word {word:?}");
+        }
+    }
+
+    /// THE RESPONSIVE LAYOUT CONTRACT (PLAN §6 "16:10 authoring
+    /// master with 16:9 safe region, other aspect ratios
+    /// fit/letterbox/pillarbox"): the master is 16:10, its safe
+    /// region the centered 16:9; EVERY target's safe region is the
+    /// largest centered 16:9 (or narrower) rect that fits — 16:9
+    /// full-bleed, wider pillarboxed, taller letterboxed; the world
+    /// rect reuses the LANDED Fit shape inside the safe region.
+    #[test]
+    fn responsive_layout_pins_the_master_and_safe_regions() {
+        assert_eq!(
+            authoring_master(),
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1200
+            }
+        );
+        // The 16:9 safe region inside the 16:10 master: centered
+        // 1920x1080 (60px bands top and bottom).
+        assert_eq!(
+            master_safe_region(),
+            Rect {
+                x: 0,
+                y: 60,
+                w: 1920,
+                h: 1080
+            }
+        );
+        // 16:9 target: full bleed.
+        assert_eq!(
+            safe_region(1920, 1080),
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080
+            }
+        );
+        // 16:10 target: 16:9 letterboxed.
+        assert_eq!(
+            safe_region(1920, 1200),
+            Rect {
+                x: 0,
+                y: 60,
+                w: 1920,
+                h: 1080
+            }
+        );
+        // 4:3 target: 16:9 letterboxed at full width.
+        assert_eq!(
+            safe_region(640, 480),
+            Rect {
+                x: 0,
+                y: 60,
+                w: 640,
+                h: 360
+            }
+        );
+        // Wider than 16:9: pillarboxed.
+        assert_eq!(
+            safe_region(2560, 1080),
+            Rect {
+                x: 320,
+                y: 0,
+                w: 1920,
+                h: 1080
+            }
+        );
+        // Square: 16:9 letterboxed.
+        assert_eq!(
+            safe_region(1000, 1000),
+            Rect {
+                x: 0,
+                y: 219,
+                w: 1000,
+                h: 562
+            }
+        );
+        // Zero-size inputs degrade to a zero rect (no draw).
+        assert_eq!(safe_region(0, 480).w, 0);
+        assert_eq!(safe_region(640, 0).h, 0);
+        // The safe region never exceeds its target and always sits
+        // inside it (letterbox/pillarbox geometry is centered).
+        for (w, h) in [
+            (1920u32, 1080),
+            (1920, 1200),
+            (640, 480),
+            (2560, 1080),
+            (1001, 999),
+        ] {
+            let r = safe_region(w, h);
+            assert!(r.w <= w && r.h <= h);
+            assert!(r.x + r.w <= w && r.y + r.h <= h);
+            // 16:9 with floor semantics (w*9/16), never wider.
+            assert_eq!(r.h, r.w * 9 / 16, "16:9 aspect ({w}x{h})");
+            assert!(r.w * 9 <= r.h * 16 + 15);
+        }
+    }
+
+    /// The world rect is the LANDED Fit composition inside the safe
+    /// region — the existing PresentConfig shape reused verbatim
+    /// (PLAN §6 "fit/letterbox/pillarbox via the existing shapes"):
+    /// the whole 640x480 frame always visible, pillarboxed by the
+    /// safe region on wide targets, and the frame_draw_rect
+    /// decision fn answers it under Enhanced while Parity keeps the
+    /// landed scale_rect answer (including the Fill crop — which
+    /// the Enhanced layout never applies).
+    #[test]
+    fn enhanced_world_reuses_the_landed_fit_shape() {
+        let frame = responsive_frame(1920, 1200);
+        assert_eq!(frame.safe, master_safe_region());
+        // 4:3 fits 640x480 into 1920x1080 as 1440x1080, centered.
+        assert_eq!(
+            frame.world,
+            Rect {
+                x: 240,
+                y: 60,
+                w: 1440,
+                h: 1080
+            }
+        );
+        let (left, right) = world_margins(&frame);
+        assert_eq!(
+            left,
+            Rect {
+                x: 0,
+                y: 60,
+                w: 240,
+                h: 1080
+            }
+        );
+        assert_eq!(
+            right,
+            Rect {
+                x: 1680,
+                y: 60,
+                w: 240,
+                h: 1080
+            }
+        );
+        // A 4:3 target letterboxes the safe region and fits the
+        // frame into it (480x360 centered, 80px bars INSIDE the
+        // safe region — the safe region is 16:9, the frame 4:3, so
+        // bars exist on every aspect; they are only wide enough to
+        // host the strip on wide targets).
+        let tall = responsive_frame(640, 480);
+        assert_eq!(
+            tall.world,
+            Rect {
+                x: 80,
+                y: 60,
+                w: 480,
+                h: 360
+            }
+        );
+        assert_eq!(world_margins(&tall).0.w, 80);
+        // The decision fn: Enhanced answers the layout's world rect
+        // whatever the scale selection (never the Fill crop);
+        // Parity answers the landed scale_rect for every mode.
+        let fill = scaling_present_config(ScaleMode::Fill, FilterMode::Nearest);
+        assert_eq!(
+            frame_draw_rect(PresentationMode::Enhanced, &fill, 1920, 1200),
+            responsive_frame(1920, 1200).world,
+            "the Enhanced layout never crops the frame"
+        );
+        for scale in [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Fill] {
+            let cfg = scaling_present_config(scale, FilterMode::Nearest);
+            assert_eq!(
+                frame_draw_rect(PresentationMode::Parity, &cfg, 1920, 1200),
+                scale_rect(scale, CANON_W, CANON_H, 1920, 1200),
+                "Parity keeps the landed path for {scale:?}"
+            );
+        }
+    }
+
+    /// The ENHANCED cursor mapping is ABSOLUTE through the world
+    /// rect (the click targets live in the responsive layout,
+    /// RESEARCH-HD-ASSET-PIPELINE §8) — exact corners/center, bars
+    /// clamp to the frame edge, and the mapping never degrades to
+    /// Fill's relative-only case because the layout never crops.
+    #[test]
+    fn enhanced_cursor_maps_absolutely_through_the_layout() {
+        let frame = responsive_frame(1920, 1200);
+        // World rect (240,60)-(1680,1140) over 640x480.
+        assert_eq!(layout_cursor_to_game(240.0, 60.0, &frame), Some((0, 0)));
+        assert_eq!(
+            layout_cursor_to_game(1680.0, 1140.0, &frame),
+            Some((639, 479))
+        );
+        assert_eq!(
+            layout_cursor_to_game(960.0, 600.0, &frame),
+            Some((320, 240))
+        );
+        // The bars clamp to the frame edge (never outside).
+        assert_eq!(layout_cursor_to_game(0.0, 0.0, &frame), Some((0, 0)));
+        assert_eq!(
+            layout_cursor_to_game(1920.0, 1200.0, &frame),
+            Some((639, 479))
+        );
+        // Degenerate target: no world, no mapping.
+        let empty = ResponsiveFrame {
+            safe: Rect {
+                x: 0,
+                y: 0,
+                w: 0,
+                h: 0,
+            },
+            world: Rect {
+                x: 0,
+                y: 0,
+                w: 0,
+                h: 0,
+            },
+        };
+        assert_eq!(layout_cursor_to_game(5.0, 5.0, &empty), None);
+    }
+
+    /// THE PARITY BOUNDS (the trajectory pin, the D215 shape): the
+    /// selection is PRESENTATION-BUCKET ONLY (D17 b) — it lives in
+    /// `WindowOptions` and never enters `ModeConfig`/`SimConfig`,
+    /// so the SAME pump script through hosts built under either
+    /// presentation mode yields the identical executed-tick
+    /// sequence, sim tick count, state hash, scene hash AND frame
+    /// parity hash, and the canonical 640x480 indexed frame +
+    /// palette are byte-identical (goldens stay canonical-frame
+    /// based and resolution-agnostic under either mode).
+    #[test]
+    fn presentation_selection_never_touches_the_sim_or_the_hashed_trajectory() {
+        let opts_all = [PresentationMode::Parity, PresentationMode::Enhanced].map(opts_with);
+        assert_eq!(
+            host_sim_config(&opts_all[0]),
+            host_sim_config(&opts_all[1]),
+            "the selection never reaches the sim config"
+        );
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+        let mut executed = vec![Vec::new(); hosts.len()];
+        for (i, &dt) in script.iter().cycle().take(30).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            for (host, log) in hosts.iter_mut().zip(executed.iter_mut()) {
+                log.push(host.pump_frame(dt, &input));
+            }
+        }
+        for (i, host) in hosts.iter().enumerate().skip(1) {
+            assert_eq!(executed[i], executed[0], "same executed ticks");
+            assert_eq!(
+                host.driver().sim().tick_index(),
+                hosts[0].driver().sim().tick_index()
+            );
+            assert_eq!(
+                host.driver().sim().state_hash(),
+                hosts[0].driver().sim().state_hash()
+            );
+            assert_eq!(host.scene_hash(), hosts[0].scene_hash());
+            assert_eq!(host.frame().parity_hash(), hosts[0].frame().parity_hash());
+            // The canonical frame + palette ride BYTE-IDENTICAL —
+            // the ENHANCED composition reads them, it never rewrites
+            // them (the native pass is a separate plane).
+            assert_eq!(host.frame().indices, hosts[0].frame().indices);
+            assert_eq!(host.frame().palette, hosts[0].frame().palette);
+        }
+    }
+
+    /// GATE ANSWERS are option-invariant: the presentation
+    /// selection lives entirely upstream of the host (never in
+    /// `ModeConfig`), so BOTH pacing arms accept it identically —
+    /// the present-gate and alpha answers are IDENTICAL under
+    /// either selection in the modern AND the classic arm.
+    #[test]
+    fn presentation_option_never_changes_the_gate_answers() {
+        for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let mut opts_all =
+                [PresentationMode::Parity, PresentationMode::Enhanced].map(opts_with);
+            for opts in &mut opts_all {
+                opts.mode = mode;
+            }
+            let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+            let mut clock = FixedStepClock::host();
+            for dt in [4u32, 0, 4, 3, 0, 4] {
+                clock.advance(4_166_666);
+                for host in &mut hosts {
+                    host.pump_frame(dt, &InputFrame::default());
+                }
+                for (i, host) in hosts.iter().enumerate().skip(1) {
+                    assert_eq!(
+                        present_due(host),
+                        present_due(&hosts[0]),
+                        "{mode:?} dt {dt} selection {i}"
+                    );
+                    assert_eq!(
+                        present_camera_alpha(host, &clock),
+                        present_camera_alpha(&hosts[0], &clock),
+                        "{mode:?} dt {dt} selection {i}"
+                    );
+                }
+            }
+        }
     }
 }

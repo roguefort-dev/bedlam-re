@@ -969,3 +969,53 @@ commands = [
   ["/usr/bin/python3", "tools/test-p6-hd-asset-research.py"],
 ]
 tracked_paths = ["docs/RESEARCH-HD-ASSET-PIPELINE.md", "tools/check-p6-hd-asset-research.py", "tools/test-p6-hd-asset-research.py", "docs/required-gates.toml"]
+
+# p6-enhanced-native-render — the P6 ENHANCED native-render OPENER per
+# PLAN §6 "Resolution independence + GPU rendering ... ENHANCED mode
+# is explicitly non-parity and renders supported world/UI passes
+# natively; bespoke responsive layouts target 16:9 and 16:10 (16:10
+# authoring master with 16:9 safe region), while other aspect ratios
+# fit/letterbox/pillarbox" (implementation D217; the resolution
+# bullet's big remaining half after the D215 scaling selection, with
+# docs/RESEARCH-HD-ASSET-PIPELINE.md sec 5.A/8 as the design inputs).
+# (a) THE SELECTION: PresentationMode (Parity default = the shipped
+# posture exactly / Enhanced) in bedlam-platform layout, carried as
+# WindowOptions.presentation — a platform presentation knob OUT of
+# ModeConfig (D200) with NO purist arbitration (the D215 posture:
+# both pacing arms accept it identically, it selects nothing in the
+# sim; the binary's --presentation parity|enhanced fails closed at
+# exit 2, noted + ignored headless). (b) THE FIRST NATIVE PASS: the
+# mission-identity strip — a palette-indexed UI plane at
+# presentation resolution through the ALREADY-LANDED parity-pipeline
+# path (ParityPipeline::with_plane + upload_indexed + draw_rect) in
+# the responsive layout's left margin INSIDE the safe region,
+# Mission scenes only, built from the game's own landed data only
+# (the RE-EXW-SAVE identity semantics over mission_slot, the pub
+# bedlam_render::ui_bank glyph drawer FUN_00402884/FUN_00408913, the
+# game's own sidebar color 0x24, the canonical frame's own palette)
+# — zero new binary claims, zero invented pixels, never over game
+# pixels; the margins outside the safe region stay untouched for the
+# future HD-pack seam. (c) THE RESPONSIVE LAYOUT CONTRACT as pure
+# data (bedlam_platform::layout): 16:10 master 1920x1200, the
+# centered 16:9 safe region on any target (fit/letterbox/pillarbox),
+# the world rect REUSING the landed scale_rect(Fit) shape (the Fill
+# crop never applies), the margins, the absolute cursor inverse.
+# (d) PARITY BOUNDS: bit-identical SimConfig + identical executed
+# ticks, tick count, state hash, scene hash AND frame parity hash
+# under either selection, the canonical frame indices + palette
+# byte-identical, the Parity present path running the landed calls
+# unchanged, goldens canonical-frame based and resolution-agnostic;
+# canonical_dump_gate 13/13 + determinism 4/4 + zone_mission_parity
+# 5/5 verified before AND after (zero canonical-chain movement).
+# OUT OF SCOPE: the extended viewport (a separately FLAGGED gameplay
+# change), Smacker native decode, further world passes, HD-pack
+# consumption. Catalog stays EMPTY (a plan-named presentation unit
+# is not a catalog entry). Command hermetic: --release --locked
+# --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-enhanced-native-render"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-platform/src/layout.rs", "engine/bedlam-platform/src/gpu.rs", "engine/bedlam-platform/src/lib.rs", "engine/bedlam-shell/src/native.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
