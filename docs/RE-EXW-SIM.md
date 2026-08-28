@@ -11198,3 +11198,234 @@ faithfully). No canonical scenario stages S1 (the S8 scenario
 stages ZONEA S3+S4 only) → no chain movement. The canonical
 critter-bank blob is UNTOUCHED (the new `variant` record field is
 not serialized — the §7j.71 dir/frame/z_restore convention).
+
+## 7j.75. THE KIND-3 CHASER — the .NME S5 loader walk + the k3
+controller body (0x4145c1..0x414c96) + its helper family decoded
+whole: the distance-ladder mode selector, the THREE roles of the
+species word, and the pathfinder's wall-follow sector w@+0x5E
+(2026-08-28, worker bc51a491 claim 1, item
+p5-critter-state-g2-chasers-r2; objdump-only from the committed
+ghidra-project/exw-text-objdump.txt + the §7j.18 loader decompile
+ghidra-project/exw-critterpoi-loader.txt + raw DGROUP table reads
+of BEDLAM.EXW (0x454b48/0x454edc) — no Ghidra run; read-only
+corpus byte access with MANIFEST.sha256 clean before and after)
+[verified]
+
+Method: the S5 block of the committed loader decompile and the k3
+body 0x4145c1..0x414c96 walked instruction-by-instruction from
+the committed objdump; the helpers FUN_00417c00/FUN_00425498/
+FUN_0041571c/FUN_0040cc27/FUN_0041e9a2/FUN_0040f277/
+FUN_0041286f/FUN_0041eb7d/FUN_0041ebc1 re-walked whole; the
+walk-pattern dword table 0x454b48 and the delay table 0x454edc
+read as raw DGROUP bytes (VA 0x454000 = file 0x52600, the D135
+anchor). All facts [verified] against those artifacts unless
+tagged.
+
+1. **THE S5 LOADER WALK (the §7j.18 S5 gloss made exact).** The
+   decompile's fifth section (10-B recs; w0 marker, w1 = heading
+   scalar, w2 = z level, w3 = x tile, w4 = y tile): **NO inner
+   spawn loop — ONE critter per record at EVERY difficulty — and
+   NO stream draws of any kind** (zero RandA/FUN_0041ec1c sites
+   in the block; the S6 §7j.72/1 shape). Stamps in write order:
+   x d@+0x36 := w3·0x2000+0xF00 and y d@+0x3A :=
+   w4·0x2000+0xF00 (Q13); **home_x d@+0x42 := x, home_y d@+0x46
+   := y** (S5 is the ONE section that stamps home — §7j.72/1's
+   "only S5 writes +0x42/+0x46/+0x4A"); target-robot w@+0x7A :=
+   0xFFFF (−1, no target); z d@+0x3E := FUN_0041e411(x>>8, y>>8,
+   w2<<5) — the S3/S6 floor-probe shape verbatim (Q5 z, the
+   record's z convention for kinds 3/4/5/6); the 8 corner-z words
+   w@+0x60..+0x6E := the direction-table probes
+   (0x4543e4/0x454404) at the spawn z (the S3/S6 loop verbatim);
+   **home_z d@+0x4A := z** (after the corner loop — S5's third
+   home stamp); **heading d@+0x10 := w1<<6 AND the wake-heading
+   cell d@+0x14 := w1<<6** [CORRECTS the §7j.18 "+0x10 = +0x12 =
+   w1<<6 (timer/leash)" gloss — the second stamp is the DWORD at
+   +0x14, the preserved spawn heading the dormant teleport
+   restores]; state w@+0x00 := 3, hp w@+0x06 := 0x5DC +
+   ([0x46ae8c]·0x5DC)/27 (1500+(1500·m)/27 — the linear-mission
+   scalar, the closed imul census's S5 site), presence w@+0x24 :=
+   1, **MODE w@+0x0C := 0** (NOT 8 — the awake-idle state), **NO
+   countdown stamp** (the bank memset leaves w@+0x56 = 0),
+   **species w@+0x02 := 8** (the spawn-grace counter — see /3),
+   count++.
+2. **THE k3 CONTROLLER BODY** (kind table 0x412f18 case 3 →
+   0x4145c1; entered once per frame per critter — **NO substep
+   loop: the body never reads species as a substep count**,
+   unlike k1/k2/k4/k5/6). In order:
+   - **(a) TARGET-LIVENESS CHECK** (0x4145c1): target w@+0x7A ≠
+     −1 ∧ robot[target] alive word @+0x7C == 0 (bank 0x4c69e4,
+     stride 0xA8) → MODE := 8, countdown := 0, target := −1
+     (species untouched). Runs BEFORE the mode dispatch — even a
+     dormant (0xB) or dying (7) chaser whose target died flips to
+     the awake-idle mode 8.
+   - **(b) MODE 0xB DORMANT** (0x41460d): countdown <
+     [0x454edc + difficulty·4] → countdown++ (word inc) and, on
+     the frame the counter EXACTLY equals delay−0x14 (0x4146a0:
+     `lea eax,[edi-0x14]`), the **TELEPORT-HOME BLOCK**
+     [NEW pin, absent from §7j.17/§7j.42]: heading := the +0x14
+     wake-heading cell, x := home_x, y := home_y, z := home_z —
+     the chaser re-materializes at home 20 frames BEFORE waking.
+     countdown ≥ delay → **WAKE** (0x414649): presence := 1,
+     countdown := 0, **species := 0**, MODE := 8, **hp := 0x5DC
+     FLAT** (1500, no m scalar — unlike the loader's staged hp),
+     then straight to the epilogue (the ladder does not run this
+     frame).
+   - **(c) MODE 7 DYING** (0x4146f3): hp := 0, death_ctr
+     (dword@+0x52)++, < 0x28 → epilogue; else MODE := 0xB,
+     countdown := 0 (the death_ctr is NOT reset — the k5/6
+     convention).
+   - **(d) SPECIES DECREMENT** (0x414731): species > 0 →
+     species−− (floor at 0; runs for every mode that reaches the
+     ladder, i.e. all but 0xB/7).
+   - **(e) THE DISTANCE LADDER** (0x41474e..0x414912) — ONE
+     FUN_00417c00 nearest-alive-robot probe
+     (x>>8/y>>8 → {out: dist px octile, ret: robot idx}; sentinel
+     idx 0 / dist 10_000_000 when none) + the home leash =
+     FUN_0041ebf8(home_x−x, home_y−y) on the >>8'd pair; then
+     FOUR rules IN ORDER (the §7j.17 gloss made exact; the mode
+     dispatch re-reads MODE after the ladder, so a flip RUNS THE
+     NEW BODY THE SAME FRAME):
+     R1 (0x4147ce): dist > 200 (0xC8) ∧ MODE == 2 → MODE := 10,
+       countdown := 0, **species := 0x20 (32)**, target := −1
+       [the 0x20 stamps SPECIES — the return-home WALK DURATION,
+       NOT countdown; corrects the naive "countdown := 32"
+       reading — the register-arg walk shows edx→+0x02, edi→
+       +0x56];
+     R2 (0x41481f): **species == 0** ∧ dist < 200 ∧ leash < 400
+       (0x190) ∧ MODE ∉ {3,2} → MODE := 3, target := robot,
+       countdown := 0 [NEW pin: the species==0 gate — the 8-frame
+       spawn GRACE; a fresh chaser cannot approach for 8 frames];
+     R3 (0x41487e): dist < 100 (0x64) ∧ MODE ≠ 2 → MODE := 2,
+       target := robot, countdown := 0;
+     R4 (0x4148c1): leash ≥ 400 ∧ MODE ≠ 10 → MODE := 10,
+       countdown := 0, species := 0x20, target := −1 (a mode-3
+       chaser past the leash flips home mid-chase).
+   - **(f) MODE 3 APPROACH** (0x41492b): countdown == 0 →
+     countdown := 9 + heading := the 8-SECTOR SNAP of
+     FUN_00425498(aim at robot[target]'s LIVE x/y): ((angle+0xF)
+     &0xFF)>>5 &7)<<5 (the +15 = half-sector rounding — headings
+     land on {0,0x20,...,0xE0}); then the WALK GATE: dword
+     [0x454b48 + countdown·4] ≠ 0 → FUN_0041571c(idx, heading)
+     (the pathfinder step, /4); then countdown−− (the tail
+     0x414c59 — the dec is AFTER the table read, so the table
+     sees the fresh 9 on aim frames; table[0] is never read).
+   - **(g) MODE 2 ATTACK** (0x4149eb): countdown == 0 → the same
+     snap-aim at robot[target]; countdown++ (word inc) then
+     countdown > 3 → countdown := 0 (the 5-frame aim cycle
+     0→1→2→3→4→0); then the fire EVERY FRAME (the §7j.17 ">4
+     shots → reset" gloss = this countdown wrap, NOT a fire
+     gate): slot := FUN_0041286f (the first-free 0x4cc654 scan,
+     §7j.74/2) — full (−1) → done (no countdown dec); else the
+     0x67 STAMP with the FULL 3-D octile-normalized velocity at
+     the LIVE robot position — dx = robot.x>>8 − x>>8, dy =
+     robot.y>>8 − y>>8 (px), dz = (robot.z+4) − (z+0x10) (Q5,
+     the +4 muzzle/center offsets); dist =
+     max(FUN_0041ebf8(dx,dy),1); vx = dx·0x800/dist, vy =
+     dy·0x800/dist; vz = dz·0x8000 / max(octile(dist<<4, dz<<4),
+     1) (the second-octile z denominator, the mode-2 0x68 lane's
+     exact math, §7j.42/7); projectile {w@+0x00 := 0x67,
+     d@+0x02 := x (Q13), d@+0x06 := y, d@+0x0A := (z+0x10)<<8,
+     d@+0x0E := vx, d@+0x12 := vy, d@+0x16 := vz}. No jitter, no
+     range gate (the ladder already owns the bands), no draws.
+   - **(h) MODE 0xA RETURN-HOME** (0x414bbc): countdown == 0 →
+     countdown := 9 + the snap-aim at HOME (FUN_00425498 with
+     ebx/ecx = home_x/home_y>>8); then the same walk-table gate
+     + FUN_0041571c + countdown−− (the shared tail).
+   - **(i) MODES 0 AND 8 have NO body** — awake-idle: only the
+     ladder acts (the loader spawns MODE 0; the target-death flip
+     and the wake set MODE 8 — the same role).
+   - **(j) TAIL** (0x414c67): the presence-mark cell prep (y>>13
+     row ptr + x) → the shared epilogue 0x413fa2.
+3. **THE THREE ROLES OF THE SPECIES WORD for kind 3** [NEW pin —
+   the "species = substeps" rule of §7j.42/2 does NOT hold here]:
+   (1) the S5 spawn grace — stamped 8 by the loader, decremented
+   per frame at (d), and READ as the R2 gate (species == 0);
+   (2) the return-home walk duration — stamped 0x20 (32) by R1/R4
+   and decremented to 0 (a mode-10 chaser walks home for 32
+   frames, then R2 can re-fire when a robot is near — species is
+   the walk budget, NOT a substep count);
+   (3) the wake clears it (0 — a woken chaser can approach
+   immediately).
+4. **FUN_0041571c(idx, heading) — THE PATHFINDER STEP**
+   (0x41571c..0x415b6e) [walked whole; the §7j.17 "pathfinder
+   step" pin made instruction-exact]:
+   - dx = FUN_0041eb65(heading)>>5 (cos word), dy =
+     FUN_0041eb77(heading)>>5 (sin) — the shared 256-word
+     table pair;
+   - OPEN PATH: FUN_0040cc27(idx, dx, dy) passes → x += dx,
+     y += dy, **sector w@+0x5E := (heading+0x20)&0xC0** (the
+     4-way mirror; NOT the kind-1 DIR +0x58 — 0x4cfff6 is the
+     record's +0x5E word, between frame +0x5A and the corner
+     words +0x60), heading UNCHANGED, → the tail helper;
+   - BLOCKED: z := the entry z (restore), then the WALL-FOLLOW
+     ladder dispatched on the CURRENT sector word: each arm first
+     re-tries its own axis move (±0x200 Q13 = 2 px, NO sector
+     write on the keep-move), then the two PERPENDICULAR
+     candidates (each on success: sector := the move's sector,
+     the ±0x200 step), all fail → no move. The perpendicular
+     ORDER: sector 0x00 (−y) and 0x80 (+y) arms key on the
+     HEADING arg (≥ 0x80 → the −x/−x-side candidate first, else
+     the +x-side); sector 0x40 (+x) and 0xC0 (−x) arms key on
+     the DY component (sin(heading)>>5 > 0x80 → the +y candidate
+     first, else −y) [the two different keys are literal asm —
+     two arms use the live edi heading, two the ebp dy]; every
+     ladder exit copies sector w@+0x5E → heading d@+0x10 (the
+     tail 0x415b44) — after any blocked frame the heading IS the
+     wall-follow direction; the sector convention 0x00=−y,
+     0x40=+x, 0x80=+y, 0xC0=−x (the DIR-table axes);
+   - every exit calls FUN_0040f277(idx) — the presence-gated
+     8-corner z-settle family (FUN_0041e411 + FUN_004222ce/
+     FUN_0042343, the documented no-draw E-gap, module doc).
+5. **FUN_0040cc27(idx, dx, dy) → FUN_0041e9a2((x+dx)>>8,
+   (y+dy)>>8, idx)** — the TRY-MOVE gate [walked whole]: the
+   8-sample footprint probe at the candidate cell with the z
+   reference read from **the dword@+0x5E>>16 = w@+0x60 — the
+   FIRST CORNER-Z WORD** (why the loader stages the corner
+   words); per sample (the 0x4543e4/0x454404 ±11/±12 offsets):
+   map bounds (px vs [0x4eddec]/[0x4eddf0]·0x20) ∧ floor :=
+   FUN_0041e411(sx, sy, z) ≠ 0 ∧ |floor − z| ≤ 4; on PASS the
+   gate SETTLES z d@+0x3E := FUN_0041e411(x, y, min(z,0xFF))
+   (the center floor, clamped-high probe) and rewrites the 8
+   corner words with the sample floors; returns pass.
+6. **THE WALK-PATTERN TABLE 0x454b48** [raw DGROUP bytes,
+   file 0x53148]: 10 dwords = **[0,0,1,1,0,0,0,1,1,1]** indexed
+   by the live countdown (1..9; 0 never read — the aim sets 9
+   first). The 10-frame mode-3/0xA walk cycle steps on countdown
+   {9,8,7,3,2} = **6 steps per 10 frames** (3 quick, 3 rest, 2
+   quick, 2 rest). The dwords past index 9 (0x67/0x62/0x92/
+   0xA4/...) are a DIFFERENT table — never read by the k3 body
+   (the countdown domain is 0..9 precisely BECAUSE R1/R4 stamp
+   the 32 into species, not countdown; a naive countdown-32
+   reading would overflow into that data — the register-arg walk
+   rules it out).
+7. **THE DELAY TABLE** [0x454edc, file 0x534dc]: 1500/900/600/
+   400 for d=0..3 (the k4/k5/6 RESPAWN_DELAYS pin [1500,900,600]
+   corroborated byte-exact; the 4th entry exists at d=3 — the
+   engine's min(d,2) clamp convention stays, as the landed kinds).
+8. **DIFFICULTY COUPLING — the dormant delay read only** (zero
+   other [0x46cbf8] sites in the body). **DRAW BUDGET: the whole
+   k3 chain is DRAW-FREE** — zero RandA/FUN_0041ec1c sites in
+   0x4145c1..0x414c96 and in every helper reached
+   (FUN_00417c00/FUN_0041ebf8/FUN_0042548→FUN_0041eb7d/ebc1
+   [leaf table lookups]/FUN_0041286f/FUN_0041571c→FUN_0040cc27→
+   FUN_0041e9a2→FUN_0041e411/FUN_0040f277). The S5 staging is
+   draw-free too — a Chasers-only .NME consumes ZERO stream
+   draws at load and per frame (the first such critter section;
+   S6 is draw-free at load only).
+ENGINE CONSEQUENCE (landed this unit): S5 accepted by
+stage_critters (kind 3, Q13 x/y + Q5 z, home x/y/z staged, spawn
+heading + the +0x14 wake-heading cell = w1<<6, species 8, MODE 0,
+hp = 1500+(1500·m)/27 via MissionSim::linear); the k3 body lands
+as the target-liveness flip + the dormant/wake/teleport machine +
+the species triple role + the 4-rule ladder + the mode 3/2/0xA
+bodies with the 8-sector snap aim and the every-frame 0x67 fire
+(the live-robot 3-D octile aim); FUN_0041571c lands as the
+open-path sine step + the wall-follow ladder on the new sector
+word w@+0x5E (modeled walk gate: the documented 8-sample-probe
+E-gap approximation — bounds + the center floor band, as the
+landed kinds); the walk table [0,0,1,1,0,0,0,1,1,1] lands as the
+const. No canonical scenario stages S5 (ZONEA/M1 hosts S3+S4
+only — the §6.3 census) → no chain movement. The canonical
+critter-bank blob is UNTOUCHED (the new home_z/spawn_heading/
+seek_sector record fields are not serialized — the §7j.71
+dir/frame/z_restore convention).
