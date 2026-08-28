@@ -10,33 +10,97 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-uncapped-present-mode] [gate=p6-uncapped-present-mode] P6
-   present-quality unit #2 per PLAN §6 "time-based simulation ... vsync-
-   locked present at any refresh (60/120/144/240/360Hz+) or uncapped,
-   while the logic stays fixed at the original tick rate" — the OPTIONAL
-   UNCAPPED present mode, sibling of the landed D207 interpolation
-   policy: a PRESENTATION OPTION at the platform level (D200 layering —
-   vsync is a platform knob, presentation options stay OUT of
-   ModeConfig; default stays the vsync-locked Fifo present exactly as
-   shipped). The unit lands the policy selection + the loop shape:
-   uncapped applies ONLY under the modern Decoupled pacing arm (an
-   uncapped loop presents as fast as the loop runs, every present
-   recomposing from latest state + the D207 interpolated camera at the
-   clock accumulator fraction — coherent frames by construction); the
-   classic FrameLocked arm declines it (the visible refresh follows
-   the fixed logic tick, never the display rate — uncapped is
-   nonsensical there and the arm pins vsync-locked). Bounds: the shell
-   fixed-step clock/pump contract and the hashed trajectory stay
-   untouched — no canonical-chain movement, no harness change; test
-   surface stays the ONE purist toggle both arms where practical
-   (policy selection + gate answers pinned hermetically, no window
-   needed, the winit/wgpu PresentMode mapping is a pure function under
-   test); catalog stays EMPTY; wire gate p6-uncapped-present-mode as
-   the SEVENTH P6 required_gates entry; fmt + clippy on touched
-   crates; gates-validator green; MANIFEST clean; no Ghidra run; own
+1. [READY] [id=p6-window-modes] [gate=p6-window-modes] P6 QoL unit
+   per PLAN §6 "QoL: window modes, vsync control, volume mixers,
+   save slots + metadata + opt-in autosave" — the WINDOW MODES
+   presentation option at the platform level, the direct sibling of
+   the landed D208 vsync option (vsync control is now DONE): a
+   WindowOptions window-mode selection (WINDOWED default, exactly
+   as shipped / BORDERLESS borderless-fullscreen / exclusive-style fullscreen
+   best-effort) — D200 layering: a platform knob OUT of ModeConfig
+   with NO purist arbitration this time (the visible window chrome
+   never touches the sim; the original was a fullscreen DOS
+   exclusive with no windowed mode to preserve, so both pacing
+   arms accept the selection identically and the selection selects
+   nothing in the host). The winit fullscreen target is a pure
+   function under test (hermetic, no window needed); a runtime
+   toggle key (F11) included only if it stays bounded — it is a
+   PLATFORM/window-manager key OUTSIDE both control schemes and
+   never reaches ShellInput. Bounds: the shell fixed-step clock/
+   pump contract and the hashed trajectory stay untouched (the
+   swapchain resize/reconfigure path only, already the Resized
+   shape); catalog stays EMPTY; wire gate p6-window-modes as the
+   EIGHTH P6 required_gates entry; fmt + clippy on touched crates;
+   gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+1. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+   PUSHED, plus this bookkeeping commit): P6 present-option unit
+   `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
+   the remaining half of the PLAN §6 present sentence ("vsync-
+   locked present at any refresh (60/120/144/240/360Hz+) or
+   uncapped"), sibling of the landed D207 interpolation policy
+   (implementation D208). (a) bedlam-shell window.rs: `Vsync`
+   (Locked default / Uncapped) as a PLATFORM presentation option
+   on WindowOptions (D200 layering — vsync is a platform knob, OUT
+   of ModeConfig; default = the vsync-locked Fifo present exactly
+   as shipped; the binary's `--uncapped` selects the request,
+   noted + ignored on the headless path); `effective_vsync(mode,
+   requested)` — the POLICY SELECTION: the request is arbitrated
+   by the SAME timing-lock arm GameHost::present_pacing reads
+   (D203, agreement unit-pinned: Uncapped is effective iff
+   Decoupled AND requested) — the modern Decoupled arm HONORS it,
+   the classic FrameLocked arm DECLINES it and pins vsync-locked
+   (RE-EXW-PACER §3 — the visible refresh follows the fixed logic
+   tick, never the display rate; axis independence pinned: the
+   control-scheme arm alone never declines); `surface_present_mode`
+   — the PURE winit/wgpu PresentMode mapping (Locked -> Fifo
+   unconditionally at any refresh; Uncapped -> Immediate when the
+   surface offers it, else the HONEST Fifo fallback — Mailbox is
+   NOT uncapped, it still paces to the display; best-effort
+   platform knob, stderr note at configure time, never fatal). (b)
+   LOOP SHAPE: no loop code changes — with the Fifo block gone the
+   unconditional D205 redraw cycle free-runs: the loop presents as
+   fast as it runs, every present recomposing from latest state +
+   the D207 interpolated camera at the clock accumulator fraction
+   (present_camera_alpha unchanged) — coherent frames BY
+   CONSTRUCTION (recompose re-renders from LATEST state: idempotent
+   + drift-free per present, pinned); each iteration still executes
+   at most what the clock banks (fixed dt per pump — the fixed-step
+   clock/pump contract untouched). (c) BOUNDS KEPT: the selection
+   never enters ModeConfig/SimConfig (pinned by
+   uncapped_selection_never_touches_the_hashed_trajectory:
+   identical executed ticks, tick count, state hash, scene hash AND
+   frame parity hash under either option) and the present-gate/
+   alpha answers are option-invariant
+   (vsync_option_never_changes_the_gate_answers); NO new RE needed
+   (no new binary claims — rests on the committed RE-EXW-PACER §3
+   + D200 layering); test surface = the ONE purist toggle, both
+   arms, hermetic (no window needed); catalog stays EMPTY. (d)
+   GATE: p6-uncapped-present-mode wired as the SEVENTH P6
+   required_gates entry — command = bedlam-shell --lib,
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-shell --lib 58/0 (+6: the shipped-default pin, the
+   policy selection both arms + the axis-independence control +
+   the end-to-end decline, the pure surface mapping incl. the
+   Mailbox refusal, the trajectory pin, the option-invariant gate
+   answers, the uncapped loop-shape coherence/drift pin); fmt +
+   clippy clean on the touched crate; binary --help/--uncapped
+   wiring checked first-hand (help text, the headless ignore note);
+   controls green: canonical_dump_gate 13/13, determinism 4/4,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement),
+   headless smoke two-run byte-identical AND at the recorded
+   baseline (scene 696adb1cd110e062, parity cce30c983b97b16d,
+   audio 110400/158092); gates-validator suite 22/22;
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+   with the seventh gate) + its suite 30/30; MANIFEST clean before
+   AND after every corpus read; the bounded --phase P6 validator
+   verdict at 44c6f2d: status=passed, ALL 7 P6 GATES GREEN, every
+   command rc=0 under bwrap containment (report
+   .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
+   no Ghidra run. Queued: the QoL window-modes platform unit as
+   the new head (PLAN §6 QoL list order — vsync control now DONE).
+2. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames

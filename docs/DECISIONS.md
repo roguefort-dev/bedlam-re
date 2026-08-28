@@ -7696,3 +7696,56 @@ smoke hashes unchanged); controls green: gates-validator suite
 satisfied with the seventh gate) + its suite 30/30; fmt + clippy
 clean on bedlam-shell (the only touched crate); MANIFEST clean
 before AND after; no Ghidra run.
+
+## D209 — 2026-08-28: autonomy/watchdog — the SECOND post-completion death, new shape: the client died AFTER a completion rewrite that itself carried one forbidden queue token; the repair is the MINIMAL token fix + landing the dead worker's bookkeeping, adjudicated replaced-task
+
+Worker 754e7c94 finished `p6-uncapped-present-mode` completely —
+44c6f2d PUSHED with its own Nudge-Worker trailer, ALL 7 P6 gates
+green at the flip (report .state/p6-uncapped-gates-report.json,
+head-bound), the queue rewritten on disk (sha256 d493336b... =
+exactly the failure record's queue_after, inode 3836061) — and
+then the model client died (Error: Transport) BETWEEN the rewrite
+and the strict parser check it had just announced ("Now verify the
+queue parses with the strict parser before committing:"). The
+rewrite it left behind queued the successor head `p6-window-modes`
+with the phrase "BORDERLESS desktop" in the item prose: the strict
+queue parser's human-only token lint (`\bdesktop\b`, full item
+text including continuation lines — already pinned by
+test-nudge-queue.sh's active-task lint cases) rejects the whole
+queue (rc=2, INVALID-DEADLOCKED), so the controller refused
+idle/spawn: a hard stall with a fully-landed task behind it. The
+wrapper then killed the still-resident model pid when the queue
+changed under it and recorded the structured failure
+(kind preflight-mismatch, reason launch-boundary).
+
+THE BINDING REPAIR (all verified first-hand, D206 checklist with
+one miss — and per D206 a miss means an actual repair):
+
+1. The failed gate's substantive commit exists and is PUSHED with
+   the failing worker's own trailer (44c6f2d, main == origin/main).
+2. The queue on disk IS the worker's completion rewrite (sha256 +
+   inode match queue_after) but it FAILED the D206 item-2 parser
+   check, so the repair is the MINIMAL mechanical fix: one token
+   replaced ("BORDERLESS desktop" -> "BORDERLESS
+   borderless-fullscreen"), every other line of the dead worker's
+   rewrite preserved — never re-run, never revert, never rewrite;
+   strict parser back to rc=0 RUNNABLE 1 with required work active.
+3. The repair completes the worker's interrupted bookkeeping (the
+   "plus this bookkeeping commit" its Done entry announces): the
+   completion rewrite + the STATE.md head entry land in the repair
+   commit, which carries the exact Watchdog-Repair trailer and BOTH
+   .state/NEXT.md and a non-.state path (this entry) in its
+   diff-tree — the verified-repair evidence contract.
+4. The structured failure is acknowledged replaced-task: the
+   (ordinal 1, p6-uncapped-present-mode, p6-uncapped-present-mode)
+   identity is absent from the resulting active queue (the
+   successor p6-window-modes replaced it), the ack record bound to
+   the snapshot name/device/inode/sha256/ordinal/id/gate with the
+   repair commit as remediation_commit.
+
+LESSON (extends D180's authoring rule to its third recurrence
+class): the queue grammar is not only about brackets — the
+human-only token lint scans the FULL item prose including
+continuation lines, and the only safe worker finish is the strict
+parser run BEFORE the bookkeeping commit. This worker announced
+that run and its transport died before it could execute it.

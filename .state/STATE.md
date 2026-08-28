@@ -1,5 +1,52 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-uncapped-present-mode` COMPLETE (worker
+    754e7c94 claim 1, commit 44c6f2d, PUSHED; bookkeeping landed by
+    the watchdog repair 1787917175 after the worker's client died
+    between its queue rewrite and its parser check — D208/D209):
+    THE OPTIONAL UNCAPPED PRESENT MODE (D208, PLAN §6 "vsync-locked
+    present at any refresh ... or uncapped, while the logic stays
+    fixed at the original tick rate"). bedlam-shell window.rs:
+    WindowOptions::Vsync (Locked default / Uncapped) as a PLATFORM
+    presentation option (D200 layering — OUT of ModeConfig; the
+    binary's --uncapped selects the request, noted + ignored on
+    the headless path); effective_vsync(mode, requested) — the
+    POLICY SELECTION arbitrated by the SAME timing-lock arm
+    GameHost::present_pacing reads (D203: Uncapped effective iff
+    Decoupled AND requested — the modern arm HONORS it, the classic
+    FrameLocked arm DECLINES it and pins vsync-locked per
+    RE-EXW-PACER §3); surface_present_mode — the PURE winit/wgpu
+    PresentMode mapping (Locked -> Fifo at any refresh; Uncapped ->
+    Immediate when the surface offers it, else the honest Fifo
+    fallback — Mailbox still paces to the display; stderr note at
+    configure time, never fatal). LOOP SHAPE unchanged — no loop
+    code changes: the unconditional D205 redraw cycle free-runs
+    under Decoupled, every present recomposing from latest state +
+    the D207 interpolated camera at the clock accumulator fraction
+    (coherent frames by construction; the fixed-step clock/pump
+    contract untouched). BOUNDS KEPT: pinned by
+    uncapped_selection_never_touches_the_hashed_trajectory
+    (identical ticks/tick count/state hash/scene hash/frame parity
+    hash under either option) and
+    vsync_option_never_changes_the_gate_answers. GATE:
+    p6-uncapped-present-mode wired as the SEVENTH P6 required_gates
+    entry (bedlam-shell --lib, --release --locked --offline,
+    hermetic). Verified: bedlam-shell --lib 58/0 (+6), fmt + clippy
+    clean on the touched crate, controls green
+    (canonical_dump_gate 13/13, determinism 4/4,
+    zone_mission_parity 5/5 — ZERO canonical-chain movement,
+    headless smoke two-run byte-identical at the recorded baseline
+    scene 696adb1cd110e062 / parity cce30c983b97b16d / audio
+    110400/158092), gates-validator suite 22/22,
+    check-p6-behavior-catalog OK (catalog EMPTY, R6 satisfied with
+    the seventh gate) + suite 30/30, MANIFEST clean before AND
+    after every corpus read, the bounded --phase P6 validator at
+    44c6f2d: status=passed, ALL 7 P6 GATES GREEN, every command
+    rc=0 under bwrap containment (report
+    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
+    no Ghidra run. Queued: the QoL window-modes platform unit as
+    the new head.
+
   - 2026-08-28 `p6-high-refresh-interpolation` COMPLETE (worker
     ceafd198 claim 1, commits fe5bf72 + 37aaddf, both PUSHED): THE
     COMPOSITION POLICY OF THE MODERN DECOUPLED PRESENT (D207, PLAN
