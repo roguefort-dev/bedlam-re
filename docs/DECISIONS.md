@@ -6502,3 +6502,64 @@ tag — RE address notation must stay bracket-free (bare `0x…`,
 the intended heads; failure-snapshot record matches the live
 artifact byte-for-byte; failure-watchdog harness contract green;
 no game-data touch, no Rust change (fmt/clippy N/A).
+
+## D189 — 2026-08-28: P5 `p5-critter-state-g2-closecombat` — the kind-7 CLOSE-COMBAT state LANDED (the .NME S7 staging + the k7 steer/beam body + the kind-7 knock lane); the census CloseCombat class CLOSED with ONE deliberate row flip (ZONEC-MISSION3 — the one CloseCombat-ONLY host, no Personnel), the third no-flip-expectation falsification after D185/D187
+
+FOUR decisions recorded. (1) **THE RE (§7j.76, committed BEFORE the
+impl per the stream-survival rule — commit 533eaac)**: the S7 loader
+block decoded exact — the spawn count is the §7j.18 S3 cascade made
+precise {d=0→1, d=1→(RandA&1)+1, d=2→2, d≥3→1} (NOT "max(d,1)"),
+and the roll is ONE SECTION-LEVEL draw computed BEFORE the record
+loop (0x416e36..0x416e80 — even an EMPTY section draws at d=1);
+x/y = tile·0x2000+0xF00 (Q13), z FIXED 0xDF (Q5 by value — 6·0x20+
+0x1F, NO floor probe, NO home stamps, NO bounds gate), anim 0,
+countdown 0, heading = FUN_0041ec1c(0xFF) (the ONLY per-critter
+draw), MODE 3 (ACTIVE from frame 0 — never dormant), species 1,
+hp 2500+(2500·m)/27. The k7 body 0x412f52..0x41367c decoded whole:
+mode 7 dying despawns on the FIFTH frame (countdown++ > 4 → hp 0 ∧
+presence 0); mode 6 ballistic integrates the in-record knock triple
+×2/frame with the +2/frame fall-rate ramp (cap 0x18) and the floor
+LANDING TEST, the landing staging 8 debris (kind 6, delays 1..8) +
+5 claim-gated splash tiles (z level (z>>5)+2 clamp 7, delays 1..5)
++ 24 effect rows — the §7j.43/2 "0x18 k7-only" pin anchored; mode 5
+is the KNOCK DRIFT (countdown++ first, >10 → mode 3 — TEN drift
+frames, and the tail engage runs the flip substep against the STALE
+scan cells); every other mode runs ONLY the nearest-robot scan (a
+dormant k7 is inert). The engage tail (mode 3 ∧ sticky dist < 0x320
+— a FLAT gate, CORRECTING the §7j.42 "(d+1)·0x40+600" k5/6-leash
+gloss): a nonzero countdown only decrements; else the ±1 STEER
+(FUN_00412a19 decoded: wrap8(aim−heading), δ≥0x80 → −1 else +1,
+equal → 0) at the LIVE scan robot with the critter side
+LOW-BYTE-SCRUBBED, the cos/sin>>6 move (no wall probe), and the
+TWO-CONJUNCT fire gate — point-blank sticky-dist < 0x50 ∧ the
+(g_frame_count+idx) modulo 0x1F/0xF/0x7 by difficulty (≥3 NEVER —
+§7j.16's "32/16/8" made exact, idx-staggered) — stamping projectile
+0x69 {x/y Q13 post-move, z LITERAL 6, counter 0, TTL 0x18, NO
+velocity} + the 6-frame countdown recharge. The whole approach/fire
+chain is DRAW-FREE (the only body draws are the landing's 122).
+(2) **THE ENGINE (0ab42a3)**: stage_critters accepts section 7 and
+the k7 body lands in bedlam-core::critter with 11 unit tests (50
+critter tests green, bedlam-core 154); the weapon→critter hit lane
+specializes kind 7 (the away heading, the in-record vx/vy
+cos/sin>>6, mode 5 + countdown 0 — no juice roll). (3) **THE STAGING
+CONVENTION RIDER**: the engine models the d-cascade roll
+PER-RECORD (the landed-S3 convention of §7j.72), so an EMPTY S7
+consumes no draw — deliberately deviating from the asm's
+unconditional section-level roll to keep the canonical S8 chain
+byte-identical (the queue's no-chain-movement bound); the asm truth
+is recorded in §7j.76 and the S3+S7 section-level-roll re-baseline
+(moving the S8 chain deliberately) is queued as its own unit.
+(4) **THE CENSUS RE-PIN (D28 fingerprint rule)**: the CloseCombatxNN
+component dropped from all 8 hosting rows AND ZONEC-MISSION3 FLIPPED
+CLEAN — the one CloseCombat-ONLY host (CloseCombatx4, no Personnel);
+the queue's "every CloseCombat host also carries Personnel today, so
+the expectation should HOLD" expectation was wrong for that single
+row, documented + deliberate (the D185 ZONED-M5 / D187 twelve-row
+precedent); 25/37 load clean (was 24); the G2 residue = the S8
+personnel/POI bank ALONE (12 missions — ZONEE M1-5, ZONEF M1-5,
+ZONEG-M1); the ledger stays 1/37 green; provenance
+docs/evidence/p5-g2-closecombat-census-table.txt; P5-ZONE-GATES
+§6.2/§6.3/§6.4 re-baselined. The k7 DEATH handler (FUN_0041896c —
+kind flips to 6, w@+0x78 := 1, 3 falling gibs + 1× k0xD + CACODETH
++ bounty +1000) stays the documented unlanded §7j.24 subset
+alongside k1/k2/k3, as does the 0x69 beam TICK/impact (§7j.50).
