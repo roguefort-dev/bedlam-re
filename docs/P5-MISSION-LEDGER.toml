@@ -151,43 +151,43 @@ catalog_refs = []
 id = "ZONEE-MISSION1"
 zone = "E"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION2"
 zone = "E"
 mission = 2
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION3"
 zone = "E"
 mission = 3
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION4"
 zone = "E"
 mission = 4
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION5"
 zone = "E"
 mission = 5
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION6"
 zone = "E"
 mission = 6
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEE-MISSION7"
 zone = "E"
 mission = 7
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]

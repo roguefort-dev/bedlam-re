@@ -28,7 +28,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 [[phase]]
 id = "P5"
 status = "pending"
-required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c", "p5-zone-d"]
+required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c", "p5-zone-d", "p5-zone-e"]
 
 [[phase]]
 id = "P6"
@@ -298,6 +298,50 @@ tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedl
 # contract). The per-criterion table lives in P5-ZONE-GATES §10.
 [[gate]]
 id = "p5-zone-d"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zone_mission_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "determinism"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "hash_fixture", "--test", "mission_corpus_gate"],
+]
+tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml"]
+
+# p5-zone-e — the ZONEE completion gate (P5-ZONE-GATES §11, D196):
+# all SEVEN ZONEE missions flipped green in the same unit as this
+# executable evidence (the cross-artifact rule: the §4 rule-5 check
+# requires zone E fully green the moment this gate is wired). The
+# THIRD PURE instantiation of the generalized harness: zone E ships
+# NO committed .scen flows, so the generated per-mission battery IS
+# the whole criterion-1 leg; M6 carries the THIRD G3 variant bank
+# ZONEE/MISSION6.BIN — its OWN bank (NOT the ZONEB/MISSION6.BIN
+# dev twin ZONED/MISSION5.BIN is) — runtime-dead editor residue
+# under the D184 no-swap pin (the runtime always fetches the
+# zone-level MISSIONE.BIN), so no extra leg beyond the zone-level
+# fetch-chain assert of zone_t1_rules_spot. The suite carries the
+# closed-zone LIST (B, C, D, E) — this gate and
+# p5-zone-b/p5-zone-c/p5-zone-d run the same command over the same
+# file; no zone's evidence can be stranded by a later zone's unit.
+# Command 1 = the bedlam-game evidence: zone_mission_parity (the
+# battery for ALL seven ZONEE missions — boot, 120-frame passive,
+# 48-frame full-staging destroy+pickup+platforms+critters —
+# campaigns 1-5 through the episode-slot mask seam and the MP files
+# 6-7 through the SELECT write-pair seam, two-run byte identity +
+# full declared budgets; the anchor TS/T0 statics re-derived
+# independently from each TOT header + the §7j.64 formula (linear =
+# clamp(5·(5−2)+m−1, 1, 26) = m+14); the T1 spot table incl. the
+# D184 zone-level CGR/BIN/LNK fetch pin + the seam domains; the
+# file-level shipped SAVED.BDL/OPTIONS import + fuzz) +
+# canonical_dump_gate (the pinned per-scenario chain digests — zone
+# E stages no committed flow, so its leg rides the generated
+# battery; zero movement) + differ_gate (the cross-channel
+# structural spot check) + determinism (rate-invariance replay
+# identity). Command 2 = the bedlam-core evidence: hash_fixture
+# (the cross-OS replay-hash pins) + mission_corpus_gate (the T1
+# loader/rules oracles). game-data is never git-tracked: no corpus
+# path in tracked_paths/corpus (read-only runtime reads, the
+# MANIFEST contract). The per-criterion table lives in
+# P5-ZONE-GATES §11.
+[[gate]]
+id = "p5-zone-e"
 timeout_seconds = 1800
 commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zone_mission_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "determinism"],

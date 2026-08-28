@@ -6800,3 +6800,44 @@ suite 22/22 + the HEAD-bound battery all-green at the flip commit
 (13 gates), MANIFEST clean before AND after every corpus read, no
 Ghidra run. The remaining zones E/F/G are pure ZONES-append units
 in the §9/§10 shape.
+
+## D196 (2026-08-28, p5-zone-e-disposition): ZONE E CLOSED — the
+FOURTH 7-mission zone flips green (the ledger 29/37). The unit is
+the SECOND PURE ZONES-APPEND disposition (the §9/§10 shape, what
+zone F/G take next): no harness change, no grammar change, no
+engine change — the suite-append commit 9410e0d adds the E spec
+(letter E, missions 1..=7, dims 100x100, committed flows NONE — no
+committed .scen stages zone E) and nothing else; the flip commit
+lands the §11 table, the ledger rows, the p5-zone-e gate and the
+22/37->29/37 test-pin re-baseline together (the §5 cross-artifact
+rule, the D28 fingerprint discipline). Zone-E-distinct fact: M6
+carries the THIRD G3 variant bank ZONEE/MISSION6.BIN — its OWN
+bank (1508806 B, sha256-verified distinct), NOT the
+ZONEB/MISSION6.BIN dev twin (ZONED/MISSION5.BIN is that twin) —
+RUNTIME-DEAD editor residue under the D184 no-swap verdict (the
+runtime unconditionally fetches the zone-level MISSIONE.BIN,
+1968763 B), so it adds NO evidence leg beyond the zone-level
+fetch-chain assert (criterion 2's EDITOR\ZONEE\MISSIONE.* pin).
+Evidence: the generated battery IS the whole criterion-1 leg —
+P5EM1A..P5EM7C all 21 flows full declared budgets, dumps verify,
+two-run byte identity; NO engine gap surfaced on any ZONEE mission
+(the stopping condition did not trigger); the anchor statics
+re-derived from each TOT header (100x100, 160004 B — all seven) +
+the §7j.64 formula (zone E: linear = clamp(5*3+m-1, 1, 26) = m+14,
+M1..M7 = 15..21, no clamp bite); the T1 spot table per zone
+(FULL_MASK arithmetic, start_score, the 25-name fetch chain, the
+seam domains at stage/zone-cell 5 incl. campaign-clears-select);
+criterion 6 stays FILE-LEVEL (the shipped slot-0 campaign IS
+ZONEB/MISSION1). P5-ZONE-GATES §11 documents the per-criterion
+table; the ledger flips ZONEE-MISSION1..7 green (catalog_refs =
+[]); the p5-zone-e gate joins P5 required_gates (14 gates); the
+ledger test pin re-baselined 22/37 to 29/37 + the ZONEE 7/7 line
+(deliberate, same commit). Verified: zone_mission_parity 5/5 (four
+zones), bedlam-game suites green (canonical_dump_gate 13/13 — ZERO
+canonical chain movement; differ_gate 4/4; determinism; census
+37/37 unchanged), bedlam-core green, fmt + clippy clean,
+check-p5-zone-ledger OK 29/37 + hermetic suite 18/18,
+gates-validator suite 22/22 + the HEAD-bound battery all-green at
+the flip commit (14 gates), MANIFEST clean before AND after every
+corpus read, no Ghidra run. The remaining zones F/G are pure
+ZONES-append units in the §9/§10/§11 shape.
