@@ -10,49 +10,90 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-phase-close] [gate=p6-phase-close] P6
-   phase-close bookkeeping unit (the p5-phase-close/f608207 +
-   p4-phase-status-green/972748d pattern) — ALL 14 P6 GATES GREEN
-   at eb4981f (the bounded validator verdict, report
-   .state/p6-framepacing-gates-report.json), so P6's remaining
-   work is the PHASE-CLOSE ONLY: first the ONE bounded survey duty
-   — walk the PLAN sec 6 P6 acceptance surface bullet by bullet
-   and record in DECISIONS.md which bullets are gate-green landed
-   (ModeConfig seam D200/D201; time-based simulation +
-   high-refresh present + uncapped + camera interpolation
-   D17/D203-D208; modern controls D204; the triage rubric +
-   catalog contract D200 with the catalog deliberately EMPTY — the
-   P5 ledger's catalog_refs are all empty, so no entry is owed;
-   resolution independence + scaling D215 + the ENHANCED opener
-   D217; the HD asset pipeline RESEARCH D216; the QoL list
-   D208/D210/D212/D213; the feel-proxy benchmark instrument D219)
-   versus EXPLICITLY deferred by plan text or decision (the
-   extended viewport = a separately FLAGGED gameplay change, never
-   a silent default; the sub-pixel blitter = a default-off later
-   option per PLAN; HD-pack runtime consumption = future work per
-   D216 — the plan's own "Optional HD asset pipeline" with its
-   named prerequisite doc landed; Smacker native decode +
-   GPU-scale — verify the landed bedlam-smk present path covers
-   the plan sentence and record the anchor), so the flip is a
-   surveyed verdict, not a rubber stamp; then flip the P6 phase
-   status pending->green in docs/required-gates.toml (P0-P6 green,
-   P7 pending; plan_complete stays false exactly as designed),
-   commit, then re-emit the bound phase verdict at the flip commit
-   with the exact P4/P5-shaped command: /usr/bin/python3
-   tools/validate-required-gates.py --root . --report
-   .state/p6-gates-report.json --phase P6 --phase-output
-   .state/P6-COMPLETE (ALL 14 P6 GATES GREEN at the flip commit;
-   .state/P6-COMPLETE phase-complete-v1 re-bound to the flip
-   commit, producer required-gates-validator, emitted by the
-   validator itself). BOUNDS: no engine code, no gate-command
-   changes, no catalog seeding, no CI change; the survey + the
-   flip + the verdict artifact + the STATE.md head entry; the
-   tracked tree stays clean through the whole HEAD-bound battery
-   (STATE.md/NEXT.md edits parked until after); own Nudge-Worker
-   trailer; no Ghidra run; MANIFEST clean before/after any corpus
-   read.
+1. [READY] [id=p7-ports-scaffold] [gate=p7-ports-scaffold] P7
+   opener per PLAN section 6 (Ports and packaging) — land the P7
+   decision surface + the FIRST P7 required gate (the D175
+   p5-zone-gate-scaffold / D200 p6-modernization-scaffold
+   pattern: the machine-checkable contract lands BEFORE any
+   packaging work it grades; the P7 required_gates list is
+   currently empty and the P7 phase status stays pending until
+   its gates close). (a) DECISIONS.md entry deciding the P7 scope
+   map per PLAN section 6 verbatim: Linux native + Flatpak;
+   Windows installer; macOS universal2 through automated CI;
+   runner, signing, and publication availability are EXTERNAL
+   conditions and do not block engineering completion; CI
+   artifacts per push; CDDA = user-supplied original tracks
+   (WAV/CD) with an optional local lossy cache generated on first
+   run — never redistributed; SteamDeck defaults stretch. (b)
+   Commit the contract artifact (docs/P7-PORTS.md): the
+   deliverable map splitting that surface into ENGINEERING
+   deliverables (the per-push CI artifact jobs, the Flatpak
+   manifest, the Windows installer definition, the macOS
+   universal2 CI job, the CDDA user-supply + local-cache
+   contract, the SteamDeck stretch default as a recorded platform
+   default over the landed D215 scale surface) versus EXTERNAL-
+   CONDITIONAL items (signing keys, publication stores, macOS
+   runner availability — recorded as exclusions exactly like the
+   P4 live-capture diagnostics, so P7 gates grade only the
+   engineering), plus the gate shape the phase closes on. (c) The
+   fail-closed checker + hermetic test suite over the committed
+   contract wired as the FIRST P7 required_gates entry in
+   docs/required-gates.toml (re-run tools/test-validate-required-
+   gates.py — the validator's strict manifest key schema applies
+   to the new gate). BOUNDS: scaffold only — no engine change and
+   no packaging build lands in this unit; controls green before
+   AND after (check-p6-behavior-catalog + the gates-validator
+   suite); the gate reads no corpus; MANIFEST clean before and
+   after any corpus read; no Ghidra run; commit with the unit's
+   own Nudge-Worker trailer.
 
 ## Done
+1. DONE (2026-08-28, claim 1 — commit d01a7b7 by worker 7486871a,
+   PUSHED, plus this bookkeeping commit): P6 phase-close
+   bookkeeping `p6-phase-close` — THE SURVEYED VERDICT + the P6
+   phase status FLIPPED pending->green in docs/required-gates.toml
+   (P0-P6 green, P7 pending; plan_complete correctly stays false).
+   The survey (DECISIONS.md D220, carried by the flip commit):
+   every PLAN section 6 P6 acceptance bullet walked and
+   dispositioned — gate-green landed (D200/D201 the scaffold +
+   ModeConfig seam; D203/D205/D207/D208 time-based simulation,
+   the platform wiring, the high-refresh camera/scroll
+   interpolation, the uncapped present; D204 modern controls; the
+   D200 triage-rubric + catalog contract with the catalog
+   deliberately EMPTY — all 37 P5 ledger catalog_refs empty, no
+   entry owed; D215 + D217 resolution independence/scaling + the
+   ENHANCED opener; D216 the HD-pipeline research prerequisite;
+   D208/D210/D212/D213 the QoL list; D219 the feel-proxy
+   benchmark) versus EXPLICITLY deferred by plan text or decision
+   (the extended viewport = a separately FLAGGED gameplay change,
+   never a silent default; the sub-pixel blitter = a default-off
+   later option per PLAN; HD-pack runtime consumption = future
+   work per D216; further ENHANCED native passes beyond the
+   opener; the versioned save-format writer = future
+   config-not-state work per the D201 posture) — the Smacker
+   sentence anchor re-verified first-hand (native decode =
+   bedlam-smk/SmkStream + the D31 MoviePlayer, the movie frame
+   GPU-scaled through the landed present path + D215), nothing
+   silently dropped. Then the bound phase verdict RE-EMITTED at
+   the flip commit with the exact P4/P5-shaped command:
+   /usr/bin/python3 tools/validate-required-gates.py --root .
+   --report .state/p6-gates-report.json --phase P6 --phase-output
+   .state/P6-COMPLETE — ALL 14 P6 GATES GREEN at d01a7b7 (report
+   status=passed, bounded, offline, containment
+   bwrap-unshare-net-pid-ro, every command rc=0;
+   .state/P6-COMPLETE phase-complete-v1 re-bound to the flip
+   commit + manifest sha256 4a9678a7..., producer
+   required-gates-validator, emitted by the validator itself).
+   Pre-flip first-hand checks: check-p6-behavior-catalog OK with
+   P6 status green (the cross-artifact rule — zero open entries,
+   satisfied by the empty catalog); the tracked tree stayed clean
+   through the whole HEAD-bound battery (the D193/D194 lesson —
+   STATE.md/NEXT.md edits parked until after); MANIFEST clean
+   before AND after every corpus read; no Ghidra run. The queue
+   now carries the P7 opener as the head (the
+   p5-phase-close/0c81387 pattern): p7-ports-scaffold per PLAN
+   section 6, so required work stays active.
+
 1. DONE (2026-08-28, claim 1 — commits 2b521d1 + eb4981f by worker
    73e5e9a2, both PUSHED): P6 QoL FEEL-PROXY benchmark unit
    `p6-frame-pacing-benchmark` — the plan's own closing instrument

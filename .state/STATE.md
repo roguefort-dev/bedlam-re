@@ -1,5 +1,50 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-phase-close` COMPLETE (worker 7486871a
+    claim 1, commit d01a7b7, PUSHED, plus this bookkeeping
+    commit): P6 CLOSED IN THE MANIFEST — docs/required-gates.toml
+    P6 status pending->green (P0-P6 green, P7 pending;
+    plan_complete stays false exactly as designed). THE SURVEYED
+    VERDICT (DECISIONS.md D220, carried by the flip commit):
+    every PLAN section 6 P6 acceptance bullet walked — gate-green
+    LANDED (D200/D201 the scaffold + ModeConfig seam; D203 the
+    timing-lock present pacing, D205 the platform wiring, D207 the
+    high-refresh camera/scroll interpolation, D208 the uncapped
+    present mode; D204 modern controls; the D200 triage-rubric +
+    catalog contract with the catalog deliberately EMPTY — all 37
+    P5 ledger catalog_refs empty, no entry owed; D215 scaling +
+    D217 the ENHANCED opener; D216 the HD-pipeline research
+    prerequisite; D210/D212/D213 the QoL list; D219 the feel-proxy
+    benchmark instrument) versus EXPLICITLY DEFERRED by plan text
+    or decision (the extended viewport — a separately FLAGGED
+    gameplay change, never a silent default; the sub-pixel
+    blitter — a default-off later option per PLAN; HD-pack runtime
+    consumption + packs — future work per D216; further ENHANCED
+    native passes beyond the opener; the versioned save-format
+    writer — future config-not-state work per the D201 posture) —
+    nothing silently dropped. The Smacker sentence anchor
+    re-verified first-hand (native decode = bedlam-smk/SmkStream
+    + the D31 MoviePlayer; the movie frame rides the same GPU
+    present path + the D215 scale). The bound phase verdict
+    RE-EMITTED at the flip commit with the exact P4/P5-shaped
+    command: /usr/bin/python3 tools/validate-required-gates.py
+    --root . --report .state/p6-gates-report.json --phase P6
+    --phase-output .state/P6-COMPLETE — ALL 14 P6 GATES GREEN at
+    d01a7b7 (report status=passed, bounded, offline, containment
+    bwrap-unshare-net-pid-ro, every command rc=0;
+    .state/P6-COMPLETE phase-complete-v1 re-bound to the flip
+    commit + manifest sha256 4a9678a7..., producer
+    required-gates-validator, emitted by the validator itself).
+    Pre-flip first-hand checks: check-p6-behavior-catalog OK with
+    P6 status green (the cross-artifact rule: green requires zero
+    open entries — satisfied by the empty catalog); the tracked
+    tree stayed clean through the whole HEAD-bound battery
+    (STATE.md/NEXT.md edits parked until after); MANIFEST clean
+    before AND after every corpus read; no Ghidra run. PHASE MOVES
+    TO P7 (Ports and packaging, PLAN section 6): first unit queued
+    = p7-ports-scaffold, the ports/packaging contract opener (the
+    D175/D200 scaffold pattern).
+
   - 2026-08-28 `p6-frame-pacing-benchmark` COMPLETE (worker 73e5e9a2
     claim 1, commits 2b521d1 + eb4981f, both PUSHED): P6 QoL
     FEEL-PROXY benchmark unit (D219) — the plan's own closing
@@ -656,12 +701,14 @@
     movement. Queued: the p6-modeconfig-seam engine unit as the new
     head.
 
-- Phase: P6 UNDERWAY (the contract scaffold green at e0bc7fb, D200;
-  the ModeConfig seam green at 9d39368, D201; the timing-lock axis
-  consumer green at c225c81, D203; the p6-control-scheme-surface
-  axis-consumer unit queued as the head). P0-P5 GREEN (P5 flipped
-  f608207, .state/P5-COMPLETE; ledger 37/37, D199). P7 pending;
-  plan_complete false.
+- Phase: P6 GREEN (the surveyed flip d01a7b7 with the bound verdict
+  re-emitted there — ALL 14 P6 gates green, .state/P6-COMPLETE
+  phase-complete-v1; the D220 survey: every PLAN section 6 P6 bullet
+  gate-green landed or explicitly deferred, nothing silently
+  dropped). P0-P5 GREEN (P5 flipped f608207, .state/P5-COMPLETE;
+  ledger 37/37, D199). P7 UNDERWAY (p7-ports-scaffold queued);
+  runner, signing, and publication availability are external
+  conditions per PLAN. plan_complete false.
 
   - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6
     claim 1, commit f608207, PUSHED): P5 CLOSED IN THE MANIFEST —
