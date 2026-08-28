@@ -7839,3 +7839,56 @@ checker + suite (below); canonical chains unmoved
 (zone_mission_parity 5/5, canonical_dump_gate 13/13, determinism
 4/4); fmt + clippy clean on bedlam-shell (the only touched crate);
 MANIFEST clean before AND after every corpus read; no Ghidra run.
+
+## D211 — 2026-08-28: autonomy/watchdog — the THIRD post-completion death, third kind variant: a provider-side `transport` death (rc=0, progress=1) AFTER a fully-green completion; adjudicated replaced-task per the D206 checklist with ZERO misses
+
+Worker 7aed939f finished `p6-window-modes` completely — 8784da1
+PUSHED with its own Nudge-Worker trailer, the bounded --phase P6
+validator green at the flip (ALL 8 P6 GATES GREEN, report
+.state/p6-windowmodes-gates-report.json, head-bound to 8784da1),
+the queue rewritten parser-clean (rc=0, new head
+`p6-volume-mixers`), the STATE.md bookkeeping landed in 1cc6038,
+and the FULL final summary printed ("Queue item p6-window-modes is
+COMPLETE... Stopping here per the workflow") — and THEN the model
+connection died provider-side (kind `transport`, client rc=0,
+progress=1; the controller itself marked it "provider-side, not
+charged to the task"). The wrapper correctly recorded the
+structured failure (gate p6-window-modes, repair required) and
+paused the loop; nothing about the TASK was incomplete.
+
+This is the third recurrence of the D206 class and a THIRD kind
+variant: D206 was `client-error` rc=1, D209 was
+`preflight-mismatch` after a token-corrupted rewrite, this one is
+`transport` rc=0 with the cleanest possible worker finish — the
+D209 lesson (run the strict parser BEFORE the bookkeeping commit)
+was followed, the rewrite carried no forbidden token, so every
+D206 checklist item passes with NO miss and the adjudication is
+pure acknowledgment, no mechanical repair needed.
+
+THE BINDING CHECKLIST, verified first-hand before acknowledging
+(all four green — any miss means an actual repair instead):
+
+1. The failed gate's substantive commit exists and is PUSHED with
+   the failing worker's own trailer (8784da1, Nudge-Worker
+   7aed939f, origin/main contains it; main == origin/main at
+   1cc6038).
+2. The queue on disk IS the worker's completion rewrite: sha256
+   128e6045... equals the failure record's queue_after (inode
+   3836061) and the strict parser accepts it (rc=0, RUNNABLE 1)
+   with required work still active (item 1 READY
+   p6-volume-mixers).
+3. The failure artifact still matches the trigger snapshot
+   identity (name 7aed939f...json, device 52, inode 7507630,
+   sha256 5ff33658..., ordinal 1, id/gate p6-window-modes).
+4. The resolution is `replaced-task`: the failed (ordinal 1,
+   p6-window-modes, p6-window-modes) triple is absent from the
+   active queue — the successor p6-volume-mixers replaced it — so
+   the remediation commit is this repair commit (it re-affirms the
+   queue postcondition and carries .state/NEXT.md + this
+   non-.state entry in its diff-tree), and
+   .state/llm-watchdog-failure-ack.json (schema
+   nudge-failure-ack-v1) binds to exactly that commit.
+
+NEVER (unchanged from D206/D209): re-run the task, revert, or
+rewrite the dead worker's queue. A provider death AFTER a green
+completion rewrite is transport debris, not lost work.

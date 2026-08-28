@@ -93,6 +93,14 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 8784da1); no Ghidra run. Queued: the QoL volume
    mixers unit as the new head (PLAN §6 QoL list order — window
    modes and vsync control now DONE).
+   NOTE (watchdog repair 1787918690, D211): the worker's model
+   connection died provider-side (transport, rc=0, progress=1)
+   AFTER this completion rewrite and its printed final summary —
+   a post-completion transport death, no work lost (8784da1 +
+   this bookkeeping both PUSHED, strict parser rc=0 on the
+   rewritten queue); the structured transport failure was
+   adjudicated replaced-task per the D206 checklist (all four
+   items green, D211) and item 1 above stands untouched, READY.
 2. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,

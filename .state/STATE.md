@@ -55,6 +55,13 @@
     .state/p6-windowmodes-gates-report.json, head-bound to
     8784da1); no Ghidra run. Queued: the QoL volume mixers unit
     as the new head (window modes and vsync control now DONE).
+    NOTE (watchdog repair 1787918690, D211): the worker's model
+    connection died provider-side (transport, rc=0, progress=1)
+    AFTER this entry's completion rewrite — a post-completion
+    transport death, no work lost (8784da1 + the bookkeeping both
+    PUSHED, parser rc=0 on the rewritten queue); the structured
+    transport failure was adjudicated replaced-task and the loop
+    resumes on the queued head.
 
   - 2026-08-28 `p6-uncapped-present-mode` COMPLETE (worker
     754e7c94 claim 1, commit 44c6f2d, PUSHED; bookkeeping landed by
