@@ -39,6 +39,21 @@
 //! presentation-bucket decision ONLY: the fixed-step clock/pump
 //! contract above is untouched, and no hashed value can see it.
 //!
+//! P6 COMPOSITION POLICY (the p6-high-refresh-interpolation unit):
+//! WHEN the gate opens, the modern decoupled arm RECOMPOSES the
+//! presented frame from latest state + the interpolated camera —
+//! [`present_camera_alpha`] pairs the gate's host with the shell
+//! clock's [`FixedStepClock::fraction`] (the accumulator fraction
+//! of the pending tick) and [`ShellApp::present`] feeds it to
+//! [`GameHost::recompose`] before the upload. CAMERA/SCROLL ONLY
+//! (the 1996 sprites had no sub-pixel positions; RE-EXW-CAMERA §4
+//! found no sub-tick camera in the original — the blend is the
+//! deliberate modernization manufacture, §5), classic arm
+//! unchanged (the frame-locked pacing presents only after a tick —
+//! nothing to interpolate). Still presentation-bucket ONLY (D17 b):
+//! the fixed-step clock/pump contract and the hashed trajectory
+//! stay untouched.
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -181,6 +196,33 @@ fn shell_input_for(opts: &WindowOptions) -> ShellInput {
 /// reaches the sim, the state hash or the scene hash.
 fn present_due(host: &GameHost) -> bool {
     host.should_present()
+}
+
+/// The camera-interpolation alpha for THIS host frame, if the mode's
+/// composition policy recomposes — the p6-high-refresh-interpolation
+/// companion of [`present_due`] (P6, PLAN §6 "the frame is composed
+/// from latest state + camera/scroll interpolation").
+///
+/// MODERN (decoupled) arm: `Some(clock.fraction())` — the accumulator
+/// fraction of the pending logic tick, i.e. where the present lands
+/// between the last executed tick and the next one; the presented
+/// frame recomposes from LATEST state with the camera lerped from
+/// the last executed tick toward the present (camera/scroll ONLY —
+/// sprites stay grid-quantized; the sub-pixel blitter stays
+/// default-off and out of scope). On a 60 Hz display the steady
+/// state reads 1.0, so the interpolated camera IS the parity camera
+/// — the policy only becomes visible when the display outpaces the
+/// fixed tick rate (the high-refresh present it exists for).
+/// CLASSIC (frame-locked) arm: `None` — the arm presents only after
+/// a tick executes, so the presented image is exactly the tick-state
+/// camera (the original's shape, RE-EXW-CAMERA §4); nothing to
+/// interpolate.
+///
+/// Presentation-bucket ONLY (D17 b): the alpha derives from measured
+/// display timing and never reaches the sim, the state hash or the
+/// scene hash (the clock/pump contract is untouched).
+fn present_camera_alpha(host: &GameHost, clock: &FixedStepClock) -> Option<f32> {
+    host.camera_interpolation().then(|| clock.fraction())
 }
 
 /// Open the window host and run until the window closes.
@@ -478,6 +520,18 @@ impl ShellApp {
         // neither hashed.
         if !present_due(&self.host) {
             return;
+        }
+        // P6 COMPOSITION POLICY (p6-high-refresh-interpolation): the
+        // modern arm recomposes the frame it is about to upload from
+        // latest state + the interpolated camera at the accumulator
+        // fraction of the pending tick (zero-tick high-refresh
+        // frames included — that is the entire point: the camera
+        // sweeps between logic ticks). Classic arm: no alpha, the
+        // pump's parity frame uploads as-is. Presentation-bucket
+        // only (D17 b): recompose mutates the frame and nothing
+        // else; the next pump re-renders parity regardless.
+        if let Some(alpha) = present_camera_alpha(&self.host, &self.clock) {
+            self.host.recompose(alpha);
         }
         let Some(g) = self.gfx.as_mut() else {
             return;
@@ -784,6 +838,107 @@ mod present_loop_tests {
         );
         assert_eq!(modern.scene_hash(), classic.scene_hash());
         assert_eq!(modern.frame().parity_hash(), classic.frame().parity_hash());
+    }
+
+    /// The composition-policy selection at the platform boundary
+    /// (the p6-high-refresh-interpolation companion of
+    /// `present_due`): the SAME timing-lock arm that gates the
+    /// present selects the recompose alpha — modern
+    /// `Some(clock.fraction())` (the accumulator fraction of the
+    /// pending tick), classic `None` (the frame-locked arm presents
+    /// only after a tick — nothing to interpolate). Axis
+    /// independence: the control-scheme arm alone moves nothing
+    /// here.
+    #[test]
+    fn present_camera_alpha_is_the_modern_arm_only() {
+        let mut clock = FixedStepClock::host();
+        // A 240 Hz-style cadence: bank lands mid-pending-tick so the
+        // alpha is a real interior value, not the 60 Hz steady 1.0.
+        for _ in 0..6 {
+            clock.advance(4_166_666);
+        }
+        assert!((clock.fraction() - 0.5).abs() < 1e-6);
+
+        let modern = host_for(&opts_with(ModeConfig::MODERN));
+        assert_eq!(
+            present_camera_alpha(&modern, &clock),
+            Some(clock.fraction())
+        );
+
+        let classic = host_for(&opts_with(ModeConfig::CLASSIC));
+        assert_eq!(present_camera_alpha(&classic, &clock), None);
+
+        let timing_only =
+            opts_with(ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic));
+        assert_eq!(present_camera_alpha(&host_for(&timing_only), &clock), None);
+
+        let controls_only =
+            opts_with(ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic));
+        assert_eq!(
+            present_camera_alpha(&host_for(&controls_only), &clock),
+            Some(clock.fraction())
+        );
+    }
+
+    /// The PRESENT-SITE recompose the loop wires
+    /// (`present_camera_alpha` -> `GameHost::recompose`, both arms
+    /// consulted every present) never touches the hashed trajectory:
+    /// the SAME pump script with the modern arm recomposing at the
+    /// clock's accumulator fractions and the classic arm declining
+    /// yields the identical executed-tick sequence, sim tick count,
+    /// state hash and scene hash — the camera interpolation is
+    /// presentation-bucket only (D17 b). The frame parity hash
+    /// deliberately MAY diverge on the modern arm (the interpolated
+    /// camera is the feature — pinned host-side by
+    /// `recompose_interpolates_only_on_the_decoupled_arm`); the
+    /// platform pin is that nothing hashed moves.
+    #[test]
+    fn present_site_recompose_never_touches_the_hashed_trajectory() {
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut modern = host_for(&opts_with(ModeConfig::MODERN));
+        let mut classic = host_for(&opts_with(ModeConfig::CLASSIC));
+        let mut clock = FixedStepClock::host();
+        let moving = InputFrame {
+            buttons: 1,
+            mouse_dx: 2,
+            mouse_dy: 1,
+            ..InputFrame::default()
+        };
+        let mut executed_modern = Vec::new();
+        let mut executed_classic = Vec::new();
+        let mut recomposed = 0usize;
+        for (i, &dt) in script.iter().cycle().take(40).enumerate() {
+            let input = if i % 3 == 0 {
+                moving
+            } else {
+                InputFrame::default()
+            };
+            // The clock tracks the vsync cadence the present site
+            // reads it at; the pump script stays the contract under
+            // test (hashes depend on the dt sequence only).
+            clock.advance(4_166_666);
+            executed_modern.push(modern.pump_frame(dt, &input));
+            executed_classic.push(classic.pump_frame(dt, &input));
+            if let Some(alpha) = present_camera_alpha(&modern, &clock) {
+                assert!(modern.recompose(alpha), "endpoint staged from frame 0");
+                recomposed += 1;
+            }
+            assert!(!classic.recompose(clock.fraction()));
+        }
+        assert!(
+            recomposed > 0,
+            "the modern present site recomposes on this script"
+        );
+        assert_eq!(executed_modern, executed_classic);
+        assert_eq!(
+            modern.driver().sim().tick_index(),
+            classic.driver().sim().tick_index()
+        );
+        assert_eq!(
+            modern.driver().sim().state_hash(),
+            classic.driver().sim().state_hash()
+        );
+        assert_eq!(modern.scene_hash(), classic.scene_hash());
     }
 }
 

@@ -188,6 +188,51 @@ hashed-trajectory surface and owns no present loop or mapper. The
 catalog stays empty (a plan-named wiring unit is not a catalog
 entry).
 
+**Implementation status (D207, 2026-08-28, gate
+`p6-high-refresh-interpolation`): the present-quality unit — the
+composition policy of the modern decoupled present.** RE first:
+`docs/RE-EXW-CAMERA.md` (committed before the implementation)
+collects the EXW camera/scroll traffic — the Q5 pixel pair
+`_DAT_004edde4/8`, its tick-boundary writers (the `robots()`
+recenter @`0x40b875..0x40b8c5`, the `FUN_004245c9` chase-camera
+override), its frame-path readers (`FUN_00403938` the viewport
+renderer, `FUN_00401107` the present fine-offsets) — and records
+the NEGATIVE the policy rests on: NO sub-tick camera interpolation
+exists anywhere in the decoded original (the Q5 fixed point is
+sub-PIXEL precision within integer tick updates, never sub-TICK).
+The implementation lands the PLAN §6 composition policy at the
+HOST/PRESENT seam: `GameHost` stages a presentation-bucket
+`prev_sim` (the sim as of the pump BEFORE the last executed tick;
+D17 b — never hashed, never serialized; `Sim` gains a `Clone`
+derive for exactly this), the pump path still renders the PURE
+parity configuration (prev=None, alpha=0 — zero canonical-chain
+movement), and `GameHost::recompose(alpha)` re-renders the
+presented frame from LATEST state with the camera lerped
+`(prev → cur) · alpha` — **interpolate CAMERA/SCROLL ONLY**
+(sprites stay grid-quantized; the sub-pixel blitter stays
+default-off and out of scope), selected by `camera_interpolation()`
+= the Decoupled arm ONLY: the CLASSIC frame-locked arm is a NO-OP
+(it presents only after a tick — the exact tick-state camera of
+the original, nothing to interpolate). The alpha is the shell
+clock's accumulator fraction (`FixedStepClock::fraction`,
+`banked_ns / PUMP_PERIOD_NS` saturated — the one float in the
+integer clock, presentation-side only), and the present site pairs
+it with the gate (`present_camera_alpha`) before every upload:
+zero-tick high-refresh frames now carry the interpolated camera
+sweep, while the 60 Hz steady state reads fraction 1.0 — the
+interpolated camera IS the parity camera, so the modern arm adds
+no latency on the original display class and the sweep only
+becomes visible when the display outpaces the fixed tick rate.
+The shell fixed-step clock/pump contract and the hashed trajectory
+are untouched (pinned host-side by
+`camera_interpolation_never_touches_the_hashed_buckets` and
+platform-side by
+`present_site_recompose_never_touches_the_hashed_trajectory`: the
+same pump script with the modern arm recomposing at the clock
+fractions = identical executed ticks, tick count, state hash,
+scene hash). The catalog stays empty (a plan-named composition
+unit is not a catalog entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -319,7 +364,12 @@ Per the D175 pattern the contract lands before any behavior change:
   FIFTH P6 required gate (D205; command = bedlam-shell --lib,
   --release --locked --offline, hermetic — the platform wiring suite:
   mode plumbing into host + mapper, the present-gate cadence pin both
-  arms, and the trajectory pin).
+  arms, and the trajectory pin). The present-quality composition gate
+  `p6-high-refresh-interpolation` landed 2026-08-28 as the SIXTH P6
+  required gate (D207; commands = bedlam-game --lib + bedlam-shell
+  --lib, both --release --locked --offline, hermetic — the host
+  composition-policy suite + the clock-fraction/present-site wiring
+  suite).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 

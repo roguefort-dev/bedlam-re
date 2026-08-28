@@ -18,7 +18,7 @@ const SKIP_BUTTONS: u32 = (1 << 9) | (1 << 10);
 fn cinema_skip_requested(input: &InputFrame) -> bool {
     input.buttons & SKIP_BUTTONS != 0 || input.mouse_buttons & 1 != 0
 }
-use bedlam_core::sim::SimConfig;
+use bedlam_core::sim::{Sim, SimConfig};
 use bedlam_render::{render, Frame, MovieFrame, RenderInput, Vga6};
 
 use crate::boot::{BootAttract, BootPhase};
@@ -122,6 +122,16 @@ pub struct GameHost {
     /// [`GameHost::should_present`] and can never reach the sim or
     /// the state/scene hashes.
     last_pump_ticks: Option<u32>,
+    /// Camera-interpolation ENDPOINT: a clone of the sim as of the
+    /// pump BEFORE the last executed tick batch (None until a pump
+    /// executes a tick). Presentation-bucket ONLY (D17 b,
+    /// docs/RE-EXW-CAMERA.md §5): it is read exclusively by
+    /// [`GameHost::recompose`] as the `prev_sim` half of the
+    /// camera-only lerp — never advanced, never hashed, never
+    /// serialized; the hashed trajectory is identical with or
+    /// without it (pinned by test
+    /// `camera_interpolation_never_touches_the_hashed_buckets`).
+    prev_sim: Option<Sim>,
 }
 
 /// One loaded movie: the player plus its lifecycle state. Loads are
@@ -157,6 +167,7 @@ impl GameHost {
             frame: Frame::new(palette),
             palette,
             last_pump_ticks: None,
+            prev_sim: None,
         };
         host.sync_music();
         host.frame = host.render_now();
@@ -173,7 +184,20 @@ impl GameHost {
     /// 3. the music script follows any scene change;
     /// 4. the canonical frame is re-rendered and stored for present.
     pub fn pump_frame(&mut self, dt_subticks: u32, input: &InputFrame) -> u32 {
+        // Camera-interpolation endpoint (P6 high-refresh present,
+        // D17 b / docs/RE-EXW-CAMERA.md §5): snapshot the sim BEFORE
+        // the advance; if this pump executes >= 1 tick the snapshot
+        // is the state at (current - executed) ticks — for the
+        // canonical one-tick pump exactly one tick back, the
+        // `prev_sim` half of the camera lerp. A zero-tick pump keeps
+        // the previous endpoint (the sim did not move, so the old
+        // endpoint is still the tick-before-latest state). Pure
+        // presentation bucket: the clone is read by recompose only.
+        let pre_advance = self.driver.sim().clone();
         let executed = self.driver.advance(dt_subticks, input);
+        if executed > 0 {
+            self.prev_sim = Some(pre_advance);
+        }
         // Pacing bookkeeping (P6 timing-lock consumer): recorded BEFORE
         // the rest of the pump so a mid-pump panic can never leave a
         // stale gate answer behind; presentation-bucket only.
@@ -290,6 +314,68 @@ impl GameHost {
             PresentPacing::Decoupled => true,
             PresentPacing::FrameLocked => !matches!(self.last_pump_ticks, Some(0)),
         }
+    }
+
+    /// Whether the presented frame should be recomposed with the
+    /// interpolated camera — the PLAN §6 composition policy selected
+    /// from the SAME timing-lock arm as [`GameHost::present_pacing`]
+    /// (P6, `p6-high-refresh-interpolation`).
+    ///
+    /// - `Decoupled` (modern): `true` — the accumulator-driven
+    ///   high-refresh present composes most frames between logic
+    ///   ticks, so the camera/scroll blends from the last executed
+    ///   tick toward the present (the accumulator fraction,
+    ///   docs/RE-EXW-CAMERA.md §5). The original had NO sub-tick
+    ///   camera anywhere (§4): this is the deliberate, budgeted
+    ///   modernization manufacture.
+    /// - `FrameLocked` (classic): `false` — the frame-locked pacing
+    ///   presents only after a tick executes, so the presented image
+    ///   is exactly the tick-state camera: nothing to interpolate
+    ///   (the original's shape, unchanged).
+    ///
+    /// Camera/scroll ONLY: sprites stay grid-quantized (the 1996
+    /// sprites had no sub-pixel positions); sub-pixel blitting stays
+    /// a default-off presentation option out of scope here.
+    pub fn camera_interpolation(&self) -> bool {
+        matches!(self.present_pacing(), PresentPacing::Decoupled)
+    }
+
+    /// Recompose the presented frame under the mode's camera
+    /// interpolation policy — the PRESENT-SITE companion of the
+    /// decoupled pacing (P6, PLAN §6 "the frame is composed from
+    /// latest state + camera/scroll interpolation").
+    ///
+    /// `alpha` is the accumulator fraction of the pending logic tick
+    /// (0..=1, nominally the fraction between the last executed
+    /// logic tick and the present; saturated by the renderer, never
+    /// extrapolates). Under the MODERN arm with an interpolation
+    /// endpoint staged this re-renders `frame` from the LATEST state
+    /// with the camera lerped `(prev -> cur) · alpha` — everything
+    /// else in the frame still comes from the current sim. Under the
+    /// CLASSIC arm (or before the first executed tick) this is a
+    /// NO-OP: the pump's parity frame stands.
+    ///
+    /// Returns whether an interpolated recompose happened.
+    ///
+    /// Presentation-bucket ONLY (D17 b): this mutates `frame` and
+    /// nothing else — never the sim, the state hash or the scene
+    /// hash. The next [`GameHost::pump_frame`] re-renders the parity
+    /// frame regardless, so the pump path is byte-identical with or
+    /// without interleaved recompose calls (pinned by test
+    /// `camera_interpolation_never_touches_the_hashed_buckets`).
+    pub fn recompose(&mut self, alpha: f32) -> bool {
+        if !self.camera_interpolation() {
+            return false;
+        }
+        // Take the endpoint out for the borrow split (render_with
+        // needs &mut self for the mission/menu plane passes), then
+        // restore it: the endpoint survives every recompose.
+        let Some(prev) = self.prev_sim.take() else {
+            return false;
+        };
+        self.frame = self.render_with(Some(&prev), alpha);
+        self.prev_sim = Some(prev);
+        true
     }
 
     /// The scene machine (hashed bucket).
@@ -1228,15 +1314,28 @@ impl GameHost {
         }
     }
 
-    /// Parity render pass: canonical frame from the current sim. A
-    /// started movie REPLACES the scene pipeline (D31): the plane is
-    /// the decoded raster + the folded 6-bit movie palette, and render
-    /// emits the centered letterboxed blit - one compositing path,
-    /// inside bedlam-render. An active loading-flow plane (D34) takes
-    /// priority: BETWEEN / the fading loading screen own the screen the
-    /// same way, and a full-screen 640x480 still centers at the origin,
-    /// i.e. the 1:1 no-letterbox blit the loading gate pins.
+    /// Parity render pass: canonical frame from the current sim —
+    /// `prev_sim = None, alpha = 0` (the parity/golden
+    /// configuration, D17: interpolation OFF; identical bytes with or
+    /// without the P6 interpolation fields staged). See
+    /// [`GameHost::render_with`] for the shared body.
     fn render_now(&mut self) -> Frame {
+        self.render_with(None, 0.0)
+    }
+
+    /// The shared composition body. `prev` + `alpha` are the D12
+    /// camera-interpolation inputs (P6 `p6-high-refresh-interpolation`):
+    /// PRESENTATION inputs only — they shape the interpolated camera
+    /// (integer-grid quantized, scroll-bounds clamped) and nothing
+    /// else; with `prev = None` the output depends only on the
+    /// current sim + palette (the parity contract). A started movie
+    /// REPLACES the scene pipeline (D31); an active loading-flow
+    /// plane (D34) or boot/brief attract plane takes priority the
+    /// same way, and the mission/menu planes own the screen on their
+    /// scenes — so a presented non-scene plane is
+    /// interpolation-invariant by construction (the interpolated
+    /// camera only exists in the scene path).
+    fn render_with(&mut self, prev: Option<&Sim>, alpha: f32) -> Frame {
         // Menu gate inputs (D41/D42), hoisted before the disjoint
         // mission/menu plane borrows below.
         let title_movies_playing = self.title_movie_playing();
@@ -1323,8 +1422,11 @@ impl GameHost {
             });
         let input = RenderInput {
             sim: self.driver.sim(),
-            prev_sim: None, // parity config: interpolation off (D17)
-            alpha: 0.0,
+            // P6 camera interpolation (p6-high-refresh-interpolation):
+            // the parity path (pump) passes None/0.0 — interpolation
+            // enters ONLY through recompose() at the present site.
+            prev_sim: prev,
+            alpha,
             palette: self.palette,
             movie,
         };
@@ -1640,6 +1742,209 @@ mod tests {
             arms_disagree_on_present,
             "the pacing arms must disagree on should_present somewhere"
         );
+    }
+
+    #[test]
+    fn camera_interpolation_selects_from_the_timing_lock_arm() {
+        // P6 composition policy (p6-high-refresh-interpolation): the
+        // SAME timing-lock arm that selects present pacing selects
+        // whether the presented frame recomposes with the
+        // interpolated camera — modern interpolates, classic (the
+        // original frame-locked shape, RE-EXW-CAMERA §4) never does.
+        // The control-scheme axis is the axis-independence CONTROL:
+        // flipping IT alone must not move this consumer.
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        assert!(modern.camera_interpolation(), "modern interpolates");
+
+        let purist_timing = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert!(!purist_timing.camera_interpolation(), "classic never does");
+
+        let classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::CLASSIC,
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert!(
+            !classic.camera_interpolation(),
+            "the CLASSIC preset carries the timing arm"
+        );
+
+        // Control (the OTHER axis, modern): interpolation stays on.
+        let purist_controls = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert!(purist_controls.camera_interpolation());
+    }
+
+    #[test]
+    fn recompose_interpolates_only_on_the_decoupled_arm() {
+        // The present-site consumer: recompose(alpha) re-renders the
+        // presented frame from LATEST state with the camera lerped
+        // toward the previous executed tick — ONLY under the modern
+        // arm. Classic is a no-op (the pump's parity frame stands:
+        // the frame-locked pacing presents only after a tick, the
+        // exact tick-state camera of the original,
+        // RE-EXW-CAMERA §4/§5).
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let moving = InputFrame {
+            buttons: 1, // the placeholder payload's hash-visible move bit
+            ..InputFrame::default()
+        };
+        // Walk the actor well past the scroll-clamp floor (9) so
+        // camera endpoints differ visibly in the stub world pass.
+        let ticks = 40u32;
+
+        let mut modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        for _ in 0..ticks {
+            modern.pump_frame(4, &moving);
+        }
+        assert!(modern.driver().sim().actor().0 >= 10);
+        let parity = modern.frame().parity_hash();
+        // One more executed tick stages prev (one tick back) and
+        // moves the current camera one pixel.
+        modern.pump_frame(4, &moving);
+        let parity_after = modern.frame().parity_hash();
+        assert!(modern.recompose(0.0), "modern recomposes");
+        let interpolated = modern.frame().parity_hash();
+        assert_ne!(
+            interpolated, parity_after,
+            "alpha 0 keeps the PREVIOUS tick's camera: not the parity frame"
+        );
+        // alpha 1 reaches the CURRENT camera: byte-identical to the
+        // pump's parity frame (the lerp endpoint, D12).
+        assert!(modern.recompose(1.0));
+        assert_eq!(modern.frame().parity_hash(), parity_after);
+        // Purity: the same alpha recomposes to the same bytes.
+        assert!(modern.recompose(0.0));
+        assert_eq!(modern.frame().parity_hash(), interpolated);
+        // The parity frame the PUMP renders is unchanged by any of
+        // the recomposes above (the next pump re-renders parity).
+        assert_ne!(parity, parity_after, "the actor moved the camera");
+
+        let mut classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        for _ in 0..ticks {
+            classic.pump_frame(4, &moving);
+        }
+        classic.pump_frame(4, &moving);
+        let classic_parity = classic.frame().parity_hash();
+        for alpha in [0.0f32, 0.25, 0.5, 1.0] {
+            assert!(!classic.recompose(alpha), "classic never recomposes");
+        }
+        assert_eq!(
+            classic.frame().parity_hash(),
+            classic_parity,
+            "classic arm unchanged: the parity frame stands"
+        );
+    }
+
+    #[test]
+    fn recompose_is_inert_before_the_first_executed_tick() {
+        // No endpoint staged (prev_sim None until a pump executes a
+        // tick): recompose is a no-op even on the modern arm — the
+        // boot frame and zero-tick pre-history present exactly the
+        // parity composition.
+        let mut modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let boot = modern.frame().parity_hash();
+        assert!(!modern.recompose(0.5));
+        assert_eq!(modern.frame().parity_hash(), boot);
+        // A zero-tick pump still stages nothing.
+        modern.pump_frame(0, &InputFrame::default());
+        assert!(!modern.recompose(0.5));
+        assert_eq!(modern.frame().parity_hash(), boot);
+        // The first executed tick stages the endpoint: recompose goes
+        // live (returns true; the frame may legitimately equal parity
+        // when the camera did not move — the return value is the pin).
+        modern.pump_frame(4, &InputFrame::default());
+        assert!(modern.recompose(0.5));
+    }
+
+    #[test]
+    fn camera_interpolation_never_touches_the_hashed_buckets() {
+        // The Determinism Charter pin at the composition consumer:
+        // the SAME pump script yields the IDENTICAL executed-tick
+        // sequence, sim tick count, state hash and scene hash in both
+        // arms — with the modern arm running interleaved recompose
+        // calls (the accumulator fractions a high-refresh present
+        // would feed) and the classic arm running none. The
+        // interpolated camera lives entirely in the un-hashed
+        // presentation bucket (D17 b); alpha derives from display
+        // timing and can NEVER reach the sim.
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let mut modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let mut classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        // A 240 Hz-shaped script (1 sub-tick pumps, tick every 4th)
+        // with movement input and present-site recomposes between
+        // the pumps — the shape the window loop drives.
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let alphas = [0.0f32, 0.25, 0.5, 0.75, 1.0];
+        let mut executed_modern = Vec::new();
+        let mut executed_classic = Vec::new();
+        for (i, dt) in script.iter().copied().cycle().take(40).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            executed_modern.push(modern.pump_frame(dt, &input));
+            executed_classic.push(classic.pump_frame(dt, &input));
+            // Present site: modern recomposes at the accumulator
+            // fraction, classic declines.
+            let recomposed = modern.recompose(alphas[i % alphas.len()]);
+            assert!(!classic.recompose(alphas[i % alphas.len()]));
+            if i == 0 {
+                // First pump executes a tick immediately (dt 4), so
+                // the endpoint is staged from frame 0 on.
+                assert!(recomposed);
+            }
+        }
+        assert_eq!(executed_modern, executed_classic);
+        assert_eq!(
+            modern.driver().sim().tick_index(),
+            classic.driver().sim().tick_index()
+        );
+        assert_eq!(
+            modern.driver().sim().state_hash(),
+            classic.driver().sim().state_hash()
+        );
+        assert_eq!(modern.scene_hash(), classic.scene_hash());
     }
 
     #[test]

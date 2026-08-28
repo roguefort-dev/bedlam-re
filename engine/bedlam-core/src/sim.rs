@@ -91,7 +91,13 @@ impl Default for SimConfig {
 /// clock, and contains no floats. Per-host-frame state (cursor, latches,
 /// volume, cooldown displays) deliberately does NOT live here — see
 /// `crate::frame::FrameState`.
-#[derive(Debug, PartialEq, Eq)]
+///
+/// `Clone` exists for PRESENTATION-BUCKET snapshots only (D17 b): the
+/// host keeps the previous-tick sim as the camera-interpolation
+/// endpoint (P6 high-refresh present, docs/RE-EXW-CAMERA.md §5). A
+/// clone is never advanced, never hashed into the trajectory, and
+/// never serialized — the snapshot/restore format is unchanged.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sim {
     tick: Tick,
     rng: Pcg32,

@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation"]
 
 [[phase]]
 id = "P7"
@@ -637,3 +637,67 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-high-refresh-interpolation — the P6 PRESENT-QUALITY unit (D207;
+# PLAN §6 P6 "time-based simulation ... Most high-refresh frames
+# carry zero new logic ticks; the frame is composed from latest
+# state + camera/scroll interpolation"): the composition policy of
+# the modern decoupled present, landing the D12 camera-lerp contract
+# (bedlam-render RenderInput prev_sim/alpha, until now rendered only
+# in the parity OFF configuration) at the HOST/PRESENT seam as a
+# presentation-bucket policy selected from the timing-lock arm of
+# the plumbed mode. RE FIRST (docs/RE-EXW-CAMERA.md, committed
+# before the implementation): the EXW camera/scroll traffic
+# collected — the Q5 pixel pair 004edde4/8, its tick-boundary
+# writers (robots() recenter 0x40b875..0x40b8c5 at
+# (cursor-240)*v/480 per tick; the FUN_004245c9 chase-camera
+# override), its frame-path readers (FUN_00403938 viewport renderer,
+# FUN_00401107 present fine-offsets) — plus the NEGATIVE: NO
+# sub-tick camera interpolation exists anywhere in the decoded
+# original (the Q5 fixed point is sub-PIXEL precision within
+# integer tick updates, never sub-TICK; the zoom Q16 magnifier
+# scales an already-rendered backbuffer). IMPLEMENTATION:
+# (a) bedlam-game host.rs — GameHost keeps a PRESENTATION-BUCKET
+# prev_sim clone (the sim as of the pump BEFORE the last executed
+# tick batch; D17 b: never advanced, never hashed, never
+# serialized; Sim gains a Clone derive for exactly this,
+# presentation-snapshots-only), render_now splits into
+# render_with(prev, alpha) with the PUMP path still the pure parity
+# configuration (prev=None, alpha=0 — zero canonical-chain
+# movement), and the new recompose(alpha) re-renders the presented
+# frame from LATEST state with the camera lerped (prev -> cur)*
+# alpha — CAMERA/SCROLL ONLY (sprites stay grid-quantized, the
+# 1996 sprites had no sub-pixel positions; sub-pixel blitting stays
+# default-off and out of scope), gated by camera_interpolation()
+# = the Decoupled arm ONLY: the CLASSIC frame-locked arm is a
+# NO-OP (it presents only after a tick — the exact tick-state
+# camera of the original, nothing to interpolate). (b)
+# bedlam-shell clock.rs — FixedStepClock::fraction(): the
+# ACCUMULATOR FRACTION of the pending logic tick (banked_ns /
+# PUMP_PERIOD_NS, saturated 0..=1; the one float in the integer
+# clock, presentation-side only). window.rs — present_camera_alpha
+# pairs the gate's host with the clock fraction and the present
+# site feeds it to GameHost::recompose BEFORE the upload: zero-tick
+# high-refresh frames now carry the interpolated camera sweep
+# (alpha 1.0 on the 60 Hz steady state — the modern arm adds no
+# latency on the original display class; the sweep only becomes
+# visible when the display outpaces the fixed tick rate). BOUNDS
+# KEPT: the shell fixed-step clock/pump contract and the hashed
+# trajectory untouched (pinned host-side by
+# camera_interpolation_never_touches_the_hashed_buckets and
+# platform-side by present_site_recompose_never_touches_the_hashed_
+# trajectory: same pump script with the modern arm recomposing at
+# the clock fractions = identical executed ticks, tick count, state
+# hash, scene hash); test surface = the ONE purist toggle, both
+# arms (per-axis mixes only as the axis-independence control); the
+# catalog stays EMPTY (a plan-named composition unit is not a
+# catalog entry). Command hermetic: --release --locked --offline,
+# no corpus key, no writable.
+[[gate]]
+id = "p6-high-refresh-interpolation"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-game/src/host.rs", "engine/bedlam-core/src/sim.rs", "engine/bedlam-shell/src/clock.rs", "engine/bedlam-shell/src/window.rs", "docs/RE-EXW-CAMERA.md", "docs/P6-MODERNIZATION.md", "docs/required-gates.toml"]

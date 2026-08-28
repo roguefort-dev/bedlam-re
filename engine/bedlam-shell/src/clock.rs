@@ -14,6 +14,10 @@
 //!
 //! The arithmetic is pure integer math (u128 rationals, no floats, no
 //! clock reads) so the exact banking/clamping behavior is unit-pinned.
+//! The ONE float in this module is [`FixedStepClock::fraction`] — a
+//! saturated presentation-side reading of the bank (the camera-
+//! interpolation alpha of the modern present, P6), which by design
+//! never feeds anything hashed.
 
 /// Host pump rate: 60 Hz (the D17 hashed tick grid; the FUN_0043d00b
 /// host frame pace).
@@ -26,6 +30,16 @@ const NS_PER_S: u64 = 1_000_000_000;
 /// 4 sub-ticks on the 240 Hz bedlam-core grid = exactly one 60 Hz
 /// tick, no banking inside the driver (the SHELL owns quantization).
 pub const SUBTICKS_PER_PUMP: u32 = 4;
+
+/// One pump period in nanoseconds — `NS_PER_S / HOST_HZ` integer
+/// division (16_666_666). The P6 present-quality companion of the
+/// pump contract: the ACCUMULATOR FRACTION of the pending tick (how
+/// far between the last executed logic tick and the present the
+/// vsync landed) is `banked_ns / PUMP_PERIOD_NS`, exposed as
+/// [`FixedStepClock::fraction`]. Presentation-bucket only (D17 b):
+/// the fraction feeds the camera interpolation of the modern
+/// decoupled present and can never reach the sim or any hash.
+pub const PUMP_PERIOD_NS: u64 = NS_PER_S / HOST_HZ as u64;
 
 /// Default anti-spiral clamp: at most 4 catch-up pumps per presented
 /// frame (~66 ms of sim per vsync) before surplus time is dropped.
@@ -98,6 +112,25 @@ impl FixedStepClock {
     /// frame (always < one pump period).
     pub fn banked_ns(&self) -> u128 {
         self.acc_ns
+    }
+
+    /// The ACCUMULATOR FRACTION of the pending logic tick, saturated
+    /// to 0.0..=1.0: `banked_ns / PUMP_PERIOD_NS` as f32 (the shell
+    /// half of the P6 camera-interpolation composition policy —
+    /// where the present lands between the last executed tick and
+    /// the next one, PLAN §6 / docs/RE-EXW-CAMERA.md §5).
+    ///
+    /// Presentation-bucket ONLY (D17 b): derived from MEASURED
+    /// display timing, so it is inherently non-replayable state and
+    /// never reaches the sim, a hash, or the replay log; consumers
+    /// (the camera lerp) saturate on use. The division is IEEE-754
+    /// single over exact small integers — bit-stable on every
+    /// platform. Saturation is part of the contract: the integer
+    /// floor period can leave a bank one nanosecond OVER the period
+    /// after an uneven cadence, and a clamped catch-up frame drops
+    /// banked time — the fraction simply pins to 1.0/0.0 there.
+    pub fn fraction(&self) -> f32 {
+        (self.acc_ns as f32 / PUMP_PERIOD_NS as f32).clamp(0.0, 1.0)
     }
 
     /// The anti-spiral clamp in pumps per presented frame.
@@ -198,5 +231,71 @@ mod tests {
     fn pump_dt_is_one_tick() {
         assert_eq!(SUBTICKS_PER_PUMP, 4);
         assert_eq!(HOST_HZ * SUBTICKS_PER_PUMP, 240);
+    }
+
+    /// The accumulator fraction sweeps the pending tick on a 240 Hz
+    /// display (the shape the camera interpolation consumes): the
+    /// first tick fires at frame 5 (4 vsyncs add only 16_666_664,
+    /// under the 16_666_666.67 threshold — the same cadence as
+    /// [`Self::hz240_display_mostly_zero_tick_frames`]), and the
+    /// zero-tick frames of each tick window sweep the bank through
+    /// ~0.25/0.5/0.75/1.0 of the pending tick.
+    #[test]
+    fn fraction_sweeps_the_pending_tick_at_240hz() {
+        let mut c = FixedStepClock::host();
+        for _ in 0..5 {
+            c.advance(4_166_666);
+        }
+        assert_eq!(c.banked_ns(), 4_166_664);
+        assert!((c.fraction() - 0.25).abs() < 1e-6);
+        assert_eq!(c.advance(4_166_666), 0);
+        assert_eq!(c.banked_ns(), 8_333_330);
+        assert!((c.fraction() - 0.5).abs() < 1e-6);
+        assert_eq!(c.advance(4_166_666), 0);
+        assert_eq!(c.banked_ns(), 12_499_996);
+        assert!((c.fraction() - 0.75).abs() < 1e-6);
+        assert_eq!(c.advance(4_166_666), 0);
+        assert_eq!(c.banked_ns(), 16_666_662);
+        assert!((c.fraction() - 1.0).abs() < 1e-6);
+        // The next vsync executes the tick and the sweep restarts
+        // from a near-quarter bank: the interpolated camera reaches
+        // the current state exactly as the next tick fires.
+        assert_eq!(c.advance(4_166_666), 1);
+        assert_eq!(c.banked_ns(), 4_166_662);
+        assert!((c.fraction() - 0.25).abs() < 1e-6);
+    }
+
+    /// A 60 Hz display (the original display class): the steady
+    /// state banks exactly the floor period (16_666_666 ns), so the
+    /// fraction reads 1.0 and the interpolated camera IS the parity
+    /// camera — the modern arm adds no latency on the original
+    /// cadence, interpolation only becomes visible when the display
+    /// outpaces the tick rate.
+    #[test]
+    fn fraction_is_one_on_the_60hz_steady_state() {
+        let mut c = FixedStepClock::host();
+        assert_eq!(c.advance(16_666_666), 0);
+        assert_eq!(c.advance(16_666_666), 1);
+        assert_eq!(c.banked_ns(), u128::from(PUMP_PERIOD_NS));
+        assert_eq!(c.fraction(), 1.0);
+        assert_eq!(c.advance(16_666_666), 1);
+        assert_eq!(c.fraction(), 1.0);
+    }
+
+    /// Saturation is part of the contract: an uneven cadence can
+    /// bank one nanosecond OVER the floor period (16_666_666 +
+    /// 16_666_667 = 33_333_333 leaves 16_666_667), and idle/zero
+    /// deltas read 0.0 — the fraction never extrapolates past either
+    /// endpoint.
+    #[test]
+    fn fraction_saturates_at_the_endpoints() {
+        let mut c = FixedStepClock::host();
+        assert_eq!(c.fraction(), 0.0, "idle clock is at the last tick");
+        assert_eq!(c.advance(0), 0);
+        assert_eq!(c.fraction(), 0.0);
+        assert_eq!(c.advance(16_666_666), 0, "banked, not due");
+        assert_eq!(c.advance(16_666_667), 1, "33_333_333 ns = 1 due");
+        assert_eq!(c.banked_ns(), 16_666_667u128, "one over the floor period");
+        assert_eq!(c.fraction(), 1.0, "saturated, never > 1");
     }
 }

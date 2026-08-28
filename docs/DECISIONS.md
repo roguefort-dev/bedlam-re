@@ -7518,3 +7518,98 @@ completion. A client death AFTER the completion rewrite is
 transport debris, not lost work; the D198 kill-window lesson is
 the mirror case (worker died BEFORE its bookkeeping, so the
 repair completes the bookkeeping instead).
+
+## D207 — 2026-08-28: P6/present-quality `p6-high-refresh-interpolation` — the composition policy of the modern decoupled present (camera/scroll-only interpolation at the accumulator fraction, selected from the timing-lock arm; classic no-op), wired as the SIXTH P6 required gate
+
+CONTEXT: PLAN §6 "time-based simulation" names the composition half of
+the high-refresh present explicitly: "Most high-refresh frames carry
+zero new logic ticks; the frame is composed from latest state +
+camera/scroll interpolation. Interpolation scoped to camera/scroll
+only — grid-quantized 1996 sprites had no sub-pixel positions." After
+D203/D205 the platform paces and gates the present, but zero-tick
+high-refresh frames still recompose from latest state only — the D12
+camera-lerp contract in bedlam-render (`RenderInput.prev_sim/alpha`)
+was reachable only in the parity-OFF test configuration.
+
+RE FIRST (stream-survival rule): `docs/RE-EXW-CAMERA.md` committed
+BEFORE the implementation. It is a synthesis unit — every camera/scroll
+fact re-anchored to EXW/EXD addresses and cross-referenced to the
+owning committed section: the Q5 pixel camera pair `_DAT_004edde4/8`
+(camtTile>>5 → `_DAT_004ddb24/28`; the iso sprite math `x>>8 − cam`),
+the scroll-source cursor pair `0x4eddc4/8` (ScrollUpdate `0x425ab9`
+per 100 Hz tick, clamp [9,631]×[9,463]; EXD mickeys twin), the
+tick-boundary writers (robots() recenter `0x40b875..0x40b8c5` at
+`(cursor−240)·v/480` per axis; the `FUN_004245c9` chase-camera
+override), the frame-path readers (`FUN_00403938` renderer,
+`FUN_00401107` present fine-offsets, the Q16 zoom magnifier) — plus
+the ONE new claim, scoped to the decoded frame path: NO sub-tick
+camera interpolation exists anywhere in the original (the Q5 fixed
+point is sub-PIXEL precision within integer tick updates, never
+sub-TICK; the zoom path scales an already-rendered backbuffer). That
+negative is what makes the modern blend a manufacture, not a
+reconstruction.
+
+DECISIONS:
+1. The policy is selected from the SAME timing-lock arm as the pacing
+   (D203): `GameHost::camera_interpolation()` = Decoupled arm only.
+   The CLASSIC frame-locked arm is a NO-OP by construction — it
+   presents only after a tick executes, so the presented image is
+   exactly the tick-state camera (the original's shape,
+   RE-EXW-CAMERA §4): nothing to interpolate. No new purist axis.
+2. Camera/scroll ONLY: the lerp feeds `camera_for` (integer-grid
+   quantized, scroll-bounds clamped, D12) and NOTHING else; sprites
+   stay grid-quantized; the sub-pixel blitter stays default-off and
+   out of scope. The between-ticks camera is the deliberate,
+   budgeted modernization manufacture (T2/T3 class), presentation
+   bucket only (D17 b).
+3. The ENDPOINT is a presentation-bucket `prev_sim` clone staged in
+   `pump_frame` (the sim as of the pump BEFORE the last executed
+   tick batch; zero-tick pumps keep the previous endpoint). `Sim`
+   gains a `Clone` derive for exactly this — documented
+   presentation-snapshots-only; never advanced, never hashed, never
+   serialized; the snapshot/restore format and every P5 pin are
+   byte-stable (FORMAT_VERSION unchanged).
+4. The PUMP PATH IS UNCHANGED: `render_now` splits into
+   `render_with(prev, alpha)` and the pump still calls it as the PURE
+   parity configuration (prev=None, alpha=0) — zero canonical-chain
+   movement. Interpolation enters ONLY through the new
+   `GameHost::recompose(alpha)` called at the PRESENT SITE.
+5. The ALPHA is the shell clock's accumulator fraction
+   (`FixedStepClock::fraction` = `banked_ns / PUMP_PERIOD_NS`,
+   saturated 0..=1 — the one float in the integer clock; derived from
+   measured display timing, so inherently non-replayable
+   presentation state). Consequence pinned by test: the 60 Hz steady
+   state banks exactly the floor period → fraction 1.0 → the
+   interpolated camera IS the parity camera — the modern arm adds no
+   latency on the original display class; the sweep becomes visible
+   only when the display outpaces the fixed tick rate (the case the
+   policy exists for). The shell fixed-step clock/pump contract is
+   untouched (the fraction is a read-only view of the existing bank).
+6. Movie/loading/boot/brief/menu planes REPLACE the scene pipeline,
+   so presented non-scene planes are interpolation-invariant by
+   construction (the interpolated camera only exists in the scene
+   path; no behavior change on any cutscene).
+7. GATE: `p6-high-refresh-interpolation` wired as the SIXTH P6
+   required gate — commands = bedlam-game --lib + bedlam-shell --lib,
+   both --release --locked --offline, hermetic. Test surface = the
+   ONE purist toggle, both arms (per-axis mixes only as the
+   axis-independence control), never the feature cross-product; the
+   catalog stays EMPTY (a plan-named composition unit is not a
+   catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-game --lib 152/0 (+4:
+policy selection both arms + the axis control, recompose
+modern-only/alpha endpoints/purity, recompose inert before the first
+executed tick, and the Determinism-Charter pin
+`camera_interpolation_never_touches_the_hashed_buckets`), bedlam-shell
+--lib 52/0 (+5: three `fraction` pins — the 240 Hz sweep, the 60 Hz
+steady 1.0, endpoint saturation — and the two present-site pins —
+selection arm + `present_site_recompose_never_touches_the_hashed_
+trajectory`), bedlam-core --lib 147/0 (Clone derive only) +
+hash_fixture + mission_corpus_gate green, bedlam-render determinism
+12/0; controls green: canonical_dump_gate 13/13, determinism 4/4,
+differ_gate 4/4, zone_mission_parity 5/5 (ZERO canonical-chain
+movement); check-p6-behavior-catalog OK (catalog still empty, R6
+satisfied with the sixth gate) + suite OK; fmt + clippy clean on the
+touched crates; MANIFEST clean before AND after every corpus read;
+no Ghidra run.
