@@ -8585,3 +8585,233 @@ the touched crate (the one pre-existing D210 test warning
 untouched); workspace cargo check clean; the workflow YAML parsed
 (pyyaml) with the intended triggers/jobs; MANIFEST clean before
 AND after every corpus read.
+
+## D220 — 2026-08-28: P6 phase-close `p6-phase-close` — the SURVEYED verdict (every PLAN §6 P6 acceptance bullet walked and dispositioned: gate-green landed vs EXPLICITLY deferred by plan text or decision — nothing silently dropped), P6 status flipped green in docs/required-gates.toml (P0-P6 green, P7 pending; plan_complete false exactly as designed), the bound phase verdict re-emitted at the flip commit (.state/P6-COMPLETE phase-complete-v1, producer required-gates-validator, ALL 14 P6 GATES GREEN)
+
+CONTEXT: the last P6 implementation gate closed at eb4981f (D219,
+the fourteenth; the bounded validator verdict status=passed, report
+.state/p6-framepacing-gates-report.json), so P6's remaining work is
+the phase-close bookkeeping ONLY — the p5-phase-close/f608207 +
+p4-phase-status-green/972748d pattern with ONE added duty this
+phase: the queue item requires the flip to be a SURVEYED verdict,
+not a rubber stamp — walk the PLAN §6 P6 acceptance surface bullet
+by bullet and record which bullets are gate-green landed versus
+EXPLICITLY deferred by plan text or decision. The survey:
+
+- ARCHITECTURE (PLAN "fixes land directly in the engine ... Classic
+  mode shrinks to a small purist toggle set covering feel-contested
+  items only ... Mode is one immutable ModeConfig injected at sim
+  construction; test surface = the purist toggles, not 2^features"):
+  LANDED. D200 = the contract scaffold (P6-MODERNIZATION.md: the
+  ModeConfig seam + the triage rubric verbatim + the catalog format
+  + the seeding policy; gate p6-modernization-scaffold); D201 = the
+  seam (engine/bedlam-core/src/mode.rs: private fields, no &mut
+  self, the with(axis, arm) builder, CONFIG-NOT-STATE — not hashed,
+  not serialized, FORMAT_VERSION unchanged; default MODERN per
+  plan; the initial purist toggle set = exactly the two plan-named
+  feel-contested axes, ids timing-lock/control-scheme in the
+  reserved namespace; landed INERT; gate p6-modeconfig-seam). Every
+  later P6 unit pinned the plan's test-surface rule (the ONE
+  toggle, both arms, never the feature cross-product).
+- TIME-BASED SIMULATION (accumulator decouples tick rate from
+  render; optional uncapped FPS; high-refresh first-class present
+  mode vsync-locked at any refresh 60/120/144/240/360Hz+ or
+  uncapped while logic stays fixed at the original tick rate and
+  display rate NEVER enters the sim; most high-refresh frames
+  carry zero new logic ticks, composed from latest state +
+  camera/scroll interpolation; interpolation scoped to
+  camera/scroll only): LANDED. D203 = PresentPacing
+  Decoupled/FrameLocked + should_present at the host/present seam
+  (the logic tick fixed in BOTH arms, the hashed buckets pinned
+  untouched; gate p6-timing-lock-surface); D205 = the platform
+  wiring (WindowOptions.mode into host_sim_config + the mapper,
+  the present loop honoring the gate; gate
+  p6-present-loop-wiring); D207 = the composition policy (the
+  presentation-bucket prev_sim endpoint + recompose(alpha) with the
+  camera/scroll-only lerp at the clock accumulator fraction,
+  classic a no-op; RE-EXW-CAMERA: NO sub-tick camera interpolation
+  exists in the original; gate p6-high-refresh-interpolation);
+  D208 = the optional uncapped present mode (Vsync platform knob
+  OUT of ModeConfig, arbitrated by the same timing-lock arm —
+  honored under Decoupled, declined by classic; gate
+  p6-uncapped-present-mode).
+- MODERN CONTROLS (WASD, 1-4 hotkeys, full remap, wheel zoom,
+  gamepad; original scheme selectable): LANDED. D204 =
+  ControlScheme from the immutable mode (Modern = the remappable
+  Bindings table — WASD + arrows move, 1-4 weapon hotkeys, Escape,
+  Space/Enter advance, bind/unbind; wheel ZOOM a presentation-bucket
+  accumulator in modern only; the default gamepad map in modern
+  only; Classic = the FIXED original EXW scheme, RE-EXW-INPUT secs
+  5-7 anchored; gate p6-control-scheme-surface) + the D205 plumbing
+  (the same plumbed mode selects the mapper). Boundary note
+  recorded in D204, not a plan-sentence gap: the classic table
+  covers the slots the InputFrame seam models; the original
+  digit/M/Space/P semantics join through the engine-side
+  button-map seam when it carries them — never invented.
+- BUG TRIAGE RUBRIC (crash/data-loss -> fix everywhere;
+  gameplay-coupled -> classic preserves / modern fixes; cosmetic ->
+  fix in modern; Fixed = deviation from the catalog established by
+  mechanically applying the rubric and recording regression
+  evidence — not vibes): LANDED as CONTRACT + MECHANISM. D200 = the
+  rubric verbatim in P6-MODERNIZATION.md AND as code in
+  tools/check-p6-behavior-catalog.py (the mechanical
+  class->disposition mapping, evidence discipline, purist-toggle
+  discipline, the bidirectional catalog_refs join with the P5
+  ledger, cross-artifact safety: P6 status green requires ZERO OPEN
+  entries). THE CATALOG IS DELIBERATELY EMPTY (D200 seeding
+  policy) — re-verified this unit: all 37 P5 ledger missions carry
+  catalog_refs = [] (machine-checked), P5 parity recorded zero
+  divergences and zero repro'd original-behavior observations worth
+  classifying, so NO entry is owed; zero-open is satisfied by zero
+  entries; entries land ONLY on recorded evidence with a repro.
+- RESOLUTION INDEPENDENCE + GPU RENDERING (wgpu presents at any
+  window/borderless/fullscreen resolution; PARITY keeps the
+  canonical 640x480 indexed frame + palette and GPU-scales it,
+  nearest/integer default with fit/fill/smooth options; ENHANCED
+  explicitly non-parity rendering supported world/UI passes
+  natively; bespoke responsive layouts 16:9 + 16:10 with the 16:10
+  authoring master + 16:9 safe region, other ratios
+  fit/letterbox/pillarbox; goldens canonical-frame based and
+  resolution-agnostic): LANDED. The wgpu parity pipeline is the
+  landed bedlam-platform surface (P3) + D210 window modes (gate
+  p6-window-modes); D215 = the scaling selection (ScaleMode
+  Integer/Fit/Fill + FilterMode Nearest/Linear riding
+  WindowOptions.present through pure functions, palette expansion
+  Original under every selection, goldens resolution-agnostic; gate
+  p6-scaling-options); D217 = the ENHANCED opener (PresentationMode
+  Parity default/Enhanced, the responsive layout contract as pure
+  data, the FIRST native pass = the mission-identity strip through
+  the already-landed parity-pipeline path over the game's own
+  glyphs/color/palette, zero new binary claims; gate
+  p6-enhanced-native-render); the enhanced-path CONTRACT itself
+  (dual-mode, non-parity flagged) landed at P3 (D17/D20,
+  bedlam-render). The plan's own wording is "renders SUPPORTED
+  world/UI passes" — an engine-capacity sentence, not a fixed pass
+  set: the opener landed the layout + the first pass; further
+  passes grow as separately scoped units on the same seam (future
+  work, D217's OUT OF SCOPE recorded).
+- SMACKER ("Smacker decodes native and GPU-scales"): LANDED — the
+  anchor re-verified this unit. The NATIVE decode is bedlam-smk
+  (the P3 pure-Rust decoder, SmkStream in bedlam-assets, D30)
+  driving the P5 MoviePlayer (engine/bedlam-game/src/movie.rs, D31:
+  exact-integer accumulator on the fixed 240Hz sub-tick grid; the
+  raster + palette flow through the canonical Frame seam, the PCM
+  through the mixer channel), and the presented movie frame rides
+  the SAME GPU present path as every canonical frame
+  (bedlam-platform gpu.rs upload_indexed + the D215 PresentConfig
+  scale) — native decode + GPU-scale, exactly the plan sentence.
+  (D217's "Smacker native decode" out-of-scope note referred to a
+  NEW ENHANCED-resolution movie pass, which this plan sentence does
+  not ask for.)
+- OPTIONAL HD ASSET PIPELINE (external pack, never bundled
+  originals; ComfyUI workflow presets + CLI wrapper for the four
+  categories; automated provenance/dimension/alpha/seam/perceptual
+  gates; runtime resolves by stable asset ID and falls back to
+  originals; engine renders text/controls/click targets; isolated +
+  hardware-profiled setup; "exact package/model pins come from
+  docs/RESEARCH-HD-ASSET-PIPELINE.md"): LANDED as the plan's own
+  named engineering prerequisite. D216 = that doc refreshed against
+  PRIMARY sources with every load-bearing pin re-verified first-hand
+  2026-08-28 + the machine-checkable hd-asset-pins-v1 registry +
+  the hd-pack-manifest-v1 provenance/manifest schema design + the
+  five-family fail-closed gate criteria design + the runtime
+  resolution seam sketch (stable logical asset ID, ALWAYS-silent
+  fallback, engine renders text/controls/click targets) + the
+  isolated setup posture (gate p6-hd-asset-research, the e0bc7fb
+  scaffold pattern with the bounded OFFLINE checker).
+- QoL (window modes, vsync control, volume mixers, save slots +
+  metadata + opt-in autosave): ALL LANDED. D210 window modes, D208
+  vsync control, D212 volume mixers (re-anchored on the original's
+  ONE shared master bus, RE-EXW-MUSIC sec 7; the gain applies on
+  the device-bound copy only, Q8, unity = bit-identical
+  passthrough), D213 save slots (SaveSlotId in the original's own
+  five-slot domain; the byte-faithful FUN_004473cd metadata over
+  RE-EXW-SAVE; AutosavePolicy NEVER-default-Off whose opt-in gate
+  mirrors the original's own — single-player campaign boundary
+  only; the 0x44ed98 census: THE SHIPPED GAME NEVER AUTOSAVES).
+  Gates p6-window-modes, p6-volume-mixers, p6-save-slots.
+- GAME-FEEL PROXIES + THE SCHEDULED BENCHMARK (input-to-present
+  <= 1 original frame; animation cadence matches at the active
+  display refresh, validated 60-240Hz+; no stutter under p95
+  frame-time budget; an automated scheduled CI benchmark checks
+  240Hz frame pacing against a pinned hardware profile and
+  thresholds, an unavailable profile creates no task and only
+  excludes that platform attestation): LANDED. D207 = the
+  latency/cadence floor (the modern arm adds NO latency on the
+  original display class — alpha 1.0 at the 60Hz steady state; the
+  fixed tick preserved in both arms); D219 = the instrument
+  (bedlam-shell pacing: pump cadence, present-gate answers, the
+  240Hz recompose alpha cadence, the nearest-rank p95 percentile;
+  the pinned PINNED_240HZ profile as committed data; the
+  skip-clean posture pure + mechanical; .github/workflows/
+  frame-pacing.yml daily cron + dispatch + path-filtered push/PR;
+  gate p6-frame-pacing-benchmark).
+
+EXPLICITLY DEFERRED (each by plan text or recorded decision — the
+complement the survey exists to make honest):
+1. THE EXTENDED VIEWPORT — plan text: "Extended viewport may show
+   more map and is a separately flagged gameplay change" — never a
+   silent default; D217 recorded it OUT OF SCOPE; no extended
+   viewport exists in the landed surface.
+2. THE SUB-PIXEL BLITTER — plan text: "may come later as an
+   explicit option with a feel tolerance; high refresh raises its
+   value but it stays default-off"; D207 scoped interpolation to
+   camera/scroll only (sprites grid-quantized) and kept the blitter
+   out of scope entirely — a default-off future option, not a P6
+   exit item.
+3. HD-PACK RUNTIME CONSUMPTION + GENERATED PACKS — the plan's own
+   "Optional HD asset pipeline" whose named prerequisite doc +
+   gate-design landed (D216, gate p6-hd-asset-research); the
+   runtime resolution seam + actual packs are future work per D216;
+   no pack ships, no original asset or derivative ever enters git.
+4. FURTHER ENHANCED NATIVE PASSES beyond the D217 opener (more
+   world/UI passes at presentation resolution) — the plan's
+   "supported passes" capacity sentence + D217's OUT OF SCOPE; the
+   layout contract + the seam + the first pass landed, further
+   passes are separately scoped units.
+5. THE NEW VERSIONED SAVE FORMAT WRITER — the QoL sentence (slots +
+   metadata + opt-in autosave) landed as the D213 surface, which
+   lands INERT; the engine write seam is future config-not-state
+   work per the D201 posture (a restore ADOPTS the saved session;
+   FORMAT_VERSION and every hash pin byte-stable; SAVED.BDL stays
+   import-only).
+
+DECISION: the flip is a SURVEYED verdict on that record — every
+PLAN §6 P6 acceptance bullet is gate-green landed or explicitly
+deferred above, nothing silently dropped — so docs/required-gates.toml
+P6 status flips pending->green (P0-P6 green, P7 pending; plan_complete
+stays false exactly as designed — P7 ports/packaging and the global
+P0-P7 battery remain), and the bound phase verdict is re-emitted AT
+THE FLIP COMMIT with the exact P4/P5-shaped command:
+/usr/bin/python3 tools/validate-required-gates.py --root . --report
+.state/p6-gates-report.json --phase P6 --phase-output
+.state/P6-COMPLETE (ALL 14 P6 GATES GREEN at the flip commit;
+.state/P6-COMPLETE = phase-complete-v1 re-bound to the flip commit +
+the manifest sha256, producer=required-gates-validator, emitted by
+the validator itself). The commit carrying this decision IS the flip
+commit, so the verdict binds to it.
+
+BOUNDS KEPT: no engine code, no gate-command changes, no catalog
+seeding (the catalog stays EMPTY — the D200 policy), no CI change;
+docs only (this decision + the one-line manifest flip); the tracked
+tree stays clean through the whole HEAD-bound battery (the
+D193/D194 lesson — STATE.md/NEXT.md edits parked until after the
+verdict); own Nudge-Worker trailer; no Ghidra run; MANIFEST clean
+before AND after every corpus read (the battery's corpus-reading
+gates run under the validator's own bwrap containment with the
+in-battery MANIFEST re-checks).
+
+VERIFIED (first-hand, this unit): the survey anchors re-checked
+in-tree (engine/bedlam-game/src/movie.rs D31 native decode +
+engine/bedlam-platform/src/gpu.rs upload_indexed + the D215
+PresentConfig scale = the Smacker sentence's path; the catalog
+EMPTY in docs/P6-BEHAVIOR-CATALOG.toml; all 37 P5 ledger
+catalog_refs = []; the D200-D219 anchors as cited);
+tools/check-p6-behavior-catalog.py OK WITH P6 STATUS GREEN (the
+cross-artifact rule: green requires zero open entries — satisfied
+by the empty catalog); the bounded --phase P6 validator verdict at
+the flip commit (this commit): status=passed, ALL 14 P6 GATES
+GREEN, every command rc=0 under bwrap containment, plan_complete
+false, .state/P6-COMPLETE phase-complete-v1 bound to this commit;
+the strict queue parser rc=0 on the rewritten NEXT.md; MANIFEST
+clean before AND after.

@@ -32,7 +32,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 
 [[phase]]
 id = "P6"
-status = "pending"
+status = "green"
 required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode", "p6-window-modes", "p6-volume-mixers", "p6-save-slots", "p6-scaling-options", "p6-hd-asset-research", "p6-enhanced-native-render", "p6-frame-pacing-benchmark"]
 
 [[phase]]
