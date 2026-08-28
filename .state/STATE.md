@@ -1,5 +1,34 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6
+    claim 1, commit f608207, PUSHED): P5 CLOSED IN THE MANIFEST —
+    docs/required-gates.toml P5 status pending->green (P0-P5
+    green, P6-P7 pending; plan_complete stays false exactly as
+    designed). The bound phase verdict RE-EMITTED at the flip
+    commit with the exact P4-shaped command: /usr/bin/python3
+    tools/validate-required-gates.py --root . --report
+    .state/p5-gates-report.json --phase P5 --phase-output
+    .state/P5-COMPLETE — ALL 8 P5 GATES GREEN under the
+    validator's bwrap containment (report status=passed,
+    bounded, offline; every command rc=0; .state/P5-COMPLETE
+    phase-complete-v1 re-bound to f608207 + manifest sha256
+    7efb1041..., producer=required-gates-validator, emitted by
+    the validator itself). Pre-flip first-hand checks:
+    check-p5-zone-ledger OK with P5 status green consistent (the
+    ledger 37/37 — the cross-artifact rule); the tracked tree
+    stayed clean through the whole HEAD-bound battery (the
+    D193/D194 lesson — STATE.md/NEXT.md edits parked until
+    after); MANIFEST clean before AND after every corpus read;
+    no Ghidra run. PHASE MOVES TO P6 (Modernization, PLAN §6):
+    first unit queued = p6-modernization-scaffold, the
+    ModeConfig + triage-rubric catalog opener (the D175
+    scaffold pattern).
+
+- Phase: P5 GREEN (manifest flip f608207 with the bound verdict re-emitted
+  there — all 8 P5 gates green, .state/P5-COMPLETE; the mission ledger
+  37/37, D199). P6 UNDERWAY (p6-modernization-scaffold queued). P7
+  pending; plan_complete false.
+
   - 2026-08-28 `p5-zone-g-disposition` COMPLETE (worker ebf6cfca
     claim 1, commits 0829187 + 65505ea + the bookkeeping commit,
     all PUSHED): ZONE G CLOSED — THE LEDGER READS 37/37, the LAST
@@ -515,10 +544,9 @@
     p5-zone-gate-scaffold, the 37-mission ledger (ZONEA M1;
     ZONEB..F M1-7 each; ZONEG M1 — corpus-enumerated read-only).
 
-- Phase: P4 GREEN (machine verdict 010f3e7; manifest flip 972748d with the
-  verdict re-emitted there — all 8 P4 gates green, .state/P4-COMPLETE).
-  P5 UNDERWAY (p5-zone-gate-scaffold queued). P6-P7 pending; plan_complete
-  false.
+  [historical phase line from 2026-08-27 (P4 GREEN / P5 UNDERWAY);
+  superseded 2026-08-28 by the P5 phase-close — the CURRENT phase
+  line lives at the top of this file]
 
   - 2026-08-26 D174 `p4-required-gates-manifest` COMPLETE (watchdog
     repair 364897 adopting the d7f85d22/579650c9/d6f199cb WIP,

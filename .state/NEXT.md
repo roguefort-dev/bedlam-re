@@ -10,30 +10,65 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-phase-close] [gate=p5-phase-close] P5
-   phase-close bookkeeping — the ledger reads 37/37 (D199: every
-   shipped mission green, every zone closed; the p5-zone-g gate is
-   wired, 16 gates all-green at 65505ea), so P5's remaining work is
-   the PHASE-CLOSE ONLY (the p4-phase-status-green pattern, commit
-   972748d precedent): flip the P5 phase status pending->green in
-   docs/required-gates.toml (P0-P5 green, P6-P7 pending;
-   plan_complete stays false exactly as designed), commit, then
-   re-emit the bound phase verdict at the new HEAD with the exact
-   P4-shaped command: /usr/bin/python3 tools/validate-required-gates.py
-   --root . --report .state/p5-gates-report.json --phase P5
-   --phase-output .state/P5-COMPLETE (all 8 P5 required gates must
-   be green at the flip commit under the validator's bwrap
-   containment; .state/P5-COMPLETE phase-complete-v1 re-bound to
-   the flip commit + manifest sha256, producer=required-gates-
-   validator, emitted by the validator itself). Update the
-   .state/STATE.md phase line, then queue the first P6 unit from
-   docs/PLAN.md section 6 so required work stays active. Bounds:
-   docs+state-only commit; .state/STATE.md is an s0-dispositions
-   tracked path — park uncommitted STATE.md edits while running
-   the HEAD-bound battery (the D193/D194 lesson); MANIFEST clean;
-   no Ghidra run; Nudge-Worker trailer.
+1. [READY] [id=p6-modernization-scaffold] [gate=p6-modernization-scaffold] P6
+   opener per PLAN §6 (Modernization — default modern, classic
+   available) — land the P6 decision surface + the FIRST P6
+   required gate (the D175 p5-zone-gate-scaffold pattern: the
+   machine-checkable contract lands BEFORE any behavior change;
+   the P6 required_gates list is currently empty and the P6 phase
+   status stays pending until its gates close). (a) DECISIONS.md
+   entry deciding the ModeConfig seam per PLAN §6 verbatim:
+   classic mode shrinks to a small purist toggle set covering
+   FEEL-CONTESTED items only (timing lock, control scheme,
+   selected original-behavior catalog entries classified for
+   preservation by a deterministic rubric and decision record,
+   with regression tests); mode is ONE immutable ModeConfig
+   injected at sim construction; the test surface is the purist
+   toggles, never the full feature cross-product. (b) Commit
+   docs/P6-MODERNIZATION.md: the bug-triage rubric VERBATIM from
+   PLAN §6 (crash/data-loss is fixed everywhere; gameplay-coupled
+   is classic-preserves and modern-fixes; cosmetic is fixed in
+   modern) plus the original-behavior catalog format that the P5
+   ledger catalog_refs feed — all 37 missions closed green with
+   EMPTY refs, so the seeding policy is part of the decision
+   (divergence-recorded entries only, or broader observed
+   original behaviors worth classifying). (c) The committed
+   catalog artifact + its fail-closed checker + hermetic test
+   suite wired as the FIRST P6 required_gates entry in
+   docs/required-gates.toml; the gates-validator suite must stay
+   green (re-run tools/test-validate-required-gates.py; the
+   validator's strict manifest key schema applies to the new
+   gate). Bounds: no engine change, no harness change; controls
+   green before AND after (check-p5-zone-ledger 37/37,
+   zone_mission_parity, canonical_dump_gate); MANIFEST clean
+   before and after any corpus read; no Ghidra run; commit with
+   the unit's own Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+1. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+   PUSHED, plus this bookkeeping commit): P5 phase-close
+   bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
+   pending->green in docs/required-gates.toml (P0-P5 green,
+   P6-P7 pending; plan_complete correctly stays false), then the
+   bound phase verdict RE-EMITTED at the flip commit with the
+   exact P4-shaped command: /usr/bin/python3
+   tools/validate-required-gates.py --root . --report
+   .state/p5-gates-report.json --phase P5 --phase-output
+   .state/P5-COMPLETE — ALL 8 P5 GATES GREEN at f608207 (report
+   status=passed, bounded, offline, containment
+   bwrap-unshare-net-pid-ro, every command rc=0;
+   .state/P5-COMPLETE phase-complete-v1 re-bound to the flip
+   commit + manifest sha256 7efb1041..., producer
+   required-gates-validator, emitted by the validator itself).
+   Pre-flip first-hand checks: check-p5-zone-ledger OK — the
+   ledger reads 37/37 (A 1/1, B..F 7/7 each, G 1/1) and the P5
+   status-green cross-artifact rule holds; the tracked tree
+   stayed clean through the whole HEAD-bound battery (the
+   D193/D194 lesson — STATE.md/NEXT.md edits parked until
+   after); MANIFEST clean before AND after every corpus read; no
+   Ghidra run. The queue now carries the P6 opener as the head
+   (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
+   per PLAN §6, so required work stays active.
+2. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
