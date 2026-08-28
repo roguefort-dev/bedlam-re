@@ -1,5 +1,33 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-bin-variant-g3` COMPLETE (worker cef2f815
+    claim 1, commits 51933bd + d4f7609, both PUSHED): the G3
+    zone-BIN variant question CLOSED with a NO-SWAP verdict — the
+    EXW runtime ALWAYS loads the zone-level MISSION{L}.BIN.
+    RE-anchored (§7c.9, objdump-only from the committed
+    exw/exd-text-objdump.txt, no Ghidra): build_mission_paths
+    @0x44670c builds path2 (the .CGR/.BIN/.MIN/.LNG/.LNK base) as
+    EDITOR\ZONE{L}\MISSION{L} unconditionally (zone letter twice,
+    no itoa, no conditional); the .BIN consumers are exactly two,
+    both on path2 (load_mission @0x41dcbc + the brief twin
+    FUN_0044661b @0x446644); 29-site path-buffer census + the
+    concat-private joined buffer 0x4dca4c + a whole-image string
+    census (no hardcoded ZONE?\MISSIONn.* literal); the EXD twin
+    agrees (0x2e5c3/0x58606, tag table byte-verified at linear
+    0x862a9). Data corroboration: only zone-level .MIN ship (16×
+    zone-BIN counts, never the variant counts 1443/1443/1120);
+    ZONEB/MISSION6.BIN ≡ ZONED/MISSION5.BIN byte-identical dev
+    bank. ENGINE UNTOUCHED (mission_asset_names verified correct);
+    census NOT re-pinned (the loads were already zone-level and
+    green); the three variant files are editor-side residue.
+    RESEARCH-8STREET OPEN QUESTIONS #3 ANSWERED (the 8street
+    gloss corrected); FORMATS-MISSION §0.2/§23; P5-ZONE-GATES
+    §6.2/G3 CLOSED; D184. Verified: gates-validator 22/22; MANIFEST
+    clean before AND after every corpus read; no Rust change; no
+    Ghidra run. P5: 1/37 missions green (11/37 load clean); the
+    zone-parity surface narrows to G2 — the Shooters unit is the
+    queue head, the Chasers unit queued second.
+
   - 2026-08-28 `p5-select-shell-g1` COMPLETE (worker 05e14378 claim
     1, commits a5c3a71 + 3d64ca5, both PUSHED): the G1 SELECT
     mission-choice shell LANDED — the census G1 class CLOSED: the
