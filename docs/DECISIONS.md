@@ -6841,3 +6841,45 @@ gates-validator suite 22/22 + the HEAD-bound battery all-green at
 the flip commit (14 gates), MANIFEST clean before AND after every
 corpus read, no Ghidra run. The remaining zones F/G are pure
 ZONES-append units in the §9/§10/§11 shape.
+
+## D197 (2026-08-28, p5-zone-f-disposition): ZONE F CLOSED — the
+FIFTH 7-mission zone flips green (the ledger 36/37). The unit is
+the THIRD PURE ZONES-APPEND disposition (the §9/§10/§11 shape,
+what zone G takes next): no harness change, no grammar change, no
+engine change — the suite-append commit 99bb89a adds the F spec
+(letter F, missions 1..=7, dims 100x100, committed flows NONE — no
+committed .scen stages zone F) and nothing else; the flip commit
+lands the §12 table, the ledger rows, the p5-zone-f gate and the
+29/37->36/37 test-pin re-baseline together (the §5 cross-artifact
+rule, the D28 fingerprint discipline). Zone-F-distinct facts:
+(a) zone F ships NO mission-number variant bank AT ALL — the only
+zone-F .BIN is the zone-level MISSIONF.BIN (1464679 B) — so the
+D184 no-swap verdict needs no variant caveat (unlike D/E, which
+each pinned a runtime-dead variant bank first) and the zone-level
+fetch-chain assert (criterion 2's EDITOR\ZONEF\MISSIONF.* pin) is
+the whole G3 leg; (b) the §7j.64 linear formula reaches its EDGE:
+linear = clamp(5*4+m-1, 1, 26) = m+19, M1..M7 = 20..26 — M7 = 26
+EXACTLY TOUCHES the clamp ceiling without a bite, the first
+mission of the ledger to reach it. Evidence: the generated battery
+IS the whole criterion-1 leg — P5FM1A..P5FM7C all 21 flows full
+declared budgets, dumps verify, two-run byte identity; NO engine
+gap surfaced on any ZONEF mission (the stopping condition did not
+trigger); the anchor statics re-derived from each TOT header
+(100x100, 160004 B — all seven) + the §7j.64 formula; the T1 spot
+table per zone (FULL_MASK arithmetic, start_score, the 25-name
+fetch chain, the seam domains at stage/zone-cell 6 incl.
+campaign-clears-select); criterion 6 stays FILE-LEVEL (the shipped
+slot-0 campaign IS ZONEB/MISSION1). P5-ZONE-GATES §12 documents
+the per-criterion table; the ledger flips ZONEF-MISSION1..7 green
+(catalog_refs = []); the p5-zone-f gate joins P5 required_gates
+(15 gates); the ledger test pin re-baselined 29/37 to 36/37 + the
+ZONEF 7/7 line (deliberate, same commit). Verified:
+zone_mission_parity 5/5 (five zones), bedlam-game suites green
+(canonical_dump_gate 13/13 — ZERO canonical chain movement;
+differ_gate 4/4; determinism; census 37/37 unchanged), bedlam-core
+green, fmt + clippy clean, check-p5-zone-ledger OK 36/37 +
+hermetic suite 18/18, gates-validator suite 22/22 + the HEAD-bound
+battery all-green at the flip commit (15 gates), MANIFEST clean
+before AND after every corpus read, no Ghidra run. The remaining
+zone G is a pure ZONES-append unit in the §9/§10/§11/§12 shape and
+closes the ledger.

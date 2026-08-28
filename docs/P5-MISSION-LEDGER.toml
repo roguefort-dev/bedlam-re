@@ -194,43 +194,43 @@ catalog_refs = []
 id = "ZONEF-MISSION1"
 zone = "F"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION2"
 zone = "F"
 mission = 2
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION3"
 zone = "F"
 mission = 3
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION4"
 zone = "F"
 mission = 4
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION5"
 zone = "F"
 mission = 5
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION6"
 zone = "F"
 mission = 6
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEF-MISSION7"
 zone = "F"
 mission = 7
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]
