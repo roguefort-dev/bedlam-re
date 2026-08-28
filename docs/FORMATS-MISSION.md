@@ -55,6 +55,15 @@ sites: the RUNTIME loads exactly `.TOT .DAT .CGR .BIN .MIN
 loader FUN_0041dc5a, tag table @0x4587d9..0x4587fc) plus
 `.NME .TRT .POS .BDG .MRK` (FUN_0041a4f8 etc.) from
 `EDITOR\ZONE{A..G}\MISSION{n}` paths (builder FUN_0044670c).
+**BIN/MIN/CGR naming is ZONE-LEVEL ONLY [VERIFIED 2026-08-28, EXW
+§7c.9]:** the builder's path2 (the base for `.CGR/.BIN/.MIN/
+.LNG/.LNK`) is always `EDITOR\ZONE{L}\MISSION{L}` — zone letter,
+no itoa, no conditional — while path1 (`.TOT/.DAT/.PAD/.MRK/.NME/
+.TRT/.POS/.BDG`) carries the mission number. The three shipped
+mission-number terrain banks `ZONEB/MISSION6.BIN`, `ZONED/
+MISSION5.BIN`, `ZONEE/MISSION6.BIN` are therefore **runtime-dead
+editor residue** (never opened by EXW or EXD; ZONEB M6 ≡ ZONED M5
+byte-identical, a shared dev bank).
 Six shipped EDITOR-tree extensions have ZERO references in any
 executable (case-insensitive byte census over EXW/EXD/EXE/
 DIRECTX ×3): **.BLD, .CTG, .COL, .MAP, .PTH, .TXT** — they are
@@ -719,6 +728,12 @@ Notable **negative** results (things that did NOT fit):
 - **Files:** exactly **7, ZONE-scoped** — `MISSION{A..G}.MIN` (the family
   loader builds `EDITOR\ZONE{X}\MISSION{X}.MIN` via the zone-stem path
   buffer; every mission load of a zone re-reads the same file). VERIFIED.
+  [G3 corroboration 2026-08-28, §7c.9: no mission-number .MIN ships and
+  the MIN entry count (16 B/entry) matches the ZONE-level BIN word0 in
+  every zone (B 1872, D 1450, E 1455 — never the ZONEB-M6/ZONED-M5/
+  ZONEE-M6 variant counts 1443/1443/1120); a runtime variant-BIN swap
+  would desync this walk — independent structural proof the zone bank is
+  the runtime one.]
 - **Sizes:** A/D 23200, B/G 29952, C 27888, E 23280, F 15824 — all 16-B
   entry multiples, all under the 0x7530 (30000) arena bank. **ZONEA and
   ZONED files are byte-identical.** VERIFIED.

@@ -6215,3 +6215,58 @@ until this watchdog repair.
    census_matches_pinned_table), fmt + clippy clean on the
    touched files, MANIFEST clean before AND after every corpus
    run, no Ghidra run.
+
+## D184 — 2026-08-28: P5 `p5-zone-bin-variant-g3` — the G3 zone-BIN variant question CLOSED with a NO-SWAP verdict: the EXW runtime always loads the zone-level `MISSION{L}.BIN` (path2 is letter-only, unconditional); the three shipped mission-number variant banks are runtime-dead editor residue; our engine rule VERIFIED, engine untouched, census NOT re-pinned
+
+Three decisions recorded:
+
+1. **THE VERDICT (EXW-anchored, RE-EXW-SIM §7c.9, [verified]).** The
+   open question (RESEARCH-8STREET OPEN QUESTIONS #3; the P5 census
+   G3 class, D176): do ZONEB/MISSION6, ZONED/MISSION5, ZONEE-MISSION6
+   load their mission-number `.BIN` variants instead of the zone-level
+   `MISSION{L}.BIN`? **NO.** `build_mission_paths`@0x44670c (walked
+   whole, 0x44670c..0x446907) builds path2@0x4dca8c — the base for
+   `.CGR/.BIN/.MIN/.LNG/.LNK` — as `EDITOR\`+`ZONE`+chr(0x40+
+   [0x4edd8c])+`\MISSION`+chr(0x40+[0x4edd8c]): the zone letter
+   appended TWICE, NO itoa leg, NO conditional (the function's only
+   branch remains the G1/D183 +5 on path1's mission number when
+   [0x4edb88]==2). The `.BIN` consumers are exactly two, both on
+   path2, both immediately after their own builder call: load_mission
+   @0x41dcbc (tag 0x4587e8) and the brief-reload twin FUN_0044661b
+   @0x446644 (tag 0x45979a). The joined name lives in the
+   concat-private 0x40-B buffer 0x4dca4c (one 3×0x40 family with the
+   two path buffers; only concat@0x41dbed touches it), opened
+   cwd+name "r+b" by open@0x41cd90. A complete 29-site path-buffer
+   census names every consumer: path2 = the five family tags only;
+   path1 = `.TOT/.DAT/.PAD` + the `.MRK/.NME/.TRT/.POS/.BDG` loader
+   family + the `GAMEGFX\BRF_{L}{level}` movie-name scratch reuse
+   (AFTER the twin's load — no interference) + the save-path reuse. A
+   whole-image ASCII string census finds NO hardcoded
+   `ZONE?\MISSIONn.*` literal. The EXD twin agrees (load block
+   0x2e5c3, builder 0x58606, `.BIN` on path2 0x92f34, tag table
+   byte-verified at linear 0x862a9, builder tail letter-only). Data
+   corroboration [DATA, read-only]: only zone-level `.MIN` ship, each
+   16× the ZONE-level BIN count (B 1872 / D 1450 / E 1455 — never the
+   variant counts 1443/1443/1120; a swap would desync the minimap
+   walk), and ZONEB/MISSION6.BIN ≡ ZONED/MISSION5.BIN byte-identical
+   (sha256 5735b08a3e08853e…, a shared dev/deathmatch bank).
+2. **THE DISPOSITION.** Engine untouched — `mission_asset_names`'
+   `{ZONE{L}/MISSION{L}.BIN}` rule is verified correct as-is. The
+   census is NOT re-pinned: its rows already loaded the zone-level
+   bank and stayed green; the G3 mention was a docs-side open flag,
+   now resolved (P5-ZONE-GATES §6.2/G3 CLOSED, §6.3 row notes, §6.4
+   rollup, confidence tags; FORMATS-MISSION §0.2 + §23 corroboration;
+   RESEARCH-8STREET §1.0/§1.1/§7 glosses corrected + OPEN QUESTIONS
+   #3 ANSWERED — the 8street "loaded only when the mission has its
+   own" gloss was wrong, now superseded by the EXW anchor per the
+   8street policy).
+3. **CONSEQUENCE.** The P5 zone-parity surface narrows to G2 (the
+   critter states + the S8 personnel/POI bank) — the G2 Shooters unit
+   is the queue head. No ledger movement, no canonical-chain
+   movement, no loader change (test- and docs-only unit).
+   Verified: objdump-only from the committed
+   ghidra-project/exw-text-objdump.txt + exd-text-objdump.txt (no
+   Ghidra run), tag/name string bytes read from the pinned binaries
+   with `sha256sum -c MANIFEST.sha256 --quiet` clean BEFORE and AFTER
+   every corpus-read, gates-validator 22/22 at the bookkeeping commit,
+   no Rust change (fmt/clippy N/A).
