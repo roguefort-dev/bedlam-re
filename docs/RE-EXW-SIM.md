@@ -11605,7 +11605,12 @@ facts [verified] against those artifacts unless tagged.
 ENGINE CONSEQUENCE (landed this unit): S7 accepted by
 stage_critters (kind 7, Q13 x/y + FIXED Q5 z 0xDF, heading =
 bounded_pick(0xFF), mode 3, species 1, hp = 2500+(2500·m)/27, the
-d-cascade count with its section-level d=1 roll); the k7 body
+d-cascade count — the roll modeled PER-RECORD per the landed-S3
+staging convention of §7j.72, so an EMPTY S7 consumes no draw
+[the asm's roll is section-level and unconditional at d=1,
+0x416e36..0x416e80 — a recorded engine deviation; fixing it for
+S3+S7 together would move the canonical S8 chain and is queued as
+its own re-baseline unit]); the k7 body
 lands as the dying-despawn + the ballistic landing machine (the
 fall-rate ramp, the floor landing test, the 8-debris/5-splash/
 24-row effects) + the 10-frame knock drift + the default scan +

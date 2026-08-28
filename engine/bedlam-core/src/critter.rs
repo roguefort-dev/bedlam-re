@@ -7,10 +7,11 @@
 //! stride, count cell 0x46cc2c) + the .NME staging host seam + the
 //! controller subset for the CORPUS KINDS — 1 (the wanderers,
 //! §7j.71), 2 (the sine-walk shooters, §7j.74), 3 (the chasers,
-//! §7j.75), 4 (seek steppers) and 5/6 (the shared mixed-AI body;
-//! §7j.72 landed the S6 staging — 26 corpus missions host it). The
-//! kind 7 controller body is a documented E-gap: `stage_critters`
-//! REFUSES an .NME hosting it (fail loud — never spawn a critter
+//! §7j.75), 4 (seek steppers), 5/6 (the shared mixed-AI body;
+//! §7j.72 landed the S6 staging — 26 corpus missions host it) and
+//! 7 (the close-combat beamers, §7j.76). The kind-8+ bodies and
+//! the S8 POI bank are the documented E-gaps: `stage_critters`
+//! REFUSES an .NME hosting them (fail loud — never spawn a critter
 //! whose brain is missing).
 //!
 //! Coordinate scales (§7j.23/2 + §7j.42's probe reads + §7j.74/4):
@@ -96,6 +97,29 @@ const HOLD_BAND: i32 = 0x80;
 /// 1..9 (0 is never read — the aim sets 9 first); step on
 /// {2,3,7,8,9} = 6 steps per 10 frames.
 const CHASER_WALK_TABLE: [i32; 10] = [0, 0, 1, 1, 0, 0, 0, 1, 1, 1];
+
+/// FUN_00412a19(aim, heading) — the kind-7 STEER helper
+/// [§7j.76/3, 0x412a19..0x412a49]: equal → 0; else δ :=
+/// wrap8(aim − heading) ∈ [1, 0xFF] (the +0x100/−0x100 wrap pair),
+/// and δ ≥ 0x80 → −1 else +1 — the ±1-per-substep turn toward the
+/// aim by the shorter arc (the 0x80 tie turns clockwise).
+fn closecombat_steer(aim: i32, heading: i32) -> i32 {
+    if aim == heading {
+        return 0;
+    }
+    let mut d = aim - heading;
+    if d < 0 {
+        d += 0x100;
+    }
+    if d > 0xFF {
+        d -= 0x100;
+    }
+    if d >= 0x80 {
+        -1
+    } else {
+        1
+    }
+}
 
 /// One critter record — the modeled subset of the 0x7E-stride
 /// frame [§7j.17 item 1, field names per §7j.42/1].
@@ -184,6 +208,26 @@ pub struct CritterRecord {
     pub fuse: u16,
     /// Facing word w@+0x72 (the idle 1/32 drift writes ±0xF).
     pub facing: u16,
+    /// Knock vx w@+0x74 — the kind-7 in-record knock vector (cos of
+    /// the away heading >>6, §7j.76/4); integrates ×2/frame in
+    /// modes 5/6. NOT serialized.
+    pub knock_vx: i32,
+    /// Knock vy w@+0x76 — the kind-7 vector's sin half. NOT
+    /// serialized.
+    pub knock_vy: i32,
+    /// Fall-rate ramp w@+0x78 — the kind-7 ballistic mode's
+    /// +2/frame gravity counter (capped 0x18, §7j.76/2); z −= it
+    /// each mode-6 substep. NOT serialized.
+    pub fall_rate: i32,
+    /// Sticky nearest-robot scan idx — the controller's [esp+0x2c]
+    /// stack cell, which persists across frames (re-read by the
+    /// engage tail after a mode-5 flip — §7j.76/2). NOT
+    /// serialized.
+    pub scan_robot: i32,
+    /// Sticky scan dist (px octile) — the [esp+0x28] cell; the
+    /// sentinel 10_000_000 before the first default-path substep.
+    /// NOT serialized.
+    pub scan_dist: i32,
 }
 
 impl Default for CritterRecord {
@@ -219,6 +263,11 @@ impl Default for CritterRecord {
             fuse: 0,
             facing: 0,
             spawn_heading: 0,
+            knock_vx: 0,
+            knock_vy: 0,
+            fall_rate: 0,
+            scan_robot: 0,
+            scan_dist: 10_000_000,
         }
     }
 }
@@ -230,9 +279,9 @@ impl MissionSim {
     /// load; E stages the identical bytes. Only the sections whose
     /// kinds the E controller models may spawn (S1 → kind 2, S2 →
     /// kind 1, S3 → kind 5, S4 → kind 4, S5 → kind 3, S6 →
-    /// kind 6); any other NON-EMPTY section is REFUSED (fail loud —
-    /// never spawn a brain the engine does not carry;
-    /// ZONEA/MISSION1 hosts exactly S3+S4).
+    /// kind 6, S7 → kind 7); any other NON-EMPTY section is
+    /// REFUSED (fail loud — never spawn a brain the engine does
+    /// not carry; ZONEA/MISSION1 hosts exactly S3+S4).
     ///
     /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72 + §7j.74/1]:
     /// S1 (state 2, 10-B recs, w1 = spawn base, w2 = variant flag,
@@ -267,7 +316,17 @@ impl MissionSim {
     /// (§7j.75/1). S6 (state 6, 8-B recs): ONE each at EVERY
     /// difficulty — the S3 stamps verbatim with kind 6 (mode 8,
     /// species 3, anim 5, heading 0x72, the w1-level floor probe,
-    /// hp base 0x96) and NO stream draws (§7j.72/1). **EVERY
+    /// hp base 0x96) and NO stream draws (§7j.72/1). S7 (state 7,
+    /// 6-B recs, w1/w2 = x/y tile): the d-cascade count {0→1,
+    /// 1→(RandA&1)+1, 2→2, ≥3→1} — the roll is ONE SECTION-LEVEL
+    /// draw at d=1 in the asm (§7j.76/1; the engine models it
+    /// per-record, the landed-S3 convention — an empty section
+    /// draws nothing) — x = w1·0x2000+0xF00, y = w2·0x2000+0xF00
+    /// (Q13), z FIXED 0xDF (Q5 by value — no probe, no home
+    /// stamps), anim 0, countdown 0, heading =
+    /// FUN_0041ec1c(0xFF) (the section's ONLY per-critter draw),
+    /// mode 3 (ACTIVE from frame 0), species 1, hp base 0x9C4
+    /// (§7j.76/1). **EVERY
     /// section's hp scalar = the LINEAR MISSION m [0x46ae8c]
     /// (§7j.64/D153, §7j.71/1, §7j.72/2) — hp = base+(base·m)/27;
     /// the engine reads `MissionSim::linear`** (staged by the
@@ -308,7 +367,7 @@ impl MissionSim {
         // S8 (personnel/POI) is a separate bank — the poi-bank T2
         // row's own unit. Any other unmodeled section refuses.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 4 && si != 5 {
+            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 4 && si != 5 && si != 6 {
                 return None;
             }
         }
@@ -529,6 +588,49 @@ impl MissionSim {
             });
             staged += 1;
         }
+        // S7 (§7j.76/1): the d-cascade count {0→1, 1→(RandA&1)+1,
+        // 2→2, ≥3→1}; per critter: Q13 tile x/y, FIXED Q5 z 0xDF (NO
+        // probe, NO home, NO bounds gate), anim/countdown 0, heading
+        // = the ONE per-critter bounded pick(0xFF), mode 3 ACTIVE,
+        // species 1 (the substep count), hp base 0x9C4 (2500).
+        // ENGINE CONVENTION: the asm computes the cascade — and at
+        // d=1 draws the roll — ONCE per SECTION, before the record
+        // loop (0x416e36..0x416e80 — even an EMPTY section draws at
+        // d=1); the engine models it PER-RECORD as the landed S3
+        // does (§7j.72's staging precedent), so an empty S7 consumes
+        // nothing and the canonical S8 chain stays byte-identical —
+        // the deviation is the recorded S3-family convention.
+        for rec in &sections[6] {
+            let s7_spawns = match d {
+                1 => (self.rand_a() & 1) as i32 + 1,
+                2 => 2,
+                _ => 1,
+            };
+            for _ in 0..s7_spawns {
+                if self.critters.len() >= CRITTER_SLOTS {
+                    break;
+                }
+                let x = rec[1] as i32 * 0x2000 + 0xF00;
+                let y = rec[2] as i32 * 0x2000 + 0xF00;
+                let base = 0x9C4i32;
+                let heading = self.bounded_pick(0xFF);
+                self.critters.push(CritterRecord {
+                    kind: 7,
+                    species: 1,
+                    hp: (base + base * m / 27) as i16, // §7j.76/1 — the m cell, as every section
+                    mode: 3,
+                    anim: 0,
+                    countdown: 0,
+                    heading,
+                    presence: true,
+                    x,
+                    y,
+                    z: 0xDF,
+                    ..Default::default()
+                });
+                staged += 1;
+            }
+        }
         Some(staged)
     }
 
@@ -626,6 +728,7 @@ impl MissionSim {
                 3 => self.critter_chaser(idx, respawn),
                 4 => self.critter_state4(idx, respawn),
                 5 | 6 => self.critter_mixed(idx, respawn, leash),
+                7 => self.critter_closecombat(idx),
                 // Staging refuses the other kinds (module doc).
                 _ => {}
             }
@@ -1414,6 +1517,237 @@ impl MissionSim {
         (z - floor).abs() <= 3
     }
 
+    /// The kind-7 CLOSE-COMBAT body (0x412f52..0x41367c) [§7j.76/2].
+    /// `species` substeps per frame (≡ 1 for S7 — nothing
+    /// re-stamps it). Mode machine: 7 dying (the FIFTH frame
+    /// despawns — hp 0 + presence 0), 6 ballistic (the in-record
+    /// knock triple ×2/frame + the +2/frame fall-rate ramp cap
+    /// 0x18, the floor landing test, the 8-debris/5-splash/24-row
+    /// landing effects), 5 knock drift (10 frames of the same ×2
+    /// drift, then mode 3), and the DEFAULT scan for every other
+    /// mode (a dormant k7 is inert). The post-mode tail re-reads
+    /// the mode: mode 3 ∧ sticky scan-dist < 0x320 → the engage —
+    /// a nonzero countdown only decrements; else the ±1 STEER at
+    /// the live scan robot (low-byte-scrubbed critter side), the
+    /// cos/sin>>6 move with the ≥1/edge clamps, and the
+    /// two-conjunct fire gate (scan-dist < 0x50 ∧ the
+    /// (frame+idx) modulo 0x1F/0xF/0x7 by difficulty, ≥3 never)
+    /// stamping the stationary z=6 TTL-0x18 beam 0x69 and setting
+    /// the 6-frame recharge. The whole approach/fire chain is
+    /// DRAW-FREE (§7j.76/5); the 0x69 tick/impact is the
+    /// enemy_tick E-gap (§7j.50).
+    fn critter_closecombat(&mut self, idx: usize) {
+        let species = self.critters[idx].species as i32;
+        let mut substep = 0i32;
+        while substep < species {
+            match self.critters[idx].mode {
+                7 => {
+                    // DYING (0x413618): countdown++ then > 4 →
+                    // hp 0 ∧ presence 0 (the substep loop runs on).
+                    self.critters[idx].countdown += 1;
+                    if self.critters[idx].countdown > 4 {
+                        let c = &mut self.critters[idx];
+                        c.hp = 0;
+                        c.presence = false;
+                    }
+                }
+                6 => {
+                    // BALLISTIC (0x412f99): x/y += knock·2, z −= the
+                    // fall rate (which ramps +2 to the 0x18 cap),
+                    // the ≥1/edge clamps, the floor probe, the
+                    // landing test.
+                    let c = &self.critters[idx];
+                    let mut nx = c.x + c.knock_vx * 2;
+                    let mut ny = c.y + c.knock_vy * 2;
+                    let mut nz = c.z - c.fall_rate;
+                    let rate = if c.fall_rate < 0x18 {
+                        c.fall_rate + 2
+                    } else {
+                        c.fall_rate
+                    };
+                    let (w, h) = self.terrain.size();
+                    if nx < 1 {
+                        nx = 1;
+                    }
+                    if ny < 1 {
+                        ny = 1;
+                    }
+                    if nx >> 13 >= w {
+                        nx = (w << 13) - 1;
+                    }
+                    if ny >> 13 >= h {
+                        ny = (h << 13) - 1;
+                    }
+                    if nz < 1 {
+                        nz = 1;
+                    }
+                    self.critters[idx].fall_rate = rate;
+                    let floor = self.terrain.floor_z(nx >> 8, ny >> 8, nz);
+                    if floor < nz && nz != 1 {
+                        // The NO-LANDING path (0x413249): write the
+                        // clamped triple, stay mode 6.
+                        let c = &mut self.critters[idx];
+                        c.x = nx;
+                        c.y = ny;
+                        c.z = nz;
+                    } else {
+                        // LAND (0x4130c5): z := the post-clamp floor,
+                        // mode 7 + countdown 0, then the effects.
+                        let z = floor.max(1);
+                        {
+                            let c = &mut self.critters[idx];
+                            c.z = z;
+                            c.mode = 7;
+                            c.countdown = 0;
+                        }
+                        let (x, y) = (self.critters[idx].x, self.critters[idx].y);
+                        // (a) 8 debris — 3 draws each (kind 6, the
+                        // staggered delay = the loop counter).
+                        for i in 1..=8 {
+                            let jz = z + (self.rand_a() & 0xF) as i32;
+                            let jy = (y >> 8) + (self.rand_a() & 0x3F) as i32 - 0x1F;
+                            let jx = (x >> 8) + (self.rand_a() & 0x3F) as i32 - 0x1F;
+                            let _ = self.stage_debris(jx, jy, jz, 6, i, -1);
+                        }
+                        // (b) 5 splash tiles — 2 draws each, the
+                        // z level clamp (z>>5)+2 ≤ 7, delay = the
+                        // counter.
+                        let sz = ((z >> 5) + 2).min(7);
+                        for i in 1..=5 {
+                            let sy = (y >> 13) + (self.rand_a() & 3) as i32 - 2;
+                            let sx = (x >> 13) + (self.rand_a() & 3) as i32 - 2;
+                            let _ = self.stage_splash(sx, sy, sz, i as u16);
+                        }
+                        // (c) 24 effect rows (FUN_0041a14f).
+                        self.stage_effect_rows(x, y, (z + 0x15) * 0x100, 0x18);
+                    }
+                }
+                5 => {
+                    // KNOCK DRIFT (0x413303): countdown++ FIRST;
+                    // > 10 → mode 3 + countdown 0 (the tail engage
+                    // runs this substep on the STALE scan cells);
+                    // else the ×2 drift with the ≥1/edge clamps.
+                    self.critters[idx].countdown += 1;
+                    if self.critters[idx].countdown > 10 {
+                        let c = &mut self.critters[idx];
+                        c.mode = 3;
+                        c.countdown = 0;
+                    } else {
+                        let c = &self.critters[idx];
+                        let mut nx = c.x + c.knock_vx * 2;
+                        let mut ny = c.y + c.knock_vy * 2;
+                        let (w, h) = self.terrain.size();
+                        if nx < 1 {
+                            nx = 1;
+                        }
+                        if ny < 1 {
+                            ny = 1;
+                        }
+                        if nx >> 13 >= w {
+                            nx = (w << 13) - 1;
+                        }
+                        if ny >> 13 >= h {
+                            ny = (h << 13) - 1;
+                        }
+                        let c = &mut self.critters[idx];
+                        c.x = nx;
+                        c.y = ny;
+                    }
+                }
+                _ => {
+                    // The DEFAULT (0x4133c0): the scan alone — the
+                    // sticky cells mirror the original's stack
+                    // frame (they survive into later frames).
+                    let (x, y) = (self.critters[idx].x, self.critters[idx].y);
+                    let (robot, dist) = self.nearest_robot(x >> 8, y >> 8);
+                    let c = &mut self.critters[idx];
+                    c.scan_robot = robot as i32;
+                    c.scan_dist = dist;
+                }
+            }
+            // The post-mode tail (0x4133e7): re-read the mode;
+            // engage only mode 3 inside the flat 800-px gate.
+            if self.critters[idx].mode == 3 && self.critters[idx].scan_dist < 0x320 {
+                if self.critters[idx].countdown != 0 {
+                    self.critters[idx].countdown -= 1;
+                } else {
+                    // (a) AIM + STEER at the LIVE scan robot (the
+                    // critter side low-byte-scrubbed).
+                    let t = self.critters[idx].scan_robot;
+                    if let Some(r) = self.robots.get(t as usize) {
+                        let c = &self.critters[idx];
+                        let dx = r.pos_x - (c.x & !0xFF);
+                        let dy = r.pos_y - (c.y & !0xFF);
+                        let aim = self.angles.angle_byte(dx, dy) as i32;
+                        let steer = closecombat_steer(aim, c.heading & 0xFF);
+                        let heading = (c.heading + steer) & 0xFF;
+                        // (b) MOVE — cos/sin>>6, no wall probe.
+                        let (mx, my) = match (
+                            self.angles.sine_word(heading as u16),
+                            self.angles.sine_word(((heading - 0x40) & 0xFF) as u16),
+                        ) {
+                            (Some(cos), Some(sin)) => {
+                                ((cos as i16 as i32) >> 6, (sin as i16 as i32) >> 6)
+                            }
+                            _ => (0, 0),
+                        };
+                        let mut nx = c.x + mx;
+                        let mut ny = c.y + my;
+                        let (w, h) = self.terrain.size();
+                        if nx < 1 {
+                            nx = 1;
+                        }
+                        if ny < 1 {
+                            ny = 1;
+                        }
+                        if nx >> 13 >= w {
+                            nx = (w << 13) - 1;
+                        }
+                        if ny >> 13 >= h {
+                            ny = (h << 13) - 1;
+                        }
+                        let c = &mut self.critters[idx];
+                        c.heading = heading;
+                        c.x = nx;
+                        c.y = ny;
+                        // (c) THE FIRE GATE: point-blank ∧ the
+                        // (frame+idx) modulo by difficulty (≥3
+                        // never fires — 0x413575's fall-through).
+                        let dist = self.critters[idx].scan_dist;
+                        if dist < 0x50 {
+                            let phase = self.frame() as i32 + idx as i32;
+                            let fire_frame = match self.difficulty {
+                                0 => phase & 0x1F == 0,
+                                1 => phase & 0xF == 0,
+                                2 => phase & 0x7 == 0,
+                                _ => false,
+                            };
+                            if fire_frame {
+                                // (d) THE STAMP: the stationary beam
+                                // (z LITERAL 6, TTL 0x18, no
+                                // velocity) + the 6-frame recharge.
+                                if let Some(slot) = self.enemy_free_slot() {
+                                    let c = &self.critters[idx];
+                                    self.enemy_bank[slot] = EnemyProjectile {
+                                        kind: 0x69,
+                                        x: c.x,
+                                        y: c.y,
+                                        z: 6,
+                                        vx: 0,
+                                        vy: 0,
+                                        vz: 0,
+                                    };
+                                    self.critters[idx].countdown = 6;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            substep += 1;
+        }
+    }
+
     /// The kind-4 body (the seek steppers, 0x414079) [§7j.42/2]:
     /// `species` substeps per frame; the mode ladder
     /// {0xB dormant, 7 dying, 6 ballistic, 5 stun-rise} then the
@@ -2174,7 +2508,32 @@ impl MissionSim {
                 c.hp -= dmg as i16;
                 c.attacker = owner as i16;
                 c.fuse = 1;
-                if matches!(c.kind, 4..=7) {
+                if c.kind == 7 {
+                    // The kind-7 knock lane [§7j.76/4]: the impact
+                    // pair stages the shooter (as k4/k5/6), then the
+                    // AWAY heading + the in-record vector, then mode
+                    // 5 + countdown 0 (no juice roll — k7 has none).
+                    c.impact_x = x << 8;
+                    c.impact_y = y << 8;
+                    let away = (self.angles.angle_byte(c.x - (x << 8), c.y - (y << 8)) as i32
+                        + 0x80)
+                        & 0xFF;
+                    let h = away as u16;
+                    let (vx, vy) = match (
+                        self.angles.sine_word(h),
+                        self.angles.sine_word(((h as i32 - 0x40) & 0xFF) as u16),
+                    ) {
+                        (Some(cos), Some(sin)) => {
+                            ((cos as i16 as i32) >> 6, (sin as i16 as i32) >> 6)
+                        }
+                        _ => (0, 0),
+                    };
+                    c.heading = away;
+                    c.knock_vx = vx;
+                    c.knock_vy = vy;
+                    c.mode = 5;
+                    c.countdown = 0;
+                } else if matches!(c.kind, 4..=7) {
                     c.mode = 5;
                     c.impact_x = x << 8;
                     c.impact_y = y << 8;
@@ -2701,6 +3060,11 @@ mod debris_physics_tests {
             home_z: 0,
             spawn_heading: 0,
             seek_sector: 0,
+            knock_vx: 0,
+            knock_vy: 0,
+            fall_rate: 0,
+            scan_robot: 0,
+            scan_dist: 10_000_000,
         });
     }
 
@@ -3558,5 +3922,462 @@ mod chaser_tests {
             a.enemy_bank.iter().any(|p| p.kind == 0x67),
             "the chaser engaged"
         );
+    }
+}
+
+#[cfg(test)]
+mod closecombat_tests {
+    //! The kind-7 lane (§7j.76): the S7 loader walk (the d-cascade
+    //! count, the FIXED z, the one heading draw) and the k7 body
+    //! (the steer-aim-move engage, the two-conjunct 0x69 fire with
+    //! the 6-frame recharge, the knock drift, the ballistic landing
+    //! machine, the 5-frame dying despawn, the stale-scan flip).
+
+    use super::*;
+
+    fn sim_flat(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let angles = crate::mission::AngleTable::from_thresholds(&[0u16; 64]).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5; // m = 5 → S7 hp = 2500 + 12500/27 = 2962
+        sim
+    }
+
+    fn sim_sine(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let mut words = vec![0i16; 256];
+        for (a, w) in words.iter_mut().enumerate() {
+            *w = ((a as f64 * core::f64::consts::PI / 128.0).sin() * 32767.0).round() as i16;
+        }
+        let angles = crate::mission::AngleTable::from_sintable_words(&words).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5;
+        sim
+    }
+
+    fn push_robot(sim: &mut MissionSim, x: i32, y: i32, z: i32, alive: bool) {
+        sim.robots.push(crate::mission::Robot {
+            pos_x: x,
+            pos_y: y,
+            z,
+            state: 0,
+            dir_byte: 0,
+            facing: crate::mission::FACING_NONE,
+            anim: 0,
+            variant: 0,
+            probe_z: [z as u16; 8],
+            stop_dist: 0,
+            target: None,
+            alive,
+            armor: 0,
+            hit_flash: 0,
+            alarm: 0,
+            alarm_ctr: 0,
+            shield: 0,
+            shield_charges: 0,
+            shield_boost: 0,
+            battery: 0,
+            armor_pool: 0,
+            kind: 0,
+            death_flag: 0,
+            hp: 5000,
+            weapons: [crate::weapon::WeaponSlot::default(); 7],
+            weapon_mask: 0,
+            drop_countdown: 0,
+        });
+    }
+
+    /// An .NME hosting `n` S7 records (w1/w2 = x/y tile); every
+    /// other section empty.
+    fn s7_nme(n: u16, w1: u16, w2: u16) -> Vec<u8> {
+        let mut b = Vec::new();
+        for _ in 0..6 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S1..S6
+        }
+        b.extend_from_slice(&n.to_le_bytes()); // S7 count
+        for _ in 0..n {
+            for w in [1u16, w1, w2] {
+                b.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        b.extend_from_slice(&0u16.to_le_bytes()); // S8
+        b
+    }
+
+    fn push_closecombat(sim: &mut MissionSim, x: i32, y: i32, z: i32) {
+        sim.critters.push(CritterRecord {
+            kind: 7,
+            species: 1,
+            hp: 2500,
+            mode: 3,
+            x,
+            y,
+            z,
+            heading: 0,
+            presence: true,
+            ..Default::default()
+        });
+    }
+
+    #[test]
+    fn s7_staging_cascade_counts_and_stamps() {
+        // §7j.76/1: the d-cascade {0→1, 1→1+RandA&1, 2→2, ≥3→1} —
+        // NOT max(d,1) — with the FIXED Q5 z 0xDF, mode 3 ACTIVE,
+        // species 1, hp 2500+(2500·m)/27, heading = the bounded
+        // pick(0xFF) ∈ [0, 0xFE], anim/countdown 0, NO home.
+        let mut sim = sim_flat(0x9C4);
+        let staged = sim
+            .stage_critters(&s7_nme(2, 10, 12), 2)
+            .expect("S7 staged");
+        assert_eq!(staged, 4, "d=2 → TWO each");
+        assert_eq!(sim.critters.len(), 4);
+        for c in sim.critters() {
+            assert_eq!(c.kind, 7);
+            assert_eq!(c.species, 1, "the substep count");
+            assert_eq!(c.mode, 3, "ACTIVE approach — never dormant");
+            assert_eq!(c.anim, 0);
+            assert_eq!(c.countdown, 0);
+            assert_eq!(c.x, 10 * 0x2000 + 0xF00);
+            assert_eq!(c.y, 12 * 0x2000 + 0xF00);
+            assert_eq!(c.z, 0xDF, "the FIXED level-6-top constant");
+            assert_eq!(c.hp, (2500 + 2500 * 5 / 27) as i16, "m=5");
+            assert!((0..=0xFE).contains(&c.heading), "bounded pick(0xFF)");
+            assert_eq!(c.home_x, 0, "S7 stages NO home");
+            assert!(c.presence);
+        }
+        // d=0 and d≥3 → ONE each.
+        let mut sim = sim_flat(0x9C5);
+        assert_eq!(sim.stage_critters(&s7_nme(1, 8, 8), 0), Some(1));
+        let mut sim = sim_flat(0x9C6);
+        assert_eq!(sim.stage_critters(&s7_nme(1, 8, 8), 4), Some(1));
+    }
+
+    #[test]
+    fn s7_staging_draw_budget_roll_plus_heading() {
+        // §7j.76/1: at d=1 the section consumes the ONE count roll
+        // (RandA&1) then ONE heading draw per critter — in order.
+        let mut a = sim_flat(0xBEA);
+        let mut b = sim_flat(0xBEA);
+        a.stage_critters(&s7_nme(1, 10, 10), 1).expect("staged");
+        let roll = (b.rand_a() & 1) as i32 + 1;
+        for _ in 0..roll {
+            b.bounded_pick(0xFF);
+        }
+        assert_eq!(a.rand_a_state(), b.rand_a_state());
+        assert_eq!(a.critters.len(), roll as usize);
+        // At d≠1 NO roll draw: d=0 → exactly one heading draw.
+        let mut a = sim_flat(0xBEB);
+        let mut b = sim_flat(0xBEB);
+        a.stage_critters(&s7_nme(1, 10, 10), 0).expect("staged");
+        b.bounded_pick(0xFF);
+        assert_eq!(a.rand_a_state(), b.rand_a_state());
+    }
+
+    #[test]
+    fn s7_engage_steers_moves_and_fires_the_beam() {
+        // §7j.76/2: the engage — steer ±1 toward the aim, the
+        // cos/sin>>6 move, and at point-blank (<0x50) on a fire
+        // frame the stationary 0x69 stamp {z LITERAL 6} + the
+        // 6-frame recharge; recharging frames only decrement.
+        let mut sim = sim_sine(0x69);
+        sim.set_difficulty(2);
+        // A robot 0x30 px east of the critter (Q13 pos).
+        push_robot(
+            &mut sim,
+            10 * 0x2000 + 0x30 * 0x100,
+            10 * 0x2000,
+            0x5F,
+            true,
+        );
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x5F);
+        let (x0, y0, h0) = (
+            sim.critters[0].x,
+            sim.critters[0].y,
+            sim.critters[0].heading,
+        );
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        // Aim east (0x40): heading steers +1 from 0.
+        assert_eq!(c.heading, (h0 + 1) & 0xFF, "the ±1 steer toward the aim");
+        // The move — the SAME table pair the engine reads (the
+        // test's sine-indexed table swaps the cos/sin roles).
+        let expected_dx = ((sim.angles.sine_word(1).unwrap() as i16) >> 6) as i32;
+        let expected_dy = ((sim.angles.sine_word(0xC1).unwrap() as i16) >> 6) as i32;
+        assert_eq!(c.x, x0 + expected_dx, "the eb65>>6 step");
+        assert_eq!(c.y, y0 + expected_dy, "the eb77>>6 step");
+        // phase = frame(0) + idx(0) = 0 → &7 == 0 at d=2 → FIRE.
+        let p = &sim.enemy_bank[0];
+        assert_eq!(p.kind, 0x69, "the BEAM");
+        assert_eq!(p.x, c.x, "the post-move Q13 x");
+        assert_eq!(p.y, c.y);
+        assert_eq!(p.z, 6, "the LITERAL z — NOT Q13");
+        assert_eq!((p.vx, p.vy, p.vz), (0, 0, 0), "the beam is stationary");
+        assert_eq!(c.countdown, 6, "the fire recharge");
+        // Recharge: 6 frames of countdown-only (no second beam —
+        // the bank holds exactly one 0x69).
+        for _ in 0..6 {
+            sim.critter_tick();
+        }
+        assert_eq!(sim.enemy_bank.iter().filter(|p| p.kind == 0x69).count(), 1);
+        assert_eq!(sim.critters[0].countdown, 0);
+    }
+
+    #[test]
+    fn s7_fire_phase_modulo_and_the_d3_never_arm() {
+        // §7j.76/2c: the gate keys on (frame + idx) — idx 1 at
+        // phase 1 fires at NO difficulty 0..2; d≥3 never fires.
+        let mut sim = sim_sine(0x6A);
+        push_robot(&mut sim, 0x2000 + 0x30 * 0x100, 0x2000, 0x5F, true);
+        push_closecombat(&mut sim, 0, 0, 0x5F); // idx 0 dummy
+        push_closecombat(&mut sim, 0x2000, 0x2000, 0x5F); // idx 1
+        sim.set_difficulty(2);
+        for _ in 0..3 {
+            sim.critter_tick();
+        }
+        assert!(
+            !sim.enemy_bank.iter().any(|p| p.kind == 0x69),
+            "phase 1 &7 ≠ 0 — no fire"
+        );
+        // The ≥3 arm: nothing ever fires (0x413575's fall-through).
+        let mut sim = sim_sine(0x6B);
+        push_robot(&mut sim, 0x2000 + 0x30 * 0x100, 0x2000, 0x5F, true);
+        push_closecombat(&mut sim, 0x2000, 0x2000, 0x5F);
+        sim.set_difficulty(3);
+        for _ in 0..24 {
+            sim.critter_tick();
+        }
+        assert!(!sim.enemy_bank.iter().any(|p| p.kind == 0x69));
+        assert_eq!(sim.critters[0].countdown, 0, "no recharge staged either");
+    }
+
+    #[test]
+    fn s7_engage_chain_draw_free() {
+        // §7j.76/5: the approach/move/fire chain consumes ZERO
+        // stream draws (the S7 staging alone draws).
+        let mut sim = sim_sine(0x6C);
+        sim.set_difficulty(0);
+        push_robot(
+            &mut sim,
+            10 * 0x2000 + 0x30 * 0x100,
+            10 * 0x2000,
+            0x5F,
+            true,
+        );
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x5F);
+        let s0 = sim.rand_a_state();
+        for _ in 0..24 {
+            sim.critter_tick();
+        }
+        assert_eq!(sim.rand_a_state(), s0, "the k7 engage chain is draw-free");
+        assert!(sim.enemy_bank.iter().any(|p| p.kind == 0x69));
+    }
+
+    #[test]
+    fn s7_knock_lane_away_heading_inrecord_vector_mode5() {
+        // §7j.76/4: the weapon hit stamps the impact pair, the AWAY
+        // heading, the in-record vx/vy = cos/sin>>6, mode 5 +
+        // countdown 0 — then 10 drift frames at ×2 and the flip to
+        // mode 3.
+        let mut sim = sim_sine(0x6D);
+        // The shooter 0x10 px WEST of the critter: aim(crit −
+        // shooter) = east 0x40 → the away heading = WEST 0xC0.
+        let cx = 10 * 0x2000;
+        let cy = 10 * 0x2000;
+        push_closecombat(&mut sim, cx, cy, 0xDF);
+        let sx = (cx >> 8) - 0x10;
+        let sy = cy >> 8;
+        sim.critter_hit_test(sx, sy, 0xDF, 0x1, 0);
+        let c = &sim.critters[0];
+        assert!(c.hp > 0, "the hit is non-lethal (hp 2500)");
+        assert_eq!(c.mode, 5, "the knock drift");
+        assert_eq!(c.countdown, 0);
+        // The away heading = angle(crit − shooter) + 0x80 — west on
+        // the test table (the east aim lands 0x3F, one shy of the
+        // 0x40 cardinal — the threshold resolution).
+        let aim = sim.angles.angle_byte(cx - (sx << 8), cy - (sy << 8)) as i32;
+        let away = (aim + 0x80) & 0xFF;
+        assert_eq!(c.heading, away, "the AWAY heading");
+        assert!((0x80..=0xC0).contains(&away), "pointing west");
+        assert!(c.knock_vx < 0, "knocked west");
+        assert!(c.knock_vy >= 0, "the test-table's south lean");
+        assert_eq!(c.impact_x, sx << 8);
+        assert_eq!(c.impact_y, sy << 8);
+        let (x0, vx) = (c.x, c.knock_vx);
+        // Drift frame: x += vx·2, countdown 1.
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.countdown, 1);
+        assert_eq!(c.x, x0 + vx * 2);
+        // TEN drift frames (countdown 1..10), the 11th flips.
+        for _ in 0..10 {
+            sim.critter_tick();
+        }
+        assert_eq!(sim.critters[0].mode, 3, "back to approach");
+        assert_eq!(sim.critters[0].countdown, 0);
+    }
+
+    #[test]
+    fn s7_stale_scan_cells_after_the_drift_flip() {
+        // §7j.76/2: the mode-5→3 flip does NOT rescan — the tail
+        // engages against the STICKY scan cells (the original's
+        // stack-frame leftover); the sentinel dist means no engage.
+        let mut sim = sim_sine(0x6E);
+        sim.set_difficulty(2);
+        push_robot(
+            &mut sim,
+            10 * 0x2000 + 0x30 * 0x100,
+            10 * 0x2000,
+            0x5F,
+            true,
+        );
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x5F);
+        sim.critters[0].mode = 5;
+        sim.critters[0].countdown = 10; // flips to 3 THIS tick
+        sim.critters[0].scan_dist = 10_000_000; // never scanned
+        sim.critter_tick();
+        assert_eq!(sim.critters[0].mode, 3);
+        assert!(
+            !sim.enemy_bank.iter().any(|p| p.kind == 0x69),
+            "the stale sentinel skips the engage"
+        );
+        // With a STALE close scan cell (a leftover from an earlier
+        // frame): the flip substep fires on the stale dist.
+        let mut sim = sim_sine(0x6F);
+        sim.set_difficulty(2);
+        push_robot(
+            &mut sim,
+            10 * 0x2000 + 0x30 * 0x100,
+            10 * 0x2000,
+            0x5F,
+            true,
+        );
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x5F);
+        sim.critters[0].mode = 5;
+        sim.critters[0].countdown = 10;
+        sim.critters[0].scan_robot = 0;
+        sim.critters[0].scan_dist = 0x30;
+        sim.critter_tick();
+        assert!(sim.enemy_bank.iter().any(|p| p.kind == 0x69));
+    }
+
+    #[test]
+    fn s7_ballistic_landing_machine() {
+        // §7j.76/2: mode 6 — z −= the fall rate (the +2 ramp capped
+        // 0x18), the ×2 knock drift, the floor landing test, the
+        // landing effects (8 debris + 5 splash + 24 effect rows),
+        // then mode 7.
+        let mut sim = sim_sine(0x70);
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x100);
+        let c = &mut sim.critters[0];
+        c.mode = 6;
+        c.fall_rate = 0x18;
+        c.knock_vx = 4;
+        c.knock_vy = -2;
+        let (x0, y0) = (c.x, c.y);
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        // The flat-world floor at every cell = 2·0x20+0x1F = 0x5F;
+        // z 0x100 − 0x18 = 0xE8 > floor → the NO-LANDING path.
+        assert_eq!(c.mode, 6, "still falling");
+        assert_eq!(c.z, 0x100 - 0x18);
+        assert_eq!(c.x, x0 + 8, "the ×2 knock drift");
+        assert_eq!(c.y, y0 - 4);
+        assert_eq!(c.fall_rate, 0x18, "the ramp cap");
+        // Fall to the floor: 0xE8 − 4·0x18 = 0x78 > 0x5F (no land),
+        // 0x60 > 0x5F (no land), 0x70 − 0x18 = 0x58 ≤ 0x5F → LAND.
+        for _ in 0..5 {
+            sim.critter_tick();
+        }
+        assert_eq!(sim.critters[0].z, 0x70);
+        assert_eq!(sim.critters[0].mode, 6);
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert_eq!(c.mode, 7, "the landing flips to dying");
+        assert_eq!(c.z, 0x5F, "settled on the floor");
+        assert_eq!(c.countdown, 0);
+        // The landing effects — verified by the DRAW BUDGET
+        // (§7j.76/2,5): 8 debris × 3 draws + 5 splash × 2 (the
+        // stagers themselves draw nothing for kind 6/splash) + 24
+        // rows × 3 draws + 16 overflow-id picks (rows 8..23) = 122.
+        assert_eq!(sim.debris.iter().filter(|d| d.active).count(), 8);
+        assert_eq!(sim.splashes.iter().filter(|s| s.age != 0).count(), 5);
+        let mut b = sim_sine(0x70);
+        for _ in 0..122 {
+            b.rand_a();
+        }
+        assert_eq!(
+            sim.rand_a_state(),
+            b.rand_a_state(),
+            "8·3 + 5·2 + 24·3 + 16 — the landing's whole draw budget"
+        );
+    }
+
+    #[test]
+    fn s7_dying_despawns_on_the_fifth_frame() {
+        // §7j.76/2: mode 7 — countdown++ and > 4 → hp 0 ∧ presence
+        // 0 (the FIFTH dying frame).
+        let mut sim = sim_flat(0x71);
+        push_closecombat(&mut sim, 0x2000, 0x2000, 0x5F);
+        sim.critters[0].mode = 7;
+        for _ in 0..4 {
+            sim.critter_tick();
+            assert!(sim.critters[0].presence, "frames 1..4 hold");
+        }
+        sim.critter_tick();
+        let c = &sim.critters[0];
+        assert!(!c.presence, "the fifth frame despawns");
+        assert_eq!(c.hp, 0);
+        assert_eq!(c.countdown, 5);
+    }
+
+    #[test]
+    fn s7_dormant_is_inert() {
+        // §7j.76/2: every mode but 3/5/6/7 has NO body — a dormant
+        // (0xB) k7 only runs the scan (no stamps, no draws).
+        let mut sim = sim_sine(0x72);
+        push_robot(
+            &mut sim,
+            10 * 0x2000 + 0x30 * 0x100,
+            10 * 0x2000,
+            0x5F,
+            true,
+        );
+        push_closecombat(&mut sim, 10 * 0x2000, 10 * 0x2000, 0x5F);
+        sim.critters[0].mode = 0xB;
+        let s0 = sim.rand_a_state();
+        let (x0, y0) = (sim.critters[0].x, sim.critters[0].y);
+        for _ in 0..8 {
+            sim.critter_tick();
+        }
+        let c = &sim.critters[0];
+        assert_eq!((c.x, c.y), (x0, y0), "inert");
+        assert_eq!(c.mode, 0xB);
+        assert_eq!(sim.rand_a_state(), s0, "draw-free");
+        assert_eq!(c.scan_dist, 0x30, "the scan still runs (sticky cells)");
+    }
+
+    #[test]
+    fn steer_is_the_shortest_arc_pm1() {
+        // §7j.76/3: FUN_00412a19 — equal → 0; wrap the delta into
+        // [1, 0xFF]; ≥ 0x80 → −1 else +1.
+        assert_eq!(closecombat_steer(0x40, 0x40), 0);
+        assert_eq!(closecombat_steer(0x41, 0x40), 1);
+        assert_eq!(closecombat_steer(0xBF, 0x40), 1, "0x7F short arc = +1");
+        assert_eq!(closecombat_steer(0xC0, 0x40), -1, "the 0x80 tie turns −1");
+        assert_eq!(closecombat_steer(0x00, 0x40), -1);
+        assert_eq!(closecombat_steer(0x41, 0x00), 1);
+        assert_eq!(closecombat_steer(0xFF, 0x00), -1);
+        assert_eq!(closecombat_steer(0x01, 0x00), 1);
+        assert_eq!(closecombat_steer(0x3F, 0x40), -1);
     }
 }
