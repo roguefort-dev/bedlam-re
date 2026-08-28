@@ -6270,3 +6270,45 @@ Three decisions recorded:
    with `sha256sum -c MANIFEST.sha256 --quiet` clean BEFORE and AFTER
    every corpus-read, gates-validator 22/22 at the bookkeeping commit,
    no Rust change (fmt/clippy N/A).
+
+## D185 — 2026-08-28: autonomy `queue-parser-completion-window` — the strict queue preflight stops classifying the AGENTS.md step-7 completion window (owner claim over a departed id, wrapper alive in its grace or dead awaiting the reaper) as INVALID-DEADLOCKED; capability-based classification instead, launch bindings stay byte-strict (watchdog repair 1253812)
+
+1. **THE FAULT.** The step-7 contract has the WORKER rewrite NEXT.md
+   (claimed item → ## Done) as its final act, but the canonical
+   `N-owner.claim` is released only by the wrapper epilogue after model
+   exit (or by the reaper's DEAD_CLAIM_TTL if the wrapper was killed).
+   Between those two events the claim names an id that left the active
+   set — the sanctioned completion shape — yet
+   `nudge-free-items.py::validate_v2_claim` failed the WHOLE preflight
+   on it (`active queue identity mismatch`, rc=2), so any controller
+   tick inside the window forced a watchdog repair. Five forced
+   repairs in 28h (2026-08-27 22:17, 23:36; 2026-08-28 00:50, 01:55,
+   02:32); the 02:32 one stopped the wrapper's unit mid-grace, killing
+   the epilogue that would have unlinked the claim — orphaning
+   `1-owner.claim` over a COMPLETED and PUSHED unit (`7326236`,
+   worker cef2f815) and wedging the loop: preflight rc=2, reaper TTL
+   not yet aged, controller refusing idle/spawn.
+2. **THE FIX (capability-based, parser-side).** An OWNER claim whose
+   (id, gate) left the active set no longer fails the preflight: an
+   unlocked one has no ownership capability and never suppresses work
+   (the pre-existing `claimed_ordinals` contract); a locked one only
+   holds its slot (→ CLAIMED-RUNNING) while its live wrapper finishes
+   inside the wrapper-enforced boundary grace (900s, D-b0059c4). The
+   reaper still deletes the residue after DEAD_CLAIM_TTL, and
+   `resume_glm` reaps with TTL=0 before restarting the controller.
+   UNCHANGED and still fatal: reservation claims with a departed
+   identity (they authorize a launch), and any owner claim whose
+   identity MATCHES the active queue but whose body/hash binding does
+   not (tamper protection). Precedent: identity-less lock-v1 owner
+   claims never bound to item identity at all.
+3. **CONSEQUENCE.** A controller tick that lands inside a completion
+   window now sees RUNNABLE/CLAIMED-RUNNING and stands down or spawns
+   the successor — no repair cycle, no wrapper kill, no orphaned
+   claim. Regression-pinned in test-lock-v2-adversarial.sh
+   (`case_completion_claim_is_not_a_deadlock`: unlocked residue →
+   RUNNABLE; locked window → CLAIMED-RUNNING; reservation mismatch →
+   fatal; matching-identity hash tamper → fatal). All ten automation
+   suites green (queue, claims, controller, watchdog, adversarial,
+   waiting-automatic, automation-failure, remaining-gaps,
+   final-hardening, systemd-unit-sync). No queue-grammar change, no
+   claim-file changes, no game-data access.

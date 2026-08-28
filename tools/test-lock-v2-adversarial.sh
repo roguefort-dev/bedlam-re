@@ -420,6 +420,58 @@ EOF
   grep -q "completion rewrite" "$plan/.state/nudge.log"
 }
 
+case_completion_claim_is_not_a_deadlock() {
+  # The 2026-08-28 02:32 watchdog repair: AGENTS.md step-7 has the WORKER
+  # rewrite NEXT.md (move its claimed item to ## Done) as its final act, so
+  # between that rewrite and the wrapper's claim-release epilogue (model
+  # exit, or the reaper's DEAD_CLAIM_TTL for a killed wrapper) the canonical
+  # owner claim names an id that is no longer active. The strict parser
+  # treated exactly that sanctioned window as INVALID-DEADLOCKED, so any
+  # controller tick inside it forced a repair that killed the wrapper
+  # mid-grace and orphaned the very claim its epilogue was about to release
+  # (five forced repairs in 28h, the last orphaning 1-owner.claim over a
+  # completed+pushed unit). Classify by capability instead: an unlocked
+  # departed owner claim suppresses nothing, a locked one holds its slot
+  # while a live wrapper finishes, and everything that still binds a launch
+  # (reservations, or an owner whose identity MATCHES the active queue)
+  # stays byte-strict.
+  local plan="$TMP/completion-parse" session=completion-parse holder
+  make_repo "$plan"
+  write_v2 "$plan/.state/claims/1-$session.claim" "$session" stable-one gate-one
+  mv "$plan/.state/claims/1-$session.claim" "$plan/.state/claims/1-owner.claim"
+  cat > "$plan/.state/NEXT.md" <<'QEOF'
+# NEXT
+
+## Now
+1. [READY] [id=successor-one] [gate=gate-two] queued successor task
+
+## Done
+1. DONE (fixture): stable-one/gate-one completed by the model.
+QEOF
+  # Post-crash residue: wrapper dead, flock free. The departed claim must not
+  # fail the preflight or suppress work on the successor.
+  [ "$($PARSER "$plan/.state/NEXT.md" "$plan/.state/claims" --state-v1)" = "RUNNABLE 1" ]
+  # Sanctioned window: a live wrapper still holds the flock. The claim holds
+  # the slot (CLAIMED-RUNNING) instead of deadlocking the controller.
+  flock "$plan/.state/claims/1-owner.claim" sleep 5 &
+  holder=$!
+  for _ in $(seq 1 300); do ! flock -n "$plan/.state/claims/1-owner.claim" true 2>/dev/null && break; sleep 0.01; done
+  [ "$($PARSER "$plan/.state/NEXT.md" "$plan/.state/claims" --state-v1)" = "CLAIMED-RUNNING" ]
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+  # A reservation (launch authorization) with a departed identity stays fatal.
+  rm -f "$plan/.state/claims/1-owner.claim"
+  write_v2 "$plan/.state/claims/1-$session.claim" "$session" stable-one gate-one
+  ! $PARSER "$plan/.state/NEXT.md" "$plan/.state/claims" --state-v1 2>/dev/null
+  # An owner claim whose identity still matches the queue but whose hash
+  # binding does not stays fatal (tamper protection is not weakened).
+  rm -f "$plan/.state/claims/1-$session.claim"
+  write_v2 "$plan/.state/claims/1-$session.claim" "$session" successor-one gate-two
+  mv "$plan/.state/claims/1-$session.claim" "$plan/.state/claims/1-owner.claim"
+  sed -i "s/^queue_sha256=.*/queue_sha256=$(printf '0%.0s' $(seq 1 64))/" "$plan/.state/claims/1-owner.claim"
+  ! $PARSER "$plan/.state/NEXT.md" "$plan/.state/claims" --state-v1 2>/dev/null
+}
+
 case_identityless_v1_new_launch() {
   local plan="$TMP/v1-new" session=v1-new
   make_repo "$plan"
@@ -744,6 +796,7 @@ done
 run_case 'PAUSE appearing after model start terminates the model' case_launch_mutation pause
 run_case 'launch mutation promptly kills child and grandchild process tree' case_launch_mutation_kills_process_tree
 run_case 'worker completion rewrite ends the run cleanly' case_completion_rewrite_clean_exit
+run_case 'completion-window owner claim never deadlocks the parser' case_completion_claim_is_not_a_deadlock
 run_case 'identity-less lock-v1 cannot launch a newly current ordinal' case_identityless_v1_new_launch
 run_case 'locked lock-v1 remains compatible only as running migration state' case_locked_v1_migration_retained
 run_case 'invalid item/session are rejected before path construction' case_invalid_identifiers_before_paths

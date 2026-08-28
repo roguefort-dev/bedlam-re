@@ -543,7 +543,23 @@ def validate_v2_claim(
         fail(f"malformed lock-v2 claim {name}: future timestamp")
     current = active.get(ordinal)
     if current is None or (values["id"], values["gate"]) != current[:2]:
-        fail(f"lock-v2 claim {name}: active queue identity mismatch")
+        if session is not None:
+            # A reservation authorizes a launch and must stay bound to the
+            # exact active identity it was issued against.
+            fail(f"lock-v2 claim {name}: active queue identity mismatch")
+        # An owner claim whose (id, gate) left the active set is the AGENTS.md
+        # step-7 completion-rewrite shape (the claimed item moved to ## Done, a
+        # successor may now hold the ordinal) or its post-crash residue. It
+        # authorizes nothing here: an unlocked owner claim never suppresses
+        # work (see claimed_ordinals), and a locked one only holds its slot
+        # while its live wrapper finishes inside the wrapper-enforced
+        # boundary grace; the reaper deletes the residue after DEAD_CLAIM_TTL.
+        # Failing the whole preflight on this state turned every legitimate
+        # completion window into a false INVALID-DEADLOCKED (watchdog repairs
+        # 2026-08-27 22:17/23:36, 2026-08-28 00:50/01:55/02:32 - the last one
+        # killed the wrapper mid-grace and orphaned the very claim its
+        # epilogue was about to release).
+        return
     device, inode, queue_sha256 = queue_identity
     if (
         values["body_sha256"] != current[2]
