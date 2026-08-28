@@ -357,8 +357,9 @@ carries a gap: every G2 class LANDED (the S8 personnel/POI bank was
 the last, D191) and the G1 SELECT shell LANDED (D183, §6.2 — the ten
 MP missions stage through `stage_select_mission`). Zone parity work
 continues per PLAN §6 as the per-zone DISPOSITION evidence (the §7
-ZONEA pattern: criterion tables + ledger flips + gate wiring), not
-loader work. The census test stays as the regression guard:
+ZONEA pattern and its §8 ZONEB generalization: criterion tables +
+ledger flips + gate wiring), not loader work. The census test stays
+as the regression guard:
 any loader change that flips a row fails
 `census_matches_pinned_table` until deliberately re-baselined (the D28
 fingerprint rule).
@@ -410,3 +411,70 @@ B–G open on the DISPOSITION side only: every G2 class LANDED (G1
 2026-08-28 D183, Shooters D185, Chasers D186, CloseCombat D189,
 Personnel D191 — G2 EMPTY); the per-zone parity evidence is the
 queued unit family).
+
+---
+
+## 8. Zone B closure — ZONEB-MISSION1..7 green (D192)
+
+**Provenance:** unit `p5-zone-b-disposition` (D192), run 2026-08-28
+at HEAD `2980e8b`+ (the harness-generalization commit; the evidence
+and the ledger flip land together per the §5 cross-artifact rule).
+This is the FIRST 7-mission zone closure and the first run of the
+GENERALIZED disposition harness: the D178 ZONEA shape (§7) lifted to
+a `ZoneSpec`-parameterized suite (`engine/bedlam-game/tests/
+zone_mission_parity.rs`), so the §1 criterion table is executable
+for ANY ledger mission. The scenario grammar gained the v1.8
+`mission = <1..=7>` key (requires `zone`; 6..7 pinned to zones B..F,
+the SELECT write-arm domain) and the canonical runner's staging arm
+selects the seam per the §7j.73 finding: campaigns 1–5 through the
+CAMPAIGN episode-slot mask (the completion mask whose
+first-uncompleted sub is exactly the mission — `mask =
+(1<<(m−1))−1`), the MP files 6–7 through the SELECT write pair
+(`stage_select_mission` — carried ALONE; campaign staging would
+clear it).
+
+**The per-mission criterion-1 battery** (generated per mission, all
+seven executed): flow A = boot→mission (S0 shape, TS anchor), flow B
+= 120-frame passive steady state, flow C = the 48-frame
+FULL-STAGING run (the mission's own destroy + pickup + platforms +
+critters families armed together). Plus the zone's committed flows
+S5/S5B/S5C (ZONEB/MISSION1, the set-2 pickup corridors — their
+per-flow chains stay pinned by `canonical_dump_gate`). Every run
+completes its full declared frame budget, the dump verifies, and a
+re-run is byte-identical (chain digest included). ZERO canonical
+chain movement: `canonical_dump_gate` 13/13 unchanged.
+
+**The §1 criterion table, per criterion** (every command below is in
+the `p5-zone-b` gate, executable offline under the validator's bwrap
+containment):
+
+| # | Criterion | Evidence (machine) | Status |
+|---|-----------|--------------------|--------|
+| 1 | scripted flows crash-free | `zone_mission_parity::zone_scripted_flows_complete_crash_free`: the committed ZONEB flows + the 3-flow battery × ALL SEVEN missions (campaigns through the episode-slot mask seam, M6-7 through the SELECT pair) — full budgets, dumps verify, two-run byte identity | GREEN |
+| 2 | T1 rules vs RE | `zone_mission_parity::zone_anchor_ts_statics_rederived_from_tot` (per mission: the TOT header dims straight off the file — 100×100, 4+16·w·h = 160004 — and the anchor TS/T0 statics: map-wh, money 3500, difficulty 1, zone 1, mode 0, mission n, linear = clamp(5·(2−2)+n−1, 1, 26), all re-derived INDEPENDENTLY of the engine's output) + `zone_t1_rules_spot` (the FULL_MASK/first-unset-bit selection arithmetic, the §7j.64/C economy seed, the per-mission 25-name fetch chain with the ZONE-LEVEL CGR/BIN/LNK pin of D184 — even where MISSION6.BIN ships, it is runtime-dead — and the staging-seam domains: the mask→mission inversion, the SELECT write-pair domain, campaign-clears-select) + the deep oracle suites as gate commands (`mission_corpus_gate`) | GREEN |
+| 3 | perceptual frame checks at key moments (T2) | Diagnostic band per §0b: thresholds + owner feel sign-off, never pixel-exact gates. Machine stand-in at the key moments: the two-run anchor/frame byte identity of criterion 1 (identical transcripts at mission start and through the flows). Owner feel sign-off stays the operator diagnostic process (not machine-checkable, not a gate). | GREEN (machine band) — sign-off tracked as operator diagnostic |
+| 4 | differ structural spot-check | The structural decode contract inside criterion 1 (anchor frame 0, monotone frame_no, record count = declared budget + 1, the scenario id riding the header) + `differ_gate` (the cross-channel differ on the real S0/S1 dumps: PASS-WITH-NOTES with exactly the budgeted findings, zero structural findings) — a gate command. Not tick-complete by design (§0b). | GREEN |
+| 5 | cross-OS replay hash equality (OUR engine) | The two-run byte + chain-digest identity of criterion 1 is the local half (the generated per-mission transcripts re-stitch identically); the replay-hash fixtures run as gate commands (`hash_fixture` + the `determinism` suites) and the cross-OS channel is the ubuntu+windows CI matrix (the D181 channel — the hashed state is integer-only, little-endian by format contract, float-free, so the pinned chains are OS-invariant by construction with CI as the enforcement channel). | GREEN (fixtures + CI matrix) |
+| 6 | original SAVED/OPTIONS.BDL import read-only, bounds-checked, fuzzed | `zone_mission_parity::zone_saved_import_seam_stages_the_shipped_campaign` + `zone_saved_import_seam_fuzz_bounded`: the shipped SAVED.BDL slot-0 campaign IS ZONEB/MISSION1 (zone cell 2, mask 0 — the import stages the zone's mission 1 through the D51 seam), the four shipped EMPTY rows reject loud with NOTHING staged, the typed 41-B OPTIONS import pins, and the bounded deterministic fuzz (full header-window bit-flip sweep per slot, truncations, size attacks, random images) is Ok/Err only with every Ok staging a slot inside the model. | GREEN |
+| 7 | DM carve-out | For zone B the carve-out is LOAD-BEARING: missions 6–7 ARE the MP-only files (§7j.73/D183). The checked legs: the maps LOAD (criterion 1's SELECT-seam flows stage them — flows P5BM6A/B/C and P5BM7A/B/C) and local SP semantics are CORRECT (criteria 1–2, incl. the anchor statics re-derivation on M6/M7). Full DM/netplay = future work, out of the parity exit. | NOTED |
+
+**Ledger:** `ZONEB-MISSION1..MISSION7` → `green`, `catalog_refs = []`
+(no original-behavior divergences observed on these missions; a
+green mission may legitimately carry zero refs, §3). Zone B status
+derives green (7/7); the ledger is 8/37 green.
+
+**Gate wiring:** `p5-zone-b` joins P5's `required_gates` (after
+`p5-zone-a`) carrying the zone's evidence commands:
+
+1. `/usr/bin/cargo test --release --locked --offline -p bedlam-game
+   --test zone_mission_parity --test canonical_dump_gate --test
+   differ_gate --test determinism`
+2. `/usr/bin/cargo test --release --locked --offline -p bedlam-core
+   --test hash_fixture --test mission_corpus_gate`
+
+P5 stays `pending` (8/37 missions green — zones A and B closed; the
+load census stays 37/37 clean per §6). The remaining zones C–G are
+DISPOSITION-side work only: each is its own unit instantiating the
+`ZoneSpec` parameter (the suite and the grammar v1.8 mission key are
+zone-agnostic — the per-zone unit documents its §-table, flips its
+ledger rows, and wires its `p5-zone-{c..g}` gate).

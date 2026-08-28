@@ -6649,3 +6649,46 @@ validator 22/22, inspect baseline ok (1069 files), MANIFEST clean
 before AND after every corpus read, no Ghidra run. Zone parity work
 continues per PLAN §6 as per-zone DISPOSITION evidence (the §7
 ZONEA pattern).
+
+## D192 (2026-08-28, p5-zone-b-disposition): ZONE B CLOSED — the
+first 7-mission zone flips green (8/37); the zone-parity harness
+GENERALIZED to any ledger mission
+
+The unit landed in two commits (2980e8b harness + the evidence/flip
+commit). (1) GENERALIZATION (2980e8b): the D178 ZONEA shape lifted
+to a ZoneSpec-parameterized suite (engine/bedlam-game/tests/
+zone_mission_parity.rs) so the P5-ZONE-GATES §1 criterion table is
+executable for ANY ledger mission; the scenario grammar gained the
+v1.8 `mission = <1..=7>` header key (requires `zone`; 6..7 pinned
+to zones B..F — the SELECT write-arm domain; fail-loud
+range/duplicate/pairing gates, parser tests, and dbx-plan records
+the `_e_staging` seam note), and the canonical runner's staging arm
+selects the seam per §7j.73: campaigns 1..=5 through the CAMPAIGN
+episode slot at the completion mask whose first-uncompleted sub is
+exactly the mission (mask (1<<(m-1))-1 — mission_number_for_mask
+inverts it), the MP files 6..=7 through the SELECT write pair
+ALONE (campaign staging would clear the pair). (2) ZONEB EVIDENCE
++ FLIP (same commit, the §5 cross-artifact rule): all seven
+missions' criterion-1 battery (boot + 120-frame passive + 48-frame
+full-staging destroy/pickup/platforms/critters, two-run byte
+identity, full declared budgets) + the committed ZONEB flows
+S5/S5B/S5C re-run; the anchor TS/T0 statics re-derived from each
+TOT header (100×100, 160004 B) + the §7j.64 formula (linear =
+clamp(n-1, 1, 26) — M1/M2 both floor to 1); the T1 spot table
+(FULL_MASK arithmetic, start_score, the per-mission fetch chain
+with the D184 zone-level CGR/BIN/LNK pin, the seam domains incl.
+campaign-clears-select); the shipped SAVED.BDL slot-0 campaign =
+ZONEB/MISSION1 import + bounded fuzz; the DM carve-out is
+LOAD-BEARING for M6/M7 (the MP-only files: maps load through the
+SELECT seam + local SP semantics re-derived). P5-ZONE-GATES §8
+documents the per-criterion table; the ledger flips
+ZONEB-MISSION1..7 green (catalog_refs = [] — no divergences
+observed); the p5-zone-b gate joins the P5 required_gates
+(offline evidence commands only). Verified: bedlam-game 21 suites
+green (canonical_dump_gate 13/13 — ZERO canonical chain movement;
+differ_gate 4/4; determinism; census 37/37 unchanged;
+zonea_mission1_parity 6/6; zone_mission_parity 5/5), bedlam-core
+green, diffharness green incl. the new parser tests, fmt + clippy
+clean, gates-validator all-green, MANIFEST clean before and after
+every corpus read, no Ghidra run. The remaining zones C..G are
+DISPOSITION-side units instantiating the ZoneSpec parameter.

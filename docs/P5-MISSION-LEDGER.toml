@@ -22,43 +22,43 @@ catalog_refs = []
 id = "ZONEB-MISSION1"
 zone = "B"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION2"
 zone = "B"
 mission = 2
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION3"
 zone = "B"
 mission = 3
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION4"
 zone = "B"
 mission = 4
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION5"
 zone = "B"
 mission = 5
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION6"
 zone = "B"
 mission = 6
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEB-MISSION7"
 zone = "B"
 mission = 7
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]

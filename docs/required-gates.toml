@@ -28,7 +28,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 [[phase]]
 id = "P5"
 status = "pending"
-required_gates = ["p5-zone-gate-scaffold", "p5-zone-a"]
+required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b"]
 
 [[phase]]
 id = "P6"
@@ -189,3 +189,39 @@ commands = [
 ]
 tracked_paths = ["engine/bedlam-game/tests/zonea_mission1_parity.rs", "engine/bedlam-game/src/save.rs", "engine/bedlam-game/src/host.rs", "engine/bedlam-game/src/lib.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "engine/bedlam-game/tests/canonical_dump_gate.rs", "engine/bedlam-game/tests/differ_gate.rs", "engine/bedlam-game/tests/mission_scene_gate.rs", "engine/bedlam-game/tests/determinism.rs", "engine/bedlam-core/tests/hash_fixture.rs", "engine/bedlam-core/tests/mission_corpus_gate.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml", "docs/RE-EXW-SIM.md"]
 corpus = ["tools/diffharness/scenarios/S0.scen", "tools/diffharness/scenarios/S1.scen", "tools/diffharness/scenarios/S2.scen", "tools/diffharness/scenarios/S3.scen", "tools/diffharness/scenarios/S4.scen", "tools/diffharness/scenarios/S6.scen", "tools/diffharness/scenarios/S7.scen", "tools/diffharness/scenarios/S8.scen"]
+
+# p5-zone-b — the ZONEB completion gate (P5-ZONE-GATES §8, D192):
+# all SEVEN ZONEB missions flipped green in the same commit as this
+# executable evidence (the cross-artifact rule: the §4 rule-5 check
+# requires zone B fully green the moment this gate is wired). The
+# per-criterion table lives in P5-ZONE-GATES §8. Command 1 = the
+# bedlam-game evidence: zone_mission_parity (the GENERALIZED
+# per-zone/per-mission suite — the D178 ZONEA shape lifted to a
+# ZoneSpec parameter, instantiated for zone B: the committed ZONEB
+# flows S5/S5B/S5C + the generated per-mission battery — boot,
+# 120-frame passive, 48-frame full-staging destroy+pickup+
+# platforms+critters — for ALL seven missions, campaigns 1-5 through
+# the episode-slot mask seam and the MP files 6-7 through the SELECT
+# write-pair seam, two-run byte identity + full declared budgets;
+# the anchor TS/T0 statics re-derived independently from each TOT
+# header + the §7j.64 formula; the T1 spot table incl. the D184
+# zone-level CGR/BIN/LNK fetch pin + the seam domains; the shipped
+# SAVED.BDL slot-0 campaign = ZONEB/MISSION1 import + bounded fuzz)
+# + canonical_dump_gate (the pinned per-scenario chain digests — the
+# zone-B flows' chains pinned; zero movement) + differ_gate (the
+# cross-channel structural spot check) + determinism (rate-invariance
+# replay identity). Command 2 = the bedlam-core evidence: hash_fixture
+# (the cross-OS replay-hash pins) + mission_corpus_gate (the T1
+# loader/rules oracles). game-data is never git-tracked: no corpus
+# path in tracked_paths (read-only runtime reads, the MANIFEST
+# contract). The scenario grammar v1.8 `mission` key + the canonical
+# staging arm are part of this gate's tracked evidence.
+[[gate]]
+id = "p5-zone-b"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zone_mission_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "determinism"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "hash_fixture", "--test", "mission_corpus_gate"],
+]
+tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "tools/diffharness/src/runner.rs", "tools/diffharness/src/bin/dbx-plan.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml"]
+corpus = ["tools/diffharness/scenarios/S5.scen", "tools/diffharness/scenarios/S5B.scen", "tools/diffharness/scenarios/S5C.scen"]
