@@ -169,9 +169,9 @@ schema = "p7-ports-map-v1"
 id = "linux-native"
 kind = "engineering"
 plan_anchor = "Linux native + Flatpak"
-status = "pending"
-gate = ""
-note = "The native Linux target is the dev platform and an existing per-push CI leg (.github/workflows/ci.yml, ubuntu-latest); the P7 landing is the release-shaped Linux artifact produced by the per-push artifact job."
+status = "landed"
+gate = "p7-ci-artifacts"
+note = "LANDED with p7-ci-artifacts: the native Linux artifact is the release binary (target/release/bedlam-shell) that the ci.yml build matrix's ubuntu-latest leg uploads on every push (artifact bedlam-shell-linux-x86_64, if-no-files-found: error, engine binary only, unsigned)."
 
 [[deliverable]]
 id = "flatpak-manifest"
@@ -201,9 +201,9 @@ note = "The committed universal2 (aarch64 + x86_64) CI job definition that runs 
 id = "ci-artifacts-per-push"
 kind = "engineering"
 plan_anchor = "CI artifacts per push"
-status = "pending"
-gate = ""
-note = "The per-push artifact-upload jobs extending the existing ci.yml matrix (Linux + Windows now, the macOS leg when a runner exists)."
+status = "landed"
+gate = "p7-ci-artifacts"
+note = "LANDED with p7-ci-artifacts: per-push upload steps inside the existing ci.yml build matrix -- every push uploads the release binary from each leg (bedlam-shell on ubuntu-latest -> artifact bedlam-shell-linux-x86_64, bedlam-shell.exe on windows-latest -> bedlam-shell-windows-x86_64) via actions/upload-artifact@v4 with if-no-files-found: error and 14-day retention; the artifact is the engine binary only (never game-data, never assets), unsigned, no credential; the macOS leg joins when a runner exists (macos-universal2-ci)."
 
 [[deliverable]]
 id = "cdda-user-supply"
@@ -343,6 +343,18 @@ committed + hermetically parseable; a Flatpak-manifest gate; an
 installer-definition gate; a CDDA-contract gate over the landed
 lookup + cache surface; the SteamDeck-default gate over the recorded
 platform profile), each behind the scaffold.
+
+**Landed since (unit p7-ci-artifacts, D222):** the SECOND P7 gate
+`p7-ci-artifacts` is that named example made real — the per-push
+artifact-upload steps landed inside the existing ci.yml build matrix
+(ubuntu-latest + windows-latest legs; the macOS leg joins with
+`macos-universal2-ci` when a runner exists), and the gate grades the
+committed definition hermetically: `tools/check-p7-ci-artifacts.py`
+parses `.github/workflows/ci.yml` offline (stdlib-only YAML-subset
+reader) and proves the per-push trigger, the release matrix, the two
+binary uploads (`if-no-files-found: error`), and the absence of any
+signing material. The registry rows `ci-artifacts-per-push` +
+`linux-native` flipped `landed` in the same commit (R2).
 
 ## 7. P7 acceptance surface (pointer, not re-statement)
 

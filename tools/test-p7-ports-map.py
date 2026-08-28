@@ -103,8 +103,12 @@ def manifest_text(
     gate_blocks: list[dict] | None = None,
     p7_status: str = "pending",
 ) -> str:
+    # The default mirrors the REAL manifest's honest state since the
+    # p7-ci-artifacts unit (D222): the scaffold first, then the gate
+    # proving the two landed rows (ci-artifacts-per-push +
+    # linux-native), wired exactly like docs/required-gates.toml.
     if p7_gates is None:
-        p7_gates = [GATE_ID]
+        p7_gates = [GATE_ID, "p7-ci-artifacts"]
     if gate_blocks is None:
         gate_blocks = [
             {
@@ -120,7 +124,23 @@ def manifest_text(
                     "tools/test-p7-ports-map.py",
                     "docs/required-gates.toml",
                 ],
-            }
+            },
+            {
+                "id": "p7-ci-artifacts",
+                "timeout_seconds": 120,
+                "commands": [
+                    ["/usr/bin/python3", "tools/check-p7-ci-artifacts.py"],
+                    ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+                    ["/usr/bin/python3", "tools/test-p7-ci-artifacts.py"],
+                ],
+                "tracked_paths": [
+                    ".github/workflows/ci.yml",
+                    "tools/check-p7-ci-artifacts.py",
+                    "tools/test-p7-ci-artifacts.py",
+                    DOC_RELATIVE,
+                    "docs/required-gates.toml",
+                ],
+            },
         ]
     lines = ['schema = "required-gates-v1"']
     for number in range(8):
@@ -213,7 +233,15 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"p7-ports-map: OK", result.stdout)
-        self.assertIn(b"7 engineering (0 landed, 7 pending)", result.stdout)
+        # Deliberate re-baseline with the p7-ci-artifacts unit (D222):
+        # the two rows it proves (ci-artifacts-per-push + linux-native)
+        # are landed; the other five engineering rows stay pending.
+        self.assertIn(b"7 engineering (2 landed, 5 pending)", result.stdout)
+        self.assertIn(
+            b"landed: ci-artifacts-per-push (gate p7-ci-artifacts),"
+            b" linux-native (gate p7-ci-artifacts)",
+            result.stdout,
+        )
         self.assertIn(b"3 recorded exclusions", result.stdout)
 
     # ---- structural doc rules -----------------------------------------
@@ -439,13 +467,22 @@ class PortsMapCheckerTests(unittest.TestCase):
 
     def test_landed_gate_not_in_phase_list_fails(self) -> None:
         doc = land_steamdeck(self.honest_doc(), "p7-steamdeck-default")
+        # The honest doc already lands ci-artifacts-per-push +
+        # linux-native on p7-ci-artifacts, so the fixture wires that
+        # gate in (defined + listed) to reach the steamdeck-specific
+        # failure: p7-steamdeck-default is defined but NOT in the list.
         manifest = manifest_text(
-            p7_gates=[GATE_ID],
+            p7_gates=[GATE_ID, "p7-ci-artifacts"],
             gate_blocks=[
                 {
                     "id": "p7-steamdeck-default",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": [DOC_RELATIVE],
+                },
+                {
+                    "id": "p7-ci-artifacts",
+                    "commands": [["/usr/bin/true"]],
+                    "tracked_paths": [".github/workflows/ci.yml"],
                 },
                 {
                     "id": GATE_ID,
@@ -538,8 +575,11 @@ class PortsMapCheckerTests(unittest.TestCase):
 
     def test_landed_deliverable_with_wired_gate_passes(self) -> None:
         doc = land_steamdeck(self.honest_doc(), "p7-steamdeck-default")
+        # The honest doc already lands two rows on p7-ci-artifacts; the
+        # fixture wires both gates so the flipped steamdeck row reaches
+        # its own proving gate: 3 landed, 4 pending.
         manifest = manifest_text(
-            p7_gates=[GATE_ID, "p7-steamdeck-default"],
+            p7_gates=[GATE_ID, "p7-ci-artifacts", "p7-steamdeck-default"],
             gate_blocks=[
                 {
                     "id": GATE_ID,
@@ -555,6 +595,11 @@ class PortsMapCheckerTests(unittest.TestCase):
                     ],
                 },
                 {
+                    "id": "p7-ci-artifacts",
+                    "commands": [["/usr/bin/python3", "tools/check-p7-ci-artifacts.py"]],
+                    "tracked_paths": [".github/workflows/ci.yml"],
+                },
+                {
                     "id": "p7-steamdeck-default",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": ["docs/P7-PORTS.md"],
@@ -563,7 +608,7 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         result = self.run_checker(doc, manifest)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertIn(b"1 landed, 6 pending", result.stdout)
+        self.assertIn(b"3 landed, 4 pending", result.stdout)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,12 @@ name: ci
 on:
   push:
   pull_request:
+
+# Least privilege (the frame-pacing.yml pattern): every job here,
+# artifact upload included, needs nothing beyond a read-only checkout.
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -27,6 +33,36 @@ jobs:
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
       - run: cargo build --release --workspace
+      # P7 "CI artifacts per push" (PLAN §6 P7; docs/P7-PORTS.md §2
+      # rows ci-artifacts-per-push + linux-native; proving gate
+      # p7-ci-artifacts): every push uploads the RELEASE BINARY built
+      # by the step above, one artifact per matrix leg -- the
+      # Linux-native artifact (bedlam-shell) and the Windows build
+      # artifact (bedlam-shell.exe). The artifact is the ENGINE BINARY
+      # ONLY: never game-data, never assets, nothing derived from the
+      # corpus (git is engine-only; users supply their own copy).
+      # UNSIGNED by design -- key material is the owner-held
+      # signing-keys exclusion (D221), so no store, no credential and
+      # no runner dependency enters this job; the macOS leg joins when
+      # a runner exists (macos-universal2-ci). retention-days is
+      # bounded (14) so per-push artifacts do not accumulate at the
+      # 90-day default.
+      - name: upload linux release binary (per-push artifact)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedlam-shell-linux-x86_64
+          path: target/release/bedlam-shell
+          if-no-files-found: error
+          retention-days: 14
+      - name: upload windows release binary (per-push artifact)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedlam-shell-windows-x86_64
+          path: target/release/bedlam-shell.exe
+          if-no-files-found: error
+          retention-days: 14
 
   # P4.2/W9 (DESIGN-DIFFHARNESS.md §9 "CI wiring", DH-G3): the
   # differential-harness corpus-gated set as a NAMED CI leg. CI

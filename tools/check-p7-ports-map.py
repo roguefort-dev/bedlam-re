@@ -394,6 +394,12 @@ def main() -> int:
         f" ({len(landed)} landed, {len(engineering) - len(landed)} pending)"
         f" + {len(external)} recorded exclusions"
     )
+    if landed:
+        summary = ", ".join(
+            f"{row['id']} (gate {row['gate']})"
+            for row in sorted(landed, key=lambda row: row["id"])
+        )
+        print(f"  landed: {summary}")
     for row in sorted(external, key=lambda row: row["id"]):
         print(f"  exclusion: {row['id']}")
     print(

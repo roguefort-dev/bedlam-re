@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts"]
 
 [[gate]]
 id = "trigger-address"
@@ -1106,3 +1106,33 @@ commands = [
   ["/usr/bin/python3", "tools/test-p7-ports-map.py"],
 ]
 tracked_paths = ["docs/P7-PORTS.md", "tools/check-p7-ports-map.py", "tools/test-p7-ports-map.py", "docs/required-gates.toml"]
+
+# p7-ci-artifacts — the FIRST P7 engineering deliverable per PLAN §6
+# "CI artifacts per push" (docs/P7-PORTS.md §2 rows ci-artifacts-per-push
+# + linux-native, flipped landed with this same commit per the D221 R2
+# rule; implementation D222): per-push artifact-upload steps inside the
+# EXISTING ci.yml build matrix — every push uploads the release binary
+# from each matrix leg (bedlam-shell on ubuntu-latest → artifact
+# bedlam-shell-linux-x86_64, the linux-native deliverable;
+# bedlam-shell.exe on windows-latest → bedlam-shell-windows-x86_64),
+# via actions/upload-artifact@v4 with if-no-files-found: error and
+# 14-day retention; engine binary ONLY (never game-data, never assets),
+# UNSIGNED (the signing-keys exclusion), no credential, no runner
+# dependency (the macOS leg joins with macos-universal2-ci). The gate
+# is hermetic and offline over the COMMITTED DEFINITION:
+# check-p7-ci-artifacts.py parses .github/workflows/ci.yml with a
+# stdlib-only YAML-subset reader and proves the per-push trigger, the
+# ubuntu+windows release matrix, the two gated binary uploads, and the
+# absence of signing material (denylist incl. comments); command 2 is
+# check-p7-ports-map.py (the registry flip + gate join); command 3 is
+# the checker's fail-closed hermetic suite. No corpus key, no
+# writable; no CI-side secret or store can ever enter this gate.
+[[gate]]
+id = "p7-ci-artifacts"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p7-ci-artifacts.py"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+  ["/usr/bin/python3", "tools/test-p7-ci-artifacts.py"],
+]
+tracked_paths = [".github/workflows/ci.yml", "tools/check-p7-ci-artifacts.py", "tools/test-p7-ci-artifacts.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]

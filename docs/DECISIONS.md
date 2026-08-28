@@ -8950,3 +8950,92 @@ tools/check-p6-behavior-catalog.py OK with P6 status green
 before AND after every corpus read (this unit reads no corpus);
 the bounded --phase P7 validator verdict: status=passed at the
 scaffold commit (report .state/p7-ports-gates-report.json).
+
+## D222 — 2026-08-28: P7 `p7-ci-artifacts` — the FIRST P7 ENGINEERING deliverable (PLAN §6 P7 "CI artifacts per push" + the P7-PORTS §2 rows ci-artifacts-per-push + linux-native): the per-push artifact-upload steps landed inside the EXISTING ci.yml build matrix, graded hermetically over the committed workflow definition (a stdlib-only YAML-subset checker + fail-closed suite), with both registry rows flipped landed in the SAME commit naming the new SECOND P7 required gate (the D221 R2 rule exercised end to end)
+
+CONTEXT: D221 landed the contract with all seven engineering rows
+pending; the queue head was the first engineering deliverable. The
+repo already runs ubuntu-latest + windows-latest on every push/PR
+(ci.yml `build` matrix: fmt, clippy, test, `cargo build --release
+--workspace`) — so the per-push artifact surface extends the
+EXISTING matrix rather than adding a parallel build. BOUNDS fixed
+by the queue item: CI/workflow + checker work only, no engine
+change, no packaging BUILD of installers (the artifact is cargo
+build --release, already green in CI), no macOS leg (that joins
+with macos-universal2-ci when a runner exists — the D221 exclusion
+discipline), no corpus read, controls green before AND after.
+
+DECISION: (a) THE WORKFLOW LANDING (.github/workflows/ci.yml): two
+upload steps appended to the `build` job, one per matrix leg — the
+Linux leg uploads EXACTLY the release binary
+`target/release/bedlam-shell` (artifact bedlam-shell-linux-x86_64,
+the linux-native deliverable), the Windows leg EXACTLY
+`target/release/bedlam-shell.exe` (bedlam-shell-windows-x86_64),
+both via actions/upload-artifact@v4 with `if-no-files-found: error`
+(a missing binary fails the build, never silently ships an empty
+artifact) and a BOUNDED retention-days: 14 (per-push artifacts must
+not accumulate at the 90-day default — recorded in the registry row
+note). The artifact is the ENGINE BINARY ONLY — never game-data,
+never assets, nothing corpus-derived (git is engine-only; users
+supply their own copy — the same user-supply posture §4 pins for
+CDDA) — and it is UNSIGNED: no credential, no store, no runner
+dependency enters the job (the signing-keys exclusion; the honest
+engineering output). A top-level `permissions: contents: read`
+block joins the file (least privilege, the frame-pacing.yml
+pattern). (b) THE GATE (p7-ci-artifacts, the SECOND P7
+required_gates entry behind the scaffold): hermetic + offline over
+the COMMITTED DEFINITION — tools/check-p7-ci-artifacts.py parses
+ci.yml with a PURPOSE-BUILT STDLIB-ONLY YAML-SUBSET READER (the D216
+"stdlib tomllib, no deps" family posture; no PyYAML dependency —
+the file that ships is the file that is graded: tabs in indentation,
+unterminated flow sequences, unparsable lines and trailing content
+are all parse errors) and proves the four contracted properties:
+PER-PUSH TRIGGER (top-level `on.push`), THE RELEASE MATRIX (a job
+running `cargo build --release` on a strategy matrix carrying BOTH
+ubuntu-latest and windows-latest — exactly one such job by design),
+THE UPLOADS (both legs' steps live in that job, gated on their
+runner.os, action pinned @v4, non-empty names, exact binary paths,
+if-no-files-found: error), and NO SIGNING MATERIAL (a denylist of
+credential/code-signing tokens — secrets, signtool, codesign,
+notarytool, notariz*, osslsigncode, authenticode, gpg — matched
+case-insensitively ANYWHERE in the file, comments included: the
+workflow must carry no signing vocabulary at all). Gate commands =
+the checker + tools/check-p7-ports-map.py (the registry flip + gate
+join) + tools/test-p7-ci-artifacts.py (the fail-closed suite, 22
+cases: every rule proven to fail loudly, the minimal-synthetic
+pass proving the rules not incidental content, the wrong-job
+upload refusal, and the real-repo pin). (c) THE CONTRACT FLIP
+(docs/P7-PORTS.md): rows ci-artifacts-per-push + linux-native
+flipped `landed` naming gate p7-ci-artifacts IN THE SAME COMMIT as
+the gate wiring (R2: landed exactly when the gate is named; both
+commits' invariants green — the single-commit 8fd0739 pattern, not
+the split 78c87ed pattern, precisely because R4 would otherwise
+be red between the two halves), with the rows' notes rewritten to
+say WHAT THE ARTIFACT ACTUALLY IS (the binary paths, the artifact
+names, if-no-files-found, retention, engine-only, unsigned); §6
+gains the landed-gate note. The suite's real-repo pins re-baselined
+deliberately in the same commit ((0 landed, 7 pending) → (2 landed,
+5 pending) + the new landed-rows output line; the forward-shape
+test now 3 landed / 4 pending with both proving gates wired).
+
+BOUNDS KEPT: no engine change (no Rust file touched); the artifact
+build is the ci job's existing `cargo build --release --workspace`
+(no installer byte, no packaging build); macOS leg excluded (joins
+with macos-universal2-ci); the gate reads ONLY committed files —
+no corpus key, no writable, stdlib only; MANIFEST clean before and
+after (no corpus read anywhere in the unit); no Ghidra run; no new
+RE (the deliverable is modern CI surface — no binary claims); own
+Nudge-Worker trailer.
+
+VERIFIED (first-hand, this unit): tools/check-p7-ci-artifacts.py OK
+against the real workflow (parses, 3 jobs, push trigger, build
+matrix, both binary uploads, 8 denylisted tokens absent);
+tools/test-p7-ci-artifacts.py 22/22; tools/check-p7-ports-map.py OK
+(7 engineering, 2 landed naming p7-ci-artifacts, gate join + R5
+scaffold-first verified); tools/test-p7-ports-map.py 29/29 after the
+deliberate re-baseline; tools/test-validate-required-gates.py 22/22
+re-run AFTER the manifest edit (the strict key schema applies to
+the new gate block); tools/check-p6-behavior-catalog.py OK (P6
+green, zero open entries) BEFORE AND AFTER; the bounded --phase P7
+validator verdict at the landing commit: ALL 2 P7 GATES GREEN under
+bwrap containment (report .state/p7-ciartifacts-gates-report.json).
