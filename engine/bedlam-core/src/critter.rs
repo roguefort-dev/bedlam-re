@@ -6,16 +6,18 @@
 //! Scope: the E-side model of the 0x4cff98 critter bank (0x7E
 //! stride, count cell 0x46cc2c) + the .NME staging host seam + the
 //! controller subset for the CORPUS KINDS — 1 (the wanderers,
-//! §7j.71), 4 (seek steppers) and 5/6 (the shared mixed-AI body;
-//! §7j.72 landed the S6 staging — 26 corpus missions host it). The
-//! kind 2/3/7 controller bodies are documented E-gaps:
-//! `stage_critters` REFUSES an .NME hosting them (fail loud — never
-//! spawn a critter whose brain is missing).
+//! §7j.71), 2 (the sine-walk shooters, §7j.74), 4 (seek steppers)
+//! and 5/6 (the shared mixed-AI body; §7j.72 landed the S6 staging
+//! — 26 corpus missions host it). The kind 3/7 controller bodies
+//! are documented E-gaps: `stage_critters` REFUSES an .NME hosting
+//! them (fail loud — never spawn a critter whose brain is missing).
 //!
-//! Coordinate scales (§7j.23/2 + §7j.42's probe reads): x/y are
-//! Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for kinds 1/4;
-//! z is Q5 (32/tile) for every kind — the projectile spawn's
-//! `(z+0x10)<<8` and the walker's `|rz − pz>>8| < 0x20` box pin it.
+//! Coordinate scales (§7j.23/2 + §7j.42's probe reads + §7j.74/4):
+//! x/y are Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for
+//! kinds 1/4; z is Q5 (32/tile) for kinds 1/4/5/6 — the projectile
+//! spawn's `(z+0x10)<<8` and the walker's `|rz − pz>>8| < 0x20` box
+//! pin it — but Q13 for kind 2 (the S1 stamp 0xC000 = 6 levels,
+//! passed through raw to the 0x65 projectile; §7j.74/4).
 //!
 //! The bank does NOT enter `MissionSim::state_hash` (the W6 split —
 //! its dump row is the T2 `critter-bank` watch, an E-ONLY coverage
@@ -149,6 +151,11 @@ pub struct CritterRecord {
     pub z_restore: i32,
     /// Dying counter d@+0x52 (mode 7 runs 0x28 frames).
     pub death_ctr: i32,
+    /// Variant d@+0x18 — the kind-2 heading PRECESSION rate
+    /// (FUN_0041ec1c(4)+3, negated when the record's w2 flag ≠ 0;
+    /// §7j.74/1). NOT serialized in the canonical bank blob (the
+    /// §7j.71 dir/frame/z_restore convention).
+    pub variant: i32,
     /// Target robot w@+0x7A (the mode-2 fire victim; −1 = none).
     pub target_robot: i16,
     /// Fuse / hit-flash w@+0x7C — the main loop decrements it every
@@ -184,6 +191,7 @@ impl Default for CritterRecord {
             frame: 0,
             z_restore: 0,
             death_ctr: 0,
+            variant: 0,
             target_robot: -1,
             fuse: 0,
             facing: 0,
@@ -196,12 +204,21 @@ impl MissionSim {
     /// schedule (§7j.18) — the `critters = 1` grammar host seam
     /// (D114). The ORIGINAL loads the file natively at mission
     /// load; E stages the identical bytes. Only the sections whose
-    /// kinds the E controller models may spawn (S2 → kind 1,
-    /// S3 → kind 5, S4 → kind 4, S6 → kind 6); any other NON-EMPTY
-    /// section is REFUSED (fail loud — never spawn a brain the
-    /// engine does not carry; ZONEA/MISSION1 hosts exactly S3+S4).
+    /// kinds the E controller models may spawn (S1 → kind 2, S2 →
+    /// kind 1, S3 → kind 5, S4 → kind 4, S6 → kind 6); any other
+    /// NON-EMPTY section is REFUSED (fail loud — never spawn a
+    /// brain the engine does not carry; ZONEA/MISSION1 hosts
+    /// exactly S3+S4).
     ///
-    /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72]: S2
+    /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72 + §7j.74/1]:
+    /// S1 (state 2, 10-B recs, w1 = spawn base, w2 = variant flag,
+    /// w3/w4 = x/y tile): `w1+d` each clamped ≥ 1 — per attempt two
+    /// scatter(5) draws set x/y = (tile + pick − 2)·0x2000 (Q13),
+    /// the MAP-BOUNDS gate DROPS out-of-map attempts (2 draws
+    /// consumed, no critter); on pass species 1, z 0xC000, heading
+    /// 0, anim RandA&7, variant pick(4)+3 (negated when w2 ≠ 0),
+    /// hp = 175+(175·m)/27 (the 0x4165db imul site), timer
+    /// (RandA&0x1F)−0xF — 5 draws per landed critter. S2
     /// (state 1, 10-B recs, w3/w4 = x/y tile): `d+3` each — the z
     /// SEARCH walks the DAT volume down from level 6 for the first
     /// RAW tile ∈ 1..3 with air above (skip the spawn when none);
@@ -260,7 +277,7 @@ impl MissionSim {
         // S8 (personnel/POI) is a separate bank — the poi-bank T2
         // row's own unit. Any other unmodeled section refuses.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 1 && si != 2 && si != 3 && si != 5 {
+            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 5 {
                 return None;
             }
         }
@@ -268,6 +285,54 @@ impl MissionSim {
         // The hp scalar [0x46ae8c] = the linear mission m (§7j.71/1).
         let m = self.linear as i32;
         let mut staged = 0usize;
+        for rec in &sections[0] {
+            // S1 (§7j.74/1): spawn base w1 + difficulty, clamped ≥ 1
+            // (0x4164eb); per attempt TWO scatter(5) draws feed the
+            // Q13 tile coords, then the MAP-BOUNDS DROP GATE discards
+            // the attempt (draws consumed, NO critter, count not
+            // incremented). On pass: anim = RandA&7, variant =
+            // pick(4)+3 NEGATED by the w2 flag, hp base 0xAF, timer
+            // word (RandA&0x1F)−0xF at +0x72 (a dead stamp for kind 2
+            // — the body never reads it; the DRAW is stream-live),
+            // z FIXED 0xC000 (Q13 — 6 levels; the kind-2 exception to
+            // the record's Q5-z rule, §7j.74/4).
+            let mut spawns = d + rec[1] as i32;
+            if spawns < 1 {
+                spawns = 1;
+            }
+            for _ in 0..spawns {
+                if self.critters.len() >= CRITTER_SLOTS {
+                    break;
+                }
+                let x = (rec[3] as i32 + self.bounded_pick(5) - 2) * 0x2000;
+                let y = (rec[4] as i32 + self.bounded_pick(5) - 2) * 0x2000;
+                let (w, h) = self.terrain.size();
+                if x <= 0 || y <= 0 || x >> 13 >= w || y >> 13 >= h {
+                    continue; // dropped — the 2 scatter draws stay consumed
+                }
+                let anim = (self.rand_a() & 7) as u16;
+                let base = 0xaf_i32;
+                let hp = base + base * m / 27;
+                let variant = self.bounded_pick(4) + 3;
+                let timer = ((self.rand_a() & 0x1F) as i32 - 0xF) as u16;
+                let variant = if rec[2] != 0 { -variant } else { variant };
+                self.critters.push(CritterRecord {
+                    kind: 2,
+                    species: 1,
+                    hp: hp as i16,
+                    anim,
+                    heading: 0,
+                    presence: true,
+                    x,
+                    y,
+                    z: 0xC000,
+                    variant,
+                    facing: timer,
+                    ..Default::default()
+                });
+                staged += 1;
+            }
+        }
         for rec in &sections[1] {
             // S2 (§7j.71/1): d+3 each; the z search is draw-free and
             // runs per spawn iteration; ONE bounded pick per critter
@@ -490,6 +555,7 @@ impl MissionSim {
             }
             match self.critters[idx].kind {
                 1 => self.critter_wander(idx),
+                2 => self.critter_shooter(idx),
                 4 => self.critter_state4(idx, respawn),
                 5 | 6 => self.critter_mixed(idx, respawn, leash),
                 // Staging refuses the other kinds (module doc).
@@ -777,6 +843,113 @@ impl MissionSim {
             }
         }
         (best, best_d)
+    }
+
+    /// The kind-2 SINE-WALK SHOOTER body (0x415216..0x415466)
+    /// [§7j.74/2]: `species` substeps per frame (≡ 1 for S1 —
+    /// nothing re-stamps it). Per substep, in the original's exact
+    /// order: anim wrap 0xF; heading precesses by the SIGNED
+    /// variant (`(heading+variant)&0xFF` — the w2 flag's negation
+    /// turns the curve the other way); the sine walk advances x/y
+    /// by `(cos/sin word ·0x14)>>8` Q13 with NO bounds gate, NO
+    /// wall probe and NO z change; then TWO always-consumed RandA
+    /// gates — the 1/128 SQUAWK pulse (FUN_0043a48e with the
+    /// [0x4edffc] voice base, x>>8/y>>8 — the play is the T4
+    /// E-gap, the DRAW is stream-live) and the 1/4 fire chance
+    /// (RandA&3 == 0 — a per-substep CHANCE, not "every 4th";
+    /// corrects §7j.17). The fire arm: bounded-pick a robot SLOT
+    /// over [0x46ccbc] (the 12-record 0xA8 bank), skip when the
+    /// alive word +0x7C is 0; take the FIRST-FREE 0x4cc654 slot
+    /// (FUN_0041286f; full → skip); aim at the robot with a
+    /// ±0x1F00 Q13 jitter per axis (two more draws); the range
+    /// gate `octile2D(dirx,diry)>>8 < 300−(2−d)·64` (the dz is
+    /// DEAD for the gate — FUN_0041ebf8 never reads it); in range
+    /// stamp projectile 0x65 at the critter position with the RAW
+    /// direction >>5 velocity (NOT octile-normalized — closer
+    /// targets fly slower bolts; unlike the mode-2 0x68 lane).
+    /// Draw budget: 2 per substep always, 5 on the fire arm.
+    fn critter_shooter(&mut self, idx: usize) {
+        let species = self.critters[idx].species as i32;
+        for _substep in 0..species {
+            // anim := (anim+1)&0xF (0x41524e).
+            let a = self.critters[idx].anim;
+            self.critters[idx].anim = (a + 1) & 0xF;
+            // heading := (heading + variant)&0xFF (0x415261).
+            let variant = self.critters[idx].variant;
+            self.critters[idx].heading = (self.critters[idx].heading + variant) & 0xFF;
+            // The sine walk (0x41527a..0x4152ac): pure table reads.
+            let heading = self.critters[idx].heading as u16;
+            let (x, y) = {
+                let c = &self.critters[idx];
+                (c.x, c.y)
+            };
+            if let (Some(cw), Some(sw)) = (
+                self.angles.sine_word(heading),
+                self.angles
+                    .sine_word(((heading as i32 - 0x40) & 0xFF) as u16),
+            ) {
+                let c = &mut self.critters[idx];
+                c.x = x + (((cw as i16 as i32) * 0x14) >> 8);
+                c.y = y + (((sw as i16 as i32) * 0x14) >> 8);
+            }
+            // Gate 1 — the SQUAWK pulse (draw always; play is T4).
+            if self.rand_a() & 0x7F == 0 {
+                // FUN_0043a48e([0x4edffc], x>>8, y>>8, 0, prio 2) —
+                // the SFX family E-gap (module doc); no draws inside.
+            }
+            // Gate 2 — the 1/4 fire chance (draw always).
+            if self.rand_a() & 3 != 0 {
+                continue;
+            }
+            // The robot pick over the count cell (draw).
+            let count = self.robots.len() as i32;
+            let pick = self.bounded_pick(count) as usize;
+            let Some(r) = self.robots.get(pick) else {
+                continue;
+            };
+            let (rx, ry, rz, alive) = (r.pos_x, r.pos_y, r.z, r.alive);
+            if !alive {
+                continue;
+            }
+            // FUN_0041286f: the first-free 0x4cc654 slot (no draws).
+            let Some(slot) = self.enemy_free_slot() else {
+                continue;
+            };
+            let (x, y, z) = {
+                let c = &self.critters[idx];
+                (c.x, c.y, c.z)
+            };
+            // The jittered aim (two draws) — ±31/±32 px Q13 ≈ ±1 tile.
+            let jx = (self.rand_a() & 0x3F) as i32 * 0x100 - 0x1F00;
+            let dirx = rx - x + jx;
+            let jy = (self.rand_a() & 0x3F) as i32 * 0x100 - 0x1F00;
+            let diry = ry - y + jy;
+            // robot z is Q5 (D123); the kind-2 z is Q13 (§7j.74/4).
+            let dirz = (rz << 8) - z;
+            // The 2-D octile range gate (0x4153d7): dz is dead here.
+            let dist = {
+                let d0 = dist_octagonal(dirx, diry);
+                if d0 == 0 {
+                    1
+                } else {
+                    d0
+                }
+            };
+            let range = 0x12C - (2 - self.difficulty as i32) * 0x40;
+            if dist >> 8 >= range {
+                continue;
+            }
+            // The 0x65 stamp: the RAW direction >>5 velocity.
+            self.enemy_bank[slot] = EnemyProjectile {
+                kind: 0x65,
+                x,
+                y,
+                z,
+                vx: dirx >> 5,
+                vy: diry >> 5,
+                vz: dirz >> 5,
+            };
+        }
     }
 
     /// The kind-4 body (the seek steppers, 0x414079) [§7j.42/2]:
@@ -2069,6 +2242,7 @@ mod debris_physics_tests {
             target_robot: -1,
             fuse: 0,
             facing: 0,
+            variant: 0,
         });
     }
 
@@ -2183,5 +2357,336 @@ mod debris_physics_tests {
             sim.debris_bank().iter().any(|r| r.active && r.kind == 7),
             "the death chunk staged"
         );
+    }
+}
+
+#[cfg(test)]
+mod shooter_tests {
+    //! The kind-2 lane (§7j.74): the S1 loader walk (the clamp, the
+    //! scatter, the bounds-drop gate, the stamps + the exact draw
+    //! budget) and the sine-walk shooter body (the heading
+    //! precession, the two always-draw gates, the 1/4 aimed 0x65
+    //! fire with the raw direction>>5 velocity).
+
+    use super::*;
+
+    /// Flat level-2 world (as `wanderer_tests::sim_flat`) WITH the
+    /// 256-word sine ramp (word[a] = round(sin(a)·32767)) — the
+    /// walk table the k2 body reads (FUN_0041eb65/77).
+    fn sim_sine(seed: u64) -> MissionSim {
+        let mut planes = vec![0u8; 8 * 32 * 32];
+        for b in planes[2 * 32 * 32..3 * 32 * 32].iter_mut() {
+            *b = 1;
+        }
+        let heights = vec![[0x1Fu8; 1024]];
+        let terrain = crate::mission::Terrain::from_parts(32, 32, planes, heights).unwrap();
+        let mut words = vec![0i16; 256];
+        for (a, w) in words.iter_mut().enumerate() {
+            *w = ((a as f64 * core::f64::consts::PI / 128.0).sin() * 32767.0).round() as i16;
+        }
+        let angles = crate::mission::AngleTable::from_sintable_words(&words).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, seed);
+        sim.linear = 5; // m = 5 → S1 hp = 175 + 875/27 = 207
+        sim
+    }
+
+    /// An .NME hosting `n` S1 records (w1 = spawn base, w2 = the
+    /// variant flag, w3/w4 = x/y tile); every other section empty.
+    fn s1_nme(n: u16, w1: u16, w2: u16, w3: u16, w4: u16) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(&n.to_le_bytes()); // S1 count
+        for _ in 0..n {
+            for w in [1u16, w1, w2, w3, w4] {
+                b.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        for _ in 0..7 {
+            b.extend_from_slice(&0u16.to_le_bytes()); // S2..S8
+        }
+        b
+    }
+
+    fn push_shooter(sim: &mut MissionSim, x: i32, y: i32, variant: i32) {
+        sim.critters.push(CritterRecord {
+            kind: 2,
+            species: 1,
+            hp: 100,
+            heading: 0,
+            variant,
+            z: 0xC000,
+            x,
+            y,
+            presence: true,
+            ..Default::default()
+        });
+    }
+
+    /// A robot staged at Q13 (x, y), floor z Q5, alive — the exact
+    /// field initializers of `spawn_robot` minus its one draw (the
+    /// draw-budget test needs a draw-free staging).
+    fn push_robot(sim: &mut MissionSim, x: i32, y: i32, z: i32, alive: bool) {
+        sim.robots.push(crate::mission::Robot {
+            pos_x: x,
+            pos_y: y,
+            z,
+            state: 0,
+            dir_byte: 0,
+            facing: crate::mission::FACING_NONE,
+            anim: 0,
+            variant: 0,
+            probe_z: [z as u16; 8],
+            stop_dist: 0,
+            target: None,
+            alive,
+            drop_countdown: 0,
+            hp: 5000,
+            armor: 0,
+            hit_flash: 0,
+            alarm: 0,
+            alarm_ctr: 0,
+            shield: 0,
+            shield_charges: 0,
+            shield_boost: 0,
+            battery: 0,
+            armor_pool: 0,
+            kind: 0,
+            death_flag: 0,
+            weapons: [crate::weapon::WeaponSlot::default(); 7],
+            weapon_mask: 0,
+        });
+    }
+
+    #[test]
+    fn s1_staging_spawns_and_seeds() {
+        // w1 = 2, d = 1 → 3 attempts per record; the central tile of
+        // the 32×32 world always passes the bounds gate (jitter −2..2
+        // on tile 15 stays in [0,32)).
+        let mut sim = sim_sine(0xC0FFEE);
+        let staged = sim
+            .stage_critters(&s1_nme(2, 2, 0, 15, 15), 1)
+            .expect("S1 staged");
+        assert_eq!(staged, 6);
+        for c in sim.critters() {
+            assert_eq!(c.kind, 2);
+            assert_eq!(c.species, 1);
+            assert_eq!(c.z, 0xC000, "the FIXED Q13 spawn z (6 levels)");
+            assert_eq!(c.heading, 0);
+            assert!(c.anim <= 7, "anim seed = RandA&7");
+            assert!((3..=6).contains(&c.variant), "variant = pick(4)+3 ∈ [3,7)");
+            // (RandA&0x1F)−0xF ∈ [−15,+15] stored as the u16 word.
+            let timer = c.facing as i16 as i32;
+            assert!((-15..=15).contains(&timer), "the +0x72 timer stamp");
+            assert_eq!(c.hp, 175 + 175 * 5 / 27, "hp = 175+(175·m)/27, m=5");
+            // The jittered tile: (w3 + pick − 2)·0x2000, pick ∈ [0,5).
+            assert!((13..=17).contains(&(c.x >> 13)));
+            assert!((13..=17).contains(&(c.y >> 13)));
+            assert!(c.presence);
+        }
+    }
+
+    #[test]
+    fn s1_w2_flag_negates_the_variant() {
+        let mut sim = sim_sine(0xBEEF);
+        sim.stage_critters(&s1_nme(1, 1, 1, 15, 15), 0)
+            .expect("staged");
+        let c = &sim.critters()[0];
+        assert!(c.variant <= -3, "flagged record: variant = −(pick(4)+3)");
+    }
+
+    #[test]
+    fn s1_spawn_count_clamps_to_one() {
+        // w1 = 0 ∧ d = 0 → sum 0 → CLAMPED to 1 attempt (§7j.74/1).
+        let mut sim = sim_sine(0xABCD);
+        let staged = sim
+            .stage_critters(&s1_nme(1, 0, 0, 15, 15), 0)
+            .expect("staged");
+        assert_eq!(staged, 1);
+    }
+
+    #[test]
+    fn s1_bounds_gate_drops_out_of_map_attempts() {
+        // Tile 33 (beyond the 32-tile world): EVERY attempt drops —
+        // 0 critters, and exactly 4×2 scatter draws consumed
+        // (w1 = 3, d = 1 → 4 attempts).
+        let mut sim = sim_sine(0x600D);
+        let staged = sim
+            .stage_critters(&s1_nme(1, 3, 0, 33, 33), 1)
+            .expect("staged");
+        assert_eq!(staged, 0, "all attempts out of map → dropped");
+        let mut probe = sim_sine(0x600D);
+        for _ in 0..4 {
+            probe.bounded_pick(5);
+            probe.bounded_pick(5);
+        }
+        assert_eq!(sim.rand_a_state(), probe.rand_a_state());
+    }
+
+    #[test]
+    fn s1_draw_budget_five_per_landed_critter() {
+        // Per landed critter: scatter x, scatter y, anim RandA,
+        // variant pick(4), timer RandA = 5 draws.
+        let mut a = sim_sine(7);
+        let mut b = sim_sine(7);
+        let staged = a
+            .stage_critters(&s1_nme(1, 1, 0, 15, 15), 1)
+            .expect("staged");
+        assert_eq!(staged, 2);
+        for _ in 0..2 {
+            b.bounded_pick(5);
+            b.bounded_pick(5);
+            b.rand_a();
+            b.bounded_pick(4);
+            b.rand_a();
+        }
+        assert_eq!(a.rand_a_state(), b.rand_a_state());
+    }
+
+    #[test]
+    fn sine_walk_precesses_heading_and_advances() {
+        // variant +5: heading 0→5; the walk deltas are (word·0x14)>>8
+        // in Q13 with word = the corpus convention sin(a·π/128)·
+        // 32767: at heading 5 the x word ≈ 4011 → dx ≈ 313, and the
+        // y word at (5−0x40)&0xFF ≈ −cos(5π/128)·32767 → dy ≈ −2539
+        // (≈ −0.31 tile south-east drift).
+        let mut sim = sim_sine(1);
+        push_shooter(&mut sim, 15 * 0x2000, 15 * 0x2000, 5);
+        let s0 = sim.rand_a_state();
+        sim.critter_tick();
+        assert_eq!(sim.critters()[0].heading, 5);
+        assert_eq!(sim.critters()[0].anim, 1, "anim := (0+1)&0xF");
+        // The two always-draw gates ran (squawk + fire chance).
+        assert_ne!(sim.rand_a_state(), s0);
+        let x0 = 15 * 0x2000;
+        let dx = sim.critters()[0].x - x0;
+        let dy = sim.critters()[0].y - x0;
+        assert!((280..=340).contains(&dx), "the sine walk dx (got {dx})");
+        assert!((-2600..=-2450).contains(&dy), "the sine walk dy (got {dy})");
+        // Negative variant walks the heading the other way.
+        let mut sim2 = sim_sine(1);
+        push_shooter(&mut sim2, 15 * 0x2000, 15 * 0x2000, -3);
+        sim2.critter_tick();
+        assert_eq!(sim2.critters()[0].heading, 0xFD);
+    }
+
+    #[test]
+    fn fire_arm_stamps_projectile_65_raw_velocity() {
+        // A live robot 5 tiles east, same z-plane (robot z Q5 6·32
+        // = 192; critter z Q13 0xC000): dirz = 192<<8 − 0xC000 = 0.
+        // Difficulty 2 → range 300 px; the octile dist (5 tiles =
+        // 5 px after >>8) passes; the velocity is the RAW
+        // direction >>5 (NOT octile-normalized).
+        let mut sim = sim_sine(0xFEED);
+        sim.difficulty = 2;
+        push_robot(&mut sim, 20 * 0x2000, 15 * 0x2000, 192, true);
+        push_shooter(&mut sim, 15 * 0x2000, 15 * 0x2000, 0);
+        let mut fired = false;
+        for _ in 0..64 {
+            sim.critter_tick();
+            if let Some(slot) = sim.enemy_bank.iter().position(|p| p.kind == 0x65) {
+                let p = &sim.enemy_bank[slot];
+                let c = &sim.critters()[0];
+                assert_eq!(p.x, c.x, "spawned at the critter's CURRENT position");
+                assert_eq!(p.y, c.y);
+                assert_eq!(p.z, 0xC000, "z passes through RAW (Q13)");
+                // The velocity is the RAW direction >>5: dirx =
+                // robot.x − p.x + jitter with jitter ∈ [−0x1F00,
+                // 0x2000] per axis (the exact §7j.74/2 form).
+                let dirx = 20 * 0x2000 - p.x;
+                let jx = p.vx * 32 - dirx;
+                assert!(
+                    (-0x1F00..=0x2000).contains(&jx),
+                    "vx = (dirx+jitter)>>5 (jitter {jx:#x})"
+                );
+                assert_eq!(p.vx * 32 - dirx, jx, "raw >>5, NOT normalized");
+                let diry = 15 * 0x2000 - p.y;
+                let jy = p.vy * 32 - diry;
+                assert!(
+                    (-0x1F00..=0x2000).contains(&jy),
+                    "vy = (diry+jitter)>>5 (jitter {jy:#x})"
+                );
+                // dirz = robot.z<<8 − 0xC000 = 0 → vz 0 (no z jitter).
+                assert_eq!(p.vz, 0, "same z-plane");
+                fired = true;
+                break;
+            }
+        }
+        assert!(fired, "the 1/4 gate fired within 64 frames");
+    }
+
+    #[test]
+    fn fire_arm_range_gate_and_dead_robot_skip() {
+        // Difficulty 0 → range 172 px; a robot 60 tiles east
+        // (60 px after >>8) is OUT of range → no stamp, ever.
+        let mut sim = sim_sine(0xD00D);
+        sim.difficulty = 0;
+        push_robot(&mut sim, 75 * 0x2000, 15 * 0x2000, 192, true);
+        push_shooter(&mut sim, 15 * 0x2000, 15 * 0x2000, 0);
+        for _ in 0..128 {
+            sim.critter_tick();
+        }
+        assert!(
+            sim.enemy_bank.iter().all(|p| p.kind != 0x65),
+            "out of range → never fires"
+        );
+        // A DEAD robot (alive word +0x7C == 0): the fire arm picks a
+        // slot but skips before any stamp.
+        let mut sim2 = sim_sine(0xD00D);
+        sim2.difficulty = 2;
+        push_robot(&mut sim2, 20 * 0x2000, 15 * 0x2000, 192, false);
+        push_shooter(&mut sim2, 15 * 0x2000, 15 * 0x2000, 0);
+        for _ in 0..128 {
+            sim2.critter_tick();
+        }
+        assert!(sim2.enemy_bank.iter().all(|p| p.kind != 0x65));
+    }
+
+    #[test]
+    fn fire_arm_consumes_five_draws_on_the_full_arm() {
+        // Find a seed whose first five draws are: squawk gate ≠ 0,
+        // fire gate &3 == 0 (fires), then pick(1) + two jitters.
+        // The frame then consumes EXACTLY those five draws.
+        let mut fired_seed = None;
+        for seed in 0x1010u64..0x2010 {
+            let mut probe = sim_sine(seed);
+            let g1 = probe.rand_a() & 0x7F;
+            let g2 = probe.rand_a() & 3;
+            let _pick = probe.bounded_pick(1);
+            let _jx = probe.rand_a();
+            let _jy = probe.rand_a();
+            if g1 != 0 && g2 == 0 {
+                fired_seed = Some(seed);
+                break;
+            }
+        }
+        let Some(seed) = fired_seed else {
+            panic!("no fire-arm seed found in the window");
+        };
+        let mut sim = sim_sine(seed);
+        sim.difficulty = 2;
+        push_robot(&mut sim, 20 * 0x2000, 15 * 0x2000, 192, true);
+        push_shooter(&mut sim, 15 * 0x2000, 15 * 0x2000, 0);
+        let mut probe = sim_sine(seed);
+        // Exactly the frame's five draws (squawk, fire, pick(1),
+        // jitter, jitter) — nothing else in the body draws.
+        probe.rand_a();
+        probe.rand_a();
+        probe.bounded_pick(1);
+        probe.rand_a();
+        probe.rand_a();
+        sim.critter_tick();
+        assert_eq!(sim.rand_a_state(), probe.rand_a_state());
+        assert!(sim.enemy_bank.iter().any(|p| p.kind == 0x65));
+    }
+
+    #[test]
+    fn presence_gate_keeps_idle_shooter_draw_free() {
+        // With the family armed but the shooter ABSENT (presence 0),
+        // the controller consumes nothing (the preamble gate).
+        let mut sim = sim_sine(3);
+        push_shooter(&mut sim, 0, 0, 0);
+        sim.critters[0].presence = false;
+        let s0 = sim.rand_a_state();
+        sim.critter_tick();
+        assert_eq!(sim.rand_a_state(), s0, "presence 0 → no draws");
     }
 }

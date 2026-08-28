@@ -6312,3 +6312,73 @@ Three decisions recorded:
    waiting-automatic, automation-failure, remaining-gaps,
    final-hardening, systemd-unit-sync). No queue-grammar change, no
    claim-file changes, no game-data access.
+
+## D185 — 2026-08-28: P5 `p5-critter-state-g2-shooters` — the kind-2 SHOOTERS state LANDED (the .NME S1 staging + the k2 sine-walk shooter body); the census Shooters class CLOSED with ONE deliberate row flip (ZONED-MISSION5 clean — the queue's "no row flips clean" expectation falsified by that row)
+
+Four decisions recorded:
+
+1. **THE S1 LOADER WALK (EXW-anchored, RE-EXW-SIM §7j.74/1,
+   [verified]).** Per 10-B record (w1 spawn base, w2 variant flag,
+   w3/w4 x/y tile): spawn count `w1+difficulty` CLAMPED ≥ 1
+   (0x4164eb — a NEW pin the §7j.18 gloss lacked); per attempt two
+   FUN_0041ec1c(5) scatter draws set x/y = (tile+pick−2)·0x2000
+   (Q13), then the MAP-BOUNDS DROP GATE (x≤0 ∨ x>>13 ≥ W ∨ y≤0 ∨
+   y>>13 ≥ H → no critter, count NOT incremented, both draws already
+   consumed — a NEW pin absent from §7j.18); on pass the stamps are
+   species 1, z 0xC000 FIXED, heading 0, anim RandA&7, variant
+   pick(4)+3 NEGATED by the w2 flag, hp = 0xAF+(m·0xAF)/27 (the
+   0x4165db imul site, m = [0x46ae8c] the linear mission — the
+   closed census), state 2, timer (RandA&0x1F)−0xF at +0x72 (a dead
+   stamp for kind 2 — the body never reads it; the DRAW is
+   stream-live). DRAW BUDGET: 2 per dropped attempt, 5 per landed
+   critter.
+2. **THE k2 CONTROLLER BODY (0x415216..0x415466, §7j.74/2,
+   [verified]).** Substeps = the record's species word (≡ 1 for S1;
+   the k4/k5/6 convention). Per substep: anim := (anim+1)&0xF;
+   heading := (heading+variant)&0xFF — the variant IS the curve
+   rate, the w2 flag's negation turns it; the sine walk advances
+   x/y by (cos/sin word ·0x14)>>8 with NO bounds gate/wall probe/z
+   change; TWO always-consumed RandA gates — the 1/128 SQUAWK pulse
+   (FUN_0043a48e, the [0x4edffc] voice base; the play is T4 E-gap,
+   verified draw-free) and the 1/4 fire chance (RandA&3==0 —
+   CORRECTS §7j.17's "every 4th substep": a per-substep CHANCE);
+   the fire arm bounded-picks a robot SLOT over [0x46ccbc] (skip
+   when the +0x7C alive word is 0), takes the FIRST-FREE 0x4cc654
+   slot (FUN_0041286f's identity pinned — the shared 50×0x22
+   allocator, twin of the engine's enemy_free_slot), aims at the
+   robot with a ±0x1F00 Q13 jitter per axis, gates on the 2-D
+   octile `dist>>8 < 300−(2−d)·64` (the dz is DEAD for the gate —
+   FUN_0041ebf8 never reads its third argument; it only feeds the
+   velocity stamp), and stamps projectile 0x65 at the critter
+   position with the RAW direction>>5 velocity (NOT
+   octile-normalized — closer targets fly slower bolts, unlike the
+   mode-2 0x68 lane). The kind-2 z cell is Q13 (the S1 0xC000 = 6
+   levels) — the documented exception to the record's Q5-z rule.
+3. **ENGINE CONSEQUENCE (landed).** `stage_critters` accepts .NME
+   section 1 (kind 2; the bounds-drop gate and the 2/5-draw attempt
+   budget exact); the k2 body lands in bedlam-core::critter with 10
+   unit tests (staging seeds/clamp/drop-gate/draw budget, the
+   heading precession + walk deltas on the sin(a·π/128) table, the
+   0x65 stamp with the jitter-invariant and RAW >>5 velocity
+   check, the range gate + dead-robot skip, the exact
+   5-draw fire frame, the presence gate). The new `variant` record
+   field is NOT serialized in the canonical bank blob (the §7j.71
+   dir/frame/z_restore convention) and NO canonical scenario stages
+   S1 — ZERO chain movement (canonical_dump_gate 13/13 +
+   differ_gate 4/4 + determinism re-asserted green).
+4. **THE CENSUS RE-PIN (deliberate, D28; ONE row flip).** The
+   ShootersxNN component dropped from all 17 hosting rows AND
+   ZONED-MISSION5 FLIPPED CLEAN — it was the one host whose only
+   unmodeled section was Shootersx4, so the queue item's "expect NO
+   row flip clean — Chasers remain on every host" was FALSE for
+   exactly that row (its Chasers count was zero); documented here +
+   in P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4. The G2 class is now
+   Chasers + CloseCombat + the S8 personnel bank (25 missions);
+   12/37 missions now LOAD clean (ZONEA-M1, the ten MP, ZONED-M5)
+   while the zone-parity ledger stays 1/37 green (dispositions flip
+   only on zone-parity evidence, §3/§5 — unchanged). Provenance:
+   docs/evidence/p5-g2-shooters-census-table.txt. Verified:
+   bedlam-core + bedlam-game release suites green, fmt + clippy
+   clean on the touched crates, gates-validator 22/22, inspect
+   baseline ok (1069 files), MANIFEST clean before AND after every
+   corpus read, no Ghidra run.
