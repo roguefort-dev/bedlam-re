@@ -1,5 +1,44 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-ports-scaffold` COMPLETE (worker 5c84290c
+    claim 1, commit 8fd0739, PUSHED, plus this bookkeeping
+    commit): P7 OPENED — THE PORTS/PACKAGING DELIVERABLE-MAP
+    CONTRACT landed as the FIRST P7 required gate (D221; the
+    D175/D200/D216 scaffold pattern, the contract BEFORE any
+    packaging work it grades). docs/P7-PORTS.md: the PLAN §6 P7
+    scope map VERBATIM + the ENGINEERING vs EXTERNAL-CONDITIONAL
+    split (7 graded deliverables — linux-native,
+    flatpak-manifest, windows-installer, macos-universal2-ci,
+    ci-artifacts-per-push, cdda-user-supply, steamdeck-default,
+    all seeded pending; 3 recorded exclusions —
+    macos-runner-availability, signing-keys, publication-stores,
+    exactly the P4 live-capture-diagnostics posture so P7 gates
+    grade only the engineering), the embedded p7-ports-map-v1
+    registry, the CDDA user-supply + local-lossy-cache contract
+    (user-supplied originals, silent miss, user-owned cache,
+    never redistributed; grounded on landed facts, no new RE),
+    the SteamDeck stretch platform default over the landed D215
+    scale surface, and the gate shape the phase closes on (every
+    engineering row landed with its hermetic offline proving
+    gate + the bounded --phase P7 verdict green). The checker
+    tools/check-p7-ports-map.py enforces R1-R8 (incl. R2: a
+    deliverable is landed EXACTLY when its proving gate is
+    named; R6: P7 green requires all engineering rows landed —
+    the surveyable flip). Verified first-hand: checker OK (7
+    engineering 0 landed 7 pending + 3 exclusions); suite 29/29;
+    test-validate-required-gates 22/22 after the manifest edit;
+    check-p6-behavior-catalog OK before AND after; MANIFEST
+    clean (no corpus read); the bounded --phase P7 verdict at
+    8fd0739 status=passed, the gate green with both commands
+    rc=0 under bwrap containment, head-bound to 8fd07396ef3d
+    (report .state/p7-ports-gates-report.json); no engine
+    change, no packaging build, no CI change, no Ghidra run.
+    Queue head is now p7-ci-artifacts (the per-push artifact
+    jobs over the existing ci.yml matrix — the registry's
+    ci-artifacts-per-push + linux-native rows), with the CDDA,
+    SteamDeck, Flatpak, installer, universal2 units and the P7
+    phase close queued behind it.
+
   - 2026-08-28 `p6-phase-close` COMPLETE (worker 7486871a
     claim 1, commit d01a7b7, PUSHED, plus this bookkeeping
     commit): P6 CLOSED IN THE MANIFEST — docs/required-gates.toml
@@ -701,14 +740,15 @@
     movement. Queued: the p6-modeconfig-seam engine unit as the new
     head.
 
-- Phase: P6 GREEN (the surveyed flip d01a7b7 with the bound verdict
-  re-emitted there — ALL 14 P6 gates green, .state/P6-COMPLETE
-  phase-complete-v1; the D220 survey: every PLAN section 6 P6 bullet
-  gate-green landed or explicitly deferred, nothing silently
-  dropped). P0-P5 GREEN (P5 flipped f608207, .state/P5-COMPLETE;
-  ledger 37/37, D199). P7 UNDERWAY (p7-ports-scaffold queued);
-  runner, signing, and publication availability are external
-  conditions per PLAN. plan_complete false.
+- Phase: P7 UNDERWAY (the p7-ports-scaffold contract landed 8fd0739
+  as the FIRST P7 required gate, D221; the remaining engineering
+  deliverables queued; runner, signing, and publication availability
+  are external conditions per PLAN). P0-P6 GREEN (P6 flipped d01a7b7
+  with the bound verdict re-emitted there — ALL 14 P6 gates green,
+  .state/P6-COMPLETE phase-complete-v1; the D220 survey: every PLAN
+  section 6 P6 bullet gate-green landed or explicitly deferred,
+  nothing silently dropped). P0-P5 GREEN (P5 flipped f608207,
+  .state/P5-COMPLETE; ledger 37/37, D199). plan_complete false.
 
   - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6
     claim 1, commit f608207, PUSHED): P5 CLOSED IN THE MANIFEST —

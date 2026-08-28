@@ -10,44 +10,211 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-ports-scaffold] [gate=p7-ports-scaffold] P7
-   opener per PLAN section 6 (Ports and packaging) — land the P7
-   decision surface + the FIRST P7 required gate (the D175
-   p5-zone-gate-scaffold / D200 p6-modernization-scaffold
-   pattern: the machine-checkable contract lands BEFORE any
-   packaging work it grades; the P7 required_gates list is
-   currently empty and the P7 phase status stays pending until
-   its gates close). (a) DECISIONS.md entry deciding the P7 scope
-   map per PLAN section 6 verbatim: Linux native + Flatpak;
-   Windows installer; macOS universal2 through automated CI;
-   runner, signing, and publication availability are EXTERNAL
-   conditions and do not block engineering completion; CI
-   artifacts per push; CDDA = user-supplied original tracks
-   (WAV/CD) with an optional local lossy cache generated on first
-   run — never redistributed; SteamDeck defaults stretch. (b)
-   Commit the contract artifact (docs/P7-PORTS.md): the
-   deliverable map splitting that surface into ENGINEERING
-   deliverables (the per-push CI artifact jobs, the Flatpak
-   manifest, the Windows installer definition, the macOS
-   universal2 CI job, the CDDA user-supply + local-cache
-   contract, the SteamDeck stretch default as a recorded platform
-   default over the landed D215 scale surface) versus EXTERNAL-
-   CONDITIONAL items (signing keys, publication stores, macOS
-   runner availability — recorded as exclusions exactly like the
-   P4 live-capture diagnostics, so P7 gates grade only the
-   engineering), plus the gate shape the phase closes on. (c) The
-   fail-closed checker + hermetic test suite over the committed
-   contract wired as the FIRST P7 required_gates entry in
-   docs/required-gates.toml (re-run tools/test-validate-required-
-   gates.py — the validator's strict manifest key schema applies
-   to the new gate). BOUNDS: scaffold only — no engine change and
-   no packaging build lands in this unit; controls green before
-   AND after (check-p6-behavior-catalog + the gates-validator
-   suite); the gate reads no corpus; MANIFEST clean before and
-   after any corpus read; no Ghidra run; commit with the unit's
-   own Nudge-Worker trailer.
+1. [READY] [id=p7-ci-artifacts] [gate=p7-ci-artifacts] P7 first
+   engineering deliverable per PLAN §6 P7 "CI artifacts per push" +
+   docs/P7-PORTS.md §2/§3 (the D221 contract's registry rows
+   ci-artifacts-per-push + linux-native): the per-push CI ARTIFACT
+   JOBS. (a) The workflow work: extend .github/workflows/ci.yml (or a
+   sibling artifacts workflow triggered on push) with artifact-upload
+   jobs that build the release binary per push on the EXISTING
+   ubuntu-latest + windows-latest matrix legs (Linux native + the
+   Windows build artifact; the macOS leg joins with the
+   macos-universal2-ci unit when a runner exists — D221 exclusion
+   discipline: NO store, NO signing key, NO runner dependency may
+   enter this unit). (b) The contract work: flip the registry rows
+   ci-artifacts-per-push + linux-native to landed with their proving
+   gate in the SAME commit (the D221 R2 rule — landed exactly when
+   the gate is named; update the rows' notes with what the artifact
+   actually is). (c) The gate: p7-ci-artifacts as the SECOND P7
+   required_gates entry behind p7-ports-scaffold — commands = a
+   fail-closed offline checker over the workflow definition (the
+   jobs exist, trigger per push, upload artifacts, no signing
+   material) +
+   tools/check-p7-ports-map.py (the registry flip) + the hermetic
+   suite, all offline; tracked_paths carry the workflow + the doc +
+   the tools + the manifest. BOUNDS: CI/workflow + checker work
+   only, no engine change, no packaging BUILD of installers (the
+   binary artifact is cargo build --release, already green in ci);
+   no corpus; controls green before AND after
+   (check-p6-behavior-catalog + the gates-validator suite +
+   test-validate-required-gates on the manifest edit); MANIFEST
+   clean; commit with the unit's own Nudge-Worker trailer.
+
+2. [READY] [id=p7-cdda-user-supply] [gate=p7-cdda-user-supply] P7
+   CDDA deliverable per PLAN §6 P7 + docs/P7-PORTS.md §4 (the D221
+   contract, row cdda-user-supply): the USER-SUPPLY + LOCAL-CACHE
+   surface in the shell/platform layer. (a) The documented LOOKUP
+   over user-supplied original track locations (WAV/CD; the 7
+   CDDA tracks of the mixed-mode CD, corpus shape VERIFIED
+   GROUNDWORK.md) with the SILENT MISS posture: a miss = music
+   silent + a stderr note, never fatal, never a task. (b) The
+   OPTIONAL local lossy cache generated on first run into a
+   USER-OWNED cache dir (XDG cache or platform equivalent; never
+   game-data/, never the repo), keyed by source identity,
+   regenerated on mismatch, never redistributed. (c) Parity bounds
+   pinned: music stays OUT of the sim (D17 b presentation bucket,
+   the D212 posture — audio never enters a hash; the headless
+   smoke stays at the recorded baseline with the surface present);
+   game-data/ stays read-only. (d) Flip the registry row landed
+   with the proving gate; wire p7-cdda-user-supply as the next P7
+   required_gates entry (hermetic: bedlam-shell --lib style +
+   checker, no corpus read by the gate). BOUNDS: bedlam-shell/
+   platform only, no engine change to bedlam-game/bedlam-core;
+   controls green before AND after; MANIFEST clean before and
+   after every corpus read; commit with the unit's own
+   Nudge-Worker trailer.
+
+3. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
+   SteamDeck deliverable per PLAN §6 P7 "SteamDeck defaults stretch"
+   + docs/P7-PORTS.md §5 (the D221 contract, row steamdeck-default):
+   the recorded PLATFORM-PROFILE default over the landed D215 scale
+   surface. (a) The platform profile: identify the SteamDeck class
+   at startup (the identification mechanism recorded in the
+   registry note when it lands) and override the default
+   PresentConfig scale to FILL-THE-PANEL on the 1280x800 16:10
+   panel — the user-visible posture the contract pins: the panel is
+   filled edge to edge by default, never pillarboxed bars; generic
+   platforms keep Integer + Nearest bit-for-bit (the D215 pin
+   scaling_defaults_to_the_shipped_integer_nearest must stay
+   green). (b) D200 layering: a platform knob OUT of ModeConfig,
+   both pacing arms accept it, it selects NOTHING in the sim —
+   pinned by a trajectory/hash invariance test over the profile
+   selection, and the CLI --scale/--filter overrides still win.
+   (c) Flip the registry row landed with the proving gate; wire
+   p7-steamdeck-default as the next P7 required_gates entry
+   (bedlam-shell --lib style, hermetic, no corpus). BOUNDS:
+   bedlam-shell/platform only; controls green before AND after;
+   MANIFEST clean; commit with the unit's own Nudge-Worker
+   trailer.
+
+4. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
+   Flatpak deliverable per PLAN §6 P7 "Linux native + Flatpak" +
+   docs/P7-PORTS.md §2 (row flatpak-manifest): the committed
+   Flatpak build manifest + its CI build definition; Flathub
+   submission stays the publication-stores exclusion (D221). The
+   gate grades the committed manifest hermetically (schema/shape
+   checker, offline); flip the registry row landed with the gate.
+   BOUNDS: manifest + checker work, no engine change; controls
+   green before AND after; commit with the unit's own
+   Nudge-Worker trailer.
+
+5. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
+   Windows deliverable per PLAN §6 P7 "Windows installer" +
+   docs/P7-PORTS.md §2 (row windows-installer): the committed
+   installer definition built by the artifact job; Authenticode
+   stays the signing-keys exclusion (D221). The gate grades the
+   committed definition hermetically (offline checker); flip the
+   registry row landed with the gate. BOUNDS: definition + checker
+   work, no engine change; controls green before AND after; commit
+   with the unit's own Nudge-Worker trailer.
+
+6. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
+   macOS deliverable per PLAN §6 P7 "macOS universal2 through
+   automated CI" + docs/P7-PORTS.md §2 (row macos-universal2-ci):
+   the committed universal2 aarch64+x86_64 CI job definition that
+   runs when a runner exists — the runner itself is the
+   macos-runner-availability exclusion (D221, PLAN §3 posture:
+   runner availability is external and never blocks engineering;
+   goldens never run on macOS CI). The gate grades the committed
+   job definition hermetically (offline workflow checker); flip
+   the registry row landed with the gate. BOUNDS: workflow +
+   checker work, no engine change; controls green before AND
+   after; commit with the unit's own Nudge-Worker trailer.
+
+7. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
+   phase-close bookkeeping once EVERY engineering deliverable in
+   docs/P7-PORTS.md §3 is landed with its proving gate (the D221
+   R6 surveyable flip — the p5/p6 phase-close pattern): the
+   surveyed verdict walking every PLAN §6 P7 sentence against the
+   registry (landed vs explicitly excluded, nothing silently
+   dropped), the P7 status flip pending->green in
+   docs/required-gates.toml, and the bound --phase P7 verdict
+   re-emitted at the flip commit (--phase-output
+   .state/P7-COMPLETE). This item is claimable ONLY after items
+   1-6 are done.
 
 ## Done
+1. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
+   PUSHED, plus this bookkeeping commit): P7 opener
+   `p7-ports-scaffold` — THE PORTS/PACKAGING DELIVERABLE-MAP
+   CONTRACT wired as the FIRST P7 required gate (D221; the
+   D175/D200/D216 scaffold pattern: the machine-checkable
+   contract lands BEFORE any packaging work it grades). (a) THE
+   DECISION SURFACE: docs/P7-PORTS.md pins the PLAN §6 P7 scope
+   map VERBATIM (sentence-intact, whitespace-normalized binding)
+   and the binding consequences: the three-OS surface, per-push
+   artifacts, the CDDA + SteamDeck contracts are ENGINEERING;
+   runner/signing/publication availability are EXTERNAL
+   conditions recorded as exclusions EXACTLY LIKE THE P4
+   LIVE-CAPTURE DIAGNOSTICS so P7 gates grade only the
+   engineering (no P7 gate may depend on a store, a key, or a
+   runner — the plan's non-blocking sentence made mechanical).
+   (b) THE REGISTRY: schema p7-ports-map-v1 (a fenced TOML block
+   in the doc, the D216 hd-asset-pins-v1 precedent) — ENGINEERING
+   exactly seven (linux-native, flatpak-manifest,
+   windows-installer, macos-universal2-ci, ci-artifacts-per-push,
+   cdda-user-supply, steamdeck-default; all seed pending = the
+   honest scaffold state) + EXTERNAL-CONDITIONAL exactly three
+   (macos-runner-availability, signing-keys, publication-stores;
+   never carry status/gate, always record the exclusion note).
+   THE MECHANICAL RULES (tools/check-p7-ports-map.py, the P6
+   catalog numbering mirrored): R1 registry discipline, R2 the
+   evidence rule (an engineering deliverable is landed EXACTLY
+   WHEN ITS PROVING GATE IS NAMED), R3 exact coverage sets, R4
+   the gate join (a named gate exists as a block AND sits in the
+   P7 phase list), R5 scaffold-first manifest wiring, R6 the
+   surveyable phase-close rule (P7 green requires every
+   engineering row landed), R7 boundary sentences verbatim, R8
+   exclusions stay exclusions. (c) THE CDDA CONTRACT (§4,
+   grounded on already-landed VERIFIED facts — GROUNDWORK.md,
+   RESEARCH-8STREET.md, RE-EXW-MAINLOOP.md; no new RE): mixed-
+   mode CD (track 1 data, tracks 2..8 = seven CDDA tracks);
+   user-supplied originals (never bundled/committed/
+   distributed), the documented lookup with SILENT MISS (music
+   silent + note, never fatal — the 8street CDDA-disabled
+   comparator is standing evidence the game runs music-silent),
+   the optional local lossy cache generated on first run into a
+   USER-OWNED dir (never game-data/, never the repo, keyed by
+   source identity, never redistributed — a derived copy under
+   the D21 rule), music stays out of the sim (D17 b/D212
+   posture). (d) THE STEAMDECK DEFAULT (§5): a PLATFORM DEFAULT
+   not a mode toggle (D200 layering) — on the 1280x800 16:10
+   panel the default becomes FILL-THE-PANEL (stretch, never
+   pillarbox bars), recorded over the landed D215 scale surface;
+   generic platforms keep Integer + Nearest bit-for-bit (the D215
+   pin must stay green); the arm choice (Fill vs an explicit
+   Stretch arm) is recorded by the delivering unit; platform
+   identification is that unit's scope. (e) THE GATE SHAPE P7
+   CLOSES ON (§6): every engineering deliverable landed with its
+   hermetic offline proving gate + the bounded --phase P7
+   validator verdict green. GATE: p7-ports-scaffold wired as the
+   FIRST P7 required_gates entry (checker + suite; tracked doc +
+   both tools + the manifest; no corpus, no writable; P7 status
+   stays pending). Verified first-hand: checker OK (7 engineering
+   0 landed 7 pending + 3 recorded exclusions); suite 29/29
+   (every rule fails loudly incl. both tampered verbatim-plan
+   sentences, missing/extra deliverables, missing exclusion, the
+   landed/pending gate discipline both ways, the exclusion-with-
+   status, undefined + out-of-phase-list proving gates,
+   scaffold-not-first, checker-not-run, untracked doc, premature
+   green flip; + the real-repo pin + the legal landed-state
+   forward shape); tools/test-validate-required-gates.py 22/22
+   re-run AFTER the manifest edit (the strict manifest key schema
+   applies to the new gate); controls green BEFORE (HEAD cec7466)
+   AND AFTER: check-p6-behavior-catalog OK with P6 green (zero
+   open entries) + the gates-validator suite; MANIFEST clean
+   before and after (the gate reads no corpus); the bounded
+   --phase P7 validator verdict at 8fd0739: status=passed,
+   selected_phase P7, the p7-ports-scaffold gate passed with
+   both commands rc=0 under bwrap-unshare-net-pid-ro containment,
+   offline, head-bound to 8fd07396ef3d (report
+   .state/p7-ports-gates-report.json); no engine change, no
+   packaging build, no CI change, no Ghidra run. Queued: the
+   per-push CI artifact jobs as the new head (the registry's
+   ci-artifacts-per-push + linux-native rows), then the CDDA,
+   SteamDeck, Flatpak, installer and universal2 units, then the
+   P7 phase close.
+
 1. DONE (2026-08-28, claim 1 — commit d01a7b7 by worker 7486871a,
    PUSHED, plus this bookkeeping commit): P6 phase-close
    bookkeeping `p6-phase-close` — THE SURVEYED VERDICT + the P6
