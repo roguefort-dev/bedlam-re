@@ -62,6 +62,13 @@
     corpus read, no new dependency, no Ghidra run, no new RE.
     Queue head is now p7-windows-installer, with universal2 and
     the P7 phase close queued behind (2 engineering rows left).
+    NOTE (watchdog repair 1787941613, D226): the worker's model
+    connection died provider-side (transport, rc=0, progress=1)
+    AFTER this entry's completion rewrite — a post-completion
+    transport death, no work lost (e5474b8 + the bookkeeping
+    df93006 both PUSHED, parser rc=0 on the rewritten queue); the
+    structured transport failure was adjudicated replaced-task per
+    D206/D211/D226 and the loop resumes on p7-windows-installer.
 
   - 2026-08-28 `p7-steamdeck-default` COMPLETE (worker 3d906dad
     claim 1, commit 0daf3a7, PUSHED, plus this bookkeeping

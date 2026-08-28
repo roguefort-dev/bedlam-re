@@ -90,6 +90,15 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    GREEN under bwrap), MANIFEST.sha256 clean before and after,
    test-validate-required-gates 22/22, p7-ci-artifacts + suite
    still green over the edited ci.yml.
+   NOTE (watchdog repair 1787941613, D226): the worker's model
+   connection died provider-side (transport, rc=0, progress=1)
+   AFTER this completion rewrite and its printed final summary —
+   a post-completion transport death, no work lost (e5474b8 +
+   the bookkeeping df93006 both PUSHED, strict parser rc=0 on the
+   rewritten queue); the structured transport failure was
+   adjudicated replaced-task per the D206 checklist (all four
+   items green, D211/D226) and the active queue above stands
+   untouched, RUNNABLE 1 2 3.
 
 2. DONE (2026-08-28, claim 1 — commit 0daf3a7 by worker 3d906dad,
    PUSHED, plus this bookkeeping commit): P7 FOURTH engineering

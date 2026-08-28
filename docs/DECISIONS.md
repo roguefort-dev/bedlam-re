@@ -9383,3 +9383,60 @@ under bwrap containment); MANIFEST.sha256 clean before and after
 (no game-data touch — the gate reads only committed definitions);
 the bounded --phase P7 validator verdict re-emitted at the landing
 commit: ALL 5 P7 GATES GREEN under bwrap containment.
+
+## D226 — 2026-08-28: autonomy/watchdog — the SIXTH post-completion death, second pure `transport` variant (worker 3ea06ba4, `p7-flatpak-manifest`): rc=0 progress=1 AFTER a fully-green completion (implementation + bookkeeping both PUSHED); adjudicated replaced-task per the D206 checklist with ZERO misses — no new failure mode, no code change owed
+
+Worker 3ea06ba4 finished `p7-flatpak-manifest` completely — e5474b8
+PUSHED with its own Nudge-Worker trailer (the flatpak-builder
+manifest + desktop entry + the per-push CI build job + the hermetic
+checker/suite + the registry flip, ALL 5 P7 GATES GREEN under the
+bounded --phase P7 validator at the landing commit, report
+.state/p7-flatpak-gates-report.json head-bound to e5474b88), the
+bookkeeping df93006 landed with the parser-clean completion
+rewrite (queue sha256 622880f7... == the failure record
+queue_after, device 52 inode 3836061; new head
+p7-windows-installer), main == origin/main at df93006, and the
+FULL final summary printed — and THEN the model connection died
+provider-side (kind `transport`, client rc=0, progress=1; the
+controller itself marked it "provider-side, not charged to the
+task"). The wrapper correctly recorded the structured failure
+(gate p7-flatpak-manifest, repair required) and paused the loop;
+nothing about the TASK was incomplete. Sixth recurrence of the
+D206 class, second occurrence of the pure D211 variant (aae349d
+was the first): the D209 lesson was followed, so every checklist
+item passes with NO miss and the adjudication is pure
+acknowledgment.
+
+THE BINDING CHECKLIST, verified first-hand before acknowledging
+(all four green — any miss means an actual repair instead):
+
+1. The failed gate's substantive commit exists and is PUSHED with
+   the failing worker's own trailer (e5474b8, Nudge-Worker
+   3ea06ba4, origin/main contains it; main == origin/main at
+   df93006).
+2. The queue on disk IS the worker's completion rewrite: sha256
+   622880f7... equals the failure record's queue_after (device 52,
+   inode 3836061) and the strict parser accepts it (rc=0,
+   RUNNABLE 1 2 3) with required work still active (item 1 READY
+   p7-windows-installer).
+3. The failure artifact still matches the trigger snapshot
+   identity (name 3ea06ba4...json, device 52, inode 8140175,
+   sha256 6d871429..., ordinal 1, id/gate p7-flatpak-manifest).
+4. The resolution is `replaced-task`: the failed (ordinal 1,
+   p7-flatpak-manifest, p7-flatpak-manifest) triple is absent
+   from the active queue — the successor p7-windows-installer
+   replaced it — so the remediation commit is this repair commit
+   (it re-affirms the queue postcondition and carries
+   .state/NEXT.md + this non-.state entry in its diff-tree), and
+   .state/llm-watchdog-failure-ack.json (schema
+   nudge-failure-ack-v1) binds to exactly that commit.
+
+NEVER (unchanged from D206/D209/D211): re-run the task, revert,
+or rewrite the dead worker's queue. A provider death AFTER a
+green completion rewrite is transport debris, not lost work.
+No wrapper/harness change is owed: the transport classifier, the
+structured artifact, and the watchdog pause all behaved exactly
+as designed (tools/test-nudge-queue.sh and
+tools/test-automation-failure-watchdog.sh both PASS at this
+commit; strict parser rc=0 before AND after the queue note;
+MANIFEST.sha256 clean).
