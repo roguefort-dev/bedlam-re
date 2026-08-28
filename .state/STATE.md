@@ -1,5 +1,56 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-cdda-user-supply` COMPLETE (worker d9aaa029
+    claim 1, commit 1dfd775, PUSHED, plus this bookkeeping
+    commit): P7's SECOND ENGINEERING DELIVERABLE — the CDDA
+    USER-SUPPLY + LOCAL-CACHE surface (D223; PLAN §6 P7 "CDDA:
+    user-supplied original tracks (WAV/CD), optional local lossy
+    cache generated on first run — never redistributed" +
+    P7-PORTS §4, the registry row flipped landed naming the new
+    THIRD P7 required gate in the same commit per the R2 rule).
+    engine/bedlam-shell/src/cdda.rs (NEW; bedlam-shell only): (a)
+    the documented LOOKUP — the 7 CDDA tracks (CD tracks 02..08)
+    over the ordered roots (--music-dir/BEDLAM_MUSIC_DIR, then
+    $XDG_DATA_HOME/bedlam/music, then the install dir), candidate
+    names BEDLAM0N.WAV then TRACK0N.WAV case-insensitively; SILENT
+    MISS = music silent + one stderr note, never fatal, never a
+    task. (b) the OPTIONAL local lossy cache — whole-track IMA
+    ADPCM (a real 4:1 lossy codec as dependency-free integer
+    math, no new crate) into the USER-OWNED cache home
+    ($XDG_CACHE_HOME/bedlam | ~/.cache/bedlam |
+    %LOCALAPPDATA%/bedlam/cache), keyed by source identity
+    (length + streamed FNV-1a-64), regenerated on mismatch
+    (write-then-rename), startup-refused inside the install tree
+    (game-data read-only; relative install dirs absolutized for
+    the compare — caught first-hand) or any git work tree (never
+    the repo), never redistributed; --no-music-cache opts out.
+    (c) parity bounds — a platform knob OUT of ModeConfig (D200/
+    D17 b) that never reaches the sim config or any hash (pinned
+    by test); the headless smoke EXACTLY at the recorded baseline
+    (scene 696adb1cd110e062 / parity cce30c983b97b16d / audio
+    110400/158092) with the flags noted + ignored. THE GATE:
+    p7-cdda-user-supply = the hermetic bedlam-shell --lib battery
+    (136/0, +19 tests) + check-p7-ports-map (the flip + join).
+    Verified first-hand: the window host end to end on the live
+    display (7/7 resolved; 7 cache entries generated at exactly
+    4:1; second run all FRESH; a modified source regenerating
+    EXACTLY its own entry; the install-dir root fall-through
+    finding the corpus rips; BOTH cache-refusal guards firing;
+    --no-music-cache disabling); controls green
+    (canonical_dump_gate 13/13, zone_mission_parity 5/5,
+    determinism green, catalog checker OK before AND after,
+    gates-validator 22/22, fmt + clippy clean); the ports-map
+    suite re-baselined deliberately 29/29; MANIFEST clean before
+    and after every corpus read; the bounded --phase P7 verdict
+    at 1dfd775: status=passed, ALL 3 P7 GATES GREEN, every
+    command rc=0 under bwrap containment (report
+    .state/p7-cdda-gates-report.json, head-bound to 1dfd77534cab);
+    no engine change to bedlam-game/bedlam-core, no new
+    dependency, no Ghidra run, no new RE. Queue head is now
+    p7-steamdeck-default (the §5 platform-profile default over the
+    landed D215 scale surface), with Flatpak, the Windows
+    installer, universal2 and the P7 phase close queued behind.
+
   - 2026-08-28 `p7-ci-artifacts` COMPLETE (worker cf6544eb
     claim 1, commit af9cac1, PUSHED, plus this bookkeeping
     commit): P7's FIRST ENGINEERING DELIVERABLE — the PER-PUSH CI
@@ -784,10 +835,11 @@
     head.
 
 - Phase: P7 UNDERWAY (the p7-ports-scaffold contract landed 8fd0739
-  as the FIRST P7 required gate, D221; the first engineering
-  deliverable p7-ci-artifacts landed af9cac1 as the SECOND gate,
-  D222 — registry rows ci-artifacts-per-push + linux-native landed,
-  5 engineering rows pending; runner, signing, and publication
+  as the FIRST P7 required gate, D221; p7-ci-artifacts landed af9cac1
+  as the SECOND gate, D222 — registry rows ci-artifacts-per-push +
+  linux-native landed; p7-cdda-user-supply landed 1dfd775 as the
+  THIRD gate, D223 — registry row cdda-user-supply landed, 4
+  engineering rows pending; runner, signing, and publication
   availability are external conditions per PLAN). P0-P6 GREEN (P6
   flipped d01a7b7
   with the bound verdict re-emitted there — ALL 14 P6 gates green,

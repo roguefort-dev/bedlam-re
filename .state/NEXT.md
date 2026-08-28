@@ -10,31 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-cdda-user-supply] [gate=p7-cdda-user-supply] P7
-   CDDA deliverable per PLAN §6 P7 + docs/P7-PORTS.md §4 (the D221
-   contract, row cdda-user-supply): the USER-SUPPLY + LOCAL-CACHE
-   surface in the shell/platform layer. (a) The documented LOOKUP
-   over user-supplied original track locations (WAV/CD; the 7
-   CDDA tracks of the mixed-mode CD, corpus shape VERIFIED
-   GROUNDWORK.md) with the SILENT MISS posture: a miss = music
-   silent + a stderr note, never fatal, never a task. (b) The
-   OPTIONAL local lossy cache generated on first run into a
-   USER-OWNED cache dir (XDG cache or platform equivalent; never
-   game-data/, never the repo), keyed by source identity,
-   regenerated on mismatch, never redistributed. (c) Parity bounds
-   pinned: music stays OUT of the sim (D17 b presentation bucket,
-   the D212 posture — audio never enters a hash; the headless
-   smoke stays at the recorded baseline with the surface present);
-   game-data/ stays read-only. (d) Flip the registry row landed
-   with the proving gate; wire p7-cdda-user-supply as the next P7
-   required_gates entry (hermetic: bedlam-shell --lib style +
-   checker, no corpus read by the gate). BOUNDS: bedlam-shell/
-   platform only, no engine change to bedlam-game/bedlam-core;
-   controls green before AND after; MANIFEST clean before and
-   after every corpus read; commit with the unit's own
-   Nudge-Worker trailer.
-
-2. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
+1. [READY] [id=p7-steamdeck-default] [gate=p7-steamdeck-default] P7
    SteamDeck deliverable per PLAN §6 P7 "SteamDeck defaults stretch"
    + docs/P7-PORTS.md §5 (the D221 contract, row steamdeck-default):
    the recorded PLATFORM-PROFILE default over the landed D215 scale
@@ -57,7 +33,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    MANIFEST clean; commit with the unit's own Nudge-Worker
    trailer.
 
-3. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
+2. [READY] [id=p7-flatpak-manifest] [gate=p7-flatpak-manifest] P7
    Flatpak deliverable per PLAN §6 P7 "Linux native + Flatpak" +
    docs/P7-PORTS.md §2 (row flatpak-manifest): the committed
    Flatpak build manifest + its CI build definition; Flathub
@@ -68,7 +44,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    green before AND after; commit with the unit's own
    Nudge-Worker trailer.
 
-4. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
+3. [READY] [id=p7-windows-installer] [gate=p7-windows-installer] P7
    Windows deliverable per PLAN §6 P7 "Windows installer" +
    docs/P7-PORTS.md §2 (row windows-installer): the committed
    installer definition built by the artifact job; Authenticode
@@ -78,7 +54,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    work, no engine change; controls green before AND after; commit
    with the unit's own Nudge-Worker trailer.
 
-5. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
+4. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
    macOS deliverable per PLAN §6 P7 "macOS universal2 through
    automated CI" + docs/P7-PORTS.md §2 (row macos-universal2-ci):
    the committed universal2 aarch64+x86_64 CI job definition that
@@ -91,7 +67,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    checker work, no engine change; controls green before AND
    after; commit with the unit's own Nudge-Worker trailer.
 
-6. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
+5. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
    phase-close bookkeeping once EVERY engineering deliverable in
    docs/P7-PORTS.md §3 is landed with its proving gate (the D221
    R6 surveyable flip — the p5/p6 phase-close pattern): the
@@ -101,10 +77,96 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    docs/required-gates.toml, and the bound --phase P7 verdict
    re-emitted at the flip commit (--phase-output
    .state/P7-COMPLETE). This item is claimable ONLY after items
-   1-5 are done.
+   1-4 are done.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commit af9cac1 by worker cf6544eb,
+1. DONE (2026-08-28, claim 1 — commit 1dfd775 by worker d9aaa029,
+   PUSHED, plus this bookkeeping commit): P7 SECOND ENGINEERING
+   deliverable `p7-cdda-user-supply` — the CDDA USER-SUPPLY +
+   LOCAL-CACHE surface per PLAN §6 P7 "CDDA: user-supplied original
+   tracks (WAV/CD), optional local lossy cache generated on first
+   run — never redistributed" + docs/P7-PORTS.md §4 (implementation
+   D223; the D221 registry row cdda-user-supply, flipped landed in
+   the SAME commit naming the new THIRD P7 required gate per the
+   R2 rule). (a) THE LOOKUP (engine/bedlam-shell/src/cdda.rs, NEW;
+   bedlam-shell only, no engine change): the 7 CDDA tracks of the
+   mixed-mode CD (CD tracks 02..08, corpus shape VERIFIED
+   GROUNDWORK.md; the WAV header shape re-read first-hand) resolved
+   over the ordered roots (--music-dir DIR / BEDLAM_MUSIC_DIR env,
+   then $XDG_DATA_HOME/bedlam/music, then the install dir),
+   candidate names BEDLAM0N.WAV then TRACK0N.WAV
+   case-insensitively, first match in root order; SILENT MISS = one
+   stderr note, music silent, never fatal, never a task
+   (resolve_supply never fails). (b) THE OPTIONAL LOCAL LOSSY
+   CACHE: whole-track IMA ADPCM (the standard tables, per-channel
+   coder state, nibble-packed: a REAL lossy codec at exactly 4:1,
+   chosen as a dependency-free integer-math transcode — no new
+   crate, cargo --offline stays green) into the USER-OWNED cache
+   home ($XDG_CACHE_HOME/bedlam | ~/.cache/bedlam |
+   %LOCALAPPDATA%/bedlam/cache), <cache>/music/trackNN.bcda with a
+   43-byte header carrying the SOURCE IDENTITY (length + FNV-1a-64
+   streamed), regenerated on mismatch (write-then-rename; corrupt
+   or unparseable entries regenerate, malformed sources skip with
+   a per-track reason — never fatal); --no-music-cache opts out
+   (default ON = generated on first run); startup REFUSES a cache
+   home inside the install tree (game-data stays read-only; both
+   sides best-effort absolutized so the binary's RELATIVE default
+   install dir still compares — caught first-hand) or inside any
+   git work tree (.git at the root or any ancestor — never the
+   repo); the cache is NEVER redistributed (the D21 rule applied
+   to audio). (c) PARITY BOUNDS: CddaOptions rides
+   WindowOptions::music, a PLATFORM knob OUT of ModeConfig (D200,
+   D17 b, the D212 posture) that never reaches the sim config or
+   any hash (pinned by cdda_surface_never_touches_the_sim_config);
+   the headless path owns no surface (the binary notes + ignores
+   the flags), and the smoke ran EXACTLY at the recorded baseline
+   (scene 696adb1cd110e062 / parity cce30c983b97b16d / audio
+   110400/158092) under the new flags. (d) THE GATE:
+   p7-cdda-user-supply wired as the THIRD P7 required_gates entry —
+   command 1 = the hermetic bedlam-shell --lib battery (136/0 +
+   1 pre-existing ignored; +19 cdda tests: the numbering/names,
+   the case-insensitive priority-ordered lookup, the silent-miss
+   wording, the WAV parser incl. odd-chunk padding + every
+   fail-closed shape, the ADPCM pins (silence exact, 4:1 size,
+   bounded roundtrip, held-value settling), the FNV identity
+   (streamed vs one-shot + known values), the blob round-trip +
+   verdict-on-identity, the end-to-end cache
+   generate/fresh/regenerate/corrupt cycle, the skip-with-reason
+   posture, the component-wise containment + git-worktree +
+   relative-install guards); command 2 = check-p7-ports-map (the
+   flip + join). No corpus key, no writable (temp fixtures ride
+   the validator's TMPDIR target bind). (e) THE FLIP (same
+   commit): the registry row landed with the note rewritten to
+   what shipped; §4 gained the LANDED paragraph; §6 the
+   landed-since note; the ports-map suite re-baselined
+   deliberately (real-repo pin 3 landed / 4 pending + the landed
+   line; the forward-shape test 4/3; the not-in-phase-list
+   fixture wiring the cdda gate) — 29/29. Verified first-hand:
+   fmt + clippy clean (the one pre-existing D210 warning
+   untouched); the binary --help/--music-dir/--no-music-cache
+   wiring first-hand (help text, the missing-value rejection at
+   exit 2, the headless ignore note); the WINDOW host end to end
+   on the live display — 7/7 via --music-dir with the cache
+   generating 7 entries (43-byte header + exactly 1/4 of the PCM
+   bytes), a second run all FRESH, a modified source regenerating
+   EXACTLY its own entry, the empty-override fall-through finding
+   the corpus rips via the install-dir root, BOTH refusal guards
+   firing with their notes, --no-music-cache disabling; controls
+   green: canonical_dump_gate 13/13, zone_mission_parity 5/5,
+   determinism green (ZERO canonical-chain movement),
+   check-p6-behavior-catalog OK before AND after,
+   test-validate-required-gates 22/22 after the manifest edit;
+   MANIFEST clean before and after every corpus read (one
+   deliberate guard-probe env var made mesa write its own cache
+   under game-data — removed, manifest re-verified clean); the
+   bounded --phase P7 validator verdict at 1dfd775: status=passed,
+   ALL 3 P7 GATES GREEN, every command rc=0 under bwrap
+   containment (report .state/p7-cdda-gates-report.json, head-bound
+   to 1dfd77534cab). Queued: the SteamDeck platform-profile default
+   as the new head (the next registry row in contract order), then
+   Flatpak, the Windows installer, universal2 and the P7 phase
+   close.
+2. DONE (2026-08-28, claim 1 — commit af9cac1 by worker cf6544eb,
    PUSHED, plus this bookkeeping commit): P7 first engineering
    deliverable `p7-ci-artifacts` — the PER-PUSH CI ARTIFACT JOBS per
    PLAN §6 P7 "CI artifacts per push" + docs/P7-PORTS.md §2/§3
@@ -172,7 +234,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    report.json, head-bound to af9cac1e5597). Queued: the CDDA
    user-supply + local-cache unit as the new head (the next registry
    row in contract order).
-2. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
+3. DONE (2026-08-28, claim 1 — commit 8fd0739 by worker 5c84290c,
    PUSHED, plus this bookkeeping commit): P7 opener
    `p7-ports-scaffold` — THE PORTS/PACKAGING DELIVERABLE-MAP
    CONTRACT wired as the FIRST P7 required gate (D221; the
