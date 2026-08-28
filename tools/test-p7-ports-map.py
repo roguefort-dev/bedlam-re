@@ -104,11 +104,13 @@ def manifest_text(
     p7_status: str = "pending",
 ) -> str:
     # The default mirrors the REAL manifest's honest state since the
-    # p7-ci-artifacts unit (D222): the scaffold first, then the gate
-    # proving the two landed rows (ci-artifacts-per-push +
-    # linux-native), wired exactly like docs/required-gates.toml.
+    # p7-cdda-user-supply unit (D223): the scaffold first, then the
+    # gates proving the landed rows (p7-ci-artifacts proves
+    # ci-artifacts-per-push + linux-native; p7-cdda-user-supply
+    # proves cdda-user-supply), wired exactly like
+    # docs/required-gates.toml.
     if p7_gates is None:
-        p7_gates = [GATE_ID, "p7-ci-artifacts"]
+        p7_gates = [GATE_ID, "p7-ci-artifacts", "p7-cdda-user-supply"]
     if gate_blocks is None:
         gate_blocks = [
             {
@@ -137,6 +139,31 @@ def manifest_text(
                     ".github/workflows/ci.yml",
                     "tools/check-p7-ci-artifacts.py",
                     "tools/test-p7-ci-artifacts.py",
+                    DOC_RELATIVE,
+                    "docs/required-gates.toml",
+                ],
+            },
+            {
+                "id": "p7-cdda-user-supply",
+                "timeout_seconds": 1800,
+                "commands": [
+                    [
+                        "/usr/bin/cargo",
+                        "test",
+                        "--release",
+                        "--locked",
+                        "--offline",
+                        "-p",
+                        "bedlam-shell",
+                        "--lib",
+                    ],
+                    ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+                ],
+                "tracked_paths": [
+                    "engine/bedlam-shell/src/cdda.rs",
+                    "engine/bedlam-shell/src/lib.rs",
+                    "engine/bedlam-shell/src/window.rs",
+                    "engine/bedlam-shell/src/main.rs",
                     DOC_RELATIVE,
                     "docs/required-gates.toml",
                 ],
@@ -233,12 +260,14 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"p7-ports-map: OK", result.stdout)
-        # Deliberate re-baseline with the p7-ci-artifacts unit (D222):
-        # the two rows it proves (ci-artifacts-per-push + linux-native)
-        # are landed; the other five engineering rows stay pending.
-        self.assertIn(b"7 engineering (2 landed, 5 pending)", result.stdout)
+        # Deliberate re-baseline with the p7-cdda-user-supply unit
+        # (D223): the three landed rows (ci-artifacts-per-push +
+        # linux-native on p7-ci-artifacts, cdda-user-supply on its
+        # own gate) leave four engineering rows pending.
+        self.assertIn(b"7 engineering (3 landed, 4 pending)", result.stdout)
         self.assertIn(
-            b"landed: ci-artifacts-per-push (gate p7-ci-artifacts),"
+            b"landed: cdda-user-supply (gate p7-cdda-user-supply),"
+            b" ci-artifacts-per-push (gate p7-ci-artifacts),"
             b" linux-native (gate p7-ci-artifacts)",
             result.stdout,
         )
@@ -468,11 +497,12 @@ class PortsMapCheckerTests(unittest.TestCase):
     def test_landed_gate_not_in_phase_list_fails(self) -> None:
         doc = land_steamdeck(self.honest_doc(), "p7-steamdeck-default")
         # The honest doc already lands ci-artifacts-per-push +
-        # linux-native on p7-ci-artifacts, so the fixture wires that
-        # gate in (defined + listed) to reach the steamdeck-specific
-        # failure: p7-steamdeck-default is defined but NOT in the list.
+        # linux-native on p7-ci-artifacts and cdda-user-supply on its
+        # own gate, so the fixture wires BOTH in (defined + listed)
+        # to reach the steamdeck-specific failure:
+        # p7-steamdeck-default is defined but NOT in the list.
         manifest = manifest_text(
-            p7_gates=[GATE_ID, "p7-ci-artifacts"],
+            p7_gates=[GATE_ID, "p7-ci-artifacts", "p7-cdda-user-supply"],
             gate_blocks=[
                 {
                     "id": "p7-steamdeck-default",
@@ -483,6 +513,11 @@ class PortsMapCheckerTests(unittest.TestCase):
                     "id": "p7-ci-artifacts",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": [".github/workflows/ci.yml"],
+                },
+                {
+                    "id": "p7-cdda-user-supply",
+                    "commands": [["/usr/bin/true"]],
+                    "tracked_paths": ["engine/bedlam-shell/src/cdda.rs"],
                 },
                 {
                     "id": GATE_ID,
@@ -575,11 +610,17 @@ class PortsMapCheckerTests(unittest.TestCase):
 
     def test_landed_deliverable_with_wired_gate_passes(self) -> None:
         doc = land_steamdeck(self.honest_doc(), "p7-steamdeck-default")
-        # The honest doc already lands two rows on p7-ci-artifacts; the
-        # fixture wires both gates so the flipped steamdeck row reaches
-        # its own proving gate: 3 landed, 4 pending.
+        # The honest doc already lands three rows (two on
+        # p7-ci-artifacts, cdda-user-supply on its own gate); the
+        # fixture wires all four gates so the flipped steamdeck row
+        # reaches its own proving gate: 4 landed, 3 pending.
         manifest = manifest_text(
-            p7_gates=[GATE_ID, "p7-ci-artifacts", "p7-steamdeck-default"],
+            p7_gates=[
+                GATE_ID,
+                "p7-ci-artifacts",
+                "p7-cdda-user-supply",
+                "p7-steamdeck-default",
+            ],
             gate_blocks=[
                 {
                     "id": GATE_ID,
@@ -600,6 +641,11 @@ class PortsMapCheckerTests(unittest.TestCase):
                     "tracked_paths": [".github/workflows/ci.yml"],
                 },
                 {
+                    "id": "p7-cdda-user-supply",
+                    "commands": [["/usr/bin/true"]],
+                    "tracked_paths": ["engine/bedlam-shell/src/cdda.rs"],
+                },
+                {
                     "id": "p7-steamdeck-default",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": ["docs/P7-PORTS.md"],
@@ -608,7 +654,7 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         result = self.run_checker(doc, manifest)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertIn(b"3 landed, 4 pending", result.stdout)
+        self.assertIn(b"4 landed, 3 pending", result.stdout)
 
 
 if __name__ == "__main__":

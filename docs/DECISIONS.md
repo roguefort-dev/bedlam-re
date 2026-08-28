@@ -9039,3 +9039,124 @@ the new gate block); tools/check-p6-behavior-catalog.py OK (P6
 green, zero open entries) BEFORE AND AFTER; the bounded --phase P7
 validator verdict at the landing commit: ALL 2 P7 GATES GREEN under
 bwrap containment (report .state/p7-ciartifacts-gates-report.json).
+## D223 — 2026-08-28: P7 `p7-cdda-user-supply` — the SECOND P7 ENGINEERING deliverable (PLAN §6 P7 "CDDA: user-supplied original tracks (WAV/CD), optional local lossy cache generated on first run — never redistributed" + the P7-PORTS §2 row cdda-user-supply / §4 contract): the USER-SUPPLY + LOCAL-CACHE surface in the shell/platform layer (a new bedlam-shell module), graded hermetically by the bedlam-shell --lib battery, with the registry row flipped landed in the SAME commit naming the new THIRD P7 required gate (the D221 R2 rule)
+
+CONTEXT: D221 pinned the §4 contract and D222 exercised R2 on the
+CI rows; the queue head was the CDDA row. The grounded facts were
+already VERIFIED (no new RE owed): the mixed-mode CD (track 1 data,
+tracks 2..8 = seven CDDA tracks, ~206-225 s, 44.1 kHz 16-bit
+stereo; the corpus carries BEDLAM02..08.WAV — GROUNDWORK.md,
+RESEARCH-8STREET.md; the corpus WAV header shape re-read first-hand
+for this unit: RIFF + fmt PCM/2ch/44100/16-bit + data) and the EXW
+MCI CD-audio path (RE-EXW-MAINLOOP.md — CD audio never entered the
+sampled mixer; presentation bucket by the original's own
+construction, D17 b). BOUNDS fixed by the queue item:
+bedlam-shell/platform only, no engine change to bedlam-game/
+bedlam-core, controls green before AND after, MANIFEST clean
+around every corpus read, the headless smoke at its recorded
+baseline with the surface present.
+
+DECISION: (a) THE DOCUMENTED LOOKUP (engine/bedlam-shell/src/
+cdda.rs, NEW): per music track 0..6 (CD track = index+2, the
+mixed-mode numbering), candidate file names BEDLAM0N.WAV then
+TRACK0N.WAV (N = 2..8), matched case-insensitively against each
+search root's listing (first match in root order, deterministic);
+the search roots in priority order: the explicit --music-dir DIR
+flag (BEDLAM_MUSIC_DIR env as its twin, the flag wins), then the
+user's $XDG_DATA_HOME/bedlam/music (default $HOME/.local/share/
+bedlam/music), then the game's own install directory (the packaged
+game's user-owned tree; in the repo layout the operator's
+read-only corpus copy — only ever READ). THE SILENT MISS POSTURE:
+one stderr note (a full or partial miss names the silent posture
+and where to put the rips); a miss is music silent, never fatal,
+never a task — resolve_supply NEVER fails (an unreadable root
+contributes nothing). (b) THE OPTIONAL LOCAL LOSSY CACHE: the
+cache home is $XDG_CACHE_HOME/bedlam, default $HOME/.cache/bedlam
+(the Windows platform equivalent %LOCALAPPDATA%/bedlam/cache); each
+RESOLVED track transcodes ONCE on first run into <cache>/music/
+trackNN.bcda — the whole 16-bit PCM track IMA-ADPCM-encoded (the
+standard 89-entry step table + index table, per-channel coder
+state, nibble-packed low-first: a REAL lossy codec at exactly 4:1,
+chosen deliberately as a dependency-free integer-math transcode —
+no new crate, cargo --offline stays green) behind a 43-byte header
+(magic BCDDAC01, track, rate, channels, source frames, the SOURCE
+IDENTITY = file length + FNV-1a-64 over the bytes, the nibble
+count). On every run the identity is recomputed (one streamed
+read): a match is FRESH, anything else (absent, corrupt, mismatched
+identity) REGENERATES exactly that entry, write-then-rename so a
+torn entry is impossible; unparseable or truncated sources SKIP
+that entry with a per-track reason (never fatal). --no-music-cache
+opts out (the plan's "optional"; default ON = "generated on first
+run"). THE GUARDS: the startup REFUSES a cache home inside the game
+install tree (game-data stays read-only; both sides best-effort
+absolutized so the binary's RELATIVE default install dir still
+compares against an absolute cache home — caught first-hand) or
+inside any git work tree (.git at the root or any ancestor — never
+the repo); the default construction can never land in either; the
+cache is NEVER redistributed (a derived copy, the D21 rule applied
+to audio). (c) LAYERING: CddaOptions rides WindowOptions::music —
+a PLATFORM knob OUT of ModeConfig (D200), NO purist arbitration;
+the knob never reaches host_sim_config under any setting (pinned by
+test); the headless path owns no surface, so the binary notes +
+ignores --music-dir/--no-music-cache there exactly like every other
+window-host option. (d) THE GATE: p7-cdda-user-supply wired as the
+THIRD P7 required_gates entry — command 1 = the hermetic
+bedlam-shell --lib battery (+19 tests: the track numbering/names,
+case-insensitive + priority-ordered lookup, the silent-miss
+wording, the WAV parser incl. odd-chunk padding + every
+fail-closed shape, the ADPCM pins (silence exact, 4:1 size,
+bounded roundtrip error, held-value settling, the stereo channel
+split), the FNV identity (one-shot vs streamed + known-value
+pins), the blob round-trip + verdict on identity change, the
+end-to-end cache (generate → fresh → regenerate-on-mismatch →
+corrupt-entry regenerate), the skip-with-reason posture, the
+component-wise containment guard, the git-worktree guard, the
+relative-install compare, and the sim-config invariance);
+command 2 = check-p7-ports-map.py (the registry flip + gate join).
+No corpus key, no writable, temp-dir fixtures only (TMPDIR is the
+validator's writable target bind; /tmp is its tmpfs). (e) THE
+CONTRACT FLIP (same commit, the R2 rule): the cdda-user-supply row
+landed naming gate p7-cdda-user-supply with the note rewritten to
+what shipped; §4 gained the LANDED paragraph; §6 gained the
+landed-since note; the ports-map suite re-baselined deliberately
+(the real-repo pin 3 landed / 4 pending + the landed-rows line, the
+forward-shape test now 4 landed / 3 pending with the cdda gate
+wired, and the not-in-phase-list fixture wiring the cdda gate).
+
+BOUNDS KEPT: bedlam-shell only (lib/window/main; NO bedlam-game,
+bedlam-core, bedlam-platform or workspace Cargo.toml change — no
+new dependency); no CI change; no engine write seam; the hashed
+trajectory untouched (the headless smoke ran EXACTLY at the
+recorded baseline under the new flags); game-data READ-ONLY
+(MANIFEST clean before and after every corpus read; the one mesa
+cache pollution from a deliberate guard-probe env var was removed
+and the manifest re-verified); no Ghidra run; no new RE (every
+cited original fact already landed VERIFIED); own Nudge-Worker
+trailer.
+
+VERIFIED (first-hand, this unit): cargo test --release -p
+bedlam-shell --lib 136/0 + 1 pre-existing ignored (was 116/0; +19
+cdda + 1 window invariance); fmt + clippy clean on the touched
+crate (the one pre-existing D210 test warning untouched); the
+binary --help/--music-dir/--no-music-cache wiring checked
+first-hand (help text, the missing-value rejection at exit 2, the
+headless ignore note); the headless smoke EXACTLY at the recorded
+baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d / audio
+110400/158092) under --music-dir X --no-music-cache; the WINDOW
+host end to end on the live display: 7/7 resolved via --music-dir
+(seven synthetic corpus-shaped rips) with the cache generating 7
+entries (43-byte header + exactly 1/4 of the PCM bytes) into the
+XDG cache home, a second run all FRESH, a modified source
+regenerating EXACTLY its own entry, the empty-override fall-through
+finding the corpus rips via the install-dir root, the install-tree
+refusal firing for the RELATIVE default install dir, the
+git-work-tree refusal firing for a cache home under a .git tree,
+and --no-music-cache disabling with its note; check-p7-ports-map OK
+(7 engineering, 3 landed naming their gates, gate join + R5
+scaffold-first verified); tools/test-p7-ports-map.py 29/29 after
+the deliberate re-baseline; tools/test-validate-required-gates.py
+22/22 re-run AFTER the manifest edit (the strict key schema applies
+to the new gate block); check-p6-behavior-catalog.py OK (P6 green,
+zero open entries) BEFORE AND AFTER; the bounded --phase P7
+validator verdict at the landing commit: ALL 3 P7 GATES GREEN
+under bwrap containment (report .state/p7-cdda-gates-report.json).

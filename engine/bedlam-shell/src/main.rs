@@ -38,9 +38,16 @@
 //!   D217; PARITY default = the shipped GPU-scaled canonical frame
 //!   exactly; ENHANCED = the responsive 16:10-master /
 //!   16:9-safe-region layout + the first native pass; ignored
-//!   headless).
+//!   headless). `--music-dir DIR` points the P7 CDDA user-supply
+//!   lookup at an explicit directory of user-supplied original
+//!   tracks and `--no-music-cache` opts out of the optional local
+//!   lossy cache (PLAN §6 P7 "CDDA: user-supplied original tracks
+//!   (WAV/CD), optional local lossy cache generated on first run
+//!   — never redistributed"; D223; the documented lookup resolves
+//!   BEDLAM02..08.WAV / TRACK02..08.WAV rips with a SILENT MISS —
+//!   music silent + a note, never fatal; ignored headless).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -71,6 +78,8 @@ fn main() -> ExitCode {
     let mut sfx: Option<u8> = None;
     let mut save_slot: Option<SaveSlotId> = None;
     let mut autosave = false;
+    let mut music_dir: Option<PathBuf> = None;
+    let mut no_music_cache = false;
     let mut scale: Option<ScaleMode> = None;
     let mut filter: Option<FilterMode> = None;
     let mut presentation: Option<PresentationMode> = None;
@@ -111,6 +120,14 @@ fn main() -> ExitCode {
                 }
             },
             "--autosave" => autosave = true,
+            "--music-dir" => match args.next() {
+                Some(dir) if !dir.is_empty() => music_dir = Some(PathBuf::from(dir)),
+                _ => {
+                    eprintln!("bedlam-shell: --music-dir needs a directory path");
+                    return ExitCode::from(2);
+                }
+            },
+            "--no-music-cache" => no_music_cache = true,
             "--scale" => match args.next().and_then(|w| scale_mode_from_cli(&w)) {
                 Some(mode) => scale = Some(mode),
                 None => {
@@ -140,7 +157,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -213,6 +230,23 @@ fn main() -> ExitCode {
                 println!(
                     "                       natively; explicitly non-parity; P6; ignored headless)"
                 );
+                println!("  --music-dir DIR: window host looks for user-supplied original CDDA");
+                println!("                   tracks in DIR first (P7 user supply; the documented");
+                println!(
+                    "                   lookup then probes $XDG_DATA_HOME/bedlam/music and the"
+                );
+                println!(
+                    "                   install dir; matches BEDLAM02..08.WAV / TRACK02..08.WAV"
+                );
+                println!(
+                    "                   rips case-insensitively; a miss = music silent + a note,"
+                );
+                println!("                   never fatal; the BEDLAM_MUSIC_DIR env is the twin)");
+                println!("  --no-music-cache: window host skips the optional local lossy cache");
+                println!("                    (P7; default generates it on first run into the");
+                println!("                    user-owned cache dir, keyed by source identity and");
+                println!("                    regenerated on mismatch; never redistributed; never");
+                println!("                    in game-data/ or the repo; ignored headless)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -329,6 +363,24 @@ fn main() -> ExitCode {
         if let Some(mode) = presentation {
             opts.presentation = mode;
         }
+        // P7 CDDA user-supply + local-cache surface (D223, the
+        // docs/P7-PORTS.md §4 contract): a PLATFORM selection (D200
+        // layering — OUT of ModeConfig, NO purist arbitration: music
+        // is presentation bucket, D17 b) resolving the user-supplied
+        // original tracks through the documented lookup (SILENT
+        // MISS — music silent + a note, never fatal) and refreshing
+        // the OPTIONAL local lossy cache into the USER-OWNED cache
+        // dir (default ON = generated on first run, keyed by source
+        // identity, regenerated on mismatch, never redistributed —
+        // never game-data/, never the repo). The env var is the
+        // flag's twin (the flag wins); neither touches the host, the
+        // sim config or any hash.
+        if let Some(dir) = music_dir {
+            opts.music.search_dir = Some(dir);
+        }
+        if no_music_cache {
+            opts.music.cache = bedlam_shell::cdda::MusicCachePolicy::Disabled;
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
@@ -375,6 +427,16 @@ fn main() -> ExitCode {
             // it hashes are byte-identical under either mode (the
             // ENHANCED composition is presentation-bucket only).
             eprintln!("bedlam-shell: --presentation is a window-host option; ignored headless");
+        }
+        if music_dir.is_some() || no_music_cache {
+            // Same posture for the CDDA user-supply surface: the
+            // headless path is the hashed-trajectory surface and owns
+            // no music playback — and CRITICALLY the supply/cache
+            // probe must never touch the filesystem or the corpus on
+            // the smoke path (the window startup owns it).
+            eprintln!(
+                "bedlam-shell: --music-dir/--no-music-cache are window-host options; ignored headless"
+            );
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {

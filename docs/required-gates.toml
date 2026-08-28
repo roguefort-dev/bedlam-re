@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold", "p7-ci-artifacts"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply"]
 
 [[gate]]
 id = "trigger-address"
@@ -1136,3 +1136,42 @@ commands = [
   ["/usr/bin/python3", "tools/test-p7-ci-artifacts.py"],
 ]
 tracked_paths = [".github/workflows/ci.yml", "tools/check-p7-ci-artifacts.py", "tools/test-p7-ci-artifacts.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]
+
+# p7-cdda-user-supply — the SECOND P7 engineering deliverable per
+# PLAN §6 "CDDA: user-supplied original tracks (WAV/CD), optional
+# local lossy cache generated on first run — never redistributed"
+# (docs/P7-PORTS.md §2 row cdda-user-supply + §4, flipped landed
+# with this same commit per the D221 R2 rule; implementation D223):
+# the USER-SUPPLY + LOCAL-CACHE surface in the shell/platform layer
+# (engine/bedlam-shell/src/cdda.rs — bedlam-shell only, no engine
+# change). (a) the documented LOOKUP over user-supplied original
+# track locations (the 7 CDDA tracks of the mixed-mode CD, corpus
+# shape VERIFIED GROUNDWORK.md): explicit --music-dir /
+# BEDLAM_MUSIC_DIR, then $XDG_DATA_HOME/bedlam/music, then the
+# install dir; candidate names BEDLAM0N.WAV then TRACK0N.WAV (CD
+# tracks 02..08), case-insensitive, first match in root order; the
+# SILENT MISS posture — a miss is music silent + one stderr note,
+# never fatal, never a task. (b) the OPTIONAL local lossy cache,
+# generated on first run into the USER-OWNED cache home
+# ($XDG_CACHE_HOME/bedlam, default ~/.cache/bedlam, Windows
+# %LOCALAPPDATA%/bedlam/cache): whole-track IMA ADPCM (4:1,
+# dependency-free integer math) into <cache>/music/trackNN.bcda,
+# keyed by SOURCE IDENTITY (length + FNV-1a-64), regenerated on
+# mismatch (write-then-rename), guarded against game-data/ and any
+# git work tree, never redistributed. (c) PARITY BOUNDS pinned by
+# test: the music path stays OUT of the sim (D17 b presentation
+# bucket, the D212 posture — the knob never reaches ModeConfig/
+# SimConfig/any hash under any setting), the headless smoke stays
+# at its recorded baseline (flags noted + ignored there), and
+# game-data stays read-only. Command 1 is the hermetic
+# bedlam-shell --lib battery (temp-dir fixtures only — no corpus
+# key, no writable); command 2 re-runs the registry checker (the
+# flip + gate join). No network, no device, no display.
+[[gate]]
+id = "p7-cdda-user-supply"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+]
+tracked_paths = ["engine/bedlam-shell/src/cdda.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P7-PORTS.md", "docs/required-gates.toml"]

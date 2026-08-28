@@ -209,9 +209,9 @@ note = "LANDED with p7-ci-artifacts: per-push upload steps inside the existing c
 id = "cdda-user-supply"
 kind = "engineering"
 plan_anchor = "CDDA: user-supplied original tracks (WAV/CD), optional local lossy cache generated on first run"
-status = "pending"
-gate = ""
-note = "The section 4 contract: user-supplied originals, the silent-miss lookup, the user-owned local lossy cache — never redistributed."
+status = "landed"
+gate = "p7-cdda-user-supply"
+note = "LANDED with p7-cdda-user-supply: engine/bedlam-shell/src/cdda.rs — the documented lookup (explicit --music-dir/BEDLAM_MUSIC_DIR, then $XDG_DATA_HOME/bedlam/music, then the install dir; candidate names BEDLAM0N.WAV then TRACK0N.WAV for CD tracks 02..08, case-insensitive) with the SILENT MISS posture (a miss = music silent + one stderr note, never fatal, never a task), plus the optional local lossy cache (IMA ADPCM 4:1, dependency-free integer math) generated on first run into $XDG_CACHE_HOME/bedlam (default ~/.cache/bedlam; the Windows platform equivalent %LOCALAPPDATA%/bedlam/cache), keyed by source identity (length + FNV-1a-64), regenerated on mismatch, guarded against game-data/ and any git work tree, never redistributed; music stays out of the sim (D17 b/D212) and the headless smoke stays at its recorded baseline."
 
 [[deliverable]]
 id = "steamdeck-default"
@@ -279,6 +279,44 @@ redistributed" made operational):
   presentation bucket; audio never enters a hash — the D212 posture);
   with no user tracks the shipped behavior is music-silent,
   corpus-faithful, never an error.
+
+**LANDED (unit `p7-cdda-user-supply`, D223):** the contract above
+is the shipped surface in `engine/bedlam-shell/src/cdda.rs`
+(bedlam-shell/platform only — no engine change; the gate is
+`p7-cdda-user-supply`, hermetic `bedlam-shell --lib` + the registry
+checker; no corpus read by the gate). The LOOKUP resolves each of
+the seven tracks over the ordered roots (1. the explicit
+`--music-dir DIR` flag / `BEDLAM_MUSIC_DIR` env, 2. the user's
+`$XDG_DATA_HOME/bedlam/music` — default
+`$HOME/.local/share/bedlam/music`, 3. the game's own install
+directory — the packaged game's user-owned tree; in the repo layout
+the operator's read-only corpus copy), matching candidate names
+`BEDLAM0N.WAV` then `TRACK0N.WAV` (CD track N = 2..8, the
+mixed-mode numbering) case-insensitively, first match in root
+order. The SILENT MISS posture is one stderr note (a full or
+partial miss names the silent posture + where to put the rips);
+nothing is ever fatal. The CACHE transcodes each resolved track
+ONCE — first run — into `<cache>/music/trackNN.bcda`: the whole
+16-bit PCM track IMA-ADPCM-encoded (a real lossy codec at 4:1, the
+repo's dependency-free integer-math posture) behind a small header
+carrying the SOURCE IDENTITY (file length + FNV-1a-64 of the
+bytes); later runs recompute the identity and REGENERATE exactly
+the mismatched entries (write-then-rename, so a torn entry is
+impossible; a corrupt or unparseable entry regenerates too). The
+cache home is `$XDG_CACHE_HOME/bedlam`, defaulting to
+`$HOME/.cache/bedlam` (`%LOCALAPPDATA%/bedlam/cache` on Windows);
+`--no-music-cache` opts out (the plan's "optional"). The startup
+guard REFUSES a cache home inside the game install tree
+(game-data) or inside any git work tree (a `.git` at the root or
+an ancestor), and the default construction can never land in
+either — the cache is user-owned and NEVER redistributed. Verified
+first-hand on the window host: 7/7 resolved with a generated cache
+(43-byte header + exactly 1/4 of the PCM bytes), a second run all
+FRESH, a modified source regenerating EXACTLY its own entry, both
+refusal guards firing with their notes, `--no-music-cache`
+disabling, and the headless smoke EXACTLY at its recorded baseline
+(scene `696adb1cd110e062` / parity `cce30c983b97b16d` / audio
+`110400/158092`) with the flags noted + ignored.
 
 ## 5. The SteamDeck stretch default
 
@@ -355,6 +393,16 @@ reader) and proves the per-push trigger, the release matrix, the two
 binary uploads (`if-no-files-found: error`), and the absence of any
 signing material. The registry rows `ci-artifacts-per-push` +
 `linux-native` flipped `landed` in the same commit (R2).
+
+**Landed since (unit p7-cdda-user-supply, D223):** the THIRD P7 gate
+`p7-cdda-user-supply` proves the §4 contract over the landed shell
+surface (`engine/bedlam-shell/src/cdda.rs`) — command 1 is the
+hermetic `bedlam-shell --lib` battery (the lookup + silent miss, the
+WAV shape, the ADPCM codec pins, the identity-keyed cache verdicts
+and regeneration, the containment guards, and the sim-config
+invariance), command 2 re-runs `tools/check-p7-ports-map.py` (the
+registry flip + gate join). The registry row `cdda-user-supply`
+flipped `landed` in the same commit (R2).
 
 ## 7. P7 acceptance surface (pointer, not re-statement)
 

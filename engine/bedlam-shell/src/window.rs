@@ -173,6 +173,7 @@ use winit::monitor::VideoModeHandle;
 use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::audio::{AudioDevice, VolumeMixers, TARGET_FRAMES};
+use crate::cdda::{self, CddaOptions};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
@@ -613,6 +614,26 @@ pub struct WindowOptions {
     /// reach the sim, a hash, or any file. The binary's `--autosave`
     /// opts in.
     pub autosave: AutosavePolicy,
+    /// The platform-level CDDA user-supply + local-cache selection
+    /// (P7, PLAN §6 "CDDA: user-supplied original tracks (WAV/CD),
+    /// optional local lossy cache generated on first run — never
+    /// redistributed"; D223, the docs/P7-PORTS.md §4 contract): the
+    /// explicit music search-dir override (the binary's
+    /// `--music-dir`; `BEDLAM_MUSIC_DIR` is consulted when the flag
+    /// is absent) and the cache policy (default ON = the plan's
+    /// generated-on-first-run posture; `--no-music-cache` opts
+    /// out). D200 layering with NO purist arbitration: a PLATFORM
+    /// knob, OUT of `ModeConfig`, that selects NOTHING in the host —
+    /// the window startup resolves the user-supplied tracks through
+    /// the documented lookup (SILENT MISS: music silent + a stderr
+    /// note, never fatal) and refreshes the optional local lossy
+    /// cache into the USER-OWNED cache home (never game-data/,
+    /// never the repo, keyed by source identity, regenerated on
+    /// mismatch, never redistributed). Music is presentation bucket
+    /// (D17 b): the sim config and every hash are untouched by any
+    /// setting, and the headless path owns no surface (the binary
+    /// notes + ignores the flags there).
+    pub music: CddaOptions,
     /// The platform-level frame-presentation selection (P6 ENHANCED
     /// native render opener, PLAN §6 "PARITY mode keeps the
     /// canonical 640x480 indexed frame + palette and GPU-scales it
@@ -656,6 +677,7 @@ impl WindowOptions {
             volume: VolumeMixers::SHIPPED,
             save_slot: SaveSlotId::FIRST,
             autosave: AutosavePolicy::Off,
+            music: CddaOptions::default(),
             presentation: PresentationMode::default(),
             auto_exit_after: None,
         }
@@ -831,6 +853,24 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
         }
         None => eprintln!("bedlam-shell: no audio output device; running silent"),
     }
+
+    // P7 CDDA user-supply + local-cache surface (D223, the
+    // docs/P7-PORTS.md §4 contract): the ONE-SHOT startup probe of
+    // the user-supplied music locations (documented lookup, SILENT
+    // MISS — a miss is music silent + a note, never fatal) and the
+    // optional local lossy cache refresh under the guarded
+    // USER-OWNED cache home. Presentation bucket ONLY (D17 b): this
+    // reads user-owned files, writes the user-owned cache, prints
+    // notes — and touches nothing else. The explicit override is
+    // the CLI flag, else the env var; the install dir closes the
+    // search (the packaged game's user drops rips there; in the
+    // repo layout that is the operator's read-only corpus copy).
+    let music_dir = opts
+        .music
+        .search_dir
+        .clone()
+        .or_else(|| std::env::var_os(cdda::MUSIC_DIR_ENV).map(PathBuf::from));
+    cdda::startup(music_dir.as_deref(), &opts.gfx_dir, opts.music.cache);
 
     // The mapper's scheme comes from the SAME plumbed mode
     // (computed before `opts` moves into the app struct).
@@ -2542,6 +2582,35 @@ mod window_mode_tests {
             host_sim_config(&opts),
             baseline,
             "the save surface never reaches the sim config"
+        );
+        assert_eq!(
+            baseline,
+            SimConfig {
+                mode: opts.mode,
+                ..SimConfig::default()
+            }
+        );
+    }
+
+    #[test]
+    fn cdda_surface_never_touches_the_sim_config() {
+        // D223: the CDDA user-supply + local-cache selection is a
+        // PLATFORM knob OUT of ModeConfig (D200) — the music path is
+        // presentation bucket (D17 b: audio never enters a hash), so
+        // the knob never enters the derived SimConfig under ANY
+        // setting, and the default is the enabled cache with no
+        // search-dir override (the plan's generated-on-first-run
+        // posture over the documented lookup).
+        let dir = std::path::PathBuf::from("gfx");
+        let mut opts = WindowOptions::new(&dir);
+        assert_eq!(opts.music, CddaOptions::default());
+        let baseline = host_sim_config(&opts);
+        opts.music.search_dir = Some(std::path::PathBuf::from("/user/music"));
+        opts.music.cache = crate::cdda::MusicCachePolicy::Disabled;
+        assert_eq!(
+            host_sim_config(&opts),
+            baseline,
+            "the CDDA surface never reaches the sim config"
         );
         assert_eq!(
             baseline,

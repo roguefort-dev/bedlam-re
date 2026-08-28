@@ -31,6 +31,16 @@
 //!   ModeConfig (D200), grounded in docs/RE-EXW-SAVE.md over the
 //!   engine's import-only save seam. Inert by design until the new
 //!   versioned save format writer lands (config-not-state, D201).
+//! - [`cdda`]: the P7 CDDA user-supply + local-cache surface
+//!   (D223, docs/P7-PORTS.md §4): the documented lookup over
+//!   user-supplied original track locations (the mixed-mode CD's
+//!   seven CDDA tracks, WAV/CD) with the SILENT MISS posture, plus
+//!   the OPTIONAL local lossy cache (IMA ADPCM, 4:1) generated on
+//!   first run into a USER-OWNED cache dir — keyed by source
+//!   identity, regenerated on mismatch, never redistributed, and
+//!   never in game-data/ or the repo. Presentation bucket only
+//!   (D17 b): nothing here reaches the host, the sim or any hash,
+//!   and the headless smoke never runs it.
 //! - [`native`]: the FIRST native ENHANCED pass (P6 opener, D217):
 //!   the mission-identity strip — a pure palette-indexed UI-plane
 //!   builder over the game's own SMLFONT glyphs, drawn at
@@ -61,6 +71,7 @@
 #![forbid(unsafe_code)]
 
 pub mod audio;
+pub mod cdda;
 pub mod chain;
 pub mod clock;
 pub mod headless;
@@ -74,6 +85,7 @@ pub use audio::{
     AudioDevice, AudioFeed, StreamFacts, VolumeLevel, VolumeMixers, PUMP_FRAMES, RING_CAP_FRAMES,
     TARGET_FRAMES,
 };
+pub use cdda::{CddaOptions, MusicCachePolicy, CDDA_TRACK_COUNT, MUSIC_DIR_ENV};
 pub use chain::{scene_assets, stage_boot, stage_scene, ChainConfig};
 pub use clock::FixedStepClock;
 pub use headless::{
