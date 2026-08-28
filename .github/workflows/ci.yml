@@ -147,3 +147,49 @@ jobs:
           path: packaging/bedlam-shell.flatpak
           if-no-files-found: error
           retention-days: 14
+
+  # P7 "Windows installer" (PLAN sec 6 P7; docs/P7-PORTS.md sec 2
+  # row windows-installer; proving gate p7-windows-installer): the
+  # WINDOWS INSTALLER BUILD DEFINITION -- on every push this job
+  # builds the release engine on the Windows leg, stages the
+  # binary next to the committed NSIS script, and compiles THAT
+  # script with makensis into the UNSIGNED installer
+  # bedlam-shell-setup.exe, uploaded as the per-push installer
+  # artifact. The installer carries the ENGINE BINARY ONLY --
+  # never the corpus, never art, never music (the checker pins
+  # the exact two-file set); the user supplies their OWN original
+  # install at run time (the shell's INSTALL_DIR positional
+  # argument, or a copy of their install in the shell's own
+  # documented default layout inside the install folder -- see
+  # windows-installer-README.txt). Key material is the owner-held
+  # signing-keys exclusion (D221); a store page is the
+  # publication-stores exclusion.
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # not --offline: crates.io is fetched on the runner (no
+      # vendored set is committed); --locked pins the versions.
+      - run: cargo build --release --locked -p bedlam-shell
+      - name: install nsis
+        run: choco install nsis -y
+      # makensis resolves the script's relative File sources
+      # against the script's own directory; staging the binary
+      # next to the script AND running makensis with
+      # working-directory: packaging makes every relative path
+      # resolve to packaging\ under either candidate rule (script
+      # directory or process working directory).
+      - name: stage the engine binary next to the script
+        run: Copy-Item target\release\bedlam-shell.exe packaging\bedlam-shell.exe
+      - name: build the installer
+        working-directory: packaging
+        run: '& "${env:ProgramFiles(x86)}\NSIS\makensis.exe" bedlam-shell.nsi'
+      - name: upload windows installer (per-push artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedlam-shell-windows-installer-x86_64
+          path: packaging/bedlam-shell-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+

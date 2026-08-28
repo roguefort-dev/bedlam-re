@@ -9440,3 +9440,152 @@ as designed (tools/test-nudge-queue.sh and
 tools/test-automation-failure-watchdog.sh both PASS at this
 commit; strict parser rc=0 before AND after the queue note;
 MANIFEST.sha256 clean).
+
+## D227 — 2026-08-28: P7 `p7-windows-installer` — the SIXTH P7 ENGINEERING deliverable (PLAN §6 P7 "Windows installer" + the P7-PORTS §2 row windows-installer): the committed NSIS installer definition + its per-push CI build definition, graded hermetically over the committed definition (a stdlib-only CLOSED-COMMAND-GRAMMAR NSIS parser + fail-closed suite with the OutFile/staging/makensis joins), with the registry row flipped landed in the SAME commit naming the new SIXTH P7 required gate (the D221 R2 rule)
+
+CONTEXT: D221 landed the contract with the windows-installer row
+pending; D222-D225 + D224 landed five of seven engineering rows
+(ci-artifacts-per-push + linux-native, cdda-user-supply,
+steamdeck-default, flatpak-manifest). BOUNDS fixed by the queue
+item: definition + checker work only, no engine change, controls
+green before AND after. The engine's own game-data resolution
+(bedlam-shell INSTALL_DIR positional, default `game-data/BEDLAM`
+resolved relative to the process working directory) is a VERIFIED
+fact of the landed surface this installer builds ON, not a change
+to it. NSIS semantics re-verified against the manual FIRST-HAND
+before committing to the design: $PROGRAMFILES64 exists and is the
+manual's own guidance for 64-bit applications; RequestExecutionLevel
+admin is the documented default for machine installs;
+`UninstPage` (not "Unpage") is the uninstaller page command and
+`un.`-prefixed section names make uninstaller sections; NSIS
+stores $OUTDIR as a CreateShortcut's working-directory property;
+`;`/`#` comments ride after commands quote-aware; makensis's
+relative-path resolution rule (script directory vs process cwd) is
+historically ambiguous, so the design makes the distinction
+moot (below).
+
+DECISION: (a) THE TOOL: NSIS 3, scripted headlessly and compiled
+by `makensis` — chosen over Inno Setup/WiX because the definition
+is a plain closed command language a stdlib checker can parse
+fail-closed (no embedded Pascal, no XML), the compiler runs
+unchanged on the CI Windows leg via chocolatey (`choco install
+nsis`, package v3.12 current), and the output is the classic
+unsigned setup.exe. (b) THE SCRIPT (packaging/bedlam-shell.nsi):
+Name "Bedlam engine"; OutFile "bedlam-shell-setup.exe" (the file
+the CI job uploads); Unicode true; InstallDir
+$PROGRAMFILES64\Bedlam with RequestExecutionLevel admin +
+CRCCheck force (the installer CRCs itself and /NCRC cannot skip
+it); the MINIMAL page flow Page directory + Page instfiles (the
+uninstaller UninstPage uninstConfirm + instfiles — no license
+page: no asset, no EULA text exists to show, D21); exactly two
+sections. THE INSTALL BODY is pinned instruction-for-instruction:
+SetOutPath $INSTDIR; exactly TWO File sources — the staged engine
+binary `bedlam-shell.exe` + `windows-installer-README.txt` — both
+BARE FILE NAMES sitting next to the script (the grammar forbids
+paths, separators, and wildcards outright, so the closed
+two-file set is structural: nothing else can ride along, and the
+corpus can never enter); WriteUninstaller; the
+Add/Remove-Programs registration (HKLM
+Software\Microsoft\Windows\CurrentVersion\Uninstall\BedlamEngine
+DisplayName + UninstallString — a Windows installer that ARP
+cannot see is not a Windows installer); CreateDirectory
+$SMPROGRAMS\Bedlam; ONE CreateShortcut
+$SMPROGRAMS\Bedlam\Bedlam engine.lnk onto the installed engine
+whose WORKING DIRECTORY is $INSTDIR (NSIS stores $OUTDIR as the
+shortcut's working directory and SetOutPath runs first): the
+engine's documented default lookup root sits directly inside the
+install folder, so the shipped posture is — copy your original
+install to <install folder>\game-data\BEDLAM and the shortcut
+just works, or pass INSTALL_DIR on the command line; the README
+spells both out. NO Icon anywhere (no asset ever, D21 — the
+shortcut inherits the engine binary's default icon, the honest
+posture). THE UNINSTALL BODY is the exact inverse: every Delete
+names an artifact the installer wrote (the checker REFUSES any
+Delete of a file the installer never created), the ARP key is
+removed, and RMDir only ever removes EMPTY directories — the
+recursive switch `/r` cannot even parse. (c) THE README
+(packaging/windows-installer-README.txt): the file the installer
+drops next to the binary — honest user documentation carrying the
+engine-only boundary + the supply-your-own sentence + the
+documented default layout; the corpus token may appear in it ONLY
+inside the exact phrase `game-data\BEDLAM` (the engine's own
+default, spelled as the binary documents it — the checker
+removes that phrase and then requires the token gone), and no
+signing vocabulary ever. (d) THE CI BUILD DEFINITION
+(.github/workflows/ci.yml job `windows-installer`,
+windows-latest, per push): checkout + the same
+dtolnay/rust-toolchain@stable the build matrix uses; `cargo build
+--release --locked -p bedlam-shell` (deliberately NOT --offline —
+no vendored set is committed, an --offline job could never build;
+--locked pins the reproducible set); `choco install nsis -y`; the
+STAGING COPY-Item target\release\bedlam-shell.exe ->
+packaging\bedlam-shell.exe (File sources are bare staged names);
+the makensis step runs with working-directory: packaging invoking
+the full path ${env:ProgramFiles(x86)}\NSIS\makensis.exe on
+bedlam-shell.nsi — running makensis with its working directory
+EQUAL to the script's directory makes every relative path (File
+sources AND OutFile) resolve to packaging\ under EITHER candidate
+resolution rule, so the historical script-dir-vs-cwd ambiguity is
+designed away, and the full-path invocation does not depend on
+choco PATH shims; upload per-push as
+bedlam-shell-windows-installer-x86_64 via actions/upload-
+artifact@v4 with if-no-files-found: error + retention-days 14
+(the D222 posture). UNSIGNED by design: Authenticode is the
+owner-held signing-keys exclusion (the P7-PORTS §2 row's own
+sentence), and a store page is the publication-stores exclusion;
+the signing-token denylist
+(secrets/signtool/codesign/notarytool/notariz*/osslsigncode/
+authenticode/gpg) matches NOWHERE across script + README + the
+windows-installer job, comments included, and script + job never
+mention the corpus directory at all. THE GATE (p7-windows-
+installer, the SIXTH P7 required_gates entry behind the
+scaffold): hermetic + offline over the COMMITTED definition —
+check-p7-windows-installer.py parses the script with a CLOSED
+NSIS COMMAND GRAMMAR (stdlib only: every line is one command from
+the closed set with the exact argument shape that command pins —
+quoted-string vs bare-word is tracked, so a quoted bare argument
+or an unquoted string fails; unknown commands, plug-ins,
+compiler directives (!-prefixed), labels, C-style comments, line
+continuations, unbalanced quotes, empty strings, instructions
+outside sections, attributes inside sections, unterminated
+sections are all parse errors — the file that ships is the file
+that is graded), then proves the installer schema (each attribute
+pinned exactly; the exact page flow; exactly the two named
+sections), the CLOSED FILE SET, the two pinned section bodies
+instruction-for-instruction (the distinct invariants — file set
+and the delete-only-what-you-wrote rule — run BEFORE the
+exact-body pins so each rule has teeth on its own), the README
+contract, and the CI join (job exists on windows-latest; checkout
++ toolchain + the reproducible unlocked-not-offline build words;
+choco nsis; the staging Copy-Item with its exact source and
+destination; the makensis step's working-directory: packaging +
+THIS script as a whole argument word; the strict bounded upload
+whose path == packaging/<OutFile>). Command 2 = check-p7-ports-
+map (the registry flip + gate join); command 3 = the checker's
+fail-closed hermetic suite (tools/test-p7-windows-installer.py:
+50 tests — honest real-repo + copy + minimal-script pass pins,
+then one loud refusal per rule: missing files, the eight parse
+disciplines, the six schema tamperers, the file-set tamperers
+(third file, wildcard, pathed source, recursive delete,
+uninstalled delete, reordered body, third/missing section), the
+five README tamperers, the thirteen CI-join tamperers, and the
+two signing-material tamperers). No corpus key, no writable, no
+network, no device, no display. The suite evolution:
+test-p7-ports-map.py re-baselined to the new honest state exactly
+as D222-D225 did (the canonical PENDING row for the flip fixtures
+moves windows-installer -> macos-universal2-ci; the fixture
+manifest wires the sixth gate; the real-repo pin reads 6 landed /
+1 pending; the forward shape now flips the macos row and expects
+7 landed / 0 pending).
+
+VERIFIED first-hand: the checker green over the real repo (the
+summary above); the suite 50/50; check-p7-ports-map OK (7
+engineering, 6 landed, 1 pending) + its suite 29/29 after the
+deliberate re-baseline; test-validate-required-gates 22/22 after
+the manifest edit; check-p7-ci-artifacts + its 22/22 suite and
+check-p7-flatpak-manifest + its 40/40 suite still green over the
+edited ci.yml (the new job keeps the release-matrix job unique —
+it carries no os-matrix — and the denylists clean); ci.yml
+re-parsed under pyyaml as an independent check of the family
+reader; MANIFEST.sha256 clean before and after (no game-data
+touch — the gate reads only committed definitions).

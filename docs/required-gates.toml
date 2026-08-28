@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest", "p7-windows-installer"]
 
 [[gate]]
 id = "trigger-address"
@@ -1270,3 +1270,65 @@ commands = [
   ["/usr/bin/python3", "tools/test-p7-flatpak-manifest.py"],
 ]
 tracked_paths = ["packaging/dev.roguefort.bedlam.yml", "packaging/dev.roguefort.bedlam.desktop", ".github/workflows/ci.yml", "tools/check-p7-flatpak-manifest.py", "tools/test-p7-flatpak-manifest.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]
+
+# p7-windows-installer — the SIXTH P7 engineering deliverable per
+# PLAN §6 "Windows installer" (docs/P7-PORTS.md §2 row
+# windows-installer, flipped landed with this same commit per the
+# D221 R2 rule; decision D227): the committed NSIS INSTALLER
+# DEFINITION (packaging/bedlam-shell.nsi — Name "Bedlam engine";
+# OutFile bedlam-shell-setup.exe; Unicode true; InstallDir
+# $PROGRAMFILES64\Bedlam with RequestExecutionLevel admin and
+# CRCCheck force; the minimal page flow directory + instfiles with
+# the uninstaller's uninstConfirm + instfiles; exactly the install
+# section and one un.-prefixed uninstaller section) + its CI build
+# definition (the ci.yml windows-installer job on windows-latest:
+# cargo build --release --locked -p bedlam-shell — deliberately
+# not --offline, no vendored set is committed; choco install nsis;
+# the staging Copy-Item target\release\bedlam-shell.exe ->
+# packaging\bedlam-shell.exe; makensis run with working-directory:
+# packaging on THIS script so every relative path resolves under
+# either candidate rule; the UNSIGNED installer uploaded per-push
+# as bedlam-shell-windows-installer-x86_64 with
+# if-no-files-found: error + 14-day retention). The installer
+# carries the ENGINE BINARY ONLY: the File set is the closed
+# two-file set of staged bare names (bedlam-shell.exe +
+# windows-installer-README.txt) — no paths, no wildcards, nothing
+# from the corpus can ride along (the corpus token appears nowhere
+# in script or job, and in the README only inside the documented
+# default layout game-data\BEDLAM). The install body is pinned
+# instruction-for-instruction (SetOutPath $INSTDIR; the two files;
+# WriteUninstaller; the Add/Remove-Programs registration HKLM
+# Uninstall\BedlamEngine DisplayName + UninstallString;
+# CreateDirectory $SMPROGRAMS\Bedlam; ONE CreateShortcut whose
+# working directory is $INSTDIR — NSIS stores $OUTDIR as the
+# shortcut's working directory and SetOutPath runs first, so the
+# engine's documented default lookup root sits directly inside the
+# install folder, the same posture the README documents); the
+# uninstall body is the exact inverse (every Delete names an
+# installed artifact, the checker refuses anything else; RMDir
+# only ever removes EMPTY directories — the recursive switch
+# cannot even parse). No key ever marks the installer:
+# Authenticode is the owner-held signing-keys exclusion (denylist
+# enforced across script + README + the job, comments included),
+# and a store page is the publication-stores exclusion. The gate
+# is hermetic and offline over the COMMITTED definition:
+# check-p7-windows-installer.py parses the script with a CLOSED
+# NSIS COMMAND GRAMMAR (unknown commands, plug-ins, compiler
+# directives, labels, C-style comments, line continuations,
+# unquoted/unbalanced arguments, wildcards, path separators in
+# File sources and switches on Delete/RMDir are all parse
+# errors) and proves every rule above + the joins (OutFile == the
+# upload path; the File source == the staged binary; THIS script
+# is what makensis compiles); command 2 re-runs the registry
+# checker (the flip + gate join); command 3 is the checker's
+# fail-closed hermetic suite. No corpus key, no writable; no
+# network, no device, no display.
+[[gate]]
+id = "p7-windows-installer"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p7-windows-installer.py"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+  ["/usr/bin/python3", "tools/test-p7-windows-installer.py"],
+]
+tracked_paths = ["packaging/bedlam-shell.nsi", "packaging/windows-installer-README.txt", ".github/workflows/ci.yml", "tools/check-p7-windows-installer.py", "tools/test-p7-windows-installer.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]

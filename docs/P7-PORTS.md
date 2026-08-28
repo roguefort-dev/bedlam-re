@@ -185,9 +185,9 @@ note = "LANDED with p7-flatpak-manifest: packaging/dev.roguefort.bedlam.yml — 
 id = "windows-installer"
 kind = "engineering"
 plan_anchor = "Windows installer"
-status = "pending"
-gate = ""
-note = "The committed installer definition built by the artifact job; Authenticode is the signing-keys exclusion."
+status = "landed"
+gate = "p7-windows-installer"
+note = "LANDED with p7-windows-installer: packaging/bedlam-shell.nsi — the committed NSIS installer definition (D227) compiled by the ci.yml job windows-installer on windows-latest into the UNSIGNED bedlam-shell-setup.exe, uploaded per-push as bedlam-shell-windows-installer-x86_64. The definition is a CLOSED grammar (checker-enforced command set; unknown commands, plug-ins, compiler directives, labels, C-style comments, line continuations, wildcards, path separators in File sources and switches on Delete/RMDir are all parse errors): Name 'Bedlam engine'; OutFile bedlam-shell-setup.exe; Unicode true; InstallDir $PROGRAMFILES64\\Bedlam with RequestExecutionLevel admin + CRCCheck force; the minimal page flow directory+instfiles (uninstaller uninstConfirm+instfiles); exactly two sections. The install section is pinned instruction-for-instruction: SetOutPath $INSTDIR; exactly TWO staged bare File sources (bedlam-shell.exe staged by the CI job's Copy-Item + windows-installer-README.txt — the closed engine-only file set, nothing else can ride along); WriteUninstaller; the Add/Remove-Programs registration (HKLM Uninstall\\BedlamEngine DisplayName + UninstallString); CreateDirectory $SMPROGRAMS\\Bedlam; ONE CreateShortcut onto the installed engine whose working directory is $INSTDIR (NSIS stores $OUTDIR as the shortcut's working directory; SetOutPath runs first — the engine's documented default lookup root sits directly inside the install folder, and the README spells out the INSTALL_DIR positional too). The uninstall section is the exact inverse: every installed artifact deleted BY NAME (the checker refuses any Delete of a file the installer never wrote), the ARP key removed, RMDir on empty directories only (the recursive switch cannot even parse). The CI job joins: cargo build --release --locked -p bedlam-shell (deliberately not --offline), choco install nsis, the staging Copy-Item, makensis run with working-directory: packaging on THIS script (so every relative path resolves under either candidate rule), upload via actions/upload-artifact@v4 with if-no-files-found: error + 14-day retention. No key ever marks the installer (signing-keys: Authenticode is the owner-held exclusion, denylist enforced across script + README + job, comments included); the corpus token appears nowhere in script or job, and in the README only inside the documented default layout game-data\\BEDLAM."
 
 [[deliverable]]
 id = "macos-universal2-ci"
@@ -452,6 +452,35 @@ invariance over the profile selection), command 2 re-runs
 `tools/check-p7-ports-map.py` (the registry flip + gate join). The
 registry row `steamdeck-default` flipped `landed` in the same
 commit (R2).
+
+**Landed since (unit p7-windows-installer, D227):** the SIXTH P7
+gate `p7-windows-installer` proves the Windows deliverable over
+the committed definition — `tools/check-p7-windows-installer.py`
+parses `packaging/bedlam-shell.nsi` offline under a CLOSED NSIS
+COMMAND GRAMMAR (stdlib only; every rule fail-closed) and pins the
+installer attributes (Name, OutFile `bedlam-shell-setup.exe`,
+Unicode, `$PROGRAMFILES64\Bedlam` + admin + `CRCCheck force`, the
+minimal page flow, exactly the install + `un.` sections), the
+closed engine-only File set (two staged bare names — the binary +
+its README), the instruction-for-instruction install body (the
+uninstaller, the Add/Remove-Programs registration, one Start-Menu
+shortcut whose working directory is `$INSTDIR` — NSIS stores
+`$OUTDIR` as the shortcut's working directory, and `SetOutPath`
+runs first, so the engine's documented default lookup root sits
+directly inside the install folder), the exact-inverse uninstall
+(every Delete names an installed artifact; `RMDir` never
+recurses — the switch cannot even parse), the README contract
+(engine-only boundary, supply-your-own, the documented default
+layout `game-data\BEDLAM` as the only corpus token it may carry),
+and the CI build join (the `windows-installer` job on
+windows-latest: `cargo build --release --locked -p bedlam-shell`,
+`choco install nsis`, the staging `Copy-Item`, makensis run with
+`working-directory: packaging` on THIS script, the strict
+`if-no-files-found: error` upload with bounded retention). The
+registry row `windows-installer` flipped `landed` in the same
+commit (R2). Authenticode stays the `signing-keys` exclusion: the
+installer is UNSIGNED by design and the denylist is enforced
+across script + README + job, comments included.
 
 ## 7. P7 acceptance surface (pointer, not re-statement)
 
