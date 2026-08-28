@@ -2238,6 +2238,17 @@ fn emit_plan_channel(
              record the session's zone cell (1-based set) for the cross-check\""
         ));
     }
+    if let Some(m) = scen.mission {
+        staging.push(format!(
+            "    \"mission\": {m},\n    \"mission_note\": \"E-side EQUIVALENCE seam \
+             (grammar v1.8, the P5 per-zone disposition family): the zone's \
+             mission {m} staged through the campaign mask (1..=5) or the SELECT \
+             MP write pair (6..=7, stage_select_mission — the §7j.73 MP-only \
+             files). The LIVE O1 capture reaches this mission by playing the \
+             campaign or the SELECT screen — the session's own mission cell is \
+             the live-capture seam, recorded never fabricated\""
+        ));
+    }
     if scen.pickup {
         staging.push(
             "    \"pickup\": true,\n    \"pickup_note\": \"E-side EQUIVALENCE seam \

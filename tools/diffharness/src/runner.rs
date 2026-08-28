@@ -23,6 +23,7 @@
 //! loadout = 1,0x7,9:2        ; weapon slots per robot (D103, v1.3)
 //! destroy = 1                ; stage .BDG/.POS/.TRT (D105, v1.4)
 //! zone = "B"                 ; episode-slot zone letter (D108, v1.5)
+//! mission = 3                ; the zone's mission 1..=7 (P5 disposition, v1.8)
 //! pickup = 1                 ; stage the .TOT pickup surface (D108, v1.5)
 //! platforms = 1              ; arm the epilogue creep tick (D113, v1.6)
 //! critters = 1               ; stage .NME + arm the critter controller (D114, v1.7)
@@ -144,6 +145,22 @@ pub struct Scenario {
     /// counters are the live-capture seam — consumers record the
     /// zone seam, never fabricate the counters.
     pub zone: Option<char>,
+    /// The per-mission staging key (grammar v1.8 `mission = <n>`,
+    /// n 1..=7 — the P5 per-zone disposition family): the
+    /// within-zone mission the zone's flows stage. REQUIRES the
+    /// `zone` key (a mission without a zone must fail loud). 1..=5
+    /// stage the CAMPAIGN episode slot at the completion mask whose
+    /// first-uncompleted sub selects exactly that mission (mask
+    /// `(1<<(n-1))-1` through `stage_episode_slot` — the
+    /// campaign-advance slot state); 6..=7 stage the SELECT
+    /// screen's MP write pair instead (zone letter B..=F, mission
+    /// cell n-5 through `stage_select_mission` — the §7j.73
+    /// MP-only files no stage mask can express). Purely an E-side
+    /// staging seam like `zone`: a LIVE O1 capture reaches the
+    /// mission by playing the campaign or the SELECT screen — its
+    /// own counters are the live-capture seam, recorded never
+    /// fabricated.
+    pub mission: Option<u8>,
     /// The pickup-surface staging key (grammar v1.5 `pickup = 1`,
     /// W12-S5/D108): stage the mission's OWN .TOT through the
     /// engine's `stage_pickup_surface` host seam (the init_tiles
@@ -286,6 +303,7 @@ impl Scenario {
         let mut loadout: Vec<LoadoutRobot> = Vec::new();
         let mut destroy = false;
         let mut zone: Option<char> = None;
+        let mut mission: Option<u8> = None;
         let mut pickup = false;
         let mut platforms = false;
         let mut critters = false;
@@ -697,6 +715,39 @@ impl Scenario {
                             }
                             zone = Some(z);
                         }
+                        "mission" => {
+                            // Grammar v1.8 (the P5 per-zone disposition
+                            // family): the within-zone mission 1..=7.
+                            // Strictly one decimal/0x integer in range
+                            // (a typo'd mission must fail loud — the
+                            // runner would otherwise stage the wrong
+                            // mission's assets); pairing with `zone`
+                            // and the B..F rule for 6..7 are checked at
+                            // construction (the key order is free).
+                            let m = parse_num(value).ok_or_else(|| {
+                                scen_err(
+                                    line_no,
+                                    line,
+                                    "mission key is an integer 1..=7 (e.g. `mission = 3`)",
+                                )
+                            })?;
+                            if !(1..=7).contains(&m) {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "mission out of range 1..=7 (the zone's shipped missions)",
+                                ));
+                            }
+                            let m = u8::try_from(m).expect("1..=7 fits u8");
+                            if mission.is_some() {
+                                return Err(scen_err(
+                                    line_no,
+                                    line,
+                                    "mission staged twice (one key per scenario)",
+                                ));
+                            }
+                            mission = Some(m);
+                        }
                         "pickup" => {
                             // W12-S5 (grammar v1.5, D108): the boolean
                             // pickup-surface staging key — `pickup = 1`
@@ -807,6 +858,29 @@ impl Scenario {
                 ));
             }
         }
+        // Grammar v1.8 pairing rule: the per-mission key rides a
+        // staged zone (a mission without a zone would silently stage
+        // the boot slot's ZONEA/MISSION1 — the wrong mission's
+        // assets), and the MP files 6..7 exist only for zones B..=F
+        // (the SELECT write-arm domain 2..=6; zones A and G ship no
+        // MP missions and the arm never writes them).
+        if let Some(m) = mission {
+            let Some(z) = zone else {
+                return Err(scen_err(
+                    0,
+                    "",
+                    "mission key requires the zone key (which zone's mission to stage)",
+                ));
+            };
+            if m >= 6 && !('B'..='F').contains(&z) {
+                return Err(scen_err(
+                    0,
+                    "",
+                    "missions 6..7 are the MP-only files of zones B..F (the SELECT \
+                     write-arm domain); stage them with zone = \"B\"..\"F\"",
+                ));
+            }
+        }
         Ok(Scenario {
             id,
             tiers,
@@ -817,6 +891,7 @@ impl Scenario {
             loadout,
             destroy,
             zone,
+            mission,
             pickup,
             platforms,
             critters,
@@ -1383,6 +1458,43 @@ mod tests {
         assert!(Scenario::parse(&format!("{base}zone = \"A\"\nzone = \"B\"\n")).is_err());
         assert!(Scenario::parse(&format!("{base}pickup = 0\n")).is_err());
         assert!(Scenario::parse(&format!("{base}pickup = 1\npickup = 1\n")).is_err());
+    }
+
+    #[test]
+    fn mission_key_parses_and_gates() {
+        // Grammar v1.8 (the P5 per-zone disposition family): the
+        // within-zone mission 1..=7, riding a staged zone.
+        let base = "scenario = X\ntiers = T0\nframes = 1\n";
+        assert_eq!(
+            Scenario::parse(&format!("{base}zone = \"B\"\n"))
+                .unwrap()
+                .mission,
+            None
+        );
+        for (z, m) in [('B', 1), ('B', 5), ('F', 5), ('G', 1), ('A', 1)] {
+            let s = Scenario::parse(&format!("{base}zone = \"{z}\"\nmission = {m}\n")).unwrap();
+            assert_eq!(s.mission, Some(m));
+            // key order is free: mission before zone parses the same
+            let s = Scenario::parse(&format!("{base}mission = {m}\nzone = \"{z}\"\n")).unwrap();
+            assert_eq!((s.zone, s.mission), (Some(z), Some(m)));
+        }
+        // The MP files 6..7: zones B..F only (the SELECT write arm).
+        for (z, m) in [('B', 6), ('B', 7), ('F', 7)] {
+            let s = Scenario::parse(&format!("{base}zone = \"{z}\"\nmission = {m}\n")).unwrap();
+            assert_eq!(s.mission, Some(m));
+        }
+        // Fail-loud gates: range, duplicates, pairing, MP domains.
+        assert!(Scenario::parse(&format!("{base}zone = \"B\"\nmission = 0\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"B\"\nmission = 8\n")).is_err());
+        assert!(Scenario::parse(&format!("{base}zone = \"B\"\nmission = x\n")).is_err());
+        assert!(
+            Scenario::parse(&format!("{base}zone = \"B\"\nmission = 3\nmission = 4\n")).is_err()
+        );
+        assert!(Scenario::parse(&format!("{base}mission = 3\n")).is_err());
+        for z in ['A', 'G'] {
+            assert!(Scenario::parse(&format!("{base}zone = \"{z}\"\nmission = 6\n")).is_err());
+        }
+        assert!(Scenario::parse(&format!("{base}zone = \"A\"\nmission = 7\n")).is_err());
     }
 
     #[test]

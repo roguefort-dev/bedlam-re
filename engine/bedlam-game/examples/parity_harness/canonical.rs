@@ -57,6 +57,12 @@
 //! the mission's own .TOT pickup surface (after any destroy staging,
 //! then the hazard stamper — the original mission-load order) — both
 //! EQUIVALENCE seams recorded in the plan; S5/S5B run ZONEB set 2.
+//! The `mission` header key (grammar v1.8, the P5 per-zone
+//! disposition family) selects the zone's within-zone mission:
+//! 1..=5 through the campaign mask (the campaign-advance slot
+//! state whose first-uncompleted sub is that mission), 6..=7
+//! through the SELECT MP write pair (`stage_select_mission`, the
+//! §7j.73 MP-only files).
 //!
 //! T2 tier (W12-S3): the scenario's tier list gates the two bank
 //! rows — `weapon-anim-bank` (the 400×0x36 blob, byte layout = the
@@ -822,10 +828,21 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     let mut host = GameHost::new(&config, &SimConfig::default(), palette);
 
     // The episode-slot zone staging (W12-S5, grammar v1.5 `zone`,
-    // D108): the host seam stands in for the campaign-advance
+    // D108; grammar v1.8 `mission`, the P5 per-zone disposition
+    // family): the host seam stands in for the campaign-advance
     // (0x41c9e5) / save-load-restore (0x43c2b8) shells the engine
     // does not model. Letter A..G → stage 1..7; mask 0 → MISSION1.
-    // The emitted linear row no longer reads the slot's progress
+    // The v1.8 `mission` key selects the within-zone mission:
+    // 1..=5 stage the CAMPAIGN slot at the completion mask whose
+    // first-uncompleted sub selects exactly that mission (mask
+    // (1<<(m−1))−1: m=1 → 0, m=2 → 0b0001, … m=5 → 0b1111 —
+    // `mission_number_for_mask` inverts it); 6..=7 stage the SELECT
+    // screen's MP write pair INSTEAD of the campaign slot (the
+    // §7j.73 sibling seam: the MP-only files no stage mask can
+    // express, and campaign staging would CLEAR the pair — the pair
+    // alone carries the load, zone cell = the letter's 1-based
+    // value 2..=6, mission cell m−5 the +5 offset inverts). The
+    // emitted linear row no longer reads the slot's progress
     // counter — it is the DERIVED cell (see `linear_mission_m`
     // below, §7j.64/D, S0-12b/D154; the D108 "linear stays the
     // fresh-slot 0" note superseded). Must run BEFORE the asset
@@ -834,10 +851,28 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     if let Some(letter) = scen.zone {
         let stage = u8::try_from(u32::from(letter) - u32::from(b'A') + 1)
             .expect("grammar pins the zone letter to A..G");
-        if !host.stage_episode_slot(stage, 0) {
-            return Err(CanonicalError(format!(
-                "zone {letter} maps to stage {stage} outside the campaign slot table"
-            )));
+        match scen.mission {
+            Some(m) if m >= 6 => {
+                if !host.stage_select_mission(stage, m - 5) {
+                    return Err(CanonicalError(format!(
+                        "zone {letter} mission {m} is outside the SELECT write-pair domain \
+                         (the grammar pins zones B..F for missions 6..7)"
+                    )));
+                }
+            }
+            campaign => {
+                let mask = match campaign {
+                    Some(m) => (1u8 << (m - 1)) - 1,
+                    None => 0,
+                };
+                if !host.stage_episode_slot(stage, mask) {
+                    return Err(CanonicalError(format!(
+                        "zone {letter} mission {:?} maps to stage {stage}/mask {mask} outside \
+                         the campaign slot table",
+                        scen.mission
+                    )));
+                }
+            }
         }
     }
 
