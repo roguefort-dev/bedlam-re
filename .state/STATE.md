@@ -1,5 +1,68 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-flatpak-manifest` COMPLETE (worker 3ea06ba4
+    claim 1, commit e5474b8, PUSHED, plus this bookkeeping
+    commit): P7's FIFTH ENGINEERING DELIVERABLE — the FLATPAK
+    BUILD MANIFEST + ITS CI BUILD DEFINITION (D225; PLAN §6 P7
+    "Linux native + Flatpak" + P7-PORTS §2 row flatpak-manifest,
+    the registry row flipped landed naming the new FIFTH P7
+    required gate in the same commit per the R2 rule; no engine
+    change). (a) THE MANIFEST packaging/dev.roguefort.bedlam.yml
+    (NEW) — app-id dev.roguefort.bedlam (the repo remote's own
+    reverse DNS, checker-joined to the file stems AND the CI
+    build-bundle command WORD — a substring join is defeated by
+    the manifest path containing the app-id, the suite proves the
+    tamper), org.freedesktop.Platform + Sdk at the PINNED
+    runtime-version 24.08, command bedlam-shell, the CLOSED
+    five-token finish-args surface (--socket=wayland,
+    --socket=fallback-x11, --socket=pulseaudio, --device=dri,
+    --share=ipc — NO host filesystem grant, NO network, NO bus:
+    the user's own override, never baked in); ONE simple-build
+    module (cargo build --release --locked -p bedlam-shell under
+    the rust-stable extension, deliberately NOT --offline — no
+    vendored set is committed, an offline manifest could never
+    build) installing exactly one binary + one desktop entry into
+    /app; the single dir source at the repo root carries the
+    checker-pinned NEVER-BUNDLE skip floor (.git, game-data,
+    game-data-2, derived, derived-2, goldens, ghidra-project,
+    target) and no manifest value outside the skip list
+    references the corpus at all. (b) THE DESKTOP ENTRY
+    packaging/dev.roguefort.bedlam.desktop (NEW) — Exec == the
+    command, Terminal=false, Categories=Game, NO Icon (no asset
+    ever ships, D21; generic icon is honest). (c) THE CI BUILD
+    (.github/workflows/ci.yml job flatpak, per push on
+    ubuntu-latest) — installs flatpak-builder + the SAME pinned
+    SDK//24.08 + rust-stable Extension (the version join), builds
+    THIS manifest with build/repo dirs OUTSIDE the checkout
+    ($RUNNER_TEMP), exports the UNSIGNED single-file bundle
+    bedlam-shell.flatpak naming the app-id, uploads
+    bedlam-shell-flatpak-x86_64 (upload-artifact@v4,
+    if-no-files-found: error, 14-day retention); the
+    signing-token denylist is enforced across manifest + desktop
+    + the job, comments included, and the job never mentions the
+    corpus directory. (d) THE GATE p7-flatpak-manifest — hermetic
+    + offline over the committed definition:
+    tools/check-p7-flatpak-manifest.py (the family stdlib-only
+    YAML-subset reader; closed schema, closed finish-args, the
+    engine-only module, the never-bundle skip floor, the desktop
+    contract, the CI joins, the denylists) +
+    check-p7-ports-map (the flip + join) +
+    tools/test-p7-flatpak-manifest.py (40 fail-closed tests);
+    test-p7-ports-map.py re-baselined to 5 landed / 2 pending
+    (the canonical pending row for flip fixtures is now
+    windows-installer), the D222-D224 pattern. Verified
+    first-hand: the checker + 40/40 suite green over the real
+    repo; ports-map 29/29 + gates-validator 22/22; p7-ci-artifacts
+    + its suite still green over the edited ci.yml; the bounded
+    --phase P7 baseline green at 12c118b (4 gates) BEFORE and the
+    same verdict re-emitted at the landing commit e5474b8:
+    status=passed, ALL 5 P7 GATES GREEN, every command rc=0 under
+    bwrap containment (report .state/p7-flatpak-gates-report.json,
+    head-bound to e5474b88); MANIFEST clean before and after; no
+    corpus read, no new dependency, no Ghidra run, no new RE.
+    Queue head is now p7-windows-installer, with universal2 and
+    the P7 phase close queued behind (2 engineering rows left).
+
   - 2026-08-28 `p7-steamdeck-default` COMPLETE (worker 3d906dad
     claim 1, commit 0daf3a7, PUSHED, plus this bookkeeping
     commit): P7's FOURTH ENGINEERING DELIVERABLE — the STEAMDECK
