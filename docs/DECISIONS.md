@@ -6692,3 +6692,46 @@ green, diffharness green incl. the new parser tests, fmt + clippy
 clean, gates-validator all-green, MANIFEST clean before and after
 every corpus read, no Ghidra run. The remaining zones C..G are
 DISPOSITION-side units instantiating the ZoneSpec parameter.
+
+## D193 (2026-08-28, p5-zone-c-disposition): ZONE C CLOSED — the
+SECOND 7-mission zone flips green (the ledger 15/37) and the
+zone-parity harness carries the CLOSED-ZONE LIST. (1) HARNESS SHAPE
+(f4ab798): the D192 single-`ZONE`-const suite lifted to
+`ZONES: &[ZoneSpec]` (B then C) so a zone's disposition unit
+APPENDS its spec and the closed set never loses its executable
+evidence — the alternative (re-instantiating the const per zone)
+would strand every earlier `p5-zone-{b..}` gate on a suite that no
+longer exercises its zone; both gates now run the same command over
+the same file. (2) ZONEC EVIDENCE + FLIP (same commit, the §5
+cross-artifact rule): the FIRST PURE instantiation — zone C ships
+NO committed .scen flows (scenarios-tree grep verified), so the
+generated per-mission battery IS the whole criterion-1 leg: all 21
+flows (P5CM1A..P5CM7C: boot, 120-frame passive, 48-frame
+full-staging destroy/pickup/platforms/critters) full declared
+budgets, dumps verify, two-run byte identity — NO engine gap
+surfaced on any ZONEC mission (the unit's stopping condition did
+not trigger); the anchor TS/T0 statics re-derived from each TOT
+header (100×100, 160004 B — all seven verified) + the §7j.64
+formula (zone C: linear = clamp(5+m−1, 1, 26) = m+4); the T1 spot
+table per zone (FULL_MASK arithmetic, start_score, the 25-name
+fetch chain with the D184 zone-level CGR/BIN/LNK pin
+`EDITOR\ZONEC\MISSIONC.*`, the seam domains at stage 3 / zone cell
+3 incl. campaign-clears-select); the criterion-6 SAVED/OPTIONS
+import tests stay FILE-LEVEL (the shipped slot-0 campaign IS
+ZONEB/MISSION1 — hardcoded to zone B, never derived from the list;
+the zone-C campaign staging rides criterion 2's seam legs + the
+fuzz's in-model staging assert). P5-ZONE-GATES §9 documents the
+per-criterion table (the §8 pattern) + the closed-zone-list tail
+note on §8; the ledger flips ZONEC-MISSION1..7 green
+(catalog_refs = []); the p5-zone-c gate joins the P5
+required_gates (offline evidence commands only; 12 gates total);
+the ledger test pin re-baselined 8/37 to 15/37 + the ZONEC 7/7
+line (deliberate, same commit — the D28 fingerprint discipline,
+D192 precedent). Verified: zone_mission_parity 5/5 (both zones),
+bedlam-game suites green (canonical_dump_gate 13/13 — ZERO
+canonical chain movement; differ_gate 4/4; determinism; census
+37/37 unchanged), bedlam-core 201/0, diffharness 104/0, fmt +
+clippy clean, check-p5-zone-ledger OK + hermetic suite 18/18, the
+gates validator all-green at the flip commit, MANIFEST clean
+before and after every corpus read, no Ghidra run. The remaining
+zones D..G are pure ZONES-append units in the §9 shape.

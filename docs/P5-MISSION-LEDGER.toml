@@ -65,43 +65,43 @@ catalog_refs = []
 id = "ZONEC-MISSION1"
 zone = "C"
 mission = 1
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION2"
 zone = "C"
 mission = 2
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION3"
 zone = "C"
 mission = 3
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION4"
 zone = "C"
 mission = 4
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION5"
 zone = "C"
 mission = 5
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION6"
 zone = "C"
 mission = 6
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 [[mission]]
 id = "ZONEC-MISSION7"
 zone = "C"
 mission = 7
-disposition = "pending"
+disposition = "green"
 catalog_refs = []
 
 [[mission]]

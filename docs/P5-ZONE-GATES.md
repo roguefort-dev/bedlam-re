@@ -477,4 +477,72 @@ load census stays 37/37 clean per §6). The remaining zones C–G are
 DISPOSITION-side work only: each is its own unit instantiating the
 `ZoneSpec` parameter (the suite and the grammar v1.8 mission key are
 zone-agnostic — the per-zone unit documents its §-table, flips its
-ledger rows, and wires its `p5-zone-{c..g}` gate).
+ledger rows, and wires its `p5-zone-{c..g}` gate). Since the D193
+ZONEC closure the suite carries the closed-zone LIST (`ZONES`), so a
+later zone's unit APPENDS its spec instead of re-instantiating the
+const (a re-instantiation would strand every earlier zone's
+`p5-zone-{b..}` gate on a suite that no longer exercises it).
+
+---
+
+## 9. Zone C closure — ZONEC-MISSION1..7 green (D193)
+
+**Provenance:** unit `p5-zone-c-disposition` (D193), run 2026-08-28
+at HEAD `f4ab798` (the suite-list commit; the ledger flip, this
+section and the gate wiring land together per the §5 cross-artifact
+rule). The FIRST PURE instantiation of the generalized harness: zone
+C ships NO committed `.scen` flows (verified: a scenarios-tree grep
+finds no ZONEC reference — S5/S5B/S5C are zone B's), so the
+generated per-mission battery IS the whole criterion-1 leg. The
+suite change that carries it: `zone_mission_parity.rs` now holds the
+closed-zone LIST (`ZONES: &[ZoneSpec]` — B then C), and every test
+iterates the list; the `p5-zone-b` and `p5-zone-c` gates run the
+same command over the same file, so neither zone's evidence can be
+stranded by a later zone's unit.
+
+**The per-mission criterion-1 battery** (generated per mission, all
+seven executed): flow A = boot→mission (S0 shape, TS anchor), flow B
+= 120-frame passive steady state, flow C = the 48-frame
+FULL-STAGING run (the mission's own destroy + pickup + platforms +
+critters families armed together). Every run completes its full
+declared frame budget, the dump verifies, and a re-run is
+byte-identical (chain digest included). **NO engine gap surfaced on
+any ZONEC mission** (the stopping condition of the unit charter did
+not trigger). ZERO canonical chain movement: `canonical_dump_gate`
+13/13 unchanged (zone C stages no committed flow, so its
+criterion-1 leg rides the generated battery, outside the pinned
+chain set).
+
+**The §1 criterion table, per criterion** (every command below is in
+the `p5-zone-c` gate, executable offline under the validator's bwrap
+containment):
+
+| # | Criterion | Evidence (machine) | Status |
+|---|-----------|--------------------|--------|
+| 1 | scripted flows crash-free | `zone_mission_parity::zone_scripted_flows_complete_crash_free` over the ZONEC spec (committed flows: NONE): the 3-flow battery × ALL SEVEN missions — campaigns 1–5 through the episode-slot mask seam, M6–7 through the SELECT pair — full budgets, dumps verify, two-run byte identity | GREEN |
+| 2 | T1 rules vs RE | `zone_mission_parity::zone_anchor_ts_statics_rederived_from_tot` (per mission: the TOT header dims straight off the file — 100×100, 4+16·w·h = 160004, all seven verified — and the anchor TS/T0 statics: map-wh, money 3500, difficulty 1, zone 2, mode 0, mission n, linear = clamp(5·(3−2)+n−1, 1, 26) = n+4, all re-derived INDEPENDENTLY of the engine's output) + `zone_t1_rules_spot` (the FULL_MASK/first-unset-bit selection arithmetic, the §7j.64/C economy seed, the per-mission 25-name fetch chain with the ZONE-LEVEL CGR/BIN/LNK pin of D184 — `EDITOR\ZONEC\MISSIONC.*` — and the staging-seam domains: the mask→mission inversion at stage 3, the SELECT write-pair domain incl. zone cell 3, campaign-clears-select) + the deep oracle suites as gate commands (`mission_corpus_gate`) | GREEN |
+| 3 | perceptual frame checks at key moments (T2) | Diagnostic band per §0b: thresholds + owner feel sign-off, never pixel-exact gates. Machine stand-in at the key moments: the two-run anchor/frame byte identity of criterion 1 (identical transcripts at mission start and through the flows). Owner feel sign-off stays the operator diagnostic process (not machine-checkable, not a gate). | GREEN (machine band) — sign-off tracked as operator diagnostic |
+| 4 | differ structural spot-check | The structural decode contract inside criterion 1 (anchor frame 0, monotone frame_no, record count = declared budget + 1, the scenario id riding the header) + `differ_gate` (the cross-channel differ on the real S0/S1 dumps: PASS-WITH-NOTES with exactly the budgeted findings, zero structural findings) — a gate command. Not tick-complete by design (§0b). | GREEN |
+| 5 | cross-OS replay hash equality (OUR engine) | The two-run byte + chain-digest identity of criterion 1 is the local half (the generated per-mission transcripts re-stitch identically); the replay-hash fixtures run as gate commands (`hash_fixture` + the `determinism` suites) and the cross-OS channel is the ubuntu+windows CI matrix (the D181 channel — the hashed state is integer-only, little-endian by format contract, float-free, so the pinned chains are OS-invariant by construction with CI as the enforcement channel). | GREEN (fixtures + CI matrix) |
+| 6 | original SAVED/OPTIONS.BDL import read-only, bounds-checked, fuzzed | `zone_mission_parity::zone_saved_import_seam_stages_the_shipped_campaign` + `zone_saved_import_seam_fuzz_bounded` — FILE-LEVEL seam evidence this §-table cites (no shipped save row can carry a zone-C campaign: the slot-0 campaign IS ZONEB/MISSION1, §8): the real-file import (read-only, bounds-checked, the four EMPTY rows reject loud, the typed 41-B OPTIONS import pins) + the bounded deterministic fuzz (full header-window bit-flip sweep per slot, truncations, size attacks, random images) is Ok/Err only with every Ok staging an in-model slot (any zone, C included via `zone_for_stage`); the zone-C campaign staging itself is exercised by criterion 2's seam legs. | GREEN |
+| 7 | DM carve-out | For zone C the carve-out is LOAD-BEARING: missions 6–7 ARE the MP-only files (§7j.73/D183; their .NME are 16-byte empties, §6.3). The checked legs: the maps LOAD (criterion 1's SELECT-seam flows stage them — flows P5CM6A/B/C and P5CM7A/B/C) and local SP semantics are CORRECT (criteria 1–2, incl. the anchor statics re-derivation on M6/M7). Full DM/netplay = future work, out of the parity exit. | NOTED |
+
+**Ledger:** `ZONEC-MISSION1..MISSION7` → `green`, `catalog_refs = []`
+(no original-behavior divergences observed on these missions; a
+green mission may legitimately carry zero refs, §3). Zone C status
+derives green (7/7); the ledger is 15/37 green.
+
+**Gate wiring:** `p5-zone-c` joins P5's `required_gates` (after
+`p5-zone-b`) carrying the zone's evidence commands:
+
+1. `/usr/bin/cargo test --release --locked --offline -p bedlam-game
+   --test zone_mission_parity --test canonical_dump_gate --test
+   differ_gate --test determinism`
+2. `/usr/bin/cargo test --release --locked --offline -p bedlam-core
+   --test hash_fixture --test mission_corpus_gate`
+
+P5 stays `pending` (15/37 missions green — zones A, B and C closed;
+the load census stays 37/37 clean per §6). The remaining zones D–G
+are DISPOSITION-side work only, each a pure `ZONES`-append unit in
+the §9 shape (documented §-table + ledger flip + `p5-zone-{d..g}`
+gate, all in one commit).
