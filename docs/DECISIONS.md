@@ -6883,3 +6883,33 @@ battery all-green at the flip commit (15 gates), MANIFEST clean
 before AND after every corpus read, no Ghidra run. The remaining
 zone G is a pure ZONES-append unit in the §9/§10/§11/§12 shape and
 closes the ledger.
+
+## D198 — 2026-08-28: watchdog repair 314485 finishes the
+watchdog-killed zone-F worker b5bce035 (the D190/D194 pattern,
+third recurrence) and retires the stale no-progress marker that
+caused the kill. Chain of evidence: the 09:39 wrapper pass recorded
+automation-failures/224613cc (kind no-progress, gate
+p5-zone-e-disposition) even though that run had in fact completed
+its unit — the failure record itself shows queue_change=modified
+and the run's completion commit efd1112 IS origin/main — so the
+09:49 watchdog pass hit the force_repair path on the still-unacked
+marker (no supervisor session is consulted on that path), paused
+autonomy, and terminated the live zone-F worker mid HEAD-bound
+battery with BOTH its commits (99bb89a + 29cfc3f) already landed
+and every unit bound verified per its log. Remediation, smallest
+concrete cause only, no tooling change: (1) re-validate the killed
+worker's evidence first-hand (ledger OK 36/37 + ZONEF 7/7,
+hermetic 18/18, zone_mission_parity 5/5 at 29cfc3f, parser rc=0,
+nudge-queue suite PASS, MANIFEST bracketed clean); (2) land its
+end-of-run bookkeeping (queue + STATE + this entry) with the
+failure-ack bound to this commit — resolution replaced-task: the
+failed gate's identity left the active queue when ZONEG became the
+head — and push the stranded commit pair. Structural note for the
+record: the recurring kill window is a completing worker's final
+bookkeeping+push stretch, where it holds no in-flight commit the
+wrapper can count as progress, so a transport hiccup there converts
+a completing run into a no-progress marker that the next watchdog
+pass spends on killing its successor; the ack protocol is the
+designed retirement path and works whenever a repair actually
+finishes a unit. The next worker picks up ZONEG (one mission; the
+ledger closes 37/37).

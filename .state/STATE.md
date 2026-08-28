@@ -1,5 +1,45 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-f-disposition` COMPLETE (claim 1: substantive
+    commits 99bb89a + 29cfc3f by worker b5bce035, which the 09:49
+    watchdog pass terminated mid HEAD-bound battery over the stale
+    unacked 224613cc no-progress marker — the D198 kill window;
+    watchdog repair 314485 re-validated first-hand and landed this
+    bookkeeping + push): ZONE F CLOSED — the FIFTH 7-mission zone
+    flips green (the ledger 36/37; D197) and the disposition is the
+    THIRD PURE ZONES-APPEND (the §10/§11/§12 shape — no harness,
+    grammar, or engine change). (1) THE APPEND (99bb89a): the ZONEF
+    ZoneSpec joined the closed-zone LIST in zone_mission_parity.rs
+    after B, C, D, E (letter F, missions 1..=7, dims 100x100,
+    committed flows NONE) and nothing else; the battery at that
+    state: P5FM1A..P5FM7C all 21 flows full declared budgets, dumps
+    verify, two-run byte identity — NO engine gap on any ZONEF
+    mission; zones B (21 + S5/S5B/S5C), C (21), D (21), E (21)
+    re-verified in place. (2) THE FLIP (29cfc3f, the §5
+    cross-artifact rule): the ledger flips ZONEF-MISSION1..7 green
+    (catalog_refs = []); P5-ZONE-GATES §12 documents the
+    per-criterion table — linear = clamp(5*4+m-1, 1, 26) = m+19,
+    M1..M7 = 20..26 with M7 exactly touching the clamp ceiling 26;
+    zone F ships NO mission-number variant bank (only the zone-level
+    MISSIONF.BIN 1464679 B), so the D184 no-swap pin carries no
+    variant caveat and the zone-level fetch-chain assert is the
+    whole G3 leg; the p5-zone-f gate joins P5 required_gates
+    (15 gates); the ledger test pin re-baselined 29/37 to 36/37 +
+    the ZONEF 7/7 line (deliberate, same commit — D28). Verified by
+    the worker at the flip and re-validated first-hand by the
+    repair at 29cfc3f: check-p5-zone-ledger OK 36/37 + ZONEF 7/7,
+    hermetic ledger suite 18/18, gates-validator suite 22/22,
+    zone_mission_parity 5/5 (26.75s), bedlam-game suites green
+    (canonical_dump_gate 13/13 zero chain movement, differ 4/4,
+    determinism, census 37/37), bedlam-core green, diffharness
+    104/0, fmt + clippy clean; MANIFEST clean before and after
+    every corpus read; no Ghidra run. The queue now carries ZONEG
+    as the head — the LAST ledger disposition: one mission (letter
+    G, missions 1..=1, dims 100x25, TOT 40004 B, no committed
+    flows, no variant bank, only MISSIONG.BIN 2443943 B, linear =
+    m+24, M1 = 25) — and after it P5 moves to its phase-close
+    disposition.
+
   - 2026-08-28 `p5-zone-e-disposition` COMPLETE (claim 1: substantive
     commits 9410e0d + 9190a87 by worker e9edfba4, which died waiting
     on its background battery; claim re-acquired 09:05 by worker
