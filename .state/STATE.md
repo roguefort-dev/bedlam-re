@@ -1,5 +1,41 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-modeconfig-seam` COMPLETE (worker 21604df0
+    claim 1, commit 9d39368, PUSHED): THE MODECONFIG SEAM
+    IMPLEMENTED (D201, the D200 contract's first engine unit). ONE
+    immutable ModeConfig injected at sim construction — private
+    fields, no &mut self method, a mode change is a new sim via the
+    consuming with(axis, arm) builder; default = MODERN, CLASSIC
+    preset, per-axis mixing; the initial purist toggle set = exactly
+    the two plan-named FEEL-CONTESTED axes (timing-lock,
+    control-scheme; from_id fails closed, reserved namespace). The
+    mode rides SimConfig.mode into Sim::new, read-only at
+    Sim::mode()/SimDriver::mode()/GameHost::mode(), no setter at any
+    layer; CONFIG-NOT-STATE — not hashed, not serialized
+    (FORMAT_VERSION unchanged, every P5 hash pin byte-stable); a
+    restore ADOPTS the expected SimConfig's mode; presentation/
+    platform options stay OUTSIDE. The seam lands INERT (no in-sim
+    consumer yet; pinned by test). Gate p6-modeconfig-seam wired as
+    the SECOND P6 required_gates entry (commands = bedlam-core
+    --lib + bedlam-game --lib, both --release --locked --offline,
+    hermetic). Verified first-hand by the worker: bedlam-core --lib
+    147/0, bedlam-game --lib 142/0, determinism + hash_fixture
+    green, fmt + clippy clean on touched files, canonical chains
+    UNMOVED before AND after (canonical_dump_gate 13/13,
+    zone_mission_parity 5/5, determinism 4/4 at b625559 AND at
+    9d39368), p6 suite 30/30, gates-validator 22/22, the bounded
+    --phase P6 verdict at 9d39368 status=passed (report
+    .state/p6-seam-gates-report.json, head-bound); MANIFEST clean;
+    no Ghidra run. NOTE: the worker's end-of-run queue rewrite
+    omitted the required gate tag on queued item 2 (the D202
+    invalid-queue recurrence), so the wrapper killed it at its
+    finish line; the substantive unit was already committed +
+    PUSHED and stands — the watchdog repair (D202) inserted the one
+    missing [gate=] tag, kept the worker's rewrite otherwise
+    verbatim, and completed this bookkeeping. Queued: the
+    p6-timing-lock-surface axis-consumer unit as the new head,
+    p6-control-scheme-surface second.
+
   - 2026-08-28 `p6-modernization-scaffold` COMPLETE (worker 6e45232f
     claim 1, commit e0bc7fb, PUSHED): THE P6 CONTRACT SCAFFOLD
     LANDED (D200, the D175 pattern — the machine-checkable contract
@@ -36,8 +72,9 @@
     head.
 
 - Phase: P6 UNDERWAY (the contract scaffold green at e0bc7fb, D200;
-  the p6-modeconfig-seam engine unit queued as the head). P0-P5
-  GREEN (P5 flipped f608207, .state/P5-COMPLETE; ledger 37/37,
+  the ModeConfig seam green at 9d39368, D201; the
+  p6-timing-lock-surface axis-consumer unit queued as the head).
+  P0-P5 GREEN (P5 flipped f608207, .state/P5-COMPLETE; ledger 37/37,
   D199). P7 pending; plan_complete false.
 
   - 2026-08-28 `p5-phase-close` COMPLETE (worker ec090fa6

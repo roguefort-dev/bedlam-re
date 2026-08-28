@@ -7153,3 +7153,54 @@ harness change, no Ghidra run.
    with the second gate); MANIFEST clean before AND after every
    corpus read; no Ghidra run.
    (worker 21604df0 claim 1, unit p6-modeconfig-seam)
+
+## D202 — 2026-08-28: autonomy/watchdog — the THIRD invalid-queue-rewrite recurrence (a MISSING `[gate=]` tag on a queued successor); the step-7 rewrite is not finished until the strict parser accepts it in the authoring run itself
+
+Context: watchdog repair token 1187807 (queue INVALID-DEADLOCKED,
+parser rc=2, controller refusing idle/spawn). Worker 21604df0
+finished `p6-modeconfig-seam` completely (9d39368, PUSHED) and then
+rewrote the queue per AGENTS.md step 7 — but queued item 2
+(`p6-control-scheme-surface`) carried only `[id=…]`, no
+`[gate=…]`. One missing tag, two machine consequences:
+
+1. THE KILL AT THE FINISH LINE: nudge-agent.sh
+   boundary_completion_rewrite() requires the strict parser to
+   validate the rewritten file before granting the completion
+   grace; an unparseable rewrite is classified as a corrupt
+   mutation, so the wrapper terminated the completer 117s after
+   its own commit and recorded a structured preflight-mismatch /
+   launch-boundary failure — the SECOND time a completer died for
+   a wrapper-side reason, but this time the fault was genuinely in
+   the artifact (the rewrite), not the window.
+
+2. THE DEADLOCK: the controller's next tick parsed the still-
+   invalid queue (rc=2, "item 2: missing required gate metadata"),
+   declared INVALID-DEADLOCKED, and refused to spawn — with the
+   queue unparseable, no worker can ever run to fix it; only a
+   watchdog repair can break the cycle. D177 (wrapped tag) and
+   D180 (rule restated) did not remove the failure class because
+   the rule is enforced only at the wrapper's preflight, AFTER the
+   authoring run ended.
+
+DECISION (binding on every future step-7 rewrite): a queue rewrite
+is not finished when the words are down — it is finished when
+`python3 tools/nudge-free-items.py .state/NEXT.md .state/claims
+--state-v1` exits 0 in the SAME run, before the bookkeeping
+commit. Every queued item carries BOTH `[id=…]` AND `[gate=…]`
+whole on its first numbered line (an id tag alone is invalid);
+prose never uses square brackets (D180). Parser acceptance is part
+of authoring, exactly like fmt/clippy for Rust.
+
+REPAIR (this commit): inserted the one missing
+`[gate=p6-control-scheme-surface]` tag into the killed worker's
+item 2, reflowed only that block (every word preserved; the split
+identifier `p6-control-scheme-/surface` re-joined), left the
+worker's rewrite otherwise verbatim, completed its stranded step-8
+STATE.md bookkeeping, and acked the structured failure
+(replaced-task: `(1, p6-modeconfig-seam, p6-modeconfig-seam)` is
+absent from the resulting queue, succeeded by the two D201
+axis-consumer units). The queue again parses rc=0 RUNNABLE 1 2.
+No engine, harness, or corpus change; no canonical-chain
+movement; no Ghidra run.
+(watchdog repair 1187807; unit p6-modeconfig-seam stands at
+9d39368 by worker 21604df0)

@@ -10,30 +10,87 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-modeconfig-seam] [gate=p6-modeconfig-seam] P6 seam
-   implementation per PLAN §6 + D200 — the FIRST engine unit behind
-   the p6-modernization-scaffold contract: land the ONE immutable
-   ModeConfig injected at sim construction (constructed once,
-   injected, never mutated mid-run; a mode change is a new sim) with
-   the initial purist toggle set covering the two plan-named
-   FEEL-CONTESTED axes only (timing lock, control scheme); the
-   catalog purist_toggle join stays EMPTY until entries exist (the
-   D200 seeding policy: recorded evidence with a repro only); default
-   mode = modern; presentation/platform options stay OUTSIDE
-   ModeConfig (display rate never enters the sim, Determinism
-   Charter). Test surface = the purist toggles (both arms), never the
-   feature cross-product. Wire the completion gate p6-modeconfig-seam
-   as the SECOND P6 required_gates entry (R6 of
-   tools/check-p6-behavior-catalog.py keeps the scaffold first — the
-   manifest rule enforces it). Bounds: no canonical-chain movement
-   (canonical_dump_gate 13/13, zone_mission_parity 5/5,
-   determinism green before AND after — a modern default must leave
-   the canonical S0-S8 chains byte-identical or the seam is wrong);
-   fmt + clippy on touched crates; the gates-validator suite stays
-   green; MANIFEST clean before and after any corpus read; no Ghidra
-   run; commit with the unit's own Nudge-Worker trailer.
+1. [READY] [id=p6-timing-lock-surface] [gate=p6-timing-lock-surface] P6
+   axis-consumer unit #1 per PLAN §6 + D201 — give the timing-lock
+   purist axis its FIRST real consumer at the HOST/PRESENT seam only
+   (modern arm = accumulator-driven present decoupled from tick rate,
+   classic arm = the original frame-locked present-coupled pacing),
+   while the logic tick stays FIXED at the original rate in BOTH arms
+   and display rate NEVER enters the sim or the state hash
+   (Determinism Charter; the D17 accumulator in bedlam-core/src/
+   frame.rs already quantizes host dt — the unit selects the pacing
+   POLICY from host.mode() per D201, never a Hz). Bounds: no
+   canonical-chain movement (canonical_dump_gate 13/13,
+   zone_mission_parity 5/5, determinism green before AND after — the
+   modern default must stay byte-identical); test surface = the ONE
+   purist toggle, both arms, never the feature cross-product; the
+   catalog stays EMPTY (no entry without recorded evidence + repro);
+   wire the completion gate p6-timing-lock-surface as the THIRD P6
+   required_gates entry (R6 keeps the scaffold first); fmt + clippy
+   on touched crates; gates-validator suite green; MANIFEST clean
+   before and after any corpus read; no Ghidra run; commit with the
+   unit's own Nudge-Worker trailer.
+2. [READY] [id=p6-control-scheme-surface] [gate=p6-control-scheme-surface] P6
+   axis-consumer unit #2 per PLAN §6 + D201 — the control-scheme purist
+   axis consumer at the platform/input layer (modern = WASD + 1-4
+   weapon hotkeys + full remap + wheel zoom + gamepad; classic = the
+   original scheme), mapping physical input to the existing
+   game-semantic InputFrame BEFORE the sim so the sim hash is
+   scheme-independent by construction (same InputFrame = same
+   trajectory in both arms — the seam-inertness property D201 pinned
+   generalizes). Bounds: no canonical-chain movement; test surface =
+   the ONE purist toggle, both arms; catalog stays EMPTY; wire gate
+   p6-control-scheme-surface as the FOURTH P6 required_gates entry
+   behind item 1's gate; fmt + clippy; gates-validator green;
+   MANIFEST clean; no Ghidra run; own Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+1. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+   PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
+   unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
+   D200; implementation D201): the ONE immutable ModeConfig landed,
+   injected at sim construction. (a) engine/bedlam-core/src/mode.rs
+   (NEW): ModeConfig with private fields and NO &mut self method —
+   the only way to a different mode is the consuming with(axis, arm)
+   builder returning a NEW value (a mode change is a new sim);
+   default = MODERN (the plan default), CLASSIC preset, per-axis
+   mixing; the initial purist toggle set = exactly the two
+   plan-named FEEL-CONTESTED axes with the concrete ids pinned
+   (PuristToggle::TimingLock = "timing-lock", ControlScheme =
+   "control-scheme" — reserved namespace, catalog purist_toggle ids
+   must not collide; from_id fails closed). (b) INJECTION: the mode
+   rides SimConfig.mode into Sim::new, is carried privately, and is
+   read-only at Sim::mode()/SimDriver::mode()/GameHost::mode() — no
+   setter at any layer. CONFIG-NOT-STATE: not hashed, not serialized
+   (FORMAT_VERSION unchanged, STATE_LEN + every P5 hash pin
+   byte-stable); a restore ADOPTS the expected SimConfig's mode.
+   Presentation/platform options stay OUTSIDE (no Hz/vsync/resolution
+   knob enters ModeConfig or the sim in any arm). The seam lands
+   INERT — neither axis has an in-sim consumer yet, so the same seed
+   + input stream yields the identical hashed trajectory in both
+   arms (pinned by test mode_is_config_not_state_the_seam_lands_
+   inert). (c) GATE: p6-modeconfig-seam wired as the SECOND P6
+   required_gates entry (R6 keeps the scaffold first) — commands =
+   bedlam-core --lib + bedlam-game --lib, both --release --locked
+   --offline, hermetic (no corpus, no writable); docs updated
+   (P6-MODERNIZATION.md §1 implementation status + §5 gate note,
+   D201). Verified first-hand: bedlam-core --lib 147/0 (147 = 146 +
+   new mode/sim/frame tests), bedlam-game --lib 142/0 (+1 host seam
+   test), bedlam-core determinism 12/0 + hash_fixture green (pins
+   untouched), bedlam-render determinism green, mode doctest green;
+   fmt clean + clippy clean on every touched file (the 7 D151
+   bedlam-core warnings pre-exist, untouched); canonical chains
+   UNMOVED before AND after: canonical_dump_gate 13/13 +
+   determinism 4/4 + zone_mission_parity 5/5 at clean HEAD b625559
+   AND at 9d39368; check-p6-behavior-catalog OK (catalog still
+   EMPTY, R6/R7 satisfied with the second gate), p6 suite 30/30,
+   gates-validator suite 22/22, check-p5-zone-ledger OK 37/37 + its
+   suite green; the bounded --phase P6 validator verdict at 9d39368:
+   status=passed, both P6 gates green, all 4 commands rc=0 under
+   bwrap containment (report .state/p6-seam-gates-report.json,
+   head-bound to 9d393682a3ff); MANIFEST clean before AND after
+   every corpus read; no Ghidra run. Queued: the timing-lock axis
+   consumer as the new head, control-scheme second.
+2. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -76,7 +133,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-2. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+3. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -100,7 +157,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-3. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+4. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
