@@ -334,4 +334,76 @@ if [ "$empty_failures" -ne 0 ]; then
   exit 1
 fi
 
+# 11. A completion-basis change during sealed validation is a benign retry,
+# never a structured failure: a commit landing mid-run withholds the atomic
+# verdict and the next tick re-validates the new HEAD (the D234 livelock fix).
+make_plan
+mkdir -p "$PLAN/tools" "$PLAN/docs"
+basis_token="bedlam-basis-race-$(basename "$TMP")"
+cat > "$PLAN/tools/validate-required-gates.py" <<EOF
+#!/usr/bin/env python3
+import os, pathlib, time
+pathlib.Path("/tmp/opencode/$basis_token.marker").write_text("running", encoding="utf-8")
+for _ in range(1200):
+    if os.path.exists("/tmp/opencode/$basis_token.release"):
+        break
+    time.sleep(0.05)
+EOF
+chmod +x "$PLAN/tools/validate-required-gates.py"
+: > "$PLAN/MANIFEST.sha256"
+printf '# fixture gates manifest\n' > "$PLAN/docs/required-gates.toml"
+git -C "$PLAN" add MANIFEST.sha256 docs tools
+git -C "$PLAN" commit -qm 'fixture: sealed validator stub'
+printf '# NEXT\n\n## Now\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+rm -f "/tmp/opencode/$basis_token.marker" "/tmp/opencode/$basis_token.release"
+: > "$TMP/run-calls"
+: > "$TMP/chain-calls"
+rm -rf "$PLAN/.state/automation-failures"
+rm -f "$PLAN/.state/idle-notified"
+basis_failures=0
+set +e
+run_nudge_with_production_idle &
+basis_nudge_pid=$!
+basis_committed=0
+for _ in $(seq 1 300); do
+  if [ -e "/tmp/opencode/$basis_token.marker" ]; then
+    git -C "$PLAN" commit --allow-empty -qm 'race: concurrent HEAD movement'
+    basis_committed=1
+    break
+  fi
+  sleep 0.1
+done
+touch "/tmp/opencode/$basis_token.release"
+wait "$basis_nudge_pid"
+basis_rc=$?
+set -e
+if [ "$basis_committed" -ne 1 ]; then
+  echo 'not ok - basis-change test never observed the sealed validator running' >&2
+  basis_failures=$((basis_failures + 1))
+fi
+if [ "$basis_rc" -ne 0 ]; then
+  echo "not ok - basis-change retry returned rc=$basis_rc instead of benign success" >&2
+  basis_failures=$((basis_failures + 1))
+fi
+if [ -s "$TMP/run-calls" ] || grep -q -- 'start bedlam-llm-watchdog.service' "$TMP/chain-calls"; then
+  echo 'not ok - basis-change retry spawned a worker or started the watchdog' >&2
+  echo "--- run-calls ---" >&2; cat "$TMP/run-calls" >&2 || true
+  echo "--- chain-calls ---" >&2; cat "$TMP/chain-calls" >&2 || true
+  basis_failures=$((basis_failures + 1))
+fi
+basis_artifact=$(find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null || true)
+if [ -n "$basis_artifact" ]; then
+  echo 'not ok - basis-change retry emitted a structured automatic-repair artifact' >&2
+  basis_failures=$((basis_failures + 1))
+fi
+if ! grep -q "completion basis changed during validation; sealed verdict withheld" "$PLAN/.state/nudge.log"; then
+  echo 'not ok - basis-change retry did not log the benign retry line' >&2
+  basis_failures=$((basis_failures + 1))
+fi
+rm -f "/tmp/opencode/$basis_token.marker" "/tmp/opencode/$basis_token.release"
+if [ "$basis_failures" -ne 0 ]; then
+  printf 'nudge controller tests: RED (basis-change retry: %d failed assertions)\n' "$basis_failures" >&2
+  exit 1
+fi
+
 echo "nudge controller tests: PASS"

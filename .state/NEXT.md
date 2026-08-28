@@ -1714,3 +1714,26 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    gate failure — the same documented ZONEB note), MANIFEST clean
    before and after every corpus read, no Ghidra run. Queued: the
    P5 phase-close disposition as the new head (the P4 pattern).
+   NOTE (watchdog repair 1787952748, D234): the completion-missing
+   failure recorded at 22:47:16Z was NOT a gates failure either —
+   it was the ELEVENTH-hour half of the D233 story: D233's own
+   repair commit (a89ce5a, 22:45-22:51) landed mid-run of the
+   controller's in-flight sealed validation vasjoy4_, so
+   complete-from-head's DESIGNED atomic basis re-check correctly
+   withheld the verdict ("completion basis changed during
+   validation") — and the controller then MISCLASSIFIED that
+   designed invalidation as completion-missing, beaconing a fresh
+   failure marker whose hourly watchdog repair is FORCED to commit
+   (wrapper evidence rules), which kills the next in-flight
+   validation in turn: a livelock that could never converge on
+   plan-complete-v1. Fixed in the repair commit: nudge.sh's
+   terminal completion branch now treats a basis-change rejection
+   as the benign sealed-verdict retry it is (log line + exit 0;
+   the 600s tick re-validates the new HEAD from scratch), while
+   every real rejection (validator rc!=0, wrapper timeout,
+   malformed basis) still beacons completion-missing. The
+   structured failure (controller-1787950036-2396770, ordinal 1,
+   id automation-state, gate automatic-repair) is adjudicated
+   required-empty per D234 — the required queue IS empty and stays
+   empty; the controller's next complete-from-head run owns the
+   global verdict exactly as the completion contract demands.

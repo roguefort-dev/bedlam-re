@@ -178,6 +178,19 @@ if [ "$queue_state" = REQUIRED-QUEUE-EMPTY ]; then
       "$(date -Is) completion validation rejected: $completion_proof"$'\n' 2>/dev/null || true
   fi
   "$STATE_HELPER" unlink "$completion_output" 2>/dev/null || true
+  # A completion-basis change is the DESIGNED invalidation of an in-flight
+  # sealed-HEAD run (D234): a watchdog repair commit or an operator commit
+  # landing mid-validation moves HEAD (or rewrites the queue note), the
+  # atomic verdict must not publish, and the next tick re-validates the new
+  # HEAD from scratch. Beaconing completion-missing for it instead made
+  # every repair commit mint the next failure marker, whose forced repair
+  # commit killed the retry in turn - the 2026-08-28 completion-missing
+  # livelock. Real rejections (validator rc!=0, wrapper timeout, malformed
+  # basis) still beacon below.
+  if [[ "$completion_proof" == *"completion basis changed"* ]]; then
+    log_line "completion basis changed during validation; sealed verdict withheld - benign retry on next tick"
+    exit 0
+  fi
   log_line "required Now queue is empty but full required-gates validation is incomplete - repair required"
   beacon_failure completion-missing "required queue empty; full offline required-gates validation did not prove P0-P7 completion"
   exit 2

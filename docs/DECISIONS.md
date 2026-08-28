@@ -10149,3 +10149,72 @@ expected to finish in hours of legitimate cold-compile wall time
 and emit plan-complete-v1, which accept-completion alone may
 consummate. Workers stay unspawned; no queue item appears; the
 global verdict remains the controller's alone.
+
+## D234 — 2026-08-28: autonomy/watchdog — the ELEVENTH repair, the other half of D233: the controller BEACONED completion-missing for the DESIGNED "completion basis changed during validation" invalidation, so every watchdog repair commit landing mid-run of an in-flight sealed validation minted the next failure marker, whose forced repair commit killed the retry in turn — a livelock that could never converge on plan-complete-v1; fixed in nudge.sh's terminal completion branch (basis-change rejection = benign sealed-verdict retry: log + exit 0, the 600s tick re-validates the new HEAD from scratch; every real rejection — validator rc!=0, wrapper timeout, malformed basis — still beacons); the structured failure adjudicated required-empty (the third required-empty adjudication, after D232/D233)
+
+CONTEXT. D233 (a89ce5a) derived the complete-from-head wrapper budget
+from the sealed manifest so a legitimately bounded 37-gate run can
+finish. But D233's own commit landed 22:45-22:51 mid-run of the
+in-flight attempt vasjoy4_ (started after the 22:02:26 rejection):
+complete_from_head's atomic basis re-check (queue/claims/HEAD/tree
+snapshots compared after the validator subprocess returns) correctly
+withheld the verdict — "completion basis changed during validation",
+22:47:16. nudge.sh then treated that DESIGNED invalidation like any
+other rejection: beacon_failure completion-missing → the hourly
+watchdog (which skips supervision entirely on un-acked markers,
+force_repair=1) spawned repair #11 — and the wrapper REQUIRES a
+repair commit for evidence (end_head != start_head + trailer +
+non-.state/ file + .state/NEXT.md in the diff for archive-failures),
+so every repair kills the then-in-flight validation and mints the
+next marker: livelock. Each cycle costs an hour of watchdog cadence
+plus a killed multi-hour sealed run (cold bwrap cargo targets per
+gate scratch).
+
+DECISION. nudge.sh's REQUIRED-QUEUE-EMPTY completion branch now
+matches the exact phrase "completion basis changed" in the
+complete-from-head rejection (both "during validation" and "during
+artifact publication" raise it) and handles it as what it is: the
+atomicity contract WORKING — the verdict stays sealed, nothing
+publishes, and the next 600s tick re-validates the new HEAD from
+scratch. That path logs "completion basis changed during validation;
+sealed verdict withheld - benign retry on next tick" and exits 0.
+No beacon, no watchdog start, no idle notification. Every other
+rejection mode is untouched: validator rc!=0, wrapper timeout,
+malformed MANIFEST/basis, accept-completion rejections — all still
+beacon completion-missing. The plan-complete-v1 semantics are
+unchanged (zero active items + all gates green + nothing moved
+during the whole run, or no verdict at all).
+
+TRADEOFF accepted: a pathological committer that moves HEAD more
+often than a validation run lasts would now retry silently instead
+of beaconing hourly. With an empty required queue only watchdog
+repairs and operators commit, repairs are now rare (no markers to
+force them), and the supervisor/model health checks still run —
+that silent-retry surface is strictly smaller than the livelock it
+closes. The edit is applied by ATOMIC RENAME (temp file + mv): the
+running controller instance keeps its old inode and old code for
+its current tick; every future tick reads the fix.
+
+VERIFIED first-hand: bash -n clean on nudge.sh and the test;
+tools/test-nudge-controller.sh PASS end-to-end including the NEW
+test 11 (a sealed validator stub signals mid-run via marker file,
+the test commits --allow-empty to move HEAD inside the validation
+window, and asserts rc=0 + the benign log line + NO completion-
+missing artifact + NO watchdog start + NO worker spawn — the race
+is deterministic, no sleeps against load); the strict queue parser
+rc=0 REQUIRED-QUEUE-EMPTY on the rewritten queue before and after
+the NOTE append; MANIFEST.sha256 clean before and after (no corpus
+read by this repair).
+
+POSTCONDITION for the loop: the in-flight sealed validation
+(jorfqk3m, started 23:22:27 against a89ce5a) will still end
+basis-changed against this repair commit — its parent controller
+runs the pre-fix code, so it beacons ONE last completion-missing
+marker; the NEXT hourly watchdog repairs and acks it, and from that
+point every basis change retries benignly. With no un-acked
+markers the watchdog stops forcing repairs, the controller's
+complete-from-head runs undisturbed to its manifest-declared bound
+(84480s), and plan-complete-v1 — if every gate is green — is
+consummated by accept-completion alone. Workers stay unspawned; no
+queue item appears; the global verdict remains the controller's
+alone.
