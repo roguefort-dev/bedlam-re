@@ -10,7 +10,7 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-critter-state-g2-chasers] [gate=p5-critter-state-g2-chasers] P5
+1. [READY] [id=p5-critter-state-g2-chasers-r2] [gate=p5-critter-state-g2-chasers-r2] P5
    follow-up — the FOLLOWING G2 critter-state unit from the census
    residue (docs/P5-ZONE-GATES §6.2/G2): the kind-3 CHASERS state
    (the ChasersxNN census component; hosts beside Shooters on
@@ -31,6 +31,11 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    (ZONEA/M1 hosts no S5) unless a row changes (then documented +
    deliberate); fmt + clippy; gates-validator 22/22; MANIFEST
    clean; no Ghidra run; Nudge-Worker trailer.
+   Re-issued 2026-08-28 by watchdog repair 1671051: the first issue
+   (id p5-critter-state-g2-chasers) died to a provider HTTP 502 at
+   zero progress — worker fa32df63, transport kind, no commit, no
+   queue change; scope and bounds unchanged, only the identity
+   renewed for the archive contract.
 2. [READY] [id=p5-critter-state-g2-closecombat] [gate=p5-critter-state-g2-closecombat] P5
    follow-up — the NEXT G2 critter-state unit after the Chasers
    unit (docs/P5-ZONE-GATES §6.2/G2 residue): the kind-7

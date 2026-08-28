@@ -6382,3 +6382,32 @@ Four decisions recorded:
    clean on the touched crates, gates-validator 22/22, inspect
    baseline ok (1069 files), MANIFEST clean before AND after every
    corpus read, no Ghidra run.
+
+
+## D186 — 2026-08-28: autonomy `p5-critter-state-g2-chasers-r2` — the zero-progress transport-death re-issue: worker fa32df63 (kind=transport, provider HTTP 502) died before any work, the wrapper released the claim with the queue byte-unchanged, and the pending nudge-failure-v1 artifact would force every watchdog cycle into urgent repair; the failed task identity is REPLACED by a fresh re-issue (id/gate `p5-critter-state-g2-chasers` → `p5-critter-state-g2-chasers-r2`, scope/bounds verbatim) in the remediation commit, archiving the failure as replaced-task (watchdog repair 1671051)
+
+The G2 CHASERS unit stays the queue head, still READY, still the same
+work (RE first, engine second, census re-pin, all bounds unchanged).
+Only the identity is renewed: the archive contract
+(`nudge-state.py archive-failures`) releases a failure record only
+when its `(ordinal, id, gate)` triple leaves the active `## Now`
+section under a remediation commit that itself rewrites the queue —
+a transport death at zero progress has no WIP to adopt (unlike the
+d6f235c and b0059c4 precedents, where the dead worker had finished
+substantively), so the sanctioned exit is the test-contract shape
+(tools/test-automation-failure-watchdog.sh: replace the failed
+identity, keep a READY successor active). Rationale: leaving the
+artifact unarchived churns one full repair session per watchdog
+cycle against a healthy queue; renumbering alone would satisfy the
+letter of the check while lying about intent — the identity is what
+failed, so the identity is what gets re-issued.
+
+Verified this run: strict queue parser rc=0 (`RUNNABLE 1 2`) before
+and after the rewrite; the failure artifact identity
+(fa32df63-64d6-48e3-8218-3f730be10307.json, device 52, inode
+6475634, sha256 c04fd2b0…ba0ed) matches the wrapper snapshot
+byte-for-byte; no claim, cooldown, or taskfail entry binds the old
+id; no docs reference the old id literally; no game-data touch, no
+Rust change (fmt/clippy N/A); failure-watchdog harness contract
+re-run green. Note: D185 was minted twice (autonomy + shooters);
+this entry takes D186 without renumbering history.
