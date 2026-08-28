@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest"]
 
 [[gate]]
 id = "trigger-address"
@@ -1215,3 +1215,58 @@ commands = [
   ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/platform.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "engine/bedlam-platform/src/scale.rs", "engine/bedlam-platform/tests/scale.rs", "docs/P7-PORTS.md", "docs/required-gates.toml"]
+
+# p7-flatpak-manifest — the FIFTH P7 engineering deliverable per
+# PLAN §6 "Linux native + Flatpak" (docs/P7-PORTS.md §2 row
+# flatpak-manifest, flipped landed with this same commit per the
+# D221 R2 rule; implementation D225): the committed FLATPAK BUILD
+# MANIFEST (packaging/dev.roguefort.bedlam.yml — the repo remote's
+# own reverse DNS app-id; org.freedesktop.Platform + Sdk at the
+# PINNED runtime-version 24.08; command bedlam-shell; the CLOSED
+# five-token finish-args surface --socket=wayland,
+# --socket=fallback-x11, --socket=pulseaudio, --device=dri,
+# --share=ipc — no host filesystem grant, no network, no bus) + its
+# CI build definition (the ci.yml flatpak job on ubuntu-latest:
+# installs flatpak-builder + the SAME pinned SDK//24.08 and its
+# rust-stable extension the manifest wires via append-path, builds
+# THIS manifest with flatpak-builder keeping build/repo dirs
+# outside the checkout, exports the UNSIGNED single-file bundle
+# bedlam-shell.flatpak, uploads it per-push as
+# bedlam-shell-flatpak-x86_64 with if-no-files-found: error + 14-day
+# retention). The bundle is the ENGINE BINARY ONLY: one
+# simple-buildsystem module (cargo build --release --locked -p
+# bedlam-shell, deliberately not --offline — no vendored set is
+# committed, crates fetch inside the build sandbox) installing one
+# binary + one desktop entry into /app; the single dir source at
+# the repo root carries a skip list whose floor (.git, game-data,
+# game-data-2, derived, derived-2, goldens, ghidra-project, target)
+# is checker-pinned — the mechanical never-bundle guard (nothing
+# from the corpus or its derivatives ever enters the copy; outside
+# the skip list no manifest value references the corpus); the
+# desktop entry ships no Icon (no asset ever, D21); the user
+# supplies their OWN original install at run time (INSTALL_DIR
+# positional, default game-data/BEDLAM; a host grant is the user's
+# own override, never baked in) and CDDA resolves through the
+# shell's documented lookup (inside the sandbox $XDG_DATA_HOME is
+# the per-app data dir — the second lookup root, no extra grant).
+# No store, no key: Flathub submission is the publication-stores
+# exclusion, signing the bundle/repo is the signing-keys exclusion
+# (denylist enforced across manifest + desktop + the flatpak job,
+# comments included). The gate is hermetic and offline over the
+# COMMITTED definition: check-p7-flatpak-manifest.py parses the
+# manifest + desktop + workflow with a stdlib-only YAML-subset
+# reader and proves every rule above + the joins (app-id == file
+# stems == the build-bundle word; ci SDK version == manifest
+# runtime-version; THIS manifest path is what CI builds); command 2
+# re-runs the registry checker (the flip + gate join); command 3 is
+# the checker's fail-closed hermetic suite. No corpus key, no
+# writable; no network, no device, no display.
+[[gate]]
+id = "p7-flatpak-manifest"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p7-flatpak-manifest.py"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+  ["/usr/bin/python3", "tools/test-p7-flatpak-manifest.py"],
+]
+tracked_paths = ["packaging/dev.roguefort.bedlam.yml", "packaging/dev.roguefort.bedlam.desktop", ".github/workflows/ci.yml", "tools/check-p7-flatpak-manifest.py", "tools/test-p7-flatpak-manifest.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]

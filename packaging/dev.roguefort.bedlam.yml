@@ -1,0 +1,88 @@
+# dev.roguefort.bedlam — the committed Flatpak build manifest
+# (the p7-flatpak-manifest deliverable; PLAN §6 P7 "Linux native +
+# Flatpak"; docs/P7-PORTS.md §2 row flatpak-manifest; proving gate
+# p7-flatpak-manifest; implementation D225).
+#
+# WHAT THIS IS: flatpak-builder's complete input — the definition of
+# the Flatpak app built from THIS repository's source alone. CI builds
+# it on every push (the ci.yml job `flatpak`) into an unsigned
+# single-file bundle (bedlam-shell.flatpak).
+#
+# WHAT THIS IS NOT: a distribution of the game. The bundle carries
+# the ENGINE BINARY ONLY — never the corpus, never assets, never
+# music (git is engine-only; D21). The single dir source below is
+# the repo root with a skip list that excludes every original-asset
+# and scratch tree (the mechanical never-bundle guard; the gate's
+# checker pins it). The user supplies their OWN original install
+# dir: bedlam-shell takes INSTALL_DIR as its first positional
+# argument (default `game-data/BEDLAM`, repo layout) and reads no
+# host file otherwise, so a sandboxed run is either
+#   flatpak run --command=bedlam-shell dev.roguefort.bedlam \
+#     /path/to/your/BEDLAM        (after a user-side
+#     `flatpak override --filesystem=...` grant of that path)  or
+#   the same with a copy of the install tree reachable inside the
+#   sandbox. No host grant is baked into finish-args below.
+# CDDA stays user-supplied the same way: inside the sandbox
+# $XDG_DATA_HOME is the per-app data dir
+# (~/.var/app/dev.roguefort.bedlam/data), which is exactly the
+# shell's documented second music lookup root — no extra grant.
+#
+# UNSIGNED by design: no key material ever signs the repo or the
+# bundle (the signing-keys exclusion, D221); Flathub submission is
+# the publication-stores exclusion.
+#
+# The finish-args surface is CLOSED (five tokens, checker-pinned):
+# wayland + fallback-x11 windows, pulseaudio out (cpal), dri for the
+# GPU, ipc for X11 shm — NO --filesystem grant, NO network, NO bus.
+app-id: dev.roguefort.bedlam
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: bedlam-shell
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=ipc
+
+# One module: the engine, built by the freedesktop Rust extension
+# against the repo's own Cargo.lock (--locked, so the bundle is the
+# reproducible crate set), installing exactly one binary + one
+# desktop entry into /app.
+modules:
+  - name: bedlam-shell
+    buildsystem: simple
+    build-options:
+      # the rust-stable extension's cargo
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/bedlam-shell/cargo
+    build-commands:
+      # not --offline: crates.io is fetched inside the build sandbox
+      # (no vendored set is committed); --locked pins the versions.
+      - cargo build --release --locked -p bedlam-shell
+      - install -Dm755 target/release/bedlam-shell -t /app/bin
+      - install -Dm644 packaging/dev.roguefort.bedlam.desktop -t /app/share/applications
+    sources:
+      # the repo root (manifest sits in packaging/), with every
+      # original-asset and scratch tree skipped — the copy NEVER
+      # contains the corpus, its derivatives, or local state. Keep
+      # flatpak-builder's own build/repo dirs OUTSIDE this tree (the
+      # CI job does) or they would nest into the next build's copy.
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - .github
+          - .state
+          - derived
+          - derived-2
+          - docs
+          - game-data
+          - game-data-2
+          - ghidra-project
+          - goldens
+          - head.tar
+          - target

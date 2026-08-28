@@ -104,3 +104,46 @@ jobs:
       - run: cargo +nightly miri test -p bedlam-core -p bedlam-audio
         env:
           MIRIFLAGS: -Zmiri-isolation-error=warn
+
+  # P7 "Linux native + Flatpak" (PLAN §6 P7; docs/P7-PORTS.md §2 row
+  # flatpak-manifest; proving gate p7-flatpak-manifest): the FLATPAK
+  # BUILD DEFINITION — on every push this job builds the committed
+  # flatpak-builder manifest (packaging/dev.roguefort.bedlam.yml)
+  # against the SAME pinned freedesktop runtime the manifest names,
+  # then exports an UNSIGNED single-file bundle and uploads it as the
+  # per-push flatpak artifact. The bundle carries the ENGINE BINARY
+  # ONLY — never the corpus, never assets, never music: the manifest's
+  # single dir source skips every original-asset and scratch tree
+  # (checker-pinned), and the user supplies their OWN original install
+  # at run time (INSTALL_DIR argument; no host grant is baked in).
+  # Key material is the owner-held signing-keys exclusion (D221), so
+  # nothing here signs anything; store submission is the
+  # publication-stores exclusion.
+  flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak-builder flatpak
+      # the SDK + rust-stable extension pinned to the SAME
+      # runtime-version the manifest carries (the checker joins them).
+      - name: install the freedesktop sdk + rust extension
+        run: |
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y --noninteractive flathub org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.rust-stable//24.08
+      # build/repo dirs stay OUTSIDE the checkout ($RUNNER_TEMP) so
+      # the manifest's repo-root dir source can never nest into
+      # itself on the next build.
+      - name: build the flatpak bundle
+        run: |
+          flatpak-builder --force-clean --repo="$RUNNER_TEMP/flatpak-repo" "$RUNNER_TEMP/flatpak-build" packaging/dev.roguefort.bedlam.yml
+          flatpak build-bundle "$RUNNER_TEMP/flatpak-repo" packaging/bedlam-shell.flatpak dev.roguefort.bedlam
+      - name: upload flatpak bundle (per-push artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedlam-shell-flatpak-x86_64
+          path: packaging/bedlam-shell.flatpak
+          if-no-files-found: error
+          retention-days: 14

@@ -9258,3 +9258,128 @@ forward-shape test flipping flatpak-manifest at 5/2); MANIFEST
 clean before and after every corpus read; the bounded --phase P7
 validator verdict at the landing commit: ALL 4 P7 GATES GREEN
 under bwrap containment.
+
+## D225 — 2026-08-28: P7 `p7-flatpak-manifest` — the FIFTH P7 ENGINEERING deliverable (PLAN §6 P7 "Linux native + Flatpak" + the P7-PORTS §2 row flatpak-manifest): the committed flatpak-builder manifest + its per-push CI build definition, graded hermetically over the committed definition (a stdlib-only YAML-subset checker + fail-closed suite with the runtime/app-id/corpus joins), with the registry row flipped landed in the SAME commit naming the new FIFTH P7 required gate (the D221 R2 rule)
+
+CONTEXT: D221 landed the contract with the flatpak-manifest row
+pending; D222-D224 landed ci-artifacts-per-push + linux-native,
+cdda-user-supply and steamdeck-default (four of seven engineering
+rows). BOUNDS fixed by the queue item: manifest + checker work
+only, no engine change, controls green before AND after. The
+engine's own game-data resolution (bedlam-shell INSTALL_DIR
+positional, default `game-data/BEDLAM` relative to cwd) and the
+CDDA lookup roots (explicit flag/env, then
+$XDG_DATA_HOME/bedlam/music, then the install dir — D223) are
+VERIFIED facts of the landed surface this packaging builds ON, not
+changes to it.
+
+DECISION: (a) THE APP-ID (`dev.roguefort.bedlam`): the repo
+remote's own reverse DNS (github.com/roguefort-dev/bedlam-re) —
+three dot-separated segments, deterministic, owned by the project
+and not squatting a namespace; the checker pins the app-id == the
+manifest/desktop file stems == the CI build-bundle command word
+(matched as a whole shell word, NOT a substring — a substring join
+is defeated by the manifest path itself, which contains the
+app-id; the suite proves that tamper). (b) THE MANIFEST
+(packaging/dev.roguefort.bedlam.yml): flatpak-builder's complete
+input — org.freedesktop.Platform + Sdk at the PINNED
+runtime-version "24.08" (YY.MM regex; a floating runtime is not
+reproducible), command bedlam-shell (the engine binary), the
+CLOSED five-token finish-args surface (--socket=wayland,
+--socket=fallback-x11, --socket=pulseaudio, --device=dri,
+--share=ipc — windows on wayland with x11 fallback, cpal's audio
+path, the GPU, X11 shm): NO host filesystem grant, NO network, NO
+bus, NO wider device — the user who wants the sandbox to see their
+original install makes their OWN `flatpak override --filesystem=`
+grant (or passes a path already visible), never a grant baked into
+the shipped definition. One module, buildsystem simple,
+build-options append the rust-stable extension
+(/usr/lib/sdk/rust-stable/bin) + CARGO_HOME inside the build tree;
+build-commands = `cargo build --release --locked -p bedlam-shell`
+(deliberately NOT --offline: no vendored crate set is committed, so
+an --offline manifest could never build — crates fetch inside the
+build sandbox; --locked pins the reproducible set), install the
+ONE binary into /app/bin + the desktop entry into
+/app/share/applications. THE NEVER-BUNDLE GUARD: the single source
+is a dir source at the repo root (path ".." relative to
+packaging/) whose skip list floor (.git, game-data, game-data-2,
+derived, derived-2, goldens, ghidra-project, target — extra
+entries allowed) is checker-pinned: flatpak-builder copies the
+source dir wholesale, so the skip list is the mechanical guarantee
+that NOTHING from the corpus or its derivatives ever enters the
+copy; additionally no manifest VALUE outside the skip list may
+reference the corpus at all (comments excluded by parsing). THE
+DESKTOP ENTRY (packaging/dev.roguefort.bedlam.desktop): one
+[Desktop Entry] section, closed key set, Exec == the manifest
+command, Terminal=false, Categories=Game — and NO Icon key ever:
+no asset ships in the bundle (D21 originals-or-derivatives; a
+generic icon is the honest posture, not a generated logo). (c) THE
+CI BUILD DEFINITION (.github/workflows/ci.yml job `flatpak`,
+ubuntu-latest, per push): install flatpak-builder, install
+org.freedesktop.Sdk//24.08 + Extension.rust-stable//24.08 at the
+SAME pinned version the manifest carries (the VERSION JOIN), run
+flatpak-builder on THIS manifest with build/repo dirs OUTSIDE the
+checkout ($RUNNER_TEMP — the dir source is the repo root, so an
+in-tree build dir would nest into the next build's copy), export
+the UNSIGNED single-file bundle bedlam-shell.flatpak with
+`flatpak build-bundle ... dev.roguefort.bedlam` (the app-id join),
+upload per-push as bedlam-shell-flatpak-x86_64 via
+actions/upload-artifact@v4 with if-no-files-found: error +
+retention-days 14 (the D222 posture). UNSIGNED by design: no key
+material signs the repo or the bundle (signing-keys exclusion);
+Flathub submission is the publication-stores exclusion; the
+signing-token denylist (secrets/signtool/codesign/notarytool/
+notariz*/osslsigncode/authenticode/gpg) matches NOWHERE across
+manifest + desktop + the flatpak job, comments included, and the
+flatpak job never mentions the corpus directory at all. THE GATE
+(p7-flatpak-manifest, the FIFTH P7 required_gates entry behind the
+scaffold): hermetic + offline over the COMMITTED definition —
+check-p7-flatpak-manifest.py parses all three files with the
+family's stdlib-only YAML-subset reader (the D216 no-deps posture)
+and proves file discipline (UTF-8, tabs/unterminated/unparsable =
+parse errors), the closed manifest schema (unknown top-level/
+module/source keys fail; app-id reverse-DNS shaped + joined to the
+file stems; the matched runtime pair at a pinned version; command
+== bedlam-shell), the closed five-token finish-args surface
+(extras/missing/wider grants each fail with their own message),
+the engine-only module (exactly one; the reproducible build words
+present; --offline refused as unbuildable; the /app installs), the
+never-bundle skip floor + the one-source rule (no url/archive/git
+origin), the desktop contract (no Icon, Exec join, one section),
+the CI join (job exists on ubuntu-latest, flatpak-builder
+installed, the version-joined SDK + rust extension, THIS manifest
+path built, the app-id-word build-bundle, the strict bounded
+upload), and the denylists. Command 2 = check-p7-ports-map (the
+registry flip + gate join); command 3 = the checker's fail-closed
+hermetic suite (tools/test-p7-flatpak-manifest.py: 40 tests —
+honest real-repo + copy + minimal-manifest pass pins, then one loud
+refusal per rule: missing files, parse discipline, unknown keys,
+non-DNS app-id, swapped runtime, unpinned version, non-engine
+command, filesystem/network/missing-token finish-args, second
+module, unlocked/offline/impossible builds, extension removed,
+binary install removed, skip floor missing the corpus, source path
+pointed at the corpus, a foreign url source, corpus referenced
+outside skip, desktop Icon/Exec/Terminal/corpus-mention, job
+removed, SDK version divergence, extension not installed, another
+manifest built, build-bundle app-id divergence (the substring
+trap), relaxed/unbounded upload, corpus mention in the job, and
+the two signing-material tamperers). No corpus key, no writable,
+no network, no device, no display. The suite evolution:
+test-p7-ports-map.py re-baselined to the new honest state exactly
+as D222-D224 did (the canonical PENDING row for the flip fixtures
+moves flatpak-manifest -> windows-installer; the fixture manifest
+wires the fifth gate; the real-repo pin reads 5 landed / 2
+pending).
+
+VERIFIED first-hand: the checker green over the real repo (the
+summary above); the suite 40/40; check-p7-ports-map OK (7
+engineering, 5 landed, 2 pending) + its suite 29/29 after the
+deliberate re-baseline; test-validate-required-gates 22/22 after
+the manifest edit; check-p7-ci-artifacts + its suite still green
+over the edited ci.yml (the new job keeps the release-matrix job
+unique and the signing denylist clean); the bounded --phase P7
+baseline BEFORE the unit green at 12c118b (ALL 4 P7 GATES GREEN
+under bwrap containment); MANIFEST.sha256 clean before and after
+(no game-data touch — the gate reads only committed definitions);
+the bounded --phase P7 validator verdict re-emitted at the landing
+commit: ALL 5 P7 GATES GREEN under bwrap containment.

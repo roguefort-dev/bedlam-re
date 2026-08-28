@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Bedlam (1996) reimplementation
+Comment=Rust reimplementation engine — the engine only; launch with the path to your own original install
+Exec=bedlam-shell
+Terminal=false
+Categories=Game;

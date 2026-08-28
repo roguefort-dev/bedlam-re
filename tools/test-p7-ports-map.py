@@ -62,21 +62,26 @@ def with_registry(doc: str, registry: str) -> str:
     return result
 
 
-def land_flatpak(doc: str, gate: str) -> str:
-    """Flip the honest flatpak-manifest row to landed (in place)."""
+def land_windows(doc: str, gate: str) -> str:
+    """Flip the honest windows-installer row to landed (in place).
+
+    Since the p7-flatpak-manifest unit (D225) the flatpak row is
+    landed in the honest doc, so windows-installer is the canonical
+    still-pending engineering row these fixtures flip.
+    """
     before = (
-        'id = "flatpak-manifest"\nkind = "engineering"\n'
-        'plan_anchor = "Linux native + Flatpak"\n'
+        'id = "windows-installer"\nkind = "engineering"\n'
+        'plan_anchor = "Windows installer"\n'
         'status = "pending"\ngate = ""'
     )
     after = (
-        'id = "flatpak-manifest"\nkind = "engineering"\n'
-        'plan_anchor = "Linux native + Flatpak"\n'
+        'id = "windows-installer"\nkind = "engineering"\n'
+        'plan_anchor = "Windows installer"\n'
         f'status = "landed"\ngate = "{gate}"'
     )
     result = doc.replace(before, after, 1)
     if result == doc:
-        raise AssertionError("fixture bug: flatpak row not found")
+        raise AssertionError("fixture bug: windows row not found")
     return result
 
 
@@ -104,18 +109,19 @@ def manifest_text(
     p7_status: str = "pending",
 ) -> str:
     # The default mirrors the REAL manifest's honest state since the
-    # p7-steamdeck-default unit (D224): the scaffold first, then the
+    # p7-flatpak-manifest unit (D225): the scaffold first, then the
     # gates proving the landed rows (p7-ci-artifacts proves
     # ci-artifacts-per-push + linux-native; p7-cdda-user-supply
     # proves cdda-user-supply; p7-steamdeck-default proves
-    # steamdeck-default), wired exactly like
-    # docs/required-gates.toml.
+    # steamdeck-default; p7-flatpak-manifest proves flatpak-manifest),
+    # wired exactly like docs/required-gates.toml.
     if p7_gates is None:
         p7_gates = [
             GATE_ID,
             "p7-ci-artifacts",
             "p7-cdda-user-supply",
             "p7-steamdeck-default",
+            "p7-flatpak-manifest",
         ]
     if gate_blocks is None:
         gate_blocks = [
@@ -197,6 +203,30 @@ def manifest_text(
                     "engine/bedlam-shell/src/main.rs",
                     "engine/bedlam-platform/src/scale.rs",
                     "engine/bedlam-platform/tests/scale.rs",
+                    DOC_RELATIVE,
+                    "docs/required-gates.toml",
+                ],
+            },
+            {
+                "id": "p7-flatpak-manifest",
+                "timeout_seconds": 120,
+                "commands": [
+                    [
+                        "/usr/bin/python3",
+                        "tools/check-p7-flatpak-manifest.py",
+                    ],
+                    ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+                    [
+                        "/usr/bin/python3",
+                        "tools/test-p7-flatpak-manifest.py",
+                    ],
+                ],
+                "tracked_paths": [
+                    "packaging/dev.roguefort.bedlam.yml",
+                    "packaging/dev.roguefort.bedlam.desktop",
+                    ".github/workflows/ci.yml",
+                    "tools/check-p7-flatpak-manifest.py",
+                    "tools/test-p7-flatpak-manifest.py",
                     DOC_RELATIVE,
                     "docs/required-gates.toml",
                 ],
@@ -293,15 +323,16 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"p7-ports-map: OK", result.stdout)
-        # Deliberate re-baseline with the p7-steamdeck-default unit
-        # (D224): the four landed rows (ci-artifacts-per-push +
-        # linux-native on p7-ci-artifacts, cdda-user-supply on its
-        # own gate, steamdeck-default on its own gate) leave three
-        # engineering rows pending.
-        self.assertIn(b"7 engineering (4 landed, 3 pending)", result.stdout)
+        # Deliberate re-baseline with the p7-flatpak-manifest unit
+        # (D225): the five landed rows (ci-artifacts-per-push +
+        # linux-native on p7-ci-artifacts, cdda-user-supply,
+        # steamdeck-default and flatpak-manifest on their own gates)
+        # leave two engineering rows pending.
+        self.assertIn(b"7 engineering (5 landed, 2 pending)", result.stdout)
         self.assertIn(
             b"landed: cdda-user-supply (gate p7-cdda-user-supply),"
             b" ci-artifacts-per-push (gate p7-ci-artifacts),"
+            b" flatpak-manifest (gate p7-flatpak-manifest),"
             b" linux-native (gate p7-ci-artifacts),"
             b" steamdeck-default (gate p7-steamdeck-default)",
             result.stdout,
@@ -524,29 +555,30 @@ class PortsMapCheckerTests(unittest.TestCase):
     # ---- the gate join + manifest wiring ---------------------------------
 
     def test_landed_gate_not_defined_fails(self) -> None:
-        doc = land_flatpak(self.honest_doc(), "p7-flatpak-manifest")
+        doc = land_windows(self.honest_doc(), "p7-windows-installer")
         result = self.run_checker(doc, manifest_text())
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"no [[gate]] with that id is defined", result.stderr)
 
     def test_landed_gate_not_in_phase_list_fails(self) -> None:
-        doc = land_flatpak(self.honest_doc(), "p7-flatpak-manifest")
+        doc = land_windows(self.honest_doc(), "p7-windows-installer")
         # The honest doc already lands ci-artifacts-per-push +
-        # linux-native on p7-ci-artifacts, cdda-user-supply on its own
-        # gate and steamdeck-default on its own gate, so the fixture
-        # wires ALL FOUR in (defined + listed) to reach the
-        # flatpak-specific failure: p7-flatpak-manifest is defined
-        # but NOT in the list.
+        # linux-native on p7-ci-artifacts, cdda-user-supply,
+        # steamdeck-default and flatpak-manifest on their own gates,
+        # so the fixture wires ALL FIVE in (defined + listed) to reach
+        # the windows-specific failure: p7-windows-installer is
+        # defined but NOT in the list.
         manifest = manifest_text(
             p7_gates=[
                 GATE_ID,
                 "p7-ci-artifacts",
                 "p7-cdda-user-supply",
                 "p7-steamdeck-default",
+                "p7-flatpak-manifest",
             ],
             gate_blocks=[
                 {
-                    "id": "p7-flatpak-manifest",
+                    "id": "p7-windows-installer",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": [DOC_RELATIVE],
                 },
@@ -564,6 +596,13 @@ class PortsMapCheckerTests(unittest.TestCase):
                     "id": "p7-steamdeck-default",
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": ["engine/bedlam-shell/src/platform.rs"],
+                },
+                {
+                    "id": "p7-flatpak-manifest",
+                    "commands": [["/usr/bin/true"]],
+                    "tracked_paths": [
+                        "packaging/dev.roguefort.bedlam.yml",
+                    ],
                 },
                 {
                     "id": GATE_ID,
@@ -655,12 +694,12 @@ class PortsMapCheckerTests(unittest.TestCase):
     # ---- the forward shape is legal ---------------------------------------
 
     def test_landed_deliverable_with_wired_gate_passes(self) -> None:
-        doc = land_flatpak(self.honest_doc(), "p7-flatpak-manifest")
-        # The honest doc already lands four rows (two on
-        # p7-ci-artifacts, cdda-user-supply + steamdeck-default on
-        # their own gates); the fixture wires all five gates so the
-        # flipped flatpak row reaches its own proving gate:
-        # 5 landed, 2 pending.
+        doc = land_windows(self.honest_doc(), "p7-windows-installer")
+        # The honest doc already lands five rows (two on
+        # p7-ci-artifacts, cdda-user-supply, steamdeck-default and
+        # flatpak-manifest on their own gates); the fixture wires all
+        # six gates so the flipped windows row reaches its own proving
+        # gate: 6 landed, 1 pending.
         manifest = manifest_text(
             p7_gates=[
                 GATE_ID,
@@ -668,6 +707,7 @@ class PortsMapCheckerTests(unittest.TestCase):
                 "p7-cdda-user-supply",
                 "p7-steamdeck-default",
                 "p7-flatpak-manifest",
+                "p7-windows-installer",
             ],
             gate_blocks=[
                 {
@@ -703,11 +743,16 @@ class PortsMapCheckerTests(unittest.TestCase):
                     "commands": [["/usr/bin/true"]],
                     "tracked_paths": ["docs/P7-PORTS.md"],
                 },
+                {
+                    "id": "p7-windows-installer",
+                    "commands": [["/usr/bin/true"]],
+                    "tracked_paths": ["docs/P7-PORTS.md"],
+                },
             ],
         )
         result = self.run_checker(doc, manifest)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertIn(b"5 landed, 2 pending", result.stdout)
+        self.assertIn(b"6 landed, 1 pending", result.stdout)
 
 
 if __name__ == "__main__":
