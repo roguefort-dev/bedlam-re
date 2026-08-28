@@ -1,5 +1,67 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p7-windows-installer` COMPLETE (worker a6aece66
+    claim 1, commit 07a6c57, PUSHED, plus this bookkeeping
+    commit): P7's SIXTH ENGINEERING DELIVERABLE — the WINDOWS
+    INSTALLER DEFINITION + ITS PER-PUSH CI BUILD (D227; PLAN §6 P7
+    "Windows installer" + P7-PORTS §2 row windows-installer, the
+    registry row flipped landed naming the new SIXTH P7 required
+    gate in the same commit per the R2 rule; no engine change). (a)
+    THE DEFINITION packaging/bedlam-shell.nsi (NEW) — the committed
+    NSIS script: Name "Bedlam engine", OutFile
+    bedlam-shell-setup.exe, Unicode, InstallDir
+    $PROGRAMFILES64\Bedlam + RequestExecutionLevel admin +
+    CRCCheck force, the minimal page flow, exactly the install +
+    un.Uninstall sections BOTH pinned instruction-for-instruction
+    (the closed TWO-FILE set of staged bare names — the engine
+    binary + its README; WriteUninstaller; the Add/Remove-Programs
+    registration; ONE Start-Menu shortcut whose working directory
+    is $INSTDIR by NSIS's $OUTDIR rule, so the engine's documented
+    default lookup root sits inside the install folder; the
+    uninstall is the exact inverse — every Delete names an
+    installed artifact and RMDir never recurses); NSIS semantics
+    verified FIRST-HAND against the manual, and the makensis
+    script-dir-vs-cwd path ambiguity DESIGNED AWAY (CI runs
+    makensis with working-directory: packaging == the script dir).
+    (b) THE README packaging/windows-installer-README.txt (NEW) —
+    honest user documentation (engine-only, supply-your-own, the
+    documented game-data\BEDLAM default layout as the ONLY corpus
+    token it may carry). (c) THE CI BUILD (.github/workflows/ci.yml
+    job windows-installer, per push on windows-latest) — cargo
+    build --release --locked -p bedlam-shell (not --offline), choco
+    install nsis, the staging Copy-Item, makensis on THIS script,
+    the UNSIGNED installer uploaded as
+    bedlam-shell-windows-installer-x86_64 (if-no-files-found:
+    error, 14-day retention); Authenticode stays the signing-keys
+    exclusion (8-token denylist enforced across script + README +
+    job, comments included; the corpus token absent from script +
+    job entirely). (d) THE GATE p7-windows-installer — hermetic +
+    offline over the committed definition:
+    tools/check-p7-windows-installer.py (a CLOSED NSIS COMMAND
+    GRAMMAR, stdlib only, every rule fail-closed) +
+    check-p7-ports-map (the flip + join) +
+    tools/test-p7-windows-installer.py (50 fail-closed tests);
+    test-p7-ports-map.py re-baselined to 6 landed / 1 pending (the
+    canonical pending row for flip fixtures is now
+    macos-universal2-ci), the D222-D225 pattern. Verified
+    first-hand: the checker + 50/50 suite green over the real
+    repo; ports-map OK (7 engineering, 6 landed, 1 pending) +
+    29/29; gates-validator 22/22 after the manifest edit;
+    p7-ci-artifacts checker + 22/22 suite and p7-flatpak-manifest
+    checker + 40/40 suite still green over the edited ci.yml;
+    ci.yml re-parsed under pyyaml; controls green before AND after
+    (canonical_dump_gate 13/13, determinism 4/4,
+    zone_mission_parity 5/5 — zero canonical-chain movement;
+    catalog checker OK both sides); MANIFEST clean before and
+    after every corpus read; the bounded --phase P7 validator
+    verdict at the landing commit 07a6c57: status=passed, ALL 6
+    P7 GATES GREEN, every command rc=0 under bwrap containment
+    (report .state/p7-windowsinstaller-gates-report.json,
+    head-bound to 07a6c57774dda8d6); no corpus read by the gate,
+    no new dependency, no Ghidra run, no new RE. Queue head is now
+    p7-macos-universal2-ci (the LAST pending engineering row),
+    with the P7 phase close queued behind it.
+
   - 2026-08-28 `p7-flatpak-manifest` COMPLETE (worker 3ea06ba4
     claim 1, commit e5474b8, PUSHED, plus this bookkeeping
     commit): P7's FIFTH ENGINEERING DELIVERABLE — the FLATPAK
