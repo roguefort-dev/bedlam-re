@@ -1,5 +1,61 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-volume-mixers` COMPLETE (worker 1b994336
+    claim 1, commits f49315f + aa6673c + 1b42327, all PUSHED):
+    THE QoL VOLUME MIXERS (D212, PLAN §6 "QoL: window modes,
+    vsync control, volume mixers, ..." — the next QoL list item
+    after the landed D208 vsync control and D210 window modes).
+    RE FIRST: docs/RE-EXW-MUSIC sec 7 committed BEFORE the
+    implementation (f49315f) — the volume-surfaces bus-split
+    re-anchor, no new claims: the shipped EXW has ONE shared
+    master bus (the master word 004ee9b4 written only by
+    FUN_0044c630 from the two UI volume paths; the mission-shell
+    Up/Down stepper moves g_music_volume 0..100 in +/-5 steps
+    applied vol>>1 -> master 0..50; the SAME SubVoiceStart master
+    product scales music AND sfx voices; the registry
+    sfx-master-gate 0x4ede58 D134 is the only sfx-side separation,
+    an on/off MUTE) — so the original's "music volume" stepper is
+    a WHOLE-MIX master and a per-bus music/sfx selection is a
+    MODERN platform addition. bedlam-shell audio.rs: VolumeLevel
+    (0..=100 percent, the original's own domain) + VolumeMixers
+    music/sfx (default SHIPPED = both FULL = the shipped mix
+    exactly) as WindowOptions::volume — a PLATFORM knob OUT of
+    ModeConfig per D200 layering with NO purist arbitration (audio
+    is presentation bucket, D17 b). THE GAIN APPLICATION SITE is
+    the shell audio path ONLY: AudioFeed::fill_from scales the
+    DEVICE-BOUND copy after GameHost::render_audio, Q8 math
+    composed multiplicatively on the faithfully un-split engine
+    bus (each knob alone behaves exactly like the original's own
+    whole-mix stepper), unity at the default = an EXACT
+    bit-identical passthrough. THE BOUNDED RUNTIME KEY SET (the
+    F11 posture): PageUp/PageDown step music +/-5 and
+    BracketRight/BracketLeft sfx (the original's own step and
+    0..100 clamp), intercepted BEFORE the mapper so they never
+    reach ShellInput, dead to both schemes; the binary's
+    --music/--sfx select the starting levels (noted + ignored
+    headless). BOUNDS KEPT: no engine change (bedlam-shell only);
+    the engine's mixed parity stream, the sim and every hash
+    untouched under ANY knob setting (pinned both directions; the
+    headless smoke at the recorded baseline scene 696adb1cd110e062
+    / parity cce30c983b97b16d / audio 110400/158092 first-hand
+    under --music 50 --sfx 0); catalog stays EMPTY. GATE:
+    p6-volume-mixers wired as the NINTH P6 required_gates entry
+    (gate block aa6673c + phase list 1b42327; bedlam-shell --lib,
+    --release --locked --offline, hermetic). Verified:
+    bedlam-shell --lib 75/0 (+10), the binary wiring checked
+    first-hand, controls green (canonical_dump_gate 13/13,
+    determinism 4/4 + bedlam-core 12/12, zone_mission_parity 5/5 —
+    ZERO canonical-chain movement), catalog checker OK + suite
+    30/30, gates-validator suite 22/22, fmt + clippy clean on the
+    touched crate, workspace cargo check clean, MANIFEST clean
+    before AND after every corpus read, strict queue parser rc=0,
+    the bounded --phase P6 validator at 1b42327: status=passed,
+    ALL 9 P6 GATES GREEN, every command rc=0 under bwrap
+    containment (report .state/p6-volumemixers-gates-report.json,
+    head-bound to 1b42327); no Ghidra run. Queued: the QoL save
+    slots + metadata + opt-in autosave sentence as the new head
+    (window modes, vsync control and volume mixers now DONE).
+
   - 2026-08-28 `p6-window-modes` COMPLETE (worker 7aed939f
     claim 1, commit 8784da1, PUSHED): THE QoL WINDOW-MODE
     SELECTION (D210, PLAN §6 "QoL: window modes, vsync control,

@@ -10,29 +10,105 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-volume-mixers] [gate=p6-volume-mixers] P6 QoL unit
-   per PLAN §6 "QoL: window modes, vsync control, volume mixers,
-   save slots + metadata + opt-in autosave" — the VOLUME MIXERS
-   presentation option, the next QoL list item after the landed
-   D208 vsync control and D210 window modes: a per-bus volume
-   selection (music/sfx) at the platform level, default = the
-   shipped mix exactly — D200 layering: a PLATFORM knob OUT of
-   ModeConfig with NO purist arbitration (audio is the
-   presentation bucket, D17 b: the mixed stream never reaches a
-   hash, and the original's own volume stepper is an un-hashed
-   host audio action, RE-EXW-INPUT sec 5 — re-anchor the bus
-   split there before implementing); the gain application site is
-   the shell audio path only (AudioDevice feed/watermark site),
-   the sim and every hash untouched; a runtime volume key set
-   enters scope only if it stays bounded and platform-only
-   (never ShellInput semantics). Bounds: no engine change; no
-   new RE claims without a committed RE-notes artifact first;
-   catalog stays EMPTY; wire gate p6-volume-mixers as the NINTH
-   P6 required_gates entry; fmt + clippy on touched crates;
+1. [READY] [id=p6-save-slots] [gate=p6-save-slots] P6 QoL unit
+   per PLAN §6 "QoL: ... save slots + metadata + opt-in autosave"
+   — the NEXT QoL list item after the landed D208 vsync control,
+   D210 window modes and D212 volume mixers: the SAVE SLOTS +
+   METADATA + OPT-IN AUTOSAVE sentence. RE FIRST: re-anchor the
+   original save surface in a committed RE-notes artifact before
+   any code (the SAVED.BDL 6-slot domain — the bedlam-game save
+   module SAVED_SLOTS/SAVED_LEN/SAVED_NAME + import_saved_slot
+   already implement the READ side byte-faithfully; RE-EXW-SIM
+   S0-12 rows pin the save-load writers 0x43c0dd/0x43c117/
+   0x43c388 + the 6-slot family 0x4188xx..0x418fxx; FORMATS-
+   MISSION notes SAVED.BDL is the savegame, unrelated to BLD) and
+   decide the layering in DECISIONS.md: slot selection + metadata
+   presentation + the opt-in autosave POLICY are platform knobs
+   OUT of ModeConfig (D200; autosave NEVER default — the shipped
+   game never autosaves), while any write-side engine seam lands
+   config-not-state (the D201 posture: a restore ADOPTS the saved
+   session, never a mid-run mutation; the hashed trajectory
+   untouched; FORMAT_VERSION and every hash pin byte-stable).
+   Bounds: the sim and every hash untouched by the platform
+   surface; no new RE claims without a committed artifact first;
+   catalog stays EMPTY; wire gate p6-save-slots as the TENTH P6
+   required_gates entry; fmt + clippy on touched crates;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
+1. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
+   by worker 1b994336, all PUSHED): P6 QoL unit
+   `p6-volume-mixers` — the VOLUME MIXERS presentation option per
+   PLAN §6 "QoL: window modes, vsync control, volume mixers, ..."
+   (implementation D212), the next QoL list item after the landed
+   D208 vsync control and D210 window modes. (a) RE FIRST:
+   docs/RE-EXW-MUSIC sec 7 committed BEFORE the implementation
+   (f49315f) — the volume-surfaces bus-split re-anchor, every fact
+   re-anchored to its owning verified section with NO new claims:
+   the shipped EXW has ONE shared master bus (the master word
+   004ee9b4 written only by FUN_0044c630 from the two UI volume
+   paths; the mission-shell Up/Down stepper moves g_music_volume
+   0..100 in +/-5 steps applied vol>>1 -> master 0..50,
+   RE-EXW-INPUT sec 5; the SAME SubVoiceStart master product
+   scales music AND sfx voices; SetVolume is spawn-snapshotted;
+   the registry sfx-master-gate 0x4ede58 D134 is the only sfx-side
+   separation, an on/off MUTE never a gain) — so the original's
+   "music volume" stepper is a WHOLE-MIX master and a per-bus
+   music/sfx selection is a MODERN platform addition whose default
+   must equal the shipped single-bus mix bit-exactly. (b)
+   bedlam-shell audio.rs: VolumeLevel 0..=100 percent (the
+   original's own UI domain, clamped the original's way) +
+   VolumeMixers music/sfx (default SHIPPED = both FULL) carried as
+   WindowOptions::volume — a PLATFORM knob OUT of ModeConfig per
+   D200 layering with NO purist arbitration (audio is presentation
+   bucket, D17 b; the knob never consults the mode); THE GAIN
+   APPLICATION SITE is the shell audio path ONLY: AudioFeed::
+   fill_from scales the DEVICE-BOUND copy after GameHost::
+   render_audio, Q8 integer math composed multiplicatively on the
+   faithfully un-split engine bus (each knob alone behaves exactly
+   like the original's own whole-mix stepper), unity at the
+   default = an EXACT bit-identical passthrough. (c) THE BOUNDED
+   RUNTIME KEY SET (the F11 posture): PageUp/PageDown step the
+   music bus +/-5 and BracketRight/BracketLeft the sfx bus — the
+   original's own step and 0..100 clamp — intercepted in the event
+   handler BEFORE the mapper so they never reach ShellInput, all
+   four keys dead to both schemes (the ORIGINAL volume keys Up/
+   Down deliberately stay scheme keys); the binary's --music PCT /
+   --sfx PCT select the starting levels (noted + ignored
+   headless); an adjustment applies to future fills only. (d)
+   BOUNDS KEPT: no engine change (bedlam-shell only); the engine's
+   mixed parity stream, the sim and every hash untouched under ANY
+   knob setting (pinned by volume_mixers_never_touch_the_engine_
+   stream + volume_selection_never_touches_the_sim_config; the
+   headless smoke at the recorded baseline scene 696adb1cd110e062
+   / parity cce30c983b97b16d / audio 110400/158092 first-hand
+   under --music 50 --sfx 0); catalog stays EMPTY. (e) GATE:
+   p6-volume-mixers wired as the NINTH P6 required_gates entry
+   (gate block aa6673c + phase list 1b42327) — command =
+   bedlam-shell --lib, --release --locked --offline, hermetic.
+   Verified first-hand: bedlam-shell --lib 75/0 (+10: seven audio
+   — the level domain/Q8 conversion, the shared-bus composition,
+   the unity bit-exact identity sweep, the scale/mute math, the
+   shipped-default engine-stream pin, the knob-invariance pin,
+   the future-fills-only pin; three window — the platform-only key
+   set dead to both schemes, the original step/clamp, the
+   sim-config invariance; was 65/0 + 1 pre-existing ignored); the
+   binary --help/--music/--sfx wiring checked first-hand (help
+   text, the headless ignore note); controls green:
+   canonical_dump_gate 13/13, determinism 4/4 + bedlam-core 12/12,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement);
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+   with the ninth gate) + its suite 30/30; gates-validator suite
+   22/22; fmt + clippy clean on bedlam-shell (the one pre-existing
+   D210 test warning untouched); workspace cargo check clean;
+   MANIFEST clean before AND after every corpus read; the bounded
+   --phase P6 validator verdict at 1b42327: status=passed, ALL 9
+   P6 GATES GREEN, every command rc=0 under bwrap containment
+   (report .state/p6-volumemixers-gates-report.json, head-bound to
+   1b42327); no Ghidra run. Queued: the QoL save slots + metadata
+   + opt-in autosave sentence as the new head (window modes, vsync
+   control and volume mixers now DONE).
+2. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
    PUSHED): P6 QoL unit `p6-window-modes` — the WINDOW MODES
    presentation option per PLAN §6 "QoL: window modes, vsync
    control, ..." (implementation D210), the direct sibling of the
@@ -101,7 +177,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    rewritten queue); the structured transport failure was
    adjudicated replaced-task per the D206 checklist (all four
    items green, D211) and item 1 above stands untouched, READY.
-2. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+3. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
    the remaining half of the PLAN §6 present sentence ("vsync-
@@ -167,7 +243,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
    no Ghidra run. Queued: the QoL window-modes platform unit as
    the new head (PLAN §6 QoL list order — vsync control now DONE).
-3. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+4. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames
@@ -251,7 +327,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    no Ghidra run. Queued: the optional uncapped present mode as the
    new head (the same PLAN §6 sentence's remaining half — vsync-
    locked at any refresh OR uncapped, logic fixed in both).
-4. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+5. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -307,7 +383,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-5. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+6. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -374,7 +450,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-6. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+7. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -420,7 +496,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-7. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+8. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -466,7 +542,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-8. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+9. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -509,7 +585,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-9. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+10. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -533,7 +609,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-10. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+11. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
