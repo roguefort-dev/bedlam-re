@@ -10,31 +10,90 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-window-modes] [gate=p6-window-modes] P6 QoL unit
+1. [READY] [id=p6-volume-mixers] [gate=p6-volume-mixers] P6 QoL unit
    per PLAN §6 "QoL: window modes, vsync control, volume mixers,
-   save slots + metadata + opt-in autosave" — the WINDOW MODES
-   presentation option at the platform level, the direct sibling of
-   the landed D208 vsync option (vsync control is now DONE): a
-   WindowOptions window-mode selection (WINDOWED default, exactly
-   as shipped / BORDERLESS borderless-fullscreen / exclusive-style fullscreen
-   best-effort) — D200 layering: a platform knob OUT of ModeConfig
-   with NO purist arbitration this time (the visible window chrome
-   never touches the sim; the original was a fullscreen DOS
-   exclusive with no windowed mode to preserve, so both pacing
-   arms accept the selection identically and the selection selects
-   nothing in the host). The winit fullscreen target is a pure
-   function under test (hermetic, no window needed); a runtime
-   toggle key (F11) included only if it stays bounded — it is a
-   PLATFORM/window-manager key OUTSIDE both control schemes and
-   never reaches ShellInput. Bounds: the shell fixed-step clock/
-   pump contract and the hashed trajectory stay untouched (the
-   swapchain resize/reconfigure path only, already the Resized
-   shape); catalog stays EMPTY; wire gate p6-window-modes as the
-   EIGHTH P6 required_gates entry; fmt + clippy on touched crates;
+   save slots + metadata + opt-in autosave" — the VOLUME MIXERS
+   presentation option, the next QoL list item after the landed
+   D208 vsync control and D210 window modes: a per-bus volume
+   selection (music/sfx) at the platform level, default = the
+   shipped mix exactly — D200 layering: a PLATFORM knob OUT of
+   ModeConfig with NO purist arbitration (audio is the
+   presentation bucket, D17 b: the mixed stream never reaches a
+   hash, and the original's own volume stepper is an un-hashed
+   host audio action, RE-EXW-INPUT sec 5 — re-anchor the bus
+   split there before implementing); the gain application site is
+   the shell audio path only (AudioDevice feed/watermark site),
+   the sim and every hash untouched; a runtime volume key set
+   enters scope only if it stays bounded and platform-only
+   (never ShellInput semantics). Bounds: no engine change; no
+   new RE claims without a committed RE-notes artifact first;
+   catalog stays EMPTY; wire gate p6-volume-mixers as the NINTH
+   P6 required_gates entry; fmt + clippy on touched crates;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+1. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
+   PUSHED): P6 QoL unit `p6-window-modes` — the WINDOW MODES
+   presentation option per PLAN §6 "QoL: window modes, vsync
+   control, ..." (implementation D210), the direct sibling of the
+   landed D208 vsync option. (a) bedlam-shell window.rs:
+   `WindowMode` (Windowed default, exactly as shipped / Borderless
+   borderless-fullscreen / exclusive-style Fullscreen best-effort)
+   as `WindowOptions::window_mode` — a PLATFORM knob OUT of
+   ModeConfig per D200 layering with NO purist arbitration this
+   time: the original was a fullscreen DOS exclusive with no
+   windowed mode to preserve, so both pacing arms accept the
+   selection identically and the selection selects NOTHING in the
+   host (pinned by window_mode_selection_never_touches_the_sim_
+   or_the_hashed_trajectory: bit-identical derived SimConfig and
+   identical executed ticks, sim tick count, state hash, scene
+   hash AND frame parity hash under all three options; the
+   present-gate/alpha answers are option-invariant in both arms
+   per window_mode_option_never_changes_the_gate_answers). (b) THE
+   PURE MAPPING (hermetic, no window needed): fullscreen_target
+   over plain VideoModeChoice data — Windowed -> None; Borderless
+   -> Borderless regardless of candidates (no mode switch
+   involved); Fullscreen -> pick_exclusive_mode (largest area,
+   then highest refresh, then highest bit depth — a TOTAL order,
+   list-order independent), else the HONEST borderless
+   degradation (an empty candidate list degrades, noted at
+   configure time, never fatal — the same best-effort posture as
+   the D208 surface mapping). (c) THE F11 RUNTIME TOGGLE, bounded
+   and PLATFORM-ONLY: a window-manager key OUTSIDE both control
+   schemes, intercepted in the event handler BEFORE the mapper so
+   it never reaches ShellInput (pinned by
+   f11_is_the_only_platform_toggle_key_and_is_dead_to_both_schemes
+   — F11 only, and it maps to nothing in either scheme, so even a
+   forwarding bug could not make it sim input), the pure
+   transition toggle_fullscreen_target (leaving always returns to
+   windowed; entering uses the selection's preferred shape — a
+   Windowed selection enters Borderless per the universal F11
+   convention), and ONE shared impure binder apply_fullscreen for
+   the window build and the toggle so the two sites' shapes can
+   never disagree. (d) BOUNDS KEPT: the swapchain follows the
+   EXISTING Resized reconfigure path only; the shell fixed-step
+   clock/pump contract untouched; catalog stays EMPTY. (e) GATE:
+   p6-window-modes wired as the EIGHTH P6 required_gates entry —
+   command = bedlam-shell --lib, --release --locked --offline,
+   hermetic. Verified first-hand: bedlam-shell --lib 65/0 (+7
+   window-mode tests; was 58/0 + 1 pre-existing ignored); the
+   binary --help/--fullscreen/--borderless wiring checked
+   first-hand (help text, the headless ignore note); controls
+   green: canonical_dump_gate 13/13, determinism 4/4,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement),
+   headless smoke at the recorded baseline (scene 696adb1cd110e062,
+   parity cce30c983b97b16d, audio 110400/158092);
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+   with the eighth gate) + its suite 30/30; gates-validator suite
+   22/22; fmt + clippy clean on bedlam-shell; workspace cargo
+   check clean; MANIFEST clean before AND after every corpus read;
+   the bounded --phase P6 validator verdict at 8784da1:
+   status=passed, ALL 8 P6 GATES GREEN, every command rc=0 under
+   bwrap containment (report .state/p6-windowmodes-gates-report.json,
+   head-bound to 8784da1); no Ghidra run. Queued: the QoL volume
+   mixers unit as the new head (PLAN §6 QoL list order — window
+   modes and vsync control now DONE).
+2. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
    the remaining half of the PLAN §6 present sentence ("vsync-
@@ -100,7 +159,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
    no Ghidra run. Queued: the QoL window-modes platform unit as
    the new head (PLAN §6 QoL list order — vsync control now DONE).
-2. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+3. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames
@@ -184,7 +243,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    no Ghidra run. Queued: the optional uncapped present mode as the
    new head (the same PLAN §6 sentence's remaining half — vsync-
    locked at any refresh OR uncapped, logic fixed in both).
-2. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+4. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -240,7 +299,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-3. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+5. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -307,7 +366,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-4. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+6. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -353,7 +412,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-5. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+7. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -399,7 +458,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-6. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+8. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -442,7 +501,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-7. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+9. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -466,7 +525,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-8. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+10. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition

@@ -1,5 +1,61 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-window-modes` COMPLETE (worker 7aed939f
+    claim 1, commit 8784da1, PUSHED): THE QoL WINDOW-MODE
+    SELECTION (D210, PLAN §6 "QoL: window modes, vsync control,
+    volume mixers, ..." — window modes, the direct sibling of the
+    landed D208 vsync control). bedlam-shell window.rs:
+    `WindowMode` (Windowed default, exactly as shipped / Borderless
+    borderless-fullscreen / exclusive-style Fullscreen
+    best-effort) as `WindowOptions::window_mode` — a PLATFORM knob
+    OUT of ModeConfig per D200 layering with NO purist
+    arbitration: the original was a fullscreen DOS exclusive with
+    no windowed mode to preserve, so both pacing arms accept the
+    selection identically and the selection selects NOTHING in the
+    host (pinned by
+    window_mode_selection_never_touches_the_sim_or_the_hashed_
+    trajectory: bit-identical derived SimConfig + identical
+    executed ticks, sim tick count, state hash, scene hash AND
+    frame parity hash under all three options; the
+    present-gate/alpha answers are option-invariant in both arms).
+    THE PURE MAPPING (hermetic, no window): `fullscreen_target`
+    over plain `VideoModeChoice` data — Windowed -> None;
+    Borderless -> Borderless regardless of candidates; Fullscreen
+    -> `pick_exclusive_mode` (largest area, then highest refresh,
+    then highest bit depth — a TOTAL order, list-order
+    independent), else the HONEST borderless degradation (empty
+    candidate list degrades, stderr note at configure time, never
+    fatal). THE F11 RUNTIME TOGGLE, bounded and PLATFORM-ONLY: a
+    window-manager key OUTSIDE both control schemes, intercepted
+    in the event handler BEFORE the mapper so it never reaches
+    ShellInput (pinned by
+    f11_is_the_only_platform_toggle_key_and_is_dead_to_both_schemes
+    — F11 only, and it maps to nothing in either scheme), the
+    pure transition `toggle_fullscreen_target` (leaving always
+    windowed; entering the selection's preferred shape), ONE
+    shared impure binder `apply_fullscreen` for the window build
+    and the toggle. BOUNDS KEPT: the swapchain follows the
+    EXISTING Resized reconfigure path only; the fixed-step
+    clock/pump contract untouched; catalog stays EMPTY. GATE:
+    p6-window-modes wired as the EIGHTH P6 required_gates entry
+    (bedlam-shell --lib, --release --locked --offline, hermetic).
+    Verified: bedlam-shell --lib 65/0 (+7), the binary
+    --help/--fullscreen/--borderless wiring checked first-hand,
+    workspace cargo check clean, fmt + clippy clean on the touched
+    crate, controls green (canonical_dump_gate 13/13, determinism
+    4/4, zone_mission_parity 5/5 — ZERO canonical-chain movement,
+    headless smoke at the recorded baseline scene 696adb1cd110e062
+    / parity cce30c983b97b16d / audio 110400/158092),
+    gates-validator suite 22/22, check-p6-behavior-catalog OK
+    (catalog EMPTY, R6 satisfied with the eighth gate) + suite
+    30/30, strict queue parser rc=0, MANIFEST clean before AND
+    after every corpus read, the bounded --phase P6 validator at
+    8784da1: status=passed, ALL 8 P6 GATES GREEN, every command
+    rc=0 under bwrap containment (report
+    .state/p6-windowmodes-gates-report.json, head-bound to
+    8784da1); no Ghidra run. Queued: the QoL volume mixers unit
+    as the new head (window modes and vsync control now DONE).
+
   - 2026-08-28 `p6-uncapped-present-mode` COMPLETE (worker
     754e7c94 claim 1, commit 44c6f2d, PUSHED; bookkeeping landed by
     the watchdog repair 1787917175 after the worker's client died
