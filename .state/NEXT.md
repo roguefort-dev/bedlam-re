@@ -121,6 +121,15 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    gate, no new dependency, no Ghidra run, no new RE. Queued: the
    macOS universal2 CI job definition as the new head (the LAST
    pending engineering row), then the P7 phase close.
+   NOTE (watchdog repair 1787943179, D228): the worker's model
+   connection died provider-side (transport, rc=0, progress=1)
+   AFTER this completion rewrite and its printed final summary —
+   a post-completion transport death, no work lost (07a6c57 +
+   the bookkeeping ee5c5a7 both PUSHED, strict parser rc=0 on the
+   rewritten queue); the structured transport failure was
+   adjudicated replaced-task per the D206 checklist (all four
+   items green, D211/D226/D228) and the active queue above
+   stands untouched, RUNNABLE 1 2.
 
 2. DONE (2026-08-28, claim 1 — commit e5474b8 by worker
    3ea06ba4, PUSHED): P7 FIFTH engineering deliverable

@@ -61,6 +61,14 @@
     no new dependency, no Ghidra run, no new RE. Queue head is now
     p7-macos-universal2-ci (the LAST pending engineering row),
     with the P7 phase close queued behind it.
+    NOTE (watchdog repair 1787943179, D228): the worker's model
+    connection died provider-side (transport, rc=0, progress=1)
+    AFTER this entry's completion rewrite — a post-completion
+    transport death, no work lost (07a6c57 + the bookkeeping
+    ee5c5a7 both PUSHED, parser rc=0 on the rewritten queue); the
+    structured transport failure was adjudicated replaced-task
+    per D206/D211/D226/D228 and the loop resumes on
+    p7-macos-universal2-ci.
 
   - 2026-08-28 `p7-flatpak-manifest` COMPLETE (worker 3ea06ba4
     claim 1, commit e5474b8, PUSHED, plus this bookkeeping

@@ -9589,3 +9589,64 @@ it carries no os-matrix — and the denylists clean); ci.yml
 re-parsed under pyyaml as an independent check of the family
 reader; MANIFEST.sha256 clean before and after (no game-data
 touch — the gate reads only committed definitions).
+
+## D228 — 2026-08-28: autonomy/watchdog — the SEVENTH post-completion death, third pure `transport` variant (worker a6aece66, `p7-windows-installer`): rc=0 progress=1 AFTER a fully-green completion (implementation + bookkeeping both PUSHED); adjudicated replaced-task per the D206 checklist with ZERO misses — no new failure mode, no code change owed
+
+Worker a6aece66 finished `p7-windows-installer` completely —
+07a6c57 PUSHED with its own Nudge-Worker trailer (the committed
+NSIS installer definition + its per-push windows-latest CI build
+job + the hermetic closed-command-grammar checker/suite + the
+registry flip naming the SIXTH P7 required gate, ALL 6 P7 GATES
+GREEN under the bounded --phase P7 validator re-emitted at the
+landing commit, report .state/p7-windowsinstaller-gates-report.json
+head-bound to 07a6c57774dda8d6), the bookkeeping ee5c5a7 landed
+with the parser-clean completion rewrite (queue sha256
+5fa843128c35dbb2d38e367fcac46ce12fa44a3ba02ce061cae2dc20abfd79a8
+== the failure record queue_after, device 52 inode 3836061; new
+head p7-macos-universal2-ci), main == origin/main at ee5c5a7, and
+the FULL final summary printed — and THEN the model connection
+died provider-side (kind `transport`, client rc=0, progress=1;
+the controller itself marked it "provider-side, not charged to
+the task"). The wrapper correctly recorded the structured failure
+(gate p7-windows-installer, repair required) and paused the loop;
+nothing about the TASK was incomplete. Seventh recurrence of the
+D206 class, third occurrence of the pure D211 variant (aae349d
+and 3ea06ba4 were the first two): the D209 lesson was followed,
+so every checklist item passes with NO miss and the adjudication
+is pure acknowledgment.
+
+THE BINDING CHECKLIST, verified first-hand before acknowledging
+(all four green — any miss means an actual repair instead):
+
+1. The failed gate's substantive commit exists and is PUSHED with
+   the failing worker's own trailer (07a6c57, Nudge-Worker
+   a6aece66-12d9-4f00-936d-d11b48d80f07, origin/main contains it;
+   main == origin/main at ee5c5a7).
+2. The queue on disk IS the worker's completion rewrite: sha256
+   5fa843128c35dbb2d38e367fcac46ce12fa44a3ba02ce061cae2dc20abfd79a8
+   equals the failure record's queue_after (device 52, inode
+   3836061) and the strict parser accepts it (rc=0, RUNNABLE 1 2)
+   with required work still active (item 1 READY
+   p7-macos-universal2-ci, item 2 p7-phase-close).
+3. The failure artifact still matches the trigger snapshot
+   identity (name a6aece66-12d9-4f00-936d-d11b48d80f07.json,
+   device 52, inode 8204236, sha256 8d5879fb87a742099c294800a7ccff22396c79f55b4b6485e4d29bdbe8396f6f,
+   ordinal 1, id/gate p7-windows-installer).
+4. The resolution is `replaced-task`: the failed (ordinal 1,
+   p7-windows-installer, p7-windows-installer) triple is absent
+   from the active queue — the successor p7-macos-universal2-ci
+   replaced it — so the remediation commit is this repair commit
+   (it re-affirms the queue postcondition and carries
+   .state/NEXT.md + this non-.state entry in its diff-tree), and
+   .state/llm-watchdog-failure-ack.json (schema
+   nudge-failure-ack-v1) binds to exactly that commit.
+
+NEVER (unchanged from D206/D209/D211/D226): re-run the task,
+revert, or rewrite the dead worker's queue. A provider death
+AFTER a green completion rewrite is transport debris, not lost
+work. No wrapper/harness change is owed: the transport
+classifier, the structured artifact, and the watchdog pause all
+behaved exactly as designed (tools/test-nudge-queue.sh and
+tools/test-automation-failure-watchdog.sh both PASS at this
+commit; strict parser rc=0 before AND after the queue note;
+MANIFEST.sha256 clean).
