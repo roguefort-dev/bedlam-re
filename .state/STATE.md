@@ -1,5 +1,53 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-e-disposition` COMPLETE (claim 1: substantive
+    commits 9410e0d + 9190a87 by worker e9edfba4, which died waiting
+    on its background battery; claim re-acquired 09:05 by worker
+    224613cc which independently re-validated, re-ran the HEAD-bound
+    battery and landed this bookkeeping + push): ZONE E CLOSED — the
+    FOURTH 7-mission zone flips green (the ledger 29/37; D196) and
+    the disposition is the SECOND PURE ZONES-APPEND (the §10/§11
+    shape — no harness, grammar, or engine change). (1) THE APPEND
+    (9410e0d): the ZONEE ZoneSpec joined the closed-zone LIST in
+    zone_mission_parity.rs after B, C, D (letter E, missions 1..=7,
+    dims 100x100, committed flows NONE — no committed .scen stages
+    zone E) and nothing else; the battery at that state: P5EM1A..
+    P5EM7C all 21 flows full declared budgets, dumps verify, two-run
+    byte identity — NO engine gap surfaced on any ZONEE mission;
+    zones B (21 + the committed S5/S5B/S5C), C (21) and D (21)
+    re-verified in place. (2) THE FLIP (9190a87, the §5
+    cross-artifact rule): the ledger flips ZONEE-MISSION1..7 green
+    (catalog_refs = []); P5-ZONE-GATES §11 documents the
+    per-criterion table (the §10 pattern) — the anchor statics
+    re-derived from each TOT header (100x100, 160004 B — all seven
+    re-verified first-hand at bookkeeping) + the §7j.64 formula
+    (zone E: linear = clamp(5·(5−2)+m−1, 1, 26) = m+14, M1..M7 =
+    15..21 no clamp bite); the T1 spot table (FULL_MASK arithmetic,
+    start_score, the 25-name fetch chain with the D184 zone-level
+    `EDITOR\ZONEE\MISSIONE.*` pin — the THIRD G3 variant bank
+    ZONEE/MISSION6.BIN (1508806 B) re-verified sha256-DISTINCT
+    first-hand: its OWN bank, NOT the ZONEB/MISSION6.BIN ==
+    ZONED/MISSION5.BIN dev twin pair, runtime-dead editor residue,
+    NO extra leg); criterion 6 stays FILE-LEVEL (the shipped slot-0
+    campaign IS ZONEB/MISSION1); the DM carve-out on M6/M7; the
+    p5-zone-e gate joins P5 required_gates (14 gates); the ledger
+    test pin re-baselined 22/37 to 29/37 + the ZONEE 7/7 line
+    (deliberate, same commit); D196. Verified first-hand by the
+    re-validating session: check-p5-zone-ledger OK 29/37 + ZONEE 7/7
+    green, hermetic suite 18/18, gates-validator suite 22/22,
+    bedlam-game suites green (zone_mission_parity 5/5 — four zones;
+    canonical_dump_gate 13/13 — ZERO canonical chain movement;
+    differ_gate 4/4; determinism; census 37/37 unchanged), bedlam-core
+    green, diffharness 104/0, fmt + clippy clean (the bedlam-core
+    claim-bank test warnings pre-exist from D151, untouched), the
+    HEAD-bound validator battery ALL 14 GATES PASSED at 9190a87,
+    MANIFEST clean before AND after every corpus read, no Ghidra
+    run. P5 continues per PLAN §6: ZONEF next (a pure ZONES-append
+    unit in the §11 shape — 7x 100x100 TOTs at 160004 B re-verified,
+    zone F ships NO mission-number variant bank, only the zone-level
+    MISSIONF.BIN 1464679 B, so no G3 extra leg; M6/M7 .NME the
+    16-byte MP empties; linear = m+19 with M7 exactly touching the
+    clamp ceiling 26), then ZONEG closes the ledger.
   - 2026-08-28 `p5-zone-d-disposition` COMPLETE (worker 34b13b42
     claim 1, commits 681db03 + 6c14940 + the bookkeeping commit, all
     PUSHED): ZONE D CLOSED — the THIRD 7-mission zone flips green
