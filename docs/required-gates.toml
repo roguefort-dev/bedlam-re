@@ -28,7 +28,7 @@ required_gates = ["trigger-address", "dependency-spikes", "s0-dispositions", "sc
 [[phase]]
 id = "P5"
 status = "pending"
-required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c", "p5-zone-d", "p5-zone-e", "p5-zone-f"]
+required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c", "p5-zone-d", "p5-zone-e", "p5-zone-f", "p5-zone-g"]
 
 [[phase]]
 id = "P6"
@@ -386,6 +386,57 @@ tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedl
 # per-criterion table lives in P5-ZONE-GATES §12.
 [[gate]]
 id = "p5-zone-f"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zone_mission_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "determinism"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "hash_fixture", "--test", "mission_corpus_gate"],
+]
+tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml"]
+
+# p5-zone-g — the ZONEG completion gate (P5-ZONE-GATES §13, D199):
+# the LAST ledger mission flipped green in the same unit as this
+# executable evidence (the cross-artifact rule: the §4 rule-5 check
+# requires zone G fully green the moment this gate is wired — and
+# with it the ledger reads 37/37, EVERY shipped mission green). The
+# FIFTH PURE instantiation of the generalized harness, with the
+# census-pinned NON-SQUARE map (TOT 100x25 @ 40004 B, re-verified
+# first-hand): zone G ships NO committed .scen flows (the generated
+# per-mission battery IS the whole criterion-1 leg), ONE mission
+# staged through the CAMPAIGN episode-slot seam alone (stage 7 /
+# mask 0 — zone G's zone cell 7 lies OUTSIDE the SELECT write
+# arm's 2..=6 domain and no MP file ships for G, so this unit's
+# one harness delta derives the SELECT write-pair legs from the
+# zone's own mission range; zones B..=F exercise the identical
+# legs), NO mission-number variant bank AT ALL (the only zone-G
+# .BIN is the zone-level MISSIONG.BIN, 2443943 B — the D184
+# no-swap pin carries no variant caveat and the zone-level
+# fetch-chain assert is the whole G3 leg), a REAL 1144 B .NME bank
+# (not the 16-byte MP empty), and linear = clamp(5·(7−2)+m−1, 1,
+# 26) = m+24 putting M1 = 25 one BELOW the clamp ceiling. The
+# suite carries the closed-zone LIST (B, C, D, E, F, G) — this
+# gate and p5-zone-b/…/p5-zone-f run the same command over the
+# same file; no zone's evidence can be stranded by a later zone's
+# unit. Command 1 = the bedlam-game evidence: zone_mission_parity
+# (the battery for the ONE ZONEG mission — boot, 120-frame
+# passive, 48-frame full-staging destroy+pickup+platforms+
+# critters — through the episode-slot mask seam, two-run byte
+# identity + full declared budgets; the anchor TS/T0 statics
+# re-derived independently from the TOT header + the §7j.64
+# formula (linear = 25, one below the clamp ceiling, no bite);
+# the T1 spot table incl. the D184 zone-level CGR/BIN/LNK fetch
+# pin + the seam domains; the file-level shipped SAVED.BDL/
+# OPTIONS import + fuzz) + canonical_dump_gate (the pinned
+# per-scenario chain digests — zone G stages no committed flow,
+# so its leg rides the generated battery; zero movement) +
+# differ_gate (the cross-channel structural spot check) +
+# determinism (rate-invariance replay identity). Command 2 = the
+# bedlam-core evidence: hash_fixture (the cross-OS replay-hash
+# pins) + mission_corpus_gate (the T1 loader/rules oracles).
+# game-data is never git-tracked: no corpus path in
+# tracked_paths/corpus (read-only runtime reads, the MANIFEST
+# contract). The per-criterion table lives in P5-ZONE-GATES §13.
+[[gate]]
+id = "p5-zone-g"
 timeout_seconds = 1800
 commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--test", "zone_mission_parity", "--test", "canonical_dump_gate", "--test", "differ_gate", "--test", "determinism"],

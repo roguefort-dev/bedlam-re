@@ -6913,3 +6913,55 @@ pass spends on killing its successor; the ack protocol is the
 designed retirement path and works whenever a repair actually
 finishes a unit. The next worker picks up ZONEG (one mission; the
 ledger closes 37/37).
+
+## D199 (2026-08-28, p5-zone-g-disposition): ZONE G CLOSED — the
+LAST ledger mission flips green and the P5 mission ledger reads
+37/37 (every shipped mission green, every zone closed). The unit
+is the FIFTH PURE ZONES-APPEND disposition in the §9/§10/§11/§12
+family, with the census-forced ONE-seam delta: zone G is the first
+ONE-mission zone in the closed list, and its zone cell 7 lies
+OUTSIDE the SELECT write arm's 2..=6 domain with no MP file
+shipping for G (§7j.73), so the suite-append commit 0829187 adds
+the G spec (letter G, missions 1..=1, dims 100x25, committed flows
+NONE — no committed .scen stages zone G) AND derives the SELECT
+write-pair legs of zone_t1_rules_spot from the zone's own mission
+range (zones B..=F exercise the identical legs they always did;
+the write-arm reject domain still checks (7,1) loud); no grammar
+change, no engine change. The flip commit lands the §13 table, the
+ledger row, the p5-zone-g gate and the 36/37->37/37 test-pin
+re-baseline together (the §5 cross-artifact rule, the D28
+fingerprint discipline). Zone-G-distinct facts: (a) the
+census-pinned NON-SQUARE mission — TOT 100x25 @ 40004 B
+(4+16·w·h), re-verified first-hand, the only non-100x100 shipped
+map besides zone A's 25x75; (b) ONE mission staged through the
+CAMPAIGN episode-slot seam alone (stage 7 / mask 0); (c) like F,
+NO mission-number variant bank AT ALL — the only zone-G .BIN is
+the zone-level MISSIONG.BIN (2443943 B) — so the D184 no-swap
+verdict needs no variant caveat and the zone-level fetch-chain
+assert (criterion 2's EDITOR\ZONEG\MISSIONG.* pin) is the whole
+G3 leg; (d) M1's .NME is a REAL 1144 B bank, not the 16-byte MP
+empty; (e) linear = clamp(5·5+m−1, 1, 26) = m+24, M1 = 25 — ONE
+BELOW the clamp ceiling, no bite. Evidence: the generated battery
+IS the whole criterion-1 leg — P5GM1A/B/C all 3 flows full
+declared budgets (3/121/49 records), dumps verify, two-run byte
+identity; NO engine gap surfaced on the ZONEG mission (the
+stopping condition did not trigger); the anchor statics
+re-derived from the TOT header + the §7j.64 formula; the T1 spot
+table (FULL_MASK arithmetic, start_score, the 25-name fetch
+chain, the seam domains at stage 7); criterion 6 stays FILE-LEVEL
+(the shipped slot-0 campaign IS ZONEB/MISSION1). P5-ZONE-GATES
+§13 documents the per-criterion table; the ledger flips
+ZONEG-MISSION1 green (catalog_refs = []); the p5-zone-g gate joins
+P5 required_gates (16 gates); the ledger test pin re-baselined
+36/37 to 37/37 + the ZONEG 1/1 line (deliberate, same commit).
+Verified: zone_mission_parity 5/5 (six zones, 27.43s),
+bedlam-game suites green (canonical_dump_gate 13/13 — ZERO
+canonical chain movement; differ_gate 4/4; determinism; census
+37/37 unchanged), bedlam-core green, fmt + clippy clean,
+check-p5-zone-ledger OK 37/37 + hermetic suite 18/18,
+gates-validator suite 22/22 + the HEAD-bound battery all-green at
+the flip commit (16 gates), MANIFEST clean before AND after every
+corpus read, no Ghidra run. P5's mission side is DONE: what
+remains of P5 is its PHASE-CLOSE disposition only (the P4
+pattern: the required-gates.toml P5 status flip pending->green +
+the bound phase verdict).

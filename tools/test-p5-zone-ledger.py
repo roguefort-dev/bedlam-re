@@ -130,15 +130,19 @@ class LedgerCheckerTests(unittest.TestCase):
         # ZONED closure (the second pure instantiation), then with
         # the D196 ZONEE closure (the third pure instantiation),
         # then with the D197 ZONEF closure (the fourth pure
-        # instantiation). Move this pin ONLY with a deliberate
-        # disposition flip, same commit (the fingerprint discipline).
-        self.assertIn("36/37 missions green", result.stdout)
+        # instantiation), then with the D199 ZONEG closure (the
+        # LAST ledger disposition — the ledger reads 37/37, every
+        # shipped mission green). Move this pin ONLY with a
+        # deliberate disposition flip, same commit (the fingerprint
+        # discipline).
+        self.assertIn("37/37 missions green", result.stdout)
         self.assertIn("ZONEA 1/1 green", result.stdout)
         self.assertIn("ZONEB 7/7 green", result.stdout)
         self.assertIn("ZONEC 7/7 green", result.stdout)
         self.assertIn("ZONED 7/7 green", result.stdout)
         self.assertIn("ZONEE 7/7 green", result.stdout)
         self.assertIn("ZONEF 7/7 green", result.stdout)
+        self.assertIn("ZONEG 1/1 green", result.stdout)
 
     def test_missing_corpus_fails_closed(self):
         root = self.fixture(ledger_text(honest_rows()), with_corpus=False)
