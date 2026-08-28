@@ -8143,3 +8143,70 @@ intended content is the large majority and is verbatim), never
 rewrite from scratch; and the finish-line discipline for future
 workers remains unchanged — the parser must run, and pass, before
 the bookkeeping commit.
+
+## D215 — 2026-08-28: P6 `p6-scaling-options` — the resolution-independence SCALING SELECTION (the already-landed bedlam-platform ScaleMode/FilterMode exposed as a platform presentation knob riding WindowOptions.present; a PURE mapping over plain data with NO purist arbitration — the knob is OUT of ModeConfig and selects nothing in the host beyond the PresentConfig the GPU scale path consumes), wired as the ELEVENTH P6 required gate
+
+CONTEXT: PLAN §6 "Resolution independence + GPU rendering (D9/
+D20/D21)" ends its PARITY-mode sentence "...GPU-scales it
+(nearest/integer default; fit/fill/smooth options)". The GPU scale
+PATH itself already landed in bedlam-platform (the parity
+pipeline consuming PresentConfig + scale_rect/uv_rect + the
+Fill cursor handling window-side); what was missing is the
+SELECTION surface. The QoL list is complete (D208/D210/D212/D213),
+so the queue advanced to this, the resolution bullet's last small
+piece (the ENHANCED native-render mode stays the bullet's big
+remaining half, a separate unit).
+
+DECISION: the selection rides the EXISTING WindowOptions.present
+knob (D200 layering — OUT of ModeConfig, like vsync/window mode/
+volume/save before it) with NO purist arbitration, and this time
+there is not even a policy to arbitrate: the original was a FIXED
+640x480 DOS framebuffer with no scaling mode to preserve, so BOTH
+pacing arms accept the selection identically (pinned) and the
+selection selects NOTHING in the host beyond the PresentConfig
+the already-landed GPU scale path consumes. The surface is THREE
+pure functions in bedlam-shell/src/window.rs: the fail-closed CLI
+word mappers scale_mode_from_cli (integer/fit/fill) /
+filter_mode_from_cli (nearest/linear) and the ONE composed PURE
+mapping scaling_present_config — the binary applies nothing else
+to present. BOUNDS (each pinned by its own test in
+scaling_option_tests): default = Integer + Nearest EXACTLY as
+shipped (defaults through the mapping give PresentConfig::default
+bit-for-bit); the mapping touches ONLY the two knob fields — the
+6-to-8-bit palette expansion stays VgaExpand::Original under every
+selection, so the canonical 640x480 indexed frame + palette ride
+unchanged and goldens stay resolution-agnostic; the derived
+SimConfig is bit-identical and the SAME pump script through hosts
+built under the full 3x2 selection cross product yields the
+identical executed ticks, tick count, state hash, scene hash AND
+frame parity hash; the present-gate/alpha answers are
+selection-invariant in BOTH pacing arms; the Fill cursor-uv
+handling stays window-side (absolute mapping under Integer/Fit,
+relative aiming under Fill, filter-invariant); the CLI fails
+closed at exit 2 on any other word (--save-slot's domain
+posture). NO new RE: a pure modern platform surface over landed
+code — zero new binary claims, so no RE artifact is owed. No
+engine change (bedlam-shell only); the headless path owns no
+surface so --scale/--filter are noted + ignored there (it hashes
+the SOURCE frame); test surface = the one knob, never the feature
+cross-product; the catalog stays EMPTY (a plan-named resolution
+unit is not a catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 92/0 (+6:
+the shipped-default pin, the CLI full-domain + fail-closed words,
+the pure two-field mapping, the sim/trajectory pin over the full
+selection, the both-arms gate-answer invariance, the Fill cursor
+posture; was 86/0 + 1 pre-existing ignored); the binary
+--help/--scale/--filter wiring checked first-hand (help text, the
+domain rejections at exit 2 incl. the missing value, the headless
+ignore note) AND the headless smoke EXACTLY at the recorded
+baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d /
+audio 110400/158092) first-hand under --scale fill --filter
+linear; controls green: canonical_dump_gate 13/13, determinism
+4/4, zone_mission_parity 5/5 (ZERO canonical-chain movement);
+check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+with the eleventh gate) + its suite; gates-validator suite 22/22;
+fmt + clippy clean on bedlam-shell (the one pre-existing D210
+test warning untouched); workspace cargo check clean; MANIFEST
+clean before AND after the corpus-reading smoke (the gate reads
+no corpus); no Ghidra run.

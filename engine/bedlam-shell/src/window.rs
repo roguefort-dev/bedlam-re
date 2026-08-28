@@ -95,6 +95,26 @@
 //! existing `Resized` reconfigure path only; the fixed-step
 //! clock/pump contract and the hashed trajectory stay untouched.
 //!
+//! P6 SCALING SELECTION (the p6-scaling-options unit, PLAN §6
+//! "Resolution independence + GPU rendering ... GPU-scales it
+//! (nearest/integer default; fit/fill/smooth options)"): the
+//! already-landed bedlam-platform scale surface ([`ScaleMode`] +
+//! [`FilterMode`], consumed by the parity pipeline's GPU scale
+//! path and [`cursor_to_game`]) exposed as a platform
+//! presentation knob riding [`WindowOptions::present`], selected
+//! by the binary's `--scale`/`--filter` words through the PURE
+//! mapping [`scaling_present_config`]. D200 layering with NO
+//! purist arbitration (the window-modes posture): the original
+//! was a FIXED 640x480 DOS framebuffer with no scaling mode to
+//! preserve, so BOTH pacing arms accept the selection identically
+//! and it selects NOTHING in the host beyond the [`PresentConfig`]
+//! the GPU scale path consumes — never `ModeConfig`, never
+//! `SimConfig`, never a hash. Default = Integer + Nearest EXACTLY
+//! as shipped (the canonical 640x480 indexed frame + palette ride
+//! unchanged; goldens stay resolution-agnostic; the palette
+//! expansion policy is not a knob and stays `VgaExpand::Original`
+//! under every selection).
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -116,9 +136,9 @@ use std::time::{Duration, Instant};
 use bedlam_core::mode::ModeConfig;
 use bedlam_core::sim::SimConfig;
 use bedlam_game::{GameConfig, GameError, GameHost, Scene};
-use bedlam_platform::scale::{scale_rect, PresentConfig};
+use bedlam_platform::scale::{scale_rect, FilterMode, PresentConfig, ScaleMode};
 use bedlam_platform::{ParityGpu, ParityPipeline};
-use bedlam_render::{CANON_H, CANON_W};
+use bedlam_render::{VgaExpand, CANON_H, CANON_W};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{ElementState, WindowEvent};
@@ -340,6 +360,53 @@ fn is_window_toggle_key(key: PhysicalKey) -> bool {
     matches!(key, PhysicalKey::Code(winit::keyboard::KeyCode::F11))
 }
 
+/// PURE: the binary's `--scale` word over the full domain —
+/// `integer` / `fit` / `fill` -> [`ScaleMode`]. Fail-closed: any
+/// other word is `None` and the binary exits 2 (a presentation
+/// knob never guesses; the same posture as `--save-slot`'s domain
+/// rejection).
+pub fn scale_mode_from_cli(word: &str) -> Option<ScaleMode> {
+    match word {
+        "integer" => Some(ScaleMode::Integer),
+        "fit" => Some(ScaleMode::Fit),
+        "fill" => Some(ScaleMode::Fill),
+        _ => None,
+    }
+}
+
+/// PURE: the binary's `--filter` word — `nearest` (the parity
+/// default) / `linear` (smooth) -> [`FilterMode`]. Fail-closed
+/// like the scale word.
+pub fn filter_mode_from_cli(word: &str) -> Option<FilterMode> {
+    match word {
+        "nearest" => Some(FilterMode::Nearest),
+        "linear" => Some(FilterMode::Linear),
+        _ => None,
+    }
+}
+
+/// PURE: the composed presentation config for a scaling selection
+/// (P6 resolution independence, PLAN §6 "nearest/integer default;
+/// fit/fill/smooth options") — the ONE mapping the binary applies
+/// to [`WindowOptions::present`]. NO purist arbitration (the
+/// window-modes posture: the original was a fixed 640x480 DOS
+/// framebuffer with no scaling mode to preserve): the selection
+/// touches EXACTLY the two knob fields — the 6-to-8 bit palette
+/// expansion policy stays the parity [`VgaExpand::Original`] under
+/// every selection, so the canonical 640x480 indexed frame +
+/// palette ride unchanged and only the destination geometry /
+/// sampling of the parity blit is selected. Defaults in, defaults
+/// out: `ScaleMode::default()` = Integer and
+/// `FilterMode::default()` = Nearest give `PresentConfig::default()`
+/// bit-for-bit (the shipped posture).
+pub fn scaling_present_config(scale: ScaleMode, filter: FilterMode) -> PresentConfig {
+    PresentConfig {
+        scale,
+        filter,
+        expand: VgaExpand::Original,
+    }
+}
+
 /// One bounded runtime volume adjustment (P6 QoL volume mixers,
 /// D212): which bus moves and which way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -407,7 +474,16 @@ pub struct WindowOptions {
     pub title: String,
     /// Initial inner size in logical pixels.
     pub size: (u32, u32),
-    /// Presentation config (PARITY defaults if unchanged).
+    /// Presentation config (PARITY defaults if unchanged). The P6
+    /// SCALING SELECTION rides this knob (D215, PLAN §6
+    /// "nearest/integer default; fit/fill/smooth options"): default
+    /// = Integer + Nearest EXACTLY as shipped; the binary's
+    /// `--scale`/`--filter` words select [`ScaleMode`]/
+    /// [`FilterMode`] through the PURE [`scaling_present_config`]
+    /// mapping. The selection selects NOTHING in the host: never
+    /// `ModeConfig`, never `SimConfig`, never a hash — the
+    /// already-landed GPU scale path (the parity pipeline draw +
+    /// [`cursor_to_game`]) is the only consumer.
     pub present: PresentConfig,
     /// The P6 mode this host runs under (D205, the platform-level
     /// classic/modern selection): ONE immutable [`ModeConfig`]
@@ -917,7 +993,6 @@ fn cursor_to_game(
     win_h: u32,
     cfg: &PresentConfig,
 ) -> Option<(i32, i32)> {
-    use bedlam_platform::scale::ScaleMode;
     if cfg.scale == ScaleMode::Fill {
         return None;
     }
@@ -2263,6 +2338,224 @@ mod window_mode_tests {
                 ..SimConfig::default()
             }
         );
+    }
+}
+
+#[cfg(test)]
+mod scaling_option_tests {
+    //! The p6-scaling-options unit (D215): the SCALING SELECTION —
+    //! the already-landed bedlam-platform ScaleMode/FilterMode
+    //! exposed as a platform presentation knob riding
+    //! WindowOptions::present. Every pin below is the
+    //! no-arbitration posture: a PURE mapping over plain data that
+    //! selects nothing in the host beyond the PresentConfig the GPU
+    //! scale path consumes (a plan-named resolution unit is not a
+    //! catalog entry).
+    use super::*;
+    use bedlam_core::input::InputFrame;
+    use bedlam_core::mode::ModeConfig;
+
+    fn opts_with(present: PresentConfig) -> WindowOptions {
+        let mut opts = WindowOptions::new("test-install");
+        opts.present = present;
+        opts
+    }
+
+    fn host_for(opts: &WindowOptions) -> GameHost {
+        GameHost::new(
+            &GameConfig::default(),
+            &host_sim_config(opts),
+            [[0u8, 0, 0]; 256],
+        )
+    }
+
+    /// The full 3x2 selection cross product through the composed
+    /// PURE mapping (the binary's only route into `present`).
+    fn selections() -> Vec<PresentConfig> {
+        [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Fill]
+            .into_iter()
+            .flat_map(|scale| {
+                [FilterMode::Nearest, FilterMode::Linear]
+                    .into_iter()
+                    .map(move |filter| scaling_present_config(scale, filter))
+            })
+            .collect()
+    }
+
+    /// The shipped default: Integer + Nearest — the option changes
+    /// NOTHING until asked (the parity blit runs the exact config it
+    /// always has), and defaults through the composed mapping give
+    /// `PresentConfig::default()` bit-for-bit.
+    #[test]
+    fn scaling_defaults_to_the_shipped_integer_nearest() {
+        assert_eq!(PresentConfig::default().scale, ScaleMode::Integer);
+        assert_eq!(PresentConfig::default().filter, FilterMode::Nearest);
+        assert_eq!(
+            WindowOptions::new("test-install").present,
+            PresentConfig::default()
+        );
+        assert_eq!(
+            scaling_present_config(ScaleMode::default(), FilterMode::default()),
+            PresentConfig::default()
+        );
+    }
+
+    /// The CLI words cover the full domain and FAIL CLOSED: every
+    /// selection word maps to exactly one mode, anything else is
+    /// `None` (the binary exits 2 — a presentation knob never
+    /// guesses).
+    #[test]
+    fn scaling_cli_words_map_the_full_domain_and_fail_closed() {
+        assert_eq!(scale_mode_from_cli("integer"), Some(ScaleMode::Integer));
+        assert_eq!(scale_mode_from_cli("fit"), Some(ScaleMode::Fit));
+        assert_eq!(scale_mode_from_cli("fill"), Some(ScaleMode::Fill));
+        assert_eq!(filter_mode_from_cli("nearest"), Some(FilterMode::Nearest));
+        assert_eq!(filter_mode_from_cli("linear"), Some(FilterMode::Linear));
+        for word in ["smooth", "INTEGER", "int", "", "linear ", "0"] {
+            assert_eq!(scale_mode_from_cli(word), None, "scale word {word:?}");
+        }
+        for word in ["smooth", "bilinear", "NEAREST", "", "nearest;"] {
+            assert_eq!(filter_mode_from_cli(word), None, "filter word {word:?}");
+        }
+    }
+
+    /// THE PURE MAPPING: the composed config covers exactly the 3x2
+    /// selection cross product and touches ONLY the two knob fields
+    /// — the 6-to-8 bit palette expansion stays the parity
+    /// `VgaExpand::Original` under every selection, so the canonical
+    /// 640x480 indexed frame + palette ride unchanged.
+    #[test]
+    fn scaling_selection_is_a_pure_present_config_mapping() {
+        for scale in [ScaleMode::Integer, ScaleMode::Fit, ScaleMode::Fill] {
+            for filter in [FilterMode::Nearest, FilterMode::Linear] {
+                let cfg = scaling_present_config(scale, filter);
+                assert_eq!(cfg.scale, scale);
+                assert_eq!(cfg.filter, filter);
+                assert_eq!(
+                    cfg.expand,
+                    VgaExpand::Original,
+                    "the expansion policy is not a knob"
+                );
+            }
+        }
+        for cfg in selections() {
+            assert_eq!(cfg.expand, VgaExpand::Original);
+        }
+    }
+
+    /// The selection is PRESENTATION-BUCKET ONLY (D17 b, the
+    /// no-arbitration pin): it lives in `WindowOptions` and never
+    /// enters `ModeConfig`/`SimConfig`, so the derived host config
+    /// is bit-identical and the SAME pump script through hosts
+    /// built under every selection yields the identical
+    /// executed-tick sequence, sim tick count, state hash, scene
+    /// hash AND frame parity hash — the scaling cannot touch the
+    /// hashed trajectory (goldens stay resolution-agnostic).
+    #[test]
+    fn scaling_selection_never_touches_the_sim_or_the_hashed_trajectory() {
+        let opts_all = selections().into_iter().map(opts_with).collect::<Vec<_>>();
+        for opts in &opts_all[1..] {
+            assert_eq!(
+                host_sim_config(&opts_all[0]),
+                host_sim_config(opts),
+                "the selection never reaches the sim config"
+            );
+        }
+
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+        let mut executed = vec![Vec::new(); hosts.len()];
+        for (i, &dt) in script.iter().cycle().take(30).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            for (host, log) in hosts.iter_mut().zip(executed.iter_mut()) {
+                log.push(host.pump_frame(dt, &input));
+            }
+        }
+        for (i, host) in hosts.iter().enumerate().skip(1) {
+            assert_eq!(executed[i], executed[0], "same executed ticks");
+            assert_eq!(
+                host.driver().sim().tick_index(),
+                hosts[0].driver().sim().tick_index()
+            );
+            assert_eq!(
+                host.driver().sim().state_hash(),
+                hosts[0].driver().sim().state_hash()
+            );
+            assert_eq!(host.scene_hash(), hosts[0].scene_hash());
+            assert_eq!(host.frame().parity_hash(), hosts[0].frame().parity_hash());
+        }
+    }
+
+    /// GATE ANSWERS are option-invariant: the scaling selection
+    /// lives entirely upstream of the host (never in
+    /// `ModeConfig`), so BOTH pacing arms accept it identically —
+    /// the present-gate and alpha answers are IDENTICAL under every
+    /// selection in the modern AND the classic arm.
+    #[test]
+    fn scaling_option_never_changes_the_gate_answers() {
+        for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let mut opts_all = selections().into_iter().map(opts_with).collect::<Vec<_>>();
+            for opts in &mut opts_all {
+                opts.mode = mode;
+            }
+            let mut hosts: Vec<GameHost> = opts_all.iter().map(host_for).collect();
+            let mut clock = FixedStepClock::host();
+            for dt in [4u32, 0, 4, 3, 0, 4] {
+                clock.advance(4_166_666);
+                for host in &mut hosts {
+                    host.pump_frame(dt, &InputFrame::default());
+                }
+                for (i, host) in hosts.iter().enumerate().skip(1) {
+                    assert_eq!(
+                        present_due(host),
+                        present_due(&hosts[0]),
+                        "{mode:?} dt {dt} selection {i}"
+                    );
+                    assert_eq!(
+                        present_camera_alpha(host, &clock),
+                        present_camera_alpha(&hosts[0], &clock),
+                        "{mode:?} dt {dt} selection {i}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The FILL cursor-uv handling already exists window-side (the
+    /// parity blit crops the centered source sub-rect — its inverse
+    /// needs the uv rect, so absolute cursor mapping is unavailable
+    /// under Fill and relative aiming is used instead): pin it over
+    /// the whole selection — None under Fill regardless of filter,
+    /// an exact absolute mapping under Integer/Fit.
+    #[test]
+    fn fill_scaling_cursor_is_relative_only_and_filter_invariant() {
+        for cfg in selections() {
+            match cfg.scale {
+                ScaleMode::Fill => {
+                    assert_eq!(
+                        cursor_to_game(960.0, 540.0, 1920, 1080, &cfg),
+                        None,
+                        "Fill crops: no absolute cursor mapping"
+                    );
+                }
+                _ => {
+                    assert_eq!(
+                        cursor_to_game(960.0, 540.0, 1920, 1080, &cfg),
+                        Some((320, 240)),
+                        "integer/fit map absolutely (the filter never matters)"
+                    );
+                }
+            }
+        }
     }
 }
 

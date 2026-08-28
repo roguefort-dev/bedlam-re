@@ -26,19 +26,29 @@
 //!   "QoL: ... save slots + metadata + opt-in autosave"; D213;
 //!   default 1) and `--autosave` OPTS IN to the autosave policy —
 //!   never the default: the shipped game never autosaves
-//!   (RE-EXW-SAVE).
+//!   (RE-EXW-SAVE). `--scale MODE` (`integer`/`fit`/`fill`) and
+//!   `--filter MODE` (`nearest`/`linear`) select the P6 resolution-
+//!   independence scaling (PLAN §6 "GPU-scales it (nearest/integer
+//!   default; fit/fill/smooth options)"; D215; a PURE platform
+//!   presentation mapping over the already-landed bedlam-platform
+//!   scale surface; default = integer + nearest exactly as shipped).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use bedlam_platform::scale::{FilterMode, ScaleMode};
+
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
 use bedlam_shell::save::{AutosavePolicy, SaveSlotId};
-use bedlam_shell::window::{run_window, Vsync, WindowMode, WindowOptions};
+use bedlam_shell::window::{
+    filter_mode_from_cli, run_window, scale_mode_from_cli, scaling_present_config, Vsync,
+    WindowMode, WindowOptions,
+};
 
 const DEFAULT_GFX: &str = "game-data/BEDLAM";
 
@@ -53,6 +63,8 @@ fn main() -> ExitCode {
     let mut sfx: Option<u8> = None;
     let mut save_slot: Option<SaveSlotId> = None;
     let mut autosave = false;
+    let mut scale: Option<ScaleMode> = None;
+    let mut filter: Option<FilterMode> = None;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -90,6 +102,20 @@ fn main() -> ExitCode {
                 }
             },
             "--autosave" => autosave = true,
+            "--scale" => match args.next().and_then(|w| scale_mode_from_cli(&w)) {
+                Some(mode) => scale = Some(mode),
+                None => {
+                    eprintln!("bedlam-shell: --scale needs integer|fit|fill");
+                    return ExitCode::from(2);
+                }
+            },
+            "--filter" => match args.next().and_then(|w| filter_mode_from_cli(&w)) {
+                Some(mode) => filter = Some(mode),
+                None => {
+                    eprintln!("bedlam-shell: --filter needs nearest|linear");
+                    return ExitCode::from(2);
+                }
+            },
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -98,7 +124,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -142,6 +168,19 @@ fn main() -> ExitCode {
                 println!("              original's own save opportunities (single-player campaign");
                 println!("              boundaries); NEVER the default - the shipped game never");
                 println!("              autosaves; ignored headless)");
+                println!("  --scale MODE: window host scales the canonical 640x480 frame MODE =");
+                println!(
+                    "                integer (largest integer scale, bars - default) | fit (whole"
+                );
+                println!("                frame inside, bars) | fill (whole target, cropped) (P6");
+                println!("                resolution independence; ignored headless)");
+                println!(
+                    "  --filter MODE: window host samples the scaled frame MODE = nearest (the"
+                );
+                println!(
+                    "                 parity pixels - default) | linear (smooth) (P6 resolution"
+                );
+                println!("                 independence; ignored headless)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -235,6 +274,19 @@ fn main() -> ExitCode {
         if autosave {
             opts.autosave = AutosavePolicy::On(opts.save_slot);
         }
+        // P6 resolution independence (PLAN §6 "GPU-scales it
+        // (nearest/integer default; fit/fill/smooth options)"): the
+        // SCALING SELECTION is a PURE platform presentation mapping
+        // over the already-landed bedlam-platform scale surface —
+        // OUT of ModeConfig (D200 layering), NO purist arbitration
+        // (the original was a fixed 640x480 DOS framebuffer with no
+        // scaling mode to preserve, so both pacing arms accept it
+        // identically) and it selects NOTHING in the host beyond the
+        // PresentConfig the GPU scale path consumes. Defaults in,
+        // defaults out: no flags = Integer + Nearest = the shipped
+        // posture bit-for-bit.
+        opts.present =
+            scaling_present_config(scale.unwrap_or_default(), filter.unwrap_or_default());
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
@@ -265,6 +317,14 @@ fn main() -> ExitCode {
             eprintln!(
                 "bedlam-shell: --save-slot/--autosave are window-host options; ignored headless"
             );
+        }
+        if scale.is_some() || filter.is_some() {
+            // Same posture for the scaling selection: the headless
+            // path owns no surface, so there is no destination rect
+            // to select — and the canonical frame it hashes is the
+            // SOURCE, untouched by any selection (goldens stay
+            // resolution-agnostic).
+            eprintln!("bedlam-shell: --scale/--filter are window-host options; ignored headless");
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {

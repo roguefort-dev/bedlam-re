@@ -411,6 +411,53 @@ untouched by construction (pinned by
 catalog stays empty (a plan-named QoL unit is not a catalog
 entry).
 
+**Implementation status (D215, 2026-08-28, gate
+`p6-scaling-options`): the resolution-independence SCALING
+SELECTION — PLAN §6 "Resolution independence + GPU rendering ...
+PARITY mode keeps the canonical 640x480 indexed frame + palette
+and GPU-scales it (nearest/integer default; fit/fill/smooth
+options)" (the resolution bullet's last small piece; the QoL list
+is complete as of D213).**
+THE SELECTION over the ALREADY-LANDED bedlam-platform scale
+surface (`bedlam_platform::scale`: `ScaleMode` Integer/Fit/Fill +
+`FilterMode` Nearest/Linear, consumed by the parity pipeline's
+GPU scale path and `cursor_to_game`) exposed as a platform
+presentation knob riding `WindowOptions::present`
+(`engine/bedlam-shell/src/window.rs`: the fail-closed CLI word
+mappers `scale_mode_from_cli`/`filter_mode_from_cli` + the ONE
+composed PURE mapping `scaling_present_config`). D200 layering
+with NO purist arbitration (the D210 window-modes posture): the
+original was a FIXED 640x480 DOS framebuffer with no scaling mode
+to preserve, so BOTH pacing arms accept the selection identically
+(pinned by `scaling_option_never_changes_the_gate_answers`) and
+the selection selects NOTHING in the host beyond the
+`PresentConfig` the already-landed GPU scale path consumes —
+never `ModeConfig`, never `SimConfig`, never a hash (pinned by
+`scaling_selection_never_touches_the_sim_or_the_hashed_
+trajectory`: bit-identical derived SimConfig and the identical
+executed ticks, tick count, state hash, scene hash AND frame
+parity hash under the full 3x2 selection cross product). BOUNDS
+KEPT: default = Integer + Nearest EXACTLY as shipped (pinned by
+`scaling_defaults_to_the_shipped_integer_nearest` — defaults
+through the mapping give `PresentConfig::default()` bit-for-bit);
+the mapping touches ONLY the two knob fields (pinned by
+`scaling_selection_is_a_pure_present_config_mapping` — the
+6-to-8-bit palette expansion stays `VgaExpand::Original` under
+every selection, so the canonical 640x480 indexed frame +
+palette ride unchanged and goldens stay resolution-agnostic); the
+Fill cursor-uv handling already exists window-side (pinned by
+`fill_scaling_cursor_is_relative_only_and_filter_invariant`:
+absolute mapping under Integer/Fit, relative aiming under Fill);
+the binary's `--scale MODE`/`--filter MODE` fail closed at exit 2
+on any other word (pinned by
+`scaling_cli_words_map_the_full_domain_and_fail_closed`), noted +
+ignored headless (the headless path owns no surface and hashes
+the SOURCE frame — smoke verified at the recorded baseline under
+`--scale fill --filter linear`); NO new RE (a pure modern platform
+surface over landed code, zero new binary claims); no engine
+change (bedlam-shell only); the catalog stays empty (a plan-named
+resolution unit is not a catalog entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
