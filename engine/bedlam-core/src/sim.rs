@@ -11,6 +11,7 @@
 
 use crate::hash::{Fnv1a64, StateHash};
 use crate::input::InputFrame;
+use crate::mode::ModeConfig;
 use crate::rng::Pcg32;
 use crate::time::{Tick, TimeBase};
 use crate::{CoreError, FORMAT_VERSION};
@@ -61,16 +62,23 @@ pub struct SimConfig {
     pub seed: u64,
     /// Ticks per second (D16: nominal 60 Hz for parity).
     pub time_base: TimeBase,
+    /// The mode this simulation runs under (P6 seam, D200/D201):
+    /// ONE immutable [`ModeConfig`] injected at sim construction and
+    /// never mutated mid-run — a mode change is a new sim, i.e. a new
+    /// `SimConfig`. Default = modern.
+    pub mode: ModeConfig,
 }
 
 impl Default for SimConfig {
     /// Seed 0 is the documented neutral skeleton default; the parity
     /// harness pins real per-mission seeds later. Time base is
-    /// [`TimeBase::NOMINAL`].
+    /// [`TimeBase::NOMINAL`]; mode is [`ModeConfig::MODERN`] (the
+    /// plan default).
     fn default() -> Self {
         SimConfig {
             seed: 0,
             time_base: TimeBase::NOMINAL,
+            mode: ModeConfig::default(),
         }
     }
 }
@@ -88,6 +96,11 @@ pub struct Sim {
     tick: Tick,
     rng: Pcg32,
     time_base: TimeBase,
+    /// The immutable mode this sim was constructed under (P6 seam,
+    /// D201). CONFIG, not state: deliberately not hashed and not
+    /// serialized (like the seed); read it with [`Sim::mode`]. A mode
+    /// change is a new sim, so there is no setter — ever.
+    mode: ModeConfig,
     initial_state_hash: u64,
     /// Per-tick entropy slot: exactly one `u32` draw per tick, recorded in
     /// state so any divergence in RNG consumption order shifts the hash.
@@ -163,6 +176,7 @@ impl Sim {
             tick: 0,
             rng: Pcg32::new(config.seed, STREAM_SIM),
             time_base: config.time_base,
+            mode: config.mode,
             initial_state_hash: 0,
             last_draw: 0,
             microstep: 0,
@@ -232,6 +246,13 @@ impl Sim {
     /// The time base this sim runs at.
     pub fn time_base(&self) -> TimeBase {
         self.time_base
+    }
+
+    /// The immutable [`ModeConfig`] this sim was constructed under
+    /// (P6 seam, D201). There is no mode setter: a mode change is a
+    /// new sim constructed from a new [`SimConfig`].
+    pub fn mode(&self) -> ModeConfig {
+        self.mode
     }
 
     /// The most recent per-tick entropy draw (the entropy slot value).
@@ -416,6 +437,11 @@ impl Sim {
             tick,
             rng: Pcg32::from_raw_parts(rng_state, rng_stream),
             time_base: TimeBase { tick_hz },
+            // The mode is config, not state: it is not in the
+            // snapshot bytes, so a restore ADOPTS the mode of the
+            // SimConfig it is restored under (restoring is
+            // constructing a new sim — D201).
+            mode: expected_config.mode,
             initial_state_hash,
             last_draw,
             microstep,
@@ -546,6 +572,7 @@ mod tests {
         let config = SimConfig {
             seed: 77,
             time_base: TimeBase::NOMINAL,
+            mode: ModeConfig::default(),
         };
         let mut sim = Sim::new(&config);
         sim.set_fading(true);
@@ -612,7 +639,102 @@ mod tests {
         let other = SimConfig {
             seed: config.seed,
             time_base: TimeBase { tick_hz: 120 },
+            mode: ModeConfig::default(),
         };
         assert_eq!(Sim::restore(&bytes, &other), Err(CoreError::BadTickHz(60)));
+    }
+
+    #[test]
+    fn mode_is_injected_at_construction_and_never_mutated() {
+        // P6 seam (D201): the ONE immutable ModeConfig rides SimConfig
+        // into Sim::new; the sim exposes it and offers no way to
+        // change it (a mode change is a NEW sim). Both arms of both
+        // plan-named axes construct cleanly.
+        for config in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let sim = Sim::new(&SimConfig {
+                seed: 7,
+                time_base: TimeBase::NOMINAL,
+                mode: config,
+            });
+            assert_eq!(sim.mode(), config);
+        }
+        // Default SimConfig = modern (the plan default).
+        assert_eq!(Sim::new(&SimConfig::default()).mode(), ModeConfig::MODERN);
+    }
+
+    #[test]
+    fn mode_is_config_not_state_the_seam_lands_inert() {
+        // The seam itself changes NO behavior: neither plan-named axis
+        // has an in-sim consumer yet (timing lock is a host pacing
+        // policy, control scheme is a host input mapping), so the
+        // same seed + input stream produces the IDENTICAL hashed
+        // trajectory in both arms — which is exactly why the
+        // canonical S0-S8 chains cannot move under the modern default.
+        // The mode is also not part of the state hash (config, not
+        // state — like the seed). A later unit that gives an axis or a
+        // catalog toggle an in-sim consumer is the unit that makes the
+        // arms diverge THERE; this pin documents the seam unit alone.
+        let input = InputFrame {
+            buttons: 1,
+            mouse_dx: 3,
+            mouse_dy: -2,
+            mouse_buttons: 1,
+        };
+        let mut modern = Sim::new(&SimConfig {
+            seed: 0x0BEE_F00D,
+            time_base: TimeBase::NOMINAL,
+            mode: ModeConfig::MODERN,
+        });
+        let mut classic = Sim::new(&SimConfig {
+            seed: 0x0BEE_F00D,
+            time_base: TimeBase::NOMINAL,
+            mode: ModeConfig::CLASSIC,
+        });
+        assert_eq!(
+            modern.initial_state_hash(),
+            classic.initial_state_hash(),
+            "tick-0 hash is mode-independent"
+        );
+        for _ in 0..64 {
+            modern.tick(&input);
+            classic.tick(&input);
+            assert_eq!(modern.state_hash(), classic.state_hash());
+        }
+    }
+
+    #[test]
+    fn restore_adopts_the_expected_config_mode() {
+        // The mode is not serialized (config, not state — the snapshot
+        // format is byte-stable), so a restored sim takes the mode of
+        // the SimConfig it is restored under: restoring IS
+        // constructing a new sim (D201). The stored hash still binds
+        // the trajectory bytes, not the mode.
+        let config = SimConfig {
+            seed: 99,
+            time_base: TimeBase::NOMINAL,
+            mode: ModeConfig::MODERN,
+        };
+        let mut sim = Sim::new(&config);
+        for _ in 0..10 {
+            sim.tick(&InputFrame::default());
+        }
+        let bytes = sim.snapshot().to_bytes();
+
+        let same_mode = Sim::restore(&bytes, &config).unwrap();
+        assert_eq!(same_mode.mode(), ModeConfig::MODERN);
+        assert_eq!(same_mode.state_hash(), sim.state_hash());
+
+        let classic_config = SimConfig {
+            seed: config.seed,
+            time_base: config.time_base,
+            mode: ModeConfig::CLASSIC,
+        };
+        let as_classic = Sim::restore(&bytes, &classic_config).unwrap();
+        assert_eq!(as_classic.mode(), ModeConfig::CLASSIC);
+        assert_eq!(
+            as_classic.state_hash(),
+            sim.state_hash(),
+            "same bytes, same trajectory: the mode is not hashed"
+        );
     }
 }

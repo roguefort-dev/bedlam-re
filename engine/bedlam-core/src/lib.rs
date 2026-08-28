@@ -43,6 +43,7 @@ pub mod fx;
 pub mod hash;
 pub mod input;
 pub mod mission;
+pub mod mode;
 pub mod poi;
 pub mod replay;
 pub mod rng;

@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam"]
 
 [[phase]]
 id = "P7"
@@ -472,3 +472,35 @@ commands = [
   ["/usr/bin/python3", "tools/test-p6-behavior-catalog.py"],
 ]
 tracked_paths = ["docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "tools/check-p6-behavior-catalog.py", "tools/test-p6-behavior-catalog.py", "docs/required-gates.toml"]
+
+# p6-modeconfig-seam — the FIRST P6 ENGINE unit behind the scaffold
+# contract (D201; PLAN §6 P6 + docs/P6-MODERNIZATION.md §1): the ONE
+# immutable ModeConfig injected at sim construction. engine/bedlam-
+# core/src/mode.rs lands ModeConfig (private fields, NO &mut self
+# anywhere — the only way to a different mode is the consuming
+# with(axis, arm) builder returning a NEW value; a mode change is a
+# new sim), riding SimConfig.mode into Sim::new and read-only
+# through Sim::mode()/SimDriver::mode()/GameHost::mode(); default =
+# MODERN (PLAN §6 "default = modern"); the initial purist toggle set
+# = exactly the two plan-named FEEL-CONTESTED axes with concrete ids
+# pinned (PuristToggle::TimingLock = "timing-lock",
+# ControlScheme = "control-scheme" — reserved namespace, catalog
+# purist_toggle ids must not collide); the CATALOG STAYS EMPTY (D200
+# seeding policy — no entry without recorded evidence + repro).
+# CONFIG-NOT-STATE: the mode is not hashed and not serialized
+# (FORMAT_VERSION unchanged, all P5 hash pins byte-stable); a restore
+# adopts the expected SimConfig's mode. The seam lands INERT —
+# neither axis has an in-sim consumer yet, so the canonical S0-S8
+# chains are byte-identical under the modern default (proven by
+# canonical_dump_gate 13/13 before AND after + the seam inertness
+# test). Test surface = the purist toggles, both arms, never the
+# feature cross-product (D200). Both commands hermetic: --release
+# --locked --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-modeconfig-seam"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--lib"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
+]
+tracked_paths = ["engine/bedlam-core/src/mode.rs", "engine/bedlam-core/src/sim.rs", "engine/bedlam-core/src/lib.rs", "engine/bedlam-core/src/frame.rs", "engine/bedlam-game/src/host.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]

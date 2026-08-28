@@ -2,6 +2,7 @@
 //! DESIGN-RENDER sec 5/10).
 
 use bedlam_core::input::InputFrame;
+use bedlam_core::mode::ModeConfig;
 use bedlam_core::sim::{Sim, SimConfig};
 use bedlam_render::compose::RenderInput;
 use bedlam_render::{clamp_camera, render, sanitize_palette, Frame, Vga6, VgaExpand};
@@ -24,6 +25,7 @@ fn sim_after(seed: u64, ticks: u32, input: &InputFrame) -> Sim {
     let mut sim = Sim::new(&SimConfig {
         seed,
         time_base: bedlam_core::time::TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     });
     for _ in 0..ticks {
         sim.tick(input);

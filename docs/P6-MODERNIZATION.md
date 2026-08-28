@@ -67,6 +67,22 @@ the Determinism Charter in PLAN §3):
 Bounds of this unit: the seam is DECIDED here; no engine code lands with it
 (the first P6 engine unit implements `ModeConfig` and the toggle plumbing).
 
+**Implementation status (D201, 2026-08-28, gate `p6-modeconfig-seam`):**
+the seam is IMPLEMENTED in `engine/bedlam-core/src/mode.rs` —
+`ModeConfig` rides `SimConfig.mode` into `Sim::new` (sim construction),
+is carried unmutated and read-only through `Sim::mode()` /
+`SimDriver::mode()` / `GameHost::mode()` (no setter at any layer; a mode
+change is a new sim). Default = `ModeConfig::MODERN` (PLAN §6). The two
+plan-named axis ids are pinned: **`timing-lock`** and **`control-scheme`**
+(`PuristToggle::id()`, fail-closed `from_id`). The ids are a RESERVED
+namespace: catalog `purist_toggle` ids must not collide with them
+(checker-side enforcement lands with the first catalog entry). The axes
+are config, not state: not hashed, not serialized (FORMAT_VERSION
+unchanged); a restore adopts the expected config's mode. The unit lands
+inert — neither axis has an in-sim consumer yet, so the canonical chains
+are byte-identical under the modern default (pinned by
+`canonical_dump_gate` and the seam's inertness test).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -184,7 +200,9 @@ Per the D175 pattern the contract lands before any behavior change:
   scaffold state). P6 status stays `pending` until the phase's actual exit.
 - Later P6 gates (the ModeConfig seam implementation, catalog entries +
   regression evidence, modernization surfaces per PLAN §6) land as evidence
-  lands, each behind the scaffold.
+  lands, each behind the scaffold. The seam implementation gate
+  `p6-modeconfig-seam` landed 2026-08-28 as the SECOND P6 required gate
+  (D201).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 

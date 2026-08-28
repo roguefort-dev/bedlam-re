@@ -24,6 +24,7 @@
 
 use bedlam_core::hash::{Fnv1a64, StateHash};
 use bedlam_core::input::InputFrame;
+use bedlam_core::mode::ModeConfig;
 use bedlam_core::sim::{Sim, SimConfig};
 use bedlam_core::time::TimeBase;
 
@@ -88,6 +89,7 @@ fn run_script() -> Vec<u64> {
     let config = SimConfig {
         seed: SEED,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let mut sim = Sim::new(&config);
     let mut hashes = Vec::with_capacity(FIXED_TICKS as usize + 1);

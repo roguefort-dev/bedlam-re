@@ -9,6 +9,7 @@
 
 use bedlam_core::frame::SimDriver;
 use bedlam_core::input::InputFrame;
+use bedlam_core::mode::ModeConfig;
 use bedlam_core::replay::Replay;
 use bedlam_core::rng::Pcg32;
 use bedlam_core::sim::{Sim, SimConfig};
@@ -31,6 +32,7 @@ fn same_seed_same_inputs_same_hash_stream() {
     let config = SimConfig {
         seed: 0x00C0_FFEE,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let mut a = Sim::new(&config);
     let mut b = Sim::new(&config);
@@ -61,10 +63,12 @@ fn different_seed_diverges() {
     let config_a = SimConfig {
         seed: 1,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let config_b = SimConfig {
         seed: 2,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let mut a = Sim::new(&config_a);
     let mut b = Sim::new(&config_b);
@@ -117,6 +121,7 @@ fn replay_round_trip_is_bit_exact() {
     let replay_config = SimConfig {
         seed: parsed.seed,
         time_base: TimeBase::new(parsed.tick_hz).unwrap(),
+        mode: ModeConfig::default(),
     };
     let mut replayed = Sim::new(&replay_config);
     assert_eq!(replayed.initial_state_hash(), parsed.initial_state_hash);
@@ -131,6 +136,7 @@ fn snapshot_restore_continues_identically() {
     let config = SimConfig {
         seed: 0x5EED_5EED,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let mut sim = Sim::new(&config);
     let mut gen = Pcg32::new(31337, 60);
@@ -215,6 +221,7 @@ fn same_script_same_sim_hash_at_15_60_240hz() {
     let config = SimConfig {
         seed: 0x00D1_7600,
         time_base: TimeBase::NOMINAL,
+        mode: ModeConfig::default(),
     };
     let phase1 = InputFrame {
         buttons: 1, // bit 0 held: the placeholder actor advances

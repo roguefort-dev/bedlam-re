@@ -7069,3 +7069,87 @@ change, no Ghidra run; decisions + contract artifacts only.
    clean HEAD 0c81387; MANIFEST clean before AND after every corpus
    read; no Ghidra run; no engine change; no harness change.
    (worker 6e45232f claim 1, unit bedlam-nudge-item1-6e45232f)
+
+## D201 — 2026-08-28: P6/engine `p6-modeconfig-seam` — the ONE immutable ModeConfig implemented and injected at sim construction (default = modern; the two plan-named purist axes `timing-lock`/`control-scheme`), config-not-state layering, and the completion gate wired as the SECOND P6 required gate
+
+Context: PLAN §6 P6 + D200 (the scaffold contract, e0bc7fb) — the
+FIRST engine unit behind the p6-modernization-scaffold gate. Bounds
+kept: no canonical-chain movement (a modern default must leave the
+canonical S0-S8 chains byte-identical or the seam is wrong), no
+harness change, no Ghidra run.
+
+1. THE SEAM, IMPLEMENTED (bedlam-core/src/mode.rs — new module):
+   `ModeConfig` is a private-field Copy struct with NO `&mut self`
+   method anywhere; the only way to a different mode is the
+   consuming `with(axis, arm)` builder returning a NEW value, so
+   immutability is the type's shape, not a convention. It rides
+   `SimConfig.mode` into `Sim::new` (sim construction), is carried
+   privately by `Sim`, and is read-only everywhere: `Sim::mode()`,
+   `SimDriver::mode()` (forwarding), `GameHost::mode()`. No setter
+   at any layer — a mode change is a new sim (new SimConfig ->
+   new Sim/driver/host), exactly D200's binding consequence.
+   Default = `ModeConfig::MODERN` (PLAN §6 "default = modern");
+   `ModeConfig::CLASSIC` is the all-purist preset; per-axis mixing
+   composes through `with`.
+
+2. THE INITIAL PURIST TOGGLE SET (the two plan-named FEEL-CONTESTED
+   axes only): `PuristToggle::TimingLock` with concrete id
+   "timing-lock" and `PuristToggle::ControlScheme` with concrete id
+   "control-scheme" — the ids D200/P6-MODERNIZATION §1 deferred to
+   "the first P6 engine unit that implements the seam" are now
+   pinned. Id rules mirror catalog checker R3 (non-empty,
+   whitespace-free, unique across the set; `from_id` fails closed).
+   RESERVED NAMESPACE: the catalog's future purist_toggle ids must
+   not collide with these two plan-named ids (checker-side
+   enforcement lands with the first catalog entry). The set grows
+   ONLY through rubric-classified closed-preserve-classic catalog
+   entries — never ad hoc. The CATALOG ITSELF STAYS EMPTY (D200
+   seeding policy: entries land only on recorded evidence with a
+   repro; none exists yet, and this unit adds none).
+
+3. CONFIG-NOT-STATE LAYERING (the determinism decision): ModeConfig
+   is config like the seed and time base — deliberately NOT part of
+   `Sim::state_hash` and NOT serialized into snapshots/replays
+   (FORMAT_VERSION stays 1; STATE_LEN and every pinned hash
+   unchanged — the P5 hash fixtures and canonical chains are
+   byte-stable by construction). A restore ADOPTS the mode of the
+   SimConfig it is restored under (restoring IS constructing a new
+   sim). Rationale: the two initial axes are host-side policies —
+   timing lock selects PACING POLICY (frame-locked classic vs the
+   modern accumulator), control scheme selects INPUT MAPPING —
+   neither has an in-sim consumer, so a replay's trajectory is
+   arm-independent today. When a later unit gives an axis or a
+   catalog toggle an in-sim consumer, THAT unit decides whether the
+   replay/snapshot headers start recording the mode (with a
+   FORMAT_VERSION bump then, not now). Pin: the seam unit itself is
+   INERT — same seed + input stream yields the identical hashed
+   trajectory in both arms (test mode_is_config_not_state_the_seam_
+   lands_inert); the canonical chains are pinned by that inertness
+   plus canonical_dump_gate 13/13.
+
+4. PRESENTATION STAYS OUTSIDE (Determinism Charter): ModeConfig
+   carries no Hz, no resolution, no vsync/window/scaling knob of any
+   kind; display rate never enters the sim in any arm. The
+   timing-lock axis is a pacing-policy selector, not a rate input.
+
+5. GATE WIRING: `p6-modeconfig-seam` is the SECOND P6 required gate
+   (required_gates = [p6-modernization-scaffold, p6-modeconfig-
+   seam]; R6 keeps the scaffold first). Commands = bedlam-core --lib
+   (the mode/sim/frame seam suite) + bedlam-game --lib (the host
+   read-point suite), both `--release --locked --offline`, both
+   hermetic (no corpus key, no writable). Test surface per D200:
+   the purist toggles, both arms, never the feature cross-product.
+
+6. VERIFIED THIS RUN: bedlam-core --lib 147/0 (was 146: +4 mode
+   tests + 3 sim seam tests net of none), bedlam-game --lib 142/0
+   (+1 host seam test), bedlam-core determinism 12/0 + hash_fixture
+   (pinned constants untouched), bedlam-render determinism green;
+   fmt clean + clippy clean on every touched file (the 7 pre-existing
+   bedlam-core warnings from D151 untouched); controls BEFORE the
+   change at clean HEAD b625559: zone_mission_parity 5/5 +
+   canonical_dump_gate + determinism all rc=0 (27.42s parity); the
+   same battery green AFTER the seam; gates-validator suite 22/22;
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied
+   with the second gate); MANIFEST clean before AND after every
+   corpus read; no Ghidra run.
+   (worker 21604df0 claim 1, unit p6-modeconfig-seam)

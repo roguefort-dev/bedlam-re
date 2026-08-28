@@ -192,6 +192,15 @@ impl GameHost {
         self.fsm.scene()
     }
 
+    /// The immutable mode the host's sim runs under (P6 seam, D201):
+    /// the ONE [`bedlam_core::mode::ModeConfig`] injected at sim
+    /// construction via [`SimConfig`], carried by the driver. The
+    /// purist-toggle axes are read here (pacing policy, control
+    /// mapping) — never mutated mid-run; a mode change is a new host.
+    pub fn mode(&self) -> bedlam_core::mode::ModeConfig {
+        self.driver.mode()
+    }
+
     /// The scene machine (hashed bucket).
     pub fn fsm(&self) -> &SceneFsm {
         &self.fsm
@@ -1312,6 +1321,42 @@ mod tests {
         // 3 sub-ticks bank without ticking anything.
         assert_eq!(host.pump_frame(3, &InputFrame::default()), 0);
         assert_eq!(host.driver().sim().tick_index(), BOOT_TICKS as u64);
+    }
+
+    #[test]
+    fn mode_seam_is_injected_and_carried_not_mutated() {
+        // P6 seam (D201): the ONE immutable ModeConfig rides SimConfig
+        // into GameHost::new (sim construction) and is readable on the
+        // host; there is no host-side mode setter (a mode change is a
+        // new host). Default = modern; both arms of the plan-named
+        // axes construct and pump identically — the seam lands inert,
+        // which is why the canonical chains cannot move.
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        assert_eq!(
+            GameHost::new(&GameConfig::default(), &SimConfig::default(), palette()).mode(),
+            ModeConfig::MODERN,
+            "default mode = modern (PLAN §6)"
+        );
+        for config in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let mut host = GameHost::new(
+                &GameConfig::default(),
+                &SimConfig {
+                    mode: config,
+                    ..SimConfig::default()
+                },
+                palette(),
+            );
+            assert_eq!(host.mode(), config);
+            assert_eq!(host.mode(), host.driver().sim().mode());
+            // Pumps normally in both arms (Boot -> ... grid unchanged).
+            assert_eq!(host.pump_frame(4, &InputFrame::default()), 1);
+            assert_eq!(host.scene(), Scene::Boot);
+        }
+        // The preset builders compose the same axes the host reads.
+        let mixed = ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic);
+        assert!(mixed.is_purist(PuristToggle::TimingLock));
+        assert!(!mixed.is_purist(PuristToggle::ControlScheme));
     }
 
     #[test]

@@ -177,6 +177,13 @@ impl SimDriver {
         &self.sim
     }
 
+    /// The immutable mode the underlying sim runs under (P6 seam,
+    /// D201) — the injected [`crate::mode::ModeConfig`], forwarded
+    /// from construction. No setter: a mode change is a new driver.
+    pub fn mode(&self) -> crate::mode::ModeConfig {
+        self.sim.mode()
+    }
+
     /// Mutable sim access for explicit engine operations (snapshot
     /// capture, `set_fading`). Prefer routing gameplay through
     /// [`SimDriver::advance`] so the input log stays the whole truth.
