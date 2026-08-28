@@ -6411,3 +6411,64 @@ id; no docs reference the old id literally; no game-data touch, no
 Rust change (fmt/clippy N/A); failure-watchdog harness contract
 re-run green. Note: D185 was minted twice (autonomy + shooters);
 this entry takes D186 without renumbering history.
+
+## D187 — 2026-08-28: P5 `p5-critter-state-g2-chasers-r2` — the kind-3 CHASERS state LANDED (the .NME S5 staging + the k3 distance-ladder body); the census Chasers class CLOSED with TWELVE deliberate row flips (the Chasers-only hosts ZONEB M1-5, ZONEC M1/M2/M4/M5, ZONED M1-4 — 24/37 load clean), the second and largest no-flip-expectation falsification after D185's ZONED-M5
+
+THREE decisions recorded. (1) **THE RE (§7j.75, committed BEFORE the
+impl per the stream-survival rule — commit c0c8279)**: the S5 loader
+block decoded draw-free and exact — ONE critter per record at every
+difficulty (no spawn loop, no stream draws), x/y = tile·0x2000+0xF00
+(Q13), z = the FUN_0041e411 floor probe at level w2, the 8 corner-z
+words, and home x/y/z staged (S5 is the ONE home-stamping section);
+the §7j.18 "+0x10 = +0x12" gloss CORRECTED — the second w1<<6 stamp
+is the DWORD at +0x14, the preserved spawn heading; species 8, MODE
+0 (awake-idle, not 8), hp 1500+(1500·m)/27 (the linear-m cell, as
+every section). The k3 body 0x4145c1..0x414c96 decoded whole: NO
+substep loop (species is NOT a substep count for kind 3 — it has
+THREE other roles: the 8-frame spawn GRACE read as the R2 gate, the
+0x20 return-home WALK BUDGET stamped by rules R1/R4, and the wake
+clear); the target-liveness flip runs BEFORE the mode dispatch
+(dormant/dying included); the dormant block carries a NEW pin — the
+TELEPORT-HOME at EXACTLY delay−0x14 (20 frames before the wake,
+restoring the +0x14 spawn heading); the wake stamps hp FLAT 1500 (no
+m scalar); the 4-rule distance ladder made exact (R1 dist>200 ∧
+mode2, R2 species==0 ∧ dist<200 ∧ leash<400 ∧ mode∉{3,2}, R3
+dist<100, R4 leash≥400); the mode-3/0xA bodies re-aim every 9 frames
+through the 8-SECTOR SNAP ((angle+0xF)&0xFF)>>5&7)<<5 and step on
+the raw DGROUP walk table [0,0,1,1,0,0,0,1,1,1] = 6 steps/10 frames;
+mode 2 fires 0x67 EVERY frame (the §7j.17 ">4 shots → reset" gloss
+is the 5-frame aim-countdown wrap 0→4→0, not a fire gate) with the
+LIVE-robot 3-D octile velocity (the 0x68 lane's exact math); the
+pathfinder FUN_0041571c decoded whole — the open sine-step
+(cos/sin>>5) + the WALL-FOLLOW ladder on the record word w@+0x5E
+(NOT the kind-1 DIR +0x58), every blocked exit copying sector →
+heading; the walk gate FUN_0040cc27→FUN_0041e9a2 reads its z
+reference from the dword@+0x5E>>16 = the FIRST CORNER-Z WORD w@+0x60
+(why the loader stages the corner words) and settles z on pass; the
+whole k3 chain is DRAW-FREE (zero RandA/FUN_0041ec1c sites in the
+body and every helper — the first critter section with zero per-frame
+stream draws). (2) **THE LANDING (bounded)**: `stage_critters`
+accepts section 5 (kind 3) + the k3 body in bedlam-core::critter
+with 11 unit tests; the FUN_0040cc27 gate refactored into the shared
+`walk_gate` (critter_step_heading behavior-identical); three new
+CritterRecord fields (home_z, spawn_heading, seek_sector) NOT
+serialized in the canonical blob → no chain movement (verified:
+canonical_dump_gate 13/13 + differ_gate 4/4 + determinism green; no
+canonical scenario stages S5 — ZONEA/M1 hosts S3+S4 only). (3)
+**THE CENSUS RE-PIN (deliberate, D28)**: `unmodeled_nme_sections`
+adds Chasers; the ChasersxNN component dropped from all 17 hosting
+rows AND TWELVE Chasers-only hosts FLIPPED CLEAN — ZONEB M1-5,
+ZONEC M1/M2/M4/M5, ZONED M1-4 — 24/37 load clean (was 12); the
+queue's "expect NO row flip clean unless a host carries no other
+unmodeled state" carve-out exercised at scale (every B/D campaign
+mission and most of C hosted Chasers ONLY); provenance
+docs/evidence/p5-g2-chasers-census-table.txt; the G2 residue =
+CloseCombat (kind 7) + the S8 personnel/POI bank (13 missions); the
+ledger stays 1/37 (dispositions flip only on zone-parity evidence).
+Verified: bedlam-core release suites green (114 lib incl. 11 new),
+bedlam-game release green (census 1/1 re-pinned; canonical_dump_gate
+13/13 + differ_gate 4/4 + determinism green), fmt + clippy clean on
+the touched files (the destroy.rs/static-claim-test warnings
+pre-exist), gates-validator 22/22, inspect baseline ok (1069
+files), MANIFEST clean before AND after every corpus read, no
+Ghidra run (worker bc51a491 claim 1, commits c0c8279 + 542ec3f).
