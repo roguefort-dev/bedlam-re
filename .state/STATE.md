@@ -1,5 +1,45 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-present-loop-wiring` COMPLETE (worker 2a90eb65
+    claim 1, commit 9a96a60, PUSHED): THE MODE PLUMBED THROUGH THE
+    SHELL HOST CONFIG INTO BOTH PLATFORM CONSUMERS + THE WINDOW
+    PRESENT LOOP HONORING THE D203 GATE (D205, the wiring unit of
+    the D203/D204 pair; PLAN §6 "time-based simulation"). (a)
+    WindowOptions.mode (engine/bedlam-shell/src/window.rs) — ONE
+    immutable ModeConfig selected at the platform level (default =
+    modern; the binary's --classic selects the CLASSIC preset) —
+    feeds BOTH construction sites: host_sim_config (mode rides
+    SimConfig into GameHost::new as config, never state) and
+    shell_input_for (the SAME plumbed mode selects the mapper's
+    ControlScheme via ControlScheme::for_mode — the D204
+    consumer's platform selection; was default-modern). (b)
+    present_due = pure delegation to GameHost::should_present,
+    consulted at the PRESENT SITE in ShellApp::present: modern
+    presents every vsync (zero-tick high-refresh frames recompose
+    and present); classic HOLDS the previous image on zero-tick
+    host frames (the original frame-locked present-coupled pacing,
+    RE-EXW-PACER §3 verified). Loop liveness: the redraw request
+    stays UNCONDITIONAL (gating the request would stall a quiet
+    classic Wait-mode loop); only the surface write is gated. (c)
+    Bounds kept: clock/pump contract + hashed trajectory untouched
+    (pinned by platform_mode_plumbing_never_touches_the_hashed_
+    trajectory — same pump script both platform options =
+    identical executed ticks, tick count, state/scene/frame
+    hashes; presentation bucket only, D17 b); headless stays
+    neutral/modern; presentation options stay out of ModeConfig.
+    Gate p6-present-loop-wiring wired as the FIFTH P6
+    required_gates entry (command = bedlam-shell --lib, hermetic).
+    Verified first-hand: bedlam-shell --lib 47/0 (+5), bedlam-game
+    --lib 148/0 + bedlam-core --lib 147/0 untouched; controls
+    green canonical_dump_gate 13/13 + zone_mission_parity 5/5 +
+    determinism 4/4; catalog checker + suite OK, gates-validator
+    suite OK; fmt + clippy clean; MANIFEST clean before AND after;
+    the bounded --phase P6 verdict at 9a96a60: status=passed, ALL
+    5 P6 GATES GREEN every command rc=0 (report
+    .state/p6-presentloop-gates-report.json); no Ghidra run.
+    Queued: the high-refresh camera/scroll interpolation as the
+    new head.
+
   - 2026-08-28 `p6-control-scheme-surface` COMPLETE (worker e56b4ef6
     claim 1, commit b4babe3, PUSHED): THE CONTROL-SCHEME AXIS'S
     FIRST CONSUMER — THE INPUT MAPPING POLICY AT THE PLATFORM/INPUT

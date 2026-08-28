@@ -10,26 +10,82 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-present-loop-wiring] [gate=p6-present-loop-wiring] P6
-   platform unit per PLAN §6 + the D203/D204 scope notes — wire the
-   present seam's consumer into the real platform loop: route the
-   immutable ModeConfig through the bedlam-shell host config into
-   GameHost construction (classic/modern selectable at the platform
-   level) and make the window present loop honor GameHost::
-   should_present (the timing-lock pacing policy: modern presents
-   every vsync, classic holds the previous image on zero-tick
-   frames); the shell input seam selects its ControlScheme from the
-   same plumbed mode (the D204 consumer's platform selection — the
-   mapper itself is landed). The shell fixed-step clock/pump
+1. [READY] [id=p6-high-refresh-interpolation] [gate=p6-high-refresh-interpolation] P6
+   present-quality unit per PLAN §6 "time-based simulation" — the
+   camera/scroll interpolation of the modern decoupled present:
+   zero-tick high-refresh host frames currently recompose from
+   latest state only (the D203/D205 shape); this unit lands the
+   PLAN §6 composition policy — interpolate CAMERA/SCROLL ONLY
+   between the last executed logic tick and the present (the
+   accumulator fraction), NEVER sprite positions (grid-quantized
+   1996 sprites had no sub-pixel positions; interpolating them
+   manufactures motion the original never showed; the sub-pixel
+   blitter stays default-off and out of scope), classic arm
+   unchanged (the frame-locked pacing presents only after a tick —
+   nothing to interpolate). RE first: decode where the EXW
+   scroll/camera state lives in the frame path, write committed RE
+   notes anchored to EXW/EXD addresses, then implement as a
+   presentation-bucket policy selected from the timing-lock arm of
+   the plumbed mode. Bounds: the shell fixed-step clock/pump
    contract and the hashed trajectory stay untouched — no
-   canonical-chain movement, no harness change. Bounds: test
-   surface stays the ONE purist toggle both arms where practical;
-   catalog stays EMPTY; wire gate p6-present-loop-wiring as the
-   FIFTH P6 required_gates entry; fmt + clippy on touched crates;
+   canonical-chain movement, no harness change; test surface stays
+   the ONE purist toggle both arms where practical; catalog stays
+   EMPTY; wire gate p6-high-refresh-interpolation as the SIXTH P6
+   required_gates entry; fmt + clippy on touched crates;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+1. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+   PUSHED, plus this bookkeeping commit): P6 platform wiring unit
+   `p6-present-loop-wiring` — the mode plumbed through the shell
+   host config into BOTH platform consumers and the window present
+   loop honoring the D203 gate (PLAN §6 + the D203/D204 scope
+   notes; implementation D205). (a) engine/bedlam-shell/src/
+   window.rs: WindowOptions.mode — ONE immutable ModeConfig
+   selected at the platform level (default = modern; the binary's
+   --classic selects the CLASSIC preset) — routed into BOTH
+   construction sites: host_sim_config (the mode rides SimConfig
+   into GameHost::new as config, never state; seed/time base stay
+   defaults) and shell_input_for (the SAME plumbed mode selects
+   the mapper's ControlScheme via ControlScheme::for_mode — the
+   D204 consumer's platform selection; the window path ran
+   default-modern until this unit). (b) THE PRESENT GATE:
+   present_due — pure delegation to GameHost::should_present,
+   consulted at the PRESENT SITE in ShellApp::present: modern
+   presents every vsync (zero-tick high-refresh frames recompose
+   and present); classic holds the previously presented image on
+   zero-tick host frames (the original frame-locked present-coupled
+   pacing, RE-EXW-PACER §3 verified — the visible refresh follows
+   the fixed logic tick, never the display rate). Loop liveness:
+   the redraw request stays UNCONDITIONAL in both arms — gating
+   the request itself would stall a quiet classic loop (no event
+   would wake the Wait-mode loop between ticks); only the surface
+   write is gated. (c) BOUNDS KEPT: the shell fixed-step clock/
+   pump contract and the hashed trajectory untouched (pinned
+   shell-side by platform_mode_plumbing_never_touches_the_hashed_
+   trajectory: same pump script through hosts built from both
+   platform options = identical executed ticks, sim tick count,
+   state hash, scene hash AND frame parity hash; presentation
+   bucket only, D17 b); the headless smoke path stays neutral/
+   modern (the hashed-trajectory surface owns no present loop or
+   mapper); presentation options stay OUT of ModeConfig (D200
+   layering). (d) GATE: p6-present-loop-wiring wired as the FIFTH
+   P6 required_gates entry — command = bedlam-shell --lib,
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-shell --lib 47/0 (+5 wiring tests; was 42/0 + 1
+   pre-existing ignored), bedlam-game --lib 148/0 + bedlam-core
+   --lib 147/0 untouched; controls green: canonical_dump_gate
+   13/13 (ZERO canonical-chain movement), zone_mission_parity
+   5/5, determinism 4/4; check-p6-behavior-catalog OK (catalog
+   still empty, R6 satisfied with the fifth gate) + suite OK;
+   gates-validator suite OK; fmt + clippy clean on the touched
+   crates; MANIFEST clean before AND after every corpus read; the
+   bounded --phase P6 validator verdict at 9a96a60: status=passed,
+   ALL 5 P6 GATES GREEN, every command rc=0 (report
+   .state/p6-presentloop-gates-report.json, head-bound to
+   9a96a60); no Ghidra run. Queued: the high-refresh
+   camera/scroll interpolation as the new head.
+2. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -96,7 +152,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-2. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+3. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -142,7 +198,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-2. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+4. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -188,7 +244,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-3. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+5. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -231,7 +287,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-4. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+6. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -255,7 +311,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-5. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+7. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition
