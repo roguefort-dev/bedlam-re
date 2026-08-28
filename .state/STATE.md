@@ -1,5 +1,46 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-critter-state-g2-shooters` COMPLETE (worker
+    5ee1c0ce claim 1, commits 199373a + cb3a3f5, both PUSHED): the
+    THIRD G2 critter-state unit — the kind-2 SHOOTERS state LANDED
+    (S1 staging + the k2 sine-walk shooter body; D185). RE FIRST
+    (§7j.74, objdump-only from the committed loader decompile +
+    exw-text-objdump.txt, no Ghidra run, no corpus read): the .NME
+    S1 walk made exact (spawn count w1+d CLAMPED >=1, two
+    scatter(5) draws per attempt, the NEW map-bounds DROP gate —
+    out-of-map attempts leave no critter but consume both draws,
+    the variant pick(4)+3 negated by the w2 flag, anim RandA&7,
+    the dead +0x72 timer stamp, hp 0xAF+(m·0xAF)/27 at the
+    0x4165db imul site, z FIXED 0xC000 Q13 — the kind-2 exception
+    to the record's Q5-z rule, draw budget 2/dropped + 5/landed);
+    the k2 body 0x415216..0x415466 (heading precession by the
+    SIGNED variant, the (cos/sin·0x14)>>8 sine walk, the 1/128
+    SQUAWK gate — FUN_0043a48e draw-free, the 0x4152bd reader
+    identified — + the 1/4 fire gate CORRECTING §7j.17's "every
+    4th substep", the bounded robot-slot pick over [0x46ccbc] +
+    the +0x7C alive gate, FUN_0041286f PINNED as the first-free
+    0x4cc654 allocator, the ±0x1F00 jitter aim, the 2-D octile
+    range gate 300−(2−d)·0x40 with dz DEAD for the gate, the 0x65
+    stamp with the RAW direction>>5 velocity — NOT normalized).
+    ENGINE: stage_critters accepts section 1 + the k2 body with 10
+    unit tests; the variant field is NOT serialized (no blob
+    change) and no canonical scenario stages S1 — ZERO chain
+    movement (canonical_dump_gate 13/13 + differ_gate 4/4 +
+    determinism green). CENSUS RE-PIN (deliberate, D28): the
+    ShootersxNN component dropped from all 17 hosting rows AND
+    ZONED-MISSION5 FLIPPED CLEAN — the one host whose only
+    unmodeled section was Shootersx4 (the queue's "no row flips
+    clean" expectation falsified by that row, documented +
+    deliberate; provenance docs/evidence/p5-g2-shooters-census-
+    table.txt); G2 residue = Chasers + CloseCombat + the S8
+    personnel bank (25 missions); 12/37 load clean, ledger 1/37
+    green; P5-ZONE-GATES §6.1/§6.2/§6.3/§6.4 re-baselined; D185.
+    Verified: bedlam-core + bedlam-game release suites green, fmt
+    + clippy clean on the touched crates, gates-validator 22/22,
+    inspect baseline ok (1069 files), MANIFEST clean before AND
+    after every corpus read, no Ghidra run. The Chasers unit is
+    the queue head, the CloseCombat unit second.
+
   - 2026-08-28 `p5-zone-bin-variant-g3` COMPLETE (worker cef2f815
     claim 1, commits 51933bd + d4f7609, both PUSHED): the G3
     zone-BIN variant question CLOSED with a NO-SWAP verdict — the
