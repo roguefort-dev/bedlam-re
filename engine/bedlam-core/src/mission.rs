@@ -911,6 +911,21 @@ pub struct MissionSim {
     /// per-frame draws on unarmed paths are the recorded stream
     /// gap, §7j.42/5).
     pub(crate) critter_family_armed: bool,
+    // --- The S8 personnel/POI family (P5/G2, `poi.rs`; NONE of it
+    //     enters `state_hash` — the W6 split, the critter-bank
+    //     precedent: the poi-bank T2 row is the capture-plan side) ---
+    /// The POI bank 0x4dabdc (0x1E stride, count 0x46cbf0, 128
+    /// slots) — staged by stage_critters section 8; ticks beside the
+    /// critter controller under the SAME family arm (§7j.77).
+    pub(crate) pois: Vec<crate::poi::PoiRecord>,
+    /// The five 0x1C exit slots 0x4e662c — the §7j.19 family's
+    /// controller-read subset, host-staged (stage_poi_exit).
+    pub(crate) poi_exits: [crate::poi::ExitSlot; crate::poi::EXIT_SLOTS],
+    /// The escape counter [0x4eba0c].
+    pub(crate) poi_escapes: i32,
+    /// The panic timer [0x4eba10] (stamped 0x32 per escape; the
+    /// MissionShell banner decrements it host-side).
+    pub(crate) poi_panic: i32,
 }
 
 impl MissionSim {
@@ -977,6 +992,10 @@ impl MissionSim {
                 crate::critter::EFFECT_ROWS
             ],
             critter_family_armed: false,
+            pois: Vec::new(),
+            poi_exits: [crate::poi::ExitSlot::default(); crate::poi::EXIT_SLOTS],
+            poi_escapes: 0,
+            poi_panic: 0,
             terrain,
         }
     }
@@ -1800,6 +1819,11 @@ impl MissionSim {
         // on unarmed paths are the recorded stream gap, §7j.42/5).
         if self.critter_family_armed {
             self.critter_tick();
+            // The POI controller (FUN_00412a98, MissionShell
+            // 0x447fe6 — the call immediately after the critter
+            // controller's 0x447fe1; §7j.77/3) rides the SAME
+            // family arm: both banks stage from the one .NME load.
+            self.poi_tick();
         }
         // The COMMAND-record consumer (FUN_00409138) runs after the
         // input/click chain and BEFORE the six robot phases

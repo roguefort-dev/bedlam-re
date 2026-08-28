@@ -215,6 +215,7 @@ fn unmodeled_nme_sections(nme: &[u8]) -> Vec<String> {
                         | assets::misc::NmeSectionKind::Chasers
                         | assets::misc::NmeSectionKind::BallisticState6
                         | assets::misc::NmeSectionKind::CloseCombat
+                        | assets::misc::NmeSectionKind::Personnel
                 );
                 (*count != 0 && !modeled).then(|| format!("{kind:?}x{count}"))
             }
@@ -611,39 +612,28 @@ const PINNED: &[(&str, &str)] = &[
     ("ZONED-MISSION5", "host:clean"),
     ("ZONED-MISSION6", "select:clean"),
     ("ZONED-MISSION7", "select:clean"),
-    (
-        "ZONEE-MISSION1",
-        "host:gaps critters refused (Personnelx12)",
-    ),
-    (
-        "ZONEE-MISSION2",
-        "host:gaps critters refused (Personnelx12)",
-    ),
-    (
-        "ZONEE-MISSION3",
-        "host:gaps critters refused (Personnelx12)",
-    ),
-    (
-        "ZONEE-MISSION4",
-        "host:gaps critters refused (Personnelx12)",
-    ),
-    (
-        "ZONEE-MISSION5",
-        "host:gaps critters refused (Personnelx13)",
-    ),
+    // The S8 PERSONNEL/POI landing (§7j.77/D191) dropped the
+    // PersonnelxNN component from all 11 hosting rows (ZONEE M1-5,
+    // ZONEF M1-5, ZONEG M1) and FLIPPED EVERY ONE CLEAN — CloseCombat
+    // had already landed (D189), so each of these rows' remaining
+    // unmodeled section was Personnel alone. The ALL-37 load-clean
+    // census: G2 is EMPTY. (The queue prose's "13 missions" was an
+    // arithmetic slip — the corpus hosts 11 S8 files; §7j.77/6.)
+    ("ZONEE-MISSION1", "host:clean"),
+    ("ZONEE-MISSION2", "host:clean"),
+    ("ZONEE-MISSION3", "host:clean"),
+    ("ZONEE-MISSION4", "host:clean"),
+    ("ZONEE-MISSION5", "host:clean"),
     ("ZONEE-MISSION6", "select:clean"),
     ("ZONEE-MISSION7", "select:clean"),
-    ("ZONEF-MISSION1", "host:gaps critters refused (Personnelx9)"),
-    ("ZONEF-MISSION2", "host:gaps critters refused (Personnelx9)"),
-    ("ZONEF-MISSION3", "host:gaps critters refused (Personnelx9)"),
-    ("ZONEF-MISSION4", "host:gaps critters refused (Personnelx9)"),
-    (
-        "ZONEF-MISSION5",
-        "host:gaps critters refused (Personnelx19)",
-    ),
+    ("ZONEF-MISSION1", "host:clean"),
+    ("ZONEF-MISSION2", "host:clean"),
+    ("ZONEF-MISSION3", "host:clean"),
+    ("ZONEF-MISSION4", "host:clean"),
+    ("ZONEF-MISSION5", "host:clean"),
     ("ZONEF-MISSION6", "select:clean"),
     ("ZONEF-MISSION7", "select:clean"),
-    ("ZONEG-MISSION1", "host:gaps critters refused (Personnelx9)"),
+    ("ZONEG-MISSION1", "host:clean"),
 ];
 
 #[test]

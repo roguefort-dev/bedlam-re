@@ -9,10 +9,10 @@
 //! §7j.71), 2 (the sine-walk shooters, §7j.74), 3 (the chasers,
 //! §7j.75), 4 (seek steppers), 5/6 (the shared mixed-AI body;
 //! §7j.72 landed the S6 staging — 26 corpus missions host it) and
-//! 7 (the close-combat beamers, §7j.76). The kind-8+ bodies and
-//! the S8 POI bank are the documented E-gaps: `stage_critters`
-//! REFUSES an .NME hosting them (fail loud — never spawn a critter
-//! whose brain is missing).
+//! 7 (the close-combat beamers, §7j.76). The kind-8+ bodies remain
+//! the documented E-gap (`stage_critters` still refuses them); the
+//! S8 PERSONNEL/POI bank landed 2026-08-28 in `crate::poi` (§7j.77)
+//! — its records stage the SEPARATE 0x4dabdc bank, not this one.
 //!
 //! Coordinate scales (§7j.23/2 + §7j.42's probe reads + §7j.74/4):
 //! x/y are Q13 for kinds 2/3/5/6/7 but RAW px (= Q5 counts) for
@@ -276,12 +276,12 @@ impl MissionSim {
     /// Stage the mission's .NME through the FUN_00416458 spawn
     /// schedule (§7j.18) — the `critters = 1` grammar host seam
     /// (D114). The ORIGINAL loads the file natively at mission
-    /// load; E stages the identical bytes. Only the sections whose
-    /// kinds the E controller models may spawn (S1 → kind 2, S2 →
-    /// kind 1, S3 → kind 5, S4 → kind 4, S5 → kind 3, S6 →
-    /// kind 6, S7 → kind 7); any other NON-EMPTY section is
-    /// REFUSED (fail loud — never spawn a brain the engine does
-    /// not carry; ZONEA/MISSION1 hosts exactly S3+S4).
+    /// load; E stages the identical bytes. Sections 1..7 stage the
+    /// critter bank (S1 → kind 2, S2 → kind 1, S3 → kind 5, S4 →
+    /// kind 4, S5 → kind 3, S6 → kind 6, S7 → kind 7); S8 stages
+    /// the SEPARATE POI bank (crate::poi, §7j.77). A kind-8+
+    /// section is still REFUSED (fail loud — never spawn a brain
+    /// the engine does not carry).
     ///
     /// Spawn schedule [verified §7j.18 + §7j.71/1 + §7j.72 + §7j.74/1]:
     /// S1 (state 2, 10-B recs, w1 = spawn base, w2 = variant flag,
@@ -364,10 +364,20 @@ impl MissionSim {
             counts[si] = count;
             sections[si] = recs;
         }
-        // S8 (personnel/POI) is a separate bank — the poi-bank T2
-        // row's own unit. Any other unmodeled section refuses.
+        // Sections 1..7 stage the critter bank; S8 (personnel/POI)
+        // stages the SEPARATE 0x4dabdc bank (§7j.77/2 — poi.rs).
+        // No unmodeled section remains: all eight are accepted.
         for (si, &n) in counts.iter().enumerate() {
-            if n != 0 && si != 0 && si != 1 && si != 2 && si != 3 && si != 4 && si != 5 && si != 6 {
+            if n != 0
+                && si != 0
+                && si != 1
+                && si != 2
+                && si != 3
+                && si != 4
+                && si != 5
+                && si != 6
+                && si != 7
+            {
                 return None;
             }
         }
@@ -631,6 +641,14 @@ impl MissionSim {
                 staged += 1;
             }
         }
+        // S8 (§7j.77/2): the personnel/POI bank — a SEPARATE bank
+        // (0x4dabdc), staged by the poi module with its own exact
+        // three-draw schedule (x, y, heading). Four POIs per record,
+        // no difficulty term, no count draw, NO hp scaling (the
+        // literal 0x32 — the ONE .NME bank without the m-scalar
+        // formula). The POIs do NOT add to the returned critter
+        // count (the original's DAT_0046cc2c counts critters only).
+        self.stage_pois(&sections[7]);
         Some(staged)
     }
 
