@@ -1019,3 +1019,53 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-platform/src/layout.rs", "engine/bedlam-platform/src/gpu.rs", "engine/bedlam-platform/src/lib.rs", "engine/bedlam-shell/src/native.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-frame-pacing-benchmark — the P6 QoL FEEL-PROXY benchmark unit,
+# the plan's own closing instrument of the QoL sentence per PLAN §6:
+# "An automated scheduled CI benchmark checks 240Hz frame pacing
+# against a pinned hardware profile and thresholds; an unavailable
+# profile creates no task and only excludes that platform
+# attestation" (implementation D219). (a) THE HERMETIC HALF
+# (bedlam_shell::pacing): a delta trace replayed through the EXACT
+# present-loop arithmetic (FixedStepClock::advance -> due pumps ->
+# GameHost::pump_frame fixed dt -> the loop's OWN crate-visible
+# window::present_due / window::present_camera_alpha decisions ->
+# recompose at the accumulator fraction), summarized into the
+# feel-proxy metrics (pump cadence incl. dropped pumps,
+# present-gate answers, the recompose alpha cadence at 240 Hz, the
+# nearest-rank p95 frame-time percentile); the replay is
+# trajectory-neutral across the pacing arms (identical ticks, tick
+# index, state hash, scene hash) and deterministic; the pinned
+# loop-shape fact is part of the contract (a zero-PUMP frame
+# inherits the last pump's gate answer — the classic hold is
+# CONTENT-level: one NEW image per executed tick, 59 of 240 frames
+# at 240 Hz). (b) THE PINNED HARDWARE PROFILE as committed data
+# (PINNED_240HZ: id pinned-240hz-desk-v1, machine class, 240 Hz,
+# p95 budget 5_208_333 ns = 1.25 periods, 2400 bounded samples);
+# the unavailable-profile posture is PURE and mechanical
+# (profile_for exact-match on the declared BEDLAM_PACING_PROFILE
+# identity; benchmark_report's skip-clean path = exit 0 + an
+# explicit no-attestation note — never a false red, never a task).
+# (c) THE BOUNDED MEASUREMENT (examples/frame-pacing.rs,
+# profile-gated): the same driver against a wall clock as a
+# 240 Hz-cadence proxy (sleep-to-period, measure, feed the
+# measured delta); exit 1 exists only on a matched machine whose
+# thresholds failed. (d) THE SCHEDULED CI WIRING
+# (.github/workflows/frame-pacing.yml: daily cron + dispatch +
+# path-filtered push/PR) whose pacing job runs the example —
+# hosted runners never declare the profile, so the scheduled job
+# exercises exactly the skip-clean posture; the second gate
+# command runs that posture hermetically (no env profile under
+# containment -> exit 0 + note). BOUNDS KEPT: no engine change
+# (only two crate-visible helper visibilities in window.rs — pure
+# delegation); the hashed trajectory untouched; the gate reads no
+# corpus (bare hosts, no staged asset); the catalog stays EMPTY
+# (a plan-named instrument is not a catalog entry); no new RE.
+[[gate]]
+id = "p6-frame-pacing-benchmark"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+  ["/usr/bin/cargo", "run", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--example", "frame-pacing"],
+]
+tracked_paths = ["engine/bedlam-shell/src/pacing.rs", "engine/bedlam-shell/src/lib.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/examples/frame-pacing.rs", ".github/workflows/frame-pacing.yml", "docs/P6-MODERNIZATION.md", "docs/DECISIONS.md", "docs/required-gates.toml"]

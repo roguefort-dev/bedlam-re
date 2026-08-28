@@ -693,8 +693,10 @@ fn shell_input_for(opts: &WindowOptions) -> ShellInput {
 /// RE-EXW-PACER §3 — the visible refresh follows the fixed logic
 /// tick, never the display rate). The boot frame is presentable in
 /// both arms. Presentation-bucket ONLY (D17 b): the answer never
-/// reaches the sim, the state hash or the scene hash.
-fn present_due(host: &GameHost) -> bool {
+/// reaches the sim, the state hash or the scene hash. Shared
+/// crate-visible with the pacing benchmark harness (`crate::pacing`),
+/// which records the SAME answers hermetically.
+pub(crate) fn present_due(host: &GameHost) -> bool {
     host.should_present()
 }
 
@@ -720,8 +722,10 @@ fn present_due(host: &GameHost) -> bool {
 ///
 /// Presentation-bucket ONLY (D17 b): the alpha derives from measured
 /// display timing and never reaches the sim, the state hash or the
-/// scene hash (the clock/pump contract is untouched).
-fn present_camera_alpha(host: &GameHost, clock: &FixedStepClock) -> Option<f32> {
+/// scene hash (the clock/pump contract is untouched). Shared
+/// crate-visible with the pacing benchmark harness (`crate::pacing`),
+/// which records the SAME answers hermetically.
+pub(crate) fn present_camera_alpha(host: &GameHost, clock: &FixedStepClock) -> Option<f32> {
     host.camera_interpolation().then(|| clock.fraction())
 }
 

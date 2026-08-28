@@ -37,6 +37,15 @@
 //!   presentation resolution into the responsive layout's left
 //!   margin by the window present site (ENHANCED mode only; the
 //!   canonical frame rides byte-identical underneath).
+//! - [`pacing`]: the P6 frame-pacing benchmark harness (PLAN §6
+//!   closing QoL instrument, D219) — the pure cadence replay over
+//!   measured frame deltas (pumps due, present-gate answers, the
+//!   recompose alpha cadence at 240 Hz, the p95 frame-time
+//!   budget) plus the pinned hardware profile and its
+//!   unavailable-profile skip-clean posture; the bounded
+//!   wall-clock measurement lives in `examples/frame-pacing.rs`
+//!   (profile-gated) and the scheduled CI workflow
+//!   `.github/workflows/frame-pacing.yml`.
 //! - [`chain`]: the D31-D37 asset wiring - which corpus files each
 //!   scene needs and the staging calls that hand them to
 //!   [`bedlam_game::GameHost`] (the host never loads by itself).
@@ -57,6 +66,7 @@ pub mod clock;
 pub mod headless;
 pub mod input;
 pub mod native;
+pub mod pacing;
 pub mod save;
 pub mod window;
 
@@ -72,6 +82,11 @@ pub use headless::{
 };
 pub use input::{
     map_mouse_button, map_winit_key, Bindings, ControlScheme, GamepadButton, ShellInput, ShellKey,
+};
+pub use pacing::{
+    benchmark_report, percentile_ns, profile_for, replay_cadence, summarize, CadenceDriver,
+    FramePacing, PacingProfile, PacingSummary, PacingTrace, PacingVerdict, ProfileSelection,
+    PINNED_240HZ, PROFILE_ENV,
 };
 pub use save::{
     save_level_text, summarize_saved_bdl, AutosavePolicy, SaveSlotId, SaveSlotMetadata,

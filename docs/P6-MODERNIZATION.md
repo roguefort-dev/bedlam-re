@@ -527,6 +527,62 @@ decode, further world passes, any HD-pack consumption (the runtime
 seam stays future work per D216). The catalog stays empty (a
 plan-named presentation unit is not a catalog entry).
 
+**Implementation status (D219, 2026-08-28, gate
+`p6-frame-pacing-benchmark`): the QoL FEEL-PROXY benchmark unit —
+the plan's own closing instrument of the QoL sentence, "An
+automated scheduled CI benchmark checks 240Hz frame pacing against
+a pinned hardware profile and thresholds; an unavailable profile
+creates no task and only excludes that platform attestation."**
+(a) THE HERMETIC HALF (`bedlam_shell::pacing`, gate-covered): a
+delta trace — measured or synthetic frame deltas — replayed
+through the EXACT present-loop arithmetic (`CadenceDriver::frame`:
+`FixedStepClock::advance` answers pumps due, each pump runs the
+fixed dt through `GameHost::pump_frame`, then the loop's OWN
+crate-visible decision helpers `window::present_due` /
+`window::present_camera_alpha` answer and the presenting frame
+recomposes at the accumulator fraction — the same site order:
+gate, alpha, recompose), summarized into the feel-proxy metrics:
+pump cadence (pumps per delta, dropped pumps), present-gate
+answers, the recompose alpha cadence at 240 Hz, and the
+nearest-rank p95 frame-time percentile. One loop-shape fact the
+replay records faithfully and pins: a zero-PUMP frame never calls
+`pump_frame`, so the gate inherits the last pump's answer — after
+the first tick it answers YES on every frame in BOTH arms; the
+classic arm's frame-locked hold lands at CONTENT level (exactly
+one NEW image per executed tick — 59 of 240 frames at 240 Hz —
+unchanged frames re-presented), with the alpha cadence the
+arm-visible difference. The replay is trajectory-neutral across
+the arms (identical tick totals, tick index, state hash, scene
+hash — the D203 property re-pinned at the harness boundary) and
+deterministic. (b) THE PINNED HARDWARE PROFILE as committed data
+(`PacingProfile` / `PINNED_240HZ`): id `pinned-240hz-desk-v1`,
+machine class (operator desktop, 240 Hz vsync-locked display),
+p95 budget 5_208_333 ns (exactly 1.25 display periods), 2400
+sample frames (10 s of cadence — bounded in iterations and wall
+time). The UNAVAILABLE-PROFILE POSTURE is mechanical and pure
+(`profile_for` — exact-match on the declared identity
+`BEDLAM_PACING_PROFILE`, nothing probes hardware): any machine
+that does not declare the pinned id takes
+`benchmark_report`'s skip-clean path — exit 0 + an explicit
+no-attestation note — never a false red, never a task. (c) THE
+BOUNDED MEASUREMENT (`examples/frame-pacing.rs`, profile-gated):
+runs the SAME driver against a wall clock as a 240 Hz-cadence
+proxy (sleep to the next display-period boundary, measure the
+pacing path, record the inter-frame delta exactly as
+`about_to_wait` does); exit 1 exists ONLY on a matched machine
+whose thresholds failed. (d) THE SCHEDULED CI WIRING
+(`.github/workflows/frame-pacing.yml`): a cron-triggered workflow
+(daily 03:23 UTC + workflow_dispatch + path-filtered push/PR)
+whose pacing job runs the example — hosted runners never declare
+the profile, so the scheduled job exercises exactly the
+skip-clean posture; the 240 Hz attestation fires only on the
+pinned machine's runner. BOUNDS KEPT: no engine change (the
+harness needed no read-only seam beyond the two crate-visible
+helper visibilities in window.rs — pure delegation, zero behavior
+change); the hashed trajectory untouched; the gate reads no
+corpus; the catalog stays EMPTY; no new RE (every cited original
+fact already landed: RE-EXW-PACER §3, RE-EXW-CAMERA §5).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is

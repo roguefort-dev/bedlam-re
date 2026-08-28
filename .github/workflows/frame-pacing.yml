@@ -1,0 +1,76 @@
+name: frame-pacing
+
+# PLAN §6 P6 QoL, the closing instrument, VERBATIM: "An automated
+# scheduled CI benchmark checks 240Hz frame pacing against a pinned
+# hardware profile and thresholds; an unavailable profile creates no
+# task and only excludes that platform attestation."
+#
+# The pacing job runs the bounded measurement binary
+# (engine/bedlam-shell/examples/frame-pacing.rs) over the SAME
+# pacing path as the window present loop. GitHub-hosted runners are
+# NOT the pinned hardware profile and never declare themselves as
+# one (BEDLAM_PACING_PROFILE is unset in this workflow), so a
+# scheduled run here exercises exactly the UNAVAILABLE-PROFILE
+# POSTURE: the benchmark skips clean (exit 0 + an explicit
+# no-attestation note) — never a false red, never a task; the
+# hosted-runner platform is simply excluded from the 240Hz
+# attestation. The 240Hz attestation itself fires only on the
+# pinned machine (a self-hosted runner of that machine class that
+# declares the profile id in its environment — outside this repo's
+# control until it exists).
+#
+# The push/pull_request triggers are PATH-FILTERED to the benchmark
+# surfaces so the leg stays continuously verified without running
+# on every change; the schedule provides the automated cadence
+# (daily, an off-peak off-round minute); workflow_dispatch allows a
+# manual verification run. The hermetic half of the instrument (the
+# cadence replay + posture tests) lives in the ordinary ci.yml
+# matrix via `cargo test --workspace` and in the
+# p6-frame-pacing-benchmark required gate.
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/frame-pacing.yml
+      - engine/bedlam-shell/examples/frame-pacing.rs
+      - engine/bedlam-shell/src/pacing.rs
+      - engine/bedlam-shell/src/lib.rs
+      - engine/bedlam-shell/src/window.rs
+      - engine/bedlam-shell/src/clock.rs
+      - Cargo.lock
+  pull_request:
+    paths:
+      - .github/workflows/frame-pacing.yml
+      - engine/bedlam-shell/examples/frame-pacing.rs
+      - engine/bedlam-shell/src/pacing.rs
+      - engine/bedlam-shell/src/lib.rs
+      - engine/bedlam-shell/src/window.rs
+      - engine/bedlam-shell/src/clock.rs
+      - Cargo.lock
+
+permissions:
+  contents: read
+
+jobs:
+  pacing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # cpal (bedlam-shell's audio out) builds alsa-sys on Linux;
+      # its build script needs the ALSA headers + pkg-config to
+      # probe the library — the same reason as every ci.yml Linux
+      # leg (ci-cross-os-repair evidence).
+      - name: install alsa headers (linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+      # BEDLAM_PACING_PROFILE is deliberately NOT set: a hosted
+      # runner is not the pinned hardware profile, so this runs the
+      # skip-clean no-attestation posture (exit 0).
+      - name: frame-pacing benchmark (no-op without the pinned profile)
+        run: cargo run --release --locked -p bedlam-shell --example frame-pacing

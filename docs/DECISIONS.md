@@ -8459,3 +8459,129 @@ claims, and waiting-automatic suites all green. The ack binds
 remediation_commit to the bookkeeping commit (resolution
 replaced-task: the successor replaced the failed identity in the
 active queue).
+
+## D219 — 2026-08-28: P6 `p6-frame-pacing-benchmark` — the QoL FEEL-PROXY benchmark (the pure cadence replay over the loop's own seams — pumps due per measured delta, present-gate answers, the recompose alpha cadence at 240 Hz, the p95 frame-time percentile; the pinned hardware profile as committed data with the unavailable-profile skip-clean posture; the profile-gated bounded wall-clock measurement; the cron-triggered CI workflow whose pacing job no-ops off the pinned machine), wired as the FOURTEENTH P6 required gate
+
+CONTEXT: PLAN §6 P6 QoL closing sentence — "Game-feel proxies:
+input-to-present ≤ 1 original frame; animation cadence matches at
+the active display refresh (validated 60–240Hz+); no stutter under
+p95 frame-time budget at that refresh. An automated scheduled CI
+benchmark checks 240Hz frame pacing against a pinned hardware
+profile and thresholds; an unavailable profile creates no task and
+only excludes that platform attestation." The D208/D210/D212/D213
+knobs and the D215/D217 resolution pair landed every other
+plan-named piece of the sentence; this is its closing instrument
+(the repo's CI was push/PR only — no schedule existed). The
+bounded scope was fixed by the queue item: (a) the harness, (b)
+the pinned profile + posture, (c) the scheduled CI wiring, (d) the
+docs + the fourteenth gate; NO engine change, the hashed
+trajectory untouched, no corpus read by the gate, the catalog
+stays EMPTY, no new RE.
+
+DECISION: (a) THE HERMETIC HALF is `bedlam_shell::pacing`: a delta
+trace (measured or synthetic frame deltas, ns) replayed through
+the EXACT present-loop arithmetic by `CadenceDriver::frame` —
+`FixedStepClock::advance` answers the pumps due, every due pump
+runs the fixed dt through `GameHost::pump_frame` (neutral input —
+the cadence math is input-independent), then the loop's OWN
+decision helpers answer: `window::present_due` and
+`window::present_camera_alpha` (made crate-visible — pure
+delegation, zero behavior change; the harness provably runs the
+loop's exact decisions, so it can never drift from the loop it
+measures) and the presenting frame recomposes at the accumulator
+fraction in the present site's order (gate, alpha, recompose).
+The summary carries the feel-proxy metric families: pump cadence
+(pumps per delta, dropped pumps), present-gate answers (presents
+vs held), the recompose alpha cadence, and the nearest-rank p95
+frame-time percentile. THE LOOP-SHAPE FACT the replay pins (found
+first-hand while landing the gate tests): a zero-PUMP frame never
+calls `pump_frame`, so the gate INHERITS the last pump's answer —
+after the first executed tick it answers YES on every frame in
+BOTH arms; the classic arm's frame-locked hold therefore lands at
+CONTENT level (exactly one NEW image per executed tick — 59 of
+240 frames at 240 Hz, the unchanged canonical image re-presented
+between ticks), and the recompose alpha cadence is the
+arm-visible difference (Some(fraction) on every modern present,
+None on classic). The replay is trajectory-neutral across the arms
+(identical pump/tick totals, tick index, state hash, scene hash —
+the D203 property re-pinned at the harness boundary) and
+deterministic (the harness adds no nondeterminism; every input is
+the committed delta list). (b) THE PINNED HARDWARE PROFILE is
+committed DATA (`PacingProfile`/`PINNED_240HZ`): id
+`pinned-240hz-desk-v1`, machine class (operator desktop, 240 Hz
+vsync-locked display), p95 budget 5_208_333 ns — exactly 1.25
+display periods, the concrete reading of "no stutter under p95
+frame-time budget at that refresh" — and 2400 sample frames (10 s
+of cadence: bounded in iterations AND wall time). The
+UNAVAILABLE-PROFILE POSTURE is mechanical and pure:
+`profile_for` exact-matches the declared identity
+(`BEDLAM_PACING_PROFILE`; nothing probes hardware — a machine that
+does not declare the id is unavailable by definition, so CI
+runners and stray machines can never produce a false attestation),
+and `benchmark_report` (pure — the measurement binary's entire
+behavior except the wall-clock loop) answers the skip-clean path:
+exit 0 + an explicit no-attestation note, never a false red,
+never a task (the plan sentence verbatim, as executable code).
+(c) THE BOUNDED MEASUREMENT is `examples/frame-pacing.rs`,
+profile-gated: on a matched machine it runs the SAME driver
+against a wall clock as a 240 Hz-CADENCE PROXY (sleep to the next
+display-period boundary, measure the pacing path, feed the
+measured inter-frame delta exactly as `about_to_wait` does); the
+display's own vsync wait is the one piece a surface-less benchmark
+cannot include and the docs say so — the budget covers the pacing
+path + wake jitter, and the real 240 Hz attestation this
+instrument feeds runs on the pinned machine. Exit 1 exists ONLY
+on a matched machine whose thresholds failed (p95 over budget OR
+dropped pumps ≠ 0 — the anti-spiral clamp firing IS stutter).
+(d) THE SCHEDULED CI WIRING is `.github/workflows/frame-pacing.yml`:
+cron daily 03:23 UTC + workflow_dispatch + path-filtered push/PR
+(continuously verified without running on every change); its
+pacing job runs the example — hosted runners never declare the
+profile, so the scheduled job exercises exactly the skip-clean
+posture, and the 240 Hz attestation fires only on the pinned
+machine's runner (a self-hosted runner declaring the profile id —
+outside this repo's control until it exists). The GATE
+(p6-frame-pacing-benchmark, the FOURTEENTH P6 entry, the 78c87ed
+pattern — gate block with the implementation, phase list second)
+covers the hermetic suite AND the measurement binary's
+skip-clean posture under containment (no env profile -> exit 0 +
+note).
+
+BOUNDS KEPT: no engine change (bedlam-shell only; the two
+window.rs helper visibilities are pure delegation); the hashed
+trajectory untouched (the harness pumps a bare host — default
+config, empty palette, no corpus asset ever staged); the gate
+reads no corpus; the catalog stays EMPTY (a plan-named QoL
+instrument is not a catalog entry); no new RE (every cited
+original fact already landed: RE-EXW-PACER §3 for the classic
+arm's frame-locked pacing, RE-EXW-CAMERA §5 for the accumulator
+fraction); no Ghidra run.
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 116/0 (+12
+pacing tests — the 240 Hz pump arithmetic through the real host
+pumps (59 pumps/181 zero-tick frames), the present-gate answers
+both arms incl. the pinned stale-answer loop fact + the classic
+content-refresh cadence 59/240, the alpha sweep ~0.25/0.5/0.75/1.0
++ the 60 Hz steady 1.0, the stall clamp + the drop-as-verdict
+failure, the over-budget p95 failing ONLY on the matched profile,
+the ideal-cadence attestation, the exact profile matching, the
+profile data self-consistency, the nearest-rank percentile, the
+three benchmark-report postures, the cross-arm trajectory
+neutrality, the replay determinism; was 104/0 + 1 pre-existing
+ignored); the measurement binary checked first-hand BOTH paths
+(unavailable: exit 0 + the no-attestation note; matched
+diagnostic run on this dev machine: 2400 bounded frames in 10.1 s,
+p95 4_207_023 ns within the 5_208_333 budget, 600 ticks = exactly
+the 60 Hz sim cadence inside the 240 Hz proxy, VERDICT ATTESTED
+exit 0 — a diagnostic, not a committed attestation; the committed
+attestation posture is the scheduled job's); controls green:
+canonical_dump_gate 13/13, determinism 4/4, zone_mission_parity
+5/5 (ZERO canonical-chain movement), the headless smoke EXACTLY at
+the recorded baseline (scene 696adb1cd110e062 / parity
+cce30c983b97b16d / audio 110400/158092); check-p6-behavior-catalog
+OK (catalog still empty, R6 satisfied with the fourteenth gate) +
+its suite rc=0; gates-validator suite rc=0; fmt + clippy clean on
+the touched crate (the one pre-existing D210 test warning
+untouched); workspace cargo check clean; the workflow YAML parsed
+(pyyaml) with the intended triggers/jobs; MANIFEST clean before
+AND after every corpus read.
