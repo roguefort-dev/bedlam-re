@@ -7398,3 +7398,84 @@ catalog stays EMPTY (a plan-named axis unit is not a catalog entry
    crates; MANIFEST clean before AND after every corpus read; no
    Ghidra run.
    (worker e56b4ef6 claim 1, unit p6-control-scheme-surface)
+
+## D205 — 2026-08-28: P6/platform `p6-present-loop-wiring` — the mode plumbed through the shell host config into BOTH platform consumers (GameHost construction + the mapper) and the window present loop honoring GameHost::should_present, wired as the FIFTH P6 required gate
+
+Context: PLAN §6 P6 "time-based simulation ... vsync-locked present
+at any refresh" + the D203/D204 scope notes (both units deferred
+the platform plumbing here). Bounds kept: no canonical-chain
+movement (canonical_dump_gate 13/13 + zone_mission_parity 5/5 +
+determinism 4/4 green before (clean HEAD 4f76cd1 baseline b4babe3)
+and after); no harness change; no Ghidra run; the catalog stays
+EMPTY (a plan-named wiring unit is not a catalog entry — D200
+seeding policy); the shell fixed-step clock/pump contract
+untouched.
+
+1. THE PLUMBING (engine/bedlam-shell/src/window.rs + main.rs):
+   `WindowOptions.mode` — ONE immutable `ModeConfig` selected at
+   the platform level (default = modern, PLAN §6; the binary's
+   `--classic` selects the `CLASSIC` preset) — feeds BOTH
+   construction sites: `host_sim_config` (the mode rides
+   `SimConfig` into `GameHost::new`; seed/time base stay defaults —
+   the mode is the ONLY platform selection that enters the sim,
+   and as config, never state) and `shell_input_for`
+   (`ShellInput::new().with_scheme(ControlScheme::for_mode(mode))`
+   — the D204 consumer's platform selection; until this unit the
+   window path ran default-modern). Presentation options
+   (`PresentConfig`) stay OUT of the mode per the D200 layering.
+
+2. THE PRESENT GATE: `present_due` — pure delegation to
+   `GameHost::should_present` (the D203 policy), consulted at the
+   PRESENT SITE in `ShellApp::present`: MODERN presents every
+   vsync (zero-tick high-refresh frames recompose and present);
+   CLASSIC holds the previously presented image on zero-tick host
+   frames (the original frame-locked present-coupled pacing,
+   RE-EXW-PACER §3 [verified] — the visible refresh follows the
+   fixed logic tick, never the display rate; the surface keeps the
+   last presented buffer). LOOP LIVENESS: the redraw request in
+   about_to_wait stays UNCONDITIONAL in both arms — gating the
+   REQUEST itself would stall a quiet classic loop (no event would
+   wake the Wait-mode event loop between ticks); only the surface
+   write is gated, so the vsync-paced loop keeps pumping in both
+   arms and the pump contract is untouched. On the original 60 Hz
+   display class the classic gate opens every flip
+   (indistinguishable from the original cadence).
+
+3. THE HEADLESS PATH STAYS NEUTRAL/MODERN: it is the
+   hashed-trajectory surface (the two-run byte-identity gate) and
+   owns no present loop or mapper — mode selection is a window-
+   path (`--window`/`--classic`) concern.
+
+4. PINS (bedlam-shell --lib): `window_options_default_mode_is_
+   modern`; `one_plumbed_selection_reaches_host_and_mapper` (the
+   mode reaches the host unchanged AND selects the scheme from the
+   same value); `each_consumer_reads_only_its_own_arm` (per-axis
+   mixes as the axis-independence control); the gate cadence pin
+   `present_gate_holds_the_previous_image_only_on_classic_zero_
+   tick_frames` (boot frame presentable both arms; MODERN presents
+   every host frame; CLASSIC present iff the pump executed a
+   tick); `platform_mode_plumbing_never_touches_the_hashed_
+   trajectory` (same pump script through both platform options =
+   identical executed ticks, sim tick count, state hash, scene
+   hash AND frame parity hash — the platform selection is
+   presentation-bucket only, D17 b). Test surface = the ONE
+   purist toggle, both arms, never the feature cross-product.
+
+5. GATE WIRING: `p6-present-loop-wiring` is the FIFTH P6
+   required_gates entry (R6 keeps the scaffold first). Command =
+   bedlam-shell --lib, --release --locked --offline, hermetic (no
+   corpus key, no writable).
+
+6. VERIFIED THIS RUN: bedlam-shell --lib 47/0 (+5 wiring tests;
+   was 42/0 + 1 pre-existing ignored), bedlam-game --lib 148/0
+   (untouched), bedlam-core --lib 147/0 (untouched); controls
+   green: canonical_dump_gate 13/13 (ZERO canonical-chain
+   movement), zone_mission_parity 5/5, determinism 4/4;
+   check-p6-behavior-catalog OK (catalog still empty, R6
+   satisfied with the fifth gate) + its suite OK; gates-validator
+   suite OK; fmt + clippy clean on the touched crates; MANIFEST
+   clean before AND after every corpus read; the bounded --phase
+   P6 validator verdict at the unit commit: status=passed, ALL 5
+   P6 GATES GREEN (report .state/p6-presentloop-gates-report.json,
+   head-bound); no Ghidra run.
+   (worker 2a90eb65 claim 1, unit p6-present-loop-wiring)

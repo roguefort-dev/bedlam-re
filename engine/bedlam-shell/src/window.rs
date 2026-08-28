@@ -24,6 +24,21 @@
 //! a fixed watermark - the ONLY producer. No audio device means
 //! the shell runs silent (stderr note), never fatal.
 //!
+//! P6 MODE PLUMBING (D205, the p6-present-loop-wiring unit): the
+//! platform selects ONE immutable [`ModeConfig`]
+//! ([`WindowOptions::mode`], default = modern, `--classic` on the
+//! binary) and it is routed into BOTH consumers at construction:
+//! the host ([`host_sim_config`] -> `GameHost::new`, so
+//! `GameHost::should_present` answers under the plumbed mode) and
+//! the mapper ([`shell_input_for`] -> `ShellInput::with_scheme`,
+//! the D204 consumer's platform selection). The PRESENT GATE is
+//! the D203 timing-lock consumer wired into the real loop:
+//! [`present_due`] — modern presents every vsync, classic holds
+//! the previous image on zero-tick host frames (the original
+//! frame-locked present-coupled pacing). The gate is a
+//! presentation-bucket decision ONLY: the fixed-step clock/pump
+//! contract above is untouched, and no hashed value can see it.
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -42,6 +57,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bedlam_core::mode::ModeConfig;
+use bedlam_core::sim::SimConfig;
 use bedlam_game::{GameConfig, GameError, GameHost, Scene};
 use bedlam_platform::scale::{scale_rect, PresentConfig};
 use bedlam_platform::{ParityGpu, ParityPipeline};
@@ -56,7 +73,7 @@ use crate::audio::{AudioDevice, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
-use crate::input::{map_mouse_button, ShellInput};
+use crate::input::{map_mouse_button, ControlScheme, ShellInput};
 
 /// Shell-level failures (window/surface/GPU init + propagated game
 /// staging errors). The window loop cannot return through winit
@@ -90,6 +107,19 @@ pub struct WindowOptions {
     pub size: (u32, u32),
     /// Presentation config (PARITY defaults if unchanged).
     pub present: PresentConfig,
+    /// The P6 mode this host runs under (D205, the platform-level
+    /// classic/modern selection): ONE immutable [`ModeConfig`]
+    /// routed into BOTH platform consumers at construction — the
+    /// host (via [`host_sim_config`], so the present gate
+    /// [`GameHost::should_present`] answers under this mode) and
+    /// the input mapper (via [`shell_input_for`], the D204
+    /// control-scheme consumer's selection). Default = modern
+    /// (PLAN §6; the binary's `--classic` selects the classic
+    /// preset). A mode change is a new host, never a mid-run
+    /// mutation. Presentation options (`present` above) stay OUT
+    /// of the mode per the D200 layering: window mode, vsync and
+    /// scaling are platform knobs, not purist toggles.
+    pub mode: ModeConfig,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -111,9 +141,46 @@ impl WindowOptions {
             title: String::from("Bedlam (1996) - re shell"),
             size: (960, 720),
             present: PresentConfig::default(),
+            mode: ModeConfig::default(),
             auto_exit_after: None,
         }
     }
+}
+
+/// The host's sim config derived from the platform options (P6
+/// D205): the immutable mode rides `SimConfig` into
+/// `GameHost::new`; seed and time base stay the defaults — the
+/// mode is the ONLY platform selection that enters the sim, and it
+/// enters as config, never state (D201: not hashed, not
+/// serialized; the hashed trajectory is arm-invariant).
+fn host_sim_config(opts: &WindowOptions) -> SimConfig {
+    SimConfig {
+        mode: opts.mode,
+        ..SimConfig::default()
+    }
+}
+
+/// The input accumulator derived from the platform options (P6
+/// D205): the control-scheme arm of the SAME plumbed mode selects
+/// the mapper's [`ControlScheme`] (the D204 consumer's platform
+/// selection — until this unit the window path ran default-modern).
+fn shell_input_for(opts: &WindowOptions) -> ShellInput {
+    ShellInput::new().with_scheme(ControlScheme::for_mode(opts.mode))
+}
+
+/// Whether the present loop may put a new image on the surface for
+/// THIS host frame — the timing-lock pacing policy wired into the
+/// real loop (P6 D203 consumer / D205 wiring). Pure delegation to
+/// [`GameHost::should_present`]: MODERN presents every vsync
+/// (zero-tick high-refresh frames recompose and present too);
+/// CLASSIC holds the previously presented image on zero-tick host
+/// frames (the original frame-locked present-coupled pacing,
+/// RE-EXW-PACER §3 — the visible refresh follows the fixed logic
+/// tick, never the display rate). The boot frame is presentable in
+/// both arms. Presentation-bucket ONLY (D17 b): the answer never
+/// reaches the sim, the state hash or the scene hash.
+fn present_due(host: &GameHost) -> bool {
+    host.should_present()
 }
 
 /// Open the window host and run until the window closes.
@@ -124,9 +191,13 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
     let event_loop = EventLoop::new().map_err(|e| ShellError::EventLoop(e.to_string()))?;
 
     let mut source = GameGfxSource::new(&opts.gfx_dir);
+    // P6 mode plumbing (D205): ONE immutable ModeConfig from the
+    // platform options feeds BOTH construction sites — the host
+    // (so the present gate answers under the plumbed mode) and the
+    // input mapper (the D204 consumer's platform selection).
     let mut host = GameHost::new(
         &GameConfig::default(),
-        &bedlam_core::sim::SimConfig::default(),
+        &host_sim_config(&opts),
         [[0u8, 0, 0]; 256],
     );
     stage_boot(&mut host, &mut source, opts.config)?;
@@ -151,12 +222,15 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
         None => eprintln!("bedlam-shell: no audio output device; running silent"),
     }
 
+    // The mapper's scheme comes from the SAME plumbed mode
+    // (computed before `opts` moves into the app struct).
+    let input = shell_input_for(&opts);
     let mut app = ShellApp {
         opts,
         source,
         host,
         scene: Scene::Boot,
-        input: ShellInput::new(),
+        input,
         clock: FixedStepClock::host(),
         gfx: None,
         audio,
@@ -390,6 +464,21 @@ impl ShellApp {
     /// Upload + present the canonical frame (PARITY path, D20).
     /// Split field borrows: gfx mutable, host frame read-only.
     fn present(&mut self) {
+        // P6 PRESENT GATE (D203 consumer, wired D205): the
+        // timing-lock pacing policy decides whether THIS host frame
+        // may put a new image on the surface. MODERN (default)
+        // presents every vsync; CLASSIC holds the previously
+        // presented image on zero-tick host frames (the surface
+        // keeps the last presented buffer — wgpu needs no re-
+        // present for that). The redraw request itself stays
+        // UNCONDITIONAL (about_to_wait step 5) so the loop keeps
+        // its vsync-driven liveness in BOTH arms — only the
+        // surface write is gated. Presentation-bucket only: the
+        // gate reads the plumbed mode + the last pump's tick count,
+        // neither hashed.
+        if !present_due(&self.host) {
+            return;
+        }
         let Some(g) = self.gfx.as_mut() else {
             return;
         };
@@ -527,10 +616,174 @@ impl ApplicationHandler for ShellApp {
         if self.fatal.is_some() {
             return;
         }
-        // 5. Present on the next vsync.
+        // 5. Request the next frame. UNCONDITIONAL in both arms
+        //    (loop liveness: the vsync-paced redraw cycle keeps
+        //    about_to_wait pumping even when the classic present
+        //    gate holds the previous image — the gate lives at the
+        //    present site, `ShellApp::present`). The Fifo present
+        //    then blocks to vsync, pacing the loop.
         if let Some(g) = self.gfx.as_ref() {
             g.window.request_redraw();
         }
+    }
+}
+
+#[cfg(test)]
+mod present_loop_tests {
+    //! The P6 platform wiring pins (D205, `p6-present-loop-wiring`):
+    //! the ONE plumbed [`WindowOptions::mode`] reaches BOTH platform
+    //! consumers (host + mapper), the present gate holds the previous
+    //! image only on the classic arm's zero-tick frames, and the
+    //! plumbing never touches the hashed trajectory. Test surface =
+    //! the ONE purist toggle, both arms (per-axis mixes appear only
+    //! as the axis-independence control), never the feature
+    //! cross-product (D200).
+    use super::*;
+    use bedlam_core::input::InputFrame;
+    use bedlam_core::mode::{PuristToggle, ToggleArm};
+
+    fn opts_with(mode: ModeConfig) -> WindowOptions {
+        let mut opts = WindowOptions::new("test-install");
+        opts.mode = mode;
+        opts
+    }
+
+    fn host_for(opts: &WindowOptions) -> GameHost {
+        GameHost::new(
+            &GameConfig::default(),
+            &host_sim_config(opts),
+            [[0u8, 0, 0]; 256],
+        )
+    }
+
+    /// Default = modern (PLAN §6): the platform selection starts on
+    /// the modern arm, exactly like the sim default it feeds.
+    #[test]
+    fn window_options_default_mode_is_modern() {
+        assert_eq!(WindowOptions::new("test-install").mode, ModeConfig::MODERN);
+    }
+
+    /// ONE plumbed selection drives BOTH consumers: the mode rides
+    /// the derived SimConfig into the host unchanged (so the
+    /// present gate answers under it), and the SAME mode selects
+    /// the mapper's ControlScheme via `ControlScheme::for_mode`
+    /// (the D204 consumer's platform selection).
+    #[test]
+    fn one_plumbed_selection_reaches_host_and_mapper() {
+        for (mode, scheme) in [
+            (ModeConfig::MODERN, ControlScheme::Modern),
+            (ModeConfig::CLASSIC, ControlScheme::Classic),
+        ] {
+            let opts = opts_with(mode);
+            assert_eq!(host_sim_config(&opts).mode, mode);
+            let host = host_for(&opts);
+            assert_eq!(host.mode(), mode);
+            assert_eq!(shell_input_for(&opts).scheme(), scheme);
+            assert_eq!(ControlScheme::for_mode(opts.mode), scheme);
+        }
+    }
+
+    /// Axis independence at the PLATFORM level: each consumer reads
+    /// its own arm of the same plumbed mode — the timing-lock arm
+    /// moves present pacing only, the control-scheme arm moves the
+    /// mapper only. Per-axis mixes are the controls here, never the
+    /// feature cross-product.
+    #[test]
+    fn each_consumer_reads_only_its_own_arm() {
+        use bedlam_game::host::PresentPacing;
+        let timing_only =
+            opts_with(ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic));
+        assert_eq!(
+            host_for(&timing_only).present_pacing(),
+            PresentPacing::FrameLocked
+        );
+        assert_eq!(
+            shell_input_for(&timing_only).scheme(),
+            ControlScheme::Modern
+        );
+        let controls_only =
+            opts_with(ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic));
+        assert_eq!(
+            host_for(&controls_only).present_pacing(),
+            PresentPacing::Decoupled
+        );
+        assert_eq!(
+            shell_input_for(&controls_only).scheme(),
+            ControlScheme::Classic
+        );
+    }
+
+    /// THE PRESENT GATE (the D203 consumer wired into the loop):
+    /// `present_due` — what [`ShellApp::present`] consults before
+    /// touching the surface — presents every host frame on the
+    /// MODERN arm (zero-tick frames included) and on the CLASSIC
+    /// arm holds the previous image exactly on zero-tick frames
+    /// (present iff the pump executed a tick; the boot frame is
+    /// presentable in both arms so the platform has something to
+    /// blit).
+    #[test]
+    fn present_gate_holds_the_previous_image_only_on_classic_zero_tick_frames() {
+        for (mode, expect) in [
+            (ModeConfig::MODERN, [true, true, true, true]),
+            (ModeConfig::CLASSIC, [true, false, true, false]),
+        ] {
+            let mut host = host_for(&opts_with(mode));
+            // Boot frame (no pump yet): presentable in both arms.
+            assert!(present_due(&host), "boot frame presentable");
+            // Script: a 60 Hz tick frame, then a zero-tick frame,
+            // then a tick frame, then a short banked frame (3
+            // sub-ticks — no whole tick after a 4, so zero ticks).
+            let dts = [SUBTICKS_PER_PUMP, 0, SUBTICKS_PER_PUMP, 3];
+            let mut observed = [false; 4];
+            for (i, dt) in dts.iter().copied().enumerate() {
+                let executed = host.pump_frame(dt, &InputFrame::default());
+                if mode.is_purist(PuristToggle::TimingLock) {
+                    assert_eq!(executed > 0, expect[i], "classic: gate iff a tick executed");
+                }
+                observed[i] = present_due(&host);
+            }
+            assert_eq!(observed, expect, "gate cadence for {mode:?}");
+        }
+    }
+
+    /// The plumbing is CONFIG-NOT-STATE (the D201/D203/D204 property
+    /// at the platform boundary): the SAME pump script through
+    /// hosts built from the modern and classic platform options
+    /// yields the identical executed-tick sequence, sim tick count,
+    /// sim state hash, scene hash AND frame parity hash — the
+    /// platform selection can never touch the hashed trajectory,
+    /// only the presentation bucket.
+    #[test]
+    fn platform_mode_plumbing_never_touches_the_hashed_trajectory() {
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut modern = host_for(&opts_with(ModeConfig::MODERN));
+        let mut classic = host_for(&opts_with(ModeConfig::CLASSIC));
+        let mut executed_modern = Vec::new();
+        let mut executed_classic = Vec::new();
+        for (i, dt) in script.iter().copied().enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            executed_modern.push(modern.pump_frame(dt, &input));
+            executed_classic.push(classic.pump_frame(dt, &input));
+        }
+        assert_eq!(executed_modern, executed_classic);
+        assert_eq!(
+            modern.driver().sim().tick_index(),
+            classic.driver().sim().tick_index()
+        );
+        assert_eq!(
+            modern.driver().sim().state_hash(),
+            classic.driver().sim().state_hash()
+        );
+        assert_eq!(modern.scene_hash(), classic.scene_hash());
+        assert_eq!(modern.frame().parity_hash(), classic.frame().parity_hash());
     }
 }
 

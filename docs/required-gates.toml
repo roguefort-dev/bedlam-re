@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring"]
 
 [[phase]]
 id = "P7"
@@ -593,3 +593,47 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-shell/src/input.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-game/src/host.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-present-loop-wiring — the THIRD P6 PLATFORM unit + the wiring
+# unit that connects both landed consumers to the REAL platform
+# loop (D205; PLAN §6 P6 "time-based simulation ... vsync-locked
+# present at any refresh" + D203/D204 scope notes): the immutable
+# ModeConfig routed through the bedlam-shell host config into
+# GameHost construction — WindowOptions.mode (default = modern,
+# the binary's --classic selects the CLASSIC preset) feeds
+# host_sim_config (the mode rides SimConfig into GameHost::new as
+# config, never state) and shell_input_for (the SAME plumbed mode
+# selects the mapper's ControlScheme via ControlScheme::for_mode —
+# the D204 consumer's platform selection; until this unit the
+# window path ran default-modern) — and the window present loop
+# honors GameHost::should_present through present_due: MODERN
+# presents every vsync (zero-tick high-refresh frames recompose
+# and present); CLASSIC holds the previously presented image on
+# zero-tick host frames (the original frame-locked present-coupled
+# pacing, RE-EXW-PACER sec 3 [verified] — the visible refresh
+# follows the fixed logic tick, never the display rate). Loop
+# liveness is preserved by gating at the PRESENT SITE only: the
+# redraw request stays unconditional so the vsync-paced loop keeps
+# pumping in both arms. The shell fixed-step clock/pump contract
+# and the hashed trajectory are UNTOUCHED (pinned shell-side by
+# platform_mode_plumbing_never_touches_the_hashed_trajectory: same
+# pump script through hosts built from both platform options =
+# identical executed ticks, sim tick count, state hash, scene hash
+# and frame parity hash; the gate is presentation-bucket only,
+# D17 b). The headless smoke path stays neutral/modern (the
+# hashed-trajectory surface owns no present loop or mapper). The
+# canonical chains are untouched (canonical_dump_gate 13/13 +
+# zone_mission_parity 5/5 + determinism 4/4 green before AND
+# after). Test surface = the ONE purist toggle, both arms
+# (per-axis mixes only as the axis-independence control), never
+# the feature cross-product. The CATALOG STAYS EMPTY (D200 seeding
+# policy — a plan-named wiring unit is not a catalog entry).
+# Command hermetic: --release --locked --offline, no corpus key,
+# no writable.
+[[gate]]
+id = "p6-present-loop-wiring"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]

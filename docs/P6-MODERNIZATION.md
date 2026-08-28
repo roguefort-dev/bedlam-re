@@ -154,6 +154,40 @@ path already routes through the scheme-aware
 `ShellInput::set_physical_key` (the seam is live, the selection
 default-modern).
 
+**Implementation status (D205, 2026-08-28, gate
+`p6-present-loop-wiring`): the platform wiring — BOTH consumers
+connected to the REAL platform loop**
+(`engine/bedlam-shell/src/window.rs` + `main.rs`). The platform
+selects ONE immutable `ModeConfig` — `WindowOptions.mode` (default
+= modern; the binary's `--classic` selects the `CLASSIC` preset)
+— and routes it into BOTH construction sites:
+`host_sim_config` (the mode rides `SimConfig` into
+`GameHost::new` as config, never state) and `shell_input_for`
+(the SAME plumbed mode selects the mapper's `ControlScheme` via
+`ControlScheme::for_mode` — the D204 consumer's platform
+selection; until this unit the window path ran default-modern).
+The WINDOW PRESENT LOOP honors the D203 gate through
+**`present_due`** (pure delegation to `GameHost::should_present`,
+consulted at the present site): MODERN presents every vsync
+(zero-tick high-refresh frames recompose and present too);
+CLASSIC holds the previously presented image on zero-tick host
+frames — the original frame-locked present-coupled pacing, so on
+faster hosts the visible refresh follows the fixed logic tick,
+never the display rate. Loop liveness is preserved by gating at
+the PRESENT SITE ONLY: the redraw request stays unconditional, so
+the vsync-paced loop keeps pumping in both arms (gating the
+request itself would stall a quiet classic loop — there would be
+no event to wake it). The shell fixed-step clock/pump contract
+and the hashed trajectory are untouched (pinned shell-side by
+`platform_mode_plumbing_never_touches_the_hashed_trajectory`: the
+same pump script through hosts built from both platform options
+yields the identical executed-tick sequence, sim tick count, state
+hash, scene hash and frame parity hash). The headless smoke path
+stays neutral/modern by construction — it is the
+hashed-trajectory surface and owns no present loop or mapper. The
+catalog stays empty (a plan-named wiring unit is not a catalog
+entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -276,7 +310,16 @@ Per the D175 pattern the contract lands before any behavior change:
   (D201). The timing-lock axis-consumer gate `p6-timing-lock-surface`
   landed 2026-08-28 as the THIRD P6 required gate (D203; commands =
   bedlam-game --lib + bedlam-core --lib, both --release --locked --offline,
-  hermetic — the host present-seam suite carries the pacing tests).
+  hermetic — the host present-seam suite carries the pacing tests). The
+  control-scheme axis-consumer gate `p6-control-scheme-surface` landed
+  2026-08-28 as the FOURTH P6 required gate (D204; commands =
+  bedlam-shell --lib + bedlam-game --lib, both --release --locked
+  --offline, hermetic — the input-seam suite + the host hash pin). The
+  platform wiring gate `p6-present-loop-wiring` landed 2026-08-28 as the
+  FIFTH P6 required gate (D205; command = bedlam-shell --lib,
+  --release --locked --offline, hermetic — the platform wiring suite:
+  mode plumbing into host + mapper, the present-gate cadence pin both
+  arms, and the trajectory pin).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 

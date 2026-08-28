@@ -8,14 +8,18 @@
 //!   and CI; prints the journey report).
 //! - `--window` or `BEDLAM_SHELL=1`: the winit + wgpu window host
 //!   (see [`bedlam_shell::window`]) - interactive display only.
+//!   `--classic` selects the P6 classic purist mode for the window
+//!   host (default = modern; the platform-level ModeConfig
+//!   selection, D205).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
 use bedlam_shell::window::{run_window, WindowOptions};
 
@@ -24,11 +28,13 @@ const DEFAULT_GFX: &str = "game-data/BEDLAM";
 fn main() -> ExitCode {
     let mut gfx_dir: Option<PathBuf> = None;
     let mut window = false;
+    let mut classic = false;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--window" | "-w" => window = true,
+            "--classic" | "-c" => classic = true,
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -37,8 +43,12 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
+                println!(
+                    "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
+                );
+                println!("             default = modern)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -63,6 +73,15 @@ fn main() -> ExitCode {
             .and_then(|v| v.parse::<u64>().ok())
         {
             opts.auto_exit_after = Some(std::time::Duration::from_millis(ms));
+        }
+        // P6 platform selection (D205): `--classic` runs the window
+        // host under the classic ModeConfig preset (purist timing
+        // lock + original control scheme); default = modern. The
+        // headless smoke path stays neutral/modern by construction —
+        // it is the hashed-trajectory surface and owns no present
+        // loop or mapper.
+        if classic {
+            opts.mode = ModeConfig::CLASSIC;
         }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
