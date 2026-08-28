@@ -7204,3 +7204,82 @@ No engine, harness, or corpus change; no canonical-chain
 movement; no Ghidra run.
 (watchdog repair 1187807; unit p6-modeconfig-seam stands at
 9d39368 by worker 21604df0)
+
+## D203 — 2026-08-28: P6/engine `p6-timing-lock-surface` — the timing-lock purist axis's FIRST REAL CONSUMER: the present pacing policy selected from the immutable mode at the HOST/PRESENT seam (modern = accumulator-driven decoupled present, classic = the original frame-locked present-coupled pacing), and the completion gate wired as the THIRD P6 required gate
+
+Context: PLAN §6 P6 "time-based simulation" + D200 (scaffold) + D201
+(the inert ModeConfig seam at 9d39368). Bounds kept: the consumer
+lands at the HOST/PRESENT seam only; no canonical-chain movement
+(canonical_dump_gate 13/13 + zone_mission_parity 5/5 + determinism
+green BEFORE (c942bd9) and AFTER; the modern default stays
+byte-identical); no harness change; no Ghidra run; the catalog stays
+EMPTY (a plan-named axis unit is not a catalog entry — D200 seeding
+policy).
+
+1. THE CONSUMER (engine/bedlam-game/src/host.rs):
+   `GameHost::present_pacing()` reads the timing-lock arm of the
+   IMMUTABLE mode and maps it to a `PresentPacing` policy — MODERN =
+   `Decoupled`: every host frame is presentable (zero-tick
+   high-refresh frames included; the accumulator-driven present the
+   PLAN §6 high-refresh requirement names and the shell clock
+   bedlam-shell/src/clock.rs feeds); CLASSIC = `FrameLocked`: the
+   original frame-locked present-coupled pacing [verified,
+   RE-EXW-PACER §3 / D16: the FUN_0043d00b loop pass and its
+   PresentEnd are ONE event, g_frame_count++ exactly once per flip,
+   no software frame clock] — a host frame is presentable only when
+   it executed >= 1 logic tick. `GameHost::should_present()` is the
+   per-host-frame gate the platform's present loop asks; before the
+   first pump the pre-rendered boot frame is presentable in BOTH
+   arms (the platform must blit once to have anything on screen).
+   On the original 60 Hz display class the classic lock presents
+   every flip (indistinguishable from the original); on faster
+   hosts the VISIBLE refresh follows the fixed tick, never the
+   display — the purist cadence without a blocking loop.
+
+2. A POLICY, NEVER A HZ (Determinism Charter): the logic tick stays
+   FIXED at the original rate in BOTH arms; display rate never
+   enters the sim or the state hash. The decision rides the
+   un-hashed presentation bucket ONLY: a private `last_pump_ticks:
+   Option<u32>` (recorded by pump_frame before anything else) feeds
+   the gate — it cannot reach the sim, the state hash or the scene
+   hash. The D17 accumulator is pacing-policy-neutral in every arm
+   (documented on SimDriver). Pin:
+   `timing_lock_pacing_never_touches_the_hashed_buckets` — the same
+   pump script (dt sequence + inputs, tick-carrying and zero-tick
+   frames mixed) yields the IDENTICAL executed-tick sequence, sim
+   tick count, sim state hash and scene hash in both arms, while
+   should_present differs somewhere (the consumer is real, not
+   inert). CONFIG-NOT-STATE unchanged: FORMAT_VERSION stays 1, no
+   hash pin moves.
+
+3. TEST SURFACE (per D200): the ONE purist toggle, both arms —
+   selection (incl. the control-scheme axis as the
+   axis-independence control, never a cross-product sweep), the
+   modern high-refresh shape (240x dt=1 pumps: 60 ticks, 240
+   presents), the classic lock (same script: 60 presents, gate =
+   executed>0; boot presentable), the classic 60 Hz shape
+   (dt=4: present every flip; a banked 3-sub-tick frame is the only
+   no-present shape), and the hash-inertness pin above.
+
+4. GATE WIRING: `p6-timing-lock-surface` is the THIRD P6 required
+   gate (required_gates = [scaffold, modeconfig-seam,
+   timing-lock-surface]; R6 keeps the scaffold first). Commands =
+   bedlam-game --lib (the host present-seam suite) + bedlam-core
+   --lib (the mode/frame policy-neutral docs-bearing modules), both
+   --release --locked --offline, hermetic (no corpus key, no
+   writable).
+
+5. SCOPE NOTE: the platform loop wiring (the window shell consuming
+   should_present, mode plumbing through the shell config) is a
+   LATER P6 unit — this unit lands the seam-side policy, its
+   contract and its pins.
+
+6. VERIFIED THIS RUN: bedlam-game --lib 147/0 (+5 pacing tests),
+   bedlam-core --lib 147/0; controls green BEFORE at clean HEAD
+   c942bd9 AND AFTER: zone_mission_parity 5/5 + canonical_dump_gate
+   13/13 + determinism 4/4; check-p6-behavior-catalog OK (catalog
+   still empty, R6 satisfied with the third gate) + its suite
+   30/30; gates-validator suite 22/22; fmt + clippy clean on the
+   touched crates; MANIFEST clean before AND after every corpus
+   read; no Ghidra run.
+   (worker 458a7e98 claim 1, unit p6-timing-lock-surface)

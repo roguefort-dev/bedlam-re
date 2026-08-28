@@ -37,10 +37,14 @@
 //! (see [`crate::sim::Sim::restore`]) — restoring IS constructing a new
 //! sim. The initial two axes are host-side policies (pacing, input
 //! mapping) with zero in-sim consumers, so the sim trajectory is
-//! arm-independent in this unit; a later unit that gives an axis (or a
-//! catalog toggle) an in-sim consumer diverges the arms there, and
-//! THAT unit decides whether the replay header starts recording the
-//! mode (with a FORMAT_VERSION bump then, not now).
+//! arm-independent: the timing-lock axis gained its FIRST consumer at
+//! the host/present seam (D203 — `bedlam_game::GameHost` present
+//! pacing, a presentation-bucket-only decision); the control-scheme
+//! axis's consumer lands at the platform/input layer. A later unit
+//! that gives an axis (or a catalog toggle) an IN-SIM consumer
+//! diverges the arms there, and THAT unit decides whether the replay
+//! header starts recording the mode (with a FORMAT_VERSION bump
+//! then, not now).
 
 /// One arm of a purist-toggle axis: the modern arm (the default — the
 /// modernization the plan asks for) or the classic arm (the purist

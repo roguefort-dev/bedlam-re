@@ -83,6 +83,32 @@ inert — neither axis has an in-sim consumer yet, so the canonical chains
 are byte-identical under the modern default (pinned by
 `canonical_dump_gate` and the seam's inertness test).
 
+**Implementation status (D203, 2026-08-28, gate
+`p6-timing-lock-surface`): the timing-lock axis's FIRST CONSUMER** —
+present pacing at the HOST/PRESENT seam (`engine/bedlam-game/src/
+host.rs`). `GameHost::present_pacing()` maps the axis arm to a
+`PresentPacing` policy — MODERN = `Decoupled` (the accumulator-driven
+present: every host frame is presentable, zero-tick high-refresh frames
+included — the PLAN §6 high-refresh present the shell clock
+`bedlam-shell/src/clock.rs` feeds), CLASSIC = `FrameLocked` (the original
+frame-locked present-coupled pacing, RE-EXW-PACER §3 [verified / D16]:
+one sim/render frame per display flip, no software frame clock — a host
+frame is presentable only when it executed ≥ 1 logic tick). The gate the
+platform asks per host frame is `GameHost::should_present()`; before the
+first pump the pre-rendered boot frame is presentable in both arms. The
+policy is a POLICY, never a Hz: the logic tick stays FIXED at the
+original rate in BOTH arms, and the decision rides the un-hashed
+presentation bucket only (a private `last_pump_ticks` field, D17 b —
+pinned by `timing_lock_pacing_never_touches_the_hashed_buckets`: the
+same pump script yields the identical executed-tick sequence, sim tick
+count, state hash and scene hash in both arms while `should_present`
+differs). The accumulator itself (D17) is pacing-policy-neutral in every
+arm. The control-scheme axis stays consumer-less until its
+platform/input-layer unit; the catalog stays empty (a plan-named axis
+unit is not a catalog entry). The platform loop wiring (the window shell
+consuming `should_present`, mode plumbing through the shell config) is a
+LATER P6 unit — this unit lands the seam-side policy and its contract.
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -202,7 +228,10 @@ Per the D175 pattern the contract lands before any behavior change:
   regression evidence, modernization surfaces per PLAN §6) land as evidence
   lands, each behind the scaffold. The seam implementation gate
   `p6-modeconfig-seam` landed 2026-08-28 as the SECOND P6 required gate
-  (D201).
+  (D201). The timing-lock axis-consumer gate `p6-timing-lock-surface`
+  landed 2026-08-28 as the THIRD P6 required gate (D203; commands =
+  bedlam-game --lib + bedlam-core --lib, both --release --locked --offline,
+  hermetic — the host present-seam suite carries the pacing tests).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 

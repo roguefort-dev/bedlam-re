@@ -46,6 +46,40 @@ pub trait ByteSink {
     fn store(&mut self, name: &str, bytes: &[u8]) -> Result<(), GameError>;
 }
 
+/// The present pacing policy of one host — the FIRST consumer of the
+/// timing-lock purist axis (P6, PLAN §6 "time-based simulation" +
+/// D201/D203; selected from the immutable mode, NEVER a Hz).
+///
+/// Both arms share the fixed 60 Hz logic tick and the D17 accumulator
+/// (the sim never sees display timing); the axis selects only how the
+/// PLATFORM's presents couple to that tick:
+///
+/// - [`PresentPacing::Decoupled`] (MODERN arm): present every host
+///   frame regardless of ticks executed — accumulator-driven, the
+///   PLAN §6 high-refresh present (a 240 Hz host presents 240 frames
+///   of which most carry zero logic ticks; the shell clock
+///   `bedlam-shell/src/clock.rs` is built for exactly this shape).
+/// - [`PresentPacing::FrameLocked`] (CLASSIC arm): the original
+///   frame-locked present-coupled pacing [verified, RE-EXW-PACER §3 /
+///   D16: "one sim/render frame per display flip = vsync-locked, no
+///   software frame clock" — the FUN_0043d00b loop pass and its
+///   PresentEnd are ONE event, `g_frame_count++` exactly once per
+///   flip]. A host frame is presentable only when it executed >= 1
+///   logic tick; zero-tick frames leave the previously presented
+///   image up. On the original 60 Hz display class this is
+///   indistinguishable from the original (one tick per flip); on
+///   faster hosts the VISIBLE refresh follows the fixed tick rate,
+///   never the display rate — the purist cadence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresentPacing {
+    /// MODERN arm: the accumulator-driven present, decoupled from the
+    /// tick rate (every host frame is presentable).
+    Decoupled,
+    /// CLASSIC arm: the original frame-locked, present-coupled pacing
+    /// (a present is due only when a logic tick executed).
+    FrameLocked,
+}
+
 /// The composition root: hashed sim + hashed scene FSM + un-hashed
 /// frame state (inside the SimDriver), the audio mixer and the latest
 /// canonical frame.
@@ -82,6 +116,12 @@ pub struct GameHost {
     mission: Option<MissionScene>,
     frame: Frame,
     palette: [Vga6; 256],
+    /// Sim ticks executed by the most recent [`GameHost::pump_frame`]
+    /// (None before the first pump). Pacing-policy bookkeeping ONLY
+    /// — the un-hashed presentation bucket (D17 b): it feeds
+    /// [`GameHost::should_present`] and can never reach the sim or
+    /// the state/scene hashes.
+    last_pump_ticks: Option<u32>,
 }
 
 /// One loaded movie: the player plus its lifecycle state. Loads are
@@ -116,6 +156,7 @@ impl GameHost {
             mission: None,
             frame: Frame::new(palette),
             palette,
+            last_pump_ticks: None,
         };
         host.sync_music();
         host.frame = host.render_now();
@@ -133,6 +174,10 @@ impl GameHost {
     /// 4. the canonical frame is re-rendered and stored for present.
     pub fn pump_frame(&mut self, dt_subticks: u32, input: &InputFrame) -> u32 {
         let executed = self.driver.advance(dt_subticks, input);
+        // Pacing bookkeeping (P6 timing-lock consumer): recorded BEFORE
+        // the rest of the pump so a mid-pump panic can never leave a
+        // stale gate answer behind; presentation-bucket only.
+        self.last_pump_ticks = Some(executed);
         self.apply_cinema_skip(input);
         // Menu input ownership (D42.1): while a menu is staged on
         // Title, the menu IS the Title input path - the FSM is fed
@@ -195,10 +240,56 @@ impl GameHost {
     /// The immutable mode the host's sim runs under (P6 seam, D201):
     /// the ONE [`bedlam_core::mode::ModeConfig`] injected at sim
     /// construction via [`SimConfig`], carried by the driver. The
-    /// purist-toggle axes are read here (pacing policy, control
-    /// mapping) — never mutated mid-run; a mode change is a new host.
+    /// purist-toggle axes are read on the host — the timing-lock arm
+    /// through [`GameHost::present_pacing`]/[`GameHost::should_present`]
+    /// (the axis's first consumer, D203; control mapping later) —
+    /// never mutated mid-run; a mode change is a new host.
     pub fn mode(&self) -> bedlam_core::mode::ModeConfig {
         self.driver.mode()
+    }
+
+    /// The present pacing policy this host runs under — the timing-lock
+    /// axis's consumer (P6, D201/D203). Selected from the immutable
+    /// [`bedlam_core::mode::ModeConfig`]: the MODERN arm decouples the
+    /// present from the tick rate, the CLASSIC arm restores the
+    /// original frame-locked present-coupled pacing. This is a POLICY
+    /// selector, never a rate: the logic tick stays fixed at the
+    /// original rate in BOTH arms and no display rate ever enters the
+    /// sim or the state hash (Determinism Charter, PLAN §3).
+    pub fn present_pacing(&self) -> PresentPacing {
+        use bedlam_core::mode::{PuristToggle, ToggleArm};
+        if self.mode().arm(PuristToggle::TimingLock) == ToggleArm::Classic {
+            PresentPacing::FrameLocked
+        } else {
+            PresentPacing::Decoupled
+        }
+    }
+
+    /// Whether the platform should present [`GameHost::frame`] after
+    /// the most recent [`GameHost::pump_frame`] — the pacing-policy
+    /// consumer the present loop asks each host frame.
+    ///
+    /// - `Decoupled` (modern): always `true` — every host frame
+    ///   presents, zero-tick frames included (they recompose from
+    ///   latest state; PLAN §6 high-refresh present).
+    /// - `FrameLocked` (classic): `true` iff the last pump executed
+    ///   at least one logic tick (the original one-flip-one-loop-pass
+    ///   lock, RE-EXW-PACER §3). A zero-tick host frame returns
+    ///   `false`: the previously presented image stays up. Before
+    ///   the FIRST pump the pre-rendered boot frame is presentable
+    ///   in both arms (the platform must blit once to have anything
+    ///   on the surface at all).
+    ///
+    /// Presentation-bucket only: the answer depends on the immutable
+    /// mode plus the last pump's tick count — neither is hashed, so
+    /// the same pump script yields identical sim/scene hashes in both
+    /// arms (pinned by test `timing_lock_pacing_never_touches_hashed_
+    /// buckets`).
+    pub fn should_present(&self) -> bool {
+        match self.present_pacing() {
+            PresentPacing::Decoupled => true,
+            PresentPacing::FrameLocked => !matches!(self.last_pump_ticks, Some(0)),
+        }
     }
 
     /// The scene machine (hashed bucket).
@@ -211,8 +302,10 @@ impl GameHost {
         self.fsm.scene_hash()
     }
 
-    /// The latest canonical frame (the PresentCopy analog: hand this to
-    /// the platform; bedlam-game never presents by itself).
+    /// The latest canonical frame (the PresentCopy analog: hand this
+    /// to the platform; bedlam-game never presents by itself). The
+    /// platform presents it each host frame iff [`GameHost::
+    /// should_present`] says so (the timing-lock pacing policy).
     pub fn frame(&self) -> &Frame {
         &self.frame
     }
@@ -1357,6 +1450,196 @@ mod tests {
         let mixed = ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic);
         assert!(mixed.is_purist(PuristToggle::TimingLock));
         assert!(!mixed.is_purist(PuristToggle::ControlScheme));
+    }
+
+    #[test]
+    fn timing_lock_pacing_selects_from_the_immutable_mode() {
+        // P6 first consumer (D203): the timing-lock arm SELECTS the
+        // present pacing policy on the host — a policy, never a Hz.
+        // The surface is the ONE purist toggle (both arms); the
+        // control-scheme axis is a targeted CONTROL: flipping IT
+        // alone must not move this consumer (axis independence).
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        assert_eq!(modern.present_pacing(), PresentPacing::Decoupled);
+        assert!(modern.should_present(), "boot frame is presentable");
+
+        let purist_timing = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert_eq!(purist_timing.present_pacing(), PresentPacing::FrameLocked);
+        // The CLASSIC preset carries the purist timing arm too.
+        let classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::CLASSIC,
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert_eq!(classic.present_pacing(), PresentPacing::FrameLocked);
+
+        // Control (the OTHER axis, modern): pacing stays decoupled.
+        let purist_controls = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert_eq!(purist_controls.present_pacing(), PresentPacing::Decoupled);
+    }
+
+    #[test]
+    fn modern_pacing_presents_every_host_frame_at_high_refresh() {
+        // MODERN arm (PLAN §6 high-refresh present): a 240 Hz-style
+        // script (dt = 1 sub-tick per pump) mostly executes ZERO
+        // ticks, and every frame still presents — the accumulator-
+        // driven decoupled present. 240 pumps = 60 whole ticks.
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let mut ticks = 0u32;
+        for _ in 0..240 {
+            let executed = host.pump_frame(1, &InputFrame::default());
+            ticks += executed;
+            assert!(host.should_present(), "decoupled: zero-tick frames present");
+        }
+        assert_eq!(ticks, 60, "240 x 1 sub-tick = 60 whole ticks");
+    }
+
+    #[test]
+    fn classic_pacing_locks_present_to_the_logic_frame() {
+        // CLASSIC arm: the original frame-locked present-coupled
+        // pacing (RE-EXW-PACER §3 — one sim/render frame per display
+        // flip). The SAME 240 Hz-style script as the modern test:
+        // presentable exactly on the pumps that executed a tick, the
+        // zero-tick frames hold the previous image; and before the
+        // first pump the boot frame is presentable (the platform
+        // must blit once to show anything at all).
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        assert!(host.should_present(), "boot frame presentable");
+        let mut ticks = 0u32;
+        let mut presents = 0u32;
+        for _ in 0..240 {
+            let executed = host.pump_frame(1, &InputFrame::default());
+            ticks += executed;
+            let due = host.should_present();
+            assert_eq!(
+                due,
+                executed > 0,
+                "frame-locked: present iff the pump executed a tick"
+            );
+            presents += u32::from(due);
+        }
+        // 60 ticks, 60 presents — the visible refresh follows the
+        // fixed logic tick, never the host's faster display rate.
+        assert_eq!(ticks, 60);
+        assert_eq!(presents, 60);
+    }
+
+    #[test]
+    fn classic_pacing_on_a_60hz_host_presents_every_flip() {
+        // The original display class (60 Hz): dt = 4 sub-ticks = one
+        // tick per pump, so the classic lock presents EVERY host
+        // frame — indistinguishable from the original's one-loop-
+        // pass-per-flip cadence on the hardware it shipped for.
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        for _ in 0..32 {
+            assert_eq!(host.pump_frame(4, &InputFrame::default()), 1);
+            assert!(host.should_present());
+        }
+        // A banked short frame (3 sub-ticks, no tick) is the ONLY
+        // shape a well-formed 60 Hz script never hits — the lock
+        // holds exactly as in the original: no tick, no present.
+        assert_eq!(host.pump_frame(3, &InputFrame::default()), 0);
+        assert!(!host.should_present());
+    }
+
+    #[test]
+    fn timing_lock_pacing_never_touches_the_hashed_buckets() {
+        // The Determinism Charter pin at the new consumer: the SAME
+        // pump script (inputs + dt sequence) yields the IDENTICAL
+        // executed-tick sequence, sim tick count, sim state hash and
+        // scene hash in BOTH arms — the pacing policy differs only
+        // in should_present(), which lives in the un-hashed
+        // presentation bucket (D17 b). Display rate and pacing never
+        // enter the sim or the state hash.
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let mut modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let mut classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        // A script with tick-carrying AND zero-tick frames (the
+        // accumulator banks): dt sequence 4,1,1,1,1,3,2,2 cycled,
+        // with a moving-pointer input every 5th frame.
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2];
+        let mut executed_modern = Vec::new();
+        let mut executed_classic = Vec::new();
+        let mut arms_disagree_on_present = false;
+        for i in 0..16 {
+            let dt = script[i % script.len()];
+            let input = if i % 5 == 0 {
+                InputFrame {
+                    mouse_dx: 3,
+                    mouse_dy: -2,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            let m = modern.pump_frame(dt, &input);
+            let c = classic.pump_frame(dt, &input);
+            executed_modern.push(m);
+            executed_classic.push(c);
+            if modern.should_present() != classic.should_present() {
+                arms_disagree_on_present = true;
+            }
+        }
+        assert_eq!(executed_modern, executed_classic);
+        assert_eq!(
+            modern.driver().sim().tick_index(),
+            classic.driver().sim().tick_index()
+        );
+        assert_eq!(
+            modern.driver().sim().state_hash(),
+            classic.driver().sim().state_hash()
+        );
+        assert_eq!(modern.scene_hash(), classic.scene_hash());
+        // And the arms DO differ on the policy surface itself (the
+        // consumer is real, not inert): over this script some frame
+        // exists where the arms disagree on presenting.
+        assert!(
+            arms_disagree_on_present,
+            "the pacing arms must disagree on should_present somewhere"
+        );
     }
 
     #[test]

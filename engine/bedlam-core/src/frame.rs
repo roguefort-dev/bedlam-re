@@ -152,6 +152,11 @@ impl FrameState {
 /// sequence of (input, tick) pairs reaches the sim, which is what makes
 /// the same input script produce the identical sim hash at 15/60/240Hz
 /// host.
+///
+/// PACING-POLICY-NEUTRAL (P6, D203): the accumulator behaves identically
+/// in every mode arm — the timing-lock axis selects only how the HOST
+/// presents the results (`bedlam_game::GameHost::should_present`), never
+/// how ticks are banked or paid.
 #[derive(Debug)]
 pub struct SimDriver {
     sim: Sim,

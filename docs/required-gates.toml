@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface"]
 
 [[phase]]
 id = "P7"
@@ -504,3 +504,41 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-core/src/mode.rs", "engine/bedlam-core/src/sim.rs", "engine/bedlam-core/src/lib.rs", "engine/bedlam-core/src/frame.rs", "engine/bedlam-game/src/host.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-timing-lock-surface — the SECOND P6 ENGINE unit + the FIRST REAL
+# CONSUMER of a purist axis (D203; PLAN §6 P6 "time-based simulation"
+# + D201): the timing-lock arm selects the PRESENT PACING POLICY at
+# the host/present seam. engine/bedlam-game/src/host.rs lands
+# PresentPacing (Decoupled = the modern accumulator-driven present,
+# every host frame presentable incl. zero-tick high-refresh frames;
+# FrameLocked = the original frame-locked present-coupled pacing,
+# RE-EXW-PACER sec 3 [verified]: one sim/render frame per display
+# flip, no software frame clock — a host frame is presentable only
+# when it executed >= 1 logic tick) + GameHost::present_pacing()
+# (selected from the immutable mode, NEVER a Hz) +
+# GameHost::should_present() (the gate the platform's present loop
+# asks each host frame; boot frame presentable in both arms). The
+# policy rides the un-hashed presentation bucket ONLY: a private
+# last_pump_ticks field (D17 b) feeds the gate and can never reach
+# the sim, the state hash or the scene hash — the LOGIC TICK STAYS
+# FIXED at the original rate in BOTH arms and display rate NEVER
+# enters the sim (Determinism Charter; pinned by
+# timing_lock_pacing_never_touches_the_hashed_buckets: same pump
+# script = identical executed-tick sequence, sim tick count, state
+# hash and scene hash in both arms, while should_present differs).
+# The canonical chains are untouched (modern default byte-identical;
+# canonical_dump_gate 13/13 + zone_mission_parity 5/5 green before
+# AND after). Test surface = the ONE purist toggle, both arms (the
+# control-scheme axis appears only as the axis-independence
+# control), never the feature cross-product. The CATALOG STAYS EMPTY
+# (D200 seeding policy — this is a plan-named axis unit, not a
+# catalog entry). Both commands hermetic: --release --locked
+# --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-timing-lock-surface"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--lib"],
+]
+tracked_paths = ["engine/bedlam-game/src/host.rs", "engine/bedlam-core/src/mode.rs", "engine/bedlam-core/src/frame.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
