@@ -3,12 +3,13 @@
 
 Every structural rule of the checker is proven to FAIL LOUDLY on the
 specific tampering it guards against, and to pass on the honest
-scaffold state (the committed doc + a correctly wired manifest). One
+landed state (the committed doc + a correctly wired manifest). One
 test runs the checker against the REAL repository doc + manifest (the
-same thing the gate runs), pinning the honest state, and one proves
-the LANDED-state shape is legal (a deliverable flipped to landed with
-its proving gate wired into the P7 phase list passes -- the forward
-shape P7 grows into).
+same thing the gate runs), pinning the honest state; one proves the
+LANDED-everywhere shape is legal (P7 status green against all seven
+engineering rows landed -- the forward shape the phase close grows
+into), and one proves the premature flip stays loud once a row is
+un-landed.
 """
 
 from __future__ import annotations
@@ -62,26 +63,27 @@ def with_registry(doc: str, registry: str) -> str:
     return result
 
 
-def land_macos(doc: str, gate: str) -> str:
-    """Flip the honest macos-universal2-ci row to landed (in place).
+def unland_macos(doc: str) -> str:
+    """Flip the honest macos-universal2-ci row back to pending.
 
-    Since the p7-windows-installer unit (D227) the windows-installer
-    row is landed in the honest doc, so macos-universal2-ci is the
-    canonical still-pending engineering row these fixtures flip.
+    Since the p7-macos-universal2-ci unit (D229) ALL SEVEN
+    engineering rows are landed in the honest doc, so the R6
+    premature-phase-flip fixture un-lands this one row to make a
+    not-yet-landed engineering deliverable exist again.
     """
     before = (
         'id = "macos-universal2-ci"\nkind = "engineering"\n'
         'plan_anchor = "macOS universal2 through automated CI"\n'
-        'status = "pending"\ngate = ""'
+        'status = "landed"\ngate = "p7-macos-universal2-ci"'
     )
     after = (
         'id = "macos-universal2-ci"\nkind = "engineering"\n'
         'plan_anchor = "macOS universal2 through automated CI"\n'
-        f'status = "landed"\ngate = "{gate}"'
+        'status = "pending"\ngate = ""'
     )
     result = doc.replace(before, after, 1)
     if result == doc:
-        raise AssertionError("fixture bug: macos row not found")
+        raise AssertionError("fixture bug: landed macos row not found")
     return result
 
 
@@ -109,13 +111,14 @@ def manifest_text(
     p7_status: str = "pending",
 ) -> str:
     # The default mirrors the REAL manifest's honest state since the
-    # p7-windows-installer unit (D227): the scaffold first, then the
+    # p7-macos-universal2-ci unit (D229): the scaffold first, then the
     # gates proving the landed rows (p7-ci-artifacts proves
     # ci-artifacts-per-push + linux-native; p7-cdda-user-supply
     # proves cdda-user-supply; p7-steamdeck-default proves
     # steamdeck-default; p7-flatpak-manifest proves flatpak-manifest;
-    # p7-windows-installer proves windows-installer), wired exactly
-    # like docs/required-gates.toml.
+    # p7-windows-installer proves windows-installer;
+    # p7-macos-universal2-ci proves macos-universal2-ci), wired
+    # exactly like docs/required-gates.toml.
     if p7_gates is None:
         p7_gates = [
             GATE_ID,
@@ -124,6 +127,7 @@ def manifest_text(
             "p7-steamdeck-default",
             "p7-flatpak-manifest",
             "p7-windows-installer",
+            "p7-macos-universal2-ci",
         ]
     if gate_blocks is None:
         gate_blocks = [
@@ -257,6 +261,28 @@ def manifest_text(
                     "docs/required-gates.toml",
                 ],
             },
+            {
+                "id": "p7-macos-universal2-ci",
+                "timeout_seconds": 120,
+                "commands": [
+                    [
+                        "/usr/bin/python3",
+                        "tools/check-p7-macos-universal2-ci.py",
+                    ],
+                    ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+                    [
+                        "/usr/bin/python3",
+                        "tools/test-p7-macos-universal2-ci.py",
+                    ],
+                ],
+                "tracked_paths": [
+                    ".github/workflows/macos-universal2.yml",
+                    "tools/check-p7-macos-universal2-ci.py",
+                    "tools/test-p7-macos-universal2-ci.py",
+                    DOC_RELATIVE,
+                    "docs/required-gates.toml",
+                ],
+            },
         ]
     lines = ['schema = "required-gates-v1"']
     for number in range(8):
@@ -349,17 +375,19 @@ class PortsMapCheckerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"p7-ports-map: OK", result.stdout)
-        # Deliberate re-baseline with the p7-windows-installer unit
-        # (D227): the six landed rows (ci-artifacts-per-push +
-        # linux-native on p7-ci-artifacts, cdda-user-supply,
-        # steamdeck-default, flatpak-manifest and windows-installer
-        # on their own gates) leave ONE engineering row pending.
-        self.assertIn(b"7 engineering (6 landed, 1 pending)", result.stdout)
+        # Deliberate re-baseline with the p7-macos-universal2-ci unit
+        # (D229): ALL SEVEN engineering rows are landed (ci-artifacts-
+        # per-push + linux-native on p7-ci-artifacts, cdda-user-supply,
+        # steamdeck-default, flatpak-manifest, windows-installer and
+        # macos-universal2-ci on their own gates) — zero pending, so
+        # the phase's remaining work is the close itself.
+        self.assertIn(b"7 engineering (7 landed, 0 pending)", result.stdout)
         self.assertIn(
             b"landed: cdda-user-supply (gate p7-cdda-user-supply),"
             b" ci-artifacts-per-push (gate p7-ci-artifacts),"
             b" flatpak-manifest (gate p7-flatpak-manifest),"
             b" linux-native (gate p7-ci-artifacts),"
+            b" macos-universal2-ci (gate p7-macos-universal2-ci),"
             b" steamdeck-default (gate p7-steamdeck-default),"
             b" windows-installer (gate p7-windows-installer)",
             result.stdout,
@@ -582,19 +610,22 @@ class PortsMapCheckerTests(unittest.TestCase):
     # ---- the gate join + manifest wiring ---------------------------------
 
     def test_landed_gate_not_defined_fails(self) -> None:
-        doc = land_macos(self.honest_doc(), "p7-macos-universal2-ci")
-        result = self.run_checker(doc, manifest_text())
+        # The honest doc lands macos-universal2-ci on
+        # p7-macos-universal2-ci; the fixture manifest lists that
+        # gate in the P7 phase list but defines NO [[gate]] block
+        # for it (every other landed row's gate stays defined).
+        default_blocks = manifest_text().splitlines()
+        block_start = default_blocks.index('id = "p7-macos-universal2-ci"') - 1
+        manifest = "\n".join(default_blocks[:block_start]) + "\n"
+        result = self.run_checker(self.honest_doc(), manifest)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"no [[gate]] with that id is defined", result.stderr)
+        self.assertIn(b"macos-universal2-ci", result.stderr)
 
     def test_landed_gate_not_in_phase_list_fails(self) -> None:
-        doc = land_macos(self.honest_doc(), "p7-macos-universal2-ci")
-        # The honest doc already lands ci-artifacts-per-push +
-        # linux-native on p7-ci-artifacts, cdda-user-supply,
-        # steamdeck-default, flatpak-manifest and windows-installer
-        # on their own gates, so the fixture wires ALL SIX in
-        # (defined + listed) to reach the macos-specific failure:
-        # p7-macos-universal2-ci is defined but NOT in the list.
+        # The honest doc lands macos-universal2-ci on
+        # p7-macos-universal2-ci; the fixture manifest defines that
+        # gate block but leaves it OUT of the P7 required_gates list.
         manifest = manifest_text(
             p7_gates=[
                 GATE_ID,
@@ -604,56 +635,11 @@ class PortsMapCheckerTests(unittest.TestCase):
                 "p7-flatpak-manifest",
                 "p7-windows-installer",
             ],
-            gate_blocks=[
-                {
-                    "id": "p7-macos-universal2-ci",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": [DOC_RELATIVE],
-                },
-                {
-                    "id": "p7-ci-artifacts",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": [".github/workflows/ci.yml"],
-                },
-                {
-                    "id": "p7-cdda-user-supply",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["engine/bedlam-shell/src/cdda.rs"],
-                },
-                {
-                    "id": "p7-steamdeck-default",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["engine/bedlam-shell/src/platform.rs"],
-                },
-                {
-                    "id": "p7-flatpak-manifest",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": [
-                        "packaging/dev.roguefort.bedlam.yml",
-                    ],
-                },
-                {
-                    "id": "p7-windows-installer",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["packaging/bedlam-shell.nsi"],
-                },
-                {
-                    "id": GATE_ID,
-                    "commands": [
-                        ["/usr/bin/python3", "tools/check-p7-ports-map.py"]
-                    ],
-                    "tracked_paths": [
-                        DOC_RELATIVE,
-                        "tools/check-p7-ports-map.py",
-                        "tools/test-p7-ports-map.py",
-                        "docs/required-gates.toml",
-                    ],
-                },
-            ],
         )
-        result = self.run_checker(doc, manifest)
+        result = self.run_checker(self.honest_doc(), manifest)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"not in the P7 required_gates list", result.stderr)
+        self.assertIn(b"macos-universal2-ci", result.stderr)
 
     def test_scaffold_not_first_fails(self) -> None:
         manifest = manifest_text(p7_gates=["some-other-gate", GATE_ID])
@@ -718,79 +704,28 @@ class PortsMapCheckerTests(unittest.TestCase):
     # ---- phase-close consistency -----------------------------------------
 
     def test_premature_phase_flip_fails(self) -> None:
+        # Since D229 the honest doc lands ALL SEVEN engineering rows,
+        # so a green P7 would be legal against it; the fixture un-lands
+        # the macos-universal2-ci row to make the premature flip loud
+        # again (one not-landed engineering deliverable + status green).
+        doc = unland_macos(self.honest_doc())
         manifest = manifest_text(p7_status="green")
-        result = self.run_checker(self.honest_doc(), manifest)
+        result = self.run_checker(doc, manifest)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"status is green but", result.stderr)
         self.assertIn(b"engineering", result.stderr)
+        self.assertIn(b"macos-universal2-ci", result.stderr)
 
     # ---- the forward shape is legal ---------------------------------------
 
-    def test_landed_deliverable_with_wired_gate_passes(self) -> None:
-        doc = land_macos(self.honest_doc(), "p7-macos-universal2-ci")
-        # The honest doc already lands six rows (two on
-        # p7-ci-artifacts, cdda-user-supply, steamdeck-default,
-        # flatpak-manifest and windows-installer on their own
-        # gates); the fixture wires all seven gates so the flipped
-        # macos row reaches its own proving gate: 7 landed,
-        # 0 pending.
-        manifest = manifest_text(
-            p7_gates=[
-                GATE_ID,
-                "p7-ci-artifacts",
-                "p7-cdda-user-supply",
-                "p7-steamdeck-default",
-                "p7-flatpak-manifest",
-                "p7-windows-installer",
-                "p7-macos-universal2-ci",
-            ],
-            gate_blocks=[
-                {
-                    "id": GATE_ID,
-                    "commands": [
-                        ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
-                        ["/usr/bin/python3", "tools/test-p7-ports-map.py"],
-                    ],
-                    "tracked_paths": [
-                        DOC_RELATIVE,
-                        "tools/check-p7-ports-map.py",
-                        "tools/test-p7-ports-map.py",
-                        "docs/required-gates.toml",
-                    ],
-                },
-                {
-                    "id": "p7-ci-artifacts",
-                    "commands": [["/usr/bin/python3", "tools/check-p7-ci-artifacts.py"]],
-                    "tracked_paths": [".github/workflows/ci.yml"],
-                },
-                {
-                    "id": "p7-cdda-user-supply",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["engine/bedlam-shell/src/cdda.rs"],
-                },
-                {
-                    "id": "p7-steamdeck-default",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["engine/bedlam-shell/src/platform.rs"],
-                },
-                {
-                    "id": "p7-flatpak-manifest",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["docs/P7-PORTS.md"],
-                },
-                {
-                    "id": "p7-windows-installer",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["docs/P7-PORTS.md"],
-                },
-                {
-                    "id": "p7-macos-universal2-ci",
-                    "commands": [["/usr/bin/true"]],
-                    "tracked_paths": ["docs/P7-PORTS.md"],
-                },
-            ],
-        )
-        result = self.run_checker(doc, manifest)
+    def test_green_phase_shape_passes(self) -> None:
+        # Since D229 the honest doc lands all seven engineering rows
+        # on their proving gates, so the forward shape P7 grows into
+        # is the PHASE CLOSE itself: the same fully-wired manifest
+        # with P7 status flipped green passes R6 (every engineering
+        # deliverable landed, nothing premature about it).
+        manifest = manifest_text(p7_status="green")
+        result = self.run_checker(self.honest_doc(), manifest)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"7 landed, 0 pending", result.stdout)
 

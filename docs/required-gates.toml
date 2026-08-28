@@ -38,7 +38,7 @@ required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-
 [[phase]]
 id = "P7"
 status = "pending"
-required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest", "p7-windows-installer"]
+required_gates = ["p7-ports-scaffold", "p7-ci-artifacts", "p7-cdda-user-supply", "p7-steamdeck-default", "p7-flatpak-manifest", "p7-windows-installer", "p7-macos-universal2-ci"]
 
 [[gate]]
 id = "trigger-address"
@@ -1332,3 +1332,42 @@ commands = [
   ["/usr/bin/python3", "tools/test-p7-windows-installer.py"],
 ]
 tracked_paths = ["packaging/bedlam-shell.nsi", "packaging/windows-installer-README.txt", ".github/workflows/ci.yml", "tools/check-p7-windows-installer.py", "tools/test-p7-windows-installer.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]
+
+# p7-macos-universal2-ci — the SEVENTH P7 engineering deliverable
+# per PLAN §6 "macOS universal2 through automated CI" (docs/P7-PORTS.md
+# §2 row macos-universal2-ci, flipped landed with this same commit per
+# the D221 R2 rule; decision D229): the committed UNIVERSAL2 macOS CI
+# JOB DEFINITION (.github/workflows/macos-universal2.yml) — the
+# scheduled macos-universal2 job builds the engine for BOTH slices
+# (cargo build --release --locked -p bedlam-shell --target
+# aarch64-apple-darwin + --target x86_64-apple-darwin, deliberately
+# not --offline — no vendored set is committed) and joins the two
+# binaries into ONE universal Mach-O with lipo -create (the
+# universal2 deliverable), uploaded as bedlam-shell-macos-universal2
+# via actions/upload-artifact@v4 with if-no-files-found: error +
+# 14-day retention — ENGINE BINARY ONLY, UNSIGNED (the signing-keys
+# exclusion; denylist enforced across the workflow, comments
+# included; the corpus token appears nowhere at all). The CADENCE is
+# exactly PLAN §3's posture — "automated scheduled macOS CI when a
+# runner is available ... goldens never run on macOS CI": a weekly
+# off-peak cron + workflow_dispatch and NO push/pull_request
+# trigger, so no push is ever gated on a macOS runner existing (the
+# macos-runner-availability exclusion made mechanical; the per-push
+# artifact surface stays the Linux + Windows ci.yml matrix), and no
+# test/golden/diffharness command rides along (the job builds,
+# joins, uploads). The runner itself is EXTERNAL: the gate grades
+# the committed definition hermetically and offline —
+# check-p7-macos-universal2-ci.py parses the workflow with the
+# stdlib-only YAML-subset reader (the D222 family) and proves every
+# rule above; command 2 re-runs the registry checker (the flip +
+# gate join); command 3 is the checker's fail-closed hermetic suite.
+# No corpus key, no writable; no network, no device, no display.
+[[gate]]
+id = "p7-macos-universal2-ci"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p7-macos-universal2-ci.py"],
+  ["/usr/bin/python3", "tools/check-p7-ports-map.py"],
+  ["/usr/bin/python3", "tools/test-p7-macos-universal2-ci.py"],
+]
+tracked_paths = [".github/workflows/macos-universal2.yml", "tools/check-p7-macos-universal2-ci.py", "tools/test-p7-macos-universal2-ci.py", "docs/P7-PORTS.md", "docs/required-gates.toml"]

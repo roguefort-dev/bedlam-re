@@ -9650,3 +9650,99 @@ behaved exactly as designed (tools/test-nudge-queue.sh and
 tools/test-automation-failure-watchdog.sh both PASS at this
 commit; strict parser rc=0 before AND after the queue note;
 MANIFEST.sha256 clean).
+
+## D229 — 2026-08-28: P7 `p7-macos-universal2-ci` — the SEVENTH P7 ENGINEERING deliverable (PLAN §6 "macOS universal2 through automated CI" + the P7-PORTS §2 row macos-universal2-ci): the committed scheduled universal2 macOS CI job definition, graded hermetically over the committed definition (the D222-family stdlib YAML-subset checker + fail-closed suite with the scheduled-cadence/universal2-join/no-test-boundary rules), with the registry row flipped landed in the SAME commit naming the new SEVENTH P7 required gate (the D221 R2 rule) — the LAST engineering row, leaving only the phase close
+
+CONTEXT: D221 landed the contract with the macos-universal2-ci row
+pending; D222-D227 landed the other six engineering rows. BOUNDS
+fixed by the queue item: workflow + checker work only, no engine
+change, controls green before AND after. Two plan sentences bind
+the design: PLAN §6 P7 "macOS universal2 through automated CI" and
+PLAN §3's posture sentence "automated scheduled macOS CI when a
+runner is available. Runner availability is external and does not
+block other technical gates; goldens never run on macOS CI" — the
+registry's macos-runner-availability exclusion row records the
+second one, so the engineering question is what a job definition
+that "runs when a runner exists" IS when no runner may ever exist.
+
+DECISION: (a) THE SHAPE — a SEPARATE scheduled workflow
+(.github/workflows/macos-universal2.yml), NOT a ci.yml leg: the
+per-push ci.yml matrix stays Linux + Windows (the landed
+p7-ci-artifacts surface), and the macOS job carries a weekly
+off-peak off-round cron ("41 4 * * 1", the frame-pacing.yml
+discipline) + workflow_dispatch and NO push/pull_request trigger.
+That absence IS the "when a runner is available" posture made
+mechanical: no push is ever gated on a macOS runner existing
+(runner availability stays external, never blocking), a hosted
+runner that does exist exercises the job on its weekly cadence,
+and a manual dispatch verifies it the moment an owner provides a
+runner. Weekly mirrors the plan's own cost posture for the
+priciest hosted leg (macOS minutes; the plan pins per-push
+artifacts to Linux + Windows). (b) THE JOB — runs-on macos-latest;
+dtolnay/rust-toolchain@stable with BOTH targets
+(aarch64-apple-darwin,x86_64-apple-darwin); the two reproducible
+slice builds (cargo build --release --locked -p bedlam-shell
+--target aarch64-apple-darwin + --target x86_64-apple-darwin,
+deliberately not --offline — no vendored set is committed, the
+D225/D227 posture); the UNIVERSAL2 JOIN (lipo -create over
+exactly the two built binaries into staging/bedlam-shell — ONE
+Mach-O carrying both architectures); the strict bounded upload
+(actions/upload-artifact@v4, name bedlam-shell-macos-universal2,
+path staging/bedlam-shell, if-no-files-found: error,
+retention-days 14 — the D222 per-run-artifact posture).
+UNSIGNED by design (the signing-keys exclusion; the family's
+8-token denylist enforced across the file, comments included) and
+the corpus token appears NOWHERE in the workflow at all (the
+checker enforces its absence outright — engine binary only, the
+user supplies their own install at run time). NO TEST COMMAND
+rides along: PLAN §3's "goldens never run on macOS CI" gets
+mechanical teeth (cargo test / --lib / diffharness / goldens are
+refused in every run step; the job builds, joins, uploads).
+Least privilege: top-level permissions: contents: read. THE
+RUNNER IS EXTERNAL: the first live execution may need ordinary
+CI fixes (that is exactly the exclusion's content); the gate
+grades the committed definition only. (c) THE GATE
+(p7-macos-universal2-ci, the SEVENTH P7 required_gates entry
+behind the scaffold, wired in the SAME commit): hermetic +
+offline — tools/check-p7-macos-universal2-ci.py parses the
+workflow with the D222-family stdlib-only YAML-subset reader (the
+file that ships is the file that is graded) and proves every rule
+above: the scheduled cadence (cron with exactly 5 non-empty
+fields + workflow_dispatch present; push/pull_request ABSENT with
+the posture in the error), the macos-universal2 job on a
+macos-* runner label, the both-targets toolchain, the two exact
+--release --locked -p bedlam-shell --target builds, the lipo
+-create join consuming exactly the two built binaries at the
+pinned output, the strict bounded upload, the no-test boundary,
+least privilege, and the denylists. Command 2 = check-p7-ports-
+map (the registry flip + gate join); command 3 = the checker's
+fail-closed hermetic suite (tools/test-p7-macos-universal2-ci.py:
+35 tests — real-repo + copy + minimal pass pins, the parse
+disciplines, the seven cadence tamperers incl. a push trigger
+ADDED being itself a failure, the eight universal2 job tamperers
+(builds, toolchain, lipo, runner label, job id), the six upload
+tamperers, the two no-test-boundary injections, and the three
+denylist injections). No corpus key, no writable, no network, no
+device, no display. The suite evolution: test-p7-ports-map.py
+re-baselined to the new honest state exactly as D222-D227 did
+(the honest doc now lands ALL SEVEN rows — the flip fixtures
+un-land the macos row for the premature-flip test; the default
+fixture manifest wires the seventh gate; the real-repo pin reads
+7 landed / 0 pending; the forward shape becomes the GREEN PHASE
+itself, legal exactly because every engineering row is landed).
+
+VERIFIED first-hand: the checker green over the real repo (the
+summary above); the suite 35/35; check-p7-ports-map OK (7
+engineering, 7 landed, 0 pending) + its suite 29/29 after the
+deliberate re-baseline; test-validate-required-gates 22/22 after
+the manifest edit; check-p7-ci-artifacts + 22/22, check-p7-
+flatpak-manifest + 40/40 and check-p7-windows-installer + 50/50
+still green over the untouched ci.yml; the workflow re-parsed
+under pyyaml as an independent check of the family reader
+(triggers, runs-on, both targets, the lipo block, the upload
+with-block); controls green BEFORE AND AFTER (canonical_dump_gate
+13/13, determinism 4/4, zone_mission_parity 5/5 — ZERO
+canonical-chain movement; check-p6-behavior-catalog OK both
+sides); MANIFEST.sha256 clean before and after every corpus read
+(the gate itself reads only committed definitions — no engine
+change, no Rust file touched, no Ghidra run, no new RE).

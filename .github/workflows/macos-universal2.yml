@@ -1,0 +1,63 @@
+name: macos-universal2
+
+# P7 "macOS universal2 through automated CI" (PLAN §6 P7; §2 row
+# macos-universal2-ci in docs/P7-PORTS.md; proving gate
+# p7-macos-universal2-ci): the committed UNIVERSAL2 JOB DEFINITION —
+# a macOS runner builds the engine for BOTH slices
+# (aarch64-apple-darwin + x86_64-apple-darwin) and joins the two
+# binaries into ONE universal Mach-O with lipo -create, uploaded as
+# the macOS artifact bedlam-shell-macos-universal2. The artifact is
+# the ENGINE BINARY ONLY — never the user's original install tree,
+# never assets, never music. UNSIGNED by design: key material is the
+# owner-held exclusion (D221), so nothing here marks or gates on a
+# key.
+#
+# THE CADENCE is SCHEDULED, exactly the posture PLAN §3 records
+# ("automated scheduled macOS CI when a runner is available ... goldens
+# never run on macOS CI"): this workflow carries a weekly off-peak
+# off-round cron plus workflow_dispatch and NO push or pull_request
+# trigger, so no push is ever gated on a macOS runner existing —
+# runner availability stays the external condition the registry
+# records (the macos-runner-availability exclusion), never a blocker,
+# and the per-push artifact surface stays the Linux + Windows ci.yml
+# matrix, which this job's scheduled artifact joins. Goldens and the
+# differential harness NEVER run here (the plan's own macOS
+# boundary): this job builds, joins and uploads — no test command
+# rides along.
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-universal2:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      # not --offline: crates.io is fetched on the runner (no vendored
+      # set is committed); --locked pins the versions. Both slices
+      # build from the same tree — a hosted arm64 macOS runner
+      # cross-builds the x86_64 slice exactly as an Intel runner
+      # cross-builds the arm64 slice.
+      - run: cargo build --release --locked -p bedlam-shell --target aarch64-apple-darwin
+      - run: cargo build --release --locked -p bedlam-shell --target x86_64-apple-darwin
+      - name: join the two slices into the universal2 binary
+        run: |
+          mkdir -p staging
+          lipo -create -output staging/bedlam-shell \
+            target/aarch64-apple-darwin/release/bedlam-shell \
+            target/x86_64-apple-darwin/release/bedlam-shell
+      - name: upload macos universal2 binary (scheduled artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedlam-shell-macos-universal2
+          path: staging/bedlam-shell
+          if-no-files-found: error
+          retention-days: 14

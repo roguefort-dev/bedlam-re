@@ -193,9 +193,9 @@ note = "LANDED with p7-windows-installer: packaging/bedlam-shell.nsi — the com
 id = "macos-universal2-ci"
 kind = "engineering"
 plan_anchor = "macOS universal2 through automated CI"
-status = "pending"
-gate = ""
-note = "The committed universal2 (aarch64 + x86_64) CI job definition that runs when a runner exists; the runner itself is the macos-runner-availability exclusion."
+status = "landed"
+gate = "p7-macos-universal2-ci"
+note = "LANDED with p7-macos-universal2-ci: .github/workflows/macos-universal2.yml — the committed universal2 (aarch64 + x86_64) CI job definition (D229). The scheduled macos-universal2 job builds the engine for BOTH slices (cargo build --release --locked -p bedlam-shell --target aarch64-apple-darwin + --target x86_64-apple-darwin, after dtolnay/rust-toolchain@stable installs both targets) and joins the two into ONE universal binary with lipo -create, uploaded as bedlam-shell-macos-universal2 (actions/upload-artifact@v4, if-no-files-found: error, 14-day retention) — engine binary only, unsigned, the corpus token absent from the workflow entirely. The CADENCE is PLAN §3's own posture ('automated scheduled macOS CI when a runner is available ... goldens never run on macOS CI'): weekly off-peak cron + workflow_dispatch, NO push/pull_request trigger, so no push is ever gated on a macOS runner existing, and no test/golden/diffharness command rides along (the job builds, joins, uploads). The runner itself is the macos-runner-availability exclusion: the gate grades the committed definition hermetically (tools/check-p7-macos-universal2-ci.py, offline), never a live macOS run."
 
 [[deliverable]]
 id = "ci-artifacts-per-push"
@@ -481,6 +481,35 @@ registry row `windows-installer` flipped `landed` in the same
 commit (R2). Authenticode stays the `signing-keys` exclusion: the
 installer is UNSIGNED by design and the denylist is enforced
 across script + README + job, comments included.
+
+**Landed since (unit p7-macos-universal2-ci, D229):** the SEVENTH
+P7 gate `p7-macos-universal2-ci` proves the macOS deliverable over
+the committed job definition — `tools/check-p7-macos-universal2-ci.py`
+parses `.github/workflows/macos-universal2.yml` offline with the
+D222-family stdlib YAML-subset reader and pins the SCHEDULED CADENCE
+(a weekly off-peak cron + `workflow_dispatch`, and NO
+push/pull_request trigger — PLAN §3's "automated scheduled macOS CI
+when a runner is available" made mechanical: no push is ever gated
+on a macOS runner existing; the per-push artifact surface stays the
+Linux + Windows ci.yml matrix), the `macos-universal2` job on a
+macOS runner label, the BOTH-slice build
+(`dtolnay/rust-toolchain@stable` with both targets, then
+`cargo build --release --locked -p bedlam-shell --target
+aarch64-apple-darwin` + `--target x86_64-apple-darwin`), the
+`lipo -create` universal2 join over exactly the two built binaries
+(into `staging/bedlam-shell`), the strict bounded upload
+(`bedlam-shell-macos-universal2`, `if-no-files-found: error`,
+14-day retention), the NO-TEST boundary (goldens never run on
+macOS CI — the job builds, joins, uploads; `cargo test`/`--lib`/
+`diffharness`/`goldens` are refused in every run step), least
+privilege (`permissions: contents: read`), and the denylists
+(the 8 signing tokens + the corpus token absent, comments
+included). The registry row `macos-universal2-ci` flipped
+`landed` in the same commit (R2). The runner itself stays the
+`macos-runner-availability` exclusion: the gate grades the
+committed definition hermetically, never a live macOS run — which
+is the last engineering row, so the phase's remaining work is the
+close itself (the R6 survey + status flip).
 
 ## 7. P7 acceptance surface (pointer, not re-statement)
 
