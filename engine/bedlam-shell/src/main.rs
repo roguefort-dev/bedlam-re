@@ -21,9 +21,14 @@
 //!   P6 QoL volume mixers' starting levels (PLAN §6 "QoL: ...
 //!   volume mixers"; a platform per-bus selection, default 100 =
 //!   the shipped mix exactly; PageUp/PageDown and
-//!   BracketRight/BracketLeft adjust at runtime).
+//!   BracketRight/BracketLeft adjust at runtime). `--save-slot N`
+//!   selects the P6 QoL save slot of the original's five (PLAN §6
+//!   "QoL: ... save slots + metadata + opt-in autosave"; D213;
+//!   default 1) and `--autosave` OPTS IN to the autosave policy —
+//!   never the default: the shipped game never autosaves
+//!   (RE-EXW-SAVE).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -32,6 +37,7 @@ use std::process::ExitCode;
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
+use bedlam_shell::save::{AutosavePolicy, SaveSlotId};
 use bedlam_shell::window::{run_window, Vsync, WindowMode, WindowOptions};
 
 const DEFAULT_GFX: &str = "game-data/BEDLAM";
@@ -45,6 +51,8 @@ fn main() -> ExitCode {
     let mut borderless = false;
     let mut music: Option<u8> = None;
     let mut sfx: Option<u8> = None;
+    let mut save_slot: Option<SaveSlotId> = None;
+    let mut autosave = false;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -68,6 +76,20 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             },
+            "--save-slot" => match args.next().and_then(|v| v.parse::<u8>().ok()) {
+                Some(n) => match SaveSlotId::new(n.wrapping_sub(1)) {
+                    Some(slot) => save_slot = Some(slot),
+                    None => {
+                        eprintln!("bedlam-shell: --save-slot needs a slot 1..=5");
+                        return ExitCode::from(2);
+                    }
+                },
+                None => {
+                    eprintln!("bedlam-shell: --save-slot needs a slot 1..=5");
+                    return ExitCode::from(2);
+                }
+            },
+            "--autosave" => autosave = true,
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -76,7 +98,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -110,6 +132,16 @@ fn main() -> ExitCode {
                 println!(
                     "             shipped; BracketRight/BracketLeft adjust; ignored headless)"
                 );
+                println!(
+                    "  --save-slot N: window host targets save slot N of the original five (P6"
+                );
+                println!("                 QoL save slots, 1..=5; default 1; ignored headless)");
+                println!(
+                    "  --autosave: OPT IN to autosaving the campaign to the selected slot at the"
+                );
+                println!("              original's own save opportunities (single-player campaign");
+                println!("              boundaries); NEVER the default - the shipped game never");
+                println!("              autosaves; ignored headless)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -187,6 +219,22 @@ fn main() -> ExitCode {
                 .volume
                 .with_sfx(bedlam_shell::audio::VolumeLevel::new(pct));
         }
+        // P6 QoL save slots + opt-in autosave (PLAN §6 "save slots +
+        // metadata + opt-in autosave"; D213): PLATFORM knobs (D200
+        // layering — outside ModeConfig) over the original's own
+        // five-slot domain (RE-EXW-SAVE). The selection targets a
+        // slot; `--autosave` OPTS IN to the policy — NEVER the
+        // default (the shipped game never autosaves). Both are
+        // platform surface only: nothing here reaches the sim config
+        // or any hash, and no write ships in this unit (the new
+        // versioned save format writer is future engine work,
+        // config-not-state per the D201 posture).
+        if let Some(slot) = save_slot {
+            opts.save_slot = slot;
+        }
+        if autosave {
+            opts.autosave = AutosavePolicy::On(opts.save_slot);
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
         if uncapped {
@@ -207,6 +255,16 @@ fn main() -> ExitCode {
             // to scale — and CRITICALLY the engine's mixed stream
             // (the determinism gate) must never see the knobs.
             eprintln!("bedlam-shell: --music/--sfx are window-host options; ignored headless");
+        }
+        if save_slot.is_some() || autosave {
+            // Same posture for the save surface: the headless path is
+            // the hashed-trajectory surface and owns no save screen —
+            // and the policy NEVER writes anything by itself (D213:
+            // the surface is inert until the versioned save format
+            // writer lands).
+            eprintln!(
+                "bedlam-shell: --save-slot/--autosave are window-host options; ignored headless"
+            );
         }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {

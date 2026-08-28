@@ -7985,3 +7985,97 @@ fmt + clippy clean on bedlam-shell (the one `let mut opts` test
 warning pre-exists from D210, untouched); workspace cargo check
 clean; MANIFEST clean before AND after every corpus read; no
 Ghidra run.
+
+## D213 — 2026-08-28: P6/QoL `p6-save-slots` — the save-slot selection + metadata presentation + OPT-IN autosave policy (platform knobs OUT of ModeConfig over the engine's import-only save seam; the surface lands INERT — no engine write seam ships, the versioned save format writer stays future config-not-state work), wired as the TENTH P6 required gate
+
+CONTEXT: PLAN §6 P6 QoL names the list "window modes, vsync
+control, volume mixers, save slots + metadata + opt-in autosave".
+Vsync landed as D208, window modes as D210, volume mixers as D212;
+this unit lands the SAVE SLOTS sentence. RE FIRST: the original
+save surface is re-anchored in a committed artifact BEFORE the
+implementation (docs/RE-EXW-SAVE.md, 63d58ac) — mostly NEW decode,
+objdump-only from the committed exw-text-objdump.txt: the EXW
+persistence is REGISTRY-BACKED (values "SAVEGAME" 0x384 = the whole
+5x180 image, "HISCORES" 0x78; FUN_00446f4f = loader + first-run
+five-EMPTY init 0x44705d..0x44706c; the "<dir>SAVED.BDL<name>" path
+built at 0x44694c..0x4469dd is passed to NOTHING — the §7j.56
+CONFIG.BDL leftover pattern repeating save-side), the WRITER side
+is FUN_004446938 (the save screen: the campaign-shell SAVE button
+gate at 0x43eee1..0x43ef3e — single-player 0x4edb88==0, click,
+armed flag 0x4eae54, cursor region — then the slot write arm whose
+grammar mirrors the §7j.70 restore read instruction-for-instruction
+and the whole-image commit 0x446e98), and the exhaustive 0x44ed98
+caller census shows EXACTLY TWO SAVEGAME writers (the save screen
+commit + the first-run init), BOTH user-initiated — THE SHIPPED
+GAME NEVER AUTOSAVES. The slot metadata text is FUN_004473cd: " " +
+zone letter ('A'+zone-1) + one digit '1'..'5' per set mask bit.
+
+DECISIONS:
+
+1. The slot selection, the metadata presentation and the autosave
+   POLICY are PLATFORM KNOBS OUT of `ModeConfig` (D200 layering)
+   with NO purist arbitration: they are QoL presentation/platform
+   policy over the engine's ALREADY-LANDED import-only save seam
+   (bedlam-game save.rs, the §7j.70 grammar — READ side
+   byte-faithful, unchanged in this unit). bedlam-shell/src/save.rs:
+   `SaveSlotId` (the original's own FIVE-slot domain, 0-based like
+   the restore's dispatch; default FIRST = a MODERN platform
+   default — the original has no persistent selection, its screens
+   pick by click), `SaveSlotMetadata`/`SaveSlotRow`/
+   `summarize_saved_bdl` (the five-row save/load list over the
+   engine import; empty slots are ROWS, every broken image stays a
+   loud GameError), `save_level_text`/`slot_menu_line`
+   (byte-faithful FUN_004473cd + the menu-3 line construction:
+   name space-padded to 8 + the level text; "EMPTY" for empty
+   rows) and `AutosavePolicy` — carried as `WindowOptions::
+   save_slot` + `WindowOptions::autosave`; the binary's
+   `--save-slot N` (1..=5) selects the slot and `--autosave` opts
+   in (both noted + ignored headless, the --fullscreen posture).
+2. AUTOSAVE IS NEVER THE DEFAULT (RE-EXW-SAVE sec 4: the shipped
+   game never autosaves): `AutosavePolicy::default()` = Off, pinned
+   at every layer (the policy type, WindowOptions::new, and
+   `autosave_is_never_the_default`). The OPT-IN's save-opportunity
+   gate mirrors the original's own save gating (sec 3):
+   `should_autosave(single_player, at_campaign_boundary)` — true
+   only for On AND single-player AND a campaign boundary (the
+   armed between-missions save button); mid-mission and the
+   coop/h2h variants never save, exactly like the original.
+3. NO ENGINE WRITE SEAM SHIPS IN THIS UNIT — the surface lands
+   INERT (the D201 seam precedent): the knobs select and describe,
+   they do not write. The new versioned save FORMAT writer (PLAN
+   §6 P5: new saves use it) is future engine work and lands
+   CONFIG-NOT-STATE when it does (the D201 posture: a restore
+   ADOPTS the saved session — the title-menu shape — never a
+   mid-run mutation; FORMAT_VERSION and every P5 hash pin
+   byte-stable; the original-format SAVED.BDL stays import-only —
+   no writer is owed or allowed for parity). Consequently the sim,
+   the ModeConfig and every hash are untouched by construction:
+   no bedlam-game/bedlam-core file changes, and the knobs never
+   enter the derived SimConfig (pinned by
+   `save_surface_never_touches_the_sim_config`: bit-identical
+   host_sim_config under FIRST/Off and LAST/On(LAST)).
+4. GATE: `p6-save-slots` wired as the TENTH P6 required gate —
+   command = bedlam-shell --lib, --release --locked --offline,
+   hermetic. Test surface = the ONE selection + the ONE policy (the
+   slot domain, the byte-faithful level text, the menu line, the
+   five-row summary incl. the loud rejections, the metadata sweep
+   over the whole modeled stage/mask space, the never-default pin,
+   the original's own gate, the sim-config invariance), never the
+   feature cross-product; the catalog stays EMPTY (a plan-named QoL
+   unit is not a catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 86/0 (+11:
+10 save — the five-slot domain, the EXW-faithful level text (a
+wrong worked example in the first artifact draft was CAUGHT by
+this test and corrected before push: mask 0b10011 = "125" not
+"135"), the menu-line padding, the EMPTY row, the five-row
+summary + metadata mapping + loud rejections, the full-domain
+metadata sweep, the never-default pin, the original's own
+autosave gate; 1 window — the sim-config invariance; was 75/0 +
+1 pre-existing ignored); the binary --help/--save-slot/--autosave
+wiring checked first-hand (help text, the 1..=5 domain rejection,
+the headless ignore note); bedlam-game --lib untouched and green;
+fmt + clippy clean on bedlam-shell (the one pre-existing D210 test
+warning untouched); MANIFEST clean before AND after every corpus
+read (the RE probe only; no corpus read in the gate); no Ghidra
+run.

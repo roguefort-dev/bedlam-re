@@ -25,6 +25,12 @@
 //!   into it from the GameHost audio bus. Device-gated exactly like
 //!   the window: never built on the headless path; the mixer stays
 //!   hermetic and the mixed stream stays un-hashed (D17 bucket b).
+//! - [`save`]: the P6 QoL save-slot platform surface (D213): the
+//!   five-slot selection, the EXW-faithful slot metadata presentation
+//!   and the OPT-IN autosave policy — platform knobs OUT of
+//!   ModeConfig (D200), grounded in docs/RE-EXW-SAVE.md over the
+//!   engine's import-only save seam. Inert by design until the new
+//!   versioned save format writer lands (config-not-state, D201).
 //! - [`chain`]: the D31-D37 asset wiring - which corpus files each
 //!   scene needs and the staging calls that hand them to
 //!   [`bedlam_game::GameHost`] (the host never loads by itself).
@@ -44,6 +50,7 @@ pub mod chain;
 pub mod clock;
 pub mod headless;
 pub mod input;
+pub mod save;
 pub mod window;
 
 pub use audio::{
@@ -58,5 +65,9 @@ pub use headless::{
 };
 pub use input::{
     map_mouse_button, map_winit_key, Bindings, ControlScheme, GamepadButton, ShellInput, ShellKey,
+};
+pub use save::{
+    save_level_text, summarize_saved_bdl, AutosavePolicy, SaveSlotId, SaveSlotMetadata,
+    SaveSlotRow, EMPTY_SLOT_LINE,
 };
 pub use window::{run_window, ShellError, WindowOptions};

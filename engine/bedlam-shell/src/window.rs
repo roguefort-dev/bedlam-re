@@ -132,6 +132,7 @@ use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
 use crate::input::{map_mouse_button, ControlScheme, ShellInput};
+use crate::save::{AutosavePolicy, SaveSlotId};
 
 /// Shell-level failures (window/surface/GPU init + propagated game
 /// staging errors). The window loop cannot return through winit
@@ -452,6 +453,33 @@ pub struct WindowOptions {
     /// PageUp/PageDown and BracketRight/BracketLeft adjust at
     /// runtime.
     pub volume: VolumeMixers,
+    /// The platform-level save-slot selection (P6 QoL save slots,
+    /// D213; PLAN §6 "save slots + metadata + opt-in autosave";
+    /// D200 layering — a PLATFORM knob, OUT of `ModeConfig`, with NO
+    /// purist arbitration): the slot of the original's own FIVE-slot
+    /// domain (RE-EXW-SAVE sec 1) that the platform's save surface
+    /// targets. Default = [`SaveSlotId::FIRST`] — a MODERN platform
+    /// default (the original has no persistent selection: its
+    /// save/load screens pick the slot by click, per screen). The
+    /// selection selects nothing in the host — it never reaches the
+    /// sim config or any hash; the binary's `--save-slot` selects
+    /// the starting slot.
+    pub save_slot: SaveSlotId,
+    /// The platform-level autosave policy (P6 QoL; D213; RE-EXW-SAVE
+    /// sec 4 — the exhaustive EXW writer census: the ONLY savegame
+    /// writers are the save screen's slot commit and the first-run
+    /// five-EMPTY init, BOTH user-initiated — THE SHIPPED GAME NEVER
+    /// AUTOSAVES). Default = [`AutosavePolicy::Off`], the shipped
+    /// posture exactly; [`AutosavePolicy::On`] is the modern OPT-IN
+    /// whose save opportunities mirror the original's own gating
+    /// (single-player, campaign boundary — never mid-mission). The
+    /// policy is presentation/platform policy ONLY: the surface
+    /// lands INERT (the D201 seam posture — no engine write seam
+    /// ships in this unit; the new versioned save format writer is
+    /// future engine work, config-not-state), so nothing here can
+    /// reach the sim, a hash, or any file. The binary's `--autosave`
+    /// opts in.
+    pub autosave: AutosavePolicy,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -477,6 +505,8 @@ impl WindowOptions {
             vsync: Vsync::default(),
             window_mode: WindowMode::default(),
             volume: VolumeMixers::SHIPPED,
+            save_slot: SaveSlotId::FIRST,
+            autosave: AutosavePolicy::Off,
             auto_exit_after: None,
         }
     }
@@ -2206,6 +2236,33 @@ mod window_mode_tests {
             "the volume selection never reaches the sim config"
         );
         assert_eq!(opts.volume.stream_gain_q8(), 0);
+    }
+
+    #[test]
+    fn save_surface_never_touches_the_sim_config() {
+        // D213: the save-slot selection + the opt-in autosave policy
+        // are PLATFORM knobs OUT of ModeConfig (D200) — the knobs
+        // never enter the derived SimConfig under ANY setting, and
+        // the shipped defaults are the FIRST slot + the OFF policy
+        // (RE-EXW-SAVE sec 4: the shipped game never autosaves).
+        let dir = std::path::PathBuf::from("gfx");
+        let mut opts = WindowOptions::new(&dir);
+        assert!(crate::save::window_save_surface_is_shipped(&opts));
+        let baseline = host_sim_config(&opts);
+        opts.save_slot = SaveSlotId::LAST;
+        opts.autosave = AutosavePolicy::On(SaveSlotId::LAST);
+        assert_eq!(
+            host_sim_config(&opts),
+            baseline,
+            "the save surface never reaches the sim config"
+        );
+        assert_eq!(
+            baseline,
+            SimConfig {
+                mode: opts.mode,
+                ..SimConfig::default()
+            }
+        );
     }
 }
 
