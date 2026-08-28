@@ -3111,7 +3111,14 @@ bytes) + a corpus exact-consumption check
      7j.17's state map (state@+4) holds, **personnel spawn
      directly in state 5 = ESCAPE** — consistent with the
      escape counter objective ([0x4eba0c]++, 5000 pts via
-     FUN_00448b80).
+     FUN_00448b80). **[CORRECTED 2026-08-28 §7j.77/2 — the +4/+6
+     stores were TRANSPOSED in this 2026-08-21 reading: the asm
+     (0x417076 stores 0x4dabe2 = +6 := 5; 0x41707e stores
+     0x4dabe0 = +4 := 1) seeds STATE 1 = IDLE and the DEAD
+     angle seed 5 at +6; +2's 0x32 is the HP word (the
+     FUN_0040dc1b damage lane), not a timer. Personnel spawn
+     IDLE and only ESCAPE via the flee lane — §7j.77 decodes
+     the whole controller.]**
    Every section stamps +0x00 = the 7j.17 state word
    {1,2,3,4,5,6,7}, +0x02 = species/type word {1,3,6},
    +0x24 = 1 (word), +0x06 = hp =
@@ -4901,7 +4908,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | critter seek-acquisition dispatcher | FUN_00415490(idx): dword@+0x10 (dual-purpose: wander heading 0..255 / mode-9 seek direction 0..3) `cmp 3; ja FATAL` → table 0x415480; 4 directional forward-acquisition probes vs the robot bank 0x4c69e4/0xA8 (tight −4..+0xF ahead on the walk axis, |Δ|<0x18 crossing + z; case 3 reads robot y RAW — quirk); hit → target w@+0x7A, mode w@+0xC := 2, anim w@+0x56 := 0; >3 → "Buggered direction in MOFO" 0x457a3c fatal (fade-cancel 0x420100 + print 0x44d2ac + FATAL EXIT 0x44d2da); the mode-9 walk dispatches the same dword via table 0x412ef8 → steppers 0x417f2c/0x417fe8/0x4180c0/0x41813d (y−1/x+1/y+1/x−1), step-OK → move one unit + call FUN_00415490 | §7j.29 |
 | mission extension tags | DGROUP 0x457a57 ".NME" / 0x457a5c ".TRT" / 0x457a64 ".POS" / 0x457a69 ".BDG" — exactly one reference each (0x41648c/0x4170c3/0x41a55d/0x41a5d6 = the four CLOSED loaders §7j.18/§7j.15/§7j.25); 0x457a4c "MOFO\0" = dead tail of the fatal string 0x457a3c, ZERO refs, no ".MOFO" bytes in EXW or EXD, no *.MOFO corpus file — the ".MOFO loader" RETIRED | §7j.29 |
 | suicide-bomb trigger | FUN_00417e2f: nearest robot (FUN_00417c00) < 0x30 px → deactivate + 8× debris k1 + 8× FUN_00424355 rings | §7j.17 |
-| POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18: 4 POIs per record, spawn state 5 ESCAPE); {active@0, state@4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), heading@8, timer@0xA, xyz@0xE/+0x12/+0x16}; escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c | §7j.17/§7j.18 |
+| POI/personnel controller | FUN_00412a98: bank 0x4dabdc stride 0x1E count DAT_0046cbf0 (FUN_00416458 @0x416f6e — the .NME section-8 loader, §7j.18): field map + the WHOLE body decoded §7j.77 [verified] — {active w@+0, HP w@+2 (0x32, the FUN_0040dc1b damage lane), state w@+4 (1 idle/2 settle/3 walk/4 flee/5 ESCAPE/6·7 panic), DEAD seed w@+6 (5), heading w@+8, timer w@+0xA, exit slot w@+0xC, xyz d@+0xE/+0x12/+0x16, draw word d@+0x1A}; spawn state 1 IDLE (the §7j.18 "+4 5" was a transposed store); escape → [0x4eba0c]++, [0x4eba10]=0x32, FUN_00448b80(5000); walker FUN_00415b6c (the quadrant ladder + the ≤4 floor gate); scans FUN_00417c64 (exits) / FUN_00417c00 (robots) | §7j.17/§7j.18/§7j.77 |
 | exit/threat slots | 5 × 0x1C @0x4e662c {active d@+0, PHASE d@+4 (1 descend / 2 landed-OPEN / 3 depart — §7j.19 reread of the 7j.17 "kind"), x/y d@+8/+0xC, altitude d@+0x10, img-group d@+0x14 (7j.27: the animator's per-tick DROPSHIP.BIN frame selector), dwell d@+0x18 — RESET TO 0 BY FUN_00412a98 @0x412b60 on each POI rescue (multi-POI elevators), cleared on escape}; nearest scan FUN_00417c64 (gate phase==2); producer CLOSED §7j.18: FUN_0041fa51 = the EXIT-PAD ACTIVATOR (arg = a 0x4e44f8 .PAD slot index; dedup registry 5×d @0x46cd20; stamps {1, 1, pad.x·0x20+0xF, pad.y·0x20+0xF, 0x400, 0}; sole caller FUN_00433980 case 0x1B @0x43900e (§7j.19); animator FUN_0041fbb1 §7j.19; boot reset MissionShell 0x447a8d | §7j.17/§7j.18/§7j.19/§7j.27 |
 | escape-craft animator | FUN_0041fbb1 (MissionShell @0x448012, per frame): 3 machines over the 0x1C frame {active@+0, phase@+4, x@+8, y@+0xC, alt@+0x10, img-group@+0x14, dwell@+0x18} — the 5 exits + the dropship @0x4e6610 + the per-robot pods @0x4e64c0 (gated [0x46aed4+idx·4]==0, the CLAIMED/no-extract latch: boot-clear GameMain 0x41c408 = the sole EXW writer (memset; D133 — the original FUN_0040e230/FUN_00449c94/FUN_0044a38a/FUN_00408e99 "writers" are readers; EXD twin 0xf929c adds the MP-lobby-pick setter) — the latch ALSO gates the MP respawn @0x40e7a1); dropship landing = extraction sweep (states 3/4 → 5, _DAT_004dc680++, SFX _DAT_004edfe0), depart → _DAT_004dc67c=1 (complete; readers MissionShell 0x4486d5 + FUN_0044425c ×2); pod landing = payout 100·w@+0x94+5000 + state 6 (robot RELEASED) + msg. §7j.27 per-tick write map: phase 1 alt −0x20/(v>>2)·3 + img-group toggles 0↔1; phase 2 alt := (RandA&7)==0 jitter, exits dwell++>0x78, dropship dwell−−, pods ONE TICK then payout; phase 3 alt += (alt>>2)+1, x −= group·4, group ramps 2..5 then oscillates 4↔5, alt>0x200 → active 0 | §7j.19, §7j.27 |
 | dropship deployer | FUN_0041faf0: stamps 0x4e6610 {active 1, phase 1, img-group 0, alt 0x200, x beacon.x<<5, y beacon.y<<5} from beacon 0x4eabb4/0x4eabb6, clears 0x4eabb0/0x4eabb2 (x/y words SURVIVE — renderer 0x4070c0 reads the always-0 z word 0x4eabb8 as a no-op sy nudge); caller MissionShell @0x44832f/0x448375 (countdown 0x4eabb2 == 0 ∨ all robots dead/state-3); beacon armer FUN_004247b5 [§7j.20]; boot reset MissionShell 0x447a7e | §7j.19, §7j.27 |
@@ -11624,3 +11631,187 @@ S7 (ZONEA/M1 hosts S3+S4 only) → no chain movement. The k7 DEATH
 handler (§7j.24) stays the documented unlanded subset (the
 k1/k2/k3 precedent); the 0x69 beam TICK/impact (§7j.50's
 terrain-only 50/100/200 re-key) stays the enemy_tick E-gap.
+
+## 7j.77. THE S8 PERSONNEL/POI BANK — the .NME section-8 loader walk
+made exact + the POI controller FUN_00412a98 whole + the damage lane
+FUN_0040dc1b + the walker FUN_00415b6c + the two scans — the LAST G2
+census class (2026-08-28, worker 0ecf083b claim 1, item
+p5-personnel-poi-s8; objdump-only from the committed
+ghidra-project/exw-critterpoi-loader.txt +
+ghidra-project/exw-text-objdump.txt — no Ghidra run; read-only .NME
+corpus census with MANIFEST.sha256 clean before and after)
+[verified]
+
+Method: the §7j.18 committed decompile of FUN_00416458 (its S8
+block = loader lines 300-328) re-walked against the raw asm
+(0x416fd9..0x417094) + the controller 0x412a98..0x412f21, the
+walker 0x415b6c..0x415ff1, the exit scan 0x417c64..0x417cdd, the
+robot scan 0x417c00..0x417c63, the damage lane 0x40dc1b..0x40dcc3,
+the gate pair FUN_0040cc5e/0x41e859, and the cos/sin readers
+0x41eb65/0x41eb77. **Reading convention (the sar-16 idiom):** the
+Watcom code reads a record word at +2k as `dword@[base+2k−2] >>
+16`; every ">>16" read below is a WORD read at the stated offset.
+
+1. **THE FIELD MAP (0x1E-stride POI bank 0x4dabdc, count
+   DAT_0046cbf0, 0xF00 B memset-0 at loader entry 0x41647d)**
+   [verified, correcting §7j.17 item 3's unnamed +2/+6]:
+   - w@+0x00 ACTIVE (1 present, 0 gone — the escape-complete
+     clears it);
+   - w@+0x02 HP — seeded 0x32 (50) by the loader, DECREMENTED by
+     the ranged-attack applier's POI lane (FUN_0040dc1b
+     `sub [poi+2], dx` @0x40dc2a; ≤0 → death, item 5). This is
+     the "0x32" the §7j.18 gloss read as a timer;
+   - w@+0x04 STATE {1 idle, 2 settle, 3 walk-out, 4 flee-to-exit,
+     5 ESCAPE, 6/7 panic} — seeded 1 (IDLE);
+   - w@+0x06 DEAD SEED 5 — stamped by the loader, read by NOTHING
+     (every controller/animator read in the census is the >>16
+     form = w@+8); a dead stamp like S1's +0x72 timer word;
+   - w@+0x08 HEADING word — three writers: the loader seeds
+     RandA()&7 RAW (0..7); the settle/walk-out/flee aims stamp
+     ((dir+0xF)&0xFF)>>5&7<<5 (the 32-sector quantized octile
+     direction, 0..0xE0); the walker tail copies the draw word's
+     low part (one of {0,0x40,0x80,0xC0}). The cos/sin walk reads
+     THIS word (0x412be9/0x412e60 — NOT +6);
+   - w@+0x0A TIMER — multiplexed per state (idle counter /
+     settle counter / walk budget / escape countdown / panic
+     counter); seeded 0 by the memset;
+   - w@+0x0C EXIT SLOT — the flee-begin stash (0x412afb); read by
+     the state-4 validity re-check and the escape-complete dwell
+     reset; seeded 0 by the memset;
+   - d@+0x0E/+0x12/+0x16 x/y/z — Q13 x/y (0x2000 per tile), Q5 z;
+   - d@+0x1A DRAW word — the walker's sprite quadrant
+     (angle+0x20)&0xC0, copied to w@+8 at the walker tail.
+2. **THE S8 LOADER WALK (FUN_00416458 tail, 0x416f6e..0x417094)**
+   [verified; CORRECTS §7j.18/1's seed list — the 2026-08-21
+   reading SWAPPED the +4/+6 stores]: `DAT_0046cbf0 = 0` @0x416f6e
+   (the POI count reset), then ONE `u16 count + count×8-B record`
+   section (the 8th and last of the §7j.18 schedule); per record,
+   a fixed `do { } while (n < 4)` inner loop spawns exactly FOUR
+   POIs (no difficulty term, no count draw):
+   - draw order (exactly three RandA draws per POI):
+     (a) x@+0xE = ((RandA()&0x1F) + (w2<<5)) · 0x100 — a RANDOM
+     in-tile offset 0..0x1F00 instead of the S3/S5/S6 fixed
+     +0xF00 (Q13: tile·0x2000 + r·0x100);
+     (b) y@+0x12 = ((RandA()&0x1F) + (w3<<5)) · 0x100;
+     (c) z@+0x16 = FUN_0041e411(x>>8, y>>8, w1<<5) — the SAME
+     floor-probe family as S3/S5/S6 (draw-free);
+     (d) heading w@+8 = RandA()&7 (the `xor dh,ah` byte juggle at
+     0x41704a is the Watcom RandA return extraction — value &7);
+   - the stamps: active 1, **state 1 (IDLE — personnel spawn
+   IDLE; the "spawn directly in state 5 = ESCAPE" inference of
+   §7j.18/1 is RETIRED, the stores were transposed)**, hp 0x32,
+   dead +6 seed 5, timer/exit 0 (the memset).
+   - hp: NONE scaling — the POI bank carries NO hp-formula word
+   (no imul site in the block; the 0x32 is a literal) — the ONE
+   .NME section whose hp is not base+(base·m)/27.
+3. **THE CONTROLLER FUN_00412a98** (MissionShell call @0x447fe6;
+   prologue 53 51 52 56 57 55) [verified whole]:
+   - PER-ACTIVE-POI PROLOGUE (every frame): z :=
+     FUN_0041e411(x>>8, y>>8, z) (the z re-settle); exit_idx :=
+     FUN_00417c64(i, &[esp]) — the nearest-exit scan over the
+     five 0x1C exit slots @0x4e662c (skip inactive@+0, octile
+     dist FUN_0041ebf8 on (x−poi.x)>>8/(y−poi.y)>>8 vs
+     slot x@+8/y@+0xC, best-fit, sentinel 0x989680) returning the
+     slot index AND writing the best distance into the caller's
+     [esp] scratch cell;
+   - HEAD DISPATCH (states 1/2/3 only): ONE RandA draw —
+     (RandA()&0xF) ≠ 0 → skip (a 1/16 lane); [esp] ≥ 0x180 (no
+     open exit within 384 octile-px) → skip; exit[exit_idx].
+     PHASE@+4 ≠ 2 (not landed-OPEN, §7j.19) → skip; else
+     FLEE-BEGIN: state := 4, w@+0xC := exit_idx;
+   - STATE 4 fast lane (before the main dispatch): [esp] < 0x10
+     ∧ exit[w@+0xC].PHASE == 2 → ESCAPE-BEGIN: state := 5,
+     timer := −1 (0xFFFF), the drop-in sound FUN_0043a48e
+     (0x4edfe0, 2, x>>8, 0, y>>8);
+   - STATE 5 ESCAPE: timer++; timer ≥ 10 → COMPLETE: active := 0,
+     [0x4eba0c]++ (the escape counter — MissionShell resets it
+     at 0x447933, the HUD tail reads it at 0x448402/0x448ce1),
+     [0x4eba10] := 0x32 (the panic timer — the MissionShell tail
+     0x448386 decrements it while >0, the banner-message lane),
+     exit[w@+0xC].dwell@+0x18 := 0 (the multi-POI elevator
+     reset, §7j.19's reader), the escape sound FUN_0043a48e
+     (0x4edfa8, 3, …), and **FUN_00448b80(0x1388) — the 5000-pt
+     award** (the zone-7 objective/score family);
+   - STATE 4 FLEE body: exit[w@+0xC] inactive OR PHASE ≠ 2 →
+     ABORT (timer := 0, state := 1); else re-aim w@+8 :=
+     sector<<5 at the exit (FUN_00425498 octile dir, the same
+     quantizer as the settle aim), then the walker
+     FUN_00415b6c(i, cos(w@+8)>>6, sin(w@+8)>>6, w@+8) (the
+     cos/sin readers 0x41eb65/0x41eb77 are the [0x46cbd0] table
+     lookups — sin(a) = cos(a−0x40), draw-free), then timer−−;
+     timer < 0 → timer := 0x2710 (10000 — the never-expire
+     sentinel; the flee walk is otherwise unbounded);
+   - STATE 1 IDLE: timer ≤ 10 → timer++ (done); timer > 10:
+     [esp] ≥ 0xC0 (no open exit within 192) → the WALK-OUT gate;
+     else ONE RandA draw, (RandA()&0xF) ≠ 0 → the WALK-OUT gate;
+     hit → SETTLE-BEGIN: state := 2, timer := 0, [esp] :=
+     nearest-robot dist (FUN_00417c00 — the alive-gated +0x7C
+     scan over the 0xA8-stride robot bank, distance written
+     through the ebx out-pointer; the DIST write is transient —
+     nothing reads [esp] again before the next frame's exit scan
+     overwrites it), w@+8 := sector<<5 aimed AT THE NEAREST
+     ROBOT (face the rescuer);
+   - the WALK-OUT gate (state 1 → 3): ONE RandA draw,
+     (RandA()&0xF) ≠ 0 → done; hit → state := 3, timer :=
+     (RandA()&0xF)+10 (the 10..25-frame walk budget), w@+8 :=
+     (RandA()&7)<<5 (a random 8-way heading);
+   - STATE 3 WALK-OUT: timer == 0 → state := 1; else timer−− and
+     the walker FUN_00415b6c(i, cos(w@+8)>>6, sin(w@+8)>>6, w@+8);
+   - STATE 2 SETTLE: timer++; timer > 8 → timer := 0, state := 1
+     (a 9-frame stand-and-face);
+   - STATE 6 PANIC-1: timer++; timer > 5 → state := 7;
+   - STATE 7 PANIC-2: timer := 0 (every frame; inert — the dead
+     POI stays ACTIVE forever, the animator draws the corpse);
+   - per-frame draw budget: states 1/2/3 = 1 draw minimum (the
+     head gate) + the state-1 gates (≤3 more on a transition
+     frame); states 4/5/6/7 = ZERO draws.
+4. **THE WALKER FUN_00415b6c(i, dx, dy, angle)** [verified]:
+   saves z; if the move gate FUN_0040cc5e(i, dx, dy) passes →
+   x += dx, y += dy, draw word := (angle+0x20)&0xC0; else
+   restores z and walks the QUADRANT LADDER on the CURRENT draw
+   word {0: y−0x200 then dx by angle≥0x80 (−x/0xC0 first, else
+   +x/0x40); 0x40: x+0x200 then dy by dx>0x80 (+y/0x80 first,
+   else −y/0); 0x80: y+0x200 then dx by angle≥0x80; 0xC0:
+   x−0x200 then dy by dx>0x80} — each axis attempt gate-tested,
+   first pass applies ±0x200 and rewrites the draw word, all
+   blocked → no move; the tail copies the draw word's low word
+   into w@+8. The gate core FUN_0041e859: floor :=
+   FUN_0041e231(x>>8, y>>8) at the TARGET px; pass iff
+   |floor − z| ≤ 4 (the critter walk_gate's 3 does NOT apply
+   here), and z := floor on pass (the walker's z-restore on the
+   blocked path is defensive — a failed gate never writes z).
+5. **THE DAMAGE LANE FUN_0040dc1b(poi_idx, dmg)** (the
+   ranged-attack applier's POI arm; reached from the critter
+   0x65/0x67/0x68 walker family) [verified]: hp@+2 −= dmg;
+   hp > 0 → done; hp ≤ 0 → DEATH: state := 6, timer := 0, ONE
+   **RandB** draw (0x4029b6 — the second seed pair
+   0x4ede4c/0x4ede4e, §7j.65) picking between two death sounds
+   (FUN_0043a48e at 0x4edfb8/0x4edfbc), then the effect spawn
+   FUN_00420608(x>>8, y>>8, z, …, 0xA, 0, −1) at the corpse.
+   The 6→7→inert tail rides the controller (item 3).
+6. **CORPUS CENSUS (read-only)** [verified]: exactly ELEVEN of
+   the 37 .NME files host S8 records — ZONEE M1-5 (12/12/12/12/
+   13), ZONEF M1-5 (9/9/9/9/19), ZONEG M1 (9) — 125 records →
+   500 staged POIs (4 each), every file consumed byte-exact
+   (orphan 0). The queue prose's "13 missions" is an arithmetic
+   slip (5+5+1 = 11); ZONEE/ZONEF M6/M7 and ZONEG host none
+   beyond M1. ZONEA/M1's S8 count is 0 → **landing S8 staging
+   cannot move ANY canonical chain** (no canonical scenario
+   stages personnel).
+7. ENGINE CONSEQUENCE (landed this unit): stage_critters accepts
+   section 8 → a `poi.rs` bank (PoiRecord: active/hp/state/
+   heading/timer/exit/x/y/z/draw-word) staged with the exact
+   three-draw schedule; the modeled controller subset = the
+   per-frame prologue (z re-settle + the exit scan seam), the
+   states 1/2/3 idle-settle-walk machine with the 1/16 lanes,
+   the walker (free move + the quadrant ladder + the ≤4 gate),
+   the 4-flee/5-escape lane over a host-staged 5-slot exit seam
+   (active/phase/x/y/dwell — the §7j.19 family's controller-read
+   subset; FUN_0041fa51's producer side stays unlanded), the
+   escape award through the score-pending fold (+5000) + the
+   escape counter + the panic cell, and the damage lane's state
+   flip. The RandB sound pick, both SFX, the FUN_00420608 death
+   effect, the MissionShell banner, and the animator (0x405186
+   family — presentation, reads state/heading only) are the
+   documented E-gaps. NOT hashed (the W6 split — the critter-bank
+   precedent); no canonical chain movement.
