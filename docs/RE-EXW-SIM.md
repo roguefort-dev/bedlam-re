@@ -770,6 +770,88 @@ was where the tables filled: 0x41d954 only allocates.)
    but zone 1 spawns one robot), so a second walker on the real map must
    be staged externally (host/test seam) — exactly what multiplayer's
    0x46cbe0 override does in the original.
+ 9. **The zone-BIN variant verdict — the G3 question CLOSED 2026-08-28**
+    [verified: full disasm walk 0x44670c..0x446907 + tag/name string
+    bytes read from the PE + a whole-image ASCII string census;
+    objdump-only from the committed ghidra-project/exw-text-objdump.txt
+    and exd-text-objdump.txt, no Ghidra run; worker cef2f815 claim 1]:
+    does any mission load the mission-number `.BIN`
+    (ZONEB/MISSION6.BIN, ZONED/MISSION5.BIN, ZONEE/MISSION6.BIN)
+    instead of the zone-level `MISSION{L}.BIN`? **NO — the runtime
+    NEVER opens the mission-number variants; the zone-level rule is
+    absolute.** The evidence chain:
+    - **path2 construction is unconditional and letter-only.**
+      build_mission_paths@0x44670c (the §7c.1 builder) walked whole:
+      path2@0x4dca8c = `EDITOR\`@0x4597ba + `ZONE`@0x4597c2 +
+      chr(0x40+[0x4edd8c]) (append @0x446879..0x4468a8) +
+      `\MISSION`@0x4597c7 + chr(0x40+[0x4edd8c]) AGAIN
+      (@0x4468d2..0x446901) — then straight into the shared epilogue
+      (`add esp,4; jmp 0x43c802` @0x446904/0x446907). There is NO
+      itoa leg and NO conditional anywhere in path2's construction;
+      the function's only branch remains the §7j.73/D183 +5 on
+      path1's mission number when [0x4edb88]==2 (@0x4467ca..0x4467e2).
+    - **the .BIN consumers are exactly two, both on path2, both
+      builder-fresh.** concat(path2, `.BIN`@0x4587e8) @0x41dcbc
+      inside load_mission (called at 0x41dc63, the function's first
+      instruction after the prologue) and @0x446644 inside the
+      FUN_0044661b brief-reload twin (builder called at 0x44661e,
+      its first instruction; tag @0x45979a = `.BIN`, byte-verified).
+      The joined name lives in the concat-private 0x40-B buffer
+      0x4dca4c (concat@0x41dbed zeroes + fills it; the ONLY code
+      touching 0x4dca4c is concat itself) and is opened
+      cwd(0x4de544)+name `"r+b"`@0x457bdb by open@0x41cd90 via
+      read_file@0x41cc7f. The three globals are one 3×0x40 family:
+      path1@0x4dca0c | joined@0x4dca4c | path2@0x4dca8c.
+    - **complete path-buffer census (29 EXW sites).** path2
+      consumers: `.CGR`@0x41dca0, `.BIN`@0x41dcbc, `.MIN`@0x41dcd8,
+      `.LNG`/`.LNK`@0x41dd09 (load_mission) + `.BIN`@0x446644 (the
+      brief twin) + the builder's own stores — nothing else. path1
+      consumers: `.TOT`/`.DAT`/`.PAD` (load_mission), the
+      `.MRK`@0x40ccbd / `.NME`@0x416491 / `.TRT`@0x4170c8 /
+      `.POS`@0x41a562 / `.BDG`@0x41a5f5 loader family (tags
+      0x457a34/57/5c/64/69, byte-verified), the `GAMEGFX\BRF_`
+      movie-name scratch reuse @0x43d1bc/0x43d277 (strings
+      0x4591c2/0x4591d4 = `GAMEGFX\BRF_` + zone letter + itoa level +
+      `.SMK`@0x4591cf/`.BIN`@0x4591e3 — the brief movie/subtitle
+      pair, written AFTER the twin's load so it never interferes),
+      and the save-file name reuse in the 0x43d5xx/0x43d6xx
+      error/probe paths. No site concats any tag onto path2 other
+      than the five family tags above.
+    - **whole-image string census:** NO hardcoded
+      `ZONE?\MISSIONn.*` literal exists in EXW (the only
+      mission-name building strings are `EDITOR\`, `ZONE`,
+      `\MISSION` + the extension tags; every other `.BIN` literal
+      is a fixed GAMEGFX bank). The 8street boot check
+      `EDITOR/ZONEA/MISSIONA.BIN` (main.cpp step 1) is
+      reconstruction-side, not an EXW literal.
+    - **EXD twin agrees** [verified]: the load block 0x2e5c3 calls
+      builder 0x58606 then concats `.TOT`@0x2e5d1/`.DAT`@0x2e5f2/
+      `.PAD`@0x2e7a5 on path1 0x92f74 and `.CGR`@0x2e60e/
+      `.BIN`@0x2e62a/`.MIN`@0x2e646/`.LNG`/`.LNK`@0x2e672 on path2
+      0x92f34; the tag table at linear 0x862a9..0x862cc is
+      byte-verified against the overlay (file 0x9eaa9, delta
+      −0x18800); the builder's second zone-char append @0x587d3
+      runs straight into the epilogue (`jmp 0x51d12` @0x58801) —
+      no itoa. (The overlay's linear↔file mapping is piecewise, so
+      the brief-twin's own tag triplet stays structurally identified
+      only — by its path1/path2/path1 leg bases, matching the EXW
+      twin's `.TOT/.BIN/.DAT` order exactly.)
+    - **data corroboration** [DATA, read-only]: only zone-level
+      `.MIN` files ship, each sized 16× the ZONE-level BIN count
+      (B 1872, D 1450, E 1455) — never the variant counts
+      (1443/1443/1120); since EXW always loads the zone-level MIN
+      (path2), a runtime variant-BIN swap would desync the minimap
+      walk. ZONEB/MISSION6.BIN ≡ ZONED/MISSION5.BIN byte-identical
+      (sha256 5735b08a3e08853e…, 2,189,466 B, word0 count 1443) — a
+      shared development/deathmatch bank, distinct from both zone
+      banks; ZONEE/MISSION6.BIN (1,508,806 B, count 1120) likewise
+      distinct from MISSIONE.BIN (1,968,763 B, count 1455).
+    Consequence: our engine's `mission_asset_names`
+    `{ZONE{L}/MISSION{L}.BIN}` rule is VERIFIED correct as-is
+    (engine untouched); the three variant files are editor-side
+    residue, never wired into any runtime path. Closes
+    RESEARCH-8STREET OPEN QUESTIONS #3 and the P5 census G3 class
+    (docs/P5-ZONE-GATES §6.2/G3, D184).
 
 ## 7d. Amendment 2026-08-21 (worker 4b75846d, the weapon-table provenance
 pass — REFUTES the TABLE.BIN hypothesis and closes open item 5)
