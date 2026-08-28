@@ -10,11 +10,15 @@
 //!   host pumps are due (DESIGN-RENDER sec 8 / Determinism Charter:
 //!   timing decides HOW MANY identical pumps ran, never their content
 //!   - each pump hands the host the same fixed dt).
-//! - [`input`]: the input adapter skeleton. Winit key/mouse events
-//!   accumulate into a [`bedlam_core::input::InputFrame`] per tick
-//!   through a shell-owned button-bit layout (provisional, D38 - the
-//!   EXW scan-code keystore map is RE-EXW-INPUT.md, engine-side
-//!   binding lands with P2e input RE).
+//! - [`input`]: the input adapter + the P6 control-scheme consumer
+//!   (D204). Winit key/mouse events accumulate into a
+//!   [`bedlam_core::input::InputFrame`] per tick through a
+//!   shell-owned button-bit layout (provisional, D38 - the EXW
+//!   scan-code keystore map is RE-EXW-INPUT.md, engine-side binding
+//!   lands with P2e input RE); the control-scheme arm of the
+//!   immutable mode selects the mapping policy (modern = remappable
+//!   WASD/1-4 + wheel zoom + gamepad; classic = the original
+//!   scheme), entirely upstream of the frame contract.
 //! - [`audio`]: the platform audio output (step 2, D40): a cpal
 //!   output stream at the mixer-native 11025 Hz, drained through a
 //!   bounded ring by the device callback while the main loop mixes
@@ -49,5 +53,7 @@ pub use headless::{
     default_walk, run_headless, GameGfxSource, HeadlessOptions, HeadlessReport, SceneVisit,
     WalkStep,
 };
-pub use input::{map_mouse_button, map_winit_key, ShellInput, ShellKey};
+pub use input::{
+    map_mouse_button, map_winit_key, Bindings, ControlScheme, GamepadButton, ShellInput, ShellKey,
+};
 pub use window::{run_window, ShellError, WindowOptions};

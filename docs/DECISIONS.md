@@ -7283,3 +7283,118 @@ policy).
    touched crates; MANIFEST clean before AND after every corpus
    read; no Ghidra run.
    (worker 458a7e98 claim 1, unit p6-timing-lock-surface)
+
+## D204 — 2026-08-28: P6/platform-input `p6-control-scheme-surface` — the control-scheme purist axis's FIRST CONSUMER: the input mapping policy selected from the immutable mode at the PLATFORM/INPUT seam (modern = the remappable WASD/1-4/wheel-zoom/gamepad scheme; classic = the fixed original EXW scheme), and the completion gate wired as the FOURTH P6 required gate
+
+Context: PLAN §6 P6 "Modern controls: WASD, 1-4 hotkeys, full
+remap, wheel zoom, gamepad; original scheme selectable" + D200
+(scaffold) + D201 (the inert ModeConfig seam) + D203 (the pattern:
+an axis's first consumer is a POLICY selector at a platform-side
+seam). Bounds kept: the consumer lands at the platform/input layer
+only; no canonical-chain movement (canonical_dump_gate 13/13 +
+zone_mission_parity 5/5 + determinism 4/4 green BEFORE (e236db3
+clean tree) and AFTER; the parity paths feed InputFrame directly,
+upstream of the mapper); no harness change; no Ghidra run; the
+catalog stays EMPTY (a plan-named axis unit is not a catalog entry
+— D200 seeding policy).
+
+1. THE CONSUMER (engine/bedlam-shell/src/input.rs — the
+   platform/input layer): `ControlScheme` (Modern/Classic) selected
+   from the immutable mode via `ControlScheme::for_mode` (reads the
+   `PuristToggle::ControlScheme` arm and nothing else — the
+   timing-lock arm never moves it, axis independence pinned). The
+   arm selects the INPUT MAPPING POLICY, never the frame contract:
+   MODERN maps physical keys through the caller's remappable
+   `Bindings` table (the D38 seam table as data: WASD + arrows
+   move, 1-4 weapon hotkeys, Escape, Space/Enter/NumpadEnter
+   advance), maps the WHEEL to ZOOM, and maps the default GAMEPAD
+   table (dpad moves, South fires, East backs, Start confirms;
+   analog-stick conversion deliberately absent — a feel-policy
+   decision, future modern work, never classic); CLASSIC maps
+   through the FIXED original-scheme table and ignores `Bindings`
+   (the original offered no rebinding), with the wheel and gamepad
+   DEAD.
+
+2. THE CLASSIC TABLE IS RE-ANCHORED, NOT INVENTED
+   (docs/RE-EXW-INPUT.md, all [verified]): keyboard = hotkeys +
+   volume + pause + any-key ONLY and gameplay pointing is the mouse
+   (sec 6 headline), so W/A/S/D and the arrows map to NO button
+   (Up/Down arrows are the music-volume stepper — an un-hashed host
+   audio action; Left/Right arrows are DEAD 3-way); ESC maps to
+   Escape (the ESC latch 004edb50 + the exit paths, sec 2/5) — the
+   ONE original key binding the current game-semantic slot set
+   carries. The rest of the original key set (digits 1..7 order
+   rows, M/Space map latch, P pause, F1-F3) targets semantics the
+   InputFrame does not model yet; those rows join when the P2e
+   engine-side button map lands — never invented here (the D50
+   never-invent rule). Wheel/gamepad dead in classic is the §7
+   control model (exactly KeyEvent/MouseEvent/CursorPos).
+
+3. SEAM INERTNESS GENERALIZED (the determinism decision): the
+   scheme maps PHYSICAL input to the game-semantic `InputFrame`
+   BEFORE the sim — the frame is the whole contract, so the same
+   InputFrame = the same trajectory in BOTH arms (the sim never
+   sees the scheme; the D201 inertness property is the same
+   statement at the mapping boundary). Pinned host-side by
+   `control_scheme_mapping_never_touches_the_hashed_buckets`
+   (bedlam-game): the same frame script — with `buttons` bit 0
+   held, the placeholder payload's hash-visible movement bit —
+   yields the identical executed-tick sequence, sim tick count,
+   state hash and scene hash in both arms. Where the arms DO differ
+   is UPSTREAM, pinned at the shell seam
+   (`the_same_physical_stream_maps_differently_per_arm`): the same
+   physical W-hold/click stream maps to UP|WEAPON2 frames in
+   modern and movement-neutral frames in classic — the consumer is
+   real, not inert. The MOUSE PATH is scheme-INVARIANT (the
+   original is mouse-driven; modern keeps it): deltas and
+   left/right buttons map identically in both arms (pinned). The
+   wheel-zoom accumulator is presentation-bucket ONLY
+   (`ShellInput::take_zoom`, consumed by the presentation layer;
+   it can never reach `InputFrame` or any hash — the same D17 b
+   shape as the pacing gate). CONFIG-NOT-STATE unchanged:
+   FORMAT_VERSION stays 1, no hash pin moves.
+
+4. WHEEL POLICY CORRECTION: the provisional D38 wheel->Up/Down
+   menu-stepping mapping is REPLACED by the plan-named modern
+   behavior (wheel ZOOM; PLAN §6). Classic = no wheel at all. The
+   old mapping had no test or consumer pinning it (verified by
+   census before the change).
+
+5. TEST SURFACE (per D200): the ONE purist toggle, both arms —
+   selection (+ the timing-lock axis as the axis-independence
+   control), the two tables (modern = the pinned D38 seam map,
+   table-vs-fn drift-checked; classic = the anchored original
+   rows), the mouse-path invariant, remap (bind/unbind/replace +
+   classic ignores), wheel (zoom accumulates/consumes once/never
+   rides the frame; classic dead), gamepad (modern default map;
+   classic dead), the differing-frames pin, and the host-side hash
+   pin. Never the feature cross-product.
+
+6. GATE WIRING: `p6-control-scheme-surface` is the FOURTH P6
+   required gate (required_gates = [scaffold, modeconfig-seam,
+   timing-lock-surface, control-scheme-surface]; R6 keeps the
+   scaffold first). Commands = bedlam-shell --lib (the input-seam
+   suite) + bedlam-game --lib (the host hash pin), both --release
+   --locked --offline, hermetic (no corpus key, no writable).
+
+7. SCOPE NOTE: the platform plumbing (the shell host config routing
+   the immutable ModeConfig into GameHost construction AND the
+   mapper — classic/modern selectable at the platform level) is the
+   NEXT P6 unit (`p6-present-loop-wiring`), which also consumes
+   `GameHost::should_present` in the window present loop. Until
+   then `ShellInput` defaults to the modern scheme (`new()`) and
+   the window path already routes through the scheme-aware
+   `set_physical_key` (the seam is live, the selection is
+   default-modern).
+
+8. VERIFIED THIS RUN: bedlam-shell --lib 42/0 (+9 scheme tests; was
+   33/0 +1 pre-existing ignored), bedlam-game --lib 148/0 (+1 host
+   hash pin), bedlam-core --lib 147/0 (untouched); controls green:
+   canonical_dump_gate 13/13 + zone_mission_parity 5/5 +
+   determinism 4/4 + differ_gate 4/4 + bedlam-core determinism 12/0
+   + hash_fixture green; check-p6-behavior-catalog OK (catalog
+   still empty, R6 satisfied with the fourth gate) + its suite OK;
+   gates-validator suite OK; fmt + clippy clean on the touched
+   crates; MANIFEST clean before AND after every corpus read; no
+   Ghidra run.
+   (worker e56b4ef6 claim 1, unit p6-control-scheme-surface)

@@ -1643,6 +1643,62 @@ mod tests {
     }
 
     #[test]
+    fn control_scheme_mapping_never_touches_the_hashed_buckets() {
+        // The D201 seam-inertness property GENERALIZED to the second
+        // axis (D204): the control-scheme arm selects the INPUT
+        // MAPPING POLICY at the platform/input seam (which physical
+        // key maps to which game-semantic button - shell-side), so
+        // the mapping lives ENTIRELY upstream of the InputFrame. The
+        // host-level consequence: the SAME InputFrame script yields
+        // the identical executed-tick sequence, sim tick count, sim
+        // state hash and scene hash in BOTH arms - the sim never sees
+        // the scheme. The script deliberately holds `buttons` bit 0
+        // (the placeholder payload's movement bit, hash-visible
+        // today): if the scheme ever leaked past the frame contract
+        // this pin fails loud. (Where the arms DO differ - the mapped
+        // frames a physical stream produces - is pinned at the shell
+        // seam, the consumer's own test surface.)
+        use bedlam_core::mode::{ModeConfig, PuristToggle, ToggleArm};
+
+        let mut modern = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        let mut classic = GameHost::new(
+            &GameConfig::default(),
+            &SimConfig {
+                mode: ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic),
+                ..SimConfig::default()
+            },
+            palette(),
+        );
+        // A movement-and-pointing script: bit 0 held every 2nd frame,
+        // pointer deltas every 3rd, a click every 5th - the frames a
+        // mixed modern-mapped WASD+mouse stream produces.
+        let script = [4u32, 4, 4, 1, 3];
+        let mut executed_modern = Vec::new();
+        let mut executed_classic = Vec::new();
+        for i in 0..15 {
+            let dt = script[i % script.len()];
+            let input = InputFrame {
+                buttons: if i % 2 == 0 { 1 } else { 0 },
+                mouse_dx: if i % 3 == 0 { 3 } else { 0 },
+                mouse_dy: if i % 3 == 0 { -2 } else { 0 },
+                mouse_buttons: if i % 5 == 0 { 1 } else { 0 },
+            };
+            executed_modern.push(modern.pump_frame(dt, &input));
+            executed_classic.push(classic.pump_frame(dt, &input));
+        }
+        assert_eq!(executed_modern, executed_classic);
+        assert_eq!(
+            modern.driver().sim().tick_index(),
+            classic.driver().sim().tick_index()
+        );
+        assert_eq!(
+            modern.driver().sim().state_hash(),
+            classic.driver().sim().state_hash()
+        );
+        assert_eq!(modern.scene_hash(), classic.scene_hash());
+    }
+
+    #[test]
     fn click_input_walks_the_scenes() {
         let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
         while host.scene() == Scene::Boot {

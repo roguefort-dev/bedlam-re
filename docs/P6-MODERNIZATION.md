@@ -103,11 +103,56 @@ pinned by `timing_lock_pacing_never_touches_the_hashed_buckets`: the
 same pump script yields the identical executed-tick sequence, sim tick
 count, state hash and scene hash in both arms while `should_present`
 differs). The accumulator itself (D17) is pacing-policy-neutral in every
-arm. The control-scheme axis stays consumer-less until its
-platform/input-layer unit; the catalog stays empty (a plan-named axis
-unit is not a catalog entry). The platform loop wiring (the window shell
-consuming `should_present`, mode plumbing through the shell config) is a
+arm. The control-scheme axis gained its consumer with the NEXT unit
+(D204, below); the catalog stays empty (a plan-named axis unit is not
+a catalog entry). The platform loop wiring (the window shell consuming
+`should_present`, mode plumbing through the shell config) is a
 LATER P6 unit — this unit lands the seam-side policy and its contract.
+
+**Implementation status (D204, 2026-08-28, gate
+`p6-control-scheme-surface`): the control-scheme axis's FIRST
+CONSUMER** — the input mapping policy at the PLATFORM/INPUT seam
+(`engine/bedlam-shell/src/input.rs`). `ControlScheme`
+(MODERN/CLASSIC) is selected from the immutable `ModeConfig` via
+`ControlScheme::for_mode` (the `control-scheme` arm only; the
+timing-lock arm never moves it). MODERN maps physical keys through
+the caller's remappable **`Bindings`** table (the D38 seam table
+as data: WASD + arrows move, 1-4 weapon hotkeys, Escape,
+Space/Enter advance — "full remap": bind/unbind/replace), maps the
+**wheel to ZOOM** (a presentation-bucket accumulator consumed via
+`ShellInput::take_zoom`, never the sim input — it replaces the
+provisional D38 wheel→Up/Down mapping) and maps a default
+**gamepad** table (dpad moves, South fires, East backs, Start
+confirms; analog-stick conversion is deliberately absent future
+modern work). CLASSIC is the FIXED original EXW scheme,
+re-anchored [verified, RE-EXW-INPUT secs 5-7]: keyboard =
+hotkeys/volume/pause/any-key ONLY, gameplay pointing is the mouse,
+Left/Right arrows dead 3-way — among the game-semantic slots this
+seam carries **ESC is the one original key binding**; the original
+digits/M/Space/P semantics target slots the seam does not model
+yet and join with the P2e engine-side button map (never invented,
+the D50 rule); the wheel and gamepad are DEAD in classic (the §7
+control model is exactly KeyEvent/MouseEvent/CursorPos), and the
+classic arm ignores `Bindings` (the original offered no
+rebinding). **Seam inertness generalized (the D201 property at the
+mapping boundary):** the scheme maps physical input to the
+game-semantic `InputFrame` BEFORE the sim — the frame is the whole
+contract, so the same InputFrame = the same trajectory in both
+arms (pinned host-side by
+`control_scheme_mapping_never_touches_the_hashed_buckets`, with
+`buttons` bit 0 held so a scheme leak fails loud), while the arms
+differ UPSTREAM in what a physical stream maps to (pinned at the
+shell seam: the same W-hold/click stream → UP|WEAPON2 frames in
+modern, movement-neutral frames in classic). The mouse path is
+scheme-INVARIANT. The canonical chains are untouched (the parity
+paths feed InputFrame directly, upstream of the mapper). The
+catalog stays empty. The platform plumbing (shell config → mode →
+`GameHost` + the mapper, classic/modern selectable at the platform
+level) is the NEXT P6 unit (`p6-present-loop-wiring`); until then
+`ShellInput::new()` defaults to the modern scheme and the window
+path already routes through the scheme-aware
+`ShellInput::set_physical_key` (the seam is live, the selection
+default-modern).
 
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 

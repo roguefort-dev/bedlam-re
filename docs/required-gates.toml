@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface"]
 
 [[phase]]
 id = "P7"
@@ -542,3 +542,54 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-game/src/host.rs", "engine/bedlam-core/src/mode.rs", "engine/bedlam-core/src/frame.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
+
+# p6-control-scheme-surface — the SECOND REAL CONSUMER of a purist
+# axis (D204; PLAN §6 P6 "Modern controls: WASD, 1-4 hotkeys, full
+# remap, wheel zoom, gamepad; original scheme selectable" + D201):
+# the control-scheme arm selects the INPUT MAPPING POLICY at the
+# PLATFORM/INPUT seam. engine/bedlam-shell/src/input.rs lands
+# ControlScheme (Modern = the remappable Bindings table — WASD +
+# arrows move, 1-4 weapon hotkeys, Escape, Space/Enter advance, the
+# D38 seam table as data; Classic = the FIXED original EXW scheme,
+# RE-EXW-INPUT secs 5-7 anchored: keyboard = hotkeys/volume/pause/
+# any-key ONLY, gameplay pointing is the mouse, Left/Right arrows
+# dead 3-way — among the game-semantic slots this seam carries ESC
+# is the one original key binding; the original digits/M/Space/P
+# semantics target slots the seam does not model yet and join with
+# the P2e engine-side button map, never invented), selected from the
+# immutable ModeConfig via ControlScheme::for_mode (axis-independent
+# of timing-lock), the modern full-remap Bindings (bind/unbind; the
+# classic arm ignores the table — the original offered no rebinding),
+# wheel ZOOM in modern (a presentation-bucket accumulator consumed
+# via ShellInput::take_zoom, NEVER the sim input; replaces the
+# provisional D38 wheel->Up/Down mapping) and dead in classic (the
+# 1996 control model has no wheel), and the default gamepad map in
+# modern (dpad moves, South fires, East backs, Start confirms) dead
+# in classic (the original control model is exactly KeyEvent/
+# MouseEvent/CursorPos, RE-EXW-INPUT §7). SEAM INERTNESS
+# (the D201 property generalized): physical input maps to the
+# game-semantic InputFrame BEFORE the sim — the same InputFrame =
+# the same trajectory in both arms (pinned host-side by
+# control_scheme_mapping_never_touches_the_hashed_buckets: same
+# frames = identical executed ticks, tick count, state hash and
+# scene hash in both arms, with buttons bit 0 held so a scheme leak
+# fails loud; the arms differ UPSTREAM in what physical input maps
+# to, pinned at the shell seam). The mouse path is scheme-INVARIANT.
+# The canonical chains are untouched (the mapper is upstream of the
+# frames the parity paths feed; canonical_dump_gate 13/13 +
+# zone_mission_parity 5/5 + determinism green before AND after).
+# Test surface = the ONE purist toggle, both arms (timing-lock
+# appears only as the axis-independence control), never the feature
+# cross-product. The CATALOG STAYS EMPTY (D200 seeding policy — a
+# plan-named axis unit is not a catalog entry). The platform
+# plumbing (shell config -> mode -> GameHost + the mapper) is the
+# LATER P6 platform unit. Both commands hermetic: --release
+# --locked --offline, no corpus key, no writable.
+[[gate]]
+id = "p6-control-scheme-surface"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-game", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/input.rs", "engine/bedlam-shell/src/window.rs", "engine/bedlam-game/src/host.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]

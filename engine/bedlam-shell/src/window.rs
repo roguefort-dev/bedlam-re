@@ -56,7 +56,7 @@ use crate::audio::{AudioDevice, TARGET_FRAMES};
 use crate::chain::{stage_boot, stage_scene, ChainConfig};
 use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
 use crate::headless::GameGfxSource;
-use crate::input::{map_mouse_button, map_winit_key, ShellInput};
+use crate::input::{map_mouse_button, ShellInput};
 
 /// Shell-level failures (window/surface/GPU init + propagated game
 /// staging errors). The window loop cannot return through winit
@@ -459,14 +459,16 @@ impl ApplicationHandler for ShellApp {
             }
             WindowEvent::RedrawRequested => self.present(),
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some((key, pressed)) = map_winit_key(&event) {
-                    // Escape is a GAME key (operator 2026-08-23): it must
-                    // never close the window. It rides the input queue like
-                    // every other key; the EXW options-screen target will
-                    // consume it once P2e input RE pins the binding. Until
-                    // then it is an in-game no-op. Exit = window close only.
-                    self.input.set_key(key, pressed);
-                }
+                // The scheme-aware physical->semantic path (P6 D204:
+                // the control-scheme arm selects the mapping policy).
+                // Escape is a GAME key (operator 2026-08-23): it must
+                // never close the window. It rides the input queue
+                // like every other key (bound in BOTH scheme arms);
+                // the EXW options-screen target will consume it once
+                // P2e input RE pins the binding. Until then it is an
+                // in-game no-op. Exit = window close only.
+                self.input
+                    .set_physical_key(event.physical_key, event.state == ElementState::Pressed);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(mask) = map_mouse_button(button) {
