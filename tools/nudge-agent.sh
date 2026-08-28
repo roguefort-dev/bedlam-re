@@ -420,9 +420,21 @@ set -e
 # -i: the provider prints "Usage limit reached" (capital U); the
 # pre-2026-08-21 case-sensitive matcher missed it and every quota death
 # fell through to client-error (watchdog repair, 2026-08-21).
+# (watchdog repair 2026-08-28, token 2010676: the bare `rate limit` and
+# `usage limit` alternatives were PROSE false positives -- the D230 watch
+# item, fired. Worker 78919433's fully-green p7-phase-close completion
+# exited rc=0 progress=1 with the flip 97fb49e and the bookkeeping
+# 89905f3 both committed AND pushed and the required queue emptied, but
+# its transcript quoted the D230 decision text "the rate-limit grep
+# (`rate limit`, case-insensitive substring)" verbatim and the run was
+# misclassified provider quota. Resolution-failure markers must be
+# error-shaped, never bare dictionary words: the two bare alternatives
+# are dropped; genuine quota deaths still print "Rate limit reached" /
+# "Usage limit reached" (the observed 2026-08-21 shape "Usage limit
+# reached for 5 hour") or an HTTP 429, all of which stay matched.)
 if [ "$post_queue_rc" -ne 0 ] || [ "$post_queue" = INVALID-DEADLOCKED ]; then
   kind=queue-invalid
-elif grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
+elif grep -aqiE "Rate limit reached|Usage limit reached|HTTP[^0-9]*429|429 Too Many Requests" "$LOG"; then
   kind=rate-limit
 # Provider HTTP 5xx ("Provider request failed with HTTP 502", the
 # 2026-08-21 19:15/19:34 incident) is provider-side overload, not a

@@ -579,6 +579,11 @@ mkdir "$CLAIMS"
 # Repository-level migration contract: the live active queue is itself an
 # input to the strict scheduler, not exempt historical documentation. Only the
 # ## Now slice is scoped here; human/operator prose may remain under Done.
+# (watchdog repair 2026-08-28, token 2010676: REQUIRED-QUEUE-EMPTY is the
+# parser's own legal TERMINAL verdict — the repo's required queue emptied for
+# the first time at 89905f3 with every P0-P7 gate green, and the completion
+# contract keeps it empty forever after; the check stays red on every rc!=0
+# answer and still forbids BLOCKED/operator/interactive entries in ## Now.)
 active_state=$($PARSER "$ROOT/.state/NEXT.md" "$CLAIMS" --state-v1 \
   2>"$TMP/active-queue.err")
 active_rc=$?
@@ -588,7 +593,8 @@ active_now=$(awk '
   active { print }
 ' "$ROOT/.state/NEXT.md")
 if [ "$active_rc" -ne 0 ] \
-    || [[ "$active_state" != RUNNABLE\ * && "$active_state" != AUTOMATIC-WAIT ]] \
+    || [[ "$active_state" != RUNNABLE\ * && "$active_state" != AUTOMATIC-WAIT \
+          && "$active_state" != REQUIRED-QUEUE-EMPTY ]] \
     || printf '%s\n' "$active_now" | grep -Eqi 'BLOCKED|operator|interactive|human|manual'; then
   LAST_RC=$active_rc
   LAST_OUT=$active_state

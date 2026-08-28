@@ -68,6 +68,19 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    fixed bounded offline validation over docs/required-gates.toml
    owns every global completion claim from here (workers never
    assert it — the completion contract).
+   NOTE (watchdog repair 1787945546, D232): the recorded
+   rate-limit failure for this run was a CLASSIFIER FALSE
+   POSITIVE, not a provider quota death — the client exited rc=0
+   progress=1 with the final summary fully streamed, the flip
+   97fb49e and the bookkeeping 89905f3 both PUSHED, and the queue
+   above already emptied (strict parser REQUIRED-QUEUE-EMPTY).
+   The old rate-limit grep's bare `rate limit` substring matched
+   the D230 watch-item prose quoted in this worker's own
+   transcript (the D230 watch item, fired). Fixed in the repair
+   commit (error-shaped markers only + the extended live-extracted
+   regression suite); the structured failure is adjudicated
+   required-empty per D232 — the resulting required queue IS empty
+   and stays empty.
 
 2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +

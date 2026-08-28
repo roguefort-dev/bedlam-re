@@ -9989,3 +9989,89 @@ phase-complete-v1 bound to the flip commit (report
 .state/p7-phaseclose-gates-report.json); the strict queue parser
 rc=0 on the rewritten NEXT.md; MANIFEST.sha256 clean before and
 after.
+
+
+## D232 — 2026-08-28: autonomy/watchdog — the NINTH repair: the D230 WATCH ITEM FIRED — the rate-limit classifier's bare `rate limit` substring matched the D230 watch-item PROSE quoted by worker 78919433's own transcript, misclassifying its fully-green `p7-phase-close` completion (rc=0 progress=1, flip 97fb49e + bookkeeping 89905f3 both PUSHED, required queue EMPTIED) as provider quota; fixed by error-shaped markers only, pinned by the live-extracted suite; the structured failure adjudicated required-empty (the resulting queue IS empty — the first required-empty adjudication, distinct from D206/D226/D228/D230's replaced-task)
+
+(a) THE DIAGNOSIS, mechanical: worker 78919433 exited rc=0
+progress=1 with the final summary fully streamed, both commits
+PUSHED (origin/main = 89905f3), strict parser rc=0
+REQUIRED-QUEUE-EMPTY, MANIFEST clean, tracked tree clean — a
+perfectly-green completion of the LAST required item. The wrapper
+still classified kind=rate-limit because the old grep's bare
+`rate limit` alternative (case-insensitive substring) matched
+exactly ONE line of the transcript, line 1640: the D230 decision
+text the worker legitimately quoted while surveying DECISIONS.md
+("WATCH ITEM (recorded, deliberately untouched): the rate-limit
+grep (`rate limit`, case-insensitive substring) is the same
+broad-shape risk"). No provider error exists anywhere in the log:
+old pattern on the live log = 1 match (the prose), zero
+error-shaped matches. This is D230's recorded prediction firing
+verbatim — the p7-phase-close survey (D231) walks DECISIONS.md,
+guaranteeing the quote.
+
+(b) THE FIX (tools/nudge-agent.sh, the D230 doctrine applied to
+the second grep): resolution-failure markers must be error-shaped,
+never bare dictionary words. The bare `rate limit` and bare
+`usage limit` alternatives are dropped; the pattern keeps
+"Rate limit reached", "Usage limit reached" (the observed
+2026-08-21 quota-death shape "Usage limit reached for 5 hour", the
+original reason the matcher is case-insensitive), "HTTP[^0-9]*429"
+and "429 Too Many Requests" — every observed genuine quota error
+still classifies, prose quoting classifier or quota vocabulary
+never does. tools/test-nudge-transport-markers.sh extended the same
+live-extraction way: the -aqiE grep line is extracted verbatim and
+asserted to exist exactly once, seven prose fixtures (the live
+false-positive line verbatim + sibling shapes incl. hyphenated
+`rate-limit` and case-varied title prose) never match, five real
+quota shapes (incl. the observed 2026-08-21 string) always match —
+29/29 total with the transport half unchanged.
+
+(c) THE ADJUDICATION: the live structured failure (78919433, gate
+p7-phase-close, ordinal 1) is resolved required-empty — different
+from D206/D226/D228/D230's replaced-task because the completed unit
+was the LAST required item: the resulting queue's active section is
+EMPTY (strict parser REQUIRED-QUEUE-EMPTY), the work stood complete
+and PUSHED, and nothing was replaced. The remediation_commit is
+THIS repair commit (it carries the queue NOTE recording the
+adjudication, establishing the required-empty postcondition the
+archive-failures validator re-checks against the live queue).
+
+VERIFIED first-hand: the new pattern on the affected live log
+answers 0 matches (the old: 1 — the mechanical proof); control
+logs (d9aaa029, c60dbcd6) match under neither grep; bash -n clean
+on both shell files; the extended suite 29/29; siblings green
+AFTER the edit — test-llm-watchdog, test-automation-failure-watchdog,
+test-nudge-controller, test-autonomy-remaining-gaps all PASS;
+strict queue parser rc=0 REQUIRED-QUEUE-EMPTY before and after the
+queue NOTE; MANIFEST.sha256 clean before and after (no corpus read
+by this repair).
+
+(d) TWO SIBLING REDS SEEN DURING THIS REPAIR, one fixed, one
+environmental (both first-hand): (1) test-nudge-queue's
+repository-level check ("the live active queue is an input to the
+strict scheduler") accepted only RUNNABLE/AUTOMATIC-WAIT — the
+parser's own legal TERMINAL verdict REQUIRED-QUEUE-EMPTY (rc=0)
+failed it, a permanent false red since the queue first emptied at
+89905f3 (the completion contract keeps it empty forever). Fixed by
+whitelisting exactly that verdict; every rejection guarantee stays
+(rc!=0 answers, BLOCKED/operator/interactive prose in ## Now).
+(2) test-autonomy-remaining-gaps' "wrapper atomically initializes
+a legitimate READY to WAITING schedule" case timed out at HEAD and
+on a pristine archive of HEAD alike — NOT a code defect: the case
+ends with the wrapper's controller wake-up systemctl --user start
+bedlam-nudge.service, and the live user manager had that very unit
+mid-job (start job 109708 running since 21:32:25 — the controller's
+OWN terminal completion validation executing the P0-P7 gate battery
+under bwrap, oneshot still activating), so the client queued behind
+the running job (orphaned systemctl children in ppoll are the
+direct evidence). Code deliberately untouched; the case passes
+whenever the manager is not mid-pass (it was green at D230 21:25
+with identical tools). No suite in the required-gates manifest
+runs either case, so neither red touched the autonomous loop.
+
+POSTCONDITION for the loop: the controller's terminal completion
+validation owns every global claim; with the false rate-limit
+failure acknowledged required-empty, nothing re-spawns workers and
+the fixed bounded validator's verdict for this invocation is the
+controller's alone.
