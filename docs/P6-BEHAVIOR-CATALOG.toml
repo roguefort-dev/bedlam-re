@@ -1,0 +1,21 @@
+schema = "p6-behavior-catalog-v1"
+
+# P6 original-behavior catalog (schema p6-behavior-catalog-v1).
+# Format specified by docs/P6-MODERNIZATION.md (D200). One [[entry]]
+# per cataloged original behavior; every field is machine-validated by
+# tools/check-p6-behavior-catalog.py (fail-closed), including the
+# mechanical class -> disposition rubric and the bidirectional
+# catalog_refs join with docs/P5-MISSION-LEDGER.toml (the P5 triage
+# feed: every ledger catalog_ref must resolve to an entry id here,
+# and every entry's missions must be ledger mission ids).
+#
+# SEEDING POLICY (D200): the catalog seeds EMPTY — the honest post-P5
+# state. All 37 ledger missions closed green with catalog_refs = []
+# (machine-verified), i.e. P5 parity work recorded zero divergences
+# and zero repro'd original-behavior observations worth classifying.
+# Entries land ONLY on recorded evidence with a repro (observed =
+# "original" from an oracle/RE-anchored observation of the original
+# game, or observed = "divergence" from a repro'd engine divergence);
+# speculative or retrospective vibes-seeding is forbidden. After P5
+# parity an original bug is reproduced by OUR engine faithfully, so
+# the expected dominant source is observed = "original".

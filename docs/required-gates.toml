@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = []
+required_gates = ["p6-modernization-scaffold"]
 
 [[phase]]
 id = "P7"
@@ -443,3 +443,32 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-core", "--test", "hash_fixture", "--test", "mission_corpus_gate"],
 ]
 tracked_paths = ["engine/bedlam-game/tests/zone_mission_parity.rs", "engine/bedlam-game/examples/parity_harness/canonical.rs", "docs/P5-ZONE-GATES.md", "docs/P5-MISSION-LEDGER.toml", "docs/required-gates.toml"]
+
+# p6-modernization-scaffold — the P6 opener per PLAN §6 (D200, the
+# D175 p5-zone-gate-scaffold pattern: the machine-checkable contract
+# lands BEFORE any behavior change it grades). Artifacts: the P6
+# decision surface (docs/P6-MODERNIZATION.md — the ModeConfig seam +
+# the bug-triage rubric VERBATIM from PLAN §6, the catalog format,
+# the seeding policy) and the committed original-behavior catalog
+# (docs/P6-BEHAVIOR-CATALOG.toml, schema p6-behavior-catalog-v1 —
+# the artifact the P5 ledger's catalog_refs feed). The checker is
+# fail-closed over the rubric-as-code (class -> terminal disposition),
+# evidence discipline (closed requires regression evidence), purist
+# toggle discipline (only closed-preserve-classic entries carry a
+# unique ModeConfig toggle id), mission grounding + the bidirectional
+# catalog_refs join with the P5 ledger, and cross-artifact safety with
+# this manifest (P6 gates start with this scaffold; P6 status green
+# requires zero open entries). The catalog seeds EMPTY by decision
+# (D200: all 37 missions closed green with empty refs — the honest
+# post-P5 state; entries land only on recorded evidence with a repro).
+# The checker reads ONLY committed docs — no corpus key, no game-data
+# path in tracked_paths (hermetic, PATH-free under bwrap). Command 2
+# is the checker's fail-closed hermetic test suite.
+[[gate]]
+id = "p6-modernization-scaffold"
+timeout_seconds = 120
+commands = [
+  ["/usr/bin/python3", "tools/check-p6-behavior-catalog.py"],
+  ["/usr/bin/python3", "tools/test-p6-behavior-catalog.py"],
+]
+tracked_paths = ["docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "tools/check-p6-behavior-catalog.py", "tools/test-p6-behavior-catalog.py", "docs/required-gates.toml"]

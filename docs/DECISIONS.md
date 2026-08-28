@@ -6965,3 +6965,107 @@ corpus read, no Ghidra run. P5's mission side is DONE: what
 remains of P5 is its PHASE-CLOSE disposition only (the P4
 pattern: the required-gates.toml P5 status flip pending->green +
 the bound phase verdict).
+
+## D200 — 2026-08-28: P6/gate `p6-modernization-scaffold` — the ModeConfig seam + the bug-triage rubric + the original-behavior catalog format decided (docs/P6-MODERNIZATION.md; catalog schema p6-behavior-catalog-v1, seeds EMPTY) + the fail-closed checker wired as the FIRST P6 required gate
+
+Context: PLAN §6 P6 (Modernization — default = modern; classic
+available). The P5 phase close (f608207) queued this opener per the
+D175 pattern: the machine-checkable contract lands BEFORE any
+behavior change it grades. Bounds: no engine change, no harness
+change, no Ghidra run; decisions + contract artifacts only.
+
+1. THE MODECONFIG SEAM (the decision; PLAN §6 verbatim anchored in
+   docs/P6-MODERNIZATION.md §1): fixes land directly in the engine —
+   no bug-complete-faithful core to preserve (the 99% target
+   simplification); classic mode shrinks to a small purist toggle set
+   covering FEEL-CONTESTED items only (timing lock, control scheme,
+   selected original-behavior catalog entries classified for
+   preservation by the deterministic rubric of point 2 with a
+   decision record, with regression tests); mode is ONE immutable
+   ModeConfig injected at sim construction (never mutated mid-run —
+   a mode change is a new sim); the test surface is the purist
+   toggles, never the full feature cross-product. Binding
+   consequence recorded with it: ModeConfig covers
+   sim-behavior-affecting choices only — presentation/platform
+   options (window mode, vsync, resolution, scaling, HD pack,
+   refresh rate) are NOT mode toggles; display rate never enters the
+   sim (Determinism Charter, PLAN §3/§6). The seam is DECIDED here;
+   no engine code lands this unit (the first P6 engine unit
+   implements ModeConfig + the toggle plumbing, behind this gate).
+
+2. THE RUBRIC (PLAN §6 verbatim anchored in P6-MODERNIZATION.md §2):
+   per catalog entry — crash/data-loss → fix everywhere;
+   gameplay-coupled → classic preserves / modern fixes; cosmetic →
+   fix in modern. Fixed = deviation from the catalog established by
+   mechanically applying the rubric and recording regression
+   evidence — not vibes. Encoded AS CODE: class → terminal
+   disposition (closed-fix-everywhere / closed-preserve-classic /
+   closed-fix-modern); the checker rejects every other closure pair.
+
+3. THE CATALOG FORMAT (docs/P6-BEHAVIOR-CATALOG.toml, schema
+   p6-behavior-catalog-v1, spec P6-MODERNIZATION.md §3): [[entry]]
+   rows with id (unique, whitespace-free — the P5 ledger
+   catalog_refs target), title, class, observed ∈ {original,
+   divergence} (provenance: how the behavior surfaced), repro
+   (non-empty deterministic evidence pointer), missions (non-empty,
+   duplicate-free, ⊆ the P5 ledger mission ids — "affected
+   missions"), disposition ∈ {open, closed-fix-everywhere,
+   closed-fix-modern, closed-preserve-classic}, evidence (non-empty
+   IFF closed — the regression-evidence anchor; a
+   closed-preserve-classic closure's evidence must cover BOTH arms:
+   the modern fix and the classic preservation through its toggle),
+   purist_toggle (iff closed-preserve-classic; unique across the
+   catalog — the ModeConfig toggle id), provenance (DECISIONS/RE
+   anchor + confidence tag). R1-R7 mechanical rules in
+   P6-MODERNIZATION.md §3.
+
+4. THE SEEDING POLICY: the catalog seeds EMPTY — all 37 ledger
+   missions closed green with catalog_refs = [] (machine-verified by
+   the P5 checker), i.e. P5 recorded zero divergences and zero
+   repro'd original-behavior observations worth classifying; the
+   empty catalog is the honest post-P5 state (the D175 "0/37 is the
+   honest scaffold state" principle). Entries land ONLY on recorded
+   evidence with a repro: observed = "original" (oracle run,
+   8street navigation re-anchored to EXW/EXD per repo policy, or
+   RE-verified mechanism with doc anchor + confidence) OR observed =
+   "divergence" (a repro'd engine divergence found during P6+ work).
+   BOTH classes are accepted — after P5 parity our engine
+   faithfully reproduces original behaviors, so an original bug
+   surfaces as NO divergence at all; a divergence-only policy would
+   starve the catalog of exactly the feel-contested items classic
+   mode exists to preserve (expected dominant source: "original").
+   Speculative or retrospective seeding (forum posts, unanchored
+   memory, "probably a bug") is forbidden.
+
+5. THE CHECKER + GATE: tools/check-p6-behavior-catalog.py +
+   30-case hermetic suite tools/test-p6-behavior-catalog.py, all
+   fail-closed (rubric-as-code incl. all six wrong-class closures;
+   evidence discipline both directions; toggle discipline incl.
+   duplicate/whitespace/wrong-disposition; mission grounding; the
+   BIDIRECTIONAL catalog_refs join — every ledger ref resolves to an
+   entry, every entry mission is a ledger id; manifest rules: a
+   non-empty P6 required_gates starts with p6-modernization-scaffold
+   AND defines it, P6 status green requires zero open entries).
+   Real-repo pins: entries 0, 37 ledger ids, 0 refs resolve — move
+   only with a deliberate catalog change, same commit. LAYERING (one
+   source of truth per fact): ledger schema/corpus binding = the P5
+   checker's job; mission identity here = the ledger; this checker
+   reads ONLY committed docs — no corpus read at all (game-data
+   never appears in tracked_paths/corpus). Gate wiring: P6
+   required_gates = ["p6-modernization-scaffold"] (the FIRST entry;
+   R6 keeps it first as more P6 gates land), commands = checker +
+   suite, tracked_paths = the five artifacts, no corpus key, no
+   writable (suite fixtures under the validator scratch HOME). The
+   gate grades the CONTRACT, not phase completion: green from the
+   moment it lands; P6 status stays pending.
+
+6. VERIFIED THIS RUN: checker OK on the real repo (entries 0, 37
+   ledger ids, 0 refs resolve); suite 30/30; gates-validator suite
+   22/22; check-p5-zone-ledger OK 37/37 with the edited manifest (P5
+   cross-artifact rules unaffected); manifest TOML re-parsed (8
+   phase rows, P6 pending with exactly one required gate, 17 gates,
+   last = p6-modernization-scaffold); controls BEFORE the change:
+   zone_mission_parity 5/5 (27.33s) + canonical_dump_gate 13/13 at
+   clean HEAD 0c81387; MANIFEST clean before AND after every corpus
+   read; no Ghidra run; no engine change; no harness change.
+   (worker 6e45232f claim 1, unit bedlam-nudge-item1-6e45232f)
