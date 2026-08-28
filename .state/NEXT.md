@@ -10,38 +10,117 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-scaling-options] [gate=p6-scaling-options] P6
-   resolution-independence unit per PLAN §6 "Resolution
-   independence + GPU rendering ... (nearest/integer default;
-   fit/fill/smooth options)": the SCALING SELECTION — expose the
-   already-landed bedlam-platform ScaleMode (Integer the parity
-   default / Fit / Fill) + FilterMode (Nearest the parity default
-   / Linear = smooth) as a platform presentation knob riding
-   WindowOptions.present in bedlam-shell, selected by new CLI
-   flags — a PURE mapping over plain data with NO purist
-   arbitration (the original was a fixed 640x480 DOS framebuffer
-   with no scaling mode to preserve; D200 layering — the knob is
-   OUT of ModeConfig and selects nothing in the host beyond the
-   existing PresentConfig the already-landed GPU scale path
-   consumes; both pacing arms accept it identically; the Fill
-   cursor-uv handling already exists window-side). NO new RE
-   needed (a pure modern platform surface over landed code, zero
-   new binary claims — if any RE claim becomes necessary, commit
-   the artifact first). Bounds: default = Integer + Nearest
-   exactly as shipped (pinned: the derived SimConfig
-   bit-identical under every selection — the sim, the ModeConfig
-   and every hash untouched by construction; the canonical
-   640x480 indexed frame + palette ride unchanged, goldens stay
-   resolution-agnostic; the headless path owns no surface so the
-   flags are noted + ignored there, the --fullscreen posture);
-   bedlam-shell only, no engine change; catalog stays EMPTY;
-   wire gate p6-scaling-options as the ELEVENTH P6
-   required_gates entry; fmt + clippy on touched crates;
+1. [READY] [id=p6-hd-asset-research] [gate=p6-hd-asset-research] P6
+   HD asset pipeline RESEARCH opener per PLAN §6 "Optional HD
+   asset pipeline (D21; external pack, never bundled originals or
+   derivatives in git)" — the plan's OWN named prerequisite
+   ("exact package/model pins come from
+   docs/RESEARCH-HD-ASSET-PIPELINE.md"): write that doc,
+   docs/RESEARCH-HD-ASSET-PIPELINE.md, surveying against PRIMARY
+   sources with the web tools (a transport/network failure = the
+   structured failure outcome, never a thinner doc): (a) the four
+   workflow categories — 4:3 -> 16:9/16:10 background
+   outpainting/generative fill, alpha-aware sprite/sprite-sheet
+   upscale, seamless tile/texture upscale, portraits/UI art —
+   with candidate ComfyUI workflow presets + exact
+   package/model/version pins each; (b) the provenance + manifest
+   schema the gates will check (workflow JSON, recipes, masks,
+   model/tool/version hashes, seeds/prompts, manifests,
+   provenance; generated images live in a user-selected EXTERNAL
+   HD-pack directory, never in git); (c) the automated gate
+   criteria design — provenance, dimensions, alpha integrity,
+   seam quality, perceptual thresholds, outputs without recorded
+   evidence excluded from shipping; (d) the runtime resolution
+   seam sketch — replacements resolved by stable asset ID with
+   fallback to originals; text/controls/click targets/gameplay
+   information stay ENGINE-rendered, never hallucinated into
+   generated backgrounds; (e) the isolated + hardware-profiled
+   setup posture. BOUNDS: RESEARCH ONLY — no generated assets, no
+   engine change, no new binary RE claims (citations of external
+   sources carry their own provenance), catalog stays EMPTY;
+   wire gate p6-hd-asset-research as the TWELFTH P6
+   required_gates entry (command = a bounded offline checker over
+   the committed doc, the e0bc7fb scaffold pattern — the unit
+   defines it); DECISIONS.md entry for the gate design;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commits 63d58ac + bece1cf + 9b2599f
+1. DONE (2026-08-28, claim 1 — commits 017a0f4 + 78c87ed by
+   worker 8754d532, both PUSHED): P6 resolution-independence unit
+   `p6-scaling-options` — the SCALING SELECTION per PLAN §6
+   "Resolution independence + GPU rendering ... (nearest/integer
+   default; fit/fill/smooth options)" (implementation D215), the
+   resolution bullet's last small piece after the complete QoL
+   list. (a) THE SURFACE: the ALREADY-LANDED bedlam-platform
+   scale surface (ScaleMode Integer the parity default / Fit /
+   Fill + FilterMode Nearest the parity default / Linear = smooth,
+   consumed by the parity pipeline's GPU scale path +
+   cursor_to_game) exposed as a platform presentation knob riding
+   the EXISTING WindowOptions.present — three PURE functions in
+   bedlam-shell window.rs: the fail-closed CLI word mappers
+   scale_mode_from_cli/filter_mode_from_cli + the ONE composed
+   mapping scaling_present_config (the binary's only route into
+   present; defaults in = PresentConfig::default bit-for-bit).
+   (b) D200 LAYERING, NO PURIST ARBITRATION (the D210 posture):
+   the original was a FIXED 640x480 DOS framebuffer with no
+   scaling mode to preserve — both pacing arms accept the
+   selection identically (pinned by
+   scaling_option_never_changes_the_gate_answers) and the knob
+   selects NOTHING in the host beyond the PresentConfig the GPU
+   scale path consumes (never ModeConfig/SimConfig/any hash;
+   pinned by
+   scaling_selection_never_touches_the_sim_or_the_hashed_
+   trajectory over the full 3x2 selection: bit-identical
+   host_sim_config + identical executed ticks, tick count, state
+   hash, scene hash AND frame parity hash); the mapping touches
+   ONLY the two knob fields — the palette expansion stays
+   VgaExpand::Original under every selection (pinned by
+   scaling_selection_is_a_pure_present_config_mapping), so the
+   canonical 640x480 indexed frame + palette ride unchanged and
+   goldens stay resolution-agnostic; the Fill cursor-uv handling
+   stays window-side (pinned by
+   fill_scaling_cursor_is_relative_only_and_filter_invariant:
+   absolute mapping under Integer/Fit, relative aiming under
+   Fill); the binary's --scale MODE/--filter MODE fail closed at
+   exit 2 on any other word (the --save-slot domain posture).
+   (c) BOUNDS KEPT: NO new RE (a pure modern platform surface
+   over landed code, zero new binary claims — no RE artifact
+   owed); bedlam-shell only, no engine change; the headless path
+   owns no surface so the flags are noted + ignored there (it
+   hashes the SOURCE frame); catalog stays EMPTY. (d) GATE:
+   p6-scaling-options wired as the ELEVENTH P6 required_gates
+   entry (implementation + docs 017a0f4; gate block + phase list
+   78c87ed) — command = bedlam-shell --lib, --release --locked
+   --offline, hermetic. Verified first-hand: bedlam-shell --lib
+   92/0 (+6 in scaling_option_tests: the shipped-default pin, the
+   full-domain fail-closed CLI words, the pure two-field mapping,
+   the sim/trajectory pin over the full selection, the both-arms
+   gate-answer invariance, the Fill cursor posture; was 86/0 + 1
+   pre-existing ignored); the binary --help/--scale/--filter
+   wiring checked first-hand (help text, the domain rejections at
+   exit 2 incl. the missing value, the headless ignore note) AND
+   the headless smoke EXACTLY at the recorded baseline (scene
+   696adb1cd110e062 / parity cce30c983b97b16d / audio
+   110400/158092) under --scale fill --filter linear; controls
+   green: canonical_dump_gate 13/13, determinism 4/4,
+   zone_mission_parity 5/5 (ZERO canonical-chain movement);
+   check-p6-behavior-catalog OK (catalog still empty, R6
+   satisfied with the eleventh gate) + its suite; gates-validator
+   suite 22/22; fmt + clippy clean on bedlam-shell (the one
+   pre-existing D210 test warning untouched); workspace cargo
+   check clean; MANIFEST clean before AND after the
+   corpus-reading smoke (the gate reads no corpus); the bounded
+   --phase P6 validator verdict at 78c87ed: status=passed, ALL 11
+   P6 GATES GREEN, every command rc=0 under bwrap containment
+   (report .state/p6-scalingoptions-gates-report.json, head-bound
+   to 78c87ed60ff92e5969ebc175c55fe3e719f33219); no Ghidra run.
+   Queued: the HD asset pipeline RESEARCH opener as the new head
+   (the plan's own named prerequisite doc; the ENHANCED
+   native-render half of the resolution bullet stays the
+   bullet's big remaining piece, a separately scoped unit).
+
+2. DONE (2026-08-28, claim 1 — commits 63d58ac + bece1cf + 9b2599f
    by worker bd07c7b6, all PUSHED): P6 QoL unit `p6-save-slots` —
    the SAVE SLOTS + METADATA + OPT-IN AUTOSAVE sentence per PLAN
    §6 "QoL: ... save slots + metadata + opt-in autosave"
@@ -132,7 +211,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bedlam-platform ScaleMode/FilterMode — the QoL list is
    complete, so the queue advances to the resolution bullet's
    last small piece).
-2. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
+3. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
    by worker 1b994336, all PUSHED): P6 QoL unit
    `p6-volume-mixers` — the VOLUME MIXERS presentation option per
    PLAN §6 "QoL: window modes, vsync control, volume mixers, ..."
@@ -204,7 +283,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    1b42327); no Ghidra run. Queued: the QoL save slots + metadata
    + opt-in autosave sentence as the new head (window modes, vsync
    control and volume mixers now DONE).
-3. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
+4. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
    PUSHED): P6 QoL unit `p6-window-modes` — the WINDOW MODES
    presentation option per PLAN §6 "QoL: window modes, vsync
    control, ..." (implementation D210), the direct sibling of the
@@ -273,7 +352,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    rewritten queue); the structured transport failure was
    adjudicated replaced-task per the D206 checklist (all four
    items green, D211) and item 1 above stands untouched, READY.
-4. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+5. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
    the remaining half of the PLAN §6 present sentence ("vsync-
@@ -339,7 +418,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
    no Ghidra run. Queued: the QoL window-modes platform unit as
    the new head (PLAN §6 QoL list order — vsync control now DONE).
-5. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+6. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames
@@ -423,7 +502,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    no Ghidra run. Queued: the optional uncapped present mode as the
    new head (the same PLAN §6 sentence's remaining half — vsync-
    locked at any refresh OR uncapped, logic fixed in both).
-6. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+7. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -479,7 +558,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-7. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+8. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -546,7 +625,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-8. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+9. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -592,7 +671,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-9. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+10. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -638,7 +717,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-10. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+11. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -681,7 +760,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-11. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+12. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -705,7 +784,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-12. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+13. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition

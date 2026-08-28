@@ -1,5 +1,54 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-scaling-options` COMPLETE (worker 8754d532
+    claim 1, commits 017a0f4 + 78c87ed, both PUSHED): THE P6
+    RESOLUTION-INDEPENDENCE SCALING SELECTION (D215, PLAN §6
+    "Resolution independence + GPU rendering ... (nearest/integer
+    default; fit/fill/smooth options)" — the resolution bullet's
+    last small piece after the complete QoL list). The
+    ALREADY-LANDED bedlam-platform scale surface (ScaleMode
+    Integer/Fit/Fill + FilterMode Nearest/Linear) exposed as a
+    platform presentation knob riding the EXISTING
+    WindowOptions.present: three PURE functions in bedlam-shell
+    window.rs (the fail-closed CLI word mappers
+    scale_mode_from_cli/filter_mode_from_cli + the ONE composed
+    mapping scaling_present_config — the binary's only route into
+    present, defaults in = PresentConfig::default bit-for-bit) +
+    --scale MODE/--filter MODE CLI (exit 2 on any other word;
+    noted + ignored headless). D200 layering, NO purist
+    arbitration (the original was a FIXED 640x480 DOS framebuffer
+    with no scaling mode to preserve): both pacing arms accept the
+    selection identically, the knob selects NOTHING in the host
+    beyond the PresentConfig the GPU scale path consumes, the
+    palette expansion stays VgaExpand::Original (the canonical
+    640x480 indexed frame + palette ride unchanged, goldens stay
+    resolution-agnostic), the Fill cursor-uv handling stays
+    window-side — all pinned by six scaling_option_tests incl. the
+    bit-identical SimConfig + hashed trajectory over the full 3x2
+    selection. NO new RE; bedlam-shell only; catalog stays EMPTY.
+    GATE: p6-scaling-options wired as the ELEVENTH P6
+    required_gates entry (impl + docs 017a0f4; gate block + phase
+    list 78c87ed; bedlam-shell --lib, hermetic). Verified:
+    bedlam-shell --lib 92/0 (+6; was 86/0 + 1 pre-existing
+    ignored), the binary --help/--scale/--filter wiring first-hand
+    (help text, exit-2 domain rejections, the headless note) AND
+    the headless baseline EXACT (scene 696adb1cd110e062 / parity
+    cce30c983b97b16d / audio 110400/158092) under --scale fill
+    --filter linear, controls green (canonical_dump_gate 13/13,
+    determinism 4/4, zone_mission_parity 5/5 — ZERO canonical-
+    chain movement), catalog checker OK (still empty) + suite,
+    gates-validator suite 22/22, fmt + clippy clean (the one
+    pre-existing D210 test warning untouched), workspace cargo
+    check clean, MANIFEST clean before AND after every corpus
+    read, strict queue parser rc=0, the bounded --phase P6
+    validator at 78c87ed: status=passed, ALL 11 P6 GATES GREEN,
+    every command rc=0 under bwrap containment (report
+    .state/p6-scalingoptions-gates-report.json, head-bound to
+    78c87ed60ff92e5969ebc175c55fe3e719f33219); no Ghidra run. Queued: the HD asset pipeline
+    RESEARCH opener as the new head (the plan's own named
+    prerequisite doc; the ENHANCED native-render half of the
+    resolution bullet stays a separately scoped unit).
+
   - 2026-08-28 `p6-save-slots` COMPLETE (worker bd07c7b6
     claim 1, commits 63d58ac + bece1cf + 9b2599f, all PUSHED):
     THE QoL SAVE SLOTS + METADATA + OPT-IN AUTOSAVE (D213, PLAN
