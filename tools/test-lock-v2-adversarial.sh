@@ -420,6 +420,78 @@ EOF
   grep -q "completion rewrite" "$plan/.state/nudge.log"
 }
 
+case_completion_rewrite_multiedit_clean_exit() {
+  # The 2026-08-28 third-recurrence watchdog repair: the worker's step-7
+  # rewrite is a MULTI-EDIT sequence. Its intermediate state -- the
+  # successor queued while the claimed item is not yet removed, or a
+  # torn header edit -- fails boundary_completion_rewrite exactly like a
+  # foreign mutation, so the old 200ms else-branch killed the worker
+  # BETWEEN its own edits (b3083e9c: successor item landed mid-header,
+  # claimed item still active, model terminated before the removal
+  # edit), stranding a mangled INVALID queue and recording a false
+  # preflight-mismatch. D209/D211/D214 finish-line discipline explicitly
+  # owes the worker a SECOND TURN when its own parser check fails; the
+  # wrapper must grant an actively-working completer the same bounded
+  # leash it grants the recognized completion rewrite.
+  local plan="$TMP/multiedit-clean" session=multiedit-clean marker="$TMP/multiedit-clean"
+  local model="$TMP/model-multiedit-clean" worker rc
+  make_repo "$plan"
+  write_v2 "$plan/.state/claims/1-$session.claim" "$session"
+  cat > "$model" <<EOF
+#!/usr/bin/env bash
+trap 'touch "$marker.terminated"; exit 143' TERM INT
+touch "$marker.entered"
+printf 'work\n' >> "$plan/code.txt"
+git -C "$plan" add code.txt
+git -C "$plan" commit -qm "fixture work" -m "Nudge-Worker: $session"
+# Edit 1: queue the successor ABOVE the still-active claimed item. The
+# claimed stable-one/gate-one identity is still active, so this state is
+# NOT yet a sanctioned completion rewrite. Hold it far past the old
+# 200ms grace and several wrapper poll cycles, exactly like a real
+# multi-edit rewrite between tool calls.
+cat > "$plan/.state/NEXT.md" <<'QEOF'
+# NEXT
+
+## Now
+1. [READY] [id=successor-one] [gate=gate-two] queued successor task
+2. [READY] [id=stable-one] [gate=gate-one] automated test item
+
+## Done
+QEOF
+sleep 3
+# Edit 2: the completion rewrite proper -- the claimed item leaves the
+# active set only now, and the worker exits on its own.
+cat > "$plan/.state/NEXT.md" <<'QEOF'
+# NEXT
+
+## Now
+1. [READY] [id=successor-one] [gate=gate-two] queued successor task
+
+## Done
+1. DONE (fixture): stable-one/gate-one completed by the model.
+QEOF
+sleep 1
+exit 0
+EOF
+  chmod +x "$model"
+  setsid env BEDLAM_PLAN_DIR="$plan" OPENC_OVERRIDE="$model" \
+    NUDGE_IDLE_POLL=0.05 NUDGE_IDLE_LIMIT=900 NUDGE_BOUNDARY_GRACE=10 \
+    SYSTEMD_RUN_OVERRIDE=1 "$AGENT" 1 "$session" >"$marker.out" 2>&1 &
+  worker=$!
+  for _ in $(seq 1 400); do ! kill -0 "$worker" 2>/dev/null && break; sleep 0.05; done
+  wait "$worker" 2>/dev/null
+  rc=$?
+  kill -TERM -- "-$worker" 2>/dev/null || true
+  pkill -TERM -f "^timeout 3900 $model" 2>/dev/null || true
+  pkill -KILL -f "^timeout 3900 $model" 2>/dev/null || true
+  [ "$rc" -eq 0 ]
+  [ -e "$marker.entered" ]
+  [ ! -e "$marker.terminated" ]
+  [ ! -e "$plan/.state/automation-failures/$session.json" ]
+  [ ! -e "$plan/.state/claims/1-owner.claim" ]
+  grep -q "completion rewrite" "$plan/.state/nudge.log"
+}
+
 case_completion_claim_is_not_a_deadlock() {
   # The 2026-08-28 02:32 watchdog repair: AGENTS.md step-7 has the WORKER
   # rewrite NEXT.md (move its claimed item to ## Done) as its final act, so
@@ -796,6 +868,7 @@ done
 run_case 'PAUSE appearing after model start terminates the model' case_launch_mutation pause
 run_case 'launch mutation promptly kills child and grandchild process tree' case_launch_mutation_kills_process_tree
 run_case 'worker completion rewrite ends the run cleanly' case_completion_rewrite_clean_exit
+run_case 'worker multi-edit completion rewrite ends the run cleanly' case_completion_rewrite_multiedit_clean_exit
 run_case 'completion-window owner claim never deadlocks the parser' case_completion_claim_is_not_a_deadlock
 run_case 'identity-less lock-v1 cannot launch a newly current ordinal' case_identityless_v1_new_launch
 run_case 'locked lock-v1 remains compatible only as running migration state' case_locked_v1_migration_retained

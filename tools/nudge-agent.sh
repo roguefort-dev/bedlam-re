@@ -343,6 +343,36 @@ while kill -0 "$agent_pid" 2>/dev/null; do
         sleep 0.01
       done
       [ "$exited_after_change" -eq 0 ] || break
+      # (watchdog repair 2026-08-28, third recurrence, token 4104751:
+      # the worker's own step-7 rewrite is a MULTI-EDIT sequence, and its
+      # intermediate states -- successor queued while the claimed item is
+      # not yet removed, or a torn header edit -- fail
+      # boundary_completion_rewrite exactly like a foreign mutation. The
+      # 200ms leash killed two completers BETWEEN their own edits today
+      # (bd07c7b6 15:35, b3083e9c 17:28), each time stranding a mangled
+      # INVALID queue and recording a false preflight-mismatch that cost
+      # a full watchdog repair cycle. The D209/D211/D214 finish-line
+      # discipline explicitly owes the worker a second turn when its own
+      # parser check fails; the wrapper must not close that window
+      # first. Same principle as the second recurrence: an actively-
+      # working completer never gets a shorter leash than a hung silent
+      # client. The unrecognized change now travels the same bounded
+      # BOUNDARY_GRACE window -- reap_idle_model bounds silence inside
+      # it, maturation into the sanctioned completion shape is honored
+      # -- and the kill plus the recorded failure land at the deadline
+      # exactly as before.)
+      grace_deadline=$(( $(date +%s) + BOUNDARY_GRACE ))
+      log_line "launch boundary changed for item $item (not yet a sanctioned completion rewrite); awaiting exit, idle reap, or rewrite maturation for up to ${BOUNDARY_GRACE}s (model pid $agent_pid)"
+      while ! agent_exited && [ "$(date +%s)" -lt "$grace_deadline" ]; do
+        sleep "$IDLE_POLL"
+        reap_idle_model && break
+        boundary_completion_rewrite && break
+      done
+      [ "$termination_sent" -eq 0 ] || break
+      agent_exited && break
+      if boundary_completion_rewrite; then
+        continue
+      fi
       log_line "launch boundary changed for item $item; terminating model pid $agent_pid"
     fi
     terminate_boundary_violation
