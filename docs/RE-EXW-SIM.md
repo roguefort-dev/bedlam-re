@@ -11429,3 +11429,193 @@ only — the §6.3 census) → no chain movement. The canonical
 critter-bank blob is UNTOUCHED (the new home_z/spawn_heading/
 seek_sector record fields are not serialized — the §7j.71
 dir/frame/z_restore convention).
+
+## 7j.76. THE KIND-7 CLOSE-COMBAT — the .NME S7 loader walk + the
+k7 controller body (0x412f52..0x41367c) + the FUN_00412a19 STEER
+helper + the in-record knock/mode-5 producer decoded whole
+(2026-08-28, worker 7c028ff1 claim 1, item
+p5-critter-state-g2-closecombat; objdump-only from the committed
+ghidra-project/exw-text-objdump.txt + the §7j.18 loader decompile
+ghidra-project/exw-critterpoi-loader.txt — no Ghidra run, no
+corpus read) [verified]
+
+Method: the S7 block of the committed loader decompile (the
+section between the S6 block and the S8 POI block) and the k7 body
+0x412f52..0x41367c walked instruction-by-instruction from the
+committed objdump; the helpers FUN_00412a19/FUN_00417c00/
+FUN_0041eb7d/FUN_0041ebc1/FUN_0041eb65/FUN_0041eb77/FUN_0041ebf8/
+FUN_0041286f/FUN_0041a14f/FUN_00420608/FUN_00424355 and the
+weapon→critter hit lane 0x419200..0x419390 re-walked whole. All
+facts [verified] against those artifacts unless tagged.
+
+1. **THE S7 LOADER WALK (the §7j.18 S7 gloss made exact).** The
+   decompile's seventh section (6-B recs; w0 marker, w1 = x tile,
+   w2 = y tile). The SPAWN COUNT is the §7j.18 S3 cascade made
+   exact — NOT "max(difficulty,1)": d=0 → 1, d=1 →
+   (RandA()&1)+1, d=2 → 2, d≥3 → 1 — and the count roll is ONE
+   SECTION-LEVEL draw (computed BEFORE the record loop, so at d=1
+   the section consumes exactly one RandA before any per-critter
+   draw). Per spawned critter, in write order:
+   - x d@+0x36 := w1·0x2000+0xF00 and y d@+0x3A :=
+     w2·0x2000+0xF00 (Q13 tile cells — the S3/S5/S6 shape);
+   - **z d@+0x3E := 0xDF FIXED** (Q5 by value — 6·0x20+0x1F, the
+     level-6-top constant; NO floor probe, NO corner-z loop, NO
+     home stamps — S7 stages none of the S5 home triple);
+   - anim w@+0x0E := 0, countdown w@+0x56 := 0;
+   - presence w@+0x24 := 1;
+   - **heading d@+0x10 := FUN_0041ec1c(0xFF)** — the bounded
+     RandA&0x7FFF-bucketed pick (§7j.42/3's idiv 0x8000/n clamp
+     n−1 form) → 0..0xFE; the SECTION'S ONLY per-critter draw;
+   - mode w@+0x0C := **3** (approach — ACTIVE from frame 0, never
+     dormant), species w@+0x02 := 1, kind w@+0x00 := 7;
+   - **hp w@+0x06 := 0x9C4 + (m·0x9C4)/27** (2500+(2500·m)/27 —
+     the linear-mission scalar [0x46ae8c] as at every section's
+     imul site; the decompile line `(iVar6*0x9c4)/0x1b + 0x9c4`);
+   - count++.
+   **NO map-bounds gate** (unlike S1 §7j.74/1 — an out-of-map tile
+   stages anyway at the Q13 arithmetic). DRAW BUDGET: 1 at load
+   iff d=1 (the count roll) + 1 per spawned critter.
+2. **THE k7 CONTROLLER BODY** (kind table 0x412f18 case 7 →
+   0x412f52; entered once per frame per critter; the record
+   pointer idiom is idx·0x7E + 0x4cff98, and fields past +0x71
+   address as 0x4d00xx — w@+0x72/74/76/78 = the facing/knock-vx/
+   knock-vy/fall-rate cells). The substep count = the species word
+   (the §7j.42/2 convention; S7 stamps 1). Per substep, in the
+   original's order:
+   - **HEAD**: species ≤ substep → exit (to the shared epilogue
+     prep 0x41364e — the presence-mark cell y>>13 row + x>>13).
+   - **MODE 7 DYING** (0x413618): countdown w@+0x56++ (word inc);
+     countdown > 4 → **hp := 0 ∧ presence := 0** — a landed k7
+     despawns on the FIFTH dying frame (mode 7 is entered by the
+     mode-6 landing with countdown 0; the substep loop continues
+     through the clear — the main loop skips it next frame).
+   - **MODE 6 BALLISTIC** (0x412f99): the in-record knock triple
+     integrates — newX := x + w@+0x74·2, newY := y + w@+0x76·2,
+     newZ := z − w@+0x78, and the fall-rate ramps
+     **w@+0x78 += 2 while < 0x18** (a 2/frame gravity ramp capped
+     24); then the standard clamps (each ≥ 1; x/y edge-clamped to
+     the map `[0x4eddec/df0]<<0xD − 1` form; z ≥ 1), the floor
+     probe FUN_0041e411(newX>>8, newY>>8, newZ), and the LANDING
+     TEST: `floor < newZ ∧ newZ ≠ 1` → the NO-LANDING path
+     (0x413249: write the clamped newX/newY/newZ, keep mode 6,
+     tail); else **LAND** (0x4130c5): z := the floor (post the
+     ≥1 clamp), mode := 7, countdown := 0, then the LANDING
+     EFFECTS in order —
+     (a) **8× debris**: per i=1..8, three RandA draws →
+         FUN_00420608(x>>8 + (RandA&0x3F)−0x1F, y>>8 +
+         (RandA&0x3F)−0x1F, z + (RandA&0xF), kind 6, delay i,
+         −1) — the 128-slot stager §7j/5, the chunk kind;
+     (b) **5× splash tiles**: per i=1..5, two RandA draws →
+         FUN_00424355((x>>13)+(RandA&3)−2, (y>>13)+(RandA&3)−2,
+         min((z>>5)+2, 7), delay i) — the §7j.10/14 claim-gated
+         tile stager, the staggered delay = the loop counter;
+     (c) **24 effect rows**: FUN_0041a14f(x, y, (z+0x15)<<8,
+         0x18) — the §7j.24/5 LRU row spawner (3-4 draws per row;
+         the "controller ballistic landing (0x18 — the k7 body
+         only)" pin §7j.43/2 confirmed at 0x413220..0x413248).
+   - **MODE 5 KNOCK DRIFT** (0x413303): countdown++ FIRST, then
+     countdown > 10 (0xA) → mode := 3, countdown := 0 (the tail
+     engage runs THIS substep against the STALE scan cells — the
+     [esp+0x28] dist is whatever the last default-path substep
+     left); else the drift: newX := x + w@+0x74·2, newY :=
+     y + w@+0x76·2, the same ≥1 + edge clamps, x/y written (NO z
+     change). TEN drift frames, then back to approach.
+   - **DEFAULT — every other mode** (0x4133c0): the
+     nearest-alive-robot scan FUN_00417c00(x>>8, y>>8) → the
+     per-frame stack cells dist@0x28/idx@0x2c (dist px octile,
+     sentinel idx 0 / 10,000,000 when none). NOTHING else — modes
+     0/8/9/0xA/0xB/2/4 have no k7 body (a dormant k7 is inert).
+   - **THE POST-MODE TAIL** (0x4133e7): re-read mode; **mode == 3
+     ∧ scan-dist < 0x320 (800 px)** → the ENGAGE block; countdown
+     ≠ 0 → countdown−− (a recharging k7 neither aims nor moves);
+     countdown == 0 →
+     (a) **THE AIM + STEER**: dx := robot[scan-idx].x@+0 −
+         (x & !0xFF), dy := robot.y − (y & !0xFF) (the LOW-BYTE
+         SCRUB on the critter side — a within-tile aim
+         quantization; robot x/y are the Q13 bank cells); dist :=
+         max(FUN_0041ebf8(dx,dy)>>8, 1); aim :=
+         FUN_0041eb7d/FUN_0041ebc1 on |dx|·0x80/dist (the shared
+         angle-byte family); **heading := (heading +
+         FUN_00412a19(aim, heading)) & 0xFF** — the ±1 STEER
+         below;
+     (b) **THE MOVE**: x := x + cos(heading)>>6, y :=
+         y + sin(heading)>>6 (FUN_0041eb65/77 — the shared sine
+         pair, arith shift), the same ≥1 + edge clamps; NO wall
+         probe, NO z change;
+     (c) **THE FIRE GATE — TWO CONJUNCTS**: scan-dist < 0x50
+         (80 px point-blank) ∧ the FRAME-PHASE MODULO
+         ([0x46ae68] g_frame_count + critter idx): d=0 → &0x1F==0
+         (every 32), d=1 → &0xF==0 (every 16), d=2 → &0x7==0
+         (every 8), **d≥3 → NEVER** (the jne at 0x413575 falls
+         through to the tail) — §7j.16's "fire-rate gates
+         32/16/8" made exact, idx-staggered;
+     (d) **THE STAMP** (both gates pass + FUN_0041286f free):
+         projectile slot {w@+0x00 := 0x69 (the BEAM — §7j.50),
+         d@+0x02 := x, d@+0x06 := y (Q13, post-move),
+         **d@+0x0A := 6 LITERAL** (NOT Q13 — the §7j.17 "z=6"
+         pin), d@+0x1A := 0 (counter), d@+0x1E := 0x18 (TTL 24)};
+         NO velocity stamps (the beam column is stationary — the
+         bank's stale-velocity carryover is unobservable in the
+         engine's modeled tick); then **countdown := 6** — the
+         fire RECHARGE (with the ≥8 modulo periods the modulo
+         gate dominates at every difficulty).
+3. **FUN_00412a19(aim, heading) — THE STEER HELPER** [NEW pin,
+   0x412a19..0x412a49]: aim == heading → 0; else δ :=
+   wrap-to-byte-range(aim − heading) (the +0x100/−0x100 wrap into
+   [−0x100, 0xFF]); **δ < 0x80 → +1 else −1** (the 0x80 tie turns
+   clockwise) — a ±1-per-substep turn toward the aim by the
+   shorter arc. The queue's "steer" gloss anchored.
+4. **THE WEAPON→CRITTER KNOCK LANE for kind 7** (0x419200..0x419390
+   inside the hit applier — the §7j.23 mode-2 lane): a present k7
+   in mode ∈ {6,7} is IMMUNE (0x419229..0x419264 — plus the 0xB
+   arm at 0x419395 for the second pass variant); the px box ≤ 0x20
+   + the weapon-z band; on hit, in order: hp −= damage
+   (FUN_00419aff weapon-keyed), attacker w@+0x04 := owner,
+   fuse/hit-flash w@+0x7C := 1, impact d@+0x1C/+0x20 :=
+   (shooter x,y)<<8 (the SAME impact pair the k4/k5/6 knock
+   stages), **heading := (angle_byte(crit − shooter) + 0x80)&0xFF
+   — the AWAY heading, then the in-record knock vector
+   w@+0x74 := cos(heading)>>6, w@+0x76 := sin(heading)>>6** (the
+   §7j.23 "kind 7 in-record knock instead" pin made exact);
+   hp ≤ 0 → FUN_0041896c (the k7 death handler — §7j.24: kind := 6
+   + w@+0x78 := 1 + 3 falling-gib debris + 1× k0xD + CACODETH +
+   bounty +1000 — STILL the unlanded §7j.24 subset alongside
+   k1/k2/k3); else **mode := 5, countdown := 0** — the knock
+   drift producer. (The k4/k5/6 lane instead stages
+   FUN_0041a028 juice on a 25% roll — kind 7 has NO juice roll.)
+5. **DIFFICULTY COUPLING**: loader-side none beyond the count
+   cascade (the hp scalar is m, not d); body-side the fire modulo
+   alone (32/16/8 by d). **DRAW BUDGET: the k7 chain is draw-free
+   on the approach/move/fire path** (zero RandA/FUN_0041ec1c
+   sites in 0x412f90..0x4135e7 — the scan, aim, steer, move and
+   the 0x69 stamp consume nothing); the ONLY body draws are the
+   mode-6 landing's 24 (debris) + 10 (splash) + the effect rows;
+   the S7 staging draws 1/critter (+1 at d=1).
+6. **The §7j.42 k7 gloss CORRECTED**: the "engage leash
+   (d+1)·0x40+600" is the k5/6 mode-8 band (§7j.42/3), NOT k7 —
+   the k7 engage gate is the FLAT dist < 0x320 (800), and the
+   point-blank fire band is dist < 0x50; "32/16/8-frame cadence" =
+   the (g_frame+idx) modulo gates (idx-staggered, d≥3 never), and
+   the fire carries a 6-frame countdown recharge on top. The
+   mode-6 entry producer was NOT found in the surveyed writers
+   (the death handler flips kind to 6 instead) — the k7 mode-6
+   body is landed faithfully as decoded with the producer
+   observation noted [corpus-dead path, like §7j.42's noted
+   gaps].
+ENGINE CONSEQUENCE (landed this unit): S7 accepted by
+stage_critters (kind 7, Q13 x/y + FIXED Q5 z 0xDF, heading =
+bounded_pick(0xFF), mode 3, species 1, hp = 2500+(2500·m)/27, the
+d-cascade count with its section-level d=1 roll); the k7 body
+lands as the dying-despawn + the ballistic landing machine (the
+fall-rate ramp, the floor landing test, the 8-debris/5-splash/
+24-row effects) + the 10-frame knock drift + the default scan +
+the steer-aim-move-0x69 fire chain with the two-conjunct gate and
+the 6-frame recharge; the knock lane specializes kind 7 in the
+weapon→critter hit applier (the away heading + the in-record
+vector + mode 5). The new record fields (knock_vx/knock_vy/
+fall_rate/scan_robot/scan_dist) are NOT serialized — the canonical
+74-B critter-bank blob is untouched. No canonical scenario stages
+S7 (ZONEA/M1 hosts S3+S4 only) → no chain movement. The k7 DEATH
+handler (§7j.24) stays the documented unlanded subset (the
+k1/k2/k3 precedent); the 0x69 beam TICK/impact (§7j.50's
+terrain-only 50/100/200 re-key) stays the enemy_tick E-gap.
