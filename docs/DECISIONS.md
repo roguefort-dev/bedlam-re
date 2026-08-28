@@ -8393,3 +8393,69 @@ gate) + its suite 30/30; gates-validator suite 22/22; fmt + clippy
 clean on the touched crates (the one pre-existing D210 test
 warning untouched); workspace cargo check clean; MANIFEST clean
 before AND after every corpus read.
+
+## D218 — 2026-08-28: autonomy/watchdog — the FIFTH post-completion death, second occurrence of the D214 torn-rewrite variant (worker b3083e9c, `p6-enhanced-native-render`): the wrapper's 200ms unrecognized-boundary leash killed the completer BETWEEN its own queue edits; repaired by (1) the mechanical byte-preserving queue reconstruction and (2) the wrapper fix — an unrecognized mid-run boundary change now travels the same bounded BOUNDARY_GRACE window as a recognized completion rewrite (idle reaper bounds silence, maturation into the sanctioned shape is honored, kill + failure land at the deadline exactly as before)
+
+Worker b3083e9c finished `p6-enhanced-native-render` completely —
+ca915fd + 24daf9f PUSHED, ALL 13 P6 gates green at 24daf9f (report
+.state/p6-enhancednative-gates-report.json, head-bound), its Done
+entry written — and then its step-7 queue rewrite landed as a
+MULTI-EDIT sequence: edit 1 inserted the successor item
+(`p6-frame-pacing-benchmark`) by splitting the header line
+"...never stays in '## Now' as 'N. DONE ...'" (stranding the item in
+the header region), edit 2 appended the Done entry, and edit 3
+(removing the completed item from `## Now`) never ran: the wrapper's
+boundary poll saw the changed queue, `boundary_completion_rewrite`
+correctly answered NO (the queue was torn AND the claimed identity
+was still active), and the else-branch's 200ms self-exit grace
+expired mid-sleep — pid 3689657 terminated at 17:28:47, a
+`preflight-mismatch` failure recorded, parser rc=2
+"line 37: unknown queue section before ## Now", controller refusing
+idle/spawn. Same class as bd07c7b6 at 15:35 (D214): both were
+COMPLETERS killed between their own edits, each costing a full
+watchdog repair cycle and a mangled queue.
+
+THE BINDING CHECKLIST, verified first-hand: (1) GREEN — ca915fd +
+24daf9f PUSHED with the worker's own Nudge-Worker trailers, main ==
+origin/main at 24daf9f; (2) MISS — the on-disk queue WAS the
+worker's rewrite in progress (device 52, inode 3836061, sha
+1c86ad47.. -> 4b45f878.. per the failure record) and the strict
+parser rejected it rc=2, so the postcondition had to be mechanically
+established; (3) GREEN — the failure artifact matches the trigger
+snapshot identity (b3083e9c-84b4-44b0-97bd-9ce85711abcb.json, device
+52, inode 7854603, sha256 1ee83182..., ordinal 1, id/gate
+p6-enhanced-native-render); (4) GREEN post-repair — the failed
+identity (1, p6-enhanced-native-render, p6-enhanced-native-render)
+is absent from the active queue; the successor
+`p6-frame-pacing-benchmark` is the READY head; parser rc=0 RUNNABLE
+1 on the live file before the bookkeeping commit and after.
+
+THE REPAIR, part 1 (queue, WIP preserved byte-for-byte): the
+worker's intended content was present verbatim in the torn file —
+the successor item text (kept exactly, only its PLACEMENT fixed:
+header region -> under `## Now`), its own Done entry (kept verbatim),
+and the canonical header (restored to the HEAD bytes the torn edit
+had split). Dropped only stale fragments: the duplicated half-line
+and the completed item from `## Now` (already recorded in Done).
+THE REPAIR, part 2 (wrapper, the churn cause): nudge-agent.sh's
+else-branch now grants the same BOUNDARY_GRACE window when a boundary
+change is not yet recognizable as the sanctioned completion rewrite —
+reap_idle_model still bounds a hung silent client inside the window,
+a state that MATURES into the sanctioned shape (claimed identity left
+the active set) is honored via recheck, and the kill plus the
+recorded preflight-mismatch land at the deadline exactly as before.
+This is the third extension of the same principle (878c03f's mid-run
+poll, then the 240s->900s grace for the recognized rewrite): an
+actively-working completer never gets a shorter leash than a hung
+silent client — and it reconciles the wrapper with the D209/D211/D214
+finish-line discipline, which explicitly owes the worker a second
+turn whenever its own parser check fails. Red/green: the new
+`case_completion_rewrite_multiedit_clean_exit` (successor queued
+above the still-active claimed item, held 3s, then the completing
+rewrite) kills the old wrapper rc=76 and ends cleanly under the fix;
+all seven launch-boundary mutation cases still terminate inside
+their bounded window; controller, watchdog, failure-watchdog,
+claims, and waiting-automatic suites all green. The ack binds
+remediation_commit to the bookkeeping commit (resolution
+replaced-task: the successor replaced the failed identity in the
+active queue).

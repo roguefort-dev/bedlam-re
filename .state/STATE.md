@@ -1,5 +1,36 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-enhanced-native-render` COMPLETE (worker b3083e9c
+    claim 1, commits ca915fd + 24daf9f, both PUSHED): P6 ENHANCED
+    native-render OPENER (D217) — the THIRTEENTH P6 required gate, ALL
+    13 P6 GATES GREEN at 24daf9f (bounded validator verdict
+    status=passed, report .state/p6-enhancednative-gates-report.json
+    head-bound to 24daf9fe937f). The presentation-mode selection
+    (PresentationMode Parity/Enhanced in the NEW bedlam_platform::layout,
+    carried as WindowOptions.presentation, --presentation parity|enhanced
+    fails closed at exit 2, noted + ignored headless; D200 layering OUT
+    of ModeConfig, both pacing arms accept it identically, selects
+    NOTHING in the sim), the responsive layout contract as pure data
+    (16:10 master 1920x1200, centered 16:9 safe region, world reusing
+    the landed Fit shape, absolute cursor inverse), and the FIRST
+    native pass = the mission-identity strip (palette-indexed UI plane
+    at presentation resolution through the landed ParityPipeline path,
+    Mission scenes only, identity/glyphs/color/palette all from landed
+    game-owned data — zero new binary claims, never over game pixels;
+    SMLFONT.BIN via corpus source once, miss disables the strip
+    non-fatally). Parity bounds pinned: bit-identical SimConfig,
+    executed ticks, state/scene/frame-parity hashes and canonical
+    frame indices + palette under either mode; canonical_dump_gate
+    13/13, determinism 4/4, zone_mission_parity 5/5 zero
+    canonical-chain movement; bedlam-shell --lib 104/0 (+12), smoke at
+    the recorded baseline under --presentation enhanced. The worker
+    died at its own finish line mid queue-rewrite (the wrapper's 200ms
+    unrecognized-boundary leash, fifth D206-class death, second D214
+    torn-rewrite variant); the watchdog repair completed its
+    bookkeeping mechanically (queue reconstructed byte-preserving,
+    D218; wrapper leash fixed, grace now equals BOUNDARY_GRACE).
+    Queued: p6-frame-pacing-benchmark (the plan's QoL closing
+    instrument) as the READY head — the FOURTEENTH gate candidate.
   - 2026-08-28 `p6-hd-asset-research` COMPLETE (worker b9f4e384
     claim 1, commits 4975281 + d63c82f, both PUSHED): THE P6 HD
     ASSET PIPELINE RESEARCH OPENER (D216, PLAN §6 "Optional HD

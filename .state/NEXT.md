@@ -10,44 +10,113 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-enhanced-native-render] [gate=p6-enhanced-native-render] P6
-   ENHANCED native-render OPENER per PLAN §6 "Resolution independence +
-   GPU rendering (D9/D20/D21): ... ENHANCED mode is explicitly non-parity
-   and renders supported world/UI passes natively; bespoke responsive
-   layouts target 16:9 and 16:10 (16:10 authoring master with 16:9 safe
-   region), while other aspect ratios fit/letterbox/pillarbox" — the
-   resolution bullet's big remaining half after the landed D215 scaling
-   selection and the p6-hd-asset-research prerequisite doc (its §8 seam
-   sketch and §5.A layout contract are this unit's design inputs).
-   BOUNDED SCOPE, one unit: (a) the ENHANCED PRESENTATION-MODE SELECTION
-   at the platform level — a presentation knob OUT of ModeConfig per D200
-   (the D215 posture: both pacing arms accept it identically and it
-   selects nothing in the sim; the binary selects it; the headless path
-   owns no surface so the flag is noted + ignored there); (b) the FIRST
-   supported native world or UI pass rendered at presentation resolution
-   through the already-landed bedlam-platform GPU path (choose the
-   smallest honest pass, e.g. a UI plane, document the choice in
-   P6-MODERNIZATION.md); (c) the RESPONSIVE LAYOUT CONTRACT as data:
-   16:10 authoring master with the centered 16:9 safe region, other
-   aspect ratios fit/letterbox/pillarbox via the existing PresentConfig
-   shapes, pure functions under test; (d) the PARITY BOUNDS pinned by
-   tests: the canonical 640x480 indexed frame + palette and every hash
-   stay byte-identical under either presentation mode (the D215
-   trajectory-pin shape), goldens remain canonical-frame based and
-   resolution-agnostic, zero canonical-chain movement (canonical_dump_gate
-   13/13, determinism 4/4, zone_mission_parity 5/5 before AND after).
-   OUT OF SCOPE (future separately scoped units): the extended viewport
-   (a separately FLAGGED gameplay change per PLAN — never a silent
-   default), Smacker native decode, further world passes, any HD-pack
-   consumption (the runtime seam stays future work per D216). No new RE
-   owed (a pure platform surface over landed code — zero new binary
-   claims); catalog stays EMPTY (a plan-named presentation unit is not
-   a catalog entry); wire gate p6-enhanced-native-render as the
-   THIRTEENTH P6 required_gates entry (the gate block may land with the
-   implementation, the phase list is the wiring's second half — the
-   78c87ed pattern); own Nudge-Worker trailer; no Ghidra run.
+1. [READY] [id=p6-frame-pacing-benchmark] [gate=p6-frame-pacing-benchmark] P6 QoL
+   FEEL-PROXY benchmark unit per PLAN §6 "Game-feel proxies:
+   input-to-present ≤ 1 original frame; animation cadence matches at
+   the active display refresh (validated 60–240Hz+); no stutter
+   under p95 frame-time budget at that refresh. An automated
+   scheduled CI benchmark checks 240Hz frame pacing against a pinned
+   hardware profile and thresholds; an unavailable profile creates no
+   task and only excludes that platform attestation" — the plan's own
+   closing instrument of the QoL sentence, still unlanded after the
+   D208/D210/D212/D213 knobs and the D215/D217 resolution pair (the
+   repo's CI exists as push/PR only, .github/workflows/ci.yml, no
+   schedule yet). BOUNDED SCOPE, one unit: (a) the FRAME-PACING
+   BENCHMARK HARNESS — the pure cadence math (the FixedStepClock
+   pump/present arithmetic: pumps due per measured delta, present-gate
+   answers, the recompose alpha cadence at 240Hz) under hermetic test,
+   plus a bounded measurement binary or example that runs the same
+   pieces against a wall clock ONLY on a matching profile; (b) the
+   PINNED HARDWARE PROFILE as committed data (machine class, refresh,
+   p95 thresholds) with the UNAVAILABLE-PROFILE POSTURE mechanical:
+   the benchmark skips clean (exit 0, an explicit no-attestation
+   note), never a false red, never a task; (c) the SCHEDULED CI
+   WIRING — a cron-triggered workflow whose pacing job is a no-op
+   when the profile is unavailable (the plan sentence verbatim);
+   (d) evidence in docs (P6-MODERNIZATION.md status paragraph +
+   DECISIONS entry), the gate wired as the FOURTEENTH P6
+   required_gates entry over the hermetic suite (the 78c87ed
+   pattern: gate block with the implementation, phase list second).
+   BOUNDS: no engine change unless the harness needs a read-only
+   seam; the hashed trajectory untouched; no corpus read by the gate;
+   catalog stays EMPTY (a plan-named QoL instrument is not a catalog
+   entry); no new RE; own Nudge-Worker trailer; no Ghidra run.
 
 ## Done
+1. DONE (2026-08-28, claim 1 — commits ca915fd + 24daf9f by
+   worker b3083e9c, both PUSHED): P6 ENHANCED native-render OPENER
+   `p6-enhanced-native-render` — the resolution bullet's big
+   remaining half per PLAN §6 "ENHANCED mode is explicitly non-parity
+   and renders supported world/UI passes natively; bespoke responsive
+   layouts target 16:9 and 16:10 (16:10 authoring master with 16:9
+   safe region), while other aspect ratios fit/letterbox/pillarbox"
+   (design inputs: docs/RESEARCH-HD-ASSET-PIPELINE.md §5.A + §8, the
+   p6-hd-asset-research prerequisite). (a) THE SELECTION:
+   `PresentationMode` (Parity default = the shipped posture exactly /
+   Enhanced) in the NEW `bedlam_platform::layout`, carried as
+   `WindowOptions.presentation`; the binary's `--presentation
+   parity|enhanced` fails closed at exit 2 (checked first-hand incl.
+   the missing value), noted + ignored headless (the smoke at the
+   recorded baseline under the flag). D200 layering, NO purist
+   arbitration (the D215 posture): OUT of ModeConfig, both pacing
+   arms accept it identically, selects NOTHING in the sim. (b) THE
+   FIRST NATIVE PASS — the choice documented in P6-MODERNIZATION.md
+   §1: the smallest HONEST pass is the MISSION-IDENTITY STRIP (every
+   engine-baked pass would need a canonical-frame rewrite — forbidden
+   — or ghost over scaled pixels; so the first pass is ADDITIVE in
+   the layout's own margin from landed game-owned data only): a
+   palette-indexed UI plane AT PRESENTATION RESOLUTION through the
+   ALREADY-LANDED parity-pipeline path (`ParityPipeline::with_plane`
+   + `upload_indexed` + `draw_rect`), in the responsive layout's LEFT
+   pillarbox margin INSIDE the safe region, Mission scenes only —
+   identity bytes (RE-EXW-SAVE FUN_004473cd semantics over
+   `mission_slot`), glyphs (the LANDED pub `bedlam_render::ui_bank`
+   drawer FUN_00402884 + FUN_00408913 advances), color (the game's
+   own sidebar 0x24), palette (the canonical frame's own) — ZERO new
+   binary claims, ZERO invented pixels, never over game pixels; the
+   margins OUTSIDE the safe region stay untouched for the HD-pack
+   seam; SMLFONT.BIN via the corpus source once (cached; a miss
+   disables the strip, noted, never fatal; headless never fetches);
+   2x integer glyph replication. (c) THE RESPONSIVE LAYOUT CONTRACT
+   as pure data: 16:10 master 1920x1200, the centered 16:9 safe
+   region on ANY target (largest centered ≤16:9 rect — 16:9
+   full-bleed, wider pillarboxed, taller letterboxed), the world rect
+   REUSING the landed `scale_rect(Fit)` shape (the Fill crop never
+   applies), the margins, the ABSOLUTE cursor inverse
+   `layout_cursor_to_game`. (d) PARITY BOUNDS pinned:
+   bit-identical SimConfig + identical executed ticks, tick count,
+   state hash, scene hash AND frame parity hash under either
+   selection PLUS the canonical frame indices + palette
+   byte-identical; the Parity present path runs the landed calls
+   unchanged (`frame_draw_rect` answers the landed `scale_rect`
+   under Parity); controls green BEFORE AND AFTER
+   (canonical_dump_gate 13/13, determinism 4/4, zone_mission_parity
+   5/5 — zero canonical-chain movement; goldens canonical-frame
+   based and resolution-agnostic). OUT OF SCOPE kept: the extended
+   viewport (separately FLAGGED gameplay change), Smacker native
+   decode, further world passes, HD-pack consumption (D216 future).
+   GATE: p6-enhanced-native-render wired as the THIRTEENTH P6
+   required_gates entry (implementation + docs + gate block ca915fd;
+   phase list 24daf9f) — command = bedlam-shell --lib, --release
+   --locked --offline, hermetic. Verified first-hand: bedlam-shell
+   --lib 104/0 (+12: 7 enhanced-native + 5 native; was 92/0 + 1
+   pre-existing ignored); bedlam-game --lib 152/0 + bedlam-core
+   --lib 147/0 untouched; headless smoke EXACTLY at the recorded
+   baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d /
+   audio 110400/158092) under `--presentation enhanced`;
+   check-p6-behavior-catalog OK (catalog EMPTY, R6 satisfied with
+   the thirteenth gate) + its suite 30/30; gates-validator suite
+   22/22; fmt + clippy clean on the touched crates (the one
+   pre-existing D210 test warning untouched); workspace cargo check
+   clean; MANIFEST clean before AND after every corpus read; the
+   bounded --phase P6 validator verdict at 24daf9f: status=passed,
+   ALL 13 P6 GATES GREEN, every command rc=0 under bwrap containment
+   (report .state/p6-enhancednative-gates-report.json, head-bound to
+   24daf9fe937f); no Ghidra run. Queued: the QoL feel-proxy scheduled
+   frame-pacing benchmark as the new head (the plan's own closing
+   instrument of the QoL sentence, the last unlanded plan-named P6
+   piece before the phase exit).
+
 1. DONE (2026-08-28, claim 1 — commits 4975281 + d63c82f by worker
    b9f4e384, both PUSHED): P6 HD asset pipeline RESEARCH opener
    `p6-hd-asset-research` — docs/RESEARCH-HD-ASSET-PIPELINE.md, the
