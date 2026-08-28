@@ -10,43 +10,113 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-hd-asset-research] [gate=p6-hd-asset-research] P6
-   HD asset pipeline RESEARCH opener per PLAN §6 "Optional HD
-   asset pipeline (D21; external pack, never bundled originals or
-   derivatives in git)" — the plan's OWN named prerequisite
-   ("exact package/model pins come from
-   docs/RESEARCH-HD-ASSET-PIPELINE.md"): write that doc,
-   docs/RESEARCH-HD-ASSET-PIPELINE.md, surveying against PRIMARY
-   sources with the web tools (a transport/network failure = the
-   structured failure outcome, never a thinner doc): (a) the four
-   workflow categories — 4:3 -> 16:9/16:10 background
-   outpainting/generative fill, alpha-aware sprite/sprite-sheet
-   upscale, seamless tile/texture upscale, portraits/UI art —
-   with candidate ComfyUI workflow presets + exact
-   package/model/version pins each; (b) the provenance + manifest
-   schema the gates will check (workflow JSON, recipes, masks,
-   model/tool/version hashes, seeds/prompts, manifests,
-   provenance; generated images live in a user-selected EXTERNAL
-   HD-pack directory, never in git); (c) the automated gate
-   criteria design — provenance, dimensions, alpha integrity,
-   seam quality, perceptual thresholds, outputs without recorded
-   evidence excluded from shipping; (d) the runtime resolution
-   seam sketch — replacements resolved by stable asset ID with
-   fallback to originals; text/controls/click targets/gameplay
-   information stay ENGINE-rendered, never hallucinated into
-   generated backgrounds; (e) the isolated + hardware-profiled
-   setup posture. BOUNDS: RESEARCH ONLY — no generated assets, no
-   engine change, no new binary RE claims (citations of external
-   sources carry their own provenance), catalog stays EMPTY;
-   wire gate p6-hd-asset-research as the TWELFTH P6
-   required_gates entry (command = a bounded offline checker over
-   the committed doc, the e0bc7fb scaffold pattern — the unit
-   defines it); DECISIONS.md entry for the gate design;
-   gates-validator green; MANIFEST clean; no Ghidra run; own
-   Nudge-Worker trailer.
+1. [READY] [id=p6-enhanced-native-render] [gate=p6-enhanced-native-render] P6
+   ENHANCED native-render OPENER per PLAN §6 "Resolution independence +
+   GPU rendering (D9/D20/D21): ... ENHANCED mode is explicitly non-parity
+   and renders supported world/UI passes natively; bespoke responsive
+   layouts target 16:9 and 16:10 (16:10 authoring master with 16:9 safe
+   region), while other aspect ratios fit/letterbox/pillarbox" — the
+   resolution bullet's big remaining half after the landed D215 scaling
+   selection and the p6-hd-asset-research prerequisite doc (its §8 seam
+   sketch and §5.A layout contract are this unit's design inputs).
+   BOUNDED SCOPE, one unit: (a) the ENHANCED PRESENTATION-MODE SELECTION
+   at the platform level — a presentation knob OUT of ModeConfig per D200
+   (the D215 posture: both pacing arms accept it identically and it
+   selects nothing in the sim; the binary selects it; the headless path
+   owns no surface so the flag is noted + ignored there); (b) the FIRST
+   supported native world or UI pass rendered at presentation resolution
+   through the already-landed bedlam-platform GPU path (choose the
+   smallest honest pass, e.g. a UI plane, document the choice in
+   P6-MODERNIZATION.md); (c) the RESPONSIVE LAYOUT CONTRACT as data:
+   16:10 authoring master with the centered 16:9 safe region, other
+   aspect ratios fit/letterbox/pillarbox via the existing PresentConfig
+   shapes, pure functions under test; (d) the PARITY BOUNDS pinned by
+   tests: the canonical 640x480 indexed frame + palette and every hash
+   stay byte-identical under either presentation mode (the D215
+   trajectory-pin shape), goldens remain canonical-frame based and
+   resolution-agnostic, zero canonical-chain movement (canonical_dump_gate
+   13/13, determinism 4/4, zone_mission_parity 5/5 before AND after).
+   OUT OF SCOPE (future separately scoped units): the extended viewport
+   (a separately FLAGGED gameplay change per PLAN — never a silent
+   default), Smacker native decode, further world passes, any HD-pack
+   consumption (the runtime seam stays future work per D216). No new RE
+   owed (a pure platform surface over landed code — zero new binary
+   claims); catalog stays EMPTY (a plan-named presentation unit is not
+   a catalog entry); wire gate p6-enhanced-native-render as the
+   THIRTEENTH P6 required_gates entry (the gate block may land with the
+   implementation, the phase list is the wiring's second half — the
+   78c87ed pattern); own Nudge-Worker trailer; no Ghidra run.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commits 017a0f4 + 78c87ed by
+1. DONE (2026-08-28, claim 1 — commits 4975281 + d63c82f by worker
+   b9f4e384, both PUSHED): P6 HD asset pipeline RESEARCH opener
+   `p6-hd-asset-research` — docs/RESEARCH-HD-ASSET-PIPELINE.md, the
+   plan's OWN named prerequisite ("exact package/model pins come from
+   docs/RESEARCH-HD-ASSET-PIPELINE.md"), ADOPTED from the committed
+   2026-08-18 groundwork draft (861aebe, preserved — no reset) and
+   REFRESHED against PRIMARY sources with the web tools, every
+   load-bearing pin re-verified FIRST-HAND 2026-08-28: (a) the FOUR
+   workflow categories each carry candidate ComfyUI workflow presets +
+   exact pins — 4:3 -> 16:9/16:10 background outpainting/generative fill
+   (FLUX.1-Fill-dev primary: gated, flux-1-dev-non-commercial-license,
+   the card's own color-shift/edge-line limitations; SD2-inpainting
+   fallback demoted NEVER-PRIMARY after the model card returned 401
+   login-gated first-hand; SDXL base fallback openrail++ research-only;
+   the official flux_fill_outpaint_example template verified in the
+   Comfy-Org listing), alpha-aware sprite/sprite-sheet upscale
+   (RealESRGAN x2plus v0.2.1 + x4plus_anime_6B v0.2.2.4 zoo URLs +
+   SwinIR Apache-2.0 003_realSR for tiles), seamless tile/texture
+   upscale, portraits/UI art (GFPGAN v1.4 surveyed-DEFERRED: documented
+   identity drift, no core node; CodeFormer EXCLUDED from distributable
+   packs: NTU S-Lab non-commercial) — all in a MACHINE-CHECKABLE
+   embedded registry, schema hd-asset-pins-v1; (b) tool pins refreshed:
+   ComfyUI v0.34.0 (GPL-3.0 verified at the tag; PyTorch >= 2.7 since
+   v0.32.0) + v0.33.1 fallback, comfy-cli v1.18.0 (v1.17.0 re-homed
+   API-workflow validation) + v1.16.0 fallback, Arctic Helper v0.2.9
+   unchanged + package sha256; (c) the hd-pack-manifest-v1 provenance +
+   manifest schema design (source/recipe/generation/runtime/model/
+   output/review groups; in-git mirror carries ids+hashes NEVER pixels);
+   (d) the five-family automated gate criteria design — provenance,
+   dimensions, alpha integrity, seam quality, perceptual thresholds,
+   fail-closed (outputs without recorded provenance are excluded from
+   shipping); (e) the runtime resolution seam sketch — stable logical
+   asset ID, ALWAYS-silent fallback to originals on any miss/mismatch,
+   the engine renders all text/controls/click targets/gameplay
+   information (never hallucinated into generated backgrounds), a
+   platform option OUT of ModeConfig (D200), ENHANCED-mode only with
+   parity untouched; (f) the isolated + hardware-profiled setup posture
+   (uv-managed Python 3.12, loopback-only + --disable-api-nodes, core
+   nodes only, recorded hardware profile, non-corpus smoke pixels);
+   SeedVR2 re-anchored Apache-2.0 core-native since PR #14424 with exact
+   variant filenames (phase 2). GATE: p6-hd-asset-research wired as the
+   TWELFTH P6 required_gates entry — commands = the bounded OFFLINE
+   checker over the committed doc (tools/check-p6-hd-asset-research.py,
+   the e0bc7fb scaffold pattern: ten required sections incl. the four
+   category sections, the plan-boundary sentences verbatim under
+   whitespace-normalized matching, pin-registry discipline — first-party
+   https hosts, verification-window retrieval dates, licenses on every
+   model pin, VERIFIED licenses on primaries, notes on deferred pins,
+   categories on every model pin, per-category primary coverage +
+   outpaint fallback + the comfyui/comfy-cli tool pins — and the
+   cross-artifact manifest wiring) + its hermetic suite
+   tools/test-p6-hd-asset-research.py. Verified first-hand: checker OK
+   (10 model + 5 tool + 2 workflow-template pins; all four categories
+   covered); suite 27/27 (every rule proven to fail loudly incl. the
+   BOTH-sprite-primaries demotion, the unverified-license-primary, and
+   the four manifest-wiring tampers; + the real-repo pin);
+   check-p6-behavior-catalog OK (catalog still empty, R6 satisfied with
+   the twelfth gate) + its suite 30/30; gates-validator suite 22/22;
+   MANIFEST clean before AND after (the gate reads no corpus); the
+   bounded --phase P6 validator verdict at d63c82f: status=passed, ALL
+   12 P6 GATES GREEN, every command rc=0 under bwrap containment
+   (report .state/p6-hdasset-gates-report.json, head-bound to
+   d63c82fe11b9); DECISIONS.md D216 records the gate design; no engine
+   or workspace Rust change; no Ghidra run; RESEARCH ONLY — no
+   generated assets, catalog stays EMPTY. Queued: the ENHANCED
+   native-render opener as the new head (the resolution bullet's big
+   remaining half, design inputs from this doc's §5.A/§8).
+
+2. DONE (2026-08-28, claim 1 — commits 017a0f4 + 78c87ed by
    worker 8754d532, both PUSHED): P6 resolution-independence unit
    `p6-scaling-options` — the SCALING SELECTION per PLAN §6
    "Resolution independence + GPU rendering ... (nearest/integer

@@ -1,5 +1,42 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-hd-asset-research` COMPLETE (worker b9f4e384
+    claim 1, commits 4975281 + d63c82f, both PUSHED): THE P6 HD
+    ASSET PIPELINE RESEARCH OPENER (D216, PLAN §6 "Optional HD
+    asset pipeline (D21; external pack, never bundled originals
+    or derivatives in git)" — the plan's own named prerequisite
+    doc). docs/RESEARCH-HD-ASSET-PIPELINE.md ADOPTED from the
+    committed 2026-08-18 groundwork draft and REFRESHED against
+    PRIMARY sources first-hand 2026-08-28: the four workflow
+    categories with exact pins (FLUX.1-Fill-dev primary outpaint,
+    gated non-commercial, own-words limitations; SD2-inpainting
+    demoted never-primary after a first-hand 401 login-gate;
+    SDXL openrail++ fallback; Real-ESRGAN x2plus/x4plus_anime_6B
+    zoo URLs; SwinIR Apache-2.0; GFPGAN deferred for documented
+    identity drift; CodeFormer excluded NTU-S-Lab
+    non-commercial), tool pins (ComfyUI v0.34.0 GPL-3.0 +
+    v0.33.1 fallback; comfy-cli v1.18.0 + v1.16.0 fallback;
+    Arctic Helper v0.2.9 + sha256), the hd-asset-pins-v1
+    MACHINE-CHECKABLE registry, the hd-pack-manifest-v1
+    provenance/manifest schema design, the five-family gate
+    criteria design (fail-closed: outputs without recorded
+    provenance are excluded from shipping), the runtime seam
+    sketch (stable logical asset ID, always-silent fallback to
+    originals, engine renders all text/controls/click
+    targets/gameplay information, D200 platform option), and the
+    isolated + hardware-profiled posture; SeedVR2 re-anchored
+    Apache-2.0 core-native. GATE: p6-hd-asset-research wired as
+    the TWELFTH P6 required_gates entry — the bounded OFFLINE
+    checker over the committed doc (check-p6-hd-asset-research,
+    the e0bc7fb pattern) + its 27-case hermetic suite. Verified:
+    checker OK, suite 27/27, behavior catalog OK + 30/30,
+    gates-validator 22/22, MANIFEST clean, the bounded --phase P6
+    verdict at d63c82f status=passed ALL 12 P6 GATES GREEN every
+    command rc=0 under bwrap (report
+    .state/p6-hdasset-gates-report.json head-bound d63c82fe11b9);
+    RESEARCH ONLY, no engine change, catalog EMPTY, no Ghidra
+    run. Queue head is now the ENHANCED native-render opener.
+
   - 2026-08-28 `p6-scaling-options` COMPLETE (worker 8754d532
     claim 1, commits 017a0f4 + 78c87ed, both PUSHED): THE P6
     RESOLUTION-INDEPENDENCE SCALING SELECTION (D215, PLAN §6
