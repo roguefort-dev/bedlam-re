@@ -1,5 +1,73 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p6-save-slots` COMPLETE (worker bd07c7b6
+    claim 1, commits 63d58ac + bece1cf + 9b2599f, all PUSHED):
+    THE QoL SAVE SLOTS + METADATA + OPT-IN AUTOSAVE (D213, PLAN
+    §6 "QoL: window modes, vsync control, volume mixers, save
+    slots + metadata + opt-in autosave" — the LAST QoL list
+    item; the QoL list is now DONE end to end). RE FIRST:
+    docs/RE-EXW-SAVE.md committed BEFORE the implementation
+    (63d58ac) — mostly NEW decode, objdump-only from the committed
+    exw-text-objdump.txt: the EXW persistence is REGISTRY-BACKED
+    (values "SAVEGAME" 0x384 = the whole 5x180 image and
+    "HISCORES" 0x78; FUN_00446f4f = loader + first-run five-EMPTY
+    init 0x44705d..0x44706c; the "<dir>SAVED.BDL<name>" path
+    build 0x44694c..0x4469dd is passed to NOTHING — the §7j.56
+    CONFIG.BDL leftover pattern repeating save-side), the WRITER
+    is the save screen FUN_004446938 (campaign-shell SAVE button
+    gate 0x43eee1..0x43ef3e: single-player 0x4edb88==0 + click +
+    armed flag 0x4eae54; the slot write arm mirrors the §7j.70
+    restore grammar instruction-for-instruction; whole-image
+    commit 0x446e98), and the exhaustive 0x44ed98 caller census
+    shows EXACTLY TWO user-initiated SAVEGAME writers — THE
+    SHIPPED GAME NEVER AUTOSAVES; the slot metadata text is
+    FUN_004473cd (" " + zone letter + one digit '1'..'5' per set
+    mask bit; menu line = name space-padded to 8 + that text).
+    bedlam-shell save.rs (NEW): SaveSlotId (the original's own
+    FIVE-slot domain, default FIRST = a modern platform default),
+    SaveSlotMetadata/SaveSlotRow/summarize_saved_bdl (the
+    five-row list over the engine's import-only seam; empty slots
+    are ROWS, broken images stay loud GameErrors),
+    save_level_text/slot_menu_line (byte-faithful), AutosavePolicy
+    (NEVER-default-Off — pinned at every layer by
+    autosave_is_never_the_default; the opt-in's gate mirrors the
+    original's own: should_autosave(single_player,
+    campaign_boundary) only) — carried as WindowOptions::
+    save_slot/autosave, + --save-slot N/--autosave CLI (noted +
+    ignored headless). D200 layering: PLATFORM knobs OUT of
+    ModeConfig, no purist arbitration; the surface lands INERT
+    (the D201 seam posture — NO engine write seam ships; the new
+    versioned save format writer is future config-not-state work;
+    SAVED.BDL stays import-only); no engine file changed — the
+    sim/ModeConfig/every hash untouched by construction (pinned
+    by save_surface_never_touches_the_sim_config: bit-identical
+    host_sim_config under every knob setting). GATE:
+    p6-save-slots wired as the TENTH P6 required_gates entry
+    (gate block bece1cf + phase list 9b2599f; bedlam-shell --lib,
+    --release --locked --offline, hermetic). Verified:
+    bedlam-shell --lib 86/0 (+11 — one wrong worked example in
+    the first artifact draft was CAUGHT by the level-text test
+    and corrected before push: mask 0b10011 = "125" not "135"),
+    the binary --help/--save-slot 1..=5 rejection/--autosave
+    headless note checked first-hand AND the headless baseline
+    EXACT (scene 696adb1cd110e062 / parity cce30c983b97b16d /
+    audio 110400/158092) under --save-slot 3 --autosave,
+    bedlam-game --lib 152/0 untouched, controls green
+    (canonical_dump_gate 13/13, determinism 4/4,
+    zone_mission_parity 5/5 — ZERO canonical-chain movement),
+    catalog checker OK (still empty) + suite 30/30,
+    gates-validator suite 22/22, fmt + clippy clean on the
+    touched crate, workspace cargo check clean, MANIFEST clean
+    before AND after every corpus read, strict queue parser rc=0,
+    the bounded --phase P6 validator at 9b2599f: status=passed,
+    ALL 10 P6 GATES GREEN, every command rc=0 under bwrap
+    containment (report .state/p6-saveslots-gates-report.json,
+    head-bound to 9b2599f); no Ghidra run. Queued: the
+    resolution-independence scaling-options platform unit as the
+    new head (the fit/fill/smooth selection over the landed
+    bedlam-platform ScaleMode/FilterMode, the last small piece of
+    the PLAN §6 resolution bullet).
+
   - 2026-08-28 `p6-volume-mixers` COMPLETE (worker 1b994336
     claim 1, commits f49315f + aa6673c + 1b42327, all PUSHED):
     THE QoL VOLUME MIXERS (D212, PLAN §6 "QoL: window modes,

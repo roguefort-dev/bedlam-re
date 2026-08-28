@@ -10,33 +10,129 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p6-save-slots] [gate=p6-save-slots] P6 QoL unit
-   per PLAN §6 "QoL: ... save slots + metadata + opt-in autosave"
-   — the NEXT QoL list item after the landed D208 vsync control,
-   D210 window modes and D212 volume mixers: the SAVE SLOTS +
-   METADATA + OPT-IN AUTOSAVE sentence. RE FIRST: re-anchor the
-   original save surface in a committed RE-notes artifact before
-   any code (the SAVED.BDL 6-slot domain — the bedlam-game save
-   module SAVED_SLOTS/SAVED_LEN/SAVED_NAME + import_saved_slot
-   already implement the READ side byte-faithfully; RE-EXW-SIM
-   S0-12 rows pin the save-load writers 0x43c0dd/0x43c117/
-   0x43c388 + the 6-slot family 0x4188xx..0x418fxx; FORMATS-
-   MISSION notes SAVED.BDL is the savegame, unrelated to BLD) and
-   decide the layering in DECISIONS.md: slot selection + metadata
-   presentation + the opt-in autosave POLICY are platform knobs
-   OUT of ModeConfig (D200; autosave NEVER default — the shipped
-   game never autosaves), while any write-side engine seam lands
-   config-not-state (the D201 posture: a restore ADOPTS the saved
-   session, never a mid-run mutation; the hashed trajectory
-   untouched; FORMAT_VERSION and every hash pin byte-stable).
-   Bounds: the sim and every hash untouched by the platform
-   surface; no new RE claims without a committed artifact first;
-   catalog stays EMPTY; wire gate p6-save-slots as the TENTH P6
+1. [READY] [id=p6-scaling-options] [gate=p6-scaling-options] P6
+   resolution-independence unit per PLAN §6 "Resolution
+   independence + GPU rendering ... (nearest/integer default;
+   fit/fill/smooth options)": the SCALING SELECTION — expose the
+   already-landed bedlam-platform ScaleMode (Integer the parity
+   default / Fit / Fill) + FilterMode (Nearest the parity default
+   / Linear = smooth) as a platform presentation knob riding
+   WindowOptions.present in bedlam-shell, selected by new CLI
+   flags — a PURE mapping over plain data with NO purist
+   arbitration (the original was a fixed 640x480 DOS framebuffer
+   with no scaling mode to preserve; D200 layering — the knob is
+   OUT of ModeConfig and selects nothing in the host beyond the
+   existing PresentConfig the already-landed GPU scale path
+   consumes; both pacing arms accept it identically; the Fill
+   cursor-uv handling already exists window-side). NO new RE
+   needed (a pure modern platform surface over landed code, zero
+   new binary claims — if any RE claim becomes necessary, commit
+   the artifact first). Bounds: default = Integer + Nearest
+   exactly as shipped (pinned: the derived SimConfig
+   bit-identical under every selection — the sim, the ModeConfig
+   and every hash untouched by construction; the canonical
+   640x480 indexed frame + palette ride unchanged, goldens stay
+   resolution-agnostic; the headless path owns no surface so the
+   flags are noted + ignored there, the --fullscreen posture);
+   bedlam-shell only, no engine change; catalog stays EMPTY;
+   wire gate p6-scaling-options as the ELEVENTH P6
    required_gates entry; fmt + clippy on touched crates;
    gates-validator green; MANIFEST clean; no Ghidra run; own
    Nudge-Worker trailer.
+
 ## Done
-1. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
+1. DONE (2026-08-28, claim 1 — commits 63d58ac + bece1cf + 9b2599f
+   by worker bd07c7b6, all PUSHED): P6 QoL unit `p6-save-slots` —
+   the SAVE SLOTS + METADATA + OPT-IN AUTOSAVE sentence per PLAN
+   §6 "QoL: ... save slots + metadata + opt-in autosave"
+   (implementation D213), the LAST QoL list item after the landed
+   D208 vsync control, D210 window modes and D212 volume mixers —
+   THE PLAN §6 QoL LIST IS NOW DONE END TO END. (a) RE FIRST:
+   docs/RE-EXW-SAVE.md committed BEFORE the implementation
+   (63d58ac) — the original save surface decoded objdump-only
+   from the committed exw-text-objdump.txt (plus read-only
+   string probes of BEDLAM.EXW, MANIFEST clean before and after):
+   the EXW persistence is REGISTRY-BACKED (value "SAVEGAME" 0x384
+   = the whole 5x180 image over the slot buffer 0x4eae58, twin
+   "HISCORES" 0x78; FUN_00446f4f = the loader + the first-run
+   five-EMPTY initialization 0x44705d..0x44706c; the
+   "<dir>SAVED.BDL<name>" path build inside the save screen
+   0x44694c..0x4469dd is passed to NOTHING — the §7j.56
+   CONFIG.BDL leftover pattern repeating save-side), the whole
+   WRITER side decoded (FUN_004446938 = the save screen: the
+   campaign-shell SAVE button gate 0x43eee1..0x43ef3e —
+   single-player 0x4edb88==0 AND click AND armed flag 0x4eae54
+   AND the button cursor region; the slot write arm mirrors the
+   §7j.70 restore grammar instruction-for-instruction with the
+   mask derived LIVE from the completion table 0x4decae; the
+   whole-image registry commit 0x446e98; sel 5 = Cancel writes
+   nothing), the exhaustive 0x44ed98 caller census => EXACTLY
+   TWO user-initiated SAVEGAME writers — THE SHIPPED GAME NEVER
+   AUTOSAVES — and FUN_004473cd = the slot metadata text (one
+   space + the zone letter 'A'+zone-1 + one digit '1'..'5' per
+   set mask bit; the menu line = the name space-padded to 8 +
+   that text, "EMPTY" for empty rows). (b) bedlam-shell save.rs
+   (NEW): SaveSlotId (the original's own FIVE-slot domain,
+   0-based like the restore dispatch; default FIRST = a MODERN
+   platform default, the original has no persistent selection),
+   SaveSlotMetadata/SaveSlotRow/summarize_saved_bdl (the
+   five-row save/load list over the engine's IMPORT-ONLY seam —
+   empty slots are ROWS, broken images stay loud GameErrors),
+   save_level_text/slot_menu_line (BYTE-FAITHFUL to
+   FUN_004473cd), AutosavePolicy (NEVER-default-Off, pinned at
+   every layer; the opt-in's gate mirrors the original's own:
+   should_autosave(single_player, campaign_boundary) ONLY — never
+   mid-mission, never coop/h2h) — carried as
+   WindowOptions::save_slot/autosave with the binary's
+   --save-slot N (1..=5, exit 2 on anything else) and --autosave
+   opt-in flags (both noted + ignored headless, the --fullscreen
+   posture). (c) BOUNDS KEPT: the surface lands INERT (the D201
+   seam posture — NO engine write seam ships; the new versioned
+   save FORMAT writer is future engine work, config-not-state
+   when it lands: a restore ADOPTS the saved session, never a
+   mid-run mutation, FORMAT_VERSION and every hash pin
+   byte-stable; SAVED.BDL stays import-only, no writer owed or
+   allowed for parity); NO bedlam-game/bedlam-core file changed —
+   the sim, the ModeConfig and every hash untouched by
+   construction (pinned by save_surface_never_touches_the_sim_
+   config: bit-identical host_sim_config under FIRST/Off and
+   LAST/On-LAST); catalog stays EMPTY. (d) GATE: p6-save-slots
+   wired as the TENTH P6 required_gates entry (gate block
+   bece1cf + phase list 9b2599f) — command = bedlam-shell --lib,
+   --release --locked --offline, hermetic. Verified first-hand:
+   bedlam-shell --lib 86/0 (+11: 10 save — the five-slot domain,
+   the EXW-faithful level text (a wrong worked example in the
+   first artifact draft was CAUGHT by this test and corrected
+   before push: mask 0b10011 = "125" not "135"), the menu-line
+   padding, the EMPTY row, the five-row summary + the metadata
+   mapping + the loud rejections, the full-domain metadata sweep
+   over the whole modeled stage/mask space, the never-default
+   pin, the original's own autosave gate; 1 window — the
+   sim-config invariance; was 75/0 + 1 pre-existing ignored); the
+   binary --help/--save-slot/--autosave wiring checked first-hand
+   (help text, the 1..=5 domain rejection at exit 2, the headless
+   ignore note) AND the headless smoke EXACTLY at the recorded
+   baseline (scene 696adb1cd110e062 / parity cce30c983b97b16d /
+   audio 110400/158092) first-hand under --save-slot 3
+   --autosave; bedlam-game --lib 152/0 untouched; controls green:
+   canonical_dump_gate 13/13, determinism 4/4, zone_mission_
+   parity 5/5 (ZERO canonical-chain movement); check-p6-behavior-
+   catalog OK (catalog still empty, R6 satisfied with the tenth
+   gate) + its suite 30/30; gates-validator suite 22/22; fmt +
+   clippy clean on bedlam-shell (the one pre-existing D210 test
+   warning untouched); workspace cargo check clean; MANIFEST
+   clean before AND after every corpus read (the RE probe only;
+   the gate reads no corpus); the bounded --phase P6 validator
+   verdict at 9b2599f: status=passed, ALL 10 P6 GATES GREEN,
+   every command rc=0 under bwrap containment (report
+   .state/p6-saveslots-gates-report.json, head-bound to
+   9b2599f636bbc7fa4e35365f601191d6d3f05df2); no Ghidra run.
+   Queued: the resolution-independence scaling-options unit as
+   the new head (the fit/fill/smooth selection over the landed
+   bedlam-platform ScaleMode/FilterMode — the QoL list is
+   complete, so the queue advances to the resolution bullet's
+   last small piece).
+2. DONE (2026-08-28, claim 1 — commits f49315f + aa6673c + 1b42327
    by worker 1b994336, all PUSHED): P6 QoL unit
    `p6-volume-mixers` — the VOLUME MIXERS presentation option per
    PLAN §6 "QoL: window modes, vsync control, volume mixers, ..."
@@ -108,7 +204,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    1b42327); no Ghidra run. Queued: the QoL save slots + metadata
    + opt-in autosave sentence as the new head (window modes, vsync
    control and volume mixers now DONE).
-2. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
+3. DONE (2026-08-28, claim 1 — commit 8784da1 by worker 7aed939f,
    PUSHED): P6 QoL unit `p6-window-modes` — the WINDOW MODES
    presentation option per PLAN §6 "QoL: window modes, vsync
    control, ..." (implementation D210), the direct sibling of the
@@ -177,7 +273,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    rewritten queue); the structured transport failure was
    adjudicated replaced-task per the D206 checklist (all four
    items green, D211) and item 1 above stands untouched, READY.
-3. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
+4. DONE (2026-08-28, claim 1 — commit 44c6f2d by worker 754e7c94,
    PUSHED, plus this bookkeeping commit): P6 present-option unit
    `p6-uncapped-present-mode` — the OPTIONAL UNCAPPED PRESENT MODE,
    the remaining half of the PLAN §6 present sentence ("vsync-
@@ -243,7 +339,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-uncapped-gates-report.json, head-bound to 44c6f2d);
    no Ghidra run. Queued: the QoL window-modes platform unit as
    the new head (PLAN §6 QoL list order — vsync control now DONE).
-4. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
+5. DONE (2026-08-28, claim 1 — commits fe5bf72 + 37aaddf by worker
    ceafd198, both PUSHED): P6 present-quality unit
    `p6-high-refresh-interpolation` — the composition policy of the
    modern decoupled present per PLAN §6 "Most high-refresh frames
@@ -327,7 +423,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    no Ghidra run. Queued: the optional uncapped present mode as the
    new head (the same PLAN §6 sentence's remaining half — vsync-
    locked at any refresh OR uncapped, logic fixed in both).
-5. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
+6. DONE (2026-08-28, claim 1 — commit 9a96a60 by worker 2a90eb65,
    PUSHED, plus this bookkeeping commit): P6 platform wiring unit
    `p6-present-loop-wiring` — the mode plumbed through the shell
    host config into BOTH platform consumers and the window present
@@ -383,7 +479,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    bookkeeping both PUSHED, strict parser rc=0 on the rewritten
    queue); the structured client-error failure was adjudicated
    replaced-task and item 1 above stands untouched, READY.
-6. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
+7. DONE (2026-08-28, claim 1 — commit b4babe3 by worker e56b4ef6,
    PUSHED): P6 axis-consumer unit #2 `p6-control-scheme-surface` —
    the control-scheme purist axis's FIRST CONSUMER at the
    PLATFORM/INPUT seam (PLAN §6 + D201/D204): the axis arm selects
@@ -450,7 +546,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    b4babe3931b2); no Ghidra run. Queued: the present-loop platform
    wiring as the new head (it also selects the shell mapper's
    scheme from the plumbed mode).
-7. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
+8. DONE (2026-08-28, claim 1 — commit c225c81 by worker 458a7e98,
    PUSHED): P6 axis-consumer unit #1 `p6-timing-lock-surface` — the
    timing-lock purist axis's FIRST REAL CONSUMER at the HOST/PRESENT
    seam (PLAN §6 P6 + D200/D201; implementation D203): the axis arm
@@ -496,7 +592,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    .state/p6-timinglock-gates-report.json, head-bound to c225c819f516);
    no Ghidra run. Queued: the control-scheme axis consumer as the new
    head, the present-loop platform wiring second.
-8. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
+9. DONE (2026-08-28, claim 1 — commit 9d39368 by worker 21604df0,
    PUSHED): P6 engine unit `p6-modeconfig-seam` — the FIRST engine
    unit behind the p6-modernization-scaffold contract (PLAN §6 P6 +
    D200; implementation D201): the ONE immutable ModeConfig landed,
@@ -542,7 +638,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    head-bound to 9d393682a3ff); MANIFEST clean before AND after
    every corpus read; no Ghidra run. Queued: the timing-lock axis
    consumer as the new head, control-scheme second.
-9. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
+10. DONE (2026-08-28, claim 1 — commit e0bc7fb by worker 6e45232f,
    PUSHED, plus this bookkeeping commit): P6 opener
    `p6-modernization-scaffold` — the modernization CONTRACT scaffold
    landed per PLAN §6 + the D175 pattern (the machine-checkable
@@ -585,7 +681,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    containment; MANIFEST clean before AND after every corpus read; no
    canonical-chain movement. Queued: the p6-modeconfig-seam engine
    unit as the new head.
-10. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
+11. DONE (2026-08-28, claim 1 — commit f608207 by worker ec090fa6,
    PUSHED, plus this bookkeeping commit): P5 phase-close
    bookkeeping `p5-phase-close` — the P5 phase status FLIPPED
    pending->green in docs/required-gates.toml (P0-P5 green,
@@ -609,7 +705,7 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    Ghidra run. The queue then carried the P6 opener as the head
    (the p4-phase-close/5347a37 pattern): p6-modernization-scaffold
    per PLAN §6, so required work stays active.
-11. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+12. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
    by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
    ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
    flips green and P5's mission side is DONE (D199); the disposition

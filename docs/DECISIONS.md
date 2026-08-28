@@ -8079,3 +8079,67 @@ fmt + clippy clean on bedlam-shell (the one pre-existing D210 test
 warning untouched); MANIFEST clean before AND after every corpus
 read (the RE probe only; no corpus read in the gate); no Ghidra
 run.
+
+## D214 — 2026-08-28: autonomy/watchdog — the FOURTH post-completion death, second `preflight-mismatch` variant: a TORN completion rewrite (string-surgery assembly interleaved the new head with the old file's header and stale item), parser rc=2, then a transport death before self-repair; repaired by reconstructing the worker's own intended bytes, adjudicated replaced-task per the D206 checklist with the one miss handled as an actual repair (the D209 shape)
+
+Worker bd07c7b6 finished `p6-save-slots` completely — 63d58ac +
+bece1cf + 9b2599f all PUSHED with its own Nudge-Worker trailers,
+ALL 10 P6 gates green at 9b2599f (report
+.state/p6-saveslots-gates-report.json, head-bound), the STATE.md
+bookkeeping written — and then its queue rewrite script assembled
+`head_comment + now_section + done_section` with a TORN
+head_comment (truncated mid-line-4): the on-disk queue interleaved
+the new `p6-scaling-options` item and the new Done entry with the
+OLD header tail, a SECOND `## Now`, and the STALE old item 1
+(still `p6-save-slots`). The worker's own finish-line parser check
+(the D209/D211 lesson, honored) printed `invalid queue: line 35:
+unknown queue section before ## Now` rc=2 — and the model
+connection died (Error: Transport) before it could take the
+second turn its own check demanded. The wrapper recorded the
+structured failure (kind `preflight-mismatch`, reason
+launch-boundary; queue sha 14d1917c [== HEAD content] ->
+52c4cfb3 [the torn file], inode 3836061 stable), killed the
+resident pid, and the controller refused idle/spawn on every
+cycle (parser rc=2). Fourth recurrence of the D206 class, second
+`preflight-mismatch` variant (D209 was a forbidden token; this
+one is torn assembly).
+
+THE BINDING CHECKLIST, verified first-hand (one miss -> an actual
+repair, not pure acknowledgment): (1) GREEN — the substantive
+commits are PUSHED with the failing worker's own trailers, main
+== origin/main; (2) MISS — the queue on disk WAS the worker's
+completion rewrite (sha256 + inode match the failure record's
+queue_after) but the strict parser rejected it rc=2, so the
+postcondition had to be mechanically established; (3) GREEN — the
+failure artifact still matches the trigger snapshot identity
+(device 52, inode 7670347, sha256 0567d08c..., ordinal 1); (4)
+GREEN post-repair — the failed identity (1, p6-save-slots,
+p6-save-slots) is absent from the active queue; the successor
+`p6-scaling-options` is the READY head.
+
+THE REPAIR (minimal, WIP preserved — never reset/reverted): a
+purely mechanical reconstruction from the torn file itself. Every
+byte of the worker's INTENDED rewrite was present verbatim: the
+new item = torn lines 5-33, the new Done entry = lines 70-160,
+and the renumbered old entries = lines 161-775 (byte-identical to
+HEAD's Done section modulo the leading ordinals, verified by
+diff); the canonical header is invariant across rewrites (HEAD
+lines 1-12). Dropped ONLY stale fragments: the torn duplicate of
+header line 4, the old header tail + the second `## Now`, and the
+stale old item 1 (it had already moved to Done). No worker byte
+edited, nothing rewritten from scratch; strict parser rc=0
+RUNNABLE 1 on the live file before the bookkeeping commit, and
+rc=0 after. The ack binds remediation_commit to the repair commit
+itself (resolution replaced-task: the successor replaced the
+failed identity in the active queue).
+
+LESSON (extends D180/D209/D211): the finish-line parser run only
+grades the content the assembly produced. When the rewrite is
+built by string surgery over the live file, a torn fragment can
+make the check itself fail — leaving a window (check announced,
+fix owed) that a transport death closes instantly. The repair
+posture for that window: reconstruct from the torn bytes (the
+intended content is the large majority and is verbatim), never
+rewrite from scratch; and the finish-line discipline for future
+workers remains unchanged — the parser must run, and pass, before
+the bookkeeping commit.
