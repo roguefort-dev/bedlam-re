@@ -103,6 +103,26 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    controller's next complete-from-head run owns the global
    verdict exactly as the completion contract demands.
 
+   NOTE (watchdog repair 1787956349, D235): the completion-missing
+   failure recorded at 23:52:20Z is the ONE-LAST MARKER D234's
+   POSTCONDITION explicitly predicted — the sealed validation that
+   rejected then started 23:22:27 against a89ce5a under a PRE-FIX
+   parent controller (the D234 benign classifier did not exist on
+   disk before 23:44:15), so when the D234 repair commit cff1b9b
+   itself landed mid-run the run ended basis-changed and the old
+   code beaconed. NO CODE CHANGE was needed or made this repair:
+   the D233 derived budget and the D234 classifier stand as landed,
+   re-verified first-hand (tools/test-nudge-controller.sh PASS
+   end-to-end 67s including the deterministic race test 11; the
+   live controller tick of 00:22:27 sealed i00g7bng at HEAD cff1b9b
+   under POST-FIX code and runs now). The marker is adjudicated
+   required-empty per D235 — the required queue IS empty and stays
+   empty, P0-P7 all green, strict parser rc=0. This repair commit
+   will itself end the in-flight i00g7bng run basis-changed —
+   BENIGNLY now, log + exit 0 — and the next tick re-validates
+   this HEAD from scratch; the global verdict stays the
+   controller's alone.
+
 2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +
    LAST engineering deliverable `p7-macos-universal2-ci` — the

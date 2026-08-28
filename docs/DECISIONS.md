@@ -10218,3 +10218,53 @@ complete-from-head runs undisturbed to its manifest-declared bound
 consummated by accept-completion alone. Workers stay unspawned; no
 queue item appears; the global verdict remains the controller's
 alone.
+
+## D235 — 2026-08-29: autonomy/watchdog — the TWELFTH repair is the PREDICTED TAIL of D234, not a new defect: the 23:52:20Z completion-missing marker (controller-1787953940-2542238, ordinal 1, id automation-state, gate automatic-repair) was minted by the last PRE-FIX controller instance — its sealed validation started 23:22:27 against a89ce5a, before the D234 benign classifier existed on disk (cff1b9b landed 23:44:15 mid-run), so the run ended basis-changed and the old code beaconed exactly the ONE-LAST-MARKER POSTCONDITION D234 recorded and prescribed this adjudication for; NO CODE CHANGE was needed or made (the D233 derived budget and the D234 classifier stand as landed); the structured failure adjudicated required-empty (the FOURTH required-empty adjudication, after D232/D233/D234 — the required queue IS empty, P0-P7 all green, strict parser rc=0 REQUIRED-QUEUE-EMPTY)
+
+MECHANISM, verified first-hand from the evidence this run: the
+nudge.log rejection pair at 23:52:20 (nudge state error:
+completion basis changed during validation + repair required);
+the cff1b9b commit timestamp 23:44:15 — BEFORE the rejection,
+so the beaconing instance's bash necessarily predated the fix
+(the classifier line did not exist anywhere on disk before
+23:44:15, and any tick whose sealed run saw that commit land
+mid-flight must itself have started earlier); process
+accounting for the CURRENT generation (lock-run 2698474 /
+nudge.sh 2698478 / complete-from-head 2698494 all started
+00:22:27, well after the fix, running POST-FIX code); and the
+live sealed checkout /tmp/opencode/bedlam-completion-i00g7bng
+carrying file mtimes 23:44 == the cff1b9b content and
+rev-parse HEAD == cff1b9b642e1164f1c965ee440ea1345d4e5d64d.
+The D234 POSTCONDITION paragraph had already written this
+marker's biography: "its parent controller runs the pre-fix
+code, so it beacons ONE last completion-missing marker; the
+NEXT hourly watchdog repairs and acks it".
+
+VERIFIED first-hand: tools/test-nudge-controller.sh PASS
+end-to-end in 67s INCLUDING the deterministic race test 11
+(the sealed-validator-stub race that pins the benign
+basis-change classifier: commit mid-validation, assert rc=0 +
+the benign log line + NO completion-missing artifact + NO
+watchdog start + NO worker spawn); the strict queue parser
+rc=0 REQUIRED-QUEUE-EMPTY before and after the NOTE append;
+the marker identity matches the trigger snapshot exactly
+(device 52, inode 8307780, sha256 acfe8baa21dabdf2b4f118
+0e5122f27d44f7c773bebc79c6c57b5cb1a671c7c1); docs/
+required-gates.toml carries 8 green phase statuses and zero
+pending; taskcooldown empty; MANIFEST.sha256 clean before and
+after (no corpus read by this repair — the test suite is
+hermetic over TMP fixtures).
+
+POSTCONDITION for the loop: this repair commit itself ends the
+in-flight sealed validation i00g7bng basis-changed — BENIGNLY
+now (the 00:22:27 generation runs the D234 classifier: log +
+exit 0, no beacon) — and the next controller tick re-validates
+this HEAD from scratch under the manifest-derived budget
+(84480s floor+declared at cff1b9b). With the one-last marker
+acked and archived, no un-acked failure marker remains, so the
+watchdog stops forcing repairs, complete-from-head runs
+undisturbed to its declared bound, and plan-complete-v1 — if
+every gate is green at this HEAD — is consummated by
+accept-completion alone. Workers stay unspawned; no queue item
+appears; the global verdict remains the controller's alone
+(the completion contract).
