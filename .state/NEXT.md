@@ -10,67 +10,68 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p5-zone-g-disposition] [gate=p5-zone-g-disposition] P5
-   follow-up — ZONE F is CLOSED (36/37 green, D197) and ZONEG is the
-   LAST disposition of the ledger: one mission closes P5 at 37/37.
-   A pure ZONES-append unit in the §12 shape. (a) LAND the ZONEG
-   evidence: APPEND the ZONEG ZoneSpec (letter G, missions 1..=1,
-   dims 100x25 — the census-pinned non-square mission, TOT 40004 B
-   = 4 + 16*w*h with w*h = 2500, header re-verified first-hand;
-   committed flows NONE — no committed .scen stages zone G, so the
-   generated per-mission battery IS the whole criterion-1 leg; M1
-   through the episode-slot mask seam; linear =
-   clamp(5*(7-2)+m-1, 1, 26) = m+24, M1 = 25 — one below the clamp
-   ceiling 26, no bite; zone G ships NO mission-number variant bank
-   — only the zone-level MISSIONG.BIN 2443943 B, so NO G3 no-swap
-   extra leg, just the zone-level fetch-chain assert; note M1's NME
-   is a real 1144 B bank, not the 16-byte MP empty), document the
-   §13 criterion table in P5-ZONE-GATES (the §12 pattern), flip
-   ZONEG-MISSION1 to green WITH the cross-artifact rule (the flip
-   and its evidence in the same commit), re-baseline the ledger
-   test pin 36/37 to 37/37 in the SAME commit (the D28 fingerprint
-   discipline, D192..D197 precedent), and wire the p5-zone-g gate
-   into docs/required-gates.toml P5 required_gates (offline
-   evidence commands only; zone G stages no committed flow so the
-   gate carries no scenario corpus). Bounds: bedlam-core +
-   bedlam-game suites green; the census stays 37/37; zero canonical
-   chain movement; fmt + clippy; the gates validator all-green
-   (16 gates; .state/STATE.md is an s0-dispositions tracked path —
-   park uncommitted STATE.md edits while running the HEAD-bound
-   battery, the D193/D194 lesson); MANIFEST clean; no Ghidra run;
-   Nudge-Worker trailer. If the battery surfaces a REAL engine gap
-   on the ZONEG mission, stop at the structured finding — the gap
-   becomes its own unit, the ledger stays unchanged, and the
-   failure artifact records it. After ZONEG: the ledger reads
-   37/37 and P5 moves to its phase-close disposition.
+1. [READY] [id=p5-phase-close] [gate=p5-phase-close] P5
+   phase-close bookkeeping — the ledger reads 37/37 (D199: every
+   shipped mission green, every zone closed; the p5-zone-g gate is
+   wired, 16 gates all-green at 65505ea), so P5's remaining work is
+   the PHASE-CLOSE ONLY (the p4-phase-status-green pattern, commit
+   972748d precedent): flip the P5 phase status pending->green in
+   docs/required-gates.toml (P0-P5 green, P6-P7 pending;
+   plan_complete stays false exactly as designed), commit, then
+   re-emit the bound phase verdict at the new HEAD with the exact
+   P4-shaped command: /usr/bin/python3 tools/validate-required-gates.py
+   --root . --report .state/p5-gates-report.json --phase P5
+   --phase-output .state/P5-COMPLETE (all 8 P5 required gates must
+   be green at the flip commit under the validator's bwrap
+   containment; .state/P5-COMPLETE phase-complete-v1 re-bound to
+   the flip commit + manifest sha256, producer=required-gates-
+   validator, emitted by the validator itself). Update the
+   .state/STATE.md phase line, then queue the first P6 unit from
+   docs/PLAN.md section 6 so required work stays active. Bounds:
+   docs+state-only commit; .state/STATE.md is an s0-dispositions
+   tracked path — park uncommitted STATE.md edits while running
+   the HEAD-bound battery (the D193/D194 lesson); MANIFEST clean;
+   no Ghidra run; Nudge-Worker trailer.
 ## Done
-1. DONE (2026-08-28, claim 1 — substantive commits 99bb89a +
-   29cfc3f by worker b5bce035, which the 09:49 watchdog pass
-   terminated mid HEAD-bound battery over the stale unacked
-   224613cc no-progress marker; claim released, and watchdog
-   repair 314485 independently re-validated and finished the
-   bookkeeping + push): P5 `p5-zone-f-disposition` — ZONE F
-   CLOSED: the FIFTH 7-mission zone flips green (the ledger 36/37;
-   D197) and the disposition is the THIRD PURE ZONES-APPEND (the
-   §10/§11/§12 shape). (a) THE APPEND (99bb89a): the ZONEF ZoneSpec
-   joined the ZONES list after B, C, D, E (letter F, missions
-   1..=7, dims 100x100, committed flows NONE) and nothing else; the
-   battery: P5FM1A..P5FM7C all 21 flows full declared budgets,
-   dumps verify, two-run byte identity — NO engine gap on any ZONEF
-   mission; zones B (21 + the committed S5/S5B/S5C), C (21), D (21)
-   and E (21) re-verified in place. (b) THE FLIP (29cfc3f, the
-   cross-artifact rule): ledger ZONEF-MISSION1..7 green
-   (catalog_refs = []); P5-ZONE-GATES §12 criterion table (linear =
-   m+19, M1..M7 = 20..26 — M7 exactly touches the clamp ceiling 26,
-   the first ledger mission to reach it; zone F ships NO
-   mission-number variant bank — only the zone-level MISSIONF.BIN
-   1464679 B, so the D184 no-swap pin needs no variant caveat); the
-   p5-zone-f gate joins P5 required_gates (15 gates); the ledger
-   test pin re-baselined 29/37 to 36/37 + the ZONEF 7/7 line; D197.
-   Re-validated first-hand by the finishing repair session at
-   29cfc3f: ledger OK 36/37 + ZONEF 7/7, hermetic 18/18, strict
-   queue parser rc=0, zone_mission_parity 5/5 (26.75s, all five
-   ZONES-const zones incl. F), MANIFEST clean before and after
-   every corpus read, no Ghidra run. Queued: the ZONEG disposition
-   unit as the new head — one mission closes the ledger at 37/37;
-   after it P5 moves to its phase-close disposition.
+1. DONE (2026-08-28, claim 1 — substantive commits 0829187 + 65505ea
+   by worker ebf6cfca, both PUSHED): P5 `p5-zone-g-disposition` —
+   ZONE G CLOSED, THE LEDGER READS 37/37: the LAST ledger mission
+   flips green and P5's mission side is DONE (D199); the disposition
+   is the FIFTH PURE ZONES-APPEND (the §9..§12 shape) with the ONE
+   census-forced seam delta. (a) THE APPEND (0829187): the ZONEG
+   ZoneSpec joined the ZONES list after B, C, D, E, F (letter G,
+   missions 1..=1, dims 100x25 — the census-pinned NON-SQUARE
+   mission, TOT 40004 B re-verified first-hand; committed flows
+   NONE) and the SELECT write-pair legs of zone_t1_rules_spot now
+   derive from the zone's own mission range (zone G's zone cell 7
+   is OUTSIDE the SELECT write arm's 2..=6 domain and no MP file
+   ships for G, §7j.73 — zones B..=F exercise the identical legs
+   they always did; the write-arm reject domain still checks (7,1)
+   loud); the battery: P5GM1A/B/C all 3 flows full declared budgets
+   (3/121/49 records), dumps verify, two-run byte identity — NO
+   engine gap on the ZONEG mission; zones B (21 + the committed
+   S5/S5B/S5C), C (21), D (21), E (21) and F (21) re-verified in
+   place. (b) THE FLIP (65505ea, the cross-artifact rule): ledger
+   ZONEG-MISSION1 green (catalog_refs = []), the ledger 37/37
+   (A 1/1, B..F 7/7 each, G 1/1 — EVERY shipped mission green);
+   P5-ZONE-GATES §13 criterion table (linear = m+24, M1 = 25 one
+   below the clamp ceiling; the zone-level MISSIONG.BIN 2443943 B
+   fetch-chain pin with NO variant caveat — zone G ships no
+   mission-number variant bank; the real 1144 B .NME bank; the
+   zone-A-shaped DM carve-out); the p5-zone-g gate joins P5
+   required_gates (16 gates); the ledger test pin re-baselined
+   36/37 to 37/37 + the ZONEG 1/1 line (deliberate, same commit);
+   D199. Verified first-hand at the flip commit: ledger OK 37/37 +
+   ZONEG 1/1, hermetic 18/18, strict queue parser rc=0,
+   zone_mission_parity 5/5 (six zones, 27.43s), canonical_dump_gate
+   13/13 zero chain movement, differ_gate 4/4, determinism 4/4,
+   mission_load_census green (census stays 37/37), bedlam-core
+   hash_fixture + mission_corpus_gate green, fmt + clippy clean on
+   the touched crate (the 7 bedlam-core warnings pre-exist from
+   D151, untouched), the HEAD-bound validator battery ALL 16 GATES
+   PASSED at 65505ea (bounded, offline, incl. p5-zone-g's both
+   commands rc=0; the global report's status=failed/plan_complete=
+   false is ONLY the pending P5-P7 phase-status semantics, not a
+   gate failure — the same documented ZONEB note), MANIFEST clean
+   before and after every corpus read, no Ghidra run. Queued: the
+   P5 phase-close disposition as the new head (the P4 pattern).

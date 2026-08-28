@@ -1,5 +1,64 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-08-28 `p5-zone-g-disposition` COMPLETE (worker ebf6cfca
+    claim 1, commits 0829187 + 65505ea + the bookkeeping commit,
+    all PUSHED): ZONE G CLOSED — THE LEDGER READS 37/37, the LAST
+    ledger mission flips green and P5's mission side is DONE
+    (D199); the disposition is the FIFTH PURE ZONES-APPEND (the
+    §9..§12 shape) with the ONE census-forced seam delta. (1) THE
+    APPEND (0829187): the ZONEG ZoneSpec joined the closed-zone
+    LIST in zone_mission_parity.rs after B, C, D, E, F (letter G,
+    missions 1..=1, dims 100x25 — the census-pinned NON-SQUARE
+    mission, TOT 40004 B = 4+16·w·h re-verified first-hand;
+    committed flows NONE) and the SELECT write-pair legs of
+    zone_t1_rules_spot now DERIVE from the zone's own mission
+    range — zone G's zone cell 7 lies OUTSIDE the SELECT write
+    arm's 2..=6 domain and no MP file ships for G (§7j.73), so the
+    hardcoded MP legs could not run for a 1-mission zone; zones
+    B..=F exercise the identical legs they always did and the
+    write-arm reject domain still checks (7,1) loud; no grammar or
+    engine change. The battery at that state: P5GM1A/B/C all 3
+    flows full declared budgets (3/121/49 records), dumps verify,
+    two-run byte identity — NO engine gap on the ZONEG mission;
+    zones B (21 + the committed S5/S5B/S5C), C (21), D (21), E (21)
+    and F (21) re-verified in place. (2) THE FLIP (65505ea, the §5
+    cross-artifact rule): the ledger flips ZONEG-MISSION1 green
+    (catalog_refs = []) and reads 37/37 — EVERY shipped mission
+    green (A 1/1, B..F 7/7 each, G 1/1); P5-ZONE-GATES §13
+    documents the per-criterion table — the anchor statics
+    re-derived from the TOT header (100x25 @ 40004) + the §7j.64
+    formula (linear = clamp(5·5+m−1, 1, 26) = m+24, M1 = 25 ONE
+    BELOW the clamp ceiling, no bite); the T1 spot table with the
+    D184 zone-level `EDITOR\ZONEG\MISSIONG.*` pin (zone G ships NO
+    mission-number variant bank — only the zone-level MISSIONG.BIN
+    2443943 B — so no variant caveat and the zone-level
+    fetch-chain assert is the whole G3 leg); M1's .NME is a REAL
+    1144 B bank, not the 16-byte MP empty; criterion 6 stays
+    FILE-LEVEL (the shipped slot-0 campaign IS ZONEB/MISSION1);
+    the zone-A-shaped DM carve-out (no MP-only file ships); the
+    p5-zone-g gate joins P5 required_gates (16 gates); the ledger
+    test pin re-baselined 36/37 to 37/37 + the ZONEG 1/1 line
+    (deliberate, same commit — D28). Verified first-hand at the
+    flip commit: check-p5-zone-ledger OK 37/37 + ZONEG 1/1 green,
+    hermetic ledger suite 18/18, gates-validator suite 22/22,
+    zone_mission_parity 5/5 (six zones, 27.43s), bedlam-game
+    suites green (canonical_dump_gate 13/13 ZERO canonical chain
+    movement, differ_gate 4/4, determinism 4/4, mission_load_census
+    green — census 37/37 unchanged), bedlam-core hash_fixture +
+    mission_corpus_gate green, fmt clean + clippy clean on the
+    touched crate (the 7 bedlam-core warnings pre-exist from D151,
+    untouched), the HEAD-bound validator battery ALL 16 GATES
+    PASSED at 65505ea (bounded, offline, incl. p5-zone-g's both
+    commands rc=0; the global report's status=failed/plan_complete
+    =false is ONLY the pending P5-P7 phase-status semantics, not a
+    gate failure), strict queue parser rc=0, MANIFEST clean before
+    and after every corpus read, no Ghidra run. The queue now
+    carries the P5 PHASE-CLOSE bookkeeping as the head (the
+    p4-phase-status-green/972748d pattern: flip the P5 phase status
+    pending->green in required-gates.toml, then re-emit the bound
+    phase verdict --phase P5 --phase-output .state/P5-COMPLETE),
+    then P6 opens per PLAN §6.
+
   - 2026-08-28 `p5-zone-f-disposition` COMPLETE (claim 1: substantive
     commits 99bb89a + 29cfc3f by worker b5bce035, which the 09:49
     watchdog pass terminated mid HEAD-bound battery over the stale
