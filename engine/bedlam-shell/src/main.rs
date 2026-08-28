@@ -10,9 +10,12 @@
 //!   (see [`bedlam_shell::window`]) - interactive display only.
 //!   `--classic` selects the P6 classic purist mode for the window
 //!   host (default = modern; the platform-level ModeConfig
-//!   selection, D205).
+//!   selection, D205). `--uncapped` requests the P6 optional
+//!   uncapped present (a platform presentation option, PLAN §6
+//!   "vsync-locked ... or uncapped"; honored only under the modern
+//!   pacing arm - `--classic` pins vsync).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -21,7 +24,7 @@ use std::process::ExitCode;
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_shell::headless::{run_headless, HeadlessOptions, HeadlessReport};
-use bedlam_shell::window::{run_window, WindowOptions};
+use bedlam_shell::window::{run_window, Vsync, WindowOptions};
 
 const DEFAULT_GFX: &str = "game-data/BEDLAM";
 
@@ -29,12 +32,14 @@ fn main() -> ExitCode {
     let mut gfx_dir: Option<PathBuf> = None;
     let mut window = false;
     let mut classic = false;
+    let mut uncapped = false;
     let mut pumps: Option<u64> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--window" | "-w" => window = true,
             "--classic" | "-c" => classic = true,
+            "--uncapped" | "-u" => uncapped = true,
             "--pumps" => match args.next().and_then(|v| v.parse().ok()) {
                 Some(n) => pumps = Some(n),
                 None => {
@@ -43,12 +48,17 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
                 );
                 println!("             default = modern)");
+                println!("  --uncapped: window host requests the uncapped present (no vsync wait;");
+                println!(
+                    "              P6 platform option; honored only in the modern pacing arm --"
+                );
+                println!("              --classic pins vsync; ignored headless)");
                 return ExitCode::SUCCESS;
             }
             other if other.starts_with('-') => {
@@ -83,8 +93,24 @@ fn main() -> ExitCode {
         if classic {
             opts.mode = ModeConfig::CLASSIC;
         }
+        // P6 optional uncapped present (PLAN §6 "vsync-locked ...
+        // or uncapped"): a PLATFORM presentation option (D200
+        // layering — outside ModeConfig; the binary's `--uncapped`
+        // selects it). The pacing policy arbitrates the request:
+        // honored only under the modern arm — the loop then presents
+        // as fast as it runs, every present recomposing from latest
+        // state at the accumulator fraction; `--classic` pins
+        // vsync-locked (RE-EXW-PACER §3).
+        if uncapped {
+            opts.vsync = Vsync::Uncapped;
+        }
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
+        if uncapped {
+            // The headless path owns no present surface; the option
+            // is a no-op there (noted, never fatal).
+            eprintln!("bedlam-shell: --uncapped is a window-present option; ignored headless");
+        }
         let mut opts = HeadlessOptions::new(&gfx_dir);
         if let Some(pumps) = pumps {
             opts.pumps = pumps;

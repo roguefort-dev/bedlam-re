@@ -233,6 +233,45 @@ fractions = identical executed ticks, tick count, state hash,
 scene hash). The catalog stays empty (a plan-named composition
 unit is not a catalog entry).
 
+**Implementation status (D208, 2026-08-28, gate
+`p6-uncapped-present-mode`): the optional uncapped present — the
+remaining half of the PLAN §6 present sentence ("vsync-locked
+present at any refresh (60/120/144/240/360Hz+) or uncapped").**
+A PRESENTATION OPTION at the platform level
+(`engine/bedlam-shell/src/window.rs`: `WindowOptions::vsync`,
+`Vsync::Locked`/`Uncapped`, default = LOCKED — the vsync-locked
+Fifo present exactly as shipped; the binary's `--uncapped`
+selects the request). D200 layering holds: vsync is a PLATFORM
+KNOB and stays OUT of `ModeConfig` — the selection never enters
+`SimConfig`, so the derived host config and the whole hashed
+trajectory are bit-identical under either option (pinned by
+`uncapped_selection_never_touches_the_hashed_trajectory`), and
+the present-gate/alpha answers are option-invariant
+(`vsync_option_never_changes_the_gate_answers`: the uncapped loop
+runs the same presents more often, it never changes WHAT the
+gate answers). POLICY SELECTION + LOOP SHAPE: the request is
+arbitrated by the pacing policy (`effective_vsync` — the SAME
+timing-lock arm `GameHost::present_pacing` reads, agreement
+unit-pinned): the modern Decoupled arm HONORS it — the loop
+presents as fast as it runs (with the Fifo block gone, the
+unconditional D205 redraw cycle free-runs; every present
+recomposes from latest state at the accumulator fraction, so the
+frames stay coherent by construction — idempotent and drift-free
+per present, pinned by `uncapped_presents_are_coherent_and_
+drift_free`), while the classic FrameLocked arm DECLINES it and
+pins vsync-locked (the original's visible refresh follows the
+fixed logic tick, never the display rate, RE-EXW-PACER §3 — an
+uncapped loop is nonsensical there). The winit/wgpu mapping is
+a PURE function (`surface_present_mode`): Locked → Fifo
+unconditionally (any refresh); Uncapped → `Immediate` when the
+surface offers it, else the honest Fifo fallback (Mailbox is NOT
+uncapped — it still paces to the display; best-effort platform
+knob, noted at configure time, never fatal — the same posture as
+a missing audio device). The shell fixed-step clock/pump
+contract is untouched (each pump is still the same fixed dt; the
+clock simply banks smaller deltas). The catalog stays empty (a
+plan-named present unit is not a catalog entry).
+
 ## 2. The bug-triage rubric (VERBATIM from PLAN §6, P6)
 
 The following is quoted byte-for-byte from `docs/PLAN.md` §6 (P6). It is
@@ -369,7 +408,13 @@ Per the D175 pattern the contract lands before any behavior change:
   required gate (D207; commands = bedlam-game --lib + bedlam-shell
   --lib, both --release --locked --offline, hermetic — the host
   composition-policy suite + the clock-fraction/present-site wiring
-  suite).
+  suite). The optional uncapped-present gate
+  `p6-uncapped-present-mode` landed 2026-08-28 as the SEVENTH P6
+  required gate (D208; command = bedlam-shell --lib,
+  --release --locked --offline, hermetic — the platform
+  vsync-option suite: the policy selection both arms, the pure wgpu
+  PresentMode mapping, the option-invariant gate answers, the
+  uncapped loop-shape coherence pin, and the trajectory pin).
 
 ## 6. P6 acceptance surface (pointer, not re-statement)
 

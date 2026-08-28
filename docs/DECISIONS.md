@@ -7613,3 +7613,86 @@ movement); check-p6-behavior-catalog OK (catalog still empty, R6
 satisfied with the sixth gate) + suite OK; fmt + clippy clean on the
 touched crates; MANIFEST clean before AND after every corpus read;
 no Ghidra run.
+
+## D208 — 2026-08-28: P6/present-option `p6-uncapped-present-mode` — the optional uncapped present (a platform presentation option OUT of ModeConfig, honored only by the modern Decoupled arm; the classic arm pins vsync-locked), wired as the SEVENTH P6 required gate
+
+CONTEXT: PLAN §6 P6 names the whole present sentence: "present
+mode: vsync-locked present at any refresh (60/120/144/240/360Hz+)
+or uncapped, while logic stays fixed at the original tick rate".
+D205 landed the vsync-locked half (the Fifo present + the gate at
+any refresh) and D207 landed the composition policy (the coherent
+recompose); this unit lands the REMAINING half — the optional
+uncapped present mode. No new RE: the unit rests on the
+already-verified RE-EXW-PACER §3 facts (the original's one-loop-
+pass-per-flip frame-locked pacing) and the D200 layering rule
+(vsync is a platform knob); nothing new is claimed about the
+binary.
+
+DECISIONS:
+1. The uncapped present is a PRESENTATION OPTION at the PLATFORM
+   level, NOT a purist axis: `WindowOptions::vsync`
+   (`Vsync::Locked` default / `Vsync::Uncapped`), selected by the
+   binary's `--uncapped`. D200 layering holds exactly — vsync is a
+   platform knob and stays OUT of `ModeConfig`, so the selection
+   never enters `SimConfig`: the derived host config and the whole
+   hashed trajectory are bit-identical under either option (pinned
+   by `uncapped_selection_never_touches_the_hashed_trajectory`:
+   identical executed ticks, sim tick count, state hash, scene hash
+   AND frame parity hash), and the present-gate/alpha answers are
+   option-invariant (`vsync_option_never_changes_the_gate_answers`
+   — the uncapped loop runs the same presents more often, it never
+   changes WHAT the gate answers). Default = LOCKED: the
+   vsync-locked Fifo present exactly as shipped.
+2. POLICY SELECTION: the request is ARBITRATED by the pacing
+   policy — `effective_vsync(mode, requested)` reads the SAME
+   timing-lock arm `GameHost::present_pacing` reads (D203;
+   agreement unit-pinned: Uncapped is effective iff the pacing is
+   Decoupled AND uncapped was requested). The modern Decoupled arm
+   honors it; the classic FrameLocked arm DECLINES it and pins
+   vsync-locked — the original's visible refresh follows the fixed
+   logic tick, never the display rate (RE-EXW-PACER §3), so an
+   uncapped loop is nonsensical there. Axis independence pinned:
+   the control-scheme arm alone never declines.
+3. LOOP SHAPE: an honored uncapped selection changes NO code in
+   the loop — with the Fifo block gone (Immediate), the
+   unconditional D205 redraw cycle free-runs: the loop presents as
+   fast as it runs, every present recomposing from latest state +
+   the D207 interpolated camera at the clock accumulator fraction
+   (`present_camera_alpha` unchanged). Coherent frames BY
+   CONSTRUCTION, pinned hermetically
+   (`uncapped_presents_are_coherent_and_drift_free`): recompose
+   always re-renders from LATEST state, so repeated presents at a
+   fixed fraction are idempotent and a burst of them never
+   accumulates drift, while the hashed buckets stay byte-frozen.
+   Each iteration still executes at most what the clock banks —
+   the fixed-step clock/pump contract is untouched (fixed dt per
+   pump; the clock simply banks smaller deltas).
+4. THE WGPU MAPPING is a pure function under test
+   (`surface_present_mode`): Locked → Fifo unconditionally (any
+   refresh); Uncapped → Immediate when the surface offers it, else
+   the honest Fifo fallback — Mailbox is NOT uncapped (it still
+   paces to the display), so an Immediate-less surface degrades
+   all the way to vsync-locked rather than half-honoring the
+   request. Best-effort platform knob: the configure site notes
+   the fallback on stderr, never fatal (the same posture as a
+   missing audio device).
+5. GATE: `p6-uncapped-present-mode` wired as the SEVENTH P6
+   required gate — command = bedlam-shell --lib,
+   --release --locked --offline, hermetic. Test surface = the ONE
+   purist toggle, both arms (per-axis mixes only as the
+   axis-independence control), never the feature cross-product;
+   the catalog stays EMPTY (a plan-named present unit is not a
+   catalog entry).
+
+VERIFIED (first-hand, this unit): bedlam-shell --lib 58/0 (+6: the
+shipped-default pin, the policy selection both arms + the
+axis-independence control + the end-to-end decline, the pure
+surface mapping incl. the Mailbox refusal, the trajectory pin, the
+option-invariant gate answers, and the uncapped loop-shape
+coherence/drift pin); the binary --help/--uncapped wiring checked
+first-hand (help text, the headless ignore note, the headless
+smoke hashes unchanged); controls green: gates-validator suite
+22/22, check-p6-behavior-catalog OK (catalog still empty, R6
+satisfied with the seventh gate) + its suite 30/30; fmt + clippy
+clean on bedlam-shell (the only touched crate); MANIFEST clean
+before AND after; no Ghidra run.

@@ -54,6 +54,26 @@
 //! the fixed-step clock/pump contract and the hashed trajectory
 //! stay untouched.
 //!
+//! P6 UNCAPPED PRESENT MODE (the p6-uncapped-present-mode unit): the
+//! optional uncapped present of PLAN §6 — "vsync-locked present at
+//! any refresh (60/120/144/240/360Hz+) or uncapped" — is a
+//! PRESENTATION OPTION at the platform level ([`WindowOptions::
+//! vsync`]; default = the vsync-locked Fifo present exactly as
+//! shipped). D200 layering: vsync is a platform knob and stays OUT
+//! of [`ModeConfig`]. The request is ARBITRATED by the pacing policy
+//! ([`effective_vsync`]): only the modern Decoupled arm honors it —
+//! with the Fifo block gone the unconditional redraw cycle
+//! free-runs, the loop presenting as fast as it runs, every present
+//! recomposing from latest state at the clock's accumulator fraction
+//! ([`present_camera_alpha`] — coherent frames by construction) —
+//! while the classic FrameLocked arm declines it and pins
+//! vsync-locked (the original's visible refresh follows the fixed
+//! logic tick, never the display rate; RE-EXW-PACER §3). The wgpu
+//! mapping ([`surface_present_mode`]) is a pure function: Locked ->
+//! Fifo (at any refresh), Uncapped -> Immediate when the surface
+//! offers it, else the honest Fifo fallback (best-effort platform
+//! knob, noted at configure time, never fatal).
+//!
 //! EXIT CONTRACT (D48): after the loop ends (window close,
 //! fatal, or the `auto_exit_after` hook) the teardown is ORDERED -
 //! audio stream parked first, then every wgpu/EGL object while the
@@ -108,6 +128,35 @@ pub enum ShellError {
     Game(#[from] GameError),
 }
 
+/// The platform-level vsync option (P6 optional uncapped present
+/// mode, PLAN §6 "vsync-locked present at any refresh
+/// (60/120/144/240/360Hz+) or uncapped"): a PRESENTATION OPTION
+/// under the D200 layering — vsync is a platform knob and stays OUT
+/// of [`ModeConfig`] (a mode change is a new host; a vsync change is
+/// a new window run).
+///
+/// The value is a REQUEST the pacing policy arbitrates (see
+/// [`effective_vsync`]): only the modern Decoupled pacing arm honors
+/// [`Vsync::Uncapped`]; the classic FrameLocked arm pins
+/// [`Vsync::Locked`] — the original's visible refresh follows the
+/// fixed logic tick, never the display rate (RE-EXW-PACER §3), so an
+/// uncapped loop is nonsensical there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Vsync {
+    /// Vsync-locked present (DEFAULT — exactly the shipped Fifo
+    /// present): the loop paces to the display at ANY refresh
+    /// (60/120/144/240/360 Hz+; the D205 wiring + the D207
+    /// composition policy make every vsync a coherent recomposed
+    /// frame), logic fixed at the original tick rate.
+    #[default]
+    Locked,
+    /// Uncapped present: no vsync wait — the loop presents as fast
+    /// as it runs, every present recomposing from latest state at
+    /// the accumulator fraction (coherent frames by construction).
+    /// Requires the modern Decoupled pacing arm; declined otherwise.
+    Uncapped,
+}
+
 /// Window host options.
 #[derive(Debug, Clone)]
 pub struct WindowOptions {
@@ -131,10 +180,18 @@ pub struct WindowOptions {
     /// control-scheme consumer's selection). Default = modern
     /// (PLAN §6; the binary's `--classic` selects the classic
     /// preset). A mode change is a new host, never a mid-run
-    /// mutation. Presentation options (`present` above) stay OUT
-    /// of the mode per the D200 layering: window mode, vsync and
-    /// scaling are platform knobs, not purist toggles.
+    /// mutation. Presentation options (`present`, `vsync` below)
+    /// stay OUT of the mode per the D200 layering: window mode,
+    /// vsync and scaling are platform knobs, not purist toggles.
     pub mode: ModeConfig,
+    /// The platform-level vsync option (P6 uncapped present mode,
+    /// PLAN §6 "vsync-locked ... or uncapped"; D200 layering — a
+    /// platform knob, OUT of `ModeConfig`): default
+    /// [`Vsync::Locked`], the vsync-locked Fifo present exactly as
+    /// shipped. [`Vsync::Uncapped`] is a request the pacing policy
+    /// arbitrates ([`effective_vsync`]): honored only under the
+    /// modern Decoupled arm; the classic arm pins locked.
+    pub vsync: Vsync,
     /// TEST/REPRO HOOK (D48): auto-exit the loop this long after the
     /// first resume, through the SAME exit path as window close
     /// (`ActiveEventLoop::exit`). `None` (the default) never fires;
@@ -157,6 +214,7 @@ impl WindowOptions {
             size: (960, 720),
             present: PresentConfig::default(),
             mode: ModeConfig::default(),
+            vsync: Vsync::default(),
             auto_exit_after: None,
         }
     }
@@ -223,6 +281,59 @@ fn present_due(host: &GameHost) -> bool {
 /// scene hash (the clock/pump contract is untouched).
 fn present_camera_alpha(host: &GameHost, clock: &FixedStepClock) -> Option<f32> {
     host.camera_interpolation().then(|| clock.fraction())
+}
+
+/// Arbitrate the vsync request against the pacing policy selected by
+/// the timing-lock arm of the plumbed mode (P6 uncapped present
+/// mode, PLAN §6 "vsync-locked present at any refresh ... or
+/// uncapped"): the MODERN Decoupled arm honors the request — with
+/// the Fifo block gone, the unconditional redraw cycle free-runs and
+/// the loop presents as fast as it runs, every present recomposing
+/// from latest state at the clock's accumulator fraction (coherent
+/// frames by construction) — while the CLASSIC FrameLocked arm
+/// DECLINES uncapped and pins [`Vsync::Locked`]: the original's
+/// visible refresh follows the fixed logic tick, never the display
+/// rate (RE-EXW-PACER §3 — one loop pass per flip), so an uncapped
+/// loop is nonsensical there. This reads exactly the arm
+/// `GameHost::present_pacing` reads (D203; agreement unit-pinned).
+/// Presentation-bucket ONLY (D17 b): the answer configures the
+/// swapchain and never reaches the sim or any hash.
+fn effective_vsync(mode: ModeConfig, requested: Vsync) -> Vsync {
+    use bedlam_core::mode::{PuristToggle, ToggleArm};
+    if mode.arm(PuristToggle::TimingLock) == ToggleArm::Classic {
+        Vsync::Locked
+    } else {
+        requested
+    }
+}
+
+/// The wgpu swapchain PresentMode for the effective vsync selection
+/// — the PURE MAPPING the surface configuration consumes
+/// (unit-pinned hermetically; no window needed).
+/// [`Vsync::Locked`] maps to `Fifo` unconditionally (the only
+/// universally supported mode — the shipped present, at any refresh:
+/// the blocking present paces the loop to the display).
+/// [`Vsync::Uncapped`] maps to `Immediate` when the surface offers
+/// it, else falls back to `Fifo`: Mailbox is NOT uncapped (it still
+/// paces to the display), so an uncapped request without `Immediate`
+/// support degrades honestly to vsync-locked — a best-effort
+/// platform knob, never fatal (the same posture as a missing audio
+/// device; the configure site notes the fallback).
+fn surface_present_mode(
+    effective: Vsync,
+    offered: &[bedlam_platform::wgpu::PresentMode],
+) -> bedlam_platform::wgpu::PresentMode {
+    use bedlam_platform::wgpu::PresentMode;
+    match effective {
+        Vsync::Locked => PresentMode::Fifo,
+        Vsync::Uncapped => {
+            if offered.contains(&PresentMode::Immediate) {
+                PresentMode::Immediate
+            } else {
+                PresentMode::Fifo
+            }
+        }
+    }
 }
 
 /// Open the window host and run until the window closes.
@@ -369,8 +480,22 @@ impl WindowHost {
         let mut surface_cfg = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .ok_or_else(|| ShellError::Surface(String::from("no default surface configuration")))?;
-        // Fifo is the only universally supported mode: vsync present.
-        surface_cfg.present_mode = bedlam_platform::wgpu::PresentMode::Fifo;
+        // P6 uncapped present mode: the platform vsync option,
+        // arbitrated by the pacing policy — the classic frame-locked
+        // arm pins vsync (RE-EXW-PACER §3: one loop pass per flip),
+        // the modern arm honors the request. Locked = the shipped
+        // Fifo present (any refresh); Uncapped = Immediate when the
+        // surface offers it, else the honest Fifo fallback
+        // (best-effort, noted, never fatal).
+        let vsync = effective_vsync(opts.mode, opts.vsync);
+        surface_cfg.present_mode = surface_present_mode(vsync, &caps.present_modes);
+        if vsync == Vsync::Uncapped
+            && surface_cfg.present_mode != bedlam_platform::wgpu::PresentMode::Immediate
+        {
+            eprintln!(
+                "bedlam-shell: uncapped present unsupported on this surface; staying vsync-locked (Fifo)"
+            );
+        }
         surface.configure(gpu.device(), &surface_cfg);
         let pipeline = ParityPipeline::new(&gpu, format);
 
@@ -674,8 +799,14 @@ impl ApplicationHandler for ShellApp {
         //    (loop liveness: the vsync-paced redraw cycle keeps
         //    about_to_wait pumping even when the classic present
         //    gate holds the previous image — the gate lives at the
-        //    present site, `ShellApp::present`). The Fifo present
-        //    then blocks to vsync, pacing the loop.
+        //    present site, `ShellApp::present`). Under the effective
+        //    Fifo present the surface write blocks to vsync, pacing
+        //    the loop; under an HONORED uncapped selection
+        //    (Immediate) nothing blocks and this cycle free-runs —
+        //    the uncapped loop shape: the loop presents as fast as
+        //    it runs, each iteration still executing at most what
+        //    the clock banks (fixed dt per pump, the contract
+        //    untouched).
         if let Some(g) = self.gfx.as_ref() {
             g.window.request_redraw();
         }
@@ -939,6 +1070,309 @@ mod present_loop_tests {
             classic.driver().sim().state_hash()
         );
         assert_eq!(modern.scene_hash(), classic.scene_hash());
+    }
+}
+
+#[cfg(test)]
+mod uncapped_present_tests {
+    //! The P6 uncapped-present-mode pins (PLAN §6 "vsync-locked
+    //! present at any refresh (60/120/144/240/360Hz+) or uncapped"):
+    //! a PLATFORM presentation option (D200 layering — OUT of
+    //! ModeConfig, default = the shipped vsync-locked Fifo present),
+    //! arbitrated by the pacing policy (the modern Decoupled arm
+    //! honors it; the classic FrameLocked arm pins locked), mapped
+    //! to a wgpu PresentMode by a PURE function — all hermetic, no
+    //! window needed. The shell fixed-step clock/pump contract and
+    //! the hashed trajectory stay untouched. Test surface = the ONE
+    //! purist toggle, both arms (per-axis mixes only as the
+    //! axis-independence control), never the feature cross-product;
+    //! the catalog stays EMPTY (a plan-named present unit is not a
+    //! catalog entry).
+    use super::*;
+    use bedlam_core::input::InputFrame;
+    use bedlam_core::mode::{PuristToggle, ToggleArm};
+    use bedlam_game::host::PresentPacing;
+    use bedlam_platform::wgpu::PresentMode;
+
+    fn opts_with(mode: ModeConfig) -> WindowOptions {
+        let mut opts = WindowOptions::new("test-install");
+        opts.mode = mode;
+        opts
+    }
+
+    fn host_for(opts: &WindowOptions) -> GameHost {
+        GameHost::new(
+            &GameConfig::default(),
+            &host_sim_config(opts),
+            [[0u8, 0, 0]; 256],
+        )
+    }
+
+    /// The shipped default: the platform vsync option starts LOCKED
+    /// — the Fifo present exactly as before this unit (the option
+    /// changes nothing until asked), and Locked maps to Fifo
+    /// regardless of what the surface offers (Fifo is universally
+    /// supported).
+    #[test]
+    fn vsync_option_defaults_to_the_shipped_locked_present() {
+        assert_eq!(Vsync::default(), Vsync::Locked);
+        assert_eq!(WindowOptions::new("test-install").vsync, Vsync::Locked);
+        assert_eq!(
+            surface_present_mode(
+                Vsync::Locked,
+                &[
+                    PresentMode::Fifo,
+                    PresentMode::Mailbox,
+                    PresentMode::Immediate
+                ]
+            ),
+            PresentMode::Fifo
+        );
+    }
+
+    /// POLICY SELECTION: the pacing policy (the timing-lock arm —
+    /// exactly the selector `GameHost::present_pacing` reads)
+    /// arbitrates the request. The modern Decoupled arm honors
+    /// uncapped; the classic FrameLocked arm declines it and pins
+    /// locked (the original's visible refresh follows the fixed
+    /// logic tick, never the display rate — RE-EXW-PACER §3).
+    /// Axis independence: the control-scheme arm alone never
+    /// declines. The decline is end-to-end: a classic arm asking
+    /// uncapped still configures Fifo.
+    #[test]
+    fn uncapped_is_honored_only_by_the_decoupled_pacing_arm() {
+        let timing_classic =
+            ModeConfig::default().with(PuristToggle::TimingLock, ToggleArm::Classic);
+        let controls_classic =
+            ModeConfig::default().with(PuristToggle::ControlScheme, ToggleArm::Classic);
+        for (mode, requested, expect) in [
+            (ModeConfig::MODERN, Vsync::Locked, Vsync::Locked),
+            (ModeConfig::MODERN, Vsync::Uncapped, Vsync::Uncapped),
+            (ModeConfig::CLASSIC, Vsync::Locked, Vsync::Locked),
+            (ModeConfig::CLASSIC, Vsync::Uncapped, Vsync::Locked),
+            (timing_classic, Vsync::Uncapped, Vsync::Locked),
+            (controls_classic, Vsync::Uncapped, Vsync::Uncapped),
+        ] {
+            assert_eq!(
+                effective_vsync(mode, requested),
+                expect,
+                "{mode:?} x {requested:?}"
+            );
+            // The arbitration agrees with the host's own pacing
+            // policy on the same plumbed mode: Uncapped is
+            // effective iff the pacing is Decoupled AND uncapped
+            // was requested.
+            let pacing = host_for(&opts_with(mode)).present_pacing();
+            assert_eq!(
+                effective_vsync(mode, requested) == Vsync::Uncapped,
+                pacing == PresentPacing::Decoupled && requested == Vsync::Uncapped,
+                "{mode:?}: arbitration tracks the host policy"
+            );
+        }
+        // The DECLINE reaches the swapchain: a classic arm asking
+        // uncapped on an Immediate-capable surface still gets Fifo.
+        assert_eq!(
+            surface_present_mode(
+                effective_vsync(ModeConfig::CLASSIC, Vsync::Uncapped),
+                &[PresentMode::Fifo, PresentMode::Immediate]
+            ),
+            PresentMode::Fifo
+        );
+    }
+
+    /// THE WGPU MAPPING (the pure function the surface configuration
+    /// consumes): Locked -> Fifo always; Uncapped -> Immediate when
+    /// offered; else the honest Fifo fallback — Mailbox is NOT
+    /// uncapped (it still paces to the display), so an
+    /// Immediate-less surface degrades all the way to vsync-locked
+    /// rather than half-honoring the request.
+    #[test]
+    fn surface_present_mode_is_the_pure_locked_or_immediate_mapping() {
+        assert_eq!(
+            surface_present_mode(Vsync::Locked, &[PresentMode::Fifo]),
+            PresentMode::Fifo
+        );
+        assert_eq!(
+            surface_present_mode(Vsync::Locked, &[PresentMode::Mailbox]),
+            PresentMode::Fifo
+        );
+        assert_eq!(
+            surface_present_mode(
+                Vsync::Uncapped,
+                &[PresentMode::Fifo, PresentMode::Immediate]
+            ),
+            PresentMode::Immediate
+        );
+        assert_eq!(
+            surface_present_mode(Vsync::Uncapped, &[PresentMode::Immediate]),
+            PresentMode::Immediate
+        );
+        assert_eq!(
+            surface_present_mode(Vsync::Uncapped, &[PresentMode::Fifo]),
+            PresentMode::Fifo
+        );
+        assert_eq!(
+            surface_present_mode(
+                Vsync::Uncapped,
+                &[
+                    PresentMode::Fifo,
+                    PresentMode::Mailbox,
+                    PresentMode::FifoRelaxed
+                ]
+            ),
+            PresentMode::Fifo,
+            "Mailbox/FifoRelaxed still pace to the display: not uncapped"
+        );
+    }
+
+    /// The selection is PRESENTATION-BUCKET ONLY (D17 b): it lives
+    /// in `WindowOptions` and never enters `ModeConfig`/`SimConfig`,
+    /// so the derived host config is bit-identical and the SAME pump
+    /// script yields the identical executed-tick sequence, sim tick
+    /// count, state hash, scene hash AND frame parity hash through
+    /// hosts built with either option — the uncapped loop may run
+    /// its presents faster, but the pumps it runs are the same fixed
+    /// contract they always were.
+    #[test]
+    fn uncapped_selection_never_touches_the_hashed_trajectory() {
+        let locked_opts = WindowOptions::new("test-install");
+        let mut uncapped_opts = WindowOptions::new("test-install");
+        assert_eq!(locked_opts.mode, uncapped_opts.mode, "same modern mode");
+        uncapped_opts.vsync = Vsync::Uncapped;
+        assert_eq!(
+            host_sim_config(&locked_opts),
+            host_sim_config(&uncapped_opts),
+            "the option never reaches the sim config"
+        );
+
+        let script = [4u32, 1, 1, 1, 1, 3, 2, 2, 0, 4];
+        let mut locked = host_for(&locked_opts);
+        let mut uncapped = host_for(&uncapped_opts);
+        let mut executed_locked = Vec::new();
+        let mut executed_uncapped = Vec::new();
+        for (i, &dt) in script.iter().cycle().take(30).enumerate() {
+            let input = if i % 3 == 0 {
+                InputFrame {
+                    buttons: 1,
+                    mouse_dx: 2,
+                    mouse_dy: 1,
+                    ..InputFrame::default()
+                }
+            } else {
+                InputFrame::default()
+            };
+            executed_locked.push(locked.pump_frame(dt, &input));
+            executed_uncapped.push(uncapped.pump_frame(dt, &input));
+        }
+        assert_eq!(executed_locked, executed_uncapped);
+        assert_eq!(
+            locked.driver().sim().tick_index(),
+            uncapped.driver().sim().tick_index()
+        );
+        assert_eq!(
+            locked.driver().sim().state_hash(),
+            uncapped.driver().sim().state_hash()
+        );
+        assert_eq!(locked.scene_hash(), uncapped.scene_hash());
+        assert_eq!(locked.frame().parity_hash(), uncapped.frame().parity_hash());
+    }
+
+    /// GATE ANSWERS are option-invariant: the vsync selection lives
+    /// upstream of the host (never in `ModeConfig`), so both arms'
+    /// present-gate and alpha answers are IDENTICAL under either
+    /// option — the uncapped loop runs the same presents more often;
+    /// it never changes WHAT the gate answers.
+    #[test]
+    fn vsync_option_never_changes_the_gate_answers() {
+        for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
+            let mut locked = WindowOptions::new("t");
+            let mut uncapped = WindowOptions::new("t");
+            locked.mode = mode;
+            uncapped.mode = mode;
+            uncapped.vsync = Vsync::Uncapped;
+            let mut a = host_for(&locked);
+            let mut b = host_for(&uncapped);
+            let mut clock = FixedStepClock::host();
+            for dt in [4u32, 0, 4, 3, 0, 4] {
+                clock.advance(4_166_666);
+                a.pump_frame(dt, &InputFrame::default());
+                b.pump_frame(dt, &InputFrame::default());
+                assert_eq!(present_due(&a), present_due(&b), "{mode:?} dt {dt}");
+                assert_eq!(
+                    present_camera_alpha(&a, &clock),
+                    present_camera_alpha(&b, &clock),
+                    "{mode:?} dt {dt}"
+                );
+            }
+        }
+    }
+
+    /// THE UNCAPPED LOOP SHAPE (hermetic simulation of the free-run
+    /// cycle): the gate stays open every iteration (the Decoupled
+    /// arm presents every host frame), the alpha is the clock
+    /// fraction each time, and the rapid-fire presents are COHERENT
+    /// BY CONSTRUCTION — `recompose` always re-renders from LATEST
+    /// state, so repeated presents at a fixed fraction are
+    /// idempotent and a burst of them never accumulates drift —
+    /// while the hashed buckets stay byte-frozen through the whole
+    /// burst.
+    #[test]
+    fn uncapped_presents_are_coherent_and_drift_free() {
+        let mut opts = WindowOptions::new("test-install");
+        opts.vsync = Vsync::Uncapped;
+        let mut host = host_for(&opts);
+        // Stage the interpolation endpoint: one full pump.
+        assert_eq!(
+            host.pump_frame(SUBTICKS_PER_PUMP, &InputFrame::default()),
+            1
+        );
+        let state0 = host.driver().sim().state_hash();
+        let scene0 = host.scene_hash();
+        let ticks0 = host.driver().sim().tick_index();
+
+        let mut clock = FixedStepClock::host();
+        // An uncapped iteration cadence far above the tick rate (a
+        // 1000 Hz-class loop: 1 ms deltas).
+        for _ in 0..12 {
+            assert_eq!(
+                clock.advance(1_000_000),
+                0,
+                "no whole pump per uncapped iteration here"
+            );
+            assert!(
+                present_due(&host),
+                "uncapped gate: every iteration presents"
+            );
+            let alpha = present_camera_alpha(&host, &clock).expect("modern arm interpolates");
+            assert!((0.0..=1.0).contains(&alpha));
+            assert!(host.recompose(alpha), "endpoint stays staged");
+        }
+        // The burst never touched anything hashed.
+        assert_eq!(host.driver().sim().state_hash(), state0);
+        assert_eq!(host.scene_hash(), scene0);
+        assert_eq!(host.driver().sim().tick_index(), ticks0);
+        // Idempotent at a fixed fraction and drift-free across
+        // fractions: recompose re-renders from latest state, so the
+        // frame depends on the CURRENT fraction alone, never on how
+        // many presents preceded it.
+        host.recompose(0.5);
+        let once = host.frame().parity_hash();
+        host.recompose(0.5);
+        host.recompose(0.5);
+        assert_eq!(
+            host.frame().parity_hash(),
+            once,
+            "idempotent at a fixed alpha"
+        );
+        host.recompose(0.75);
+        let direct = host.frame().parity_hash();
+        host.recompose(0.25);
+        host.recompose(0.75);
+        assert_eq!(
+            host.frame().parity_hash(),
+            direct,
+            "drift-free: present history never enters the frame"
+        );
     }
 }
 

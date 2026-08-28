@@ -33,7 +33,7 @@ required_gates = ["p5-zone-gate-scaffold", "p5-zone-a", "p5-zone-b", "p5-zone-c"
 [[phase]]
 id = "P6"
 status = "pending"
-required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation"]
+required_gates = ["p6-modernization-scaffold", "p6-modeconfig-seam", "p6-timing-lock-surface", "p6-control-scheme-surface", "p6-present-loop-wiring", "p6-high-refresh-interpolation", "p6-uncapped-present-mode"]
 
 [[phase]]
 id = "P7"
@@ -701,3 +701,52 @@ commands = [
   ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
 ]
 tracked_paths = ["engine/bedlam-game/src/host.rs", "engine/bedlam-core/src/sim.rs", "engine/bedlam-shell/src/clock.rs", "engine/bedlam-shell/src/window.rs", "docs/RE-EXW-CAMERA.md", "docs/P6-MODERNIZATION.md", "docs/required-gates.toml"]
+
+# p6-uncapped-present-mode — the P6 PRESENT-OPTION unit (D208; PLAN
+# §6 P6 "time-based simulation ... present mode: vsync-locked
+# present at any refresh (60/120/144/240/360Hz+) or uncapped, while
+# logic stays fixed at the original tick rate" — the sentence's
+# remaining half, sibling of the D207 composition policy): the
+# OPTIONAL UNCAPPED present mode as a PRESENTATION OPTION at the
+# platform level (D200 layering — vsync is a platform knob,
+# presentation options stay OUT of ModeConfig; default stays the
+# vsync-locked Fifo present exactly as shipped). The unit lands the
+# POLICY SELECTION + the LOOP SHAPE: uncapped applies ONLY under
+# the modern Decoupled pacing arm (engine/bedlam-shell/src/
+# window.rs `Vsync` + `WindowOptions::vsync` + `effective_vsync`
+# — the request is arbitrated by the SAME timing-lock arm
+# `GameHost::present_pacing` reads, agreement unit-pinned; an
+# honored uncapped loop presents as fast as the loop runs — with
+# the Fifo block gone the unconditional D205 redraw cycle
+# free-runs — every present recomposing from latest state + the
+# D207 interpolated camera at the clock accumulator fraction,
+# coherent frames by construction: idempotent and drift-free per
+# present, pinned by `uncapped_presents_are_coherent_and_
+# drift_free`), while the classic FrameLocked arm DECLINES it and
+# pins vsync-locked (the visible refresh follows the fixed logic
+# tick, never the display rate — RE-EXW-PACER sec 3 [verified];
+# uncapped is nonsensical there). The winit/wgpu PresentMode
+# mapping is a PURE function under test (`surface_present_mode`):
+# Locked -> Fifo unconditionally (any refresh); Uncapped ->
+# Immediate when the surface offers it, else the honest Fifo
+# fallback (Mailbox is NOT uncapped — best-effort platform knob,
+# noted at configure time, never fatal). BOUNDS KEPT: the shell
+# fixed-step clock/pump contract and the hashed trajectory are
+# UNTOUCHED — the selection never enters ModeConfig/SimConfig
+# (pinned by `uncapped_selection_never_touches_the_hashed_
+# trajectory`: identical executed ticks, sim tick count, state
+# hash, scene hash and frame parity hash under either option) and
+# the present-gate/alpha answers are option-invariant
+# (`vsync_option_never_changes_the_gate_answers`); test surface =
+# the ONE purist toggle, both arms (per-axis mixes only as the
+# axis-independence control), never the feature cross-product; the
+# catalog stays EMPTY (a plan-named present unit is not a catalog
+# entry). Command hermetic: --release --locked --offline, no
+# corpus key, no writable.
+[[gate]]
+id = "p6-uncapped-present-mode"
+timeout_seconds = 1800
+commands = [
+  ["/usr/bin/cargo", "test", "--release", "--locked", "--offline", "-p", "bedlam-shell", "--lib"],
+]
+tracked_paths = ["engine/bedlam-shell/src/window.rs", "engine/bedlam-shell/src/main.rs", "docs/P6-MODERNIZATION.md", "docs/P6-BEHAVIOR-CATALOG.toml", "docs/required-gates.toml"]
