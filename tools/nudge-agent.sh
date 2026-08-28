@@ -430,7 +430,24 @@ elif grep -aqiE "Rate limit reached|rate limit|usage limit|HTTP[^0-9]*429|429 To
 # charged task 1c8526453c786dd5 to 2/3 - one more would have armed
 # the cooldown+notify spiral mid-incident (watchdog repair,
 # 2026-08-21).
-elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|DNS|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event|Provider request failed with HTTP 5[0-9][0-9]" "$LOG"; then
+elif grep -aqE "Decode error|Error:.*Transport|Error: Transport|ECONNRESET|socket connection was closed|getaddrinfo ENOTFOUND|EAI_AGAIN|[Dd][Nn][Ss] resolution|Invalid [A-Za-z0-9_./-]+/openai-compatible-chat stream event|Provider request failed with HTTP 5[0-9][0-9]" "$LOG"; then
+  # (watchdog repair 2026-08-28, token 1851346: the bare `DNS` alternative
+  # was a PROSE false positive. Three fully-green completions tonight
+  # (3ea06ba4 flatpak 20:26, a6aece66 windows-installer 20:52, c60dbcd6
+  # macos-universal2 21:14) each exited rc=0 progress=1 with the final
+  # summary fully streamed, everything committed AND pushed -- and were
+  # still classified provider-side transport because their transcripts
+  # legitimately contain the phrase "reverse DNS" (the Flatpak app-id
+  # rationale recorded in docs/P7-PORTS.md and echoed by ci.yml work and
+  # sibling-gate verification). Each false positive published a structured
+  # failure, paused the loop for a watchdog repair cycle, and released a
+  # claim for nothing; the upcoming p7-phase-close survey walks P7-PORTS.md
+  # sentence by sentence, guaranteeing recurrence. Resolution-failure
+  # markers must be error-shaped, never bare dictionary words: `DNS` is
+  # replaced by the errno-shape EAI_AGAIN plus "[Dd][Nn][Ss] resolution",
+  # neither of which can match "reverse DNS", "reverse-DNS shaped", or
+  # "non-DNS app-id" prose. getaddrinfo ENOTFOUND already covered the
+  # common node resolution error and stays.)
   kind=transport
 elif [ "$reaped" -eq 1 ]; then
   # The idle-log reaper terminated a hung client (2026-08-21 watchdog

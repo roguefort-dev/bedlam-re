@@ -9746,3 +9746,72 @@ canonical-chain movement; check-p6-behavior-catalog OK both
 sides); MANIFEST.sha256 clean before and after every corpus read
 (the gate itself reads only committed definitions — no engine
 change, no Rust file touched, no Ghidra run, no new RE).
+
+## D230 — 2026-08-28: autonomy/watchdog — the EIGHTH repair is a DIFFERENT CLASS: not a post-completion death at all but a CLASSIFIER FALSE POSITIVE — the bare `DNS` dictionary word in the nudge-agent transport grep matched the engineering prose "reverse DNS", misreading three fully-green rc=0 progress=1 completions (D226's 3ea06ba4, D228's a6aece66, and c60dbcd6) as provider-side transport deaths; fixed by error-shaped markers only, pinned by a live-extracted regression suite
+
+CONTEXT: 2026-08-28 20:26/20:52/21:14 the wrapper recorded three
+`kind=transport` failures, each with evidence client_rc=0 progress=1,
+each AFTER a complete unit (df93006, ee5c5a7+f70661a, 877942e) with
+the final summary fully streamed and both commits PUSHED. D226/D228
+adjudicated the first two as provider deaths at the finish line "with
+ZERO misses — no code change owed". The third recurrence triggered
+this repair, and the log evidence finally contradicts that frame:
+grep of the three agent logs with the wrapper's EXACT transport
+pattern matches only lines like "the repo remote's own reverse DNS"
+and "non-DNS app-id" — the Flatpak app-id rationale RECORDED IN
+docs/P7-PORTS.md (D225) and echoed by every later unit that reads
+ci.yml (the flatpak job) or verifies sibling gates. No "Error:",
+no ECONNRESET, no stream-event line anywhere in those logs; the
+clients exited rc=0 by themselves. The bare `DNS` alternative was
+added 2026-08-20 (6b0798c) as a resolution-error heuristic and is a
+substring dictionary word — the same class of bug the 2026-08-21
+rate-limit repair already fixed for the capital-U "Usage limit"
+variant.
+
+WHY IT CHURNED: a false transport failure still publishes a
+structured failure artifact (repair=required), which the
+llm-watchdog escalates to a full pause+repair cycle (~6-30 min of
+dead loop each), releases a claim for nothing, and respawns. The
+upcoming p7-phase-close survey walks P7-PORTS.md sentence by
+sentence — the false positive was GUARANTEED to recur at the exact
+moment of the phase close.
+
+DECISION: (a) THE FIX (tools/nudge-agent.sh, one line): the
+transport pattern's `|DNS|` alternative is replaced by
+`|EAI_AGAIN|[Dd][Nn][Ss] resolution|` — error-shaped tokens only
+(getaddrinfo ENOTFOUND already covered the common node resolution
+failure and stays; EAI_AGAIN covers the temporary-resolution errno;
+"[Dd][Nn][Ss] resolution" covers error phrasings like "DNS
+resolution failed"). None of the three can match "reverse DNS",
+"reverse-DNS shaped", or "non-DNS app-id" prose. (b) THE PIN
+(tools/test-nudge-transport-markers.sh, NEW): the classifier pattern
+is EXTRACTED LIVE from nudge-agent.sh (sed on the exact grep line,
+asserting it exists exactly once — never a copied pattern that could
+drift), then asserted in both directions: six prose fixtures from
+the actual false-positive shapes never match, eleven real
+provider-error shapes (Transport, ECONNRESET, closed socket,
+ENOTFOUND, EAI_AGAIN, DNS-resolution error, Decode error, invalid
+stream event, HTTP 502/504) always match. (c) THE ADJUDICATION: the
+live structured failure (c60dbcd6, gate p7-macos-universal2-ci) is
+resolved replaced-task — the task stood complete and PUSHED
+(9437ac7 + bookkeeping 877942e, strict parser rc=0, queue RUNNABLE 1
+with p7-phase-close as the sole active item) exactly as D206's
+checklist requires; the remediation_commit is THIS repair commit
+(it carries the queue NOTE establishing the postcondition).
+D226/D228's "provider-side death" narrative is corrected by this
+entry: the transport kind itself was fabricated by the classifier.
+
+WATCH ITEM (recorded, deliberately untouched): the rate-limit grep
+(`rate limit`, case-insensitive substring) is the same broad-shape
+risk; no incident observed, and minimal-repair discipline leaves it
+for the repair that actually sees it fire falsely.
+
+VERIFIED first-hand: the new pattern run against the three affected
+logs answers 0 matches (the old pattern: 3/3 — the mechanical
+proof of the diagnosis); control logs (d9aaa029, 3d906dad,
+cf6544eb) match under neither; bash -n clean on nudge-agent.sh; the
+new suite 17/17; siblings green AFTER the edit — test-nudge-queue,
+test-automation-failure-watchdog, test-llm-watchdog,
+test-autonomy-remaining-gaps all PASS; strict queue parser rc=0
+RUNNABLE 1 before and after; MANIFEST.sha256 clean before and after
+(no corpus read by this repair).

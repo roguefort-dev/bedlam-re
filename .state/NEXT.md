@@ -93,6 +93,16 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    rows landed; the close = the R6 survey + the pending->green
    status flip + the bound verdict with --phase-output
    .state/P7-COMPLETE).
+   NOTE (watchdog repair 1787944462, D230): the recorded
+   transport failure for this run was a CLASSIFIER FALSE
+   POSITIVE, not a provider death — the client exited rc=0
+   progress=1 with the summary fully streamed (D226/D228
+   misread the same shape); the wrapper's bare `DNS` marker
+   matched the prose "reverse DNS" in the transcript. Fixed in
+   the repair commit (error-shaped markers only + regression
+   suite); the structured failure is adjudicated replaced-task
+   per D206 — work stood complete and PUSHED, and the active
+   queue above is untouched, RUNNABLE 1.
 
 2. DONE (2026-08-28, claim 1 — commit 07a6c57 by worker
    a6aece66, PUSHED): P7 SIXTH engineering deliverable
