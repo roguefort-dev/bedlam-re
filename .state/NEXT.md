@@ -10,33 +10,91 @@ item's first numbered line, prose starting same-line after the tags —
 never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
-1. [READY] [id=p7-macos-universal2-ci] [gate=p7-macos-universal2-ci] P7
-   macOS deliverable per PLAN §6 P7 "macOS universal2 through
-   automated CI" + docs/P7-PORTS.md §2 (row macos-universal2-ci):
-   the committed universal2 aarch64+x86_64 CI job definition that
-   runs when a runner exists — the runner itself is the
-   macos-runner-availability exclusion (D221, PLAN §3 posture:
-   runner availability is external and never blocks engineering;
-   goldens never run on macOS CI). The gate grades the committed
-   job definition hermetically (offline workflow checker); flip
-   the registry row landed with the gate. BOUNDS: workflow +
-   checker work, no engine change; controls green before AND
-   after; commit with the unit's own Nudge-Worker trailer.
-
-2. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
-   phase-close bookkeeping once EVERY engineering deliverable in
-   docs/P7-PORTS.md §3 is landed with its proving gate (the D221
-   R6 surveyable flip — the p5/p6 phase-close pattern): the
-   surveyed verdict walking every PLAN §6 P7 sentence against the
-   registry (landed vs explicitly excluded, nothing silently
-   dropped), the P7 status flip pending->green in
-   docs/required-gates.toml, and the bound --phase P7 verdict
+1. [READY] [id=p7-phase-close] [gate=p7-phase-close] P7
+   phase-close bookkeeping — every engineering deliverable in
+   docs/P7-PORTS.md §3 is NOW landed with its proving gate (the
+   D221 R6 surveyable flip is satisfiable; the p5/p6 phase-close
+   pattern): the surveyed verdict walking every PLAN §6 P7
+   sentence against the registry (landed vs explicitly excluded,
+   nothing silently dropped), the P7 status flip pending->green
+   in docs/required-gates.toml, and the bound --phase P7 verdict
    re-emitted at the flip commit (--phase-output
-   .state/P7-COMPLETE). This item is claimable ONLY after item 1
-   is done.
+   .state/P7-COMPLETE). The LAST engineering row
+   p7-macos-universal2-ci landed at 9437ac7 (ALL 7 P7 GATES
+   GREEN, 7 landed / 0 pending), so this close is claimable NOW.
 
 ## Done
-1. DONE (2026-08-28, claim 1 — commit 07a6c57 by worker
+1. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
+   c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +
+   LAST engineering deliverable `p7-macos-universal2-ci` — the
+   SCHEDULED macOS UNIVERSAL2 CI JOB DEFINITION per PLAN §6 P7
+   "macOS universal2 through automated CI" + docs/P7-PORTS.md §2
+   (row macos-universal2-ci; implementation D229; the registry
+   row flipped landed in the SAME commit naming the new SEVENTH
+   P7 required gate per the R2 rule). (a) THE DEFINITION
+   (.github/workflows/macos-universal2.yml, NEW): the scheduled
+   macos-universal2 job on macos-latest — dtolnay/rust-toolchain
+   @stable with BOTH targets (aarch64-apple-darwin,
+   x86_64-apple-darwin), the two reproducible slice builds
+   (cargo build --release --locked -p bedlam-shell --target
+   aarch64-apple-darwin + --target x86_64-apple-darwin,
+   deliberately not --offline), the UNIVERSAL2 JOIN (lipo
+   -create over exactly the two built binaries into
+   staging/bedlam-shell — ONE Mach-O carrying both slices), the
+   strict bounded upload (bedlam-shell-macos-universal2,
+   actions/upload-artifact@v4, if-no-files-found: error, 14-day
+   retention) — engine binary only, UNSIGNED (the signing-keys
+   exclusion), the corpus token ABSENT from the workflow
+   entirely. THE CADENCE is PLAN §3's own posture ("automated
+   scheduled macOS CI when a runner is available ... goldens
+   never run on macOS CI"): weekly off-peak cron "41 4 * * 1" +
+   workflow_dispatch and NO push/pull_request trigger — no push
+   is ever gated on a macOS runner existing (the
+   macos-runner-availability exclusion made mechanical; the
+   per-push artifact surface stays the Linux + Windows ci.yml
+   matrix); NO test/golden/diffharness command rides along;
+   least privilege permissions contents: read. The runner itself
+   is EXTERNAL: the first live execution may need ordinary CI
+   fixes — exactly the exclusion's content; the gate grades the
+   committed definition only. (b) THE GATE: p7-macos-universal2-
+   ci wired as the SEVENTH P7 required_gates entry — command 1 =
+   tools/check-p7-macos-universal2-ci.py (the D222-family
+   stdlib-only YAML-subset checker over the committed workflow:
+   the scheduled cadence incl. the push-trigger refusal, the
+   macos-* runner label, the both-targets toolchain, the two
+   exact --release --locked builds, the lipo -create join over
+   exactly the two built binaries, the strict bounded upload,
+   the no-test boundary, least privilege, and the signing-token
+   + corpus-token denylists, comments included) + command 2 =
+   check-p7-ports-map (the flip + gate join) + command 3 =
+   tools/test-p7-macos-universal2-ci.py (35 fail-closed tests);
+   test-p7-ports-map.py re-baselined to 7 landed / 0 pending
+   (the flip fixtures now UN-land the macos row; the default
+   fixture manifest wires the seventh gate; the forward shape
+   becomes the GREEN PHASE itself), the D222-D227 pattern.
+   VERIFIED first-hand: the checker + 35/35 suite green over the
+   real repo; ports-map OK (7 engineering, 7 landed, 0 pending)
+   + 29/29; test-validate-required-gates 22/22 after the
+   manifest edit; p7-ci-artifacts + 22/22, p7-flatpak-manifest +
+   40/40 and p7-windows-installer + 50/50 still green over the
+   untouched ci.yml; the workflow re-parsed under pyyaml as an
+   independent check of the family reader; controls green BEFORE
+   AND AFTER (canonical_dump_gate 13/13, determinism 4/4,
+   zone_mission_parity 5/5 — ZERO canonical-chain movement;
+   check-p6-behavior-catalog OK both sides); MANIFEST.sha256
+   clean before and after every corpus read (the gate reads no
+   corpus); the bounded --phase P7 validator verdict RE-EMITTED
+   at the landing commit 9437ac7: status=passed, ALL 7 P7 GATES
+   GREEN, every command rc=0 under bwrap containment (report
+   .state/p7-macosuniversal2-gates-report.json, head-bound to
+   9437ac750224). No engine change, no corpus read by the gate,
+   no new dependency, no Ghidra run, no new RE. Queued: the P7
+   phase close as the SOLE remaining item (all seven engineering
+   rows landed; the close = the R6 survey + the pending->green
+   status flip + the bound verdict with --phase-output
+   .state/P7-COMPLETE).
+
+2. DONE (2026-08-28, claim 1 — commit 07a6c57 by worker
    a6aece66, PUSHED): P7 SIXTH engineering deliverable
    `p7-windows-installer` — the WINDOWS INSTALLER DEFINITION +
    ITS PER-PUSH CI BUILD per PLAN §6 P7 "Windows installer" +
