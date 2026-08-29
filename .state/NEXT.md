@@ -160,6 +160,37 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    with the gate suite deterministic, the flake class that
    beacons completion-missing is closed.
 
+   NOTE (watchdog repair 1788037173, D237): the completion-missing
+   failure recorded at 2026-08-29T20:59:32Z is a NEW defect
+   class, the first HOST-ENVIRONMENT failure of the completion
+   era: the machine rebooted at 22:57 (tmpfs /tmp wiped) and the
+   first post-boot controller pass died BEFORE any gate ran —
+   complete-from-head's mkdtemp over /tmp/opencode raised ENOENT
+   because nothing recreated the completion staging root after
+   the wipe; the controller had been healthy all day (13
+   consecutive accepted validations 13:11:52-22:30:44). The
+   staging root is controller-owned infrastructure, so the
+   controller now creates it itself: completion_scratch_base in
+   tools/nudge-state.py recreates the root 0o700, idempotently,
+   and refuses a symlink or non-directory root; both host-side
+   completion call sites (complete-from-head mkdtemp,
+   accept-completion TemporaryDirectory) stage through it; the
+   sealed validator needs nothing (its scratch_base already
+   falls back to a HOME-based root). The controller suite gained
+   deterministic test 12 pinning the defect class (mkdtemp into
+   a wiped root ENOENTs) and proving recreate/idempotent/refuse
+   semantics, and test 11's fixture now mkdir -p's the shared
+   root so the suite itself is reboot-proof. Verified:
+   tools/test-nudge-controller.sh PASS end-to-end, test-12 body
+   green standalone, py_compile and bash -n clean, strict parser
+   rc=0 REQUIRED-QUEUE-EMPTY before and after this NOTE, MANIFEST
+   clean before and after, required-gates manifest untouched.
+   The marker is adjudicated required-empty per D237 (the sixth,
+   after D232/D233/D234/D235/D236) — the required queue IS empty
+   and stays empty, P0-P7 all green at this HEAD; the next
+   controller tick re-validates this HEAD from scratch and the
+   reboot-wipe class that beacons completion-missing is closed.
+
 2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +
    LAST engineering deliverable `p7-macos-universal2-ci` — the

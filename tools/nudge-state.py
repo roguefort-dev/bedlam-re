@@ -34,6 +34,7 @@ MAX_STATE_FILE = 1024 * 1024
 MAX_FAILURES = 256
 MAX_CLAIM_FILE = 64 * 1024
 MAX_CLAIMS = 256
+COMPLETION_SCRATCH_BASE = Path("/tmp/opencode")
 
 
 def open_directory(path: Path, create: bool = False) -> int:
@@ -1159,6 +1160,27 @@ def inert_git(checkout: Path, environment: dict[str, str], *arguments: str) -> s
     return result.stdout.strip()
 
 
+def completion_scratch_base() -> Path:
+    """Completion staging root, recreated when a host reboot wiped /tmp.
+
+    /tmp is tmpfs on the controller host: the 2026-08-29 22:57 reboot
+    deleted /tmp/opencode and the first post-boot completion pass then
+    died at mkdtemp with ENOENT, beaconing completion-missing (the
+    22:59:32 marker, watchdog repair 1788037173). The staging root is
+    controller-owned infrastructure, so create it when missing; a root
+    that exists as a symlink or a non-directory is refused, not
+    followed.
+    """
+    base = COMPLETION_SCRATCH_BASE
+    if base.is_symlink() or (base.exists() and not base.is_dir()):
+        raise ValueError("unsafe completion scratch root")
+    try:
+        base.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    return base
+
+
 def complete_from_head(arguments: list[str]) -> None:
     if len(arguments) != 3:
         raise ValueError("complete-from-head requires root, report, and completion output")
@@ -1179,7 +1201,7 @@ def complete_from_head(arguments: list[str]) -> None:
     if items or claims_before["entries"]:
         raise ValueError("queued work or claims block completion validation")
     head, objects = read_git_head(root)
-    checkout = Path(tempfile.mkdtemp(prefix="bedlam-completion-", dir="/tmp/opencode"))
+    checkout = Path(tempfile.mkdtemp(prefix="bedlam-completion-", dir=completion_scratch_base()))
     output = checkout.parent / f".{checkout.name}-output"
     output.mkdir(mode=0o700)
     archive_path = output / "head.tar"
@@ -1447,7 +1469,7 @@ def accept_completion(arguments: list[str]) -> None:
         "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_TERMINAL_PROMPT": "0", "HOME": "/tmp/opencode", "LC_ALL": "C",
     }
-    with tempfile.TemporaryDirectory(prefix="bedlam-completion-accept-", dir="/tmp/opencode") as temporary:
+    with tempfile.TemporaryDirectory(prefix="bedlam-completion-accept-", dir=completion_scratch_base()) as temporary:
         inert = Path(temporary)
         subprocess.run(
             ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "-q",

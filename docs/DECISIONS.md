@@ -10352,3 +10352,79 @@ appears; the global verdict remains the controller's alone.
 Confidence: high (both flakes reproduced and eliminated
 mechanically; the 02:22 report pins the failing gate to this
 suite; no other gate in that report failed on its own terms).
+
+## D237 — 2026-08-29: autonomy/watchdog — the FOURTEENTH repair is a NEW defect class, the first HOST-ENVIRONMENT failure of the completion era: the machine rebooted at 22:57 (tmpfs /tmp wiped), and the first post-boot controller pass at 22:59:32 died BEFORE any gate ran — complete-from-head's mkdtemp(dir="/tmp/opencode") raised ENOENT because nothing recreates the completion staging root after /tmp is wiped; nudge.sh logged "completion validation rejected: nudge state error: [Errno 2] No such file or directory: '/tmp/opencode/bedlam-completion-belf2dyq'" and beacoed completion-missing (marker controller-1788037172-3590-completion-missing, ordinal 1, id automation-state, gate automatic-repair); the structured failure adjudicated required-empty (the SIXTH required-empty adjudication, after D232/D233/D234/D235/D236 — the required queue IS empty, P0-P7 all green at e3e0512 proven by the 13 consecutive accepted validations 13:11:52–22:30:44 in nudge.log, strict parser rc=0 REQUIRED-QUEUE-EMPTY)
+
+MECHANISM, established from the evidence chain this run: the
+controller tail shows the completion branch HEALTHY all day —
+every ~30-minute tick from 13:11:52 to 22:30:44 ran
+complete-from-head end-to-end and accept-completion accepted
+("all required P0-P7 gates passed fresh bounded offline
+validation"), so the code, the queue, the gates, and the corpus
+are all proven good at HEAD e3e0512. `last -x` pins the reboot:
+shutdown 22:57, boot 22:57 (uptime 3 min at 23:00). /tmp is
+tmpfs on this host; /tmp/opencode was recreated empty at 22:59
+by the watchdog wrapper's own session start — AFTER the 22:59:32
+controller pass had already failed its mkdtemp against the
+wiped root. The defect is an order-of-operations fragility in
+nudge-state.py, not a gates failure: staging-root creation was
+nobody's job, so the first consumer after a reboot ENOENTs.
+Both host-side completion-path call sites are the same class —
+complete_from_head (mkdtemp, tools/nudge-state.py) and
+accept_completion (TemporaryDirectory, same file); the sealed
+validator itself is NOT exposed (validate-required-gates.py
+scratch_base() falls back to HOME/.required-gate-scratch when
+/tmp/opencode is missing, and every gate command runs inside
+bwrap containment regardless). The hermetic controller suite
+test 11 fixture validator also writes markers under
+/tmp/opencode and would be the next same-class victim when run
+post-reboot.
+
+FIX (smallest concrete cause, production code + its own
+regression pin): the staging root is controller-owned
+infrastructure, so the controller now creates it itself —
+completion_scratch_base() in tools/nudge-state.py recreates
+/tmp/opencode (mode 0o700, idempotent, FileExistsError-tolerant
+for concurrent creators) and REFUSES an unsafe root (symlink or
+non-directory) instead of staging into it; both call sites
+(mkdtemp in complete_from_head, TemporaryDirectory in
+accept_completion) now stage through the helper. The suite
+gained a deterministic regression test 12 (tools/
+test-nudge-controller.sh) that pins the defect class first
+(mkdtemp into a wiped root ENOENTs), then proves the helper
+recreates the root 0o700, staging succeeds, the helper is
+idempotent, and non-directory/symlinked roots raise; test 11's
+fixture now mkdir -p's the shared root so the suite itself is
+reboot-proof.
+
+VERIFIED first-hand: tools/test-nudge-controller.sh PASS
+end-to-end (rc=0, all 12 tests incl. the completion-flow fence
+and the new scratch-root regression); the test-12 body green
+standalone (ENOENT pinned, recreate 0o700, staging, idempotent,
+refusals); python3 -m py_compile tools/nudge-state.py clean;
+bash -n tools/test-nudge-controller.sh clean; the strict queue
+parser rc=0 REQUIRED-QUEUE-EMPTY before and after the queue
+NOTE; MANIFEST.sha256 clean before and after (the suite is
+hermetic over TMP fixtures — no corpus read by this repair);
+docs/required-gates.toml untouched; the failure marker identity
+re-verified against the trigger snapshot exactly (name
+controller-1788037172-3590-completion-missing, device 52, inode
+8390758, sha256 4b67ccd7597dc652d87b4362c6f896267d877a1b372102
+a6e8a0d307c9d7529e, ordinal 1, id automation-state, gate
+automatic-repair).
+
+POSTCONDITION for the loop: the completion branch's staging can
+no longer ENOENT after a reboot — the next controller tick
+re-validates this HEAD from scratch under the manifest-derived
+budget, every gate green at e3e0512 is green at this HEAD (the
+only tracked changes are the controller helper, its suite, and
+bookkeeping), complete-from-head publishes plan-complete-v1 for
+that invocation, and accept-completion consummates it exactly
+as the completion contract demands. Workers stay unspawned; no
+queue item appears; the global verdict remains the controller's
+alone. Confidence: high (the 22:59:32 rejection names the exact
+missing path; the reboot is pinned by last -x to the minute; 13
+prior accepted validations prove every other link green; the
+defect and the fix are both reproduced mechanically by the new
+deterministic test).
+

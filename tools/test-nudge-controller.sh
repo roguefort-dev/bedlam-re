@@ -355,6 +355,10 @@ printf '# fixture gates manifest\n' > "$PLAN/docs/required-gates.toml"
 git -C "$PLAN" add MANIFEST.sha256 docs tools
 git -C "$PLAN" commit -qm 'fixture: sealed validator stub'
 printf '# NEXT\n\n## Now\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+# The fixture validator and the completion staging root both live in the
+# host tmpfs /tmp/opencode: a reboot (2026-08-29 22:57) can wipe it before
+# this suite runs, so ensure the shared root exists before the markers.
+mkdir -p /tmp/opencode
 rm -f "/tmp/opencode/$basis_token.marker" "/tmp/opencode/$basis_token.release"
 : > "$TMP/run-calls"
 : > "$TMP/chain-calls"
@@ -403,6 +407,73 @@ fi
 rm -f "/tmp/opencode/$basis_token.marker" "/tmp/opencode/$basis_token.release"
 if [ "$basis_failures" -ne 0 ]; then
   printf 'nudge controller tests: RED (basis-change retry: %d failed assertions)\n' "$basis_failures" >&2
+  exit 1
+fi
+
+# 12. The completion staging root is controller-owned infrastructure: a host
+# reboot wipes the tmpfs /tmp (2026-08-29 22:57) and the old hardcoded
+# mkdtemp(dir="/tmp/opencode") died with ENOENT on the first post-boot
+# completion pass, beaconing completion-missing (watchdog repair 1788037173).
+# complete-from-head/accept-completion must recreate the root themselves and
+# refuse an unsafe (symlink or non-directory) root instead of staging into it.
+scratch_failures=0
+if ! python3 - "$ROOT" "$TMP" <<'PY'
+import importlib.util
+import pathlib
+import sys
+import tempfile
+
+root, tmp = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location(
+    "nudge_state", root / "tools" / "nudge-state.py"
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+missing = tmp / "wiped-opencode"
+# Pin the defect class first: staging into a wiped root is ENOENT.
+try:
+    tempfile.mkdtemp(dir=missing)
+except FileNotFoundError:
+    pass
+else:
+    raise AssertionError("precondition: mkdtemp into a missing root must ENOENT")
+
+module.COMPLETION_SCRATCH_BASE = missing
+base = module.completion_scratch_base()
+assert base == missing and base.is_dir(), "helper must recreate the wiped root"
+staging = pathlib.Path(tempfile.mkdtemp(prefix="bedlam-completion-", dir=base))
+assert staging.is_dir(), "staging must succeed against the recreated root"
+assert module.completion_scratch_base() == base, "helper must be idempotent"
+
+refused = tmp / "refused-opencode"
+refused.write_text("not a directory", encoding="utf-8")
+module.COMPLETION_SCRATCH_BASE = refused
+try:
+    module.completion_scratch_base()
+except ValueError:
+    pass
+else:
+    raise AssertionError("non-directory root must be refused")
+
+linked = tmp / "linked-opencode"
+target = tmp / "linked-target"
+target.mkdir()
+linked.symlink_to(target, target_is_directory=True)
+module.COMPLETION_SCRATCH_BASE = linked
+try:
+    module.completion_scratch_base()
+except ValueError:
+    pass
+else:
+    raise AssertionError("symlinked root must be refused")
+PY
+then
+  echo 'not ok - completion scratch root regression (reboot wipe) failed' >&2
+  scratch_failures=$((scratch_failures + 1))
+fi
+if [ "$scratch_failures" -ne 0 ]; then
+  printf 'nudge controller tests: RED (completion scratch root: %d failed assertions)\n' "$scratch_failures" >&2
   exit 1
 fi
 
