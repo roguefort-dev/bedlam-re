@@ -55,6 +55,15 @@ class ValidatorTests(unittest.TestCase):
         subprocess.run([GIT, "init", "-q", str(root)], check=True)
         subprocess.run([GIT, "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run([GIT, "-C", str(root), "config", "user.name", "test"], check=True)
+        # A fixture commit can dispatch a DETACHED `git maintenance run
+        # --auto` that briefly creates and unlinks .git/objects/
+        # maintenance.lock AFTER `git commit` returns. Anything that then
+        # walks or stats the tree in good faith (the sealed-root test's
+        # read-only walk) races that transient and flakes the suite --
+        # which fails the gates-validator gate and with it the whole
+        # completion validation. Fixtures never need background
+        # maintenance; disable it at the source.
+        subprocess.run([GIT, "-C", str(root), "config", "maintenance.auto", "false"], check=True)
         subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
         subprocess.run([GIT, "-C", str(root), "commit", "-qm", "fixture"], check=True)
         return root
@@ -223,12 +232,30 @@ class ValidatorTests(unittest.TestCase):
         self.assertFalse(sentinel.exists())
 
     def test_timeout_and_success_reap_command_descendants(self):
+        # The descendant's observable touch must sit FAR after the reap
+        # deadline, never on top of it. The validator reaps by collapsing
+        # the bwrap PID namespace (killpg of the sandbox at timeout, or at
+        # command exit), and that kill path legitimately takes
+        # scheduler-dependent milliseconds: the Python timeout raise ->
+        # killpg(SIGTERM) -> cleanup_group's own 50ms TERM->KILL spacing
+        # -> SIGKILL -> namespace teardown. A "sleep 1" descendant against
+        # a timeout_seconds=1 gate TIES the touch deadline to the kill
+        # deadline, so a loaded completion host (the sealed runs peak
+        # ~12G RSS plus swap while the cargo gates saturate the cores)
+        # can schedule the awakened touch first and flake this suite ->
+        # the gates-validator gate -> the whole completion validation
+        # (the 2026-08-29T00:22Z completion-missing, the ONLY gate
+        # failure in an otherwise all-green report). sleep 5 keeps the
+        # pinned property exactly -- a reaped descendant must NEVER
+        # touch -- with seconds of scheduling margin on both reap paths,
+        # and the fail-fast poll still catches a surviving descendant
+        # the moment it lands the sentinel.
         for mode in ("timeout", "success"):
             with self.subTest(mode=mode):
                 sentinel_name = f"{mode}-descendant-ran"
                 body = (
                     "#!/bin/bash\n"
-                    f"setsid sh -c 'sleep 1; touch {sentinel_name}' >/dev/null 2>&1 &\n"
+                    f"setsid sh -c 'sleep 5; touch {sentinel_name}' >/dev/null 2>&1 &\n"
                     + ("sleep 30\n" if mode == "timeout" else "exit 0\n")
                 )
                 root = self.fixture(
@@ -238,8 +265,13 @@ class ValidatorTests(unittest.TestCase):
                 rc, _report = self.run_validator(root)
                 if mode == "success":
                     self.assertEqual(rc, 0)
-                time.sleep(1.3)
-                self.assertFalse((root / sentinel_name).exists())
+                deadline = time.monotonic() + 6.5
+                while time.monotonic() < deadline:
+                    self.assertFalse(
+                        (root / sentinel_name).exists(),
+                        f"reap failed in {mode} mode: descendant survived and touched {sentinel_name}",
+                    )
+                    time.sleep(0.1)
 
     def test_manifest_writable_dir_is_bound_with_private_tmp_and_read_only_root(self):
         # /tmp holds either nothing (live-root invocation) or exactly the
@@ -413,16 +445,33 @@ exit 0
             for current, directories, files in os.walk(root):
                 os.chmod(current, 0o700)
                 for name in files:
-                    os.chmod(os.path.join(current, name), 0o600)
+                    try:
+                        os.chmod(os.path.join(current, name), 0o600)
+                    except FileNotFoundError:
+                        # A git-internal transient (lock/pid) removed
+                        # itself mid-walk; nothing to restore.
+                        pass
 
         self.addCleanup(unseal)
         for current, directories, files in os.walk(root, topdown=False):
             for name in files:
                 path = os.path.join(current, name)
-                os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+                try:
+                    os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+                except FileNotFoundError:
+                    # The path vanished between os.walk listing it and
+                    # this stat/chmod: a self-removing git-internal
+                    # transient (e.g. objects/maintenance.lock from a
+                    # detached auto-maintenance dispatch). A file that
+                    # no longer exists needs no seal; skipping it is
+                    # the correct read-only walk, not a weakened one.
+                    continue
             for name in directories:
                 path = os.path.join(current, name)
-                os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+                try:
+                    os.chmod(path, stat.S_IMODE(os.stat(path).st_mode) & ~0o222)
+                except FileNotFoundError:
+                    continue
         outside = Path(tempfile.mkdtemp(prefix="required-gates-report-"))
         self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
         rc, report = self.run_validator(root, report=outside / "report.json")

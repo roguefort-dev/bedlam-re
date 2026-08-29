@@ -10268,3 +10268,87 @@ every gate is green at this HEAD — is consummated by
 accept-completion alone. Workers stay unspawned; no queue item
 appears; the global verdict remains the controller's alone
 (the completion contract).
+
+## D236 — 2026-08-29: autonomy/watchdog — the THIRTEENTH repair is a NEW defect class, the first real GATE failure of the completion era: the sealed run of 01:52:23 finished inside its manifest-derived budget yet was rejected 02:22:17 with HEAD required-gates validator failed rc=1, and the published report names exactly one failing gate — gates-validator, whose command IS the validator suite (tools/test-validate-required-gates.py, rc=1; p4-machine-verdict fell with it as a pure dependency consequence, the other 35 gates green); the suite was FLAKY by TWO independent intermittent defects, both reproduced first-hand and both fixed in the test file only (the validator, the controller, and the manifest are untouched); the structured failure adjudicated required-empty (the FIFTH required-empty adjudication, after D232/D233/D234/D235 — the required queue IS empty, P0-P7 all green, strict parser rc=0 REQUIRED-QUEUE-EMPTY)
+
+MECHANISM, established from the evidence chain this run: the
+identical HEAD e310b19 passed the SAME suite inside sealed runs
+at 01:22:25.001926 and 01:52:22.732122 (both accepted by
+accept-completion, microsecond timestamps in nudge.log) and
+failed it at 02:22:17 — identical inputs, different outcome, so
+environment-shape causes are excluded and nondeterminism is
+proven. The report (published by complete_from_head to
+.state/required-gates-report.json before the rc=1 raise)
+isolates the failure to the gates-validator gate command. Two
+defects found in that suite, both wall-clock/world-state races:
+
+(a) THE REAP-TIE (tools/test-validate-required-gates.py,
+test_timeout_and_success_reap_command_descendants): the escaped
+setsid descendant touched its sentinel at sleep 1 while the
+gate's timeout_seconds=1 kills the sandbox AT THE SAME INSTANT.
+The validator's reap is legitimate-but-latent: Python's timeout
+raise, killpg(SIGTERM), cleanup_group's own 50ms TERM-to-KILL
+spacing, SIGKILL, then the bwrap PID-namespace teardown — a
+scheduler-dependent path of milliseconds. The controller's own
+sealed runs peak 12.4G RSS with ~4 cores saturated (journal:
+1h56m CPU over 30min wall, 952M swap peak), exactly the regime
+where an awakened tiny sh+touch beats the kill path and the
+sentinel appears. FIX: the touch deadline moved to sleep 5 with
+a fail-fast poll to 6.5s — seconds of scheduling margin on both
+reap paths (timeout kill ~1s, success kill ~0.05s), the pinned
+property unchanged and still regression-sharp: a reaped
+descendant must NEVER touch, and a surviving one is caught the
+moment it lands the sentinel.
+
+(b) THE MAINTENANCE-LOCK RACE (same file,
+test_sealed_read_only_controller_root_pre_creates_mountpoints):
+a fixture's git commit can dispatch a DETACHED git maintenance
+run --auto that briefly creates and unlinks
+.git/objects/maintenance.lock AFTER git commit returns; the
+test's read-only sealing walk (os.walk listing then stat+chmod)
+raced that transient and died FileNotFoundError — reproduced
+first-hand 2-of-7 runs, an error class the 02:22 rejection is
+equally consistent with. FIX: fixtures set maintenance.auto
+false (the source is silenced for every fixture repo) and both
+the seal walk and the unseal cleanup skip paths that vanish
+beneath them — a file that no longer exists needs no seal;
+skipping is the correct read-only walk, not a weakened one. The
+controller's own sealing walk in complete_from_head is NOT
+exposed: its checkout is a tar extraction with a synthetic
+objects/refs-only .git, no index, no commits, no maintenance
+dispatch; the race is confined to test fixtures.
+
+VERIFIED first-hand: tools/test-validate-required-gates.py
+10-of-10 green after the fix (6 idle runs, then 4 runs under 24
+busy-loop CPU hogs recreating the scheduler contention class
+that flaked it — suite runtime ~18s, comfortably inside the
+120s gates-validator bound); tools/test-nudge-controller.sh
+PASS end-to-end (the completion-flow fence incl. the sealed
+validator race tests); the strict queue parser rc=0
+REQUIRED-QUEUE-EMPTY before and after the queue NOTE append;
+MANIFEST.sha256 clean before and after (the suite is hermetic
+over TMP/HOME fixtures — no corpus read by this repair);
+docs/required-gates.toml untouched (8 green phases, the
+gates-validator gate command string pinned by
+test-final-hardening-red.sh line 707 unchanged); the failure
+marker identity re-verified against the trigger snapshot
+exactly (name controller-1787962938-3066208-completion-missing,
+device 52, inode 8310450, sha256 3d0fa35e4dd00494d22e7b41d69d5
+ab46fdda52e6bf0885cb1d1a20a5a2fef61, ordinal 1, id
+automation-state, gate automatic-repair).
+
+POSTCONDITION for the loop: with the gate suite deterministic,
+the completion branch's remaining rejection classes are the
+designed ones — basis-change (benign retry, D234) and genuine
+gate regressions (real beacons, as intended). The next
+controller tick re-validates this HEAD from scratch under the
+manifest-derived budget; every gate that was green at e310b19
+is green at this HEAD (the only tracked change is the test
+file itself), so complete-from-head runs to its bound,
+publishes plan-complete-v1 for that invocation, and
+accept-completion consummates it exactly as the completion
+contract demands. Workers stay unspawned; no queue item
+appears; the global verdict remains the controller's alone.
+Confidence: high (both flakes reproduced and eliminated
+mechanically; the 02:22 report pins the failing gate to this
+suite; no other gate in that report failed on its own terms).

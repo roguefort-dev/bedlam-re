@@ -123,6 +123,43 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
    this HEAD from scratch; the global verdict stays the
    controller's alone.
 
+   NOTE (watchdog repair 1787962939, D236): the completion-missing
+   failure recorded at 2026-08-29T00:22:17Z is a NEW defect class,
+   neither a D234 tail nor a classifier miss: the sealed run
+   completed well inside its manifest-derived budget and was
+   rejected with HEAD required-gates validator failed rc=1, and
+   the published report names the single failing gate —
+   gates-validator, whose command is the validator suite itself,
+   tools/test-validate-required-gates.py, rc=1 (p4-machine-verdict
+   fell with it as a pure dependency consequence; the other 35
+   gates green). The suite is FLAKY, two independent intermittent
+   defects, both reproduced first-hand this repair and both fixed
+   in the repair commit: (a) the reap test tied the escaped
+   descendant's touch deadline to the kill deadline (sleep 1
+   against timeout_seconds=1) — under the sealed runs' real load
+   (12.4G RSS peak, ~4 saturated cores, swap) the awakened touch
+   can beat the kill path (Python timeout raise, killpg SIGTERM,
+   the 50ms TERM-to-KILL spacing, namespace teardown), so the
+   sentinel appears and the suite fails; the touch now sits at
+   sleep 5 with a fail-fast poll — seconds of scheduling margin,
+   the pinned property unchanged: a reaped descendant must never
+   touch. (b) the sealed-root test's read-only walk raced git's
+   DETACHED auto-maintenance, which briefly creates and unlinks
+   git objects maintenance.lock after the fixture commit —
+   reproduced 2-of-7 runs as FileNotFoundError at the walk's
+   stat; fixtures now set maintenance.auto false and the seal and
+   unseal walks skip paths that vanish beneath them (a vanished
+   file needs no seal; skipping is the correct walk, not a
+   weaker one). Verified: 10-of-10 suite runs green including 4
+   under 24 busy-loop CPU hogs, tools/test-nudge-controller.sh
+   PASS end-to-end, strict parser rc=0 REQUIRED-QUEUE-EMPTY
+   before and after this NOTE, manifest clean before and after.
+   The marker is adjudicated required-empty per D236 — the
+   required queue IS empty and stays empty, P0-P7 all green; the
+   next controller tick re-validates this HEAD from scratch and,
+   with the gate suite deterministic, the flake class that
+   beacons completion-missing is closed.
+
 2. DONE (2026-08-28, claim 1 — commit 9437ac7 by worker
    c60dbcd6, PUSHED, plus this bookkeeping commit): P7 SEVENTH +
    LAST engineering deliverable `p7-macos-universal2-ci` — the
