@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -27,6 +28,7 @@ class ValidatorTests(unittest.TestCase):
         files: dict[str, str] | None = None,
         ignore: list[str] | None = None,
         base_dir: str | None = None,
+        wrap_phases: bool = True,
     ) -> Path:
         # Fixtures live under HOME: inside the gates-validator gate that is
         # the validator's own repo-anchored scratch home (writable through
@@ -35,6 +37,21 @@ class ValidatorTests(unittest.TestCase):
         # base_dir overrides that for controller-shaped fixtures that must
         # live under /tmp itself (the sandbox tmpfs is writable and the
         # validator re-exposes the invocation root's own chain there).
+        # wrap_phases: required-gates-v2 refuses a phase-less manifest, so
+        # single-gate fixtures are auto-wrapped in the eight-phase
+        # product-green shell (every phase wires the fixture's one gate);
+        # tests that deliberately build phase shapes pass wrap_phases=False
+        # or carry their own [[phase]] blocks.
+        if wrap_phases and "[[phase]]" not in manifest:
+            match = re.search(r'\[\[gate\]\][^\[]*?id\s*=\s*"([^"]+)"', manifest)
+            if not match:
+                raise AssertionError("fixture bug: no gate id to wrap phases around")
+            gate_id = match.group(1)
+            manifest += "".join(
+                f'[[phase]]\nid = "P{number}"\nstatus = "green"\n'
+                f'required_gates = ["{gate_id}"]\n\n'
+                for number in range(8)
+            )
         base = Path(base_dir) if base_dir else Path(os.environ.get("HOME") or tempfile.gettempdir())
         root = Path(tempfile.mkdtemp(prefix="required-gates-", dir=base))
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
@@ -512,15 +529,21 @@ exit 0
         # fixtures live under HOME and whose own scratch must not need the
         # gate's private (empty) /tmp.
         validator_source = VALIDATOR.read_text()
+        phase_toml = "".join(
+            f'[[phase]]\nid = "P{number}"\nstatus = "green"\n'
+            f'required_gates = ["ok"]\n\n'
+            for number in range(8)
+        )
         nested = (
             "import hashlib, json, os, pathlib, subprocess, sys, tempfile\n"
             "validator = pathlib.Path(__file__).with_name('validate-required-gates.py')\n"
             "root = pathlib.Path(tempfile.mkdtemp(prefix='nested-', "
             "dir=pathlib.Path(os.environ['HOME'])))\n"
             "(root / 'docs').mkdir()\n"
-            "(root / 'docs/required-gates.toml').write_text(\n"
+            "manifest = (\n"
             "    'schema=\"required-gates-v2\"\\n[[gate]]\\nevidence=\"product\"\\nid=\"ok\"\\n'\n"
-            "    'command=[\"/usr/bin/true\"]\\ntimeout_seconds=10\\n')\n"
+            "    'command=[\"/usr/bin/true\"]\\ntimeout_seconds=10\\n' + " + repr(phase_toml) + ")\n"
+            "(root / 'docs/required-gates.toml').write_text(manifest)\n"
             "anchor = root / 'anchor.txt'\n"
             "anchor.write_text('anchor\\n')\n"
             "digest = hashlib.sha256(anchor.read_bytes()).hexdigest()\n"
@@ -683,6 +706,56 @@ exit 0
         self.assertEqual(verdict["phase_status"], "engineering-green")
         self.assertTrue(verdict["engineering_complete"])
         self.assertFalse(verdict["product_complete"])
+
+    def test_empty_phase_enumeration_never_completes(self):
+        # The review-reproduced bypass, pinned: zero [[phase]] blocks plus
+        # one product gate plus a trivially-true command must NEVER yield
+        # product completion. A product plan must enumerate its phases;
+        # the validator fails closed on the empty phase array.
+        root = self.fixture(
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n',
+            wrap_phases=False,
+        )
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("non-empty gate and phase arrays", report["error"])
+        self.assertFalse(report["plan_complete"])
+
+    def test_duplicate_phase_ids_are_rejected(self):
+        # Duplicate phase ids must not silently collapse (last-wins) in the
+        # phase index while completion iterates every entry.
+        manifest = (
+            'schema="required-gates-v2"\n'
+            '[[phase]]\nid="P0"\nstatus="green"\nrequired_gates=["g0"]\n'
+            '[[phase]]\nid="P0"\nstatus="pending"\nrequired_gates=[]\n'
+            + "".join(
+                f'[[phase]]\nid="P{number}"\nstatus="pending"\nrequired_gates=[]\n'
+                for number in range(1, 8)
+            )
+            + '[[gate]]\nevidence="product"\nid="g0"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+        )
+        root = self.fixture(manifest, wrap_phases=False)
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("duplicate phase id", report["error"])
+        self.assertFalse(report["plan_complete"])
+
+    def test_all_product_phase_verdict_claims_no_engineering_coverage(self):
+        # engineering_complete is fail-closed: a phase wiring only product
+        # gates has no engineering evidence to claim, so the verdict must
+        # not read as vacuously engineering-complete.
+        root = self.fixture(
+            self.full_manifest(
+                [("green", ["g0"])] + [("pending", [])] * 7,
+                [("g0", "product")],
+            )
+        )
+        phase_output = root / "P0-verdict.json"
+        rc, report = self.run_validator(root, phase="P0", phase_output=phase_output)
+        self.assertEqual(rc, 0, report)
+        verdict = json.loads(phase_output.read_text())
+        self.assertFalse(verdict["engineering_complete"])
+        self.assertTrue(verdict["product_complete"])
 
     def test_legacy_completion_markers_are_non_authoritative(self):
         # v1-era .state residue — PLAN-COMPLETE, P4..P7-COMPLETE, an old

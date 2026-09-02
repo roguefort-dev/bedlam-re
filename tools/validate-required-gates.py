@@ -460,8 +460,14 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
     manifest_corpus = check_manifest(root)
     gates = value.get("gate", [])
     phases = value.get("phase", [])
-    if not isinstance(gates, list) or not gates or not isinstance(phases, list):
-        raise ValidationError("required-gates manifest requires gate and phase arrays")
+    if (
+        not isinstance(gates, list) or not gates
+        or not isinstance(phases, list) or not phases
+    ):
+        raise ValidationError(
+            "required-gates manifest requires non-empty gate and phase "
+            "arrays (a product plan must enumerate its phases)"
+        )
     gate_evidence: dict[str, str] = {}
     for gate in gates:
         if not isinstance(gate, dict) or not isinstance(gate.get("id"), str):
@@ -480,9 +486,14 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
         gate_id for gate_id, evidence in gate_evidence.items()
         if evidence == EVIDENCE_PRODUCT
     )
+    seen_phase_ids: set[str] = set()
     for phase in phases:
         if not isinstance(phase, dict) or set(phase) - PHASE_KEYS:
             raise ValidationError("phase entries have unknown keys")
+        phase_id = phase.get("id")
+        if phase_id in seen_phase_ids:
+            raise ValidationError(f"duplicate phase id: {phase_id}")
+        seen_phase_ids.add(phase_id)
         status = phase.get("status")
         if status not in PHASE_STATUSES:
             raise ValidationError(
@@ -508,7 +519,7 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
                     "infrastructure) can never certify product completion"
                 )
     phase_by_id = {phase.get("id"): phase for phase in phases if isinstance(phase, dict)}
-    if phases and set(phase_by_id) != {f"P{number}" for number in range(8)}:
+    if set(phase_by_id) != {f"P{number}" for number in range(8)}:
         raise ValidationError("global manifest must enumerate exactly P0 through P7")
     selected_ids: set[str] | None = None
     if selected_phase is not None:
@@ -591,19 +602,20 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
 
     if selected_ids is not None:
         complete = selected_ids == set(passed) and all(passed.values())
-    elif phases:
+    else:
         # Product completion requires every phase product-green: a "green"
         # phase is structurally impossible without a wired product gate
         # (rejected above), so all-green plus all-gates-passed is the only
-        # shape that can ever complete. engineering-green and pending phases
-        # always leave the plan incomplete.
+        # shape that can ever complete. engineering-green and pending
+        # phases always leave the plan incomplete. There is deliberately
+        # no phase-less completion branch: the phase array is required
+        # non-empty above (a zero-phase manifest with one product gate
+        # must never complete the plan — the review-reproduced bypass).
         complete = all(
             phase.get("status") == "green"
             and all(passed.get(gate_id, False) for gate_id in phase.get("required_gates", []))
             for phase in phases
         )
-    else:
-        complete = all(passed.values()) and bool(product_gates)
     why_incomplete: list[str] = []
     if selected_phase is None:
         for phase in phases:
@@ -650,12 +662,16 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
     if selected_phase is not None:
         selected = phase_by_id.get(selected_phase, {})
         selected_required = selected.get("required_gates", []) if isinstance(selected, dict) else []
+        selected_engineering = [
+            gate_id for gate_id in selected_required
+            if gate_evidence.get(gate_id) != EVIDENCE_PRODUCT
+        ]
         report["phase_verdict"] = {
-            "engineering_complete": all(
-                passed.get(gate_id, False)
-                for gate_id in selected_required
-                if gate_evidence.get(gate_id) != EVIDENCE_PRODUCT
-            ),
+            # Fail-closed: a phase wiring no engineering gates has no
+            # engineering coverage to claim, so it must never read as
+            # vacuously complete.
+            "engineering_complete": bool(selected_engineering)
+            and all(passed.get(gate_id, False) for gate_id in selected_engineering),
             "phase": selected_phase,
             "phase_status": selected.get("status") if isinstance(selected, dict) else None,
             "product_complete": (

@@ -88,7 +88,10 @@ def manifest_text(
         p6_gates = ["p6-modernization-scaffold"]
     lines = ['schema = "required-gates-v2"']
     for number in range(8):
-        status = "green" if number < 6 else (p6_status if number == 6 else "pending")
+        # Legal v2 shape: only the graded phase carries a status; the
+        # others stay pending (a green phase without a wired product gate
+        # is invalid under required-gates-v2).
+        status = p6_status if number == 6 else "pending"
         gates = p6_gates if number == 6 else []
         rendered = ", ".join(f'"{g}"' for g in gates)
         lines += [

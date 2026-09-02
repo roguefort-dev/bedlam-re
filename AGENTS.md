@@ -75,10 +75,15 @@ runs. Read it fully before doing anything.
 ## Completion
 Workers never assert global completion and `.state/PLAN-COMPLETE` is never trusted
 as later-run input. When the active required queue is empty, the controller runs
-the fixed bounded offline validator over `docs/required-gates.toml`; only zero
-active items plus every P0-P7 gate green produces an informational, atomic,
-HEAD/manifest-bound `plan-complete-v1` report for that invocation. A P4 verdict
-may emit `.state/P4-COMPLETE`, never global PLAN completion.
+the fixed bounded offline validator over `docs/required-gates.toml` under the
+`required-gates-v2` contract (D238): only zero active items plus every phase
+product-green — each phase status `green` with a wired `evidence="product"`
+gate, all gates passing, and the manifest enumerating exactly P0-P7 (an empty
+phase array is invalid) — produces an informational, atomic, HEAD/manifest-bound
+`plan-complete-v1` report for that invocation. Bounded phase runs emit
+`phase-verdict-v2` artifacts with an explicit `product_complete` flag; legacy
+`.state/*-COMPLETE` markers and pre-D238 reports are non-authoritative residue.
+A phase verdict is never global PLAN completion.
 
 ## Build/test baseline
 - cargo build --release / cargo run --release -q -- game-data derived  (tools/inspect)
