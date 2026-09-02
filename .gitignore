@@ -37,3 +37,8 @@
 
 # Pinned runtimes (flathub user-install + wine prefix) - see docs/RUNTIME.md
 /runtime/
+
+# Per-gate verdict cache for tools/validate-required-gates.py --gate-cache
+# (D239: runtime accelerator, regenerable, never tracked evidence; no
+# trailing slash so check-ignore matches before the directory exists)
+/gate-cache

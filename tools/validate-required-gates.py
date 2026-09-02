@@ -39,6 +39,15 @@ EVIDENCE_CLASSES = (
     "infrastructure",   # environment/validator machinery evidence
 )
 PHASE_STATUSES = ("pending", "engineering-green", "green")
+# Per-gate verdict cache (D239): an OPT-IN accelerator, never an authority.
+# A cached green is only ever reused when the gate's full basis fingerprint
+# -- HEAD commit, the whole tracked tree, the required-gates manifest, the
+# MANIFEST.sha256 corpus digest, the validator bytes, and every per-gate
+# input (commands, tracked paths, command scripts, bounds) -- is exactly
+# the basis this run computes. Anything else (missing, malformed, foreign,
+# corrupt entry) fails closed to a re-run.
+GATE_CACHE_SCHEMA = "required-gate-cache-v1"
+MAX_CACHE_ENTRY_BYTES = 4096
 # MANIFEST.sha256 corpus files (the read-only game-data corpus) are bound
 # into the sealed completion basis by the controller at 128 MiB -- the
 # exact cap complete_from_head enforces for external corpus paths. The
@@ -211,6 +220,177 @@ def ensure_writable_dir(root: Path, relative: str) -> None:
             raise ValidationError(
                 f"writable path cannot be created and does not exist: {relative}"
             ) from None
+
+
+def command_script_arguments(commands: list[list[str]], root: Path) -> list[str]:
+    """Every command argument that names a tracked script the gate reaches.
+
+    This mirrors the predicate command_arrays() already validates: an
+    argument that is not a flag, exists under the root, and is a regular
+    file (the validator has already fail-closed on such paths being
+    tracked and clean at HEAD, so re-reading them here is safe).
+    """
+    scripts: list[str] = []
+    for command in commands:
+        for argument in command[1:]:
+            if argument.startswith("-"):
+                continue
+            candidate = root / argument
+            if candidate.exists() and candidate.is_file():
+                scripts.append(argument)
+    return scripts
+
+
+def gate_cache_key(gate_id: str) -> str:
+    return sha256(gate_id.encode("utf-8")) + ".json"
+
+
+def gate_cache_basis(
+    *,
+    gate_id: str,
+    evidence: str,
+    timeout: int,
+    head: str,
+    tree_fingerprint: str,
+    manifest_sha: str,
+    corpus_digest: str,
+    validator_sha: str,
+    path_digests: dict[str, str],
+    script_digests: dict[str, str],
+    commands: list[list[str]],
+    writable: list[str],
+    depends: list[str],
+) -> str:
+    """The per-gate basis fingerprint a cached green is keyed on.
+
+    Covers everything that can change the gate's verdict: the HEAD commit
+    and the whole tracked tree (any tracked change re-runs, by design --
+    the scheduler's pain was repeat full-battery runs at an UNCHANGED
+    HEAD), the required-gates manifest bytes, the MANIFEST.sha256 corpus
+    digest, the validator's own bytes, and the gate's own slice -- its
+    commands, tracked paths, command scripts, declared bounds, and
+    dependency edges.
+    """
+    digest = hashlib.sha256()
+
+    def field(label: str, payload: bytes) -> None:
+        digest.update(label.encode("utf-8") + b"\0" + payload + b"\0")
+
+    field("schema", GATE_CACHE_SCHEMA.encode())
+    field("head", head.encode())
+    field("tracked-tree", tree_fingerprint.encode())
+    field("manifest", manifest_sha.encode())
+    field("manifest-corpus", corpus_digest.encode())
+    field("validator", validator_sha.encode())
+    field("gate-id", gate_id.encode())
+    field("evidence", evidence.encode())
+    field("timeout", str(timeout).encode())
+    field("commands", json.dumps(commands, separators=(",", ":")).encode())
+    field(
+        "tracked-paths",
+        json.dumps(
+            [[relative, path_digests[relative]] for relative in sorted(path_digests)],
+            separators=(",", ":"),
+        ).encode(),
+    )
+    field(
+        "command-scripts",
+        json.dumps(
+            [[relative, script_digests[relative]] for relative in sorted(script_digests)],
+            separators=(",", ":"),
+        ).encode(),
+    )
+    field("writable", json.dumps(sorted(writable), separators=(",", ":")).encode())
+    field("depends", json.dumps(sorted(depends), separators=(",", ":")).encode())
+    return digest.hexdigest()
+
+
+def ensure_gate_cache_dir(root: Path, value: Path | None) -> Path | None:
+    """Resolve and validate the optional per-gate verdict cache directory.
+
+    The cache is runtime state, never evidence. A path inside the
+    invocation root must be gitignored with no tracked content beneath it
+    and must not be reached through a symlink (the same discipline as a
+    gate-declared writable) so the cache can never become, cover, or
+    fabricate tracked evidence; a path outside the root is host-side
+    runtime state with the same trust as --report. Configuration errors
+    fail closed and loudly; the cache is never silently disabled here.
+    """
+    if value is None:
+        return None
+    path = Path(value)
+    resolved = path if path.is_absolute() else root / path
+    try:
+        relative = resolved.relative_to(root).as_posix()
+    except ValueError:
+        relative = None
+    if relative is not None:
+        if not relative:
+            raise ValidationError("gate cache path must not be the invocation root")
+        if not gitignored(root, relative):
+            raise ValidationError(f"gate cache path must be gitignored: {relative}")
+        if head_paths_under(root, relative):
+            raise ValidationError(f"gate cache path must not contain tracked files: {relative}")
+        walked = root
+        for part in Path(relative).parts:
+            walked = walked / part
+            if walked.is_symlink():
+                raise ValidationError(f"gate cache path traverses a symlink: {relative}")
+    if resolved.exists():
+        if resolved.is_symlink() or not resolved.is_dir():
+            raise ValidationError(f"gate cache path is not a real directory: {value}")
+    else:
+        try:
+            resolved.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError:
+            # A read-only root that still exposes an existing cache
+            # directory (pre-sealed) may read from it; entries are only
+            # ever written best-effort.
+            if not resolved.is_dir():
+                raise ValidationError(f"gate cache path cannot be created: {value}") from None
+    return resolved
+
+
+def cached_green_verdict(cache: Path, gate_id: str, basis: str) -> bool:
+    """Strict, fail-closed cache lookup: anything but an exact match is a miss."""
+    entry_path = cache / gate_cache_key(gate_id)
+    try:
+        info = entry_path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_CACHE_ENTRY_BYTES:
+            return False
+        raw = entry_path.read_bytes()
+    except OSError:
+        return False
+    try:
+        entry = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        return False
+    if not isinstance(entry, dict) or set(entry) != {"schema", "id", "basis_sha256"}:
+        return False
+    if entry["schema"] != GATE_CACHE_SCHEMA or entry["id"] != gate_id:
+        return False
+    return entry["basis_sha256"] == basis
+
+
+def remember_green_verdict(cache: Path, gate_id: str, basis: str) -> None:
+    """Persist a green verdict best-effort: the cache accelerates, never validates."""
+    try:
+        entry_path = cache / gate_cache_key(gate_id)
+        try:
+            # A poisoned or odd entry (symlink, fifo) is never written
+            # THROUGH -- it is cleared and replaced by a fresh regular
+            # file, so the next run can hit honestly.
+            if not stat.S_ISREG(entry_path.lstat().st_mode):
+                entry_path.unlink()
+        except OSError:
+            pass
+        atomic_json(entry_path, {
+            "basis_sha256": basis,
+            "id": gate_id,
+            "schema": GATE_CACHE_SCHEMA,
+        })
+    except (OSError, ValidationError):
+        pass
 
 
 def tracked_at_head(root: Path, relative: str) -> bytes:
@@ -445,7 +625,12 @@ def run_command(
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) -> tuple[dict[str, object], bool]:
+def run_validation(
+    root: Path,
+    manifest_path: Path,
+    selected_phase: str | None,
+    gate_cache: Path | None = None,
+) -> tuple[dict[str, object], bool]:
     raw = tracked_at_head(root, manifest_path.relative_to(root).as_posix())
     value = tomllib.loads(raw.decode("utf-8"))
     if value.get("schema") != MANIFEST_SCHEMA:
@@ -458,6 +643,11 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
     head_tree = git(root, "rev-parse", "HEAD^{tree}")
     tree_fingerprint = tracked_tree_fingerprint(root)
     manifest_corpus = check_manifest(root)
+    manifest_sha = sha256(raw)
+    validator_sha = sha256(Path(__file__).read_bytes())
+    # The optional per-gate verdict cache: resolved (and fail-closed on a
+    # violating path) only after the immutable basis is established.
+    cache_dir = ensure_gate_cache_dir(root, gate_cache)
     gates = value.get("gate", [])
     phases = value.get("phase", [])
     if (
@@ -548,10 +738,12 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
         corpus = gate.get("corpus", [])
         if not isinstance(paths, list) or not isinstance(corpus, list):
             raise ValidationError(f"gate {gate_id} path policies must be arrays")
+        path_digests: dict[str, str] = {}
         for relative in [*paths, *corpus]:
             if not isinstance(relative, str):
                 raise ValidationError(f"gate {gate_id} path policy must contain strings")
             raw_path = tracked_at_head(root, relative)
+            path_digests[relative] = sha256(raw_path)
             if relative in corpus:
                 corpus_hashes[relative] = sha256(raw_path)
         writable = gate.get("writable", [])
@@ -569,28 +761,63 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
             cargo_environment_vars = cargo_environment(root)
         ok = all(passed.get(dependency, False) for dependency in dependencies)
         command_results: list[dict[str, object]] = []
+        gate_basis: str | None = None
+        if cache_dir is not None and commands and (ok or not dependencies):
+            # Only a gate that would actually execute now computes its
+            # basis: dependency-failed gates are red as a live consequence
+            # and never consult the cache at all.
+            script_digests = {
+                relative: sha256(tracked_at_head(root, relative))
+                for relative in sorted(set(command_script_arguments(commands, root)))
+            }
+            gate_basis = gate_cache_basis(
+                commands=commands,
+                corpus_digest=manifest_corpus,
+                depends=dependencies,
+                evidence=gate_evidence[gate_id],
+                gate_id=gate_id,
+                head=head,
+                manifest_sha=manifest_sha,
+                path_digests=path_digests,
+                script_digests=script_digests,
+                timeout=timeout,
+                tree_fingerprint=tree_fingerprint,
+                validator_sha=validator_sha,
+                writable=writable,
+            )
         if ok or not dependencies:
             ok = True
-            for command in commands:
-                rc = run_command(
-                    command,
-                    root,
-                    timeout,
-                    cargo_environment_vars=cargo_environment_vars,
-                    writable=tuple(writable),
-                )
-                command_results.append({"argv": command, "rc": rc})
-                # Every command boundary revalidates the immutable basis.
-                if git(root, "rev-parse", "HEAD") != head:
-                    raise ValidationError("HEAD changed during required-gates validation")
-                if tracked_tree_fingerprint(root) != tree_fingerprint:
-                    raise ValidationError("tracked tree changed during required-gates validation")
-                if check_manifest(root) != manifest_corpus:
-                    raise ValidationError("MANIFEST.sha256 corpus changed during required-gates validation")
-                for relative, expected in corpus_hashes.items():
-                    if sha256(tracked_at_head(root, relative)) != expected:
-                        raise ValidationError(f"tracked corpus changed during validation: {relative}")
-                ok = ok and rc == 0
+            if gate_basis is not None and cached_green_verdict(cache_dir, gate_id, gate_basis):
+                # Cached green reused: this exact basis was proven green by
+                # this exact validator at a prior run, so the green command
+                # verdicts replay byte-identically (a remembered green
+                # implies rc=0 for every command) and nothing re-executes --
+                # no command boundaries run, so the per-boundary basis
+                # revalidation has nothing to recheck.
+                command_results = [{"argv": command, "rc": 0} for command in commands]
+            else:
+                for command in commands:
+                    rc = run_command(
+                        command,
+                        root,
+                        timeout,
+                        cargo_environment_vars=cargo_environment_vars,
+                        writable=tuple(writable),
+                    )
+                    command_results.append({"argv": command, "rc": rc})
+                    # Every command boundary revalidates the immutable basis.
+                    if git(root, "rev-parse", "HEAD") != head:
+                        raise ValidationError("HEAD changed during required-gates validation")
+                    if tracked_tree_fingerprint(root) != tree_fingerprint:
+                        raise ValidationError("tracked tree changed during required-gates validation")
+                    if check_manifest(root) != manifest_corpus:
+                        raise ValidationError("MANIFEST.sha256 corpus changed during required-gates validation")
+                    for relative, expected in corpus_hashes.items():
+                        if sha256(tracked_at_head(root, relative)) != expected:
+                            raise ValidationError(f"tracked corpus changed during validation: {relative}")
+                    ok = ok and rc == 0
+                if ok and gate_basis is not None:
+                    remember_green_verdict(cache_dir, gate_id, gate_basis)
         passed[gate_id] = ok
         results.append({
             "commands": command_results,
@@ -640,7 +867,7 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
         "gates": results,
         "head": head,
         "head_tree": head_tree,
-        "manifest_sha256": sha256(raw),
+        "manifest_sha256": manifest_sha,
         "offline": True,
         "phase_product_coverage": {
             phase.get("id"): sum(
@@ -656,7 +883,7 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
         "selected_phase": selected_phase,
         "status": "passed" if complete else "failed",
         "tracked_tree_sha256": tree_fingerprint,
-        "validator_sha256": sha256(Path(__file__).read_bytes()),
+        "validator_sha256": validator_sha,
         "why_incomplete": why_incomplete,
     }
     if selected_phase is not None:
@@ -692,6 +919,7 @@ def main() -> int:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--completion-output", type=Path)
+    parser.add_argument("--gate-cache", type=Path, default=None)
     parser.add_argument("--phase", choices=[f"P{number}" for number in range(8)])
     parser.add_argument("--phase-output", type=Path)
     arguments = parser.parse_args()
@@ -702,7 +930,9 @@ def main() -> int:
     except Exception:
         initial_head = "unknown"
     try:
-        report, complete = run_validation(root, manifest, arguments.phase)
+        report, complete = run_validation(
+            root, manifest, arguments.phase, gate_cache=arguments.gate_cache
+        )
     except (OSError, UnicodeError, ValueError, subprocess.SubprocessError, ValidationError, tomllib.TOMLDecodeError) as error:
         report = {
             "bounded": True,
