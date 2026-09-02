@@ -35,6 +35,22 @@ MAX_FAILURES = 256
 MAX_CLAIM_FILE = 64 * 1024
 MAX_CLAIMS = 256
 COMPLETION_SCRATCH_BASE = Path("/tmp/opencode")
+# Deterministic failed-product-gate synthesis (queue-synthesis-v1, D240).
+QUEUE_SYNTHESIS_SCHEMA = "queue-synthesis-v1"
+SYNTHESIS_EVIDENCE_CLASSES = frozenset({
+    "product", "supporting", "static", "paperwork", "synthetic",
+    "corpus-required", "infrastructure",
+})
+SYNTHESIS_PRODUCT_EVIDENCE = "product"
+# Characters safe to quote verbatim from a failing gate command into queue
+# item prose: the strict grammar reads every bracket as a metadata tag and
+# the automation-only lint bans a fixed token set, so anything else fails
+# closed to "argv withheld" instead of corrupting the queue.
+SYNTHESIS_CITABLE_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    " ._/-:=,+%"
+)
+MAX_SYNTHESIS_CITATION = 400
 
 
 def open_directory(path: Path, create: bool = False) -> int:
@@ -1181,18 +1197,24 @@ def completion_scratch_base() -> Path:
     return base
 
 
-def complete_from_head(arguments: list[str]) -> None:
-    if len(arguments) != 3:
-        raise ValueError("complete-from-head requires root, report, and completion output")
-    root, report_path, completion_path = map(Path, arguments)
-    queue_path = root / ".state/NEXT.md"
-    claims_path = root / ".state/claims"
+def load_queue_parser():
+    """Load the strict queue grammar parser shared by controller actions."""
     parser_path = Path(__file__).with_name("nudge-free-items.py")
     spec = importlib.util.spec_from_file_location("nudge_free_items", parser_path)
     if spec is None or spec.loader is None:
         raise ValueError("cannot load queue parser")
     parser = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(parser)
+    return parser
+
+
+def complete_from_head(arguments: list[str]) -> None:
+    if len(arguments) != 3:
+        raise ValueError("complete-from-head requires root, report, and completion output")
+    root, report_path, completion_path = map(Path, arguments)
+    queue_path = root / ".state/NEXT.md"
+    claims_path = root / ".state/claims"
+    parser = load_queue_parser()
 
     before = queue_snapshot(queue_path)
     claims_before = claims_snapshot(claims_path)
@@ -1452,12 +1474,7 @@ def accept_completion(arguments: list[str]) -> None:
         ])
         raise ValueError("completion output artifact changed after validation")
 
-    parser_path = Path(__file__).with_name("nudge-free-items.py")
-    spec = importlib.util.spec_from_file_location("nudge_free_items", parser_path)
-    if spec is None or spec.loader is None:
-        raise ValueError("cannot load queue parser")
-    parser = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(parser)
+    parser = load_queue_parser()
     _queue_info, queue_raw = trusted_file_bytes(queue_path)
     current_items = parser.validate_queue(queue_raw.decode("utf-8"), queue_path)
     current_claims = claims_snapshot(claims_path)
@@ -1536,6 +1553,247 @@ def accept_completion(arguments: list[str]) -> None:
     print(json.dumps({"schema": "completion-decision-v1", "status": "accepted", "head": current_head}))
 
 
+def insert_synthesized_items(text: str, blocks: list[str]) -> str:
+    """Insert synthesized item blocks directly under the active ## Now."""
+    lines = text.splitlines()
+    heading = re.compile(r"##[ \t]+Now[ \t]*")
+    for index, line in enumerate(lines):
+        if heading.fullmatch(line):
+            return "\n".join(
+                [*lines[: index + 1], "", *blocks, "", *lines[index + 1:]]
+            ) + "\n"
+    raise ValueError("queue synthesis refused: active queue has no ## Now heading")
+
+
+def synthesize_product_work(arguments: list[str]) -> None:
+    """Deterministic failed-product-gate queue synthesis (queue-synthesis-v1).
+
+    Invoked by the controller's completion branch when the required queue is
+    empty and the sealed full-battery required-gates validation failed.
+    Exactly two product-class failure shapes synthesize READY items:
+
+      - a wired product gate whose OWN evidence ran and is red (a gate with
+        recorded command verdicts where some command exited nonzero -- the
+        synthesized item cites the gate id and its first red command), and
+      - a phase that wires no product gate at all (product completion is
+        structurally impossible under required-gates-v2 until one exists).
+
+    Everything else refuses WITHOUT touching the queue so the caller beacons
+    the structured automation-failure shape for watchdog repair: malformed,
+    foreign, stale, or error-shaped reports (validator/sandbox/corpus/
+    harness failures), red non-product gates (they never synthesize), and
+    dependency-blocked gates whose failure root is not a red product gate.
+    The synthesized queue is validated by the strict queue grammar
+    (tools/nudge-free-items.py) BEFORE publication, and no synthesized item
+    ever asserts a phase status -- only the validator flips phases.
+    """
+    if len(arguments) != 3:
+        raise ValueError("synthesize-product-work requires report, queue, and claims")
+    report_path, queue_path, claims_path = map(Path, arguments)
+    root = queue_path.parent.parent
+
+    def refuse(reason: str) -> None:
+        raise ValueError(f"queue synthesis refused: {reason}")
+
+    _info, raw = trusted_file_bytes(report_path)
+    try:
+        report = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, ValueError) as error:
+        refuse(f"report is not readable JSON: {error}")
+    if not isinstance(report, dict):
+        refuse("report is not a JSON object")
+    if report.get("schema") != "required-gates-report-v2":
+        refuse("report is not a required-gates-report-v2 report")
+    if report.get("status") != "failed" or report.get("plan_complete") is not False:
+        refuse("report does not record a failed, incomplete validation")
+    if report.get("selected_phase") is not None:
+        refuse("report is a bounded phase run, not the completion battery")
+    if "error" in report:
+        refuse(f"validation failed before any gate evidence ran: {report.get('error')}")
+    gates = report.get("gates")
+    evidence_map = report.get("evidence")
+    coverage = report.get("phase_product_coverage")
+    if (not isinstance(gates, list) or not isinstance(evidence_map, dict)
+            or not isinstance(coverage, dict) or not coverage):
+        refuse("report lacks structured gate or phase coverage evidence")
+    current_head, _objects = read_git_head(root)
+    if report.get("head") != current_head:
+        refuse("report is stale: it does not bind the current HEAD")
+    parser = load_queue_parser()
+
+    def citation_lint_clean(joined: str) -> bool:
+        for _forbidden, pattern in parser.FORBIDDEN_TEXT:
+            if any(
+                pattern.search(lint_text)
+                for lint_text in parser.normalized_active_texts(joined)
+            ):
+                return False
+        return True
+
+    # A failing gate that recorded command verdicts RAN its own evidence and
+    # is a failure root; a failing gate with no recorded commands never ran
+    # and is a dependency consequence (its failed dependency is itself in
+    # this report and is classified here as a root).
+    red_roots: list[tuple[str, str, int, str | None]] = []
+    for gate in gates:
+        if not isinstance(gate, dict) or not isinstance(gate.get("id"), str):
+            refuse("report gate entries are malformed")
+        gate_id = gate["id"]
+        if gate.get("passed") is True:
+            continue
+        if gate.get("passed") is not False:
+            refuse(f"gate {gate_id} verdict is malformed")
+        evidence = evidence_map.get(gate_id)
+        if evidence not in SYNTHESIS_EVIDENCE_CLASSES:
+            refuse(f"gate {gate_id} carries no valid evidence classification")
+        commands = gate.get("commands")
+        if not isinstance(commands, list) or not all(
+            isinstance(entry, dict) for entry in commands
+        ):
+            refuse(f"gate {gate_id} command verdicts are malformed")
+        if not commands:
+            continue
+        first_red: tuple[int, str | None] | None = None
+        for entry in commands:
+            argv = entry.get("argv")
+            return_code = entry.get("rc")
+            if not isinstance(argv, list) or isinstance(return_code, bool) \
+                    or not isinstance(return_code, int):
+                refuse(f"gate {gate_id} command verdict is malformed")
+            if return_code == 0 or first_red is not None:
+                continue
+            citation = None
+            if argv and all(isinstance(part, str) and part for part in argv):
+                joined = " ".join(argv)
+                if (len(joined) <= MAX_SYNTHESIS_CITATION
+                        and set(joined) <= SYNTHESIS_CITABLE_CHARACTERS
+                        and citation_lint_clean(joined)):
+                    citation = joined
+            first_red = (return_code, citation)
+        if first_red is None:
+            refuse(f"failing gate {gate_id} recorded no red command")
+        red_roots.append((gate_id, evidence, first_red[0], first_red[1]))
+
+    non_product_roots = sorted(
+        gate_id for gate_id, evidence, _rc, _citation in red_roots
+        if evidence != SYNTHESIS_PRODUCT_EVIDENCE
+    )
+    if non_product_roots:
+        refuse(
+            "non-product gates never synthesize product work: "
+            + ", ".join(non_product_roots)
+        )
+    absent_phases = []
+    for phase, wired in coverage.items():
+        if not isinstance(phase, str) or isinstance(wired, bool) \
+                or not isinstance(wired, int):
+            refuse("phase product coverage is malformed")
+        if wired == 0:
+            absent_phases.append(phase)
+    absent_phases.sort()
+
+    head_short = current_head[:12]
+    items: list[tuple[str, str, list[str]]] = []
+    seen_ids: set[str] = set()
+    seen_gates: set[str] = set()
+
+    def add_item(item_id: str, item_gate: str, lines: list[str]) -> None:
+        if item_id in seen_ids or item_gate in seen_gates:
+            refuse("synthesized item identities collide")
+        if not SAFE_ID.fullmatch(item_id) or not SAFE_ID.fullmatch(item_gate):
+            refuse(f"synthesized identity is not queue-safe: {item_id} {item_gate}")
+        seen_ids.add(item_id)
+        seen_gates.add(item_gate)
+        items.append((item_id, item_gate, lines))
+
+    bounds_line = (
+        "   BOUNDS: this synthesized item never asserts any phase status -- only the "
+        "required-gates validator may flip a phase, and only under the full product "
+        "bar of the required-gates-v2 contract; the queue never records a verdict."
+    )
+    for gate_id, _evidence, return_code, citation in red_roots:
+        if citation is not None:
+            command_phrase = f'command "{citation}" exited rc={return_code}'
+        else:
+            command_phrase = (
+                "the first red command is recorded in the gate report "
+                "(its argv is withheld from the queue for grammar safety), "
+                f"rc={return_code}"
+            )
+        add_item(
+            f"synth-repair-{gate_id}",
+            gate_id,
+            [
+                f"SYNTHESIZED BY THE CONTROLLER from failed product gate {gate_id} "
+                f"at HEAD {head_short} -- the empty-queue completion validation ran "
+                "this gate's own product evidence and it is red: "
+                f"{command_phrase}. Repair the real product path this gate measures "
+                "until the cited command passes from a clean tree, update "
+                "docs/required-gates.toml and docs/DECISIONS.md honestly, and "
+                "rewrite this queue per the AGENTS.md workflow.",
+                bounds_line,
+            ],
+        )
+    for phase in absent_phases:
+        add_item(
+            f"synth-wire-{phase.lower()}",
+            f"synth-wire-{phase.lower()}",
+            [
+                f"SYNTHESIZED BY THE CONTROLLER from the absent product gate of "
+                f"phase {phase} at HEAD {head_short} -- the empty-queue completion "
+                "validation found this phase wires no evidence=product gate, so "
+                "product completion is structurally impossible until one exists. "
+                "Design and wire the first real product-path journey gate for this "
+                "phase into docs/required-gates.toml under the required-gates-v2 "
+                "contract, drive its commands to passing, and record the decision.",
+                bounds_line,
+            ],
+        )
+    if not items:
+        refuse(
+            "no product-class failure or absent product gate was identified in the "
+            "report; the validation failure is not synthesis-class"
+        )
+
+    _queue_info, queue_raw = trusted_file_bytes(queue_path)
+    text = queue_raw.decode("utf-8")
+    try:
+        if parser.validate_queue(text, queue_path):
+            refuse("active queue is not empty")
+    except Exception as error:
+        refuse(f"active queue does not parse: {error}")
+    claims_fd = open_directory(claims_path)
+    try:
+        residue = [
+            entry.name for entry in os.scandir(claims_fd)
+            if entry.name.endswith(".claim")
+        ]
+    finally:
+        os.close(claims_fd)
+    if residue:
+        refuse("claims block queue synthesis: " + ", ".join(sorted(residue)))
+
+    blocks = []
+    for index, (item_id, item_gate, lines) in enumerate(items, 1):
+        blocks.append(
+            "\n".join(
+                [f"{index}. [READY] [id={item_id}] [gate={item_gate}] {lines[0]}", *lines[1:]]
+            )
+        )
+    candidate = insert_synthesized_items(text, blocks)
+    try:
+        parser.validate_queue(candidate, queue_path)
+    except Exception as error:
+        refuse(f"synthesized queue failed strict grammar validation: {error}")
+    replace_publish(queue_path, candidate.encode("utf-8"))
+    print(json.dumps({
+        "schema": QUEUE_SYNTHESIS_SCHEMA,
+        "head": current_head,
+        "ids": [item_id for item_id, _item_gate, _lines in items],
+        "items": len(items),
+    }, sort_keys=True, separators=(",", ":")))
+
+
 def main(arguments: list[str]) -> int:
     if len(arguments) < 2:
         return 64
@@ -1551,6 +1809,7 @@ def main(arguments: list[str]) -> int:
         "archive-failures": archive_failures,
         "complete-from-head": complete_from_head,
         "accept-completion": accept_completion,
+        "synthesize-product-work": synthesize_product_work,
         "create-text": create_text,
         "ensure-dir": ensure_directory,
         "exec-output": exec_output,

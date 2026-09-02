@@ -8,6 +8,11 @@ CONTROLLER="$ROOT/tools/nudge.sh"
 AGENT="$ROOT/tools/nudge-agent.sh"
 WAIT_EXECUTOR="$ROOT/tools/nudge-wait.py"
 REAPER="$ROOT/tools/nudge-reap-claims.sh"
+# Hermetic environment: run from inside a nudge-launched worker session the
+# inherited NUDGE_OWNER_FD / NUDGE_CLAIM_IDENTITY make the agent under test
+# skip its claim-owner-exec re-exec and fail launch preflight claim-invalid;
+# production units launch through systemd-run with a clean environment.
+unset NUDGE_OWNER_FD NUDGE_CLAIM_IDENTITY NUDGE_QUEUE_LOCK_HELD
 TMP=$(mktemp -d /tmp/opencode/bedlam-waiting-automatic.XXXXXX)
 trap 'jobs -pr | xargs -r kill 2>/dev/null || true; rm -rf "$TMP"' EXIT
 failures=0

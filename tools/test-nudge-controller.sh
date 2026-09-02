@@ -76,6 +76,13 @@ EOF
 chmod +x "$TMP/mock-systemctl-chain"
 
 run_nudge() {
+  # Hermetic environment: a suite run from INSIDE a nudge-launched worker
+  # session inherits NUDGE_OWNER_FD/NUDGE_CLAIM_IDENTITY (the wrapper's
+  # claim-owner-exec exports), which made the mock-launched agent skip its
+  # own claim-owner-exec re-exec and fail launch preflight claim-invalid.
+  # Production units launch through systemd-run with a clean environment;
+  # the harness must do the same.
+  env -u NUDGE_OWNER_FD -u NUDGE_CLAIM_IDENTITY \
   BEDLAM_PLAN_DIR="$PLAN" NUDGE_LOCK="$TMP/nudge.lock" \
   OPENC_OVERRIDE="$TMP/mock-client" \
   NETWORK_WATCHDOG_OVERRIDE="$TMP/mock-network-watchdog" \
@@ -87,7 +94,7 @@ run_nudge() {
 }
 
 run_nudge_with_production_idle() {
-  env -u SYSTEMD_RUN_OVERRIDE \
+  env -u NUDGE_OWNER_FD -u NUDGE_CLAIM_IDENTITY \
     PATH="$TMP/mock-bin:$PATH" \
     BEDLAM_PLAN_DIR="$PLAN" NUDGE_LOCK="$TMP/nudge.lock" \
     OPENC_OVERRIDE="$TMP/mock-client" \
@@ -474,6 +481,194 @@ then
 fi
 if [ "$scratch_failures" -ne 0 ]; then
   printf 'nudge controller tests: RED (completion scratch root: %d failed assertions)\n' "$scratch_failures" >&2
+  exit 1
+fi
+
+# 13. Deterministic failed-product-gate synthesis (queue-synthesis-v1): a
+# red wired product gate at an empty queue makes the controller itself
+# publish READY repair items from the failing gate id -- no beacon, no
+# idle -- and the synthesized item is real claimable work on the next tick.
+make_plan
+mkdir -p "$PLAN/tools" "$PLAN/docs"
+: > "$PLAN/MANIFEST.sha256"
+printf 'schema = "required-gates-v2"\n' > "$PLAN/docs/required-gates.toml"
+cat > "$PLAN/tools/validate-required-gates.py" <<'EOF'
+#!/usr/bin/python3
+import json, subprocess, sys
+report_path = sys.argv[sys.argv.index("--report") + 1]
+root = sys.argv[sys.argv.index("--root") + 1]
+head = subprocess.run(
+    ["/usr/bin/git", "-C", root, "rev-parse", "HEAD"],
+    capture_output=True, text=True,
+).stdout.strip()
+report = {
+    "schema": "required-gates-report-v2",
+    "status": "failed",
+    "plan_complete": False,
+    "selected_phase": None,
+    "evidence": {"menu-journey": "product", "eng-shell": "supporting"},
+    "phase_product_coverage": {f"P{n}": 1 for n in range(8)},
+    "gates": [
+        {"commands": [{"argv": ["/usr/bin/python3", "tools/test-menu-journey-gate.py"], "rc": 1}],
+         "evidence": "product", "id": "menu-journey", "passed": False, "writable": []},
+        {"commands": [{"argv": ["/usr/bin/true"], "rc": 0}],
+         "evidence": "supporting", "id": "eng-shell", "passed": True, "writable": []},
+    ],
+}
+report["head"] = head
+with open(report_path, "w", encoding="utf-8") as handle:
+    json.dump(report, handle)
+sys.exit(1)
+EOF
+chmod +x "$PLAN/tools/validate-required-gates.py"
+git -C "$PLAN" add MANIFEST.sha256 docs tools
+git -C "$PLAN" commit -qm 'fixture: stub validator with one red product gate'
+printf '# NEXT\n\n## Now\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+: > "$TMP/run-calls"
+: > "$TMP/chain-calls"
+rm -rf "$PLAN/.state/automation-failures"
+synth_failures=0
+set +e
+run_nudge_with_production_idle
+synth_rc=$?
+set -e
+if [ "$synth_rc" -ne 0 ]; then
+  echo "not ok - product-gate synthesis tick returned rc=$synth_rc instead of 0" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+if ! grep -q "product-gate synthesis published READY queue items" "$PLAN/.state/nudge.log"; then
+  echo "not ok - controller did not log the synthesis publication" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+if ! grep -q -- "\[id=synth-repair-menu-journey\] \[gate=menu-journey\]" "$PLAN/.state/NEXT.md"; then
+  echo "not ok - synthesized repair item missing from the queue" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+if [ -n "$(find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null || true)" ]; then
+  echo "not ok - product-gate synthesis emitted a repair artifact" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+if grep -q -- 'start bedlam-llm-watchdog.service' "$TMP/chain-calls"; then
+  echo "not ok - product-gate synthesis started the watchdog" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+synth_state=$(python3 "$ROOT/tools/nudge-free-items.py" "$PLAN/.state/NEXT.md" "$PLAN/.state/claims" --state-v1)
+if [ "$synth_state" != "RUNNABLE 1" ]; then
+  echo "not ok - synthesized queue is not RUNNABLE 1 (got: $synth_state)" >&2
+  synth_failures=$((synth_failures + 1))
+fi
+# The synthesized item is ordinary claimable work: a stale-heartbeat tick
+# spawns a worker for it end to end. Tests 7-8 leave a rate-limit emitter
+# behind as the mock client, so restore the committing client first.
+cat > "$TMP/mock-client" <<EOF
+#!/usr/bin/env bash
+slot=\$(printf "%s\n" "\$*" | sed -nE "s/.*for slot ([0-9A-Za-z-]+) .*/\1/p" | head -n 1)
+echo "work by \$slot" >> "$PLAN/code.txt"
+git -C "$PLAN" add code.txt
+git -C "$PLAN" commit -qm "work" -m "Nudge-Worker: \$slot"
+EOF
+chmod +x "$TMP/mock-client"
+touch -d "10 minutes ago" "$PLAN/.state/heartbeat"
+: > "$PLAN/.state/nudge.log"
+run_nudge
+grep -q -- "--unit bedlam-nudge-item1-" "$TMP/run-calls"
+wait_agent_done
+grep -q "ended cleanly (rc=0 progress=1)" "$PLAN/.state/nudge.log"
+if [ "$synth_failures" -ne 0 ]; then
+  printf 'nudge controller tests: RED (product-gate synthesis: %d failed assertions)\n' "$synth_failures" >&2
+  exit 1
+fi
+
+# 14. The non-product refusal end to end: a red supporting gate at an empty
+# queue never synthesizes product work; the controller falls through to the
+# structured completion-missing beacon for watchdog repair, queue untouched.
+make_plan
+mkdir -p "$PLAN/tools" "$PLAN/docs"
+: > "$PLAN/MANIFEST.sha256"
+printf 'schema = "required-gates-v2"\n' > "$PLAN/docs/required-gates.toml"
+cat > "$PLAN/tools/validate-required-gates.py" <<'EOF'
+#!/usr/bin/python3
+import json, subprocess, sys
+report_path = sys.argv[sys.argv.index("--report") + 1]
+root = sys.argv[sys.argv.index("--root") + 1]
+head = subprocess.run(
+    ["/usr/bin/git", "-C", root, "rev-parse", "HEAD"],
+    capture_output=True, text=True,
+).stdout.strip()
+report = {
+    "schema": "required-gates-report-v2",
+    "status": "failed",
+    "plan_complete": False,
+    "selected_phase": None,
+    "evidence": {"gates-validator": "infrastructure", "menu-journey": "product"},
+    "phase_product_coverage": {f"P{n}": 1 for n in range(8)},
+    "gates": [
+        {"commands": [{"argv": ["/usr/bin/python3", "tools/test-validate-required-gates.py"], "rc": 1}],
+         "evidence": "infrastructure", "id": "gates-validator", "passed": False, "writable": []},
+        {"commands": [{"argv": ["/usr/bin/true"], "rc": 0}],
+         "evidence": "product", "id": "menu-journey", "passed": True, "writable": []},
+    ],
+}
+report["head"] = head
+with open(report_path, "w", encoding="utf-8") as handle:
+    json.dump(report, handle)
+sys.exit(1)
+EOF
+chmod +x "$PLAN/tools/validate-required-gates.py"
+git -C "$PLAN" add MANIFEST.sha256 docs tools
+git -C "$PLAN" commit -qm 'fixture: stub validator with one red non-product gate'
+printf '# NEXT\n\n## Now\n\n## Backlog\n' > "$PLAN/.state/NEXT.md"
+: > "$TMP/run-calls"
+: > "$TMP/chain-calls"
+rm -rf "$PLAN/.state/automation-failures"
+refuse_failures=0
+set +e
+run_nudge_with_production_idle
+refuse_rc=$?
+set -e
+if [ "$refuse_rc" -ne 2 ]; then
+  echo "not ok - non-product refusal returned rc=$refuse_rc instead of 2" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+if ! grep -q "product-gate synthesis refused" "$PLAN/.state/nudge.log"; then
+  echo "not ok - controller did not log the synthesis refusal" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+if ! grep -q "non-product gates never synthesize" "$PLAN/.state/nudge.log"; then
+  echo "not ok - refusal reason missing from the controller log" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+refuse_artifact=$(find "$PLAN/.state/automation-failures" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null || true)
+if [ -z "$refuse_artifact" ]; then
+  echo "not ok - non-product refusal emitted no structured repair artifact" >&2
+  refuse_failures=$((refuse_failures + 1))
+else
+  if ! python3 - "$refuse_artifact" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    value = json.load(f)
+assert value["kind"] == "completion-missing"
+assert value["repair"] == "required"
+PY
+  then
+    echo "not ok - non-product refusal artifact has the wrong shape" >&2
+    refuse_failures=$((refuse_failures + 1))
+  fi
+fi
+if ! grep -q -- 'start bedlam-llm-watchdog.service' "$TMP/chain-calls"; then
+  echo "not ok - non-product refusal did not start the watchdog" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+if grep -q "synth-" "$PLAN/.state/NEXT.md"; then
+  echo "not ok - non-product refusal synthesized queue items anyway" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+if [ -s "$TMP/run-calls" ]; then
+  echo "not ok - non-product refusal spawned a worker" >&2
+  refuse_failures=$((refuse_failures + 1))
+fi
+if [ "$refuse_failures" -ne 0 ]; then
+  printf 'nudge controller tests: RED (non-product refusal: %d failed assertions)\n' "$refuse_failures" >&2
   exit 1
 fi
 

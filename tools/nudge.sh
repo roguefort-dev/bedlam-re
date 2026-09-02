@@ -191,6 +191,28 @@ if [ "$queue_state" = REQUIRED-QUEUE-EMPTY ]; then
     log_line "completion basis changed during validation; sealed verdict withheld - benign retry on next tick"
     exit 0
   fi
+  # Deterministic failed-product-gate synthesis (queue-synthesis-v1, D240):
+  # the empty-queue validation failed. When the failure is PRODUCT-class --
+  # a wired product gate whose own evidence ran red, or a phase wiring no
+  # product gate at all -- the controller itself synthesizes READY queue
+  # items from the failing gate ids so product work resumes mechanically
+  # (the designated source for the later product backlog). Infrastructure
+  # failures (validator, sandbox, corpus, harness) and red non-product
+  # gates never synthesize: the helper refuses without touching the queue
+  # and this branch falls through to the structured automation-failure
+  # beacon for watchdog repair, exactly as before.
+  set +e
+  synthesis_result=$("$STATE_HELPER" synthesize-product-work \
+    "$completion_report" "$STATE/NEXT.md" "$STATE/claims" 2>&1)
+  synthesis_rc=$?
+  set -e
+  if [ "$synthesis_rc" -eq 0 ]; then
+    log_line "product-gate synthesis published READY queue items; next tick claims them: $synthesis_result"
+    exit 0
+  fi
+  if [ -n "$synthesis_result" ]; then
+    log_line "product-gate synthesis refused: $synthesis_result"
+  fi
   log_line "required Now queue is empty but full required-gates validation is incomplete - repair required"
   beacon_failure completion-missing "required queue empty; full offline required-gates validation did not prove P0-P7 completion"
   exit 2

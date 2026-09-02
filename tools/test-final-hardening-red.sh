@@ -3,6 +3,13 @@
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# Hermetic environment: these suites are routinely run from INSIDE a
+# nudge-launched worker session, whose wrapper exports NUDGE_OWNER_FD /
+# NUDGE_CLAIM_IDENTITY (and may hold NUDGE_QUEUE_LOCK_HELD) for its OWN
+# claim. Without stripping them the agent under test skips its
+# claim-owner-exec re-exec and fails launch preflight claim-invalid.
+# Production units launch through systemd-run with a clean environment.
+unset NUDGE_OWNER_FD NUDGE_CLAIM_IDENTITY NUDGE_QUEUE_LOCK_HELD
 PARSER="$ROOT/tools/nudge-free-items.py"
 STATE_HELPER="$ROOT/tools/nudge-state.py"
 WAIT_EXECUTOR="$ROOT/tools/nudge-wait.py"
