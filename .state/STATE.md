@@ -1,5 +1,46 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-02 `queue-synthesis-v1` COMPLETE (worker c5b582e3 claim 1
+    interrupted provider-side by a rate limit, rc=137 progress=0, work
+    complete on disk but uncommitted; WIP adopted, verified, and
+    finished by watchdog repair 1204180, commit 1faa0f8,
+    PUSHED, plus this bookkeeping commit): THE CONTROLLER SYNTHESIS
+    HOOK (DECISIONS.md D240) — on a REQUIRED-QUEUE-EMPTY parse whose
+    sealed full-battery validation failed, the completion branch of
+    tools/nudge.sh calls the new tools/nudge-state.py
+    synthesize-product-work, which publishes READY items ONLY from
+    product-class failures (a red wired evidence="product" gate that
+    ran its own commands — citing gate id + first red argv when
+    grammar-safe else withheld + exit code; a phase wiring zero
+    product gates) and REFUSES byte-identically for everything else
+    (red non-product gates, dependency consequences, error-shaped
+    reports, stale HEAD, phase runs, non-empty queues, claim residue),
+    with strict-grammar validation before the queue-locked
+    replace_publish and a BOUNDS line: no synthesized item ever
+    asserts a phase status — the designated mechanical source for the
+    later 37-mission product backlog. Includes the hermetic
+    worker-env guard class (worker-session-inherited NUDGE_OWNER_FD/
+    NUDGE_CLAIM_IDENTITY made suite-spawned agents skip
+    claim-owner-exec and die at preflight claim-invalid): the
+    interrupted worker's fixes to test-nudge-claims,
+    test-waiting-automatic, test-nudge-controller, extended by the
+    repair to test-lock-v2-adversarial,
+    test-automation-failure-watchdog, test-final-hardening-red,
+    test-autonomy-remaining-gaps, test-reviewer-security-red — each
+    reproduced red under a simulated worker environment and restored
+    after the guard. VERIFIED first-hand: test-queue-synthesis.py
+    15/15; test-nudge-controller.sh PASS end-to-end with new live-hook
+    tests 13-14; claims, waiting-automatic, nudge-queue PASS;
+    test-validate-required-gates.py 34/34; the five guarded suites at
+    their clean-env verdicts under simulation; py_compile + bash -n
+    clean; no engine change, no manifest edit, no corpus read. The
+    pre-existing D238 v1-fixture rot (autonomy-gaps 1 case,
+    reviewer-security 6 cases — proven red at HEAD b7af042 in an
+    isolated worktree) is queued as item 6 autonomy-suite-rot-v1, not
+    fixed here. Queue head is now shell-input-seam-v1 with the
+    shell-controller -> menu-journey -> mission-outcome ->
+    zonea-trace tracer chain and the suite-rot repair behind it.
+
   - 2026-09-02 `scheduler-gate-cache-v1` COMPLETE (worker 9c719592
     claim 1, commit 2ef3678, PUSHED, plus this bookkeeping commit):
     THE SCHEDULER FOUNDATION — THE PER-GATE FINGERPRINT VERDICT CACHE
