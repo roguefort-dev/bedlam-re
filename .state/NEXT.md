@@ -11,30 +11,68 @@ never wrap INSIDE a tag; the strict parser rejects it (rc=2,
 INVALID-DEADLOCKED) and the worker dies at its own finish line.
 ## Now
 
-1. [READY] [id=scheduler-gate-cache-v1] [gate=gate-cache-v1] SCHEDULER FOUNDATION: PER-GATE FINGERPRINT CACHE — the D238 follow-up that ends the full-battery re-runs (~30min, ~12GB): tools/validate-required-gates.py gains a per-gate basis fingerprint covering HEAD tree, required-gates manifest sha256, the MANIFEST.sha256 corpus digest, the validator bytes, and the digests of every tracked path and command script the gate reads; verdicts cache under a gitignored runtime path keyed by gate id, and a gate is re-executed only when its basis changed since the last green verdict — any basis change re-runs, a cached green is reused, a corrupt or foreign cache entry fails closed to a re-run.
-   ACCEPTANCE: new focused hermetic suite tools/test-gate-cache.py green — deterministic hit, miss, basis-change-re-runs, corrupt-cache-fails-closed, and cache-poisoning-refused cases over fixtures; tools/test-validate-required-gates.py stays green; py_compile clean; no gate command changes; no engine change; no corpus write.
-
-2. [READY] [id=queue-synthesis-v1] [gate=queue-synthesis-v1] DETERMINISTIC FAILED-PRODUCT-GATE SYNTHESIS — THE CONTROLLER HOOK: on a REQUIRED-QUEUE-EMPTY queue parse with failed or absent product gates, the controller itself — the completion branch of tools/nudge.sh through tools/nudge-state.py, behind the same controller lock — deterministically synthesizes READY queue items from the failing gate ids, product-failure class only (the gate's own evidence ran and is red: the synthesized item cites the gate and its failing command, written in strict grammar and validated by tools/nudge-free-items.py before publication), while infrastructure failures (validator, sandbox, corpus, or harness errors) only beacon the structured automation-failure shape for watchdog repair and never synthesize product work; non-product gates never synthesize anything. A standalone script with no controller call site does not satisfy this unit.
+1. [READY] [id=queue-synthesis-v1] [gate=queue-synthesis-v1] DETERMINISTIC FAILED-PRODUCT-GATE SYNTHESIS — THE CONTROLLER HOOK: on a REQUIRED-QUEUE-EMPTY queue parse with failed or absent product gates, the controller itself — the completion branch of tools/nudge.sh through tools/nudge-state.py, behind the same controller lock — deterministically synthesizes READY queue items from the failing gate ids, product-failure class only (the gate's own evidence ran and is red: the synthesized item cites the gate and its failing command, written in strict grammar and validated by tools/nudge-free-items.py before publication), while infrastructure failures (validator, sandbox, corpus, or harness errors) only beacon the structured automation-failure shape for watchdog repair and never synthesize product work; non-product gates never synthesize anything. A standalone script with no controller call site does not satisfy this unit.
    ACCEPTANCE: the hook lands in the controller completion branch with a new focused hermetic suite covering both failure types, the non-product refusal, and the absent-product-gate synthesis path; tools/test-nudge-controller.sh stays green end to end; this unit is the designated source for expanding the 37-mission product backlog later — it must synthesize mechanically, and no synthesized item may ever assert a phase green.
 
-3. [READY] [id=shell-input-seam-v1] [gate=shell-input-seam-v1] PRODUCTION INPUT SEAM — end fabricated scene actions outside the headless harness: the scripted WalkStep injection in engine/bedlam-shell/src/headless.rs is confined behind an explicit harness-only seam, and the production shell feeds scenes through a real input-source type so no production path fabricates SceneAction values, MissionComplete included.
+2. [READY] [id=shell-input-seam-v1] [gate=shell-input-seam-v1] PRODUCTION INPUT SEAM — end fabricated scene actions outside the headless harness: the scripted WalkStep injection in engine/bedlam-shell/src/headless.rs is confined behind an explicit harness-only seam, and the production shell feeds scenes through a real input-source type so no production path fabricates SceneAction values, MissionComplete included.
    ACCEPTANCE: cargo fmt and cargo clippy clean on the touched crates; cargo test --release --locked --offline -p bedlam-shell --lib green with new seam tests pinning that production paths cannot inject SceneAction::MissionComplete; the headless smoke at the recorded baseline hashes; controls green before and after with zero canonical-chain movement (canonical_dump_gate, zone_mission_parity, determinism); MANIFEST.sha256 clean before and after every corpus read.
 
-4. [READY] [id=shell-controller-v1] [gate=shell-controller-v1] PLATFORM-NEUTRAL SHELL CONTROLLER — one controller type owns scene transitions and journey state for the winit host, the headless harness, and tests alike; hosts adapt their events to it and no host fabricates scene actions; builds on the item 3 seam.
+3. [READY] [id=shell-controller-v1] [gate=shell-controller-v1] PLATFORM-NEUTRAL SHELL CONTROLLER — one controller type owns scene transitions and journey state for the winit host, the headless harness, and tests alike; hosts adapt their events to it and no host fabricates scene actions; builds on the item 2 seam.
    ACCEPTANCE: cargo test --release --locked --offline -p bedlam-shell --lib green including new controller journey tests driving boot, title, and advance edges through the controller only; cargo fmt and clippy clean; the headless smoke re-baselined only deliberately if journey-visible behavior changes, in the same commit; controls green with zero canonical-chain movement; MANIFEST clean around corpus reads.
 
-5. [READY] [id=menu-journey-v1] [gate=menu-journey-v1] MENU JOURNEY PRODUCT GATE — the FIRST gate classified evidence="product" in docs/required-gates.toml, wired under P6 behind the item 3 seam and item 4 controller by queue order: a real menu journey — boot to title, into options, toggling a setting, back out, the quit path — driven through the ShellController over production scenes with observable assertions and no injected actions.
+4. [READY] [id=menu-journey-v1] [gate=menu-journey-v1] MENU JOURNEY PRODUCT GATE — the FIRST gate classified evidence="product" in docs/required-gates.toml, wired under P6 behind the item 2 seam and item 3 controller by queue order: a real menu journey — boot to title, into options, toggling a setting, back out, the quit path — driven through the ShellController over production scenes with observable assertions and no injected actions.
    ACCEPTANCE: new named test menu_journey_gate green in the bedlam-shell battery; wiring the product gate flips no phase green by itself (the validator v2 suite stays green, proving the gate stays rejectable should its evidence ever regress to synthetic); controls green; MANIFEST clean around corpus reads.
 
-6. [READY] [id=mission-outcome-v1] [gate=mission-outcome-v1] MISSION-OWNED OUTCOME RESOLVER — MissionScene::tick in engine/bedlam-game/src/mission.rs returns an outcome owned by the mission scene itself; the shell maps it to the debrief transition; the headless harness stops injecting SceneAction::MissionComplete because the item 3 seam makes that injection impossible in production paths.
+5. [READY] [id=mission-outcome-v1] [gate=mission-outcome-v1] MISSION-OWNED OUTCOME RESOLVER — MissionScene::tick in engine/bedlam-game/src/mission.rs returns an outcome owned by the mission scene itself; the shell maps it to the debrief transition; the headless harness stops injecting SceneAction::MissionComplete because the item 2 seam makes that injection impossible in production paths.
    ACCEPTANCE: cargo test --release --locked --offline -p bedlam-game green with new outcome tests; zone_mission_parity, canonical_dump_gate, and determinism green with ZERO canonical-chain movement — outcome resolution must not perturb replay hashes; cargo fmt and clippy clean; MANIFEST clean around corpus reads.
 
-7. [READY] [id=zonea-trace-v1] [gate=zonea-trace-v1] ZONE A PRODUCTION TRACE PRODUCT GATE — a natural production-path trace of ZONEA-MISSION1 from mission start through the mission-owned outcome into debrief, driven end to end through the ShellController with real input over the read-only corpus; wired as the second product gate and cited as the product evidence that may later flip ZONEA-MISSION1 green in docs/P5-MISSION-LEDGER.toml.
+6. [READY] [id=zonea-trace-v1] [gate=zonea-trace-v1] ZONE A PRODUCTION TRACE PRODUCT GATE — a natural production-path trace of ZONEA-MISSION1 from mission start through the mission-owned outcome into debrief, driven end to end through the ShellController with real input over the read-only corpus; wired as the second product gate and cited as the product evidence that may later flip ZONEA-MISSION1 green in docs/P5-MISSION-LEDGER.toml.
    ACCEPTANCE: new named test zonea_production_trace green; the ledger checker green with the row still unproven unless the trace meets the full v2 product bar in the same commit that flips it; the validator v2 suites green; MANIFEST.sha256 clean before and after every corpus read.
 
 ## Backlog
 
 ## Done
+1. DONE (2026-09-02, claim 1, slot 9c719592 — commit 2ef3678 by worker
+   9c719592, PUSHED, plus this bookkeeping commit): SCHEDULER
+   FOUNDATION `scheduler-gate-cache-v1` — THE PER-GATE FINGERPRINT
+   VERDICT CACHE (D239), the D238 follow-up that ends the full-battery
+   re-runs: tools/validate-required-gates.py gains an OPT-IN
+   --gate-cache DIR accelerator (absent flag = byte-identical behavior
+   for every existing caller; NO gate command changes, no engine
+   change, no manifest edit). The per-gate basis fingerprint binds the
+   HEAD commit, the whole tracked-tree fingerprint, the required-gates
+   manifest sha256, the MANIFEST.sha256 corpus digest, the validator
+   bytes, and the gate's own slice (commands, tracked-path +
+   command-script digests, timeout, evidence, writable, depends); any
+   tracked change anywhere re-runs by design, a cached green is reused
+   only on an exact basis+id+schema match, verdicts are keyed by
+   sha256(gate id) under the cache dir, only greens of executed gates
+   are remembered (dependency failures never consult or write), and
+   corrupt/foreign/oversized/symlinked entries fail closed to a re-run
+   and are replaced honestly. In-root cache paths must be gitignored +
+   untracked + symlink-free (loud refusal otherwise; canonical repo
+   path /gate-cache, gitignored), out-of-root host paths allowed for
+   the sealed-controller shape. A hit replays green command verdicts
+   byte-identically, so reports stay deterministic across miss-to-hit.
+   VERIFIED first-hand: new hermetic suite tools/test-gate-cache.py
+   15/15 (deterministic hit, miss-remembers-green, basis-change
+   re-runs on gate-input AND unrelated tracked changes, corrupt +
+   oversized fail-closed-to-re-run, six poison shapes refused,
+   symlinked entry refused, dirty tracked path rejected despite cache,
+   dependency failure writes nothing and stays red, phase-run reuse,
+   out-of-root host cache, disabled-by-default never writes or reads,
+   the three in-root path refusals); tools/test-validate-required-
+   gates.py 34/34 unchanged; py_compile clean; MANIFEST.sha256 clean
+   before and after (hermetic fixtures, no corpus read); REAL-REPO
+   bounded --phase P7 smoke at the landing commit: cold run 84.7s
+   executing all 7 gates green with 7 entries remembered, warm run
+   1.0s all-hits with entries untouched and reports byte-identical
+   (an 84x collapse on P7 alone; the full 37-gate battery scales the
+   same). Queue head is now queue-synthesis-v1 (the controller hook
+   for deterministic failed-product-gate synthesis), with the
+   shell-input-seam / shell-controller / menu-journey /
+   mission-outcome / zonea-trace units behind it.
+
 1. DONE (2026-09-02, no queue claim — slice 1 required-gates-v2-contract ordered by .state/AUTONOMY-PAUSE-CHECKPOINT.md under its exact pause token; substantive commit f3f9ad8 plus this bookkeeping commit, both PUSHED): THE AUDITED FALSE-COMPLETION REVOCATION (DECISIONS.md D238) — docs/required-gates.toml moves to schema required-gates-v2: every one of the 37 gates carries a validated evidence classification (all non-product: supporting 8, static 9, paperwork 9, corpus-required 8, synthetic 1, infrastructure 2; commands byte-identical), phase statuses are vocabulary-checked, a green phase is structurally rejected without a wired product gate, plan completion requires every phase product-green, and the revoked v1 schema is refused outright — the old manifest can never validate again. P0-P6 green->pending; P7 green->engineering-green; bounded --phase runs now emit phase-verdict-v2 with product_complete false, so the legacy .state/P4..P7-COMPLETE markers and old reports are non-authoritative residue (left on disk, nothing reads them, pinned by test). docs/P5-MISSION-LEDGER.toml moves to p5-mission-ledger-v2: all 37 rows unproven with the v1 parity evidence preserved per-row in supporting_evidence citing p5-zone-a..g; the checker decouples gate wiring from zone green (citation linkage instead) and demands product evidence for any future green row; the real-repo test pin re-baselined 0/37 green, 37 unproven, same commit. VERIFIED first-hand: test-validate-required-gates 31/31, test-p5-zone-ledger 22/22, check-p5-zone-ledger OK over the read-only corpus, check-p6-behavior-catalog OK + 30/30, check-p7-ports-map OK + 29/29, test-p6-hd-asset-research 27/27, py_compile clean, git diff --check clean, MANIFEST clean before and after; no gate battery run, no engine change, no corpus write. QUEUE SEEDED (above): seven dependency-ordered machine tracer units — the per-gate fingerprint cache first (ends the ~30min/~12GB re-runs), then failed-product-gate synthesis (the designated source for the later 37-mission product backlog), the input seam, the ShellController, the menu-journey product gate, the mission outcome resolver, and the Zone A production trace. Dependencies are encoded by queue order under the pinned concurrency ceiling of one and lowest-ordinal claiming — the controller spawns the first unclaimed READY item only — so no WAITING-AUTOMATIC probe is required: none of the seven waits on an external machine event. With the queue nonempty the controller's completion branch cannot fire at all (it runs only on REQUIRED-QUEUE-EMPTY), so the intentionally-red product state drives item 1 normally and can never beacon completion-missing into watchdog-repair churn.
 1. DONE (2026-08-28, claim 1 — commit 97fb49e by worker
    78919433, PUSHED, plus this bookkeeping commit): P7

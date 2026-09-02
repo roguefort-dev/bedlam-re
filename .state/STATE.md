@@ -1,5 +1,38 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-02 `scheduler-gate-cache-v1` COMPLETE (worker 9c719592
+    claim 1, commit 2ef3678, PUSHED, plus this bookkeeping commit):
+    THE SCHEDULER FOUNDATION — THE PER-GATE FINGERPRINT VERDICT CACHE
+    (D239), ending the D238-era full-battery re-runs: tools/
+    validate-required-gates.py gains an OPT-IN --gate-cache DIR
+    accelerator (absent = byte-identical behavior; NO gate command
+    changes, no engine change, no manifest edit, no corpus write).
+    Per-gate basis fingerprint = HEAD commit + whole tracked-tree
+    fingerprint + required-gates manifest sha256 + MANIFEST.sha256
+    corpus digest + validator bytes + the gate's own slice (commands,
+    tracked-path + command-script digests, timeout, evidence,
+    writable, depends); verdicts keyed by sha256(gate id) under the
+    cache dir (canonical gitignored repo path /gate-cache; out-of-root
+    host paths allowed for the sealed-controller shape); only greens
+    of executed gates are remembered; a cached green is reused ONLY on
+    an exact schema+id+basis match with a regular non-symlink entry
+    ≤4096 bytes — corrupt/foreign/oversized/symlinked entries fail
+    closed to a re-run; in-root cache paths must be gitignored +
+    untracked + symlink-free (loud refusal); a hit replays green
+    command verdicts byte-identically so reports stay deterministic
+    across miss-to-hit. VERIFIED first-hand: new hermetic suite
+    tools/test-gate-cache.py 15/15; tools/test-validate-required-
+    gates.py 34/34 unchanged; py_compile clean; MANIFEST clean before
+    and after; REAL-REPO bounded --phase P7 smoke at the landing
+    commit: cold 84.7s / 7 gates green / 7 entries remembered, warm
+    1.0s all-hits, entries untouched, reports byte-identical. The
+    queue head is now queue-synthesis-v1 (the controller hook), with
+    the shell-input-seam -> shell-controller -> menu-journey ->
+    mission-outcome -> zonea-trace tracer chain behind it; the
+    controller's completion branch may later adopt --gate-cache for
+    its sealed runs (content-keyed bases serve the detached
+    read-only checkouts at the same HEAD).
+
   - 2026-09-02 `required-gates-v2-contract` COMPLETE (audited
     pause-checkpoint slice 1; substantive commit f3f9ad8 plus its
     bookkeeping commit, both PUSHED): THE FALSE-COMPLETION REVOCATION
