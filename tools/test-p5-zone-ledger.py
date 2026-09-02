@@ -27,7 +27,7 @@ CORPUS_SHAPE = {
 }
 
 
-def ledger_text(rows: list[dict], schema: str = "p5-mission-ledger-v1") -> str:
+def ledger_text(rows: list[dict], schema: str = "p5-mission-ledger-v2") -> str:
     lines = [f'schema = "{schema}"']
     for row in rows:
         lines.append("")
@@ -35,7 +35,15 @@ def ledger_text(rows: list[dict], schema: str = "p5-mission-ledger-v1") -> str:
         lines.append(f'id = "{row["id"]}"')
         lines.append(f'zone = "{row["zone"]}"')
         lines.append(f'mission = {row["mission"]}')
-        lines.append(f'disposition = "{row.get("disposition", "pending")}"')
+        lines.append(f'disposition = "{row.get("disposition", "unproven")}"')
+        evidence = row.get(
+            "supporting_evidence", [f'p5-zone-{row["zone"].lower()}']
+        )
+        lines.append(
+            "supporting_evidence = ["
+            + ", ".join(f'"{e}"' for e in evidence)
+            + "]"
+        )
         refs = row.get("catalog_refs", [])
         lines.append("catalog_refs = [" + ", ".join(f'"{r}"' for r in refs) + "]")
     return "\n".join(lines) + "\n"
@@ -47,7 +55,8 @@ def honest_rows(tamper=None) -> list[dict]:
             "id": f"ZONE{letter}-MISSION{number}",
             "zone": letter,
             "mission": number,
-            "disposition": "pending",
+            "disposition": "unproven",
+            "supporting_evidence": [f"p5-zone-{letter.lower()}"],
             "catalog_refs": [],
         }
         for letter, count in ZONE_SHAPE.items()
@@ -58,16 +67,33 @@ def honest_rows(tamper=None) -> list[dict]:
     return rows
 
 
-def manifest_text(p5_gates: list[str] | None = None, p5_status: str = "pending") -> str:
+def manifest_text(
+    p5_gates: list[str] | None = None,
+    p5_status: str = "pending",
+    extra_gates: list[tuple[str, str]] | None = None,
+) -> str:
     gates = p5_gates if p5_gates is not None else ["p5-zone-gate-scaffold"]
-    return (
-        'schema = "required-gates-v1"\n\n'
-        "".join(
-            f'[[phase]]\nid = "P{n}"\nstatus = "{("green" if n < 5 else p5_status if n == 5 else "pending")}"\n'
-            f'required_gates = {("[]" if n != 5 else repr(gates).replace("'", '"'))}\n\n'
-            for n in range(8)
+    gate_blocks = [("p5-zone-gate-scaffold", "paperwork")] + [
+        (f"p5-zone-{letter}", "corpus-required")
+        for letter in "abcdefg"
+    ]
+    if extra_gates:
+        gate_blocks.extend(extra_gates)
+    blocks = ['schema = "required-gates-v2"\n']
+    for number in range(8):
+        status = p5_status if number == 5 else "pending"
+        required = gates if number == 5 else []
+        blocks.append(
+            f'[[phase]]\nid = "P{number}"\nstatus = "{status}"\n'
+            f'required_gates = [{", ".join(f"{g!r}" for g in required)}]\n'
+            .replace("'", '"')
         )
-    )
+    for gate_id, evidence in gate_blocks:
+        blocks.append(
+            f'[[gate]]\nevidence = "{evidence}"\nid = "{gate_id}"\n'
+            'command = ["/usr/bin/true"]\ntimeout_seconds = 2\n'
+        )
+    return "\n".join(blocks)
 
 
 class LedgerCheckerTests(unittest.TestCase):
@@ -122,27 +148,23 @@ class LedgerCheckerTests(unittest.TestCase):
             timeout=120,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        # Re-baselined with the D178 ZONEA-MISSION1 flip (the first
-        # green disposition; was "0/37 missions green" while every
-        # mission was pending), then with the D192 ZONEB closure (the
-        # first 7-mission zone), then with the D193 ZONEC closure
-        # (the first pure ZoneSpec instantiation), then with the D195
-        # ZONED closure (the second pure instantiation), then with
-        # the D196 ZONEE closure (the third pure instantiation),
-        # then with the D197 ZONEF closure (the fourth pure
-        # instantiation), then with the D199 ZONEG closure (the
-        # LAST ledger disposition — the ledger reads 37/37, every
-        # shipped mission green). Move this pin ONLY with a
-        # deliberate disposition flip, same commit (the fingerprint
-        # discipline).
-        self.assertIn("37/37 missions green", result.stdout)
-        self.assertIn("ZONEA 1/1 green", result.stdout)
-        self.assertIn("ZONEB 7/7 green", result.stdout)
-        self.assertIn("ZONEC 7/7 green", result.stdout)
-        self.assertIn("ZONED 7/7 green", result.stdout)
-        self.assertIn("ZONEE 7/7 green", result.stdout)
-        self.assertIn("ZONEF 7/7 green", result.stdout)
-        self.assertIn("ZONEG 1/1 green", result.stdout)
+        # Re-baselined with the D238 required-gates-v2 revocation: the v1
+        # 37/37 greens were replay/oracle parity evidence, not natural
+        # product-path proof (headless injected SceneAction::MissionComplete;
+        # production MissionScene::tick returns no outcome), so every
+        # mission is UNPROVEN as a product claim while the parity evidence
+        # stays preserved per-row in supporting_evidence. Move this pin
+        # ONLY with a deliberate disposition change backed by product-path
+        # evidence, same commit (the fingerprint discipline).
+        self.assertIn("0/37 missions green", result.stdout)
+        self.assertIn("ZONEA 0/1 green", result.stdout)
+        self.assertIn("ZONEB 0/7 green", result.stdout)
+        self.assertIn("ZONEC 0/7 green", result.stdout)
+        self.assertIn("ZONED 0/7 green", result.stdout)
+        self.assertIn("ZONEE 0/7 green", result.stdout)
+        self.assertIn("ZONEF 0/7 green", result.stdout)
+        self.assertIn("ZONEG 0/1 green", result.stdout)
+        self.assertIn("37 unproven, 0 green", result.stdout)
 
     def test_missing_corpus_fails_closed(self):
         root = self.fixture(ledger_text(honest_rows()), with_corpus=False)
@@ -202,7 +224,15 @@ class LedgerCheckerTests(unittest.TestCase):
         root = self.fixture(ledger_text(honest_rows(), schema="p5-mission-ledger-v0"))
         code, output = self.run_checker(root)
         self.assertNotEqual(code, 0)
-        self.assertIn("schema must be p5-mission-ledger-v1", output)
+        self.assertIn("schema must be p5-mission-ledger-v2", output)
+
+    def test_v1_ledger_schema_is_revoked(self):
+        # v1's green was certified by replay evidence alone; v1 ledgers are
+        # refused outright (D238).
+        root = self.fixture(ledger_text(honest_rows(), schema="p5-mission-ledger-v1"))
+        code, output = self.run_checker(root)
+        self.assertNotEqual(code, 0)
+        self.assertIn("schema must be p5-mission-ledger-v2", output)
 
     def test_unknown_row_key_fails(self):
         ledger = ledger_text(honest_rows()).replace(
@@ -240,40 +270,92 @@ class LedgerCheckerTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("zone set drifted", output)
 
-    def test_zone_gate_wired_before_zone_green_fails(self):
-        root = self.fixture(ledger_text(honest_rows()), manifest=manifest_text(["p5-zone-gate-scaffold", "p5-zone-a"]))
+    def test_zone_parity_gate_wired_without_citation_fails(self):
+        # D238 decoupling: wiring p5-zone-a proves evidence LINKAGE, so the
+        # zone's rows must cite the gate in supporting_evidence — not be
+        # green (the v1 rule let replay evidence certify zones complete).
+        def strip_citation(rows):
+            for row in rows:
+                if row["zone"] == "A":
+                    row["supporting_evidence"] = []
+
+        root = self.fixture(
+            ledger_text(honest_rows(strip_citation)),
+            manifest=manifest_text(["p5-zone-gate-scaffold", "p5-zone-a"]),
+        )
         code, output = self.run_checker(root)
         self.assertNotEqual(code, 0)
         self.assertIn("p5-zone-a", output)
-        self.assertIn("non-green missions", output)
+        self.assertIn("do not cite it in supporting_evidence", output)
 
-    def test_zone_gate_passes_once_zone_is_green(self):
-        def green_zone_a(rows):
-            for row in rows:
-                if row["zone"] == "A":
-                    row["disposition"] = "green"
-
+    def test_zone_parity_gate_cited_passes_with_unproven_rows(self):
+        # The honest post-D238 shape: every mission unproven, the parity
+        # evidence still cited and linked.
         root = self.fixture(
-            ledger_text(honest_rows(green_zone_a)),
+            ledger_text(honest_rows()),
             manifest=manifest_text(["p5-zone-gate-scaffold", "p5-zone-a"]),
         )
         code, output = self.run_checker(root)
         self.assertEqual(code, 0, output)
 
-    def test_p5_status_green_with_pending_missions_fails(self):
+    def test_unknown_supporting_evidence_citation_fails(self):
+        def tamper(rows):
+            rows[0]["supporting_evidence"] = ["p5-zone-a", "not-a-gate"]
+
+        root = self.fixture(ledger_text(honest_rows(tamper)))
+        code, output = self.run_checker(root)
+        self.assertNotEqual(code, 0)
+        self.assertIn("cites unknown gate", output)
+
+    def test_green_row_without_product_evidence_fails(self):
+        # The v1 false-green, replayed: a green row whose supporting
+        # evidence cites only non-product gates is refused.
+        def green_zone_a(rows):
+            for row in rows:
+                if row["zone"] == "A":
+                    row["disposition"] = "green"
+
+        root = self.fixture(ledger_text(honest_rows(green_zone_a)))
+        code, output = self.run_checker(root)
+        self.assertNotEqual(code, 0)
+        self.assertIn("cites no product gate", output)
+
+    def test_green_row_with_product_evidence_passes(self):
+        # The forward shape: green requires a cited PRODUCT gate.
+        def green_all(rows):
+            for row in rows:
+                row["disposition"] = "green"
+                row["supporting_evidence"] = row["supporting_evidence"] + ["menu-journey"]
+
+        root = self.fixture(
+            ledger_text(honest_rows(green_all)),
+            manifest=manifest_text(
+                ["p5-zone-gate-scaffold"],
+                extra_gates=[("menu-journey", "product")],
+            ),
+        )
+        code, output = self.run_checker(root)
+        self.assertEqual(code, 0, output)
+
+    def test_p5_status_green_with_unproven_missions_fails(self):
         root = self.fixture(ledger_text(honest_rows()), manifest=manifest_text(p5_status="green"))
         code, output = self.run_checker(root)
         self.assertNotEqual(code, 0)
         self.assertIn("P5 status is green", output)
+        self.assertIn("are not green", output)
 
     def test_p5_status_green_with_all_green_passes(self):
         def all_green(rows):
             for row in rows:
                 row["disposition"] = "green"
+                row["supporting_evidence"] = row["supporting_evidence"] + ["menu-journey"]
 
         root = self.fixture(
             ledger_text(honest_rows(all_green)),
-            manifest=manifest_text(p5_status="green"),
+            manifest=manifest_text(
+                p5_status="green",
+                extra_gates=[("menu-journey", "product")],
+            ),
         )
         code, output = self.run_checker(root)
         self.assertEqual(code, 0, output)
@@ -281,7 +363,8 @@ class LedgerCheckerTests(unittest.TestCase):
 
     def test_scaffold_gate_id_is_not_a_zone_gate(self):
         # p5-zone-gate-scaffold must not be captured by the p5-zone-{a..g}
-        # consistency rule: the scaffold is green while missions are pending.
+        # consistency rule: the scaffold is legal while missions are
+        # unproven.
         root = self.fixture(
             ledger_text(honest_rows()),
             manifest=manifest_text(["p5-zone-gate-scaffold"]),

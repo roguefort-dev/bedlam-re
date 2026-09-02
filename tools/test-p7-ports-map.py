@@ -284,7 +284,7 @@ def manifest_text(
                 ],
             },
         ]
-    lines = ['schema = "required-gates-v1"']
+    lines = ['schema = "required-gates-v2"']
     for number in range(8):
         gates = p7_gates if number == 7 else []
         rendered = ", ".join(f'"{gate}"' for gate in gates)

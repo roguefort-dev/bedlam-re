@@ -21,6 +21,24 @@ from pathlib import Path
 
 MAX_TIMEOUT = 1800
 MAX_FILE_SIZE = 16 * 1024 * 1024
+# required-gates-v2 (D238): every gate carries an evidence classification.
+# Only "product" evidence may certify product (phase-green / plan) completion;
+# the six non-product classes are preserved supporting evidence that can never
+# flip a phase to green. The v1 manifest — 37 gates, none a natural
+# product-path journey — certified P0-P7 green and a complete plan without a
+# single product gate, which is why v1 is revoked outright below.
+MANIFEST_SCHEMA = "required-gates-v2"
+EVIDENCE_PRODUCT = "product"
+EVIDENCE_CLASSES = (
+    "product",          # natural product-path journey evidence
+    "supporting",       # real code/evidence supporting the port, not a journey
+    "static",           # static/differential oracle pins
+    "paperwork",        # contract/registry/definition grading
+    "synthetic",        # synthetic inputs or synthetic journeys
+    "corpus-required",  # replay/oracle evidence that requires the corpus
+    "infrastructure",   # environment/validator machinery evidence
+)
+PHASE_STATUSES = ("pending", "engineering-green", "green")
 # MANIFEST.sha256 corpus files (the read-only game-data corpus) are bound
 # into the sealed completion basis by the controller at 128 MiB -- the
 # exact cap complete_from_head enforces for external corpus paths. The
@@ -42,7 +60,7 @@ EXECUTABLES = {
 }
 GATE_KEYS = {
     "id", "timeout_seconds", "tracked_paths", "corpus", "depends",
-    "commands", "command", "writable",
+    "commands", "command", "writable", "evidence",
 }
 PHASE_KEYS = {"id", "status", "required_gates"}
 SCRATCH_BASE = Path("/tmp/opencode")
@@ -430,8 +448,12 @@ def run_command(
 def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) -> tuple[dict[str, object], bool]:
     raw = tracked_at_head(root, manifest_path.relative_to(root).as_posix())
     value = tomllib.loads(raw.decode("utf-8"))
-    if value.get("schema") != "required-gates-v1":
-        raise ValidationError("required-gates manifest schema is not required-gates-v1")
+    if value.get("schema") != MANIFEST_SCHEMA:
+        raise ValidationError(
+            "required-gates manifest schema is not required-gates-v2 (v1 is "
+            "revoked: its non-product evidence certified product completion; "
+            "re-classify every gate under required-gates-v2 evidence classes)"
+        )
     head = git(root, "rev-parse", "HEAD")
     head_tree = git(root, "rev-parse", "HEAD^{tree}")
     tree_fingerprint = tracked_tree_fingerprint(root)
@@ -440,9 +462,51 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
     phases = value.get("phase", [])
     if not isinstance(gates, list) or not gates or not isinstance(phases, list):
         raise ValidationError("required-gates manifest requires gate and phase arrays")
+    gate_evidence: dict[str, str] = {}
+    for gate in gates:
+        if not isinstance(gate, dict) or not isinstance(gate.get("id"), str):
+            raise ValidationError("gate entries require stable string ids")
+        gate_id = gate["id"]
+        evidence = gate.get("evidence")
+        if not isinstance(evidence, str) or evidence not in EVIDENCE_CLASSES:
+            raise ValidationError(
+                f"gate {gate_id} evidence classification must be one of "
+                f"{list(EVIDENCE_CLASSES)}, found {evidence!r}"
+            )
+        if gate_id in gate_evidence:
+            raise ValidationError(f"duplicate gate id: {gate_id}")
+        gate_evidence[gate_id] = evidence
+    product_gates = sorted(
+        gate_id for gate_id, evidence in gate_evidence.items()
+        if evidence == EVIDENCE_PRODUCT
+    )
     for phase in phases:
         if not isinstance(phase, dict) or set(phase) - PHASE_KEYS:
             raise ValidationError("phase entries have unknown keys")
+        status = phase.get("status")
+        if status not in PHASE_STATUSES:
+            raise ValidationError(
+                f"phase {phase.get('id')} status must be one of "
+                f"{list(PHASE_STATUSES)}, found {status!r}"
+            )
+        required = phase.get("required_gates", [])
+        if status == "engineering-green" and not required:
+            raise ValidationError(
+                f"phase {phase.get('id')} is engineering-green but wires no "
+                "required gate (use pending until engineering evidence exists)"
+            )
+        if status == "green":
+            wired_product = [
+                gate_id for gate_id in required
+                if gate_evidence.get(gate_id) == EVIDENCE_PRODUCT
+            ]
+            if not wired_product:
+                raise ValidationError(
+                    f"phase {phase.get('id')} status is green but no "
+                    "product gate is wired: non-product evidence (supporting, "
+                    "static, paperwork, synthetic, corpus-required, "
+                    "infrastructure) can never certify product completion"
+                )
     phase_by_id = {phase.get("id"): phase for phase in phases if isinstance(phase, dict)}
     if phases and set(phase_by_id) != {f"P{number}" for number in range(8)}:
         raise ValidationError("global manifest must enumerate exactly P0 through P7")
@@ -517,34 +581,93 @@ def run_validation(root: Path, manifest_path: Path, selected_phase: str | None) 
                         raise ValidationError(f"tracked corpus changed during validation: {relative}")
                 ok = ok and rc == 0
         passed[gate_id] = ok
-        results.append({"commands": command_results, "id": gate_id, "passed": ok, "writable": writable})
+        results.append({
+            "commands": command_results,
+            "evidence": gate_evidence[gate_id],
+            "id": gate_id,
+            "passed": ok,
+            "writable": writable,
+        })
 
     if selected_ids is not None:
         complete = selected_ids == set(passed) and all(passed.values())
     elif phases:
+        # Product completion requires every phase product-green: a "green"
+        # phase is structurally impossible without a wired product gate
+        # (rejected above), so all-green plus all-gates-passed is the only
+        # shape that can ever complete. engineering-green and pending phases
+        # always leave the plan incomplete.
         complete = all(
             phase.get("status") == "green"
             and all(passed.get(gate_id, False) for gate_id in phase.get("required_gates", []))
             for phase in phases
         )
     else:
-        complete = all(passed.values())
+        complete = all(passed.values()) and bool(product_gates)
+    why_incomplete: list[str] = []
+    if selected_phase is None:
+        for phase in phases:
+            if phase.get("status") != "green":
+                why_incomplete.append(
+                    f"phase {phase.get('id')} status is {phase.get('status')!r},"
+                    " not product-green"
+                )
+        if not product_gates:
+            why_incomplete.append(
+                "manifest wires no product gate; non-product evidence can "
+                "never certify product completion"
+            )
+        failing_gates = sorted(gate_id for gate_id, ok in passed.items() if not ok)
+        if failing_gates:
+            why_incomplete.append("failing gates: " + ", ".join(failing_gates))
     report: dict[str, object] = {
         "bounded": True,
         "containment": "bwrap-unshare-net-pid-ro",
         "corpus_sha256": sha256(json.dumps(corpus_hashes, sort_keys=True).encode()),
+        "evidence": gate_evidence,
         "gates": results,
         "head": head,
         "head_tree": head_tree,
         "manifest_sha256": sha256(raw),
         "offline": True,
+        "phase_product_coverage": {
+            phase.get("id"): sum(
+                1 for gate_id in phase.get("required_gates", [])
+                if gate_evidence.get(gate_id) == EVIDENCE_PRODUCT
+            )
+            for phase in phases
+            if isinstance(phase, dict)
+        },
         "plan_complete": complete if selected_phase is None else False,
-        "schema": "required-gates-report-v1",
+        "product_gates": product_gates,
+        "schema": "required-gates-report-v2",
         "selected_phase": selected_phase,
         "status": "passed" if complete else "failed",
         "tracked_tree_sha256": tree_fingerprint,
         "validator_sha256": sha256(Path(__file__).read_bytes()),
+        "why_incomplete": why_incomplete,
     }
+    if selected_phase is not None:
+        selected = phase_by_id.get(selected_phase, {})
+        selected_required = selected.get("required_gates", []) if isinstance(selected, dict) else []
+        report["phase_verdict"] = {
+            "engineering_complete": all(
+                passed.get(gate_id, False)
+                for gate_id in selected_required
+                if gate_evidence.get(gate_id) != EVIDENCE_PRODUCT
+            ),
+            "phase": selected_phase,
+            "phase_status": selected.get("status") if isinstance(selected, dict) else None,
+            "product_complete": (
+                isinstance(selected, dict)
+                and selected.get("status") == "green"
+                and all(passed.get(gate_id, False) for gate_id in selected_required)
+                and any(
+                    gate_evidence.get(gate_id) == EVIDENCE_PRODUCT
+                    for gate_id in selected_required
+                )
+            ),
+        }
     return report, complete
 
 
@@ -571,7 +694,7 @@ def main() -> int:
             "head": initial_head,
             "offline": True,
             "plan_complete": False,
-            "schema": "required-gates-report-v1",
+            "schema": "required-gates-report-v2",
             "status": "failed",
         }
         complete = False
@@ -582,16 +705,25 @@ def main() -> int:
             "head_tree": report["head_tree"],
             "offline_validation": {"bounded": True, "status": "passed", "validated_at_head": report["head"]},
             "producer": "controller",
+            "product_complete": True,
+            "product_gates": report["product_gates"],
             "required_gates_sha256": report["manifest_sha256"],
             "schema": "plan-complete-v1",
             "validator_sha256": report["validator_sha256"],
         })
-    if complete and arguments.phase is not None and arguments.phase_output:
+    if arguments.phase is not None and arguments.phase_output and "phase_verdict" in report:
+        # required-gates-v2 phase verdicts never claim product completion for
+        # non-product phases: the artifact carries the schema phase-verdict-v2
+        # with an explicit product_complete flag, so a legacy *-COMPLETE path
+        # (or filename) can no longer smuggle a completion claim — the old
+        # phase-complete-v1 markers are non-authoritative residue.
         atomic_json(arguments.phase_output, {
-            "head": report["head"], "phase": arguments.phase,
+            "head": report["head"],
+            "phase": arguments.phase,
             "producer": "required-gates-validator",
             "required_gates_sha256": report["manifest_sha256"],
-            "schema": "phase-complete-v1",
+            "schema": "phase-verdict-v2",
+            **report["phase_verdict"],
         })
     return 0 if complete else 1
 

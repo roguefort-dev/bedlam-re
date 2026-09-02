@@ -52,7 +52,7 @@ def manifest_text(
 ) -> str:
     if p6_gates is None:
         p6_gates = [GATE_ID]
-    lines = ['schema = "required-gates-v1"']
+    lines = ['schema = "required-gates-v2"']
     for number in range(8):
         gates = p6_gates if number == 6 else []
         rendered = ", ".join(f'"{gate}"' for gate in gates)

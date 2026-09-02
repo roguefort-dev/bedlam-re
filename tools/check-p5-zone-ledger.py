@@ -1,18 +1,21 @@
 #!/usr/bin/python3
-"""Validate the P5 per-zone parity ledger against the read-only corpus.
+"""Validate the P5 per-zone ledger against the read-only corpus.
 
 Fail-closed checker for the p5-zone-gate-scaffold required gate
 (docs/required-gates.toml). It validates:
 
-  1. the committed ledger (docs/P5-MISSION-LEDGER.toml) is schema-clean,
-     complete, and internally consistent;
+  1. the committed ledger (docs/P5-MISSION-LEDGER.toml, schema
+     p5-mission-ledger-v2) is schema-clean, complete, and internally
+     consistent;
   2. its mission set equals the corpus set enumerated READ-ONLY from
      game-data/BEDLAM/EDITOR/ZONE*/MISSION*.TOT (exactly the 37 shipped
      missions in the pinned zone shape A:1, B-F:7 each, G:1);
-  3. cross-artifact safety with docs/required-gates.toml: a per-zone
-     completion gate p5-zone-{a..g} may only exist once its zone is fully
-     green in the ledger, and the P5 phase status may only be green once
-     every mission is green.
+  3. cross-artifact safety with docs/required-gates.toml under the D238
+     evidence contract: every supporting_evidence citation names a defined
+     gate; a wired p5-zone-{a..g} parity gate must be cited by its zone's
+     rows (evidence linkage, NOT a product claim); a green (product)
+     disposition must cite at least one product gate; and the P5 phase
+     status may only be green once every mission is green.
 
 game-data is never git-tracked: no corpus path may appear in the gate's
 tracked_paths or corpus policy. This checker READS the corpus at runtime
@@ -28,8 +31,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-LEDGER_SCHEMA = "p5-mission-ledger-v1"
-DISPOSITIONS = ("pending", "green")
+LEDGER_SCHEMA = "p5-mission-ledger-v2"
+DISPOSITIONS = ("unproven", "green")
 # The VERIFIED shipped census (docs/P5-ZONE-GATES.md §2; FORMATS-MISSION §0):
 # ZONEA MISSION1; ZONEB..ZONEF MISSION1..7 each; ZONEG MISSION1.
 PINNED_ZONE_SHAPE = {"A": 1, "B": 7, "C": 7, "D": 7, "E": 7, "F": 7, "G": 1}
@@ -115,7 +118,7 @@ def load_ledger(root: Path) -> tuple[dict, dict[str, dict]]:
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
             raise LedgerError(f"ledger row {index} is not a table")
-        allowed = {"id", "zone", "mission", "disposition", "catalog_refs"}
+        allowed = {"id", "zone", "mission", "disposition", "supporting_evidence", "catalog_refs"}
         unknown = set(row) - allowed
         if unknown:
             raise LedgerError(
@@ -129,6 +132,7 @@ def load_ledger(root: Path) -> tuple[dict, dict[str, dict]]:
         zone = row.get("zone")
         number = row.get("mission")
         disposition = row.get("disposition")
+        supporting = row.get("supporting_evidence")
         refs = row.get("catalog_refs")
         if not isinstance(zone, str) or zone not in PINNED_ZONE_SHAPE:
             raise LedgerError(
@@ -149,6 +153,21 @@ def load_ledger(root: Path) -> tuple[dict, dict[str, dict]]:
             raise LedgerError(
                 f"ledger row id {identifier!r} disagrees with "
                 f"zone/mission ({expected_id!r})"
+            )
+        if not isinstance(supporting, list) or not all(isinstance(e, str) for e in supporting):
+            raise LedgerError(
+                f"ledger row {identifier} supporting_evidence must be an "
+                "array of strings"
+            )
+        for evidence in supporting:
+            if not evidence or evidence.split() != [evidence]:
+                raise LedgerError(
+                    f"ledger row {identifier} supporting_evidence entries "
+                    f"must be non-empty and whitespace-free, found {evidence!r}"
+                )
+        if len(set(supporting)) != len(supporting):
+            raise LedgerError(
+                f"ledger row {identifier} supporting_evidence contains duplicates"
             )
         if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
             raise LedgerError(
@@ -190,7 +209,7 @@ def check_ledger_vs_corpus(by_id: dict[str, dict], found: dict[str, list[int]]) 
 def zone_states(by_id: dict[str, dict]) -> dict[str, dict[str, int]]:
     summary: dict[str, dict[str, int]] = {}
     for letter in sorted(PINNED_ZONE_SHAPE):
-        summary[letter] = {"green": 0, "pending": 0, "total": PINNED_ZONE_SHAPE[letter]}
+        summary[letter] = {"green": 0, "unproven": 0, "total": PINNED_ZONE_SHAPE[letter]}
     for row in by_id.values():
         summary[row["zone"]][row["disposition"]] += 1
     return summary
@@ -206,6 +225,11 @@ def check_manifest_consistency(root: Path, by_id: dict[str, dict]) -> None:
         manifest = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeError, tomllib.TOMLDecodeError) as error:
         raise LedgerError(f"required-gates manifest does not parse: {error}") from error
+    gate_evidence: dict[str, str] = {}
+    for gate in manifest.get("gate", []):
+        if isinstance(gate, dict) and isinstance(gate.get("id"), str):
+            evidence = gate.get("evidence")
+            gate_evidence[gate["id"]] = evidence if isinstance(evidence, str) else ""
     phases = {
         phase.get("id"): phase
         for phase in manifest.get("phase", [])
@@ -217,7 +241,18 @@ def check_manifest_consistency(root: Path, by_id: dict[str, dict]) -> None:
     required = p5.get("required_gates", [])
     if not isinstance(required, list):
         raise LedgerError("P5 required_gates must be an array")
-    # A per-zone completion gate may only be wired once its zone closed.
+    # Every citation names a defined gate (the evidence join).
+    for row in by_id.values():
+        for evidence in row["supporting_evidence"]:
+            if evidence not in gate_evidence:
+                raise LedgerError(
+                    f"ledger row {row['id']} cites unknown gate "
+                    f"{evidence!r} in supporting_evidence"
+                )
+    # A wired p5-zone-{a..g} parity gate must be cited by every mission of
+    # its zone: the wiring proves EVIDENCE LINKAGE, not product completion
+    # (the D238 decoupling — the v1 rule let replay evidence certify the
+    # zone green).
     for gate_id in required:
         if not isinstance(gate_id, str):
             raise LedgerError("P5 required_gates entries must be strings")
@@ -225,16 +260,27 @@ def check_manifest_consistency(root: Path, by_id: dict[str, dict]) -> None:
         if not match:
             continue
         letter = match.group(1).upper()
-        pending = [
+        uncited = [
             identifier
             for identifier, row in by_id.items()
-            if row["zone"] == letter and row["disposition"] != "green"
+            if row["zone"] == letter and gate_id not in row["supporting_evidence"]
         ]
-        if pending:
+        if uncited:
             raise LedgerError(
-                f"manifest wires zone completion gate {gate_id} but ledger "
-                f"ZONE{letter} still has {len(pending)} non-green missions "
-                f"(e.g. {sorted(pending)[0]})"
+                f"manifest wires zone parity gate {gate_id} but "
+                f"{len(uncited)} ZONE{letter} missions do not cite it in "
+                f"supporting_evidence (e.g. {sorted(uncited)[0]})"
+            )
+    # A green (product) disposition must cite product-path evidence: the
+    # v1 greens were certified by replay/oracle evidence alone.
+    for row in by_id.values():
+        if row["disposition"] != "green":
+            continue
+        if not any(gate_evidence.get(e) == "product" for e in row["supporting_evidence"]):
+            raise LedgerError(
+                f"ledger row {row['id']} is green but supporting_evidence "
+                "cites no product gate (non-product evidence can never "
+                "prove a mission's product completion)"
             )
     # The phase status may only be green once every mission is green.
     status = p5.get("status")
@@ -247,7 +293,7 @@ def check_manifest_consistency(root: Path, by_id: dict[str, dict]) -> None:
         if not_green:
             raise LedgerError(
                 f"manifest P5 status is green but {len(not_green)} missions "
-                f"are still pending (e.g. {sorted(not_green)[0]})"
+                f"are not green (e.g. {sorted(not_green)[0]})"
             )
 
 
@@ -278,6 +324,11 @@ def main() -> int:
         + ")"
     )
     print(f"  overall: {total_green}/{len(by_id)} missions green; P5 open")
+    total_unproven = sum(state["unproven"] for state in summary.values())
+    print(
+        f"  dispositions: {total_unproven} unproven, {total_green} green "
+        "(p5-mission-ledger-v2: green requires product-path evidence)"
+    )
     return 0
 
 

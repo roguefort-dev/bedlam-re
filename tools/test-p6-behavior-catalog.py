@@ -86,7 +86,7 @@ def manifest_text(
 ) -> str:
     if p6_gates is None:
         p6_gates = ["p6-modernization-scaffold"]
-    lines = ['schema = "required-gates-v1"']
+    lines = ['schema = "required-gates-v2"']
     for number in range(8):
         status = "green" if number < 6 else (p6_status if number == 6 else "pending")
         gates = p6_gates if number == 6 else []

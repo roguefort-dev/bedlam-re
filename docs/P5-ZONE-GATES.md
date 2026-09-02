@@ -93,25 +93,42 @@ fails closed on any drift.
 ## 3. The per-mission disposition ledger
 
 Committed artifact: **`docs/P5-MISSION-LEDGER.toml`**, schema
-`p5-mission-ledger-v1`. One `[[mission]]` row per shipped mission, keyed by
-`id = "ZONE{L}-MISSION{n}"` with `zone` ∈ A..G and `mission` ≥ 1.
+`p5-mission-ledger-v2` (the D238 revocation of `p5-mission-ledger-v1`;
+see the v2 note at the end of this section). One `[[mission]]` row per
+shipped mission, keyed by `id = "ZONE{L}-MISSION{n}"` with `zone` ∈ A..G
+and `mission` ≥ 1.
 
-- **disposition** ∈ `{pending, green}` — nothing else. Every mission starts
-  `pending`. A mission flips to `green` only when its zone's acceptance shape
-  (§1 above) holds for it. A mission that fails verification simply stays
-  `pending` (there is no `failed` state: the ledger records closure, not
-  attempt history — history lives in `.state/NEXT.md` Done entries and
-  DECISIONS.md).
+- **disposition** ∈ `{unproven, green}` — nothing else. Every mission
+  starts `unproven`. A mission flips to `green` only on natural
+  product-path evidence (a product gate cited in `supporting_evidence`).
+  A mission that fails verification simply stays `unproven` (there is no
+  `failed` state: the ledger records closure, not attempt history —
+  history lives in `.state/NEXT.md` Done entries and DECISIONS.md).
+- **supporting_evidence** — the preserved non-product evidence for the
+  mission (v1-era replay/oracle parity: the `p5-zone-{a..g}` gates).
+  Citations must name defined gates in `docs/required-gates.toml`; a
+  wired `p5-zone-{a..g}` gate must be cited by every mission of its
+  zone (evidence linkage). Non-product citations can never justify a
+  `green` disposition.
 - **catalog_refs** — list of original-behavior catalog entry ids observed on
   that mission (the per-bug catalog is the PLAN §6 P5 artifact that feeds P6
-  triage). Empty while `pending` work has not begun; a `green` mission may
+  triage). Empty while disposition work has not begun; a `green` mission may
   legitimately carry zero refs (no divergences found). Refs are non-empty,
   unique, whitespace-free strings.
 - Zone completion status is DERIVED (all missions of the zone `green`), never
   stored — one source of truth per fact.
 - Schema evolution: adding fields or dispositions bumps the schema string and
-  the checker together (fail-closed on unknown schema), the required-gates-v1
+  the checker together (fail-closed on unknown schema), the required-gates-v2
   pattern.
+
+**v2 note (D238, 2026-09-02):** under v1, `green` was granted by zone-parity
+replay/oracle evidence; the audited completion review found none of that is
+natural product-path proof (headless evidence injects
+`SceneAction::MissionComplete`; production `MissionScene::tick` returns no
+outcome), so all 37 v1 greens were revoked to `unproven` and the parity
+evidence moved into `supporting_evidence`. The historical v1 record (37/37
+green, per-zone acceptance tables in §7–§13) remains accurate as PARITY
+history — it is not product completion.
 
 The ledger is machine-checked by `tools/check-p5-zone-ledger.py`
 (fail-closed; see §4) and human-audited via its per-zone summary output.
@@ -132,36 +149,44 @@ The ledger is machine-checked by `tools/check-p5-zone-ledger.py`
 
 Checker consistency rules (all fail-closed):
 
-1. Ledger schema must be `p5-mission-ledger-v1`.
+1. Ledger schema must be `p5-mission-ledger-v2`.
 2. The corpus enumeration must yield exactly the pinned zone shape
    (A:1, B–F:7 each, G:1; total 37). Corpus drift (a mission added or
    removed anywhere in `game-data/BEDLAM/EDITOR`) fails loudly until the
    ledger and the pin are deliberately re-baselined.
 3. Ledger rows ↔ corpus missions must match exactly (missing row, extra
    row, duplicate id, id/zone/mission mismatch all fail).
-4. Dispositions must be `pending` or `green`; `catalog_refs` entries
-   non-empty, unique, whitespace-free.
-5. Cross-artifact safety with the manifest: a per-zone completion gate id
-   `p5-zone-{a..g}` present in P5's `required_gates` requires that zone to
-   be fully `green` in the ledger (a zone gate can never be wired ahead of
-   its closure), and the manifest's P5 phase `status = "green"` requires
-   ALL 37 missions `green` (premature phase flips fail even with an empty
-   gate list).
+4. Dispositions must be `unproven` or `green`; `supporting_evidence` and
+   `catalog_refs` entries non-empty, unique, whitespace-free.
+5. Cross-artifact safety with the manifest (D238 semantics): every
+   `supporting_evidence` citation must name a gate defined in
+   `docs/required-gates.toml`; a per-zone parity gate id `p5-zone-{a..g}`
+   present in P5's `required_gates` must be cited by every mission of its
+   zone in `supporting_evidence` (evidence LINKAGE — under v1 this rule
+   instead demanded zone `green`, which let replay evidence certify
+   completion); a `green` row must cite at least one gate classified
+   `evidence = "product"`; and the manifest's P5 phase `status = "green"`
+   requires ALL 37 missions `green` (premature phase flips fail even with
+   an empty gate list).
 6. game-data paths must NOT appear in the gate's `tracked_paths` or
    `corpus` (game-data is never git-tracked); the checker reads the corpus
    READ-ONLY at runtime, the same contract `MANIFEST.sha256` already
    enforces.
 
-**Per-zone completion gates land as each zone closes:** when a zone's
-missions are all flipped `green`, a `p5-zone-{a..g}` gate is added to P5's
+**Per-zone completion gates land as each zone closes (the v1-era landing
+rule, kept as history):** when a zone's missions were all flipped `green`
+under v1 parity evidence, a `p5-zone-{a..g}` gate was added to P5's
 `required_gates` carrying that zone's executable acceptance evidence (the
-zone's scripted-flow/T1/spot-check commands). Rule 5 keeps wiring and ledger
-consistent in both directions of time.
+zone's scripted-flow/T1/spot-check commands). All seven landed that way and
+remain wired; under v2 they are classified `corpus-required` supporting
+evidence cited per-row, and rule 5 binds wiring to citation linkage instead
+of zone closure.
 
 **P5 phase status stays `pending` until every zone closes** (validator
-semantics + rule 5). P5 completion emits only the HEAD/manifest-bound
-`.state/P5-COMPLETE` via the validator's `--phase P5` path; global plan
-completion stays controller-owned.
+semantics + rule 5; under required-gates-v2 the flip additionally requires
+a wired product gate). P5 completion emits a `phase-verdict-v2` artifact
+via the validator's `--phase P5` path whose `product_complete` flag is the
+completion authority; global plan completion stays controller-owned.
 
 ---
 

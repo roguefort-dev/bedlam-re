@@ -1,241 +1,319 @@
-schema = "p5-mission-ledger-v1"
+schema = "p5-mission-ledger-v2"
 
-# P5 per-mission parity disposition ledger (schema p5-mission-ledger-v1).
-# Format specified by docs/P5-ZONE-GATES.md (D175). Every mission starts
-# 'pending'; 'green' requires the zone acceptance shape of PLAN §6 P5 to
-# hold for the mission. Zone status is DERIVED (all missions green), never
-# stored. catalog_refs = original-behavior catalog entry ids (P6 triage
-# feed); empty until disposition work begins.
-# Enumerated READ-ONLY from game-data/BEDLAM/EDITOR/ZONE*/MISSION*.TOT
-# (37 missions: ZONEA M1; ZONEB..F M1-7 each; ZONEG M1; MANIFEST.sha256
-# clean before and after, 2026-08-27). Machine-checked by
-# tools/check-p5-zone-ledger.py (fail-closed).
+# P5 per-mission ledger (schema p5-mission-ledger-v2, the D238 revocation
+# of schema p5-mission-ledger-v1). v1's `green` let replay/oracle parity
+# evidence certify missions complete without any natural product-path
+# journey; the audit found all 37 such greens unproven as product claims
+# (headless evidence injects SceneAction::MissionComplete and production
+# MissionScene::tick returns no outcome). v2 splits the two concerns:
+#   disposition         the PRODUCT claim — "unproven" until a natural
+#                       product journey proves the mission; "green" again
+#                       only with product-path evidence (checker-enforced:
+#                       a green row must cite a product gate in
+#                       supporting_evidence).
+#   supporting_evidence the preserved v1-era parity evidence (the
+#                       p5-zone-{a..g} replay/oracle gates) — still real,
+#                       still required-gates-manifest evidence, and never
+#                       sufficient for a product green.
+# catalog_refs = original-behavior catalog entry ids (P6 triage feed).
+# Zone status stays DERIVED, never stored. Machine-checked by
+# tools/check-p5-zone-ledger.py (fail-closed); mission set enumerated
+# READ-ONLY from game-data/BEDLAM/EDITOR/ZONE*/MISSION*.TOT (37 missions:
+# ZONEA M1; ZONEB..F M1-7 each; ZONEG M1; MANIFEST.sha256 clean before and
+# after, 2026-09-02).
 
 [[mission]]
 id = "ZONEA-MISSION1"
 zone = "A"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-a"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONEB-MISSION1"
 zone = "B"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION2"
 zone = "B"
 mission = 2
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION3"
 zone = "B"
 mission = 3
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION4"
 zone = "B"
 mission = 4
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION5"
 zone = "B"
 mission = 5
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION6"
 zone = "B"
 mission = 6
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEB-MISSION7"
 zone = "B"
 mission = 7
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-b"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONEC-MISSION1"
 zone = "C"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION2"
 zone = "C"
 mission = 2
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION3"
 zone = "C"
 mission = 3
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION4"
 zone = "C"
 mission = 4
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION5"
 zone = "C"
 mission = 5
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION6"
 zone = "C"
 mission = 6
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEC-MISSION7"
 zone = "C"
 mission = 7
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-c"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONED-MISSION1"
 zone = "D"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION2"
 zone = "D"
 mission = 2
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION3"
 zone = "D"
 mission = 3
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION4"
 zone = "D"
 mission = 4
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION5"
 zone = "D"
 mission = 5
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION6"
 zone = "D"
 mission = 6
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONED-MISSION7"
 zone = "D"
 mission = 7
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-d"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONEE-MISSION1"
 zone = "E"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION2"
 zone = "E"
 mission = 2
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION3"
 zone = "E"
 mission = 3
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION4"
 zone = "E"
 mission = 4
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION5"
 zone = "E"
 mission = 5
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION6"
 zone = "E"
 mission = 6
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEE-MISSION7"
 zone = "E"
 mission = 7
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-e"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONEF-MISSION1"
 zone = "F"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION2"
 zone = "F"
 mission = 2
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION3"
 zone = "F"
 mission = 3
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION4"
 zone = "F"
 mission = 4
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION5"
 zone = "F"
 mission = 5
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION6"
 zone = "F"
 mission = 6
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
+
 [[mission]]
 id = "ZONEF-MISSION7"
 zone = "F"
 mission = 7
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-f"]
 catalog_refs = []
 
 [[mission]]
 id = "ZONEG-MISSION1"
 zone = "G"
 mission = 1
-disposition = "green"
+disposition = "unproven"
+supporting_evidence = ["p5-zone-g"]
 catalog_refs = []

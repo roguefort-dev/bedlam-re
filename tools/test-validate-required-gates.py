@@ -75,26 +75,53 @@ class ValidatorTests(unittest.TestCase):
         env: dict[str, str] | None = None,
         cwd: Path | None = None,
         report: Path | None = None,
+        phase: str | None = None,
+        phase_output: Path | None = None,
     ) -> tuple[int, dict]:
         report = report or root / "report.json"
+        command = [sys.executable, str(VALIDATOR), "--root", str(root), "--report", str(report)]
+        if phase is not None:
+            command.extend(["--phase", phase])
+        if phase_output is not None:
+            command.extend(["--phase-output", str(phase_output)])
         result = subprocess.run(
-            [sys.executable, str(VALIDATOR), "--root", str(root), "--report", str(report)],
+            command,
             env=env,
             cwd=str(cwd or root),
             timeout=60,
         )
         return result.returncode, json.loads(report.read_text())
 
+    @staticmethod
+    def full_manifest(
+        phases: list[tuple[str, list[str]]],
+        gates: list[tuple[str, str]],
+    ) -> str:
+        """An eight-phase P0..P7 v2 manifest with explicit evidence classes."""
+        blocks = ['schema="required-gates-v2"\n']
+        for number, (status, required) in enumerate(phases):
+            blocks.append(
+                "[[phase]]\nid=\"P%d\"\nstatus=\"%s\"\nrequired_gates=[%s]\n\n"
+                % (number, status, ", ".join('"%s"' % gate_id for gate_id in required))
+            )
+        for gate_id, evidence in gates:
+            blocks.append(
+                "[[gate]]\nevidence=\"%s\"\nid=\"%s\"\n"
+                "command=[\"/usr/bin/true\"]\ntimeout_seconds=2\n\n" % (evidence, gate_id)
+            )
+        return "".join(blocks)
+
     def test_pass_is_deterministic_and_head_bound(self):
-        root = self.fixture('schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/test","-f","ok"]\ntimeout_seconds=2\n', {"ok": ""})
+        root = self.fixture('schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/test","-f","ok"]\ntimeout_seconds=2\n', {"ok": ""})
         rc, first = self.run_validator(root)
         rc2, second = self.run_validator(root)
         self.assertEqual((rc, rc2), (0, 0))
         self.assertEqual(first, second)
+        self.assertEqual(first["schema"], "required-gates-report-v2")
         self.assertTrue(first["plan_complete"])
 
     def test_missing_corpus_fails_closed(self):
-        root = self.fixture('schema="required-gates-v1"\n[[gate]]\nid="corpus"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\ncorpus=["missing.bin"]\n')
+        root = self.fixture('schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="corpus"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\ncorpus=["missing.bin"]\n')
         rc, report = self.run_validator(root)
         self.assertNotEqual(rc, 0)
         self.assertIn("not tracked", report["error"])
@@ -105,12 +132,12 @@ class ValidatorTests(unittest.TestCase):
             '["cargo","test"]',
             '["cargo","test","--locked"]',
         ):
-            root = self.fixture(f'schema="required-gates-v1"\n[[gate]]\nid="bad"\ncommand={command}\ntimeout_seconds=2\n')
+            root = self.fixture(f'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="bad"\ncommand={command}\ntimeout_seconds=2\n')
             rc, _report = self.run_validator(root)
             self.assertNotEqual(rc, 0)
 
     def test_dirty_required_path_fails(self):
-        root = self.fixture('schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\ntracked_paths=["proof.txt"]\n', {"proof.txt": "original\n"})
+        root = self.fixture('schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\ntracked_paths=["proof.txt"]\n', {"proof.txt": "original\n"})
         (root / "proof.txt").write_text("changed\n")
         rc, report = self.run_validator(root)
         self.assertNotEqual(rc, 0)
@@ -118,7 +145,7 @@ class ValidatorTests(unittest.TestCase):
 
     def test_missing_head_tracked_corpus_manifest_fails_closed(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
         )
         subprocess.run([GIT, "-C", str(root), "rm", "-q", "MANIFEST.sha256"], check=True)
         subprocess.run([GIT, "-C", str(root), "commit", "-qm", "remove manifest"], check=True)
@@ -128,14 +155,14 @@ class ValidatorTests(unittest.TestCase):
 
     def test_commands_require_absolute_allowlisted_executables(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="relative"\ncommand=["true"]\ntimeout_seconds=2\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="relative"\ncommand=["true"]\ntimeout_seconds=2\n'
         )
         rc, _report = self.run_validator(root)
         self.assertNotEqual(rc, 0)
 
     def test_path_cannot_select_a_malicious_executable(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="python"\ncommand=["python3","tools/gate.py"]\ntimeout_seconds=2\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="python"\ncommand=["python3","tools/gate.py"]\ntimeout_seconds=2\n',
             {"tools/gate.py": "raise SystemExit(0)\n"},
         )
         malicious = root / "malicious-bin"
@@ -163,7 +190,7 @@ class ValidatorTests(unittest.TestCase):
         ]
         script = "import os\nraise SystemExit(any(os.environ.get(k) for k in " + repr(variables) + "))\n"
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="env"\ncommand=["/usr/bin/python3","tools/env_gate.py"]\ntimeout_seconds=2\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="env"\ncommand=["/usr/bin/python3","tools/env_gate.py"]\ntimeout_seconds=2\n',
             {"tools/env_gate.py": script},
         )
         env = dict(os.environ)
@@ -174,7 +201,7 @@ class ValidatorTests(unittest.TestCase):
 
     def test_dirty_reachable_gate_script_never_executes(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="script"\ncommand=["/bin/bash","tools/gate.sh"]\ntimeout_seconds=2\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="script"\ncommand=["/bin/bash","tools/gate.sh"]\ntimeout_seconds=2\n',
             {"tools/gate.sh": "#!/bin/bash\nexit 0\n"},
         )
         sentinel = root / "dirty-script-ran"
@@ -185,7 +212,7 @@ class ValidatorTests(unittest.TestCase):
 
     def test_tracked_corpus_is_rechecked_after_each_command(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="corpus"\ncommand=["/bin/bash","tools/mutate.sh"]\ntimeout_seconds=2\ncorpus=["corpus.bin"]\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="corpus"\ncommand=["/bin/bash","tools/mutate.sh"]\ntimeout_seconds=2\ncorpus=["corpus.bin"]\n',
             {
                 "corpus.bin": "original\n",
                 "tools/mutate.sh": "#!/bin/bash\nprintf changed > corpus.bin\n",
@@ -197,7 +224,7 @@ class ValidatorTests(unittest.TestCase):
 
     def test_head_is_rechecked_after_commands(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="head"\ncommand=["/bin/bash","tools/commit.sh"]\ntimeout_seconds=2\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="head"\ncommand=["/bin/bash","tools/commit.sh"]\ntimeout_seconds=2\n',
             {
                 "code.txt": "before\n",
                 "tools/commit.sh": (
@@ -218,7 +245,7 @@ class ValidatorTests(unittest.TestCase):
 
     def test_nested_smoke_cargo_is_locked_and_offline(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="smoke"\ncommand=["/bin/bash","tools/smoke.sh"]\ntimeout_seconds=2\n',
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="smoke"\ncommand=["/bin/bash","tools/smoke.sh"]\ntimeout_seconds=2\n',
             {"tools/smoke.sh": "#!/bin/bash\ncargo test\n"},
         )
         malicious = root / "cargo-bin"
@@ -259,7 +286,7 @@ class ValidatorTests(unittest.TestCase):
                     + ("sleep 30\n" if mode == "timeout" else "exit 0\n")
                 )
                 root = self.fixture(
-                    f'schema="required-gates-v1"\n[[gate]]\nid="{mode}"\ncommand=["/bin/bash","tools/group.sh"]\ntimeout_seconds=1\n',
+                    f'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="{mode}"\ncommand=["/bin/bash","tools/group.sh"]\ntimeout_seconds=1\n',
                     {"tools/group.sh": body},
                 )
                 rc, _report = self.run_validator(root)
@@ -311,7 +338,7 @@ if (echo x > ../../tracked-roots.txt) 2>/dev/null; then exit 7; fi
 exit 0
 """
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="w"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="w"\n'
             'command=["/bin/bash","tools/w.sh"]\ntimeout_seconds=30\n'
             'writable=["runtime/out"]\n',
             {"tools/w.sh": script},
@@ -324,7 +351,7 @@ exit 0
 
     def test_writable_dir_must_be_gitignored_and_untracked(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="w"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="w"\n'
             'command=["/usr/bin/true"]\ntimeout_seconds=2\n'
             'writable=["runtime/out"]\n',
             {"runtime/out/keep.txt": "tracked\n"},
@@ -340,7 +367,7 @@ exit 0
         # the controller's 128 MiB binding cap, not the 16 MiB tracked
         # content cap, or every real validation fails before any gate.
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
         )
         corpus = root / "game-data" / "BIG0.WAV"
         corpus.parent.mkdir(parents=True, exist_ok=True)
@@ -359,7 +386,7 @@ exit 0
 
     def test_manifest_corpus_over_controller_cap_fails_closed(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
         )
         corpus = root / "game-data" / "HUGE.WAV"
         corpus.parent.mkdir(parents=True, exist_ok=True)
@@ -378,7 +405,7 @@ exit 0
 
     def test_cargo_gate_requires_the_account_cache(self):
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="c"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="c"\n'
             'command=["/usr/bin/cargo","test","--locked","--offline"]\n'
             "timeout_seconds=30\n"
         )
@@ -393,7 +420,7 @@ exit 0
         # read-only root, and the declared writable directory all hold.
         probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="env-probe"\n'
             'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
             'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
             {"tools/check-gates-env.py": probe},
@@ -411,7 +438,7 @@ exit 0
         # check-gates-env tolerates exactly that chain, nothing else.
         probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="env-probe"\n'
             'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
             'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
             {"tools/check-gates-env.py": probe},
@@ -431,7 +458,7 @@ exit 0
         # complete_from_head passes output paths beside the checkout.
         probe = (Path(__file__).with_name("check-gates-env.py")).read_text()
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="env-probe"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="env-probe"\n'
             'command=["/usr/bin/python3","tools/check-gates-env.py"]\n'
             'timeout_seconds=30\nwritable=["runtime/env-probe-out"]\n',
             {"tools/check-gates-env.py": probe},
@@ -492,7 +519,7 @@ exit 0
             "dir=pathlib.Path(os.environ['HOME'])))\n"
             "(root / 'docs').mkdir()\n"
             "(root / 'docs/required-gates.toml').write_text(\n"
-            "    'schema=\"required-gates-v1\"\\n[[gate]]\\nid=\"ok\"\\n'\n"
+            "    'schema=\"required-gates-v2\"\\n[[gate]]\\nevidence=\"product\"\\nid=\"ok\"\\n'\n"
             "    'command=[\"/usr/bin/true\"]\\ntimeout_seconds=10\\n')\n"
             "anchor = root / 'anchor.txt'\n"
             "anchor.write_text('anchor\\n')\n"
@@ -514,7 +541,7 @@ exit 0
             "raise SystemExit(0 if report.get('plan_complete') else 1)\n"
         )
         root = self.fixture(
-            'schema="required-gates-v1"\n[[gate]]\nid="nested"\n'
+            'schema="required-gates-v2"\n[[gate]]\nevidence="product"\nid="nested"\n'
             'command=["/usr/bin/python3","tools/nested.py"]\ntimeout_seconds=60\n',
             {
                 "tools/nested.py": nested,
@@ -524,6 +551,168 @@ exit 0
         rc, report = self.run_validator(root)
         self.assertEqual(rc, 0, report)
         self.assertTrue(report["plan_complete"])
+
+
+    # ---- required-gates-v2 evidence contract (D238) -------------------
+    # The v2 false-green rejection: the OLD manifest shape — no product
+    # gates, corpus-skip-prone replay evidence, synthetic journeys — can
+    # NEVER yield product or global completion, no matter how green its
+    # commands or statuses claim to be. No existing repository gate is
+    # relabeled product to make anything here pass: the only completing
+    # shape is a synthetic fixture that wires a future product gate.
+
+    NON_PRODUCT_CLASSES = (
+        "supporting", "static", "paperwork", "synthetic", "corpus-required", "infrastructure",
+    )
+
+    def test_v1_manifest_schema_is_revoked(self):
+        root = self.fixture(
+            'schema="required-gates-v1"\n[[gate]]\nevidence="product"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+        )
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("required-gates-v2", report["error"])
+        self.assertIn("revoked", report["error"])
+        self.assertFalse(report["plan_complete"])
+
+    def test_gate_requires_a_known_evidence_classification(self):
+        for evidence in ("artifact", ""):
+            root = self.fixture(
+                'schema="required-gates-v2"\n[[gate]]\nevidence="%s"\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n' % evidence
+            )
+            rc, report = self.run_validator(root)
+            self.assertNotEqual(rc, 0, evidence)
+            self.assertIn("evidence classification", report["error"])
+        root = self.fixture(
+            'schema="required-gates-v2"\n[[gate]]\nid="ok"\ncommand=["/usr/bin/true"]\ntimeout_seconds=2\n'
+        )
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("evidence classification", report["error"])
+
+    def test_phase_status_vocabulary_is_enforced(self):
+        pending = [("pending", [])] * 8
+        for status, legal in (("bogus", False), ("complete", False)):
+            root = self.fixture(
+                self.full_manifest([("pending", [])] * 7 + [(status, ["g0"])], [("g0", "product")])
+            )
+            rc, report = self.run_validator(root)
+            self.assertNotEqual(rc, 0, status)
+            self.assertIn("status must be one of", report["error"])
+        root = self.fixture(
+            self.full_manifest([("engineering-green", ["g0"])] + pending[1:], [("g0", "supporting")])
+        )
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertFalse(report["plan_complete"])
+        self.assertTrue(any("engineering-green" in reason for reason in report["why_incomplete"]))
+
+    def test_green_phase_without_product_gate_is_rejected_for_every_non_product_class(self):
+        for evidence in self.NON_PRODUCT_CLASSES:
+            with self.subTest(evidence=evidence):
+                root = self.fixture(
+                    self.full_manifest(
+                        [("green", ["g0"])] + [("pending", [])] * 7,
+                        [("g0", evidence)],
+                    )
+                )
+                rc, report = self.run_validator(root)
+                self.assertNotEqual(rc, 0)
+                self.assertIn("no product gate is wired", report["error"])
+                self.assertFalse(report["plan_complete"])
+
+    def test_old_manifest_shape_never_yields_product_completion(self):
+        # The pre-D238 lie, replayed as a fixture: P0-P3 gateless, P4-P7
+        # wired with the six non-product classes, every command passing,
+        # every status flipped green. v2 rejects it outright.
+        classes = self.NON_PRODUCT_CLASSES
+        gates = [("g%d" % number, classes[number % len(classes)]) for number in range(4)]
+        phases = [("green", [])] * 4 + [("green", [gate_id]) for gate_id, _ in gates]
+        root = self.fixture(self.full_manifest(phases, gates))
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertFalse(report["plan_complete"])
+        self.assertIn("no product gate is wired", report["error"])
+
+    def test_all_passing_non_product_gates_never_complete_the_plan(self):
+        # The strongest legal non-product claim: every phase
+        # engineering-green, every command rc=0. The plan stays open and
+        # the report says exactly why.
+        gates = [("g%d" % number, "supporting") for number in range(8)]
+        phases = [("engineering-green", ["g%d" % number]) for number in range(8)]
+        root = self.fixture(self.full_manifest(phases, gates))
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertFalse(report["plan_complete"])
+        self.assertEqual(report["product_gates"], [])
+        self.assertTrue(any("no product gate" in reason for reason in report["why_incomplete"]))
+        self.assertTrue(all(coverage == 0 for coverage in report["phase_product_coverage"].values()))
+
+    def test_product_gates_green_forward_shape_completes(self):
+        # The one shape that can ever complete: every phase product-green
+        # with a wired product gate, every command passing.
+        gates = [("g%d" % number, "product") for number in range(8)]
+        phases = [("green", ["g%d" % number]) for number in range(8)]
+        root = self.fixture(self.full_manifest(phases, gates))
+        rc, report = self.run_validator(root)
+        self.assertEqual(rc, 0, report)
+        self.assertTrue(report["plan_complete"])
+        self.assertEqual(len(report["product_gates"]), 8)
+        self.assertEqual(report["gates"][0]["evidence"], "product")
+        self.assertEqual(report["why_incomplete"], [])
+        self.assertEqual(report["phase_product_coverage"], {"P%d" % number: 1 for number in range(8)})
+
+    def test_engineering_green_phase_verdict_never_claims_completion(self):
+        # A bounded --phase run over an engineering-green phase writes a
+        # phase-verdict-v2 artifact with product_complete false — even when
+        # the output path is a legacy *-COMPLETE filename, the content
+        # defeats the name. The old phase-complete-v1 authority is gone.
+        root = self.fixture(
+            self.full_manifest(
+                [("pending", [])] * 7 + [("engineering-green", ["g7"])],
+                [("g7", "supporting")],
+            )
+        )
+        phase_output = root / "P7-COMPLETE"
+        rc, report = self.run_validator(root, phase="P7", phase_output=phase_output)
+        self.assertEqual(rc, 0, report)
+        self.assertFalse(report["plan_complete"])
+        verdict = json.loads(phase_output.read_text())
+        self.assertEqual(verdict["schema"], "phase-verdict-v2")
+        self.assertEqual(verdict["phase"], "P7")
+        self.assertEqual(verdict["phase_status"], "engineering-green")
+        self.assertTrue(verdict["engineering_complete"])
+        self.assertFalse(verdict["product_complete"])
+
+    def test_legacy_completion_markers_are_non_authoritative(self):
+        # v1-era .state residue — PLAN-COMPLETE, P4..P7-COMPLETE, an old
+        # report claiming a passed plan — must not move any v2 verdict:
+        # the validator derives everything from tracked HEAD content and
+        # leaves the residue byte-for-byte intact.
+        root = self.fixture(
+            self.full_manifest([("pending", [])] * 8, [("g0", "supporting")])
+        )
+        state = root / ".state"
+        state.mkdir()
+        legacy = {
+            "PLAN-COMPLETE": '{"schema":"plan-complete-v1","status":"accepted"}',
+            "P4-COMPLETE": '{"schema":"phase-complete-v1","phase":"P4"}',
+            "P5-COMPLETE": '{"schema":"phase-complete-v1","phase":"P5"}',
+            "P6-COMPLETE": '{"schema":"phase-complete-v1","phase":"P6"}',
+            "P7-COMPLETE": '{"schema":"phase-complete-v1","phase":"P7"}',
+            "required-gates-report.json": '{"schema":"required-gates-report-v1","status":"passed","plan_complete":true}',
+        }
+        before = {}
+        for name, contents in legacy.items():
+            marker = state / name
+            marker.write_text(contents + "\n")
+            before[name] = marker.read_bytes()
+        rc, report = self.run_validator(root)
+        self.assertNotEqual(rc, 0)
+        self.assertFalse(report["plan_complete"])
+        self.assertEqual(report["schema"], "required-gates-report-v2")
+        for name, raw in before.items():
+            self.assertEqual((state / name).read_bytes(), raw, name)
 
 
 if __name__ == "__main__":
