@@ -1,5 +1,24 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-02 `required-gates-v2-contract` COMPLETE (audited
+    pause-checkpoint slice 1; substantive commit f3f9ad8 plus its
+    bookkeeping commit, both PUSHED): THE FALSE-COMPLETION REVOCATION
+    (DECISIONS.md D238) — required-gates v2 evidence classes on all 37
+    gates (ZERO product gates), P0-P6 statuses pending, P7
+    engineering-green, GLOBAL PRODUCT STATUS: INCOMPLETE AND
+    UNCERTIFIED (product completion is structurally impossible until
+    real product-path evidence lands; the v1 manifest schema is refused
+    outright). The 37 P5 mission rows are UNPROVEN
+    (p5-mission-ledger-v2) with the v1 parity evidence preserved
+    per-row in supporting_evidence. Legacy .state/P4..P7-COMPLETE
+    markers and pre-D238 gates reports are non-authoritative residue:
+    nothing reads them, and phase verdicts now carry phase-verdict-v2
+    with an explicit product_complete flag. The required queue carries
+    the seven-unit migration backlog with the scheduler-foundation
+    fingerprint-cache tracer first; with the queue nonempty the
+    controller's completion branch cannot fire, so intentionally-red
+    product gates can never beacon completion-missing.
+
   - 2026-08-28 `p7-phase-close` COMPLETE (worker 78919433
     claim 1, commit 97fb49e, PUSHED, plus this bookkeeping
     commit): P7 CLOSED IN THE MANIFEST — docs/required-gates.toml
