@@ -1,5 +1,15 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-06 interactive continuation, working alone with legacy workers
+    paused at the user's request. Commits 0b9e96d, 1510eac, 39e66fb repair
+    mission pointer alignment, title backdrop/palette, and shared production
+    scene lifecycle. Original EXD/DOSBox play reached Boot Camp via mission
+    room and Auto equipment, then observed ground movement and tutorial text.
+    The remaster still has blank selection screens and ignores empty-ground
+    clicks. Queue head: mission-room-journey-v1. Product phase statuses and
+    mission ledger remain unproven; these repairs do not certify completion.
+    Evidence and validation: docs/PLAYTEST-2026-09-06.md, D241-D243.
+
   - 2026-09-02 `queue-synthesis-v1` COMPLETE (worker c5b582e3 claim 1
     interrupted provider-side by a rate limit, rc=137 progress=0, work
     complete on disk but uncommitted; WIP adopted, verified, and
