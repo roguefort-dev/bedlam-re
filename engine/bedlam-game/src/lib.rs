@@ -19,6 +19,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod armoury;
 pub mod boot;
 pub mod brief;
 pub mod config;

@@ -204,3 +204,11 @@ row animation to zero, then subtracts spend from balance. CANCEL at
 0x442927..0x442974 clears selection without touching balance or owned rows.
 These observations are transaction evidence, not completion of the remaster
 shop: rendering, production integration and equivalent live input remain.
+
+The Rust armoury catalog now contains all 35 authored items and their category
+geometry. Availability takes explicit campaign flags and mode/zone inputs;
+it does not invent a campaign unlock progression. Tests cover the original
+Boot Camp Needler popup, transient nonzero flags, final-zone overrides,
+scanner restrictions and multiplayer exclusions. Catalog tests, release
+clippy/all-targets and fmt pass; corpus manifest verified. The catalog is a
+prerequisite module, not yet the production shop or a completed queue item.
