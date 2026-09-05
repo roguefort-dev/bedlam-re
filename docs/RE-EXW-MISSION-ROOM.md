@@ -280,3 +280,13 @@ playback is still required for the animation-enabled path.
 One real-corpus raster test passes across all category pages and the
 pending purchase display; release clippy/all-targets and fmt pass. The
 corpus manifest was verified around preview and test reads.
+
+[verified] Owned rows in FUN_00440287 use TINYFONT at weapon
+(538,342+10*slot), equipment (547,417+10*slot). Color table 0x454ca0
+is [4,64,74,58,42,128,160,158,1,207], indexed by row animation word +4,
+which advances toward 9. Weapon icon counter +12 advances from 1 to 12;
+WEAPICON entry is category*12+counter-1. Its position is
+x=[318,92,546,156,484,236,406][slot]-29,
+y=[89,145,145,202,202,181,181][slot]-27 (tables 0x456c0c/0x456c28,
+draw 0x440307..341). Equipment has text but no icon in this drawer.
+These counters are presentation state; painting must not advance them.
