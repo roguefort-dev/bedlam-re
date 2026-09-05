@@ -223,3 +223,13 @@ scanner items (8,3)/(8,4); plus checks total spend <= balance first.
 Equipment same-name selection reuses its slot, and BUY replaces its amount
 and paid word rather than accumulating or refunding the previous purchase
 (0x443899..8ac and 0x44270f..785). This original behavior is retained.
+
+Manual transactions now have a Rust model separating the pending cart from
+balance and the seven weapon/two equipment rows. The observed 3500-credit
+Needler buy/sell/cancel sequence passes as a behavioral regression. Additional
+checks cover one-pack minimum, affordability, scanner mutex/quantity, duplicate
+weapons, same-equipment replacement and the entry money floor. Persisted amount
+and paid fields retain the original word truncation. Four focused transaction
+tests, release clippy/all-targets and fmt pass. This module does not yet own
+rendering, input debounce, animation-ready DONE gating, Auto or mission transfer;
+those remain necessary before the shop can satisfy the production journey.
