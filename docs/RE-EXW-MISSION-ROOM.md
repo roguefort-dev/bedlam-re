@@ -390,3 +390,14 @@ attempts, and that a failed top-up leaves 100 credits even though the
 Needler could still buy ammunition. Six transaction tests, release
 clippy/all-targets and fmt pass. The RNG source itself, Auto animation ages
 and input dispatch remain to connect; no live Auto parity is claimed yet.
+
+[verified] Secondary RNG 0x4029b6's byte shuffle and RCR/ADD/ADC sequence
+is state = state*129 + 0x361962e9, wrapping at 32 bits; returned AX is
+the new high word. Bounded helper 0x41ec29 uses
+min((AX & 32767)/(32768/bound-1),bound-1), not modulo or rejection.
+The shop now has an explicitly seeded isolated generator with this behavior.
+Tests independently evaluate word/carry arithmetic at boundary seeds and
+check bounded sequences. Two RNG tests, release clippy/all-targets and fmt
+pass. Mission simulation RNG is untouched. Runtime initialization and the
+shared presentation-stream ownership remain integration requirements; this
+does not claim matching live random choices without matching stream state.

@@ -8,3 +8,5 @@ pub mod render;
 pub mod controls;
 
 pub mod input;
+
+pub mod random;
