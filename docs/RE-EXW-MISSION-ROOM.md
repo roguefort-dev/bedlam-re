@@ -212,3 +212,14 @@ Boot Camp Needler popup, transient nonzero flags, final-zone overrides,
 scanner restrictions and multiplayer exclusions. Catalog tests, release
 clippy/all-targets and fmt pass; corpus manifest verified. The catalog is a
 prerequisite module, not yet the production shop or a completed queue item.
+
+[verified] Manual selection checks affordability before availability
+(0x442c6e..c87). Insufficient balance leaves the existing cart alone; an
+unavailable affordable item clears it. Duplicate/full-slot rejection by
+0x4437ea/0x443870 clears selection via 0x442e70 or 0x443065. Selection
+stages one pack. Minus requires resulting amount > 0 (0x442486..48a),
+correcting the earlier zero-floor prose. Both quantity controls reject
+scanner items (8,3)/(8,4); plus checks total spend <= balance first.
+Equipment same-name selection reuses its slot, and BUY replaces its amount
+and paid word rather than accumulating or refunding the previous purchase
+(0x443899..8ac and 0x44270f..785). This original behavior is retained.

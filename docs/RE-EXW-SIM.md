@@ -7246,7 +7246,9 @@ map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
      (x∈[0x271,0x27a] × y∈[0x13c,0x14d]) accumulates spend += price ∧
      ammo += pack while spend+price ≤ money (BEEP5, debounce 8, the
      name/cash redraws, fmt 0x4595c0 'CASH: %i %s: %i'); the **−** button
-     (x∈[0x1e1,0x1ea]) reverses both (floor 0). The **CONFIRM** button
+     (x∈[0x1e1,0x1ea]) reverses both (minimum one pack: 0x442486..48a rejects a
+     resulting amount <= 0). Scanner items (8,3)/(8,4) reject both
+     quantity controls (0x442260..28a and 0x442490..4b5). The **CONFIRM** button
      (x∈[0x1e2,0x20d] × y∈[0x154,0x165], highlight img 0) commits:
      weapon → slot = FUN_004437ea(item, cat) (pass 1 = DEDUP: an owned
      name → −1; pass 2 = first word@+0==0 free slot, else −1); on slot ≥ 0
