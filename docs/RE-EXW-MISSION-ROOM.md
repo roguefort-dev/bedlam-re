@@ -290,3 +290,14 @@ x=[318,92,546,156,484,236,406][slot]-29,
 y=[89,145,145,202,202,181,181][slot]-27 (tables 0x456c0c/0x456c28,
 draw 0x440307..341). Equipment has text but no icon in this drawer.
 These counters are presentation state; painting must not advance them.
+
+The renderer now loads WEAPICON and displays owned weapon/equipment rows.
+Its animated draw takes explicit per-row ages; repeated presentation does
+not advance counters. The settled preview shows the purchased Needler icon
+above the robot and the yellow inventory row in the positions observed in
+the earlier DOSBox purchase. A real-corpus regression buys both a weapon
+and equipment, checks animated versus settled output, checks repaint
+stability and verifies selling restores the empty screen. Both raster tests,
+release clippy/all-targets and fmt pass; corpus manifest verified. Scene-clock
+ownership of the ages and DONE readiness remain integration work, alongside
+popup borders, shading, controls, Auto and mission transfer.

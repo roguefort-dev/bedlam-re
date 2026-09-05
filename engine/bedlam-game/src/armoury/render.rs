@@ -108,10 +108,10 @@ impl Font {
     }
 }
 
-/// Raster layer. Input, reveal timing and owned weapon icon animation are
-/// separate scene work; callers choose the active artwork category explicitly.
+/// Raster layer. The scene supplies input state and animation ages.
 pub struct ArmouryRenderer {
     artwork: SpriteBank,
+    icons: SpriteBank,
     tiny: Font,
     small: Font,
     palette: [Vga6; 256],
@@ -127,7 +127,12 @@ impl ArmouryRenderer {
         {
             return Err(bad("SHOPLITE.BIN"));
         }
+        let icons = parse_bin_images(&source.load("WEAPICON.BIN")?)?;
+        if icons.images.len() != 96 || icons.images.iter().any(|im| !im.ok || im.pixels.is_none()) {
+            return Err(bad("WEAPICON.BIN"));
+        }
         Ok(Self {
+            icons,
             artwork,
             tiny: Font::load(source, "TINYFONT.BIN", 118)?,
             small: Font::load(source, "SMLFONT.BIN", 63)?,
@@ -141,7 +146,20 @@ impl ArmouryRenderer {
     pub fn pixels(&self) -> &[u8] {
         &self.plane
     }
+    /// Render the settled state, useful for previews and restoration.
     pub fn draw(&mut self, state: &Transactions, category: Option<usize>) {
+        self.draw_animated(state, category, &[12; 7], &[9; 2]);
+    }
+
+    /// Ages are supplied by the scene clock, never advanced by repainting.
+    /// Weapon age zero is text phase zero and icon counter one.
+    pub fn draw_animated(
+        &mut self,
+        state: &Transactions,
+        category: Option<usize>,
+        weapon_ages: &[u8; 7],
+        equipment_ages: &[u8; 2],
+    ) {
         let category = category.filter(|&c| c < CATEGORIES.len());
         self.plane.copy_from_slice(
             self.artwork.images[category.map_or(0, |c| c + 1)]
@@ -175,6 +193,35 @@ impl ArmouryRenderer {
                 );
             }
         }
+        const COLORS: [u8; 10] = [4, 64, 74, 58, 42, 128, 160, 158, 1, 207];
+        const X: [i32; 7] = [318, 92, 546, 156, 484, 236, 406];
+        const Y: [i32; 7] = [89, 145, 145, 202, 202, 181, 181];
+        for (slot, row) in state.weapons().iter().enumerate() {
+            let Some(row) = row else {
+                continue;
+            };
+            let age = weapon_ages[slot];
+            self.tiny.text(
+                &mut self.plane,
+                crate::mission::weapon_name(row.name).as_bytes(),
+                538,
+                342 + 10 * slot as i32,
+                COLORS[age.min(9) as usize],
+            );
+            let entry = row.category * 12 + age.min(11) as usize;
+            self.icon(entry, X[slot] - 29, Y[slot] - 27);
+        }
+        for (slot, row) in state.equipment().iter().enumerate() {
+            if let Some(row) = row {
+                self.tiny.text(
+                    &mut self.plane,
+                    crate::mission::weapon_name(row.name).as_bytes(),
+                    547,
+                    417 + 10 * slot as i32,
+                    COLORS[equipment_ages[slot].min(9) as usize],
+                );
+            }
+        }
         if let Some(cart) = state.cart() {
             let item = state
                 .catalog()
@@ -184,6 +231,21 @@ impl ArmouryRenderer {
             self.center(&format!("CASH:{} AMT:{}", state.cash(), cart.amount), 0x141);
         } else {
             self.center(&format!("BALANCE:{}", state.balance()), 0x129);
+        }
+    }
+    fn icon(&mut self, entry: usize, x: i32, y: i32) {
+        let im = &self.icons.images[entry];
+        let pixels = im.pixels.as_ref().expect("validated icon");
+        let (dy, dx) = im.hot.unwrap_or((0, 0));
+        for row in 0..im.h as usize {
+            for col in 0..im.w as usize {
+                let pixel = pixels[row * im.w as usize + col];
+                let x = x + i32::from(dx) + col as i32;
+                let y = y + i32::from(dy) + row as i32;
+                if pixel != 0 && (0..640).contains(&x) && (0..480).contains(&y) {
+                    self.plane[y as usize * W + x as usize] = pixel;
+                }
+            }
         }
     }
     fn center(&mut self, text: &str, y: i32) {
@@ -210,6 +272,32 @@ mod tests {
             std::fs::read(path).map_err(|_| GameError::AssetMissing { name: name.into() })
         }
     }
+    #[test]
+    fn purchased_weapon_and_equipment_render_and_repaint_without_advancing() {
+        let mut renderer = ArmouryRenderer::load(&mut Source).unwrap();
+        let mut state = Transactions::new(Catalog::new(Mode::Campaign, 2, [1; 15]).unwrap(), 3500);
+        renderer.draw(&state, None);
+        let empty = renderer.pixels().to_vec();
+        assert!(state.select(0, 0));
+        assert!(state.buy());
+        assert!(state.select(8, 1));
+        assert!(state.buy());
+        renderer.draw_animated(&state, None, &[0; 7], &[0; 2]);
+        let first = renderer.pixels().to_vec();
+        renderer.draw_animated(&state, None, &[0; 7], &[0; 2]);
+        assert_eq!(renderer.pixels(), first);
+        renderer.draw(&state, None);
+        assert_ne!(renderer.pixels(), first);
+        assert_ne!(renderer.pixels()[70 * W..115 * W], empty[70 * W..115 * W]);
+        assert!(renderer.pixels()[342 * W..350 * W].contains(&207));
+        assert!(renderer.pixels()[417 * W..425 * W].contains(&207));
+        assert!(state.sell_weapon(0));
+        assert!(state.sell_equipment(0));
+        state.cancel();
+        renderer.draw(&state, None);
+        assert_eq!(renderer.pixels(), empty);
+    }
+
     #[test]
     fn original_artwork_and_fonts_render_the_pending_purchase() {
         let mut renderer = ArmouryRenderer::load(&mut Source).unwrap();
