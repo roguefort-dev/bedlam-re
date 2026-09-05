@@ -233,3 +233,22 @@ and paid fields retain the original word truncation. Four focused transaction
 tests, release clippy/all-targets and fmt pass. This module does not yet own
 rendering, input debounce, animation-ready DONE gating, Auto or mission transfer;
 those remain necessary before the shop can satisfy the production journey.
+
+## Armoury pointer geometry
+
+[verified] Category field +0x10 is a click radius, not a vertical offset.
+The click path computes octile distance max(abs(dx),abs(dy)) +
+min(abs(dx),abs(dy))/2 through 0x41ebf8, selects the first strictly nearest
+category below 100, then rejects distances above its +0x10 radius
+(0x44125b..29a, 0x4430c6..3153). Popup left is clamp(anchor_x -
+5*columns/2, 10, 630-5*columns); top is anchor_y
+(0x4440e5..4148). Item hit rows use strict horizontal interior and
+y in [top+4+9*i, top+13+9*i), independently of the rendered row count
+(0x4412bc..3345). Popup names are at left+5, top+7+9*i; prices at
+left+5+5*columns-44, same y (0x44326b..334c).
+
+[verified] Immediate text helper 0x43fe8a uses glyph byte-0x21,
+width+1 advance, space 3 and accent glyph 0x71+accent. It colors literal
+RLE spans through 0x4027b9, matching the mission panel's glyph grammar.
+The caller supplies either TINYFONT or SHOPFONT; their palette indices and
+roles must remain distinct when the screen renderer is connected.

@@ -7201,7 +7201,7 @@ map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
      catalog stager. See RE-EXW-MISSION-ROOM.md for the exact mapping.
    - call FUN_0044395b = the CATALOG STAGER (see 2).
 2. **The catalog grammar** [verified, FUN_0044395b 0x44395b..]: 9 category
-   blocks @0x4ea288, stride 0xA0. Header: +0x00 x0, +0x04 y0, +0x10 yoff,
+   blocks @0x4ea288, stride 0xA0. Header: +0x00 x0, +0x04 y0, +0x10 click-radius,
      +0x14 item-count, +0x18 col-width, +0x1C row-height. Items (stride 0x10,
      first at cat+0x20): name-word@+0x20 (a FUN_00420260 name index), price
      @+0x24, pack-ammo @+0x28, available @+0x2C. Cat 0 = NEEDLER CANNON
