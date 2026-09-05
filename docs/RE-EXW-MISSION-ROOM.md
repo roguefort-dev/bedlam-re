@@ -401,3 +401,16 @@ check bounded sequences. Two RNG tests, release clippy/all-targets and fmt
 pass. Mission simulation RNG is untouched. Runtime initialization and the
 shared presentation-stream ownership remain integration requirements; this
 does not claim matching live random choices without matching stream state.
+
+The input model now provides tick_with_random, which handles AutoRequested
+on the caller-owned ShopRandom stream, clears the category/cart display and
+leaves the generated equipment available for DONE. Its pointer regression
+checks that Auto produces weapons, advances the stream, and that neutral
+frames preserve the stream while another press continues it. Four input
+tests and release clippy/all-targets pass.
+
+Known integration gap: Auto currently restarts row reveal ages at zero.
+Original label counters start at 7-attempt, while icon counters start at one;
+the renderer/input currently share a weapon age, so these must be split and
+the attempt metadata retained before claiming Auto animation parity. Runtime
+seed/stream ownership, scene entry/exit and actual window validation remain.

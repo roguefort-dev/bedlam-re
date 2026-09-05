@@ -65,6 +65,25 @@ impl ArmouryInput {
         );
         renderer.highlight(self.cursor, held, self.ready());
     }
+    /// Execute Auto on the caller-owned secondary stream. The stream is not
+    /// reset by entering the shop or by another click of Auto.
+    pub fn tick_with_random(
+        &mut self,
+        input: &InputFrame,
+        random: &mut super::random::ShopRandom,
+    ) -> Outcome {
+        let outcome = self.tick(input);
+        if outcome != Outcome::AutoRequested {
+            return outcome;
+        }
+        self.state.auto(|bound| random.bounded(bound));
+        self.category = None;
+        self.panel_age = 0;
+        self.weapon_ages = [0; 7];
+        self.equipment_ages = [0; 2];
+        Outcome::None
+    }
+
     pub fn tick(&mut self, input: &InputFrame) -> Outcome {
         self.cursor.0 = (self.cursor.0 + i32::from(input.mouse_dx)).clamp(9, 631);
         self.cursor.1 = (self.cursor.1 + i32::from(input.mouse_dy)).clamp(9, 463);
@@ -192,6 +211,35 @@ mod tests {
             s.tick(&InputFrame::default());
         }
     }
+    #[test]
+    fn auto_pointer_executes_on_persistent_secondary_stream() {
+        let mut s = input();
+        let mut rng = super::super::random::ShopRandom::from_state(0);
+        let before = rng.state();
+        let frame = InputFrame {
+            mouse_dx: 180,
+            mouse_dy: 160,
+            mouse_buttons: 1,
+            ..Default::default()
+        };
+        assert_eq!(s.tick_with_random(&frame, &mut rng), Outcome::None);
+        assert_ne!(rng.state(), before);
+        assert!(s.state().has_weapon());
+        assert!(s.state().cart().is_none());
+        assert!(s.category().is_none());
+        let after = rng.state();
+        s.tick_with_random(&InputFrame::default(), &mut rng);
+        assert_eq!(rng.state(), after);
+        s.tick_with_random(
+            &InputFrame {
+                mouse_buttons: 1,
+                ..Default::default()
+            },
+            &mut rng,
+        );
+        assert_ne!(rng.state(), after);
+    }
+
     #[test]
     fn pending_purchase_blocks_selling_owned_rows() {
         let mut s = input();
