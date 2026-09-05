@@ -95,6 +95,11 @@ pub enum GameError {
         what: &'static str,
         reason: &'static str,
     },
+    #[error("armoury asset {what}: {reason}")]
+    BadArmouryAsset {
+        what: &'static str,
+        reason: &'static str,
+    },
     #[error("mission-room asset {what}: {reason}")]
     BadMissionRoomAsset {
         what: &'static str,

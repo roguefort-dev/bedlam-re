@@ -250,7 +250,7 @@ left+5+5*columns-44, same y (0x44326b..334c).
 [verified] Immediate text helper 0x43fe8a uses glyph byte-0x21,
 width+1 advance, space 3 and accent glyph 0x71+accent. It colors literal
 RLE spans through 0x4027b9, matching the mission panel's glyph grammar.
-The caller supplies either TINYFONT or SHOPFONT; their palette indices and
+The caller supplies either TINYFONT or SMLFONT; their palette indices and
 roles must remain distinct when the screen renderer is connected.
 
 Catalog geometry now exposes the original popup origin, item hit rows and
@@ -258,3 +258,25 @@ nearest artwork selection. The misleading `y_offset` field is renamed
 `click_radius`. Five catalog tests pass, including popup edge clipping and
 row boundaries; release clippy/all-targets and fmt pass. Visible rendering
 and controller integration remain outstanding.
+
+## First armoury raster integration
+
+The raster module loads the ten full-screen SHOPLITE images, SHOPPAL,
+TINYFONT and SMLFONT, and draws category names/prices plus the pending
+purchase or balance. A standalone raster was compared with the live DOSBox
+armoury. Artwork, category placement and right-hand label scale agree
+visually. This is not a complete shop: panel darkening/borders, owned rows
+and icons, reveal effects, controls and production scene wiring remain.
+
+[verified] The right-hand font pointer 0x4ede7c is SMLFONT (allocation
+0x41d648, documented boot asset mapping), not the locally loaded SHOPFONT.
+The steady redraw 0x4433ef/0x44345e uses color 253, superseding the
+click-path color 191; using 191 persistently produced incorrect white text
+in the first raster. Category text's final ramp entry is color 5 from
+0x454bf0. Both corrections were visually checked against DOSBox. The
+renderer currently uses the no-intro SHOPPAL path; SHOP.SMK palette/intro
+playback is still required for the animation-enabled path.
+
+One real-corpus raster test passes across all category pages and the
+pending purchase display; release clippy/all-targets and fmt pass. The
+corpus manifest was verified around preview and test reads.

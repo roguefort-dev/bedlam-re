@@ -2,3 +2,5 @@
 pub mod catalog;
 
 pub mod transactions;
+
+pub mod render;
