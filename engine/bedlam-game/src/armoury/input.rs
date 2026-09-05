@@ -23,6 +23,7 @@ pub struct ArmouryInput {
     debounce: u8,
     panel_age: u32,
     weapon_ages: [u8; 7],
+    icon_ages: [u8; 7],
     equipment_ages: [u8; 2],
     replaced_equipment: Option<usize>,
 }
@@ -34,7 +35,8 @@ impl ArmouryInput {
             cursor: (320, 240),
             debounce: 0,
             panel_age: 0,
-            weapon_ages: [12; 7],
+            weapon_ages: [9; 7],
+            icon_ages: [11; 7],
             equipment_ages: [9; 2],
             replaced_equipment: None,
         }
@@ -62,6 +64,7 @@ impl ArmouryInput {
             &self.weapon_ages,
             &self.equipment_ages,
             self.panel_age,
+            &self.icon_ages,
         );
         renderer.highlight(self.cursor, held, self.ready());
     }
@@ -76,11 +79,12 @@ impl ArmouryInput {
         if outcome != Outcome::AutoRequested {
             return outcome;
         }
-        self.state.auto(|bound| random.bounded(bound));
+        let (weapon_ages, equipment_ages) = self.state.auto(|bound| random.bounded(bound));
         self.category = None;
         self.panel_age = 0;
-        self.weapon_ages = [0; 7];
-        self.equipment_ages = [0; 2];
+        self.weapon_ages = weapon_ages;
+        self.equipment_ages = equipment_ages;
+        self.icon_ages = [0; 7];
         Outcome::None
     }
 
@@ -100,7 +104,14 @@ impl ArmouryInput {
             self.weapon_ages[slot] = if *old != self.state.weapons()[slot] {
                 0
             } else {
-                self.weapon_ages[slot].saturating_add(1).min(12)
+                self.weapon_ages[slot].saturating_add(1).min(9)
+            };
+        }
+        for (slot, old) in old_weapons.iter().enumerate() {
+            self.icon_ages[slot] = if *old != self.state.weapons()[slot] {
+                0
+            } else {
+                self.icon_ages[slot].saturating_add(1).min(11)
             };
         }
         for (slot, old) in old_equipment.iter().enumerate() {

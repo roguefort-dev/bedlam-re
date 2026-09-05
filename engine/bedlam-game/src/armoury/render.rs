@@ -176,7 +176,14 @@ impl ArmouryRenderer {
         weapon_ages: &[u8; 7],
         equipment_ages: &[u8; 2],
     ) {
-        self.draw_frame(state, category, weapon_ages, equipment_ages, u32::MAX);
+        self.draw_frame(
+            state,
+            category,
+            weapon_ages,
+            equipment_ages,
+            u32::MAX,
+            weapon_ages,
+        );
     }
 
     pub fn draw_frame(
@@ -186,6 +193,7 @@ impl ArmouryRenderer {
         weapon_ages: &[u8; 7],
         equipment_ages: &[u8; 2],
         panel_age: u32,
+        icon_ages: &[u8; 7],
     ) {
         let category = category.filter(|&c| c < CATEGORIES.len());
         self.plane.copy_from_slice(
@@ -241,7 +249,7 @@ impl ArmouryRenderer {
                 342 + 10 * slot as i32,
                 COLORS[age.min(9) as usize],
             );
-            let entry = row.category * 12 + age.min(11) as usize;
+            let entry = row.category * 12 + icon_ages[slot].min(11) as usize;
             self.icon(entry, X[slot] - 29, Y[slot] - 27);
         }
         for (slot, row) in state.equipment().iter().enumerate() {
@@ -426,12 +434,12 @@ mod tests {
         renderer.draw(&state, Some(0));
         assert_ne!(renderer.pixels(), entry);
         let settled = renderer.pixels().to_vec();
-        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0);
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0, &[11; 7]);
         let initial = renderer.pixels().to_vec();
         assert_ne!(initial, settled);
-        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0);
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0, &[11; 7]);
         assert_eq!(renderer.pixels(), initial);
-        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 40);
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 40, &[11; 7]);
         assert_eq!(renderer.pixels(), settled);
         // The actual small font must fit the right-hand display; SHOPFONT does not.
         assert!(renderer.small.width(b"NEEDLER CANNON #1") < 174);

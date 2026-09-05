@@ -414,3 +414,17 @@ Original label counters start at 7-attempt, while icon counters start at one;
 the renderer/input currently share a weapon age, so these must be split and
 the attempt metadata retained before claiming Auto animation parity. Runtime
 seed/stream ownership, scene entry/exit and actual window validation remain.
+
+Auto now returns label reveal phases keyed to purchased items, preserving
+7-attempt through weapon sorting and equipment replacement. The input model
+keeps separate weapon label and icon ages, so Auto icons begin at frame zero
+while labels resume their authored phase. DONE readiness reads label ages.
+The sorted three-weapon regression verifies phases [5,7,6] independently of
+sorted slot order. Twenty-one armoury tests, release clippy/all-targets and
+fmt pass; corpus manifest verified around raster tests.
+
+Remaining timing caveat: the scanner pre-purchase references the previous
+outer-index local before this pass initializes it; the current model starts
+that special label at seven. Its exact entry/click lifecycle needs the live
+integrated check. No Boot Camp impact, because scanner level 3 is unavailable
+there. Scene wiring, initial secondary stream state and window journey remain.

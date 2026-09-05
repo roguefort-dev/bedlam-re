@@ -41,7 +41,8 @@ impl Transactions {
 
     /// EXW Auto transaction pass. The caller supplies secondary bounded
     /// random draws, each strictly below the requested bound.
-    pub fn auto(&mut self, mut random: impl FnMut(u32) -> u32) {
+    pub fn auto(&mut self, mut random: impl FnMut(u32) -> u32) -> ([u8; 7], [u8; 2]) {
+        let mut label_ages = [7u8; 47];
         for row in self.weapons.iter().chain(self.equipment.iter()).flatten() {
             self.balance = self.balance.wrapping_add(u32::from(row.paid));
         }
@@ -55,7 +56,7 @@ impl Transactions {
         let attempts = random(5);
         assert!(attempts < 5, "bounded secondary RNG");
         let attempts = attempts as usize + 3;
-        for _ in 0..attempts {
+        for attempt in 0..attempts {
             for _ in 0..50 {
                 let category = random(9) as usize;
                 assert!(category < 9, "bounded secondary RNG");
@@ -67,8 +68,10 @@ impl Transactions {
                     continue;
                 }
                 // A valid but unaffordable choice consumes this outer attempt.
+                let name = item.name;
                 if self.select(category, index) {
                     self.buy();
+                    label_ages[name as usize] = 7 - attempt as u8;
                 }
                 break;
             }
@@ -98,6 +101,12 @@ impl Transactions {
         self.weapons
             .sort_by_key(|row| std::cmp::Reverse(row.map_or(0, |r| RANK[r.category])));
         self.cart = None;
+        (
+            self.weapons
+                .map(|row| row.map_or(9, |r| label_ages[r.name as usize])),
+            self.equipment
+                .map(|row| row.map_or(9, |r| label_ages[r.name as usize])),
+        )
     }
 
     pub fn catalog(&self) -> &Catalog {
@@ -278,7 +287,8 @@ mod tests {
     fn auto_stops_top_up_after_any_unaffordable_weapon() {
         let mut shop = shop(1200);
         let mut draws = [0, 0, 0, 1, 0, 6, 0].into_iter();
-        shop.auto(|_| draws.next().expect("exact call order"));
+        let (ages, _) = shop.auto(|_| draws.next().expect("exact call order"));
+        assert_eq!(&ages[..3], &[5, 7, 6]);
         assert_eq!(shop.balance(), 100);
         // First pass buys Needler ammo, cannot afford Hades, then buys Plasma.
         assert_eq!(shop.weapons()[0].unwrap().name, 6);
