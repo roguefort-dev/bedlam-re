@@ -12,16 +12,54 @@ pub struct Item {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Category {
     pub anchor: (i32, i32),
-    pub y_offset: i32,
+    pub click_radius: i32,
     pub columns: i32,
     pub rows: i32,
     pub items: &'static [Item],
 }
 
+impl Category {
+    /// EXW 0x4440e5..4148: the popup remains within the ten-pixel margins.
+    pub fn panel_origin(&self) -> (i32, i32) {
+        let width = self.columns * 5;
+        (
+            (self.anchor.0 - width / 2).clamp(10, 630 - width),
+            self.anchor.1,
+        )
+    }
+
+    /// EXW 0x4412bc..0x441345: nine-pixel rows, with strict horizontal edges.
+    pub fn item_at(&self, cursor: (i32, i32)) -> Option<usize> {
+        let (x, y) = self.panel_origin();
+        if cursor.0 <= x || cursor.0 >= x + self.columns * 5 || cursor.1 < y + 4 {
+            return None;
+        }
+        let row = ((cursor.1 - y - 4) / 9) as usize;
+        (row < self.items.len()).then_some(row)
+    }
+}
+
+/// Nearest artwork anchor under its original octile click radius. This is
+/// used for category clicks, not popup item selection or ordinary hover.
+pub fn category_at(cursor: (i32, i32)) -> Option<usize> {
+    let mut nearest = None;
+    let mut distance = 100i64;
+    for (index, category) in CATEGORIES.iter().enumerate() {
+        let dx = (i64::from(cursor.0) - i64::from(category.anchor.0)).abs();
+        let dy = (i64::from(cursor.1) - i64::from(category.anchor.1)).abs();
+        let candidate = dx.max(dy) + dx.min(dy) / 2;
+        if candidate < distance {
+            nearest = Some(index);
+            distance = candidate;
+        }
+    }
+    nearest.filter(|&index| distance <= i64::from(CATEGORIES[index].click_radius))
+}
+
 pub const CATEGORIES: [Category; 9] = [
     Category {
         anchor: (237, 97),
-        y_offset: 37,
+        click_radius: 37,
         columns: 26,
         rows: 6,
         items: &[
@@ -44,7 +82,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (390, 97),
-        y_offset: 37,
+        click_radius: 37,
         columns: 23,
         rows: 6,
         items: &[
@@ -67,7 +105,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (603, 200),
-        y_offset: 56,
+        click_radius: 56,
         columns: 23,
         rows: 7,
         items: &[
@@ -95,7 +133,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (397, 364),
-        y_offset: 59,
+        click_radius: 59,
         columns: 26,
         rows: 10,
         items: &[
@@ -133,7 +171,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (280, 375),
-        y_offset: 62,
+        click_radius: 62,
         columns: 26,
         rows: 10,
         items: &[
@@ -171,7 +209,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (165, 356),
-        y_offset: 50,
+        click_radius: 50,
         columns: 20,
         rows: 3,
         items: &[Item {
@@ -182,7 +220,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (95, 326),
-        y_offset: 50,
+        click_radius: 50,
         columns: 26,
         rows: 6,
         items: &[
@@ -205,7 +243,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (46, 269),
-        y_offset: 46,
+        click_radius: 46,
         columns: 23,
         rows: 7,
         items: &[
@@ -233,7 +271,7 @@ pub const CATEGORIES: [Category; 9] = [
     },
     Category {
         anchor: (68, 204),
-        y_offset: 46,
+        click_radius: 46,
         columns: 25,
         rows: 9,
         items: &[
@@ -329,6 +367,32 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn popup_coordinates_and_item_edges_match_original() {
+        let needler = CATEGORIES[0];
+        assert_eq!(needler.panel_origin(), (172, 97));
+        assert_eq!(needler.item_at((173, 101)), Some(0));
+        assert_eq!(needler.item_at((173, 109)), Some(0));
+        assert_eq!(needler.item_at((173, 110)), Some(1));
+        assert_eq!(needler.item_at((173, 127)), Some(2));
+        assert_eq!(needler.item_at((173, 128)), None);
+        assert_eq!(needler.item_at((172, 101)), None);
+        assert_eq!(needler.item_at((302, 101)), None);
+        assert_eq!(CATEGORIES[2].panel_origin(), (515, 200));
+        assert_eq!(CATEGORIES[7].panel_origin(), (10, 269));
+    }
+
+    #[test]
+    fn artwork_selection_uses_radius_and_rejects_empty_space() {
+        for (index, category) in CATEGORIES.iter().enumerate() {
+            assert_eq!(category_at(category.anchor), Some(index));
+        }
+        assert_eq!(category_at((237, 60)), Some(0));
+        assert_eq!(category_at((237, 59)), None);
+        assert_eq!(category_at((320, 240)), None);
+        assert_eq!(category_at((i32::MIN, i32::MAX)), None);
+    }
 
     #[test]
     fn original_boot_camp_needler_popup() {

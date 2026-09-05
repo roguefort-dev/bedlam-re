@@ -244,7 +244,7 @@ category below 100, then rejects distances above its +0x10 radius
 5*columns/2, 10, 630-5*columns); top is anchor_y
 (0x4440e5..4148). Item hit rows use strict horizontal interior and
 y in [top+4+9*i, top+13+9*i), independently of the rendered row count
-(0x4412bc..3345). Popup names are at left+5, top+7+9*i; prices at
+(0x4412bc..0x441345). Popup names are at left+5, top+7+9*i; prices at
 left+5+5*columns-44, same y (0x44326b..334c).
 
 [verified] Immediate text helper 0x43fe8a uses glyph byte-0x21,
@@ -252,3 +252,9 @@ width+1 advance, space 3 and accent glyph 0x71+accent. It colors literal
 RLE spans through 0x4027b9, matching the mission panel's glyph grammar.
 The caller supplies either TINYFONT or SHOPFONT; their palette indices and
 roles must remain distinct when the screen renderer is connected.
+
+Catalog geometry now exposes the original popup origin, item hit rows and
+nearest artwork selection. The misleading `y_offset` field is renamed
+`click_radius`. Five catalog tests pass, including popup edge clipping and
+row boundaries; release clippy/all-targets and fmt pass. Visible rendering
+and controller integration remain outstanding.
