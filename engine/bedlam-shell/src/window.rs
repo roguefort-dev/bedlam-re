@@ -1162,6 +1162,80 @@ fn cursor_to_game(
     ))
 }
 
+/// Convert the visible pointer into the relative input consumed by the scene.
+fn steer_pointer(
+    host: &GameHost,
+    frame: &mut bedlam_core::input::InputFrame,
+    target: Option<(i32, i32)>,
+) {
+    if let Some(target) = target {
+        let cursor = match host.scene() {
+            Scene::Title => host.menu_cursor(),
+            Scene::Mission => host.mission().map(|mission| mission.cursor()),
+            _ => None,
+        };
+        if let Some((mx, my)) = cursor {
+            frame.mouse_dx = (target.0 - mx).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            frame.mouse_dy = (target.1 - my).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        }
+    }
+}
+
+#[cfg(test)]
+mod mission_pointer_tests {
+    use super::*;
+    use bedlam_core::input::InputFrame;
+
+    #[test]
+    fn visible_map_button_click_reaches_mission_at_scaled_resolutions() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM");
+        for (width, height) in [(1200, 900), (1920, 1080)] {
+            let mut host =
+                GameHost::new(&GameConfig::default(), &SimConfig::default(), [[0; 3]; 256]);
+            for _ in 0..bedlam_game::BOOT_TICKS {
+                host.pump_frame(SUBTICKS_PER_PUMP, &InputFrame::default());
+            }
+            // Real mouse edges traverse Title -> Brief -> Select -> Mission.
+            for _ in 0..3 {
+                host.pump_frame(
+                    SUBTICKS_PER_PUMP,
+                    &InputFrame {
+                        mouse_buttons: 1,
+                        ..Default::default()
+                    },
+                );
+                host.pump_frame(SUBTICKS_PER_PUMP, &InputFrame::default());
+            }
+            assert_eq!(host.scene(), Scene::Mission);
+            stage_scene(
+                &mut host,
+                &mut GameGfxSource::new(&root),
+                ChainConfig::default(),
+            )
+            .unwrap();
+            host.pump_frame(SUBTICKS_PER_PUMP, &InputFrame::default());
+            assert!(!host.mission().unwrap().map_overlay_on());
+            let config = PresentConfig::default();
+            let rect = scale_rect(config.scale, CANON_W, CANON_H, width, height);
+            let px = rect.x as f64 + 560.0 * rect.w as f64 / CANON_W as f64;
+            let py = rect.y as f64 + 450.0 * rect.h as f64 / CANON_H as f64;
+            let mut frame = InputFrame {
+                mouse_buttons: 1,
+                ..Default::default()
+            };
+            // First event after entry/focus need not contain a relative delta.
+            steer_pointer(
+                &host,
+                &mut frame,
+                cursor_to_game(px, py, width, height, &config),
+            );
+            host.pump_frame(SUBTICKS_PER_PUMP, &frame);
+            assert_eq!(host.mission().unwrap().cursor(), (560, 450));
+            assert!(host.mission().unwrap().map_overlay_on());
+        }
+    }
+}
+
 impl ShellApp {
     /// Stage the scene the host just entered. On staging failure the
     /// loop records the error and exits (a missing corpus asset is
@@ -1184,19 +1258,10 @@ impl ShellApp {
     fn run_pumps(&mut self, pumps: u32) {
         for _ in 0..pumps {
             let mut frame = self.input.tick();
-            // Absolute-pointer steering (operator 2026-08-23): the DOS
-            // menu integrates RELATIVE deltas, so the internal pointer
-            // drifts from the real cursor and clicks land on the wrong
-            // strip. While a menu is staged, replace the raw deltas with
-            // the steering delta to the REAL cursor mapped into game
-            // space; the menu still owns its position (parity path
-            // unchanged), it just tracks the window cursor exactly.
-            if let Some(target) = self.game_cursor_target() {
-                if let Some((mx, my)) = self.host.menu_cursor() {
-                    frame.mouse_dx = (target.0 - mx).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-                    frame.mouse_dy = (target.1 - my).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-                }
-            }
+            // Both menus and missions consume canonical relative deltas.
+            // Align the active scene's cursor with the visible window pointer
+            // before the click is consumed, including after entry or refocus.
+            steer_pointer(&self.host, &mut frame, self.game_cursor_target());
             self.host.pump_frame(SUBTICKS_PER_PUMP, &frame);
         }
     }
@@ -2379,7 +2444,7 @@ mod window_mode_tests {
     #[test]
     fn window_mode_option_never_changes_the_gate_answers() {
         for mode in [ModeConfig::MODERN, ModeConfig::CLASSIC] {
-            let mut opts = [
+            let opts = [
                 WindowMode::Windowed,
                 WindowMode::Borderless,
                 WindowMode::Fullscreen,
