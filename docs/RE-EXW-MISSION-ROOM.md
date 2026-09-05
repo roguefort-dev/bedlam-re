@@ -301,3 +301,11 @@ stability and verifies selling restores the empty screen. Both raster tests,
 release clippy/all-targets and fmt pass; corpus manifest verified. Scene-clock
 ownership of the ages and DONE readiness remain integration work, alongside
 popup borders, shading, controls, Auto and mission transfer.
+
+[verified] Shop popup shading uses the 256-byte DARKPALS translation at
+0x402a56 over (left,top), width=5*columns, height=7*rows. Border builder
+0x440717 stages TINYFONT glyphs 95/96 and corners 97..100 on 5x7 cells.
+Horizontal delay is abs(column-columns/2). Interior side index i=0..rows-3
+has delay columns/2+min(i,rows-3-i). Drawer 0x43f71d uses color table
+0x454cc8: [4,225,222,230,221,5,10,235,228,158,1,5], advancing to phase 11
+only after its countdown expires. All coordinates preserve glyph hotspots.
