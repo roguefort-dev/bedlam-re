@@ -112,6 +112,7 @@ impl Font {
 pub struct ArmouryRenderer {
     artwork: SpriteBank,
     icons: SpriteBank,
+    controls: SpriteBank,
     dark: [u8; 256],
     tiny: Font,
     small: Font,
@@ -132,12 +133,22 @@ impl ArmouryRenderer {
         if icons.images.len() != 96 || icons.images.iter().any(|im| !im.ok || im.pixels.is_none()) {
             return Err(bad("WEAPICON.BIN"));
         }
+        let controls = parse_bin_images(&source.load("CONLITE.BIN")?)?;
+        if controls.images.len() != 6
+            || controls
+                .images
+                .iter()
+                .any(|im| !im.ok || im.pixels.is_none())
+        {
+            return Err(bad("CONLITE.BIN"));
+        }
         Ok(Self {
             dark: source
                 .load("DARKPALS.PAL")?
                 .try_into()
                 .map_err(|_| bad("DARKPALS.PAL"))?,
             icons,
+            controls,
             artwork,
             tiny: Font::load(source, "TINYFONT.BIN", 118)?,
             small: Font::load(source, "SMLFONT.BIN", 63)?,
@@ -305,8 +316,26 @@ impl ArmouryRenderer {
         }
     }
 
+    /// The original lights a control while the mouse button is held, not on
+    /// hover. DONE's animation-ready gate is supplied by the scene.
+    pub fn highlight(&mut self, cursor: (i32, i32), held: bool, ready: bool) {
+        use super::controls::Control;
+        if !held {
+            return;
+        }
+        let Some(control) = Control::at(cursor) else {
+            return;
+        };
+        if control == Control::Done && !ready {
+            return;
+        }
+        let (entry, x, y) = control.image();
+        Self::blit(&mut self.plane, &self.controls.images[entry], x, y);
+    }
     fn icon(&mut self, entry: usize, x: i32, y: i32) {
-        let im = &self.icons.images[entry];
+        Self::blit(&mut self.plane, &self.icons.images[entry], x, y);
+    }
+    fn blit(plane: &mut [u8], im: &bedlam_assets::sprites::SpriteImage, x: i32, y: i32) {
         let pixels = im.pixels.as_ref().expect("validated icon");
         let (dy, dx) = im.hot.unwrap_or((0, 0));
         for row in 0..im.h as usize {
@@ -315,7 +344,7 @@ impl ArmouryRenderer {
                 let x = x + i32::from(dx) + col as i32;
                 let y = y + i32::from(dy) + row as i32;
                 if pixel != 0 && (0..640).contains(&x) && (0..480).contains(&y) {
-                    self.plane[y as usize * W + x as usize] = pixel;
+                    plane[y as usize * W + x as usize] = pixel;
                 }
             }
         }
@@ -344,6 +373,23 @@ mod tests {
             std::fs::read(path).map_err(|_| GameError::AssetMissing { name: name.into() })
         }
     }
+    #[test]
+    fn controls_light_only_while_pressed_and_done_waits_for_readiness() {
+        let mut renderer = ArmouryRenderer::load(&mut Source).unwrap();
+        let state = Transactions::new(Catalog::new(Mode::Campaign, 1, [0; 15]).unwrap(), 3500);
+        renderer.draw(&state, None);
+        let baseline = renderer.pixels().to_vec();
+        renderer.highlight((500, 350), false, true);
+        assert_eq!(renderer.pixels(), baseline);
+        renderer.highlight((500, 350), true, true);
+        assert_ne!(renderer.pixels(), baseline);
+        renderer.draw(&state, None);
+        renderer.highlight((590, 460), true, false);
+        assert_eq!(renderer.pixels(), baseline);
+        renderer.highlight((590, 460), true, true);
+        assert_ne!(renderer.pixels(), baseline);
+    }
+
     #[test]
     fn purchased_weapon_and_equipment_render_and_repaint_without_advancing() {
         let mut renderer = ArmouryRenderer::load(&mut Source).unwrap();

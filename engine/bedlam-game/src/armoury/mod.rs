@@ -4,3 +4,5 @@ pub mod catalog;
 pub mod transactions;
 
 pub mod render;
+
+pub mod controls;

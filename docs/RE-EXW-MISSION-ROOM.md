@@ -318,3 +318,18 @@ initial/settled differences, convergence by age 40 and stable repainting;
 two renderer tests, release clippy/all-targets and fmt pass, with corpus
 manifest checks around reads. Category text reveal, control highlights,
 scene input/clock, Auto and mission transfer still remain.
+
+[verified] Control highlights at 0x4435c6..0x4437b1 require the held
+mouse-button cell, not hover. CONLITE entries/positions are Buy 0@(479,337),
+Cancel 1@(479,361), Auto 2@(480,391), Increase 3@(623,314), Decrease
+4@(479,314), Done 5@(568,446). DONE alone additionally tests animation
+readiness. These draw gates do not establish that the associated transaction
+is allowed: the click handler has separate affordability/selection gates.
+
+A shared Control enum now owns the six original hit rectangles and highlight
+placements. The renderer loads CONLITE and paints pressed feedback, including
+DONE readiness. Thirteen armoury tests pass, including held-versus-hover and
+blocked-versus-ready DONE; release clippy/all-targets and fmt pass; corpus
+manifest verified around reads. This supplies visible input feedback but does
+not yet dispatch actions from a production scene. That input/clock layer,
+Auto, category text reveal and mission transfer remain necessary.
