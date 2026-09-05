@@ -106,3 +106,29 @@ Validation for this module boundary: bedlam-assets library 100 passed;
 bedlam-game library 156 passed; canonical_dump_gate, zone_mission_parity and
 determinism passed with unchanged pins. Release clippy/all-targets and fmt
 passed. Corpus manifest verified around every asset read. Queue remains open.
+
+## Description and border follow-up
+
+[verified] FUN_00447216 seeks OVERVIEW_<zone letter><mission digit> in
+LANGUAGE, then copies preformatted rows until the closing bracket. No word
+wrapping is performed here. Calls to FUN_0043e274 stage the first row at
+(8,8) with delay 1; subsequent row n starts at (8,11+10*n), delay 3*n.
+The text drawer 0x43f9dd..0x43fb69 uses TINYFONT (0x46cdb0), glyph
+byte-0x21, glyph width+1 advance, space advance 3. High bytes use the
+existing FUN_00410493 remap and accent glyph 0x71+accent. Its solid-color
+blitter 0x4027b9 colors literal RLE spans, not skipped spans.
+
+[verified] Color table at EXW 0x454b90 is three rows of eight dwords:
+state 0: 129,130,130,130,130,130,130,130;
+state 1: 129,130,131,132,132,132,132,132;
+state 2: 1,130,131,132,133,134,135,136.
+The drawer advances color phase toward 7 after each rendered frame.
+
+[verified] FUN_00440888 builds the (1,1), 41-column, 17-row panel border
+with 5x7 cells, staging TINYFONT glyphs 95..100 through 0x4406c4.
+Horizontal top/bottom delays are abs(column-20). Interior side row r=1..15
+has delay 8+min(r-1,15-r). Horizontal glyph 95, vertical 96, top corners
+97/98 and bottom corners 99/100 preserve their file hotspot offsets.
+The same three-state color table applies. State 2 is the selected unfinished
+mission, state 0 is the initial/unavailable panel. The per-entry countdown
+is decremented without drawing until zero (0x43f7b1 and 0x43fb40 tails).
