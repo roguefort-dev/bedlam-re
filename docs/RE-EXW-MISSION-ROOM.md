@@ -333,3 +333,20 @@ blocked-versus-ready DONE; release clippy/all-targets and fmt pass; corpus
 manifest verified around reads. This supplies visible input feedback but does
 not yet dispatch actions from a production scene. That input/clock layer,
 Auto, category text reveal and mission transfer remain necessary.
+
+The armoury input model now consumes InputFrame pointer deltas and held
+left input, dispatches manual transactions, owns presentation ages and emits
+DONE only with an owned weapon and ready animation. Its draw method feeds
+those ages to the raster layer. Tests move the pointer through category,
+item, BUY and DONE, and verify held-plus repeat after the eight-frame
+quantity debounce. Category selection uses ten frames, item selection three,
+and BUY ten, following 0x441345..370/0x4431d5/0x442d32/0x442808.
+Equipment replacement resets its reveal even when the row contents match.
+Two input tests, release clippy/all-targets and fmt pass.
+
+This remains an integration prerequisite: AutoRequested is an explicit
+unhandled outcome awaiting the original Auto algorithm; the model is not
+wired into GameHost or ShellController yet. It must not be exposed as the
+completed shop until Auto, scene entry/exit, selected mission and equipment
+transfer are connected and the real window journey passes. Entry/abort and
+exact original frame ordering still need the integrated reference check.

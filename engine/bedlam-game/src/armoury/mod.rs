@@ -6,3 +6,5 @@ pub mod transactions;
 pub mod render;
 
 pub mod controls;
+
+pub mod input;
