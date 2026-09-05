@@ -6,6 +6,9 @@ use bedlam_assets::sprites::{parse_bin_images, SpriteBank, SpriteImage};
 use bedlam_core::input::InputFrame;
 use bedlam_render::Vga6;
 
+mod panel;
+use panel::RoomPanel;
+
 const W: usize = 640;
 const H: usize = 480;
 
@@ -20,6 +23,8 @@ pub enum RoomAction {
 /// Entry starts with no mission selected. Completion flags are supplied by
 /// campaign state; clicking another zone never changes that state.
 pub struct MissionRoom {
+    panel: RoomPanel,
+    panel_age: u32,
     selector: SpriteBank,
     regions: SpriteBank,
     coverage: Vec<Vec<bool>>,
@@ -62,11 +67,39 @@ fn full_screen(image: &SpriteImage, name: &'static str) -> Result<(), GameError>
     Ok(())
 }
 
+fn coverage_for_bank(
+    bytes: &[u8],
+    images: &SpriteBank,
+    name: &'static str,
+) -> Result<Vec<Vec<bool>>, GameError> {
+    images
+        .images
+        .iter()
+        .enumerate()
+        .map(|(i, im)| {
+            if im.w == 0 {
+                return Ok(Vec::new());
+            }
+            let start = 2 + i * 4 + im.off as usize + if im.flags & 2 != 0 { 10 } else { 6 };
+            let payload = bytes
+                .get(start..)
+                .ok_or_else(|| bad(name, "invalid image offset"))?;
+            if im.flags & 1 != 0 {
+                bedlam_assets::codecs::decode_rle16_coverage(payload, im.w as usize, im.h as usize)
+                    .map_err(|_| bad(name, "invalid coverage spans"))
+            } else {
+                Ok(vec![true; im.w as usize * im.h as usize])
+            }
+        })
+        .collect()
+}
+
 impl MissionRoom {
     pub fn load(
         source: &mut dyn ByteSource,
         zone: u8,
         completed: [bool; 27],
+        language_name: &str,
     ) -> Result<Self, GameError> {
         if !(1..=6).contains(&zone) {
             return Err(bad("campaign zone", "outside selectable zones 1..6"));
@@ -76,19 +109,7 @@ impl MissionRoom {
         let palette = crate::loading::loading_palette(&source.load("SELECTOR.PAL")?)?;
         let normal = source.load("NORMAL.BIN")?;
         let regions = bank(&normal, 35, "NORMAL.BIN")?;
-        let mut coverage = Vec::with_capacity(regions.images.len());
-        for (i, im) in regions.images.iter().enumerate() {
-            let start = 2 + i * 4 + im.off as usize + if im.flags & 2 != 0 { 10 } else { 6 };
-            let payload = normal
-                .get(start..)
-                .ok_or_else(|| bad("NORMAL.BIN", "invalid image offset"))?;
-            coverage.push(if im.flags & 1 != 0 {
-                bedlam_assets::codecs::decode_rle16_coverage(payload, im.w as usize, im.h as usize)
-                    .map_err(|_| bad("NORMAL.BIN", "invalid coverage spans"))?
-            } else {
-                vec![true; im.w as usize * im.h as usize]
-            });
-        }
+        let coverage = coverage_for_bank(&normal, &regions, "NORMAL.BIN")?;
         let mask_bank = bank(&source.load("SELMONT.BIN")?, 1, "SELMONT.BIN")?;
         full_screen(&mask_bank.images[0], "SELMONT.BIN")?;
         let mask = mask_bank.images[0].pixels.clone().expect("validated");
@@ -100,7 +121,10 @@ impl MissionRoom {
         if blend.len() != 65536 || dark.len() != 256 {
             return Err(bad("translation tables", "invalid table length"));
         }
+        let panel = RoomPanel::load(source, zone, language_name)?;
         let mut room = Self {
+            panel,
+            panel_age: 0,
             selector,
             regions,
             coverage,
@@ -185,6 +209,9 @@ impl MissionRoom {
             let id = self.mask[y as usize * W + x as usize];
             if let Some((zone, mission)) = mission_for_id(id) {
                 if zone == self.zone {
+                    if self.selected != Some(mission) {
+                        self.panel_age = 0;
+                    }
                     self.selected = Some(mission);
                 }
             }
@@ -195,6 +222,7 @@ impl MissionRoom {
             self.door.saturating_sub(1)
         };
         self.frame = self.frame.wrapping_add(1);
+        self.panel_age = self.panel_age.saturating_add(1);
         self.render();
         RoomAction::None
     }
@@ -209,6 +237,9 @@ impl MissionRoom {
                 *p = self.dark[*p as usize];
             }
         }
+        let panel_state = if self.available() { 2 } else { 0 };
+        self.panel
+            .draw(&mut self.plane, self.selected, panel_state, self.panel_age);
         for i in 0..26 {
             let (zone, _) = mission_for_id(i as u8 + 1).expect("region");
             if self.completed[i] {
@@ -304,8 +335,12 @@ mod tests {
     struct Corpus(std::path::PathBuf);
     impl ByteSource for Corpus {
         fn load(&mut self, name: &str) -> Result<Vec<u8>, GameError> {
-            std::fs::read(self.0.join(name))
-                .map_err(|_| GameError::AssetMissing { name: name.into() })
+            std::fs::read(if name.starts_with("LANGUAGE.") {
+                self.0.parent().unwrap().join(name)
+            } else {
+                self.0.join(name)
+            })
+            .map_err(|_| GameError::AssetMissing { name: name.into() })
         }
     }
     fn room(completed: [bool; 27]) -> MissionRoom {
@@ -316,6 +351,7 @@ mod tests {
             ),
             1,
             completed,
+            "LANGUAGE.ENG",
         )
         .unwrap()
     }
@@ -403,5 +439,46 @@ mod tests {
             }
         }
         assert_eq!(r.pixels()[0], 17);
+    }
+
+    #[test]
+    fn every_shipped_language_loads_all_campaign_descriptions() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM/GAMEGFX");
+        for language in ["ENG", "FRE", "GER", "SPA", "ITL", "DCH"] {
+            for zone in 1..=6 {
+                panel::RoomPanel::load(
+                    &mut Corpus(root.clone()),
+                    zone,
+                    &format!("LANGUAGE.{language}"),
+                )
+                .unwrap_or_else(|e| panic!("{language} zone {zone}: {e}"));
+            }
+        }
+    }
+
+    #[test]
+    fn selected_description_and_border_reveal_in_the_original_color_ramp() {
+        let mut r = room([false; 27]);
+        click(&mut r, 255, 315);
+        let early = r.pixels().to_vec();
+        for _ in 0..40 {
+            r.tick(&InputFrame::default());
+        }
+        // Settled border corner and glyph strokes use selected color 136.
+        assert_eq!(r.pixels()[4 * W + 3], 136);
+        let text_pixels = (8..100)
+            .flat_map(|y| &r.pixels()[y * W + 8..y * W + 200])
+            .filter(|&&p| p == 136)
+            .count();
+        assert!(
+            text_pixels > 700,
+            "original description missing: {text_pixels} selected-color pixels"
+        );
+        assert_ne!(
+            &r.pixels()[..W * 120],
+            &early[..W * 120],
+            "panel must reveal over time"
+        );
     }
 }

@@ -7255,16 +7255,22 @@ map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
      mutex; else first free of 2); write {+0 name, +2 staged ammo, +4 := 0,
      +6 staged spend, +8 := 8, +0xA item} (+0xC untouched). [The
      AUTO-LOADOUT writer differs only at +4: it stores the robot TYPE
-     there — a live-register artifact; the shop never reads +4 —
-     shop-internal, unconsumed.]
+     there — this initializes the shop icon animation counter; the
+     subsequent drawer increments it toward 9 (2026-09-06 correction).]
    - **DONE button** (x∈[0x238,0x267] × y∈[0x1be,0x1d8], highlight img 5,
      gated [0x4dc694] ≠ 0 — the enable flag written by the icon-grid
-     drawer FUN_00440287 @0x44029d/0x4402e5): requires a FREE weapon
+     drawer FUN_00440287 @0x44029d/0x4402e5): requires an OWNED weapon
      group (else stays); SP → the exit sequence; MP → draw the two
      waiting boxes (FUN_0043c87c over 0x46b49c/0x46b4cc, y 0xbe/0xdc)
      then the same exit + the MP sync (5).
+   **2026-09-06 correction:** +4 is the shop icon animation counter, not
+   unconsumed shop state: 0x4402c2..eb increments it toward 9 and clears
+   the DONE-ready flag while an owned row is still animating. DONE scans
+   for a nonzero name word, so it requires at least one owned weapon;
+   the former "FREE weapon group" wording reversed the predicate.
+   See RE-EXW-MISSION-ROOM.md for the exact scan and gate addresses.
 4. **Weapon-table writer census refined vs §7d.2** [verified]: the group
-   7-word layout is +0 name_idx, +2 ammo, +4 (shop artifact, unconsumed),
+   7-word layout is +0 name_idx, +2 ammo, +4 shop animation counter,
    +6 price, +8 category, +0xA item_idx, +0xC owned — §7d's
    "ammo, price, category, item_idx" word map was off by one slot (its
    price/category/item_idx sit at +6/+8/+0xA). The chassis table

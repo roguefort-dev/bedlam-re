@@ -132,3 +132,23 @@ has delay 8+min(r-1,15-r). Horizontal glyph 95, vertical 96, top corners
 The same three-state color table applies. State 2 is the selected unfinished
 mission, state 0 is the initial/unavailable panel. The per-entry countdown
 is decremented without drawing until zero (0x43f7b1 and 0x43fb40 tails).
+
+Description/border implementation now uses the original TINYFONT and color
+ramps, including delayed reveal, glyph widths, accents and border hotspot
+placement. It preserves LANGUAGE-authored rows and validates every selectable
+mission description in all six shipped languages. Corpus TINYFONT slots 105,
+106 and 113 are legitimately empty; they must not reject the whole font.
+A selected Boot Camp preview was compared with the live DOSBox selection:
+text, panel shape and open armoury door agree visually. Exact frame timing
+between EXW and EXD remains outside this visual check.
+
+## Shop DONE correction for the next integration pass
+
+[verified, correcting SIM 7j.45] DONE requires at least one **owned** weapon
+row, not a free row. The scan at 0x442a16..58 advances over zero name words;
+reaching seven means no owned weapon and jumps back without exiting.
+The 0x4dc694 flag is an animation-ready gate: 0x44029d sets it, and each
+owned row with its word@+4 below 9 clears it and increments that word
+(0x4402c2..eb, owned-row gate 0x440390..3a3). Thus +4 is not unconsumed
+inside the shop, contrary to the old prose. Both the click and highlight
+paths test the ready flag (0x4429f4 and 0x44369d).

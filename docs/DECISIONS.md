@@ -10494,3 +10494,16 @@ words are y,x for the room blitters. The module emits typed room actions;
 production integration awaits description/border and the armoury consumer.
 No shortcut from an Armoury click to Mission is authorized by this model.
 EXW anchors and visual comparison limits are in RE-EXW-MISSION-ROOM.md.
+
+
+### D245 — Preserve original mission descriptions and panel effects (2026-09-06)
+
+The mission-room panel uses LANGUAGE-authored rows and TINYFONT, with the
+EXW staggered line/border delays and three color ramps. Translation does not
+reflow text or substitute a modern font. All six shipped languages are checked
+for every selectable zone. Legitimate empty TINYFONT slots are accepted while
+undecodable glyphs fail staging. Original DOSBox selection was compared with
+the rendered Boot Camp panel. The room remains a module awaiting the armoury
+consumer and production journey wiring; no mission completion is inferred.
+The shop prerequisite audit also corrects the old DONE predicate: it requires
+an owned weapon and completed icon animation, not a free weapon slot.
