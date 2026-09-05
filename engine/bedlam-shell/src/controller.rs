@@ -1,0 +1,331 @@
+//! Scene lifecycle shared by window input, production replays, and the smoke harness.
+
+use bedlam_core::{input::InputFrame, sim::SimConfig};
+use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, Scene};
+
+use crate::chain::{stage_boot, stage_scene, ChainConfig};
+use crate::clock::SUBTICKS_PER_PUMP;
+
+/// A snapshot of player input, with no scene-transition authority.
+#[derive(Debug, Clone, Default)]
+pub struct ProductionInput(InputFrame);
+
+impl From<InputFrame> for ProductionInput {
+    fn from(frame: InputFrame) -> Self {
+        Self(frame)
+    }
+}
+
+/// One scene visit, measured in fixed host pumps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SceneVisit {
+    pub scene: Scene,
+    pub pumps: u64,
+}
+
+/// Owns the game and stages every scene before another input pump can run.
+/// Read-only host access supports rendering and diagnostics without exposing
+/// the legacy `GameHost::apply` transition shortcut.
+///
+/// ```compile_fail
+/// use bedlam_shell::ShellController;
+/// use bedlam_game::{ByteSource, SceneAction};
+/// fn cannot_complete<S: ByteSource>(game: &mut ShellController<S>) {
+///     game.pump(SceneAction::MissionComplete);
+/// }
+/// ```
+/// ```compile_fail
+/// use bedlam_shell::ShellController;
+/// use bedlam_game::{ByteSource, SceneAction};
+/// fn cannot_mutate_host<S: ByteSource>(game: &mut ShellController<S>) {
+///     game.host().apply(SceneAction::MissionComplete);
+/// }
+/// ```
+pub struct ShellController<S: ByteSource> {
+    host: GameHost,
+    source: S,
+    config: ChainConfig,
+    visits: Vec<SceneVisit>,
+}
+
+impl<S: ByteSource> ShellController<S> {
+    pub fn new(mut source: S, config: ChainConfig, sim: &SimConfig) -> Result<Self, GameError> {
+        let mut host = GameHost::new(&GameConfig::default(), sim, [[0; 3]; 256]);
+        stage_boot(&mut host, &mut source, config)?;
+        let scene = host.scene();
+        Ok(Self {
+            host,
+            source,
+            config,
+            visits: vec![SceneVisit { scene, pumps: 0 }],
+        })
+    }
+
+    pub fn host(&self) -> &GameHost {
+        &self.host
+    }
+    pub fn source(&self) -> &S {
+        &self.source
+    }
+    pub fn visits(&self) -> &[SceneVisit] {
+        &self.visits
+    }
+
+    /// Presentation-only asset fetch (for example the native UI font).
+    pub fn load_asset(&mut self, name: &str) -> Result<Vec<u8>, GameError> {
+        self.source.load(name)
+    }
+
+    pub fn recompose(&mut self, alpha: f32) -> bool {
+        self.host.recompose(alpha)
+    }
+    pub fn render_audio(&mut self, out: &mut [i16]) -> Result<usize, GameError> {
+        self.host.render_audio(out)
+    }
+
+    pub fn pump(&mut self, input: ProductionInput) -> Result<(), GameError> {
+        self.step(input, None).map(|_| ())
+    }
+
+    /// Deterministic replay drain, at the historical pre-staging audio boundary.
+    pub fn pump_with_audio(
+        &mut self,
+        input: ProductionInput,
+        out: &mut [i16],
+    ) -> Result<usize, GameError> {
+        self.step(input, Some(out))
+    }
+
+    fn step(
+        &mut self,
+        input: ProductionInput,
+        audio: Option<&mut [i16]>,
+    ) -> Result<usize, GameError> {
+        // Retry a failed entry before allowing any further input to reach it.
+        self.stage_entered()?;
+        self.host.pump_frame(SUBTICKS_PER_PUMP, &input.0);
+        let mixed = audio.map(|out| self.host.render_audio(out)).transpose();
+        self.stage_entered()?;
+        self.visits.last_mut().expect("seeded").pumps += 1;
+        Ok(mixed?.unwrap_or(0))
+    }
+
+    fn stage_entered(&mut self) -> Result<(), GameError> {
+        if self.host.scene() != self.visits.last().expect("seeded").scene {
+            stage_scene(&mut self.host, &mut self.source, self.config)?;
+            self.visits.push(SceneVisit {
+                scene: self.host.scene(),
+                pumps: 0,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Explicitly synthetic compatibility harness. Never a player input source.
+pub mod harness {
+    use super::*;
+    use bedlam_game::SceneAction;
+
+    /// One host-applied walk step: hold the CURRENT scene for `hold`
+    /// host pumps, then apply `action`. This compatibility smoke fabricates
+    /// transitions and must never be counted as a production gameplay trace.
+    pub type WalkStep = (u64, SceneAction);
+
+    /// The default campaign walk: boot attract -> title -> boot-camp
+    /// brief -> select -> mission -> debrief -> cutscene (zone 1
+    /// complete; the D32-D35 chain: cutscene + BETWEEN + region loading
+    /// screen + FULLFONT/FULLPAL + LANGUAGE) -> select. The cutscene
+    /// hold is long enough to run a real slice of the ZONEDONE pass and
+    /// hand the plane to the D34 loading flow.
+    pub fn default_walk() -> Vec<WalkStep> {
+        vec![
+            (30, SceneAction::Advance),         // Title -> Brief
+            (40, SceneAction::Advance),         // Brief -> Select
+            (10, SceneAction::Advance),         // Select -> Mission
+            (20, SceneAction::MissionComplete), // Mission -> Debrief (zone 1)
+            (10, SceneAction::Advance),         // Debrief -> Cutscene (pending)
+            (400, SceneAction::Advance),        // Cutscene -> Select
+        ]
+    }
+
+    pub(crate) struct HarnessController<S: ByteSource>(pub(crate) ShellController<S>);
+
+    impl<S: ByteSource> HarnessController<S> {
+        pub(crate) fn apply(&mut self, action: SceneAction) -> Result<(), GameError> {
+            self.0.host.apply(action);
+            self.0.stage_entered()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::headless::GameGfxSource;
+    use crate::input::ShellKey;
+
+    fn game() -> ShellController<GameGfxSource> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM");
+        ShellController::new(
+            GameGfxSource::new(root),
+            ChainConfig::default(),
+            &SimConfig::default(),
+        )
+        .unwrap()
+    }
+
+    fn title(game: &mut ShellController<GameGfxSource>) {
+        for _ in 0..100 {
+            if game.host().scene() == Scene::Title {
+                break;
+            }
+            game.pump(
+                InputFrame {
+                    buttons: ShellKey::Escape.bit(),
+                    ..Default::default()
+                }
+                .into(),
+            )
+            .unwrap();
+        }
+        assert_eq!(game.host().scene(), Scene::Title);
+        assert!(
+            game.host().menu().is_some(),
+            "entry assets must be staged before the next input"
+        );
+        game.pump(InputFrame::default().into()).unwrap();
+        game.pump(
+            InputFrame {
+                buttons: ShellKey::Escape.bit(),
+                ..Default::default()
+            }
+            .into(),
+        )
+        .unwrap();
+        game.pump(InputFrame::default().into()).unwrap();
+    }
+
+    #[test]
+    fn production_input_journey_stages_each_entry_before_the_next_pump() {
+        let mut game = game();
+        title(&mut game);
+        let (x, y) = game.host().menu_cursor().unwrap();
+        game.pump(
+            InputFrame {
+                mouse_dx: (320 - x) as i16,
+                mouse_dy: (314 - y) as i16,
+                mouse_buttons: 1,
+                ..Default::default()
+            }
+            .into(),
+        )
+        .unwrap();
+        assert_eq!(game.host().scene(), Scene::Brief);
+        for expected in [Scene::Select, Scene::Mission] {
+            game.pump(InputFrame::default().into()).unwrap();
+            game.pump(
+                InputFrame {
+                    mouse_buttons: 1,
+                    ..Default::default()
+                }
+                .into(),
+            )
+            .unwrap();
+            assert_eq!(game.host().scene(), expected);
+        }
+        assert!(
+            game.host().mission().is_some(),
+            "mission is ready when the transition pump returns"
+        );
+        assert!(game
+            .source()
+            .fetched()
+            .iter()
+            .any(|(name, _)| name.contains("ZONEA/MISSION1")));
+        assert_eq!(
+            game.visits().iter().map(|v| v.scene).collect::<Vec<_>>(),
+            vec![
+                Scene::Boot,
+                Scene::Title,
+                Scene::Brief,
+                Scene::Select,
+                Scene::Mission
+            ]
+        );
+        // Arbitrary mouse edges never stand in for MissionComplete.
+        for _ in 0..3 {
+            game.pump(InputFrame::default().into()).unwrap();
+            game.pump(
+                InputFrame {
+                    mouse_buttons: 1,
+                    ..Default::default()
+                }
+                .into(),
+            )
+            .unwrap();
+        }
+        assert_eq!(game.host().scene(), Scene::Mission);
+    }
+
+    #[test]
+    fn failed_entry_blocks_further_input_until_assets_can_be_staged() {
+        struct FailingTitle {
+            source: GameGfxSource,
+            failures: u8,
+        }
+        impl ByteSource for FailingTitle {
+            fn load(&mut self, name: &str) -> Result<Vec<u8>, GameError> {
+                if name == "TITLE.SMK" && self.failures > 0 {
+                    self.failures -= 1;
+                    return Err(GameError::AssetMissing { name: name.into() });
+                }
+                self.source.load(name)
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM");
+        let mut game = ShellController::new(
+            FailingTitle {
+                source: GameGfxSource::new(root),
+                failures: 2,
+            },
+            ChainConfig::default(),
+            &SimConfig::default(),
+        )
+        .unwrap();
+        for _ in 0..100 {
+            if game
+                .pump(
+                    InputFrame {
+                        buttons: ShellKey::Escape.bit(),
+                        ..Default::default()
+                    }
+                    .into(),
+                )
+                .is_err()
+            {
+                break;
+            }
+        }
+        assert_eq!(game.host().scene(), Scene::Title);
+        assert_eq!(game.visits().last().unwrap().scene, Scene::Boot);
+        let tick = game.host().driver().sim().tick_index();
+        assert!(game
+            .pump(
+                InputFrame {
+                    mouse_buttons: 1,
+                    ..Default::default()
+                }
+                .into()
+            )
+            .is_err());
+        assert_eq!(
+            game.host().driver().sim().tick_index(),
+            tick,
+            "failed staging must not consume another input step"
+        );
+        game.pump(ProductionInput::default()).unwrap();
+        assert_eq!(game.visits().last().unwrap().scene, Scene::Title);
+        assert!(game.host().menu().is_some());
+    }
+}

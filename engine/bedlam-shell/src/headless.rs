@@ -29,11 +29,12 @@ const PARENT: &str = "..";
 use std::path::{Path, PathBuf};
 
 use bedlam_core::input::InputFrame;
-use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, Scene, SceneAction};
+use bedlam_game::{ByteSource, GameError, SceneAction};
 
 use crate::audio::PUMP_FRAMES;
-use crate::chain::{stage_boot, stage_scene, ChainConfig};
-use crate::clock::SUBTICKS_PER_PUMP;
+use crate::chain::ChainConfig;
+pub use crate::controller::SceneVisit;
+use crate::controller::{harness::HarnessController, ShellController};
 
 /// fs-backed [`ByteSource`] over one install tree (the shipped
 /// BEDLAM directory): a bare name resolves `GAMEGFX/<name>` first,
@@ -105,28 +106,7 @@ impl ByteSource for GameGfxSource {
     }
 }
 
-/// One host-applied walk step: hold the CURRENT scene for `hold`
-/// host pumps, then apply `action` (the input path cannot derive UI
-/// intents yet - ADVANCE edges come from mouse clicks in EXW; the
-/// shell script stands in for them).
-pub type WalkStep = (u64, SceneAction);
-
-/// The default campaign walk: boot attract -> title -> boot-camp
-/// brief -> select -> mission -> debrief -> cutscene (zone 1
-/// complete; the D32-D35 chain: cutscene + BETWEEN + region loading
-/// screen + FULLFONT/FULLPAL + LANGUAGE) -> select. The cutscene
-/// hold is long enough to run a real slice of the ZONEDONE pass and
-/// hand the plane to the D34 loading flow.
-pub fn default_walk() -> Vec<WalkStep> {
-    vec![
-        (30, SceneAction::Advance),         // Title -> Brief
-        (40, SceneAction::Advance),         // Brief -> Select
-        (10, SceneAction::Advance),         // Select -> Mission
-        (20, SceneAction::MissionComplete), // Mission -> Debrief (zone 1)
-        (10, SceneAction::Advance),         // Debrief -> Cutscene (pending)
-        (400, SceneAction::Advance),        // Cutscene -> Select
-    ]
-}
+pub use crate::controller::harness::{default_walk, WalkStep};
 
 /// Headless smoke options.
 #[derive(Debug, Clone)]
@@ -154,13 +134,6 @@ impl HeadlessOptions {
             walk: default_walk(),
         }
     }
-}
-
-/// One visited scene and how many host pumps it absorbed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SceneVisit {
-    pub scene: Scene,
-    pub pumps: u64,
 }
 
 /// What the smoke run did. `PartialEq` is the determinism gate: two
@@ -197,20 +170,14 @@ pub struct HeadlessReport {
 /// happens BETWEEN the transition and the next pump, exactly where
 /// the D31 lifecycle expects the slot to exist.
 pub fn run_headless(opts: &HeadlessOptions) -> Result<HeadlessReport, GameError> {
-    let mut source = GameGfxSource::new(&opts.gfx_dir);
-    let mut host = GameHost::new(
-        &GameConfig::default(),
+    let mut harness = HarnessController(ShellController::new(
+        GameGfxSource::new(&opts.gfx_dir),
+        opts.config,
         &bedlam_core::sim::SimConfig::default(),
-        [[0u8, 0, 0]; 256],
-    );
-    stage_boot(&mut host, &mut source, opts.config)?;
+    )?);
 
     let neutral = InputFrame::default();
     let mut walk: VecDeque<WalkStep> = opts.walk.iter().copied().collect();
-    let mut scenes = vec![SceneVisit {
-        scene: host.scene(),
-        pumps: 0,
-    }];
     let mut actions: Vec<(u64, SceneAction)> = Vec::new();
     let mut held = 0u64;
     // Audio smoke drain: one reusable scratch (fixed size, no
@@ -221,66 +188,40 @@ pub fn run_headless(opts: &HeadlessOptions) -> Result<HeadlessReport, GameError>
     let mut audio_nonzero = 0u64;
 
     for pump in 0..opts.pumps {
+        let visits_before = harness.0.visits().len();
         // 1. Walk step due? Apply the host intent.
         if held >= walk.front().map_or(u64::MAX, |step| step.0) {
             let (_, action) = walk.pop_front().expect("front checked");
             if action != SceneAction::None {
-                host.apply(action);
+                harness.apply(action)?;
                 actions.push((pump, action));
             }
             held = 0;
         }
-        // 2. Stage on a scene change from the apply (pre-pump: the
-        //    slot must exist before sync_* runs inside the pump).
-        stage_if_entered(&mut host, &mut source, opts.config, &mut scenes, &mut held)?;
-        // 3. One fixed 60 Hz host pump.
-        host.pump_frame(SUBTICKS_PER_PUMP, &neutral);
-        // 4. Audio smoke drain: the same per-pump mix the device
-        //    path would consume (D40; chunking-invariant, un-hashed).
-        let mixed = host.render_audio(&mut audio_scratch)?;
+        // The shared controller owns pumping and entry staging. The explicit
+        // harness above is the only source of synthetic scene actions.
+        let mixed = harness
+            .0
+            .pump_with_audio(neutral.into(), &mut audio_scratch)?;
         audio_frames += mixed as u64;
         audio_nonzero += audio_scratch[..mixed * 2]
             .iter()
             .filter(|&&s| s != 0)
             .count() as u64;
-        // 5. Stage on a scene change from the pump (auto exits).
-        stage_if_entered(&mut host, &mut source, opts.config, &mut scenes, &mut held)?;
-        // 6. Bookkeeping.
-        scenes.last_mut().expect("seeded").pumps += 1;
+        if harness.0.visits().len() != visits_before {
+            held = 0;
+        }
         held += 1;
     }
 
     Ok(HeadlessReport {
         pumps: opts.pumps,
-        scenes,
+        scenes: harness.0.visits().to_vec(),
         actions,
-        assets: source.fetched().to_vec(),
-        scene_hash: host.scene_hash().0,
-        frame_hash: host.frame().parity_hash(),
+        assets: harness.0.source().fetched().to_vec(),
+        scene_hash: harness.0.host().scene_hash().0,
+        frame_hash: harness.0.host().frame().parity_hash(),
         audio_frames,
         audio_nonzero_samples: audio_nonzero,
     })
-}
-
-/// Stage the just-entered scene (fetch + hand the D31-D37 assets to
-/// the host) and open a new visit entry. No-op when the scene did
-/// not change.
-fn stage_if_entered(
-    host: &mut GameHost,
-    source: &mut GameGfxSource,
-    config: ChainConfig,
-    scenes: &mut Vec<SceneVisit>,
-    held: &mut u64,
-) -> Result<(), GameError> {
-    let current = scenes.last().expect("seeded").scene;
-    if host.scene() == current {
-        return Ok(());
-    }
-    stage_scene(host, source, config)?;
-    scenes.push(SceneVisit {
-        scene: host.scene(),
-        pumps: 0,
-    });
-    *held = 0;
-    Ok(())
 }

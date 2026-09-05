@@ -74,6 +74,7 @@ pub mod audio;
 pub mod cdda;
 pub mod chain;
 pub mod clock;
+pub mod controller;
 pub mod headless;
 pub mod input;
 pub mod native;
@@ -89,6 +90,7 @@ pub use audio::{
 pub use cdda::{CddaOptions, MusicCachePolicy, CDDA_TRACK_COUNT, MUSIC_DIR_ENV};
 pub use chain::{scene_assets, stage_boot, stage_scene, ChainConfig};
 pub use clock::FixedStepClock;
+pub use controller::{ProductionInput, ShellController};
 pub use headless::{
     default_walk, run_headless, GameGfxSource, HeadlessOptions, HeadlessReport, SceneVisit,
     WalkStep,

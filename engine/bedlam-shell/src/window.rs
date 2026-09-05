@@ -176,7 +176,9 @@ use std::time::{Duration, Instant};
 
 use bedlam_core::mode::ModeConfig;
 use bedlam_core::sim::SimConfig;
-use bedlam_game::{ByteSource, GameConfig, GameError, GameHost, Scene};
+#[cfg(test)]
+use bedlam_game::GameConfig;
+use bedlam_game::{GameError, GameHost, Scene};
 use bedlam_platform::layout::{layout_cursor_to_game, responsive_frame, PresentationMode};
 use bedlam_platform::scale::{scale_rect, FilterMode, PresentConfig, Rect, ScaleMode};
 use bedlam_platform::{ParityGpu, ParityPipeline};
@@ -191,8 +193,13 @@ use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::audio::{AudioDevice, VolumeMixers, TARGET_FRAMES};
 use crate::cdda::{self, CddaOptions};
-use crate::chain::{stage_boot, stage_scene, ChainConfig};
-use crate::clock::{FixedStepClock, SUBTICKS_PER_PUMP};
+#[cfg(test)]
+use crate::chain::stage_scene;
+use crate::chain::ChainConfig;
+use crate::clock::FixedStepClock;
+#[cfg(test)]
+use crate::clock::SUBTICKS_PER_PUMP;
+use crate::controller::ShellController;
 use crate::headless::GameGfxSource;
 use crate::input::{map_mouse_button, ControlScheme, ShellInput};
 use crate::native::{
@@ -829,17 +836,11 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
     opts.size = (opts.size.0.max(64), opts.size.1.max(64));
     let event_loop = EventLoop::new().map_err(|e| ShellError::EventLoop(e.to_string()))?;
 
-    let mut source = GameGfxSource::new(&opts.gfx_dir);
-    // P6 mode plumbing (D205): ONE immutable ModeConfig from the
-    // platform options feeds BOTH construction sites — the host
-    // (so the present gate answers under the plumbed mode) and the
-    // input mapper (the D204 consumer's platform selection).
-    let mut host = GameHost::new(
-        &GameConfig::default(),
+    let mut controller = ShellController::new(
+        GameGfxSource::new(&opts.gfx_dir),
+        opts.config,
         &host_sim_config(&opts),
-        [[0u8, 0, 0]; 256],
-    );
-    stage_boot(&mut host, &mut source, opts.config)?;
+    )?;
 
     // Audio (step 2, D40): open the default output device, best
     // effort - no device (or no workable config) runs silent, the
@@ -865,7 +866,7 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
                 );
             }
             let feed = dev.feed().clone();
-            if let Err(err) = feed.fill_from(&mut host, TARGET_FRAMES) {
+            if let Err(err) = feed.fill_from_controller(&mut controller, TARGET_FRAMES) {
                 eprintln!("bedlam-shell: audio prefill failed ({err}); continuing");
             }
         }
@@ -895,9 +896,7 @@ pub fn run_window(mut opts: WindowOptions) -> Result<(), ShellError> {
     let input = shell_input_for(&opts);
     let mut app = ShellApp {
         opts,
-        source,
-        host,
-        scene: Scene::Boot,
+        controller,
         input,
         clock: FixedStepClock::host(),
         smlfont: None,
@@ -1109,9 +1108,7 @@ impl WindowHost {
 /// teardown explicitly - see its ordered-teardown block.
 struct ShellApp {
     opts: WindowOptions,
-    source: GameGfxSource,
-    host: GameHost,
-    scene: Scene,
+    controller: ShellController<GameGfxSource>,
     input: ShellInput,
     clock: FixedStepClock,
     /// The ENHANCED native pass's SMLFONT bank cache (P6 opener):
@@ -1237,33 +1234,22 @@ mod mission_pointer_tests {
 }
 
 impl ShellApp {
-    /// Stage the scene the host just entered. On staging failure the
-    /// loop records the error and exits (a missing corpus asset is
-    /// fatal for the window host too - the EXW movie opens fail
-    /// hard).
-    fn stage_entered(&mut self, event_loop: &ActiveEventLoop) {
-        if self.host.scene() != self.scene {
-            let config = self.opts.config;
-            if let Err(err) = stage_scene(&mut self.host, &mut self.source, config) {
-                self.fatal = Some(err.into());
-                event_loop.exit();
-                return;
-            }
-            self.scene = self.host.scene();
-        }
-    }
-
     /// Execute `pumps` fixed 60 Hz host pumps (timing decided HOW
     /// MANY; each pump is the same fixed dt + an input snapshot).
-    fn run_pumps(&mut self, pumps: u32) {
+    fn run_pumps(&mut self, pumps: u32) -> Result<(), GameError> {
         for _ in 0..pumps {
             let mut frame = self.input.tick();
             // Both menus and missions consume canonical relative deltas.
             // Align the active scene's cursor with the visible window pointer
             // before the click is consumed, including after entry or refocus.
-            steer_pointer(&self.host, &mut frame, self.game_cursor_target());
-            self.host.pump_frame(SUBTICKS_PER_PUMP, &frame);
+            steer_pointer(
+                self.controller.host(),
+                &mut frame,
+                self.game_cursor_target(),
+            );
+            self.controller.pump(frame.into())?;
         }
+        Ok(())
     }
 
     /// The real cursor in game space, when the window knows both the
@@ -1308,7 +1294,7 @@ impl ShellApp {
         // surface write is gated. Presentation-bucket only: the
         // gate reads the plumbed mode + the last pump's tick count,
         // neither hashed.
-        if !present_due(&self.host) {
+        if !present_due(self.controller.host()) {
             return;
         }
         // P6 COMPOSITION POLICY (p6-high-refresh-interpolation): the
@@ -1320,8 +1306,8 @@ impl ShellApp {
         // pump's parity frame uploads as-is. Presentation-bucket
         // only (D17 b): recompose mutates the frame and nothing
         // else; the next pump re-renders parity regardless.
-        if let Some(alpha) = present_camera_alpha(&self.host, &self.clock) {
-            self.host.recompose(alpha);
+        if let Some(alpha) = present_camera_alpha(self.controller.host(), &self.clock) {
+            self.controller.recompose(alpha);
         }
         // P6 ENHANCED NATIVE RENDER (the opener): the composition
         // decision is made BEFORE the surface borrow so the strip
@@ -1353,7 +1339,7 @@ impl ShellApp {
         let Some(g) = self.gfx.as_mut() else {
             return;
         };
-        g.pipeline.upload_frame(self.host.frame());
+        g.pipeline.upload_frame(self.controller.host().frame());
         let surface_texture = match g.surface.get_current_texture() {
             Ok(tex) => tex,
             Err(err) => {
@@ -1412,7 +1398,7 @@ impl ShellApp {
                         ));
                     }
                     if let Some((_, _, ui)) = g.ui.as_mut() {
-                        ui.upload_indexed(&plane.indices, &self.host.frame().palette);
+                        ui.upload_indexed(&plane.indices, &self.controller.host().frame().palette);
                         let cfg = PresentConfig {
                             scale: ScaleMode::Integer,
                             filter: FilterMode::Nearest,
@@ -1432,7 +1418,10 @@ impl ShellApp {
     /// engine answers, over the cached SMLFONT bank. Presentation
     /// bucket ONLY — reads the host, never mutates it.
     fn stage_native_strip(&mut self) -> Option<NativeStripPlane> {
-        let slot = strip_slot_for(self.host.scene(), self.host.mission_slot())?;
+        let slot = strip_slot_for(
+            self.controller.host().scene(),
+            self.controller.host().mission_slot(),
+        )?;
         let bank = self.smlfont_bytes()?;
         build_identity_strip(bank, slot.0, slot.1, STRIP_SCALE)
     }
@@ -1442,7 +1431,7 @@ impl ShellApp {
     /// note — best-effort platform surface, never fatal).
     fn smlfont_bytes(&mut self) -> Option<&[u8]> {
         if self.smlfont.is_none() {
-            let fetched = match self.source.load(SMLFONT_NAME) {
+            let fetched = match self.controller.load_asset(SMLFONT_NAME) {
                 Ok(bytes) => Some(bytes),
                 Err(err) => {
                     eprintln!(
@@ -1597,20 +1586,19 @@ impl ApplicationHandler for ShellApp {
             self.clock.advance(delta_ns)
         };
         // 2. Run them (fixed dt + input snapshots each).
-        self.run_pumps(pumps);
+        if let Err(err) = self.run_pumps(pumps) {
+            self.fatal = Some(err.into());
+            event_loop.exit();
+            return;
+        }
         // 3. Refill the audio ring toward the watermark (the device
         //    callback drains it at its own pace; production self-
         //    balances against the device clock - D40). The Arc comes
         //    out first so host and audio borrow disjointly.
         if let Some(feed) = self.audio.as_ref().map(|dev| dev.feed().clone()) {
-            if let Err(err) = feed.fill_from(&mut self.host, TARGET_FRAMES) {
+            if let Err(err) = feed.fill_from_controller(&mut self.controller, TARGET_FRAMES) {
                 eprintln!("bedlam-shell: audio fill failed ({err}); continuing");
             }
-        }
-        // 4. Stage any scene the pumps entered.
-        self.stage_entered(event_loop);
-        if self.fatal.is_some() {
-            return;
         }
         // 5. Request the next frame. UNCONDITIONAL in both arms
         //    (loop liveness: the vsync-paced redraw cycle keeps

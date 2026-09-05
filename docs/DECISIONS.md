@@ -10462,3 +10462,22 @@ production regression went from zero colored pixels to a rendered backdrop;
 live window comparison confirms the artwork. Invalid replacement inputs retain
 the prior valid backdrop. The canonical control tests and headless endpoint
 hashes remain unchanged. No phase completion is inferred. See PLAYTEST-2026-09-06.
+
+
+### D243 — One production shell lifecycle, explicit synthetic smoke (2026-09-06)
+
+ShellController owns GameHost, the corpus source and scene visits. The winit
+loop and headless compatibility smoke both use its fixed pump and per-entry
+staging; production accepts only ProductionInput snapshots and exposes no
+mutable GameHost. Synthetic SceneAction injection lives in the explicitly
+named controller::harness module, reachable by the compatibility harness,
+not through the production controller API. Compile-fail examples check both
+attempted action injection and attempted mutation through host access.
+
+Stage after each pump, not once after a window batch, and retry failed entry
+staging before accepting further input. Preserve the smoke's audio drain before
+post-pump staging, so its recorded scene/frame/audio baseline remains exact.
+The existing blank Brief/Select route is tested as current behavior, not product
+completion. DOSBox playtesting now reached Boot Camp through the original
+mission room and Auto equipment selection, and established ground movement and
+a tutorial panel absent from the remaster. See PLAYTEST-2026-09-06.

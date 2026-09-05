@@ -562,6 +562,22 @@ impl AudioFeed {
     /// `render_audio` output is identical under every knob setting
     /// (pinned by test); only this device-bound copy scales.
     pub fn fill_from(&self, host: &mut GameHost, target: usize) -> Result<usize, GameError> {
+        self.fill_with(target, |out| host.render_audio(out))
+    }
+
+    pub fn fill_from_controller<S: bedlam_game::ByteSource>(
+        &self,
+        controller: &mut crate::controller::ShellController<S>,
+        target: usize,
+    ) -> Result<usize, GameError> {
+        self.fill_with(target, |out| controller.render_audio(out))
+    }
+
+    fn fill_with(
+        &self,
+        target: usize,
+        render: impl FnOnce(&mut [i16]) -> Result<usize, GameError>,
+    ) -> Result<usize, GameError> {
         if self.is_quiet() {
             return Ok(0);
         }
@@ -570,7 +586,7 @@ impl AudioFeed {
             return Ok(0);
         }
         let mut scratch = vec![0i16; deficit * 2];
-        let mixed = host.render_audio(&mut scratch)?;
+        let mixed = render(&mut scratch)?;
         apply_stream_gain(&mut scratch[..mixed * 2], self.mixers().stream_gain_q8());
         let mut state = self.lock();
         let taken = state.ring.push_frames(&scratch[..mixed * 2]);
