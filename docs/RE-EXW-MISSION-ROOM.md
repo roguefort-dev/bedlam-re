@@ -79,3 +79,30 @@ retries, then tops up ammunition and sorts groups. The observed STANDARD
 it as the Auto algorithm. DONE enable semantics must be rechecked at
 0x440287 before wiring; the old prose's "requires a FREE weapon group"
 is not enough evidence to infer that the player may leave empty-handed.
+
+
+## First implementation boundary
+
+MissionRoom now loads the original room/region/mask assets, translates region
+pixels with TXPAL3 while preserving RLE coverage, animates the two doors,
+uses the mask to select missions in the current zone, and emits typed
+Armoury/Briefing/Back actions. The viewport input cannot advance through a
+locked door or an unrelated zone. SELDARK shades the description rectangle
+at (1,1), 205x119, exactly as 0x43eb38..4f / FUN_00402a56 specify.
+
+The room is not yet attached to GameHost. Description text, animated border,
+entry sounds/music, and the armoury consumer remain in this queue item.
+A standalone local raster preview was compared with the live DOSBox room:
+map geography, region placement, door art and layout agree visually; this is
+not a pixel-exact timing/color verdict. The next implementation pass must
+finish the text/border and connect the room and shop through production
+input, not turn the Armoury action into a shortcut directly to Mission.
+
+Regression coverage: real-corpus Boot Camp selection and door gating,
+completed/other-zone rejection, translation-table placement and RLE skips;
+codec coverage test distinguishes a literal zero from a skipped pixel.
+
+Validation for this module boundary: bedlam-assets library 100 passed;
+bedlam-game library 156 passed; canonical_dump_gate, zone_mission_parity and
+determinism passed with unchanged pins. Release clippy/all-targets and fmt
+passed. Corpus manifest verified around every asset read. Queue remains open.

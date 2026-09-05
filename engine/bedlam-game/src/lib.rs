@@ -28,6 +28,7 @@ pub mod host;
 pub mod loading;
 pub mod menu;
 pub mod mission;
+pub mod mission_room;
 pub mod movie;
 pub mod movies;
 pub mod music;
@@ -90,6 +91,11 @@ pub enum GameError {
     /// base, bad ramp).
     #[error("title-menu asset {what}: {reason}")]
     BadMenuAsset {
+        what: &'static str,
+        reason: &'static str,
+    },
+    #[error("mission-room asset {what}: {reason}")]
+    BadMissionRoomAsset {
         what: &'static str,
         reason: &'static str,
     },

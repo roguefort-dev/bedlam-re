@@ -11,6 +11,23 @@ use crate::CodecError;
 /// Output is `w*h` bytes, zero-initialized. `guard` bounds total word count so
 /// hostile streams terminate instead of looping.
 pub fn decode_rle16(data: &[u8], w: usize, h: usize) -> Result<Vec<u8>, CodecError> {
+    decode_rle16_inner(data, w, h, None)
+}
+
+/// Decode RLE16 while retaining which pixels came from literal spans.
+/// Palette-translation blitters distinguish literal zero from an RLE skip.
+pub fn decode_rle16_coverage(data: &[u8], w: usize, h: usize) -> Result<Vec<bool>, CodecError> {
+    let mut coverage = vec![false; w * h];
+    decode_rle16_inner(data, w, h, Some(&mut coverage))?;
+    Ok(coverage)
+}
+
+fn decode_rle16_inner(
+    data: &[u8],
+    w: usize,
+    h: usize,
+    mut coverage: Option<&mut [bool]>,
+) -> Result<Vec<u8>, CodecError> {
     let mut out = vec![0u8; w * h];
     let mut p = 0usize;
     let mut guard = 0usize;
@@ -33,6 +50,9 @@ pub fn decode_rle16(data: &[u8], w: usize, h: usize) -> Result<Vec<u8>, CodecErr
                 for k in 0..n {
                     if x + k < w {
                         out[row * w + x + k] = data[p + k];
+                        if let Some(mask) = coverage.as_deref_mut() {
+                            mask[row * w + x + k] = true;
+                        }
                     }
                 }
                 x += n;
@@ -375,5 +395,21 @@ mod tests {
             let encb = encode_byterle(w, h, &px);
             assert_eq!(decode_byterle(&encb, w, h).unwrap(), px, "byterle {w}x{h}");
         }
+    }
+}
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    #[test]
+    fn literal_zero_is_covered_but_skip_is_not() {
+        // One skipped pixel, then literal zero and 7 ending the row.
+        let bytes = [1, 0x80, 2, 0x40, 0, 7];
+        assert_eq!(decode_rle16(&bytes, 3, 1).unwrap(), vec![0, 0, 7]);
+        assert_eq!(
+            decode_rle16_coverage(&bytes, 3, 1).unwrap(),
+            vec![false, true, true]
+        );
+        assert!(decode_rle16_coverage(&bytes[..5], 3, 1).is_err());
     }
 }

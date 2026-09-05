@@ -10481,3 +10481,16 @@ The existing blank Brief/Select route is tested as current behavior, not product
 completion. DOSBox playtesting now reached Boot Camp through the original
 mission room and Auto equipment selection, and established ground movement and
 a tutorial panel absent from the remaster. See PLAYTEST-2026-09-06.
+
+
+### D244 — Mission-room model follows original mask and translation blitters (2026-09-06)
+
+Build MissionRoom from SELECTOR, NORMAL and SELMONT rather than geometric
+approximations or hard-coded clickable regions. Preserve RLE literal coverage
+for the original TXPAL3 translation operation: decoded zero alone cannot tell
+an opaque zero from a skipped span. The existing pixel-only decoder remains
+byte-identical; a companion coverage API shares its parser. File-order hotspot
+words are y,x for the room blitters. The module emits typed room actions;
+production integration awaits description/border and the armoury consumer.
+No shortcut from an Armoury click to Mission is authorized by this model.
+EXW anchors and visual comparison limits are in RE-EXW-MISSION-ROOM.md.
