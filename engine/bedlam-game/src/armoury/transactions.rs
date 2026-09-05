@@ -39,6 +39,67 @@ impl Transactions {
         }
     }
 
+    /// EXW Auto transaction pass. The caller supplies secondary bounded
+    /// random draws, each strictly below the requested bound.
+    pub fn auto(&mut self, mut random: impl FnMut(u32) -> u32) {
+        for row in self.weapons.iter().chain(self.equipment.iter()).flatten() {
+            self.balance = self.balance.wrapping_add(u32::from(row.paid));
+        }
+        self.weapons.fill(None);
+        self.equipment.fill(None);
+        self.cart = None;
+        if self.balance >= 2400 && self.catalog.available(8, 4) {
+            self.select(8, 4);
+            self.buy();
+        }
+        let attempts = random(5);
+        assert!(attempts < 5, "bounded secondary RNG");
+        let attempts = attempts as usize + 3;
+        for _ in 0..attempts {
+            for _ in 0..50 {
+                let category = random(9) as usize;
+                assert!(category < 9, "bounded secondary RNG");
+                let count = super::catalog::CATEGORIES[category].items.len();
+                let index = random(count as u32) as usize;
+                assert!(index < count, "bounded secondary RNG");
+                let item = self.catalog.item(category, index).expect("bounded item");
+                if !self.catalog.available(category, index) || self.slot(category, item).is_none() {
+                    continue;
+                }
+                // A valid but unaffordable choice consumes this outer attempt.
+                if self.select(category, index) {
+                    self.buy();
+                }
+                break;
+            }
+        }
+        if self.has_weapon() {
+            loop {
+                let mut unaffordable = false;
+                for row in self.weapons[..attempts].iter_mut().flatten() {
+                    let item = self
+                        .catalog
+                        .item(row.category, row.item)
+                        .expect("owned item");
+                    if self.balance < u32::from(item.price) {
+                        unaffordable = true;
+                    } else {
+                        self.balance -= u32::from(item.price);
+                        row.amount = row.amount.wrapping_add(item.amount);
+                        row.paid = row.paid.wrapping_add(item.price);
+                    }
+                }
+                if unaffordable {
+                    break;
+                }
+            }
+        }
+        const RANK: [u8; 9] = [7, 2, 6, 4, 3, 1, 8, 5, 2];
+        self.weapons
+            .sort_by_key(|row| std::cmp::Reverse(row.map_or(0, |r| RANK[r.category])));
+        self.cart = None;
+    }
+
     pub fn catalog(&self) -> &Catalog {
         &self.catalog
     }
@@ -211,6 +272,31 @@ mod tests {
     use crate::armoury::catalog::Mode;
     fn shop(balance: u32) -> Transactions {
         Transactions::new(Catalog::new(Mode::Campaign, 2, [1; 15]).unwrap(), balance)
+    }
+
+    #[test]
+    fn auto_stops_top_up_after_any_unaffordable_weapon() {
+        let mut shop = shop(1200);
+        let mut draws = [0, 0, 0, 1, 0, 6, 0].into_iter();
+        shop.auto(|_| draws.next().expect("exact call order"));
+        assert_eq!(shop.balance(), 100);
+        // First pass buys Needler ammo, cannot afford Hades, then buys Plasma.
+        assert_eq!(shop.weapons()[0].unwrap().name, 6);
+        assert_eq!(shop.weapons()[0].unwrap().amount, 600);
+        assert_eq!(shop.weapons()[1].unwrap().name, 2);
+        assert_eq!(shop.weapons()[1].unwrap().amount, 600);
+        assert_eq!(shop.weapons()[2].unwrap().name, 9);
+        assert!(draws.next().is_none());
+    }
+
+    #[test]
+    fn auto_unaffordable_valid_candidate_ends_attempt() {
+        let mut shop = shop(100);
+        let mut draws = [0, 1, 0, 1, 0, 0, 0].into_iter();
+        shop.auto(|_| draws.next().expect("must not retry expensive candidate"));
+        assert_eq!(shop.balance(), 0);
+        assert_eq!(shop.weapons()[0].unwrap().name, 2);
+        assert!(draws.next().is_none());
     }
 
     #[test]

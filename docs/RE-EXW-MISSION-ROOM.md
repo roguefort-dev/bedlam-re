@@ -381,3 +381,12 @@ secondary RNG ownership remain to implement.
 weapon row y=410..411 clamps to slot 6 (0x441b49..5a). The input model
 now preserves owned items while another purchase is pending and clamps
 that final hit strip. Three input tests and release clippy/all-targets pass.
+
+Auto's transaction pass is now implemented with injected bounded secondary
+random draws: refund and clear equipment, scanner pre-purchase, bounded
+candidate attempts, weapon-only round-robin top-ups and stable descending
+rank order. Regression draws prove that valid unaffordable candidates end
+attempts, and that a failed top-up leaves 100 credits even though the
+Needler could still buy ammunition. Six transaction tests, release
+clippy/all-targets and fmt pass. The RNG source itself, Auto animation ages
+and input dispatch remain to connect; no live Auto parity is claimed yet.
