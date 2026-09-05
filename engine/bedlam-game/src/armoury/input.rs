@@ -132,14 +132,15 @@ impl ArmouryInput {
             Some(Control::Done) if self.ready() && self.state.has_weapon() => return Outcome::Done,
             _ => {}
         }
-        if (535..=636).contains(&x) && (340..=411).contains(&y) {
-            let slot = ((y - 340) / 10) as usize;
+        if self.state.cart().is_none() && (535..=636).contains(&x) && (340..=411).contains(&y) {
+            let slot = (((y - 340) / 10) as usize).min(6);
             if self.state.sell_weapon(slot) {
                 self.category = self.state.cart().map(|c| c.category);
                 return Outcome::None;
             }
         }
-        if (544..=636).contains(&x)
+        if self.state.cart().is_none()
+            && (544..=636).contains(&x)
             && (416..=435).contains(&y)
             && self.state.sell_equipment(((y - 416) / 10) as usize)
         {
@@ -191,6 +192,27 @@ mod tests {
             s.tick(&InputFrame::default());
         }
     }
+    #[test]
+    fn pending_purchase_blocks_selling_owned_rows() {
+        let mut s = input();
+        click(&mut s, 237, 97);
+        wait(&mut s, 10);
+        click(&mut s, 200, 105);
+        wait(&mut s, 3);
+        click(&mut s, 500, 350);
+        wait(&mut s, 10);
+        click(&mut s, 200, 115);
+        wait(&mut s, 3);
+        assert_eq!(s.state().cart().unwrap().item, 1);
+        click(&mut s, 560, 345);
+        assert!(s.state().weapons()[0].is_some());
+        assert_eq!(s.state().balance(), 3400);
+        click(&mut s, 500, 370);
+        click(&mut s, 560, 345);
+        assert!(s.state().weapons()[0].is_none());
+        assert_eq!(s.state().balance(), 3500);
+    }
+
     #[test]
     fn real_pointer_purchase_and_done_require_owned_weapon() {
         let mut s = input();

@@ -7257,8 +7257,8 @@ map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
      slot = FUN_00443870(item) (same-name → that slot; the 0x2D/0x2E
      mutex; else first free of 2); write {+0 name, +2 staged ammo, +4 := 0,
      +6 staged spend, +8 := 8, +0xA item} (+0xC untouched). [The
-     AUTO-LOADOUT writer differs only at +4: it stores the robot TYPE
-     there — this initializes the shop icon animation counter; the
+     AUTO-LOADOUT writer differs only at +4: it stores 7 minus the outer attempt index
+     there — this initializes the shop label animation counter; the
      subsequent drawer increments it toward 9 (2026-09-06 correction).]
    - **DONE button** (x∈[0x238,0x267] × y∈[0x1be,0x1d8], highlight img 5,
      gated [0x4dc694] ≠ 0 — the enable flag written by the icon-grid

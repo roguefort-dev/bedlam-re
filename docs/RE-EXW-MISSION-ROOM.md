@@ -350,3 +350,34 @@ wired into GameHost or ShellController yet. It must not be exposed as the
 completed shop until Auto, scene entry/exit, selected mission and equipment
 transfer are connected and the real window journey passes. Entry/abort and
 exact original frame ordering still need the integrated reference check.
+
+## Auto audit before implementation
+
+[verified] Auto's 3..7 outer attempts each try at most 50 random
+category/item pairs (0x44161d..0x4416bf). Unavailable or duplicate/full-slot
+candidates retry. Once a valid slot exists, an unaffordable candidate ends
+that outer attempt, just like a successful purchase (0x4416dd..6eb,
+0x44178b, 0x4417a7..7b5). Auto does not retry until it finds something
+cheap enough. Its animation word starts at 7 minus the outer attempt index
+(0x441641..64f/0x44173d/0x441808), not the robot type.
+
+[verified] Top-up traverses the first n weapon slots, n being the outer
+attempt count; equipment is not topped up. Each affordable weapon gets one
+pack in a pass, updating amount and paid words. An unaffordable weapon marks
+that slot; the pass completes, then ANY marked slot ends the top-up loop
+(0x441866..0x44198b). If no weapon was purchased, top-up is skipped.
+Thus remaining cash need not be exhausted. Sorting is stable descending
+category rank; table 0x456c7c is [7,2,6,4,3,1,8,5,2], and swaps happen
+only when the left rank is smaller (0x441a4c..5a).
+
+[verified] Random calls use FUN_0041ec59 -> secondary generator
+0x4029b6 (state 0x4ede4c/4ede4e), then the shared bounded transform at
+0x41ec29. Do not consume mission RandA or substitute modulo sampling.
+The pre-loop scanner purchase uses its separate original gate: balance
+at least 2400 and scanner level 3 available. Auto algorithm and its
+secondary RNG ownership remain to implement.
+
+[verified] Manual sell has a no-pending-cart gate at 0x441b0f..17;
+weapon row y=410..411 clamps to slot 6 (0x441b49..5a). The input model
+now preserves owned items while another purchase is pending and clamps
+that final hit strip. Three input tests and release clippy/all-targets pass.
