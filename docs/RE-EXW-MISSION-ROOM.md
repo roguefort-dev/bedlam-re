@@ -442,3 +442,20 @@ This test terminates at the typed launch request, not a running mission.
 GameHost/ShellController staging and live-window acceptance remain required.
 The composed flow currently uses the no-intro shop raster; briefing action,
 abort, sound and animation-enabled intro still require their host consumers.
+
+GameHost now owns optional Preparation, routes Select/Shop input through it,
+renders its plane above old loading/movie layers and switches to the selected
+Mission on its typed launch result. Explicit preparation staging is atomic
+on asset errors. Mission asset selection consults the retained one-based
+single-player slot; load_mission transfers purchased weapon rows into robot
+zero. A host-driven real-corpus input test selects Boot Camp, enters Shop,
+Auto-equips and enters Mission with the correct slot. All 182 game-library
+tests plus canonical_dump_gate, determinism and zone_mission_parity pass;
+release clippy/all-targets and fmt pass; corpus manifest verified.
+
+Shell staging has not enabled this host path yet. The host test reaches
+Mission state before mission assets are loaded; actual transfer/activation
+needs the ShellController test and window play. Current transfer covers
+robot-zero weapons, not chassis equipment or other robot types. ShopRandom
+is provisionally zero-initialized in GameHost; lifecycle seeding, options,
+briefing and sound/intro consumers still need integration. Queue stays open.

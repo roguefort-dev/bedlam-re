@@ -400,7 +400,7 @@ impl SceneFsm {
     /// derived, so no old-scene edge can leak, and leaving the held
     /// level in place means a button held across the boundary must be
     /// released and re-pressed before it acts in the new scene).
-    fn enter(&mut self, scene: Scene) {
+    pub(crate) fn enter(&mut self, scene: Scene) {
         self.scene = scene;
         self.scene_ticks = 0;
     }

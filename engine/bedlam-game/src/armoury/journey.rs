@@ -144,6 +144,44 @@ mod tests {
         )
     }
     #[test]
+    fn host_consumes_preparation_input_and_enters_selected_mission() {
+        use crate::{GameConfig, GameHost, Scene};
+        let mut host = GameHost::new(
+            &GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0; 3]; 256],
+        );
+        host.load_preparation(&mut Source, 1, [false; 27], [0; 15], 3500, "LANGUAGE.ENG")
+            .unwrap();
+        fn pointer(host: &mut GameHost, x: i32, y: i32) {
+            let (cx, cy) = host.preparation().unwrap().cursor();
+            host.pump_frame(
+                4,
+                &InputFrame {
+                    mouse_dx: (x - cx) as i16,
+                    mouse_dy: (y - cy) as i16,
+                    mouse_buttons: 1,
+                    ..Default::default()
+                },
+            );
+        }
+        pointer(&mut host, 255, 315);
+        for _ in 0..5 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        pointer(&mut host, 255, 80);
+        assert_eq!(host.scene(), Scene::Shop);
+        pointer(&mut host, 500, 400);
+        for _ in 0..12 {
+            host.pump_frame(4, &InputFrame::default());
+        }
+        pointer(&mut host, 590, 455);
+        assert_eq!(host.scene(), Scene::Mission);
+        assert_eq!(host.mission_slot(), (0, 1));
+        assert!(host.preparation().unwrap().transactions().has_weapon());
+    }
+
+    #[test]
     fn boot_camp_selection_auto_and_launch_keep_slot_and_loadout_together() {
         let mut p =
             Preparation::load(&mut Source, 1, [false; 27], [0; 15], 3500, "LANGUAGE.ENG").unwrap();

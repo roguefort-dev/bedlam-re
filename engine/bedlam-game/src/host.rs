@@ -114,6 +114,9 @@ pub struct GameHost {
     /// composition, INERT until the FSM enters Mission and dropped on
     /// exit (the flow never ends on its own).
     mission: Option<MissionScene>,
+    preparation: Option<crate::armoury::journey::Preparation>,
+    preparation_slot: Option<(u8, u8)>,
+    shop_random: crate::armoury::random::ShopRandom,
     frame: Frame,
     palette: [Vga6; 256],
     /// Sim ticks executed by the most recent [`GameHost::pump_frame`]
@@ -164,6 +167,9 @@ impl GameHost {
             menu: None,
             menu_start_score: None,
             mission: None,
+            preparation: None,
+            preparation_slot: None,
+            shop_random: crate::armoury::random::ShopRandom::from_state(0),
             frame: Frame::new(palette),
             palette,
             last_pump_ticks: None,
@@ -218,6 +224,31 @@ impl GameHost {
                     .expect("checked staged")
                     .tick(input, movies_playing);
                 self.apply_menu_tick(tick);
+                self.fsm.tick(&InputFrame::default());
+            } else if self.preparation.is_some()
+                && matches!(self.fsm.scene(), Scene::Select | Scene::Shop)
+            {
+                use crate::armoury::journey::{Action, Phase};
+                let preparation = self.preparation.as_mut().expect("staged preparation");
+                let action = preparation.tick(input, &mut self.shop_random);
+                let phase = preparation.phase();
+                match action {
+                    Action::Launch { zone, mission } => {
+                        self.preparation_slot = Some((zone, mission));
+                        self.fsm.enter(Scene::Mission);
+                    }
+                    Action::Back => self.fsm.enter(Scene::Title),
+                    Action::Briefing { .. } => self.fsm.enter(Scene::Brief),
+                    Action::None => {
+                        let scene = match phase {
+                            Phase::Room => Scene::Select,
+                            Phase::Armoury => Scene::Shop,
+                        };
+                        if self.fsm.scene() != scene {
+                            self.fsm.enter(scene);
+                        }
+                    }
+                }
                 self.fsm.tick(&InputFrame::default());
             } else {
                 // Mission input (DESIGN-GAME sec 11): while a mission
@@ -621,6 +652,9 @@ impl GameHost {
     /// `briefing_name_for_slot` uses). The zone drives the file
     /// names, the edge family and the robots-per-player count.
     pub fn mission_slot(&self) -> (i32, i32) {
+        if let Some((zone, mission)) = self.preparation_slot {
+            return (i32::from(zone) - 1, i32::from(mission));
+        }
         if let Some(select) = self.fsm.select_slot() {
             return (
                 i32::from(select.zone()) - 1,
@@ -650,6 +684,7 @@ impl GameHost {
     /// robots-per-player count). Returns false on an out-of-range
     /// slot (never guess).
     pub fn stage_episode_slot(&mut self, stage: u8, mask: u8) -> bool {
+        self.preparation_slot = None;
         self.fsm.stage_episode_slot(stage, mask)
     }
 
@@ -775,8 +810,42 @@ impl GameHost {
         mission
             .sim_mut()
             .stage_claim_bank((zone + 1) as u32, mission_no as u32);
+        if let Some(preparation) = &self.preparation {
+            if self.preparation_slot.is_some() {
+                let loadout = preparation
+                    .transactions()
+                    .weapons()
+                    .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+                mission.set_weapon_loadout(0, &loadout);
+            }
+        }
         self.mission = Some(mission);
         Ok(())
+    }
+
+    /// Stage the real selection/armoury flow. Asset loading is atomic: failed
+    /// staging preserves the current scene and its existing preparation.
+    pub fn load_preparation(
+        &mut self,
+        source: &mut dyn ByteSource,
+        zone: u8,
+        completed: [bool; 27],
+        flags: [u32; 15],
+        balance: u32,
+        language: &str,
+    ) -> Result<(), GameError> {
+        let preparation = crate::armoury::journey::Preparation::load(
+            source, zone, completed, flags, balance, language,
+        )?;
+        self.preparation = Some(preparation);
+        self.preparation_slot = None;
+        self.fsm.enter(Scene::Select);
+        self.frame = self.render_now();
+        Ok(())
+    }
+
+    pub fn preparation(&self) -> Option<&crate::armoury::journey::Preparation> {
+        self.preparation.as_ref()
     }
 
     /// The staged mission, if any (gate/host introspection: camera,
@@ -1387,6 +1456,16 @@ impl GameHost {
                     palette: p.palette,
                 })
         };
+        let preparation_frame = if matches!(self.fsm.scene(), Scene::Select | Scene::Shop) {
+            self.preparation.as_ref().map(|p| MovieFrame {
+                width: 640,
+                height: 480,
+                pixels: p.pixels(),
+                palette: *p.palette(),
+            })
+        } else {
+            None
+        };
         let movie = self
             .loading
             .as_ref()
@@ -1440,7 +1519,7 @@ impl GameHost {
             prev_sim: prev,
             alpha,
             palette: self.palette,
-            movie,
+            movie: preparation_frame.or(movie),
         };
         render(&input)
     }
