@@ -112,6 +112,7 @@ impl Font {
 pub struct ArmouryRenderer {
     artwork: SpriteBank,
     icons: SpriteBank,
+    dark: [u8; 256],
     tiny: Font,
     small: Font,
     palette: [Vga6; 256],
@@ -132,6 +133,10 @@ impl ArmouryRenderer {
             return Err(bad("WEAPICON.BIN"));
         }
         Ok(Self {
+            dark: source
+                .load("DARKPALS.PAL")?
+                .try_into()
+                .map_err(|_| bad("DARKPALS.PAL"))?,
             icons,
             artwork,
             tiny: Font::load(source, "TINYFONT.BIN", 118)?,
@@ -160,6 +165,17 @@ impl ArmouryRenderer {
         weapon_ages: &[u8; 7],
         equipment_ages: &[u8; 2],
     ) {
+        self.draw_frame(state, category, weapon_ages, equipment_ages, u32::MAX);
+    }
+
+    pub fn draw_frame(
+        &mut self,
+        state: &Transactions,
+        category: Option<usize>,
+        weapon_ages: &[u8; 7],
+        equipment_ages: &[u8; 2],
+        panel_age: u32,
+    ) {
         let category = category.filter(|&c| c < CATEGORIES.len());
         self.plane.copy_from_slice(
             self.artwork.images[category.map_or(0, |c| c + 1)]
@@ -170,7 +186,13 @@ impl ArmouryRenderer {
         if let Some(c) = category {
             let cat = CATEGORIES[c];
             let (x, y) = cat.panel_origin();
-            // Text positions are original. Border animation is added by the scene.
+            for row in y..y + 7 * cat.rows {
+                for col in x..x + 5 * cat.columns {
+                    let offset = row as usize * W + col as usize;
+                    self.plane[offset] = self.dark[self.plane[offset] as usize];
+                }
+            }
+            self.border(cat, panel_age);
             for (i, item) in cat.items.iter().enumerate() {
                 let name = if state.catalog().available(c, i) {
                     crate::mission::weapon_name(item.name)
@@ -233,6 +255,56 @@ impl ArmouryRenderer {
             self.center(&format!("BALANCE:{}", state.balance()), 0x129);
         }
     }
+    fn border(&mut self, category: super::catalog::Category, age: u32) {
+        const COLORS: [u8; 12] = [4, 225, 222, 230, 221, 5, 10, 235, 228, 158, 1, 5];
+        let color = |delay: u32| {
+            age.checked_sub(delay + 1)
+                .map(|phase| COLORS[phase.min(11) as usize])
+        };
+        let (x, y) = category.panel_origin();
+        for column in 0..category.columns {
+            if let Some(color) = color((column - category.columns / 2).unsigned_abs()) {
+                let top = if column == 0 {
+                    97
+                } else if column == category.columns - 1 {
+                    98
+                } else {
+                    95
+                };
+                let bottom = if column == 0 {
+                    99
+                } else if column == category.columns - 1 {
+                    100
+                } else {
+                    95
+                };
+                self.tiny
+                    .glyph(&mut self.plane, top, x + 5 * column, y, color);
+                self.tiny.glyph(
+                    &mut self.plane,
+                    bottom,
+                    x + 5 * column,
+                    y + 7 * (category.rows - 1),
+                    color,
+                );
+            }
+        }
+        for i in 0..category.rows - 2 {
+            let delay = category.columns / 2 + i.min(category.rows - 3 - i);
+            if let Some(color) = color(delay as u32) {
+                self.tiny
+                    .glyph(&mut self.plane, 96, x, y + 7 * (i + 1), color);
+                self.tiny.glyph(
+                    &mut self.plane,
+                    96,
+                    x + 5 * (category.columns - 1),
+                    y + 7 * (i + 1),
+                    color,
+                );
+            }
+        }
+    }
+
     fn icon(&mut self, entry: usize, x: i32, y: i32) {
         let im = &self.icons.images[entry];
         let pixels = im.pixels.as_ref().expect("validated icon");
@@ -307,6 +379,14 @@ mod tests {
         assert!(state.select(0, 0));
         renderer.draw(&state, Some(0));
         assert_ne!(renderer.pixels(), entry);
+        let settled = renderer.pixels().to_vec();
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0);
+        let initial = renderer.pixels().to_vec();
+        assert_ne!(initial, settled);
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 0);
+        assert_eq!(renderer.pixels(), initial);
+        renderer.draw_frame(&state, Some(0), &[12; 7], &[9; 2], 40);
+        assert_eq!(renderer.pixels(), settled);
         // The actual small font must fit the right-hand display; SHOPFONT does not.
         assert!(renderer.small.width(b"NEEDLER CANNON #1") < 174);
         assert!(renderer.pixels()[297 * W..308 * W].contains(&253));

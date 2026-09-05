@@ -309,3 +309,12 @@ Horizontal delay is abs(column-columns/2). Interior side index i=0..rows-3
 has delay columns/2+min(i,rows-3-i). Drawer 0x43f71d uses color table
 0x454cc8: [4,225,222,230,221,5,10,235,228,158,1,5], advancing to phase 11
 only after its countdown expires. All coordinates preserve glyph hotspots.
+
+The popup renderer now shades the exact catalog rectangle through DARKPALS
+and draws the original delayed border using explicit panel age. The settled
+Needler popup was compared with a fresh DOSBox screenshot: its outline,
+background darkening and text placement agree visually. Raster tests verify
+initial/settled differences, convergence by age 40 and stable repainting;
+two renderer tests, release clippy/all-targets and fmt pass, with corpus
+manifest checks around reads. Category text reveal, control highlights,
+scene input/clock, Auto and mission transfer still remain.
