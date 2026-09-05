@@ -428,3 +428,17 @@ outer-index local before this pass initializes it; the current model starts
 that special label at seven. Its exact entry/click lifecycle needs the live
 integrated check. No Boot Camp impact, because scanner level 3 is unavailable
 there. Scene wiring, initial secondary stream state and window journey remain.
+
+Preparation now composes MissionRoom, ArmouryInput and ArmouryRenderer into
+one owned flow. It retains the selected zone/mission while purchases occur
+and emits a typed Launch only after the shop's DONE gate passes. The caller
+can then transfer the retained Transactions into mission staging. A
+real-corpus test uses only InputFrame deltas/buttons to select Boot Camp,
+open Armoury, Auto-equip and request launch, checking visible frame change,
+nonempty ammunition and the retained A1 slot. The targeted test, release
+clippy/all-targets and fmt pass; corpus manifest verified.
+
+This test terminates at the typed launch request, not a running mission.
+GameHost/ShellController staging and live-window acceptance remain required.
+The composed flow currently uses the no-intro shop raster; briefing action,
+abort, sound and animation-enabled intro still require their host consumers.
