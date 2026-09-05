@@ -10449,3 +10449,16 @@ passes at (560,450) afterward; the rebuilt game opened the map on a visible
 MAP click. Original EXD comparison exposed missing menu backdrop and blank
 Brief/Select product screens; these remain incomplete. Evidence and reference
 runtime limits: `docs/PLAYTEST-2026-09-06.md`. No phase is advanced by this fix.
+
+## D242 — 2026-09-06: restore the original title backdrop
+
+Live EXD comparison showed that the shell's text-only black menu omitted the
+original illustrated backdrop. Restore the already-specified NameEntryScreen
+LOAD_UK/US + LOADPAL/U assets (RE-EXW-TITLEMENU 0x43a5fc..0x43a739), owned by
+the menu rather than the transient movie palette. Restore the raster on every
+redraw before drawing text and the FULLPAL ramp. Existing bare-menu fixtures
+remain valid, but the production chain must load the backdrop or fail. The
+production regression went from zero colored pixels to a rendered backdrop;
+live window comparison confirms the artwork. Invalid replacement inputs retain
+the prior valid backdrop. The canonical control tests and headless endpoint
+hashes remain unchanged. No phase completion is inferred. See PLAYTEST-2026-09-06.

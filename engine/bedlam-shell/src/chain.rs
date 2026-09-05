@@ -69,6 +69,8 @@ pub fn scene_assets(
             v.push(FULLFONT_NAME.to_string());
             v.push(FULLPAL_NAME.to_string());
             v.extend(bedlam_game::menu::MENU_SFX_NAMES.map(String::from));
+            v.push(config.region.loading_bin().to_string());
+            v.push(config.region.loading_pal().to_string());
             v
         }
         Scene::Brief => match briefing {
@@ -136,6 +138,7 @@ pub fn stage_scene(
         Scene::Title => {
             host.load_movie(Scene::Title, &bytes[0])?;
             host.load_title_menu(&bytes[1], &bytes[2], &bytes[3], &bytes[4], &bytes[5])?;
+            host.load_title_backdrop(&bytes[6], &bytes[7])?;
         }
         Scene::Brief => host.load_briefing(&bytes[0], &bytes[1])?,
         Scene::Cutscene => {
@@ -186,6 +189,49 @@ pub fn stage_scene(
 mod tests {
     use super::*;
 
+    #[test]
+    fn title_menu_retains_illustrated_backdrop_after_movie_skip() {
+        use bedlam_core::input::InputFrame;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../game-data/BEDLAM");
+        let mut source = crate::headless::GameGfxSource::new(root);
+        let mut host = GameHost::new(
+            &bedlam_game::GameConfig::default(),
+            &bedlam_core::sim::SimConfig::default(),
+            [[0; 3]; 256],
+        );
+        for _ in 0..bedlam_game::BOOT_TICKS {
+            host.pump_frame(crate::clock::SUBTICKS_PER_PUMP, &InputFrame::default());
+        }
+        stage_scene(&mut host, &mut source, ChainConfig::default()).unwrap();
+        host.pump_frame(crate::clock::SUBTICKS_PER_PUMP, &InputFrame::default());
+        host.pump_frame(
+            crate::clock::SUBTICKS_PER_PUMP,
+            &InputFrame {
+                buttons: crate::input::ShellKey::Escape.bit(),
+                ..Default::default()
+            },
+        );
+        assert_eq!(host.scene(), Scene::Title);
+        let painted = host.frame().indices[..640 * 280]
+            .iter()
+            .filter(|&&index| host.frame().palette[index as usize] != [0; 3])
+            .count();
+        assert!(
+            painted > 100_000,
+            "menu backdrop missing: {painted} colored pixels above text"
+        );
+        let backdrop = host.frame().indices[..640 * 280].to_vec();
+        // Hover redraw must restore the backdrop rather than erase it.
+        host.pump_frame(
+            crate::clock::SUBTICKS_PER_PUMP,
+            &InputFrame {
+                mouse_dy: 70,
+                ..Default::default()
+            },
+        );
+        assert_eq!(&host.frame().indices[..640 * 280], backdrop);
+    }
+
     /// The per-scene fetch sets, exactly: the wired chain.
     #[test]
     fn scene_assets_pin_the_chain() {
@@ -200,6 +246,8 @@ mod tests {
                 "FULLPAL.PAL".to_string(),
                 "MENU1.RAW".to_string(),
                 "MENU2.RAW".to_string(),
+                "LOAD_UK.BIN".to_string(),
+                "LOADPAL.PAL".to_string(),
             ]
         );
         // A lettered briefing stage: drop first, then the backdrop.

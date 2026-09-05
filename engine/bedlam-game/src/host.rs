@@ -583,6 +583,18 @@ impl GameHost {
         Ok(())
     }
 
+    /// Stage the region-specific title backdrop after `load_title_menu`.
+    /// The palette belongs to the menu and survives title movie playback.
+    pub fn load_title_backdrop(&mut self, bin: &[u8], pal: &[u8]) -> Result<(), GameError> {
+        self.menu
+            .as_mut()
+            .ok_or(GameError::BadMenuAsset {
+                what: "title backdrop",
+                reason: "title menu is not staged",
+            })?
+            .load_backdrop(bin, pal)
+    }
+
     /// The staged title menu, if any (introspection: id, slots,
     /// selection, phase, idle, cursor, start score).
     pub fn menu(&self) -> Option<&TitleMenu> {

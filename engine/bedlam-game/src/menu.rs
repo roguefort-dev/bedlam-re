@@ -179,6 +179,8 @@ pub struct TitleMenu {
     blue: LoadingFont,
     /// FULLPAL ramp (DAC 224..=255) for the plane palette tail.
     ramp: [[u8; 3]; 32],
+    /// Region-specific LOAD backdrop and palette (NameEntryScreen entry).
+    backdrop: Option<(crate::loading::Still, [Vga6; 256])>,
     id: MenuId,
     slots: Vec<Vec<u8>>,
     count: usize,
@@ -208,7 +210,7 @@ pub struct TitleMenu {
     prev_buttons: u8,
     /// Per-tick counter (the g_frame_count blink analog).
     blink: u64,
-    /// The 640x480 owned draw plane (black + text strip, D42.4).
+    /// The 640x480 owned backdrop + text draw plane.
     plane: Vec<u8>,
     /// Plane needs a redraw (build / hover change / blink).
     dirty: bool,
@@ -238,6 +240,7 @@ impl TitleMenu {
             green,
             blue,
             ramp,
+            backdrop: None,
             id: MenuId::Main,
             slots: vec![Vec::new(); SLOTS],
             count: 0,
@@ -595,6 +598,22 @@ impl TitleMenu {
         true
     }
 
+    /// Stage LOAD_UK/US entry zero and its LOADPAL palette. EXW
+    /// NameEntryScreen 0x43a5fc..0x43a739 loads these before menu drawing.
+    pub(crate) fn load_backdrop(&mut self, bin: &[u8], pal: &[u8]) -> Result<(), GameError> {
+        let still = crate::loading::decode_entry0(bin)?;
+        if (still.w, still.h) != (640, 480) {
+            return Err(GameError::BadMenuAsset {
+                what: "title backdrop",
+                reason: "expected 640x480 image",
+            });
+        }
+        let palette = crate::loading::loading_palette(pal)?;
+        self.backdrop = Some((still, palette));
+        self.dirty = true;
+        Ok(())
+    }
+
     /// The menu plane: the owned 640x480 raster under the host
     /// palette with the staged FULLPAL ramp folded into DAC
     /// 224..=255 (the draw-cycle ramp commit analog). Redraws lazily
@@ -603,7 +622,10 @@ impl TitleMenu {
         if self.phase == MenuPhase::NameEntry || self.dirty {
             self.redraw();
         }
-        let mut palette = *host_palette;
+        let mut palette = self
+            .backdrop
+            .as_ref()
+            .map_or(*host_palette, |(_, pal)| *pal);
         palette[224..].copy_from_slice(&self.ramp);
         Some(Plane {
             w: 640,
@@ -613,11 +635,15 @@ impl TitleMenu {
         })
     }
 
-    /// FUN_0044653a + the name-entry cursor: black canvas, item i at
+    /// FUN_0044653a + the name-entry cursor: restored backdrop, item i at
     /// row_base + i*0x18 through the green (sel) or blue set, the
     /// blink cursor on the item-3 row while (blink & 0xc) != 0.
     fn redraw(&mut self) {
-        self.plane.fill(0);
+        if let Some((backdrop, _)) = &self.backdrop {
+            self.plane.copy_from_slice(&backdrop.pixels);
+        } else {
+            self.plane.fill(0);
+        }
         let row_base = STRIP_Y_MAX - self.count as i32 * ROW_H;
         for i in 0..self.count {
             let font = if i as i8 == self.sel {
@@ -1058,6 +1084,38 @@ pub(crate) mod tests {
         assert_eq!(m.cursor().1, 463);
         m.tick(&frame(-2000, -2000, 0), false);
         assert_eq!(m.cursor(), (9, 9));
+    }
+
+    #[test]
+    fn backdrop_restores_pixels_and_palette_and_rejects_bad_replacements() {
+        let mut menu = menu();
+        let bank = |w: u16, h: u16| {
+            let mut bytes = 1u16.to_le_bytes().to_vec();
+            bytes.extend_from_slice(&4u32.to_le_bytes());
+            bytes.extend_from_slice(&0u16.to_le_bytes());
+            bytes.extend_from_slice(&w.to_le_bytes());
+            bytes.extend_from_slice(&h.to_le_bytes());
+            bytes.extend(std::iter::repeat_n(7, w as usize * h as usize));
+            bytes
+        };
+        let mut palette = vec![0; 770];
+        palette[2 + 7 * 3..2 + 8 * 3].copy_from_slice(&[5, 20, 63]);
+        menu.load_backdrop(&bank(640, 480), &palette).unwrap();
+        assert!(menu.load_backdrop(&bank(1, 1), &palette).is_err());
+        assert!(menu.load_backdrop(&bank(640, 480), &[0]).is_err());
+        assert!(menu.load_backdrop(&[0], &palette).is_err());
+        let plane = menu.plane(&[[0; 3]; 256]).unwrap();
+        assert_eq!(plane.pixels[100 * 640], 7);
+        assert_eq!(plane.palette[7], [5, 20, 63]);
+        assert!(plane.palette[224..].iter().any(|rgb| *rgb != [0; 3]));
+        hover(&mut menu, 0);
+        let plane = menu.plane(&[[63; 3]; 256]).unwrap();
+        assert_eq!(plane.pixels[100 * 640], 7);
+        assert_eq!(
+            plane.palette[7],
+            [5, 20, 63],
+            "movie palette cannot recolor backdrop"
+        );
     }
 
     #[test]
