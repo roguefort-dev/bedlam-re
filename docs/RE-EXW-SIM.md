@@ -4993,7 +4993,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | SHOP screen | FUN_00440e45 (GameMain call #2, §7d.4 flow; 0x440e45..0x4437e5): entry money floor [0x46ae70] := max(·,100); loads GAMEGFX\{DARKPALS.PAL,WEAPICON.BIN,CONLITE.BIN,SHOPFONT.BIN,SHOPLITE.BIN} + BEEP1/4/7/5 SFX cells + "SOUND\MIDI\SHOP"; SMK "GAMEGFX\SHOP.SMK" intro gated [0x46cca4]≠0 (else GAMEGFX\SHOPPAL.PAL); the buy/sell/auto-loadout/confirm state machine over the weapon table 0x4de664 (group layout +0 name, +2 ammo, +4 artifact, +6 price, +8 category, +0xA item, +0xC owned) + chassis table 0x4deafc (2 rows × 0xE, same layout, +2 = shield charges for equipment ids 0x2A..0x2E); exit ret 0 (abort [0x4edb50] → ret 1) | §7j.45 |
 | SHOP catalog | 9 category blocks @0x4ea288 stride 0xA0 (staged by FUN_0044395b from immediates): header +0x00 x0/+0x04 y0/+0x10 yoff/+0x14 count/+0x18 colw/+0x1C rowh; items stride 0x10 first at cat+0x20: name@+0x20 (FUN_00420260 idx), price@+0x24, pack-ammo@+0x28, avail@+0x2C; cat 0 = NEEDLERS (2/3/4, 100/250/400, 300/400/500), cat 1 = PLASMA (9/A/B, 500/700/900, ammo 1), cat 8 = CHASSIS @0x4ea788 (ids 0x2A..0x2E, 0x2D/0x2E mutex — FUN_00443870; free-slot/dedup finders FUN_00443870/FUN_004437ea) | §7j.45 |
 | SHOP MP sync | exit: FUN_00449c94(4, 0x4e43e0) appends the type-4 SHOP-LOADOUT COMMAND record (63 B staging struct 0x4e43e0 = 7×9, consumed MissionShell 0x44853e + save 0x4475fd); then the player walk p < [0x46cbe0]: 7 (name,ammo) word pairs from record 0x4dd4a0+p·0x80 (+1 byte skip) → 0x4de664+p·0x62+g·0xE{,+2} — the per-player loadout mirror (D89's 0x46cbe0 count bounds it) | §7j.45 |
-| SHOP lockout array | 0x46cd48..0x46cd80 = 16 dwords; := 1 at shop entry when [0x4edb88]==2 (MP) ∨ [0x4edd8c]==7 (final zone); value 2 = transient (exit normalize: cols 0x46cd48/5c/70+i for i∈{0,4,8,0xC} == 2 → 1) | §7j.45 |
+| SHOP availability array | 0x46cd48..0x46cd80 = 15 dwords; := 1 at shop entry when [0x4edb88]==2 (MP) ∨ [0x4edd8c]==7 (final zone); value 2 = transient (exit normalize: cols 0x46cd48/5c/70+i for i∈{0,4,8,0xC} == 2 → 1) | §7j.45 |
 | SHOP category rank table | dword[0x456c7c + 4·cat] — the auto-loadout bubble-sort key over the 7 weapon groups (swap via 3× FUN_00402aaa through scratch 0x4dec4c) | §7j.45 |
 | bombardment salvo cooldown | [0x4de658] (the dword 0xC below the weapon table base 0x4de664): := 0x80 by the robots() +0x70 threshold arm (the aerial-bombardment salvo — §7j.54 corrected the old "reinforcement pending gate"/"pending-arrival" gloss); gates the next arm while ≠ 0; FULL census §7j.54: arm write 0x40c27f, arm gate read 0x40c18b, read+dec 0x423e25..0x423e32 (FUN_00423e1c head, 1/frame), MissionShell clear 0x447877; the 0x442ba7 match is a weapon-table displacement alias ([eax+0x4de658], eax ≥ 0xC → ≥ 0x4de664), NOT a real access | §7j.45, §7j.54 |
 | aerial-bombardment marker bank | 0x4ea238, 8 × 10-byte records (0x50 total, MissionShell memset 0x447a51): {u16 x@+0, u16 y@+2 (screen-pixel ground point), u16 fall-z@+4 (starts 0xFF, −0x20/frame), u16 start-delay@+6 (0x20+2i, −1/frame), u16 valid@+8}; writer = the robots() idle arm 0x40c25e..0x40c351 (8 shells: x = robot.px + RandA&0x7F − 0x3F, y = robot.py − 0x80 + i·0x20, tile-bounds-gated); tick/resolver = FUN_00423e1c (MissionShell @0x447ffa; NOT a "selection chaser" — §7j.54): fall until get_z_pos(x,y,+4) ≥ +4 → SIX kind-6 debris (3 RandA each) + NINE FUN_004244a1 5000-damage script blasts over the 3×3 tile patch (tx−1..tx+2, ty−1..ty+2, z_level+1) + cursor clear + valid clear; renderer 0x4066e4..0x4067a6 (FUN_00403938 draw tail): +8≠0 ∧ +6==0 → iso-project, +4 fall-z subtracted from the screen axis (sprite visibly descends 32px/frame), GENERAL.BIN sprite 0x12C via FUN_0040798e | §7j.54 |
@@ -6588,7 +6588,7 @@ below is [verified] against the objdump unless tagged.
    builds Terrain from raw DAT+PAD+CGR bytes with these rules.
 2. ~~FUN_00440e45 (10661 B, GameMain call #2) identity~~ — CLOSED 2026-08-23
    §7j.45 Part A: THE SHOP SCREEN, fully decoded (assets/SMK/SFX/music,
-   the money floor ≥100, the MP/zone-7 16-dword lockout array
+   the money floor ≥100, the MP/zone-7 15-dword availability array
    0x46cd48..0x46cd80, the 9-category catalog @0x4ea288 with immediate
    data, the auto-loadout/sell/buy-stage/confirm state machine, the
    weapon/chassis group layouts, and the MP loadout sync via the type-4
@@ -7193,11 +7193,12 @@ map-room code lives here; the map room is FUN_0043e7d4 per §7d.4).
    - **MONEY FLOOR: `if ([0x46ae70] < 0x64) [0x46ae70] := 0x64`** @0x4411a0 —
      shop entry guarantees money ≥ 100 (a NEW state fact for the campaign
      model; D51 fresh-campaign 4000 unaffected).
-   - **MP/zone-7 LOCKOUT: if ([0x4edb88]==2 || [0x4edd8c]==7) → the 16
+   - **MP/zone-7 AVAILABILITY: if ([0x4edb88]==2 || [0x4edd8c]==7) → the 15
      consecutive dwords 0x46cd48..0x46cd80 := 1** @0x4411e1..0x441251 —
-     NEW pin: the category-lockout flag array (value 2 = transient, see the
-     exit normalize below). MP mode 2 OR the zone-7 (final) mission locks
-     all 16 columns.
+     NEW pin: the item-availability flag array (value 2 = transient, see the
+     exit normalize below). MP mode 2 OR the zone-7 (final) mission enables
+     all 15 flags; multiplayer then disables categories 2 and 8 in the
+     catalog stager. See RE-EXW-MISSION-ROOM.md for the exact mapping.
    - call FUN_0044395b = the CATALOG STAGER (see 2).
 2. **The catalog grammar** [verified, FUN_0044395b 0x44395b..]: 9 category
    blocks @0x4ea288, stride 0xA0. Header: +0x00 x0, +0x04 y0, +0x10 yoff,

@@ -152,3 +152,55 @@ owned row with its word@+4 below 9 clears it and increments that word
 (0x4402c2..eb, owned-row gate 0x440390..3a3). Thus +4 is not unconsumed
 inside the shop, contrary to the old prose. Both the click and highlight
 paths test the ready flag (0x4429f4 and 0x44369d).
+
+## Armoury catalog and manual transaction reference
+
+[verified] The straight-line initializer at EXW 0x44395b..0x4440e5
+writes the following catalog. Entries are (name id, price, pack amount);
+all availability fields initially contain 1, before the overrides below.
+This table was evaluated from MOV/XOR instructions in the committed EXW
+objdump, including both absolute-store encodings. No reference-project code
+was used. Geometry is (x, y, yoff, count, columns, rows).
+
+| Category | Geometry | Items |
+| --- | --- | --- |
+| 0 | (237, 97, 37, 3, 26, 6) | (2, 100, 300); (3, 250, 400); (4, 400, 500) |
+| 1 | (390, 97, 37, 3, 23, 6) | (9, 500, 1); (10, 700, 1); (11, 900, 1) |
+| 2 | (603, 200, 56, 4, 23, 7) | (37, 200, 24); (38, 400, 36); (39, 600, 72); (40, 800, 144) |
+| 3 | (397, 364, 59, 6, 26, 10) | (24, 250, 60); (25, 350, 30); (27, 50, 96); (28, 100, 144); (29, 100, 96); (30, 200, 144) |
+| 4 | (280, 375, 62, 6, 26, 10) | (20, 100, 80); (21, 200, 120); (22, 350, 160); (16, 150, 60); (17, 250, 120); (18, 400, 180) |
+| 5 | (165, 356, 50, 1, 20, 3) | (14, 500, 20) |
+| 6 | (95, 326, 50, 3, 26, 6) | (6, 200, 300); (7, 500, 600); (8, 800, 900) |
+| 7 | (46, 269, 46, 4, 23, 7) | (32, 200, 24); (33, 350, 36); (34, 700, 72); (35, 950, 108) |
+| 8 | (68, 204, 46, 5, 25, 9) | (42, 500, 15); (43, 250, 5); (44, 300, 25); (45, 400, 1); (46, 800, 1) |
+
+[verified, correcting SIM 7j.45] 0x46cd48..0x46cd80 is **15** dwords,
+not 16. These are availability flags: zero hides an item as CLASSIFIED;
+nonzero enables it. The copy at 0x444184..0x444215 maps successive flags
+to (category,item): (3,0), (0,2), (7,1), (2,0), (1,2), (5,0), (4,4),
+(7,2), (2,1), (2,2), (7,3), (2,3), (4,5), (6,2), (3,1).
+Shop entry sets all 15 flags to 1 for multiplayer or zone 7
+(0x4411e1..0x44124c). Zone 7 skips the campaign-copy overrides.
+Multiplayer additionally disables category 2 and all equipment, category 8
+(0x44421f..0x444251). Scanner level 3 (8,4) is disabled unless mode is
+zero and the valid campaign zone is 2..4 (0x44414a..0x444164).
+The fresh-campaign reset source for all 15 flags still needs tracing; the
+live original confirms Needler #3 is CLASSIFIED in a new Boot Camp game.
+
+[observed, original EXD in DOSBox] Starting STANDARD balance 3500, selecting
+Needler Cannon #1 displays CASH:3400 AMT:300. Holding the plus control
+repeats additions: the inspected state reached CASH:2800 AMT:2100.
+Clicking BUY then shows BALANCE:2800 and one owned Needler row. Clicking
+that owned row removes it and stages the same 2100-ammo purchase, showing
+CASH:2800 AMT:2100 again. Clicking CANCEL clears the staged purchase and
+reveals BALANCE:3500 with no weapon rows. Thus the sell refund is real and
+the CASH display subtracts the pending spend; it is not the bank balance.
+The plus observation verifies repeat behavior, not an exact click count
+or frame cadence.
+
+[verified] Weapon BUY at 0x4427d2..0x4428a2 writes the first free row after
+duplicate-name rejection, records staged amount and spend, initializes the
+row animation to zero, then subtracts spend from balance. CANCEL at
+0x442927..0x442974 clears selection without touching balance or owned rows.
+These observations are transaction evidence, not completion of the remaster
+shop: rendering, production integration and equivalent live input remain.
