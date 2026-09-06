@@ -125,3 +125,13 @@ Mission and owns the old room/shop selection; carrying it unchanged into
 Select would reopen the old zone/phase. A complete handoff needs the
 mission-owned result, campaign/loadout recapture, correct zone transition
 and fresh room state, in addition to the missing craft rendering.
+
+[reproduced 2026-09-07] The new controller return-boundary test reaches
+Cutscene with staged ZONEDONE, but after2000 ordinary pumps remains
+Cutscene, player frame50 unfinished. The container is a ring stream and
+MoviePlayer::advance deliberately repeats rings. That is correct for
+ambient backdrops but wrong at the FUN_0044567c zone-movie call site:
+GAMETHREAD's verified one-pass bound applies there too, not only Boot.
+Use framecount-1 displayed frames, ending after the last displayed frame's
+period, without decoding the unused closing frame/audio. Existing Boot
+implementation already supplies the advance_limited/time-budget pattern.
