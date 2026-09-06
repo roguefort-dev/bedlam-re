@@ -70,15 +70,15 @@ pub struct ViewEntry {
 }
 
 /// Per-zone off-map edge sprite base [FUN_00408030, verified]:
-/// zones 1/2/4/7 → base 0x37, zone 3 → 0x23e, zone 5 → 0x65,
-/// zone 6 → fixed 0x2ec, zone 0 → fixed 1; `+ rand(0..9)` where
+/// Zero-based zones 0/1/3/6 → base 0x37, zone 2 → 0x23e, zone 4 → 0x65,
+/// zone 5 → fixed 0x2ec, invalid zones → fixed 1; `+ rand(0..9)` where
 /// random (the EXW `FUN_0041ec59(9, ..)` shape).
 fn edge_sprite_base(zone: i32) -> (i32, u32) {
     match zone {
-        1 | 2 | 4 | 7 => (0x37, 9),
-        3 => (0x23e, 9),
-        5 => (0x65, 9),
-        6 => (0x2ec, 0),
+        0 | 1 | 3 | 6 => (0x37, 9),
+        2 => (0x23e, 9),
+        4 => (0x65, 9),
+        5 => (0x2ec, 0),
         _ => (1, 0),
     }
 }
@@ -215,7 +215,7 @@ pub struct DrawParams<'a> {
     pub cam_tx: i32,
     /// Camera TILE Y (`cam Q5 >> 5`).
     pub cam_ty: i32,
-    /// Zone index 0..=7: selects the off-map edge sprite family
+    /// Zone index 0..=6: selects the off-map edge sprite family
     /// [FUN_00408030].
     pub zone: i32,
     /// Drives the random edge variants. The EXW uses the shared

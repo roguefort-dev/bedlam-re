@@ -3,8 +3,8 @@
 //! composed MissionScene - bedlam-core MissionSim + bedlam-render
 //! MissionView through GameHost - over the REAL shipped ZONEA/
 //! MISSION1 bytes staged via host.load_mission, and EXTENDS the
-//! render corpus pin family (the terrain pin 90a9e929eea24ced and
-//! the entity pins 8d2c559df035b75b / 8804f9deec6b1fee live in
+//! render corpus pin family (the terrain pin a326c73fe710e501 and
+//! the entity pins 761094cbe33c6b84 / 00dc2ec0c12c052a live in
 //! bedlam-render tests/mission_view_gate.rs and are NOT re-derived
 //! here - this gate pins the SCENE-composed frames):
 //!
@@ -155,7 +155,7 @@ fn aim(host: &mut GameHost, x: i32, y: i32) {
 
 /// One scripted run: boot out of Boot, Advance to Mission, stage the
 /// mission, one entry pump (spawn frame), aim the cursor at robot
-/// 0's projection, click (arm), then three walk pumps. Then the MAP
+/// 0's ground destination, click to move, then three walk pumps. Then the MAP
 /// OVERLAY moment (RE-EXW-SIM 7e): a click in the map-toggle strip
 /// rect opens the strategic map; the next pump presents the overlay
 /// frame. Returns the observation chain (spawn frame hash, sim hash
@@ -212,13 +212,13 @@ fn scripted_run(
     assert_eq!(host.scene(), Scene::Mission);
 
     // --- the spawn moment ---------------------------------------------
-    // Entry pump: activation (camera fixed at robot 0 Q5) + first
+    // Entry pump: activation (four-sample camera initialized from robot 0 Q5 minus height) + first
     // present; no sim tick yet.
     host.pump_frame(4, &InputFrame::default());
     let mission = host.mission().expect("staged on Mission");
     assert!(mission.is_active());
     // Robot 0 Q5 = tile (21,73) + 0xF00 center >> 8 = (687, 2351).
-    assert_eq!(mission.camera(), (687, 2351));
+    assert_eq!(mission.camera(), (656, 2320));
     assert_eq!(mission.sim().robots().len(), 2, "MRK[0] + staged marker");
     assert_eq!(mission.sim().frame(), 0, "the entry pump renders only");
     assert_eq!(mission.render_count(), 1);
@@ -226,11 +226,8 @@ fn scripted_run(
     let spawn_sim = mission.state_hash().0;
 
     // --- the click -----------------------------------------------------
-    // Robot 0 projected at camera == its own position: dx=dy=0,
-    // colAdj 0x20, rowAdj 15, z 31 -> (0x130, 0x10C+15-31) = (304,
-    // 252). Aim the cursor (target-driven; it boots at the GameInit
-    // center, D160), then the click edge.
-    aim(&mut host, 304, 252);
+    // Original left-ground projection: +height-8, no synthetic armer.
+    aim(&mut host, 240, 185);
     host.pump_frame(
         4,
         &InputFrame {
@@ -239,15 +236,12 @@ fn scripted_run(
         },
     );
     let mission = host.mission().expect("still on Mission");
-    let order = mission.sim().order().expect("click armed the order");
-    assert_eq!(order.tile.0, 21, "armed AT the clicked robot's tile");
-    assert_eq!(order.tile.1, 73);
-    assert_eq!(mission.sim().robots()[0].state, 3, "state 3 [FUN_004247b5]");
-    assert_eq!(
-        mission.sim().robots()[0].pos_x,
-        21 << 13,
-        "snap to the tile origin"
+    assert!(
+        mission.sim().order().is_none(),
+        "ground input never arms extraction"
     );
+    assert_eq!(mission.sim().robots()[0].target, Some((624, 2288)));
+    assert_eq!(mission.sim().robots()[0].state, 1, "ordinary walking state");
     let click_sim = mission.state_hash().0;
 
     // --- mid-walk ------------------------------------------------------
@@ -255,9 +249,9 @@ fn scripted_run(
         host.pump_frame(4, &InputFrame::default());
     }
     let mission = host.mission().expect("still on Mission");
-    let walker = &mission.sim().robots()[1];
-    assert_eq!(walker.state, 4, "the staged walker is mid-walk");
-    assert_ne!(walker.anim, 0, "the walk anim phase is live");
+    let walker = &mission.sim().robots()[0];
+    assert_eq!(walker.state, 1, "the selected robot is mid-walk");
+    assert_ne!(walker.q5(), (687, 2351), "ground command moves the robot");
     let walker_obs = (walker.state, walker.anim, walker.pos_x);
     let walk_frame = host.frame().parity_hash();
 
@@ -265,7 +259,7 @@ fn scripted_run(
     // Move to the map-toggle strip [0x213,0x24D]x[0x1B5,0x1CF] and
     // click: the overlay bit flips, the lockout arms 5, and the next
     // pump presents the strategic map instead of the viewport.
-    // Target-driven aim again (the cursor sits at (304,252) after
+    // Target-driven aim again (the cursor sits at (240,185) after
     // the robot click above).
     aim(&mut host, 0x230, 0x1C0);
     host.pump_frame(
@@ -547,14 +541,13 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // (hp/armor/hit_flash/alarm/kind/shield family — spawn hp 5000
     // is the only nonzero new value, so the sim pins move while the
     // FRAME pins stay put: the bars draw the same 5000/0 values).
-    // FRAME pins RE-PINNED ONCE 2026-08-21 (the dither unit, D55):
-    // ZONEA spawns a 1-robot squad, so slots 1/2 now carry the
-    // FUN_00401ae6 static every frame (RE-EXW-SIM 7i) — the frame
-    // hashes move, the SIM hashes do NOT (the dither is
-    // presentation-only; the sim hash covers hit_flash since D53).
+    // Corrected pins: zero-based water edges (EXW 0x408035), camera
+    // height subtraction and original ground movement. See the live
+    // DOSBox comparison in PLAYTEST-2026-09-06.md. Spawn sim is unchanged;
+    // click/overlay sim pins now represent walking rather than teleporting.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "7fdada56b10f1cad",
+        "f46505107b210c69",
         "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits + bars + score strip + dither, empty loadout)"
     );
     assert_eq!(
@@ -564,12 +557,12 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{click_sim:016x}"),
-        "0bf4fb534d6b3bd5",
-        "sim state hash after the click arm"
+        "0fe8608dc09ac431",
+        "sim state hash after the ground movement command"
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "58ea10373e8d4284",
+        "162ac8c55cfe15a2",
         "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits + bars + dither, empty loadout)"
     );
     // The overlay pins [7e]: the strategic-map frame after the strip
@@ -581,12 +574,12 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // clears them either).
     assert_eq!(
         format!("{overlay_frame:016x}"),
-        "1d70e0bd059f5ae0",
+        "3639153954a3b6db",
         "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers + frozen dithered sidebar)"
     );
     assert_eq!(
         format!("{overlay_sim:016x}"),
-        "78a16ba63607d197",
+        "f6c7e590179aa0ed",
         "sim state hash at the overlay moment"
     );
 
@@ -678,7 +671,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     assert_eq!(
         format!("{armed_frame:016x}"),
-        "6050d20755b2d852",
+        "27a1c62fcff25b16",
         "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text + bars + strip + dither)"
     );
 

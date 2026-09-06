@@ -717,7 +717,7 @@ pub struct MissionScene {
     /// family draws (fill at activate / seeds + reseeds in the
     /// portrait pass / churn at the frame epilogue).
     /// `Pcg32::new(0x1E240, 0)` — the MissionShell stand-in seed;
-    /// zone 0 = ZONEA draws fixed edges and consumes none.
+    /// Zone A uses random water edges; only zone F has fixed edges.
     rand_b: Pcg32,
     /// The dither noise ring [RE-EXW-SIM 7i, D55] — the 0x4e6ed8
     /// static bank + its cursor, filled at activate, churned at

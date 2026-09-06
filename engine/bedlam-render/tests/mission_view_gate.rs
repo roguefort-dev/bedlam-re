@@ -213,7 +213,7 @@ fn zonea_mission1_viewport_cache_mirror_and_frame_hash_pinned() {
     );
     assert_eq!(
         format!("{frame_hash:016x}"),
-        "90a9e929eea24ced",
+        "a326c73fe710e501",
         "ZONEA/MISSION1 viewport crop at camera (0,0), frame 0"
     );
     // Two independent runs are byte-identical.
@@ -225,13 +225,8 @@ fn zonea_mission1_viewport_cache_mirror_and_frame_hash_pinned() {
 
 #[test]
 fn zonea_mission1_viewport_edge_variants_are_isolated() {
-    // The off-map edge draws consume the caller's RNG (the EXW uses
-    // the shared mission RandB; ours is the T3 stand-in). ZONEA is
-    // zone 0 = a FIXED edge sprite (id 1) [FUN_00408030]: no RNG is
-    // consumed and streams cannot change the frame. A random-edge
-    // zone family (zone 1: base 0x37 + rand(9)) makes the stream
-    // visible — same seed reproduces, a different stream diverges
-    // only where off-map edge tiles live.
+    // EXW 0x408035 subtracts one from the original zone. Engine zone
+    // zero (A) uses random water edges, not the invalid-zone fallback.
     let Some([tot, dat, bin, lnk]) = zonea() else {
         eprintln!("corpus absent - skipping (CI)");
         return;
@@ -244,12 +239,11 @@ fn zonea_mission1_viewport_edge_variants_are_isolated() {
         v.draw_terrain(&mut buf, &mut DrawParams::new(0, 0, zone, &mut r));
         buf
     };
-    // Zone 0: the fixed family — identical across streams.
-    assert_eq!(draw(0, 7), draw(0, 8), "zone-0 edge sprites are fixed");
-    // Zone 1: random variants — stream-sensitive, stream-reproducible.
-    let a = draw(1, 7);
-    let a2 = draw(1, 7);
-    let b = draw(1, 8);
+    // Invalid zone retains the fixed fallback, without RNG dependence.
+    assert_eq!(draw(-1, 7), draw(-1, 8));
+    let a = draw(0, 7);
+    let a2 = draw(0, 7);
+    let b = draw(0, 8);
     assert_eq!(a, a2, "same stream reproduces");
     assert_ne!(a, b, "a different edge stream changes off-map tiles");
 }
@@ -381,11 +375,11 @@ fn zonea_mission1_entity_overlay_frame_hash_pinned() {
     eprintln!("entity frame A hash {hash_a}, frame B hash {hash_b}");
     assert_ne!(hash_a, hash_b, "the walking robot changes the frame");
     assert_eq!(
-        hash_a, "8d2c559df035b75b",
+        hash_a, "761094cbe33c6b84",
         "ZONEA/MISSION1 spawn-moment entity frame at camera (19,73)"
     );
     assert_eq!(
-        hash_b, "8804f9deec6b1fee",
+        hash_b, "00dc2ec0c12c052a",
         "ZONEA/MISSION1 mid-walk entity frame (3 frames, robot b walking east)"
     );
 }
