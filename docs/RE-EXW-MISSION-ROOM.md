@@ -543,3 +543,30 @@ sets a robot movement target, whereas flag 2 stages an order/fire triple.
 Before wiring this conversion, trace the mouse-button/command-builder
 selection so ordinary movement cannot accidentally become a firing order.
 Existing robot-click synthetic controls cannot certify that production path.
+
+### Left movement versus right firing — dispatch resolved
+
+[verified] ScrollUpdate 0x425b89..0x425bc5 routes mouse bit 0
+(left) into 0x4eddf8/fc and bit 1 (right) into 0x4ede00/04.
+The previously decoded FUN_00410644 is the RIGHT firing path.
+The LEFT movement producer is FUN_0040b835, 0x40b892..0x40b969:
+
+```text
+vx = ((mouse_x - 240) * zoom) / 480
+vy = ((mouse_y - 240) * zoom) / 480 + camera_z - 8
+x = clamp(camera_x + (vx >> 1) + vy, 0, map_width * 32)
+y = clamp(camera_y - (vx >> 1) + vy, 0, map_height * 32)
+```
+
+Signed IDIV truncates toward zero; SAR halves vx toward negative
+infinity. The upper clamp includes map_width/height * 32, not minus
+one. Writes 0x46cd04/08 and sets 0x4ddb20 bit 0. Sidebar x>=480
+dispatches to 0x40d197; overlay swallows movement. The source copies
+held-left positions every poll, so movement can retarget while held.
+
+The command builder copies those two words into the flag-1 payload
+at 0x44a1d1..0x44a219. The existing core CommandRecord flag-1 consumer
+is therefore the production movement receiver, not arm_order_at_robot
+and not the flag-2 firing triple. Its existing state/alive gates must
+remain in force. Camera tracking and the four-anchor height average
+still need to accompany the production viewport input integration.
