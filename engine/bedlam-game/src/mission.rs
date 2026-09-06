@@ -1623,6 +1623,15 @@ impl MissionScene {
                 continue;
             }
             self.set_weapon_loadout(robot, weapons);
+            // EXW 0x40cefd..0x40cf6b copies the session groups into
+            // the robot itself; sidebar rows alone cannot drive firing.
+            let unit = &mut self.sim.robots_mut()[robot];
+            unit.weapons = weapons.map(|(id, ammo)| bedlam_core::weapon::WeaponSlot {
+                id,
+                ammo: ammo as i16,
+                cooldown: 0,
+            });
+            unit.weapon_mask = spawn_order_bits(weapons);
             for row in equipment.iter_mut() {
                 let amount = i32::from(row.1 as i16);
                 match row.0 {
@@ -2231,6 +2240,9 @@ mod tests {
         assert_eq!(m.weapon_loadout(0), Some(&[(0, 0); 7]));
         for robot in [1, 2] {
             assert_eq!(m.weapon_loadout(robot), Some(&weapons));
+            assert_eq!(m.sim.robots()[robot].weapons[0].id, 2);
+            assert_eq!(m.sim.robots()[robot].weapons[0].ammo, 300);
+            assert_eq!(m.sim.robots()[robot].weapon_mask, 1);
         }
         assert_eq!(m.sim.robots()[1].battery, 5);
         assert_eq!(m.sim.robots()[1].hp, 5500);

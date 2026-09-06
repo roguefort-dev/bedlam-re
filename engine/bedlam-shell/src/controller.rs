@@ -291,6 +291,15 @@ mod tests {
             Some(&expected)
         );
         let mission = game.host().mission().unwrap();
+        for robot in mission.sim().robots().iter().filter(|r| r.kind == 0) {
+            for (slot, (name, ammo)) in robot.weapons.iter().zip(expected) {
+                assert_eq!((slot.id, slot.ammo), (name, ammo as i16));
+            }
+            assert_ne!(
+                robot.weapon_mask, 0,
+                "purchased weapons must be armed in simulation"
+            );
+        }
         let first = mission
             .sim()
             .robots()
