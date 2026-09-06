@@ -6443,8 +6443,11 @@ below is [verified] against the objdump unless tagged.
    (2,14,1)) only matches a robot whose floor reached 0x20+.
    [Corpus probe, ZONEA/MISSION1.PAD: 999 6-B records, 114
    live (slot 0 = (5,61,0) … slot 113 = (18,24,4)), terminator
-   0xFFFF at slot 114; zone-1 extraction set {8,0x10,0x12,0x18}
-   = tiles (2,14,1) / (17,25,4) / (19,70,0) / (17,63,0).]
+   0xFFFF at slot 114. CORRECTED 2026-09-06: zone-1 SP mission-1
+   extraction is ONLY slot 0x10 at (17,25,4); slots 0x12 and
+   0x18 are tutorial pads, slot 8 is a door action. The old union
+   census caused a live movement lock; see RE-EXW-MISSION-ROOM.md
+   extraction dispatch correction.]
    The E model may skip the revisit latch: after a trigger the
    beacon arms (the armer's one-at-a-time gate) and the robot
    halts state 3, so a repeat probe of the same slot is inert

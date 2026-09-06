@@ -428,6 +428,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(game.host().mission().unwrap().sim().hints().active(), None);
+        let resumed_from = game.host().mission().unwrap().sim().robots()[0].q5();
+        for _ in 0..20 {
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        assert_ne!(
+            game.host().mission().unwrap().sim().robots()[0].q5(),
+            resumed_from,
+            "welcome dismissal resumes walking instead of arming extraction: {:?}",
+            game.host().mission().unwrap().sim().robots()[0]
+        );
         let plasma_before = game.host().mission().unwrap().sim().robots()[0].weapons[0].ammo;
         game.pump(
             InputFrame {

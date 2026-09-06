@@ -10581,3 +10581,13 @@ full footprint restoration. Tests and live original/native comparison
 verify Boot Camp's generator; other set mappings, camera cut and sound
 remain explicit work. Runtime network mode shares the existing mission
 configuration entry with tutorial gates and defaults to single-player.
+
+## D251 — Remove false extraction triggers from Boot Camp tutorials
+
+Live state inspection and original dispatcher branches prove that
+welcome/fence tutorial slots cannot arm extraction. Zone-1 SP mission-1
+extracts only at slot 16; preserve its mode/mission gates. Fix the
+producer instead of allowing movement to cancel a legitimate extraction
+waiting state. The S6 actual replay digest changes as documented in the
+playtest journal; retain the old expected pin pending separate control
+repair. Audit other zones' union tables before claiming their parity.

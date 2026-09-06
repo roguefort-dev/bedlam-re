@@ -1097,7 +1097,7 @@ impl MissionSim {
     /// mechanical-parse provenance; zones 6/7 are not in the census).
     fn zone_extraction_slots(zone: u32) -> &'static [usize] {
         match zone {
-            1 => &[8, 0x10, 0x12, 0x18],
+            1 => &[0x10],
             2 => &[4, 5, 7, 0xE, 0x11],
             3 => &[0, 1, 6, 0xF, 0x15],
             4 => &[0, 2, 0x10, 0x15, 0x16],
@@ -1717,6 +1717,9 @@ impl MissionSim {
             (r.pos_x >> 13, r.pos_y >> 13, r.z >> 5)
         };
         let zone = self.zone;
+        if zone == 1 && (self.mission_no != 1 || self.network_mode == 2) {
+            return;
+        }
         let Some(slot) = self.terrain.pad_slot_at(tx, ty, level) else {
             return;
         };
@@ -2813,12 +2816,32 @@ mod tests {
     /// A sim with one robot staged for damage tests (state IDLE, all
     /// vitals at the spawn defaults unless the test overrides them).
     #[test]
+    fn boot_camp_exit_pad_keeps_mission_and_network_gates() {
+        for (mission, mode, expected) in [(1, 0, true), (2, 0, false), (1, 2, false)] {
+            let mut sim = damage_sim();
+            sim.zone = 1;
+            sim.mission_no = mission;
+            sim.network_mode = mode;
+            let r = &sim.robots[0];
+            let marker = (r.pos_x >> 13, r.pos_y >> 13, r.z >> 5);
+            sim.terrain.pad_slots = vec![(7, 7, 0); 16];
+            sim.terrain.pad_slots.push(marker);
+            sim.pad_extraction_trigger(0);
+            assert_eq!(
+                sim.order_pad_armed, expected,
+                "mission={mission}, mode={mode}"
+            );
+        }
+    }
+
+    #[test]
     fn hint_pad_halts_same_phase_and_movement_command_dismisses_after_grace() {
         let mut sim = damage_sim();
         sim.configure_hints(1, 1, 0);
+        sim.zone = 1;
         let r = &sim.robots[0];
         let pos = (r.pos_x, r.pos_y);
-        sim.terrain.pad_slots = vec![(7, 7, 0); 17];
+        sim.terrain.pad_slots = vec![(7, 7, 0); 18];
         sim.terrain
             .pad_slots
             .push((r.pos_x >> 13, r.pos_y >> 13, r.z >> 5));
