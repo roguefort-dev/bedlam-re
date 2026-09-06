@@ -59,3 +59,33 @@ how collision becomes traversable. Next audit the mission initialization
 and object/terrain mutations, and obtain the original roof observation.
 No collision workaround or extraction completion was introduced. Corpus
 manifest checks passed before and after the language-file read.
+
+## Original roof comparison and restore-index defect
+
+[observed, original EXD via DOSBox] Replayed STANDARD with purchased Plasma
+X2, traversed the pool, green lifts, underpass, northern generator, PAD8
+and northern teleporter. Reached the roof alive. The intact beacon stops
+the robot in the original too. Firing Plasma at it collapses the tower,
+awards40 points (180 ->220), and the pending movement enters the pad.
+The dropship appears with the evacuation warning; subsequently the game
+enters an evacuation movie. Thus an intact-beacon collision bypass would
+be incorrect. Original PID2400491 is paused in that movie, not at title.
+
+[verified, corpus] BDG row196 is1×1×3, hp400, score/type40. Its UNDER
+TOT bank is(1331,0,0), UNDER DAT bank(0,0,0), at POS(17,25,5). The
+restore must clear world levels5..7 while retaining PAD16 at level4.
+
+[observed, native] Firing at the same tower awards40 (33105 ->33145),
+but leaves its sprite and collision intact. Native remains(528,816,159),
+HP2544, Plasma234. This isolates the defect to destruction restoration.
+
+[verified, EXW] RE-EXW-SIM7j.32/3 already correctly specifies local
+z'=z-z0 for bank indexing. Rechecked41aaf5 (local counter initialized0),
+41ab1b (world z starts at instance z),41ab36..41ab55 (local z·H·W plus
+footprint offset), and41ab59/72/8a (UNDER bank reads). The native
+`destroy_tail` instead uses absolute `zz` in its bank index, then skips
+indices beyond W·H·D. For z0=5,D=3 it skips every beacon cell. Correct
+the bank index to use zz-oz, preserving world z for DAT/mirror writes.
+Protect nonzero origins, multiple layers/footprint cells, upper-plane
+clamping, and the actual Boot Camp beacon's movement/extraction seam.
+Manifest checks passed around corpus reads; no original bytes committed.
