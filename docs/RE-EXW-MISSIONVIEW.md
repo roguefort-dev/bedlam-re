@@ -645,3 +645,22 @@ terrain pass overwrites everything the present window reads.
     base + 2..16/5..16 column), DROPSHIP.BIN count 210 (64×64
     tiles — matching the 7×7 0x40-stride ring grids; many entries
     are 0×0 empty stubs that the codec skips instantly).
+
+## Off-map zone indexing correction (live original comparison)
+
+[verified, EXW direct bounded disassembly] 0x408030 loads the one-based
+zone at 0x4edd8c, then `dec eax` at 0x408035 before the unsigned
+0..6 jump-table dispatch. The seven dwords at 0x408014 are
+408043,408043,408053,408043,408063,408073,408043. Therefore for
+engine zero-based zone indices A..G the bases are respectively
+0x37,0x37,0x23e,0x37,0x65,0x2ec,0x37. All except F add RandB(9);
+invalid zones fall back to sprite 1 without a random draw.
+
+The previous table's one-based values were passed a zero-based engine
+zone. This explains the live native paving outside Boot Camp, compared
+to water at the same location in DOSBox. Zone A must consume edge
+random draws; comments claiming fixed edges/no draws for zone zero are
+wrong. The earlier renderer table is superseded by this correction.
+The original full objdump listing was misaligned through the jump table;
+starting disassembly explicitly at 0x408030 exposes the missed decrement.
+Corpus checksums passed before and after the read-only probe.
