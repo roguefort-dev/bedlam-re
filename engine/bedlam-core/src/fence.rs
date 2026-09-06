@@ -2,16 +2,55 @@
 use crate::mission::{MissionSim, PICKUP_FLOOR_WORD};
 
 impl MissionSim {
+    fn fence_payload(&self, id: i32) -> u32 {
+        if self.network_mode == 2 {
+            return 0;
+        }
+        match (self.zone, self.mission_no, id) {
+            (1, 1, 0x85) => 0x847f,
+            (1, 1, 0x86) => 0x83,
+            (2, 2, 0x70..=0x75) => [0x67, 0x68, 0x69, 0x6d, 0x64, 0x65][id as usize - 0x70],
+            _ => 0,
+        }
+    }
+
+    /// EXW 0x41f215 object pass: generator and linked fence origin markers.
+    /// Retained immutable ids include destroyed generators, preserving the
+    /// initial target-type list built by 0x41f867. Destroyed records themselves
+    /// cannot match the original full flag-bearing id comparisons.
+    pub fn fence_radar_objects(&self) -> Vec<(usize, i32, i32)> {
+        let mut targets = Vec::new();
+        for object in &self.objects {
+            let payload = self.fence_payload(object.id);
+            for id in [payload & 0xff, (payload >> 8) & 0xff] {
+                if id != 0 && !targets.contains(&(id as i32)) {
+                    targets.push(id as i32);
+                }
+            }
+        }
+        self.objects
+            .iter()
+            .filter_map(|object| {
+                if object.destroyed {
+                    return None;
+                }
+                let icon = if self.fence_payload(object.id) != 0 {
+                    9
+                } else if targets.contains(&object.id) {
+                    10
+                } else {
+                    return None;
+                };
+                Some((icon, object.x, object.y))
+            })
+            .collect()
+    }
+
     pub(crate) fn schedule_fence_shutdown(&mut self, id: i32) {
-        // FUN_00439c20, set-1 branch. Other sets remain unmodeled.
-        if self.zone != 1 || self.mission_no != 1 || self.network_mode == 2 {
+        let payload = self.fence_payload(id);
+        if payload == 0 {
             return;
         }
-        let payload = match id {
-            0x85 => 0x847f,
-            0x86 => 0x83,
-            _ => return,
-        };
         let slot = self.fence_timers.iter().position(|t| t.0 == 0).unwrap_or(0);
         self.fence_timers[slot] = (payload, 8);
         // The producer's chase-camera call remains presentation work.
@@ -115,6 +154,38 @@ mod tests {
         assert_eq!(sim.terrain.dat_type(1, 2, 2), 1);
         sim.fence_tick();
         assert!(sim.take_terrain_writes().is_empty());
+    }
+
+    #[test]
+    fn b2_radar_links_survive_generator_death_until_delayed_shutdown() {
+        let mut sim = staged();
+        sim.zone = 2;
+        sim.mission_no = 2;
+        for (object, id) in sim.objects.iter_mut().zip([0x70, 0x67, 0x68, 0x71]) {
+            object.id = id;
+            object.destroyed = false;
+        }
+        assert_eq!(
+            sim.fence_radar_objects(),
+            vec![(9, 1, 2), (10, 2, 2), (10, 3, 2), (9, 4, 2)]
+        );
+        for (id, payload) in (0x70..=0x75).zip([0x67, 0x68, 0x69, 0x6d, 0x64, 0x65]) {
+            assert_eq!(sim.fence_payload(id), payload);
+        }
+        sim.objects[0].destroyed = true;
+        sim.schedule_fence_shutdown(0x70);
+        assert_eq!(
+            sim.fence_radar_objects(),
+            vec![(10, 2, 2), (10, 3, 2), (9, 4, 2)]
+        );
+        for _ in 0..9 {
+            sim.fence_tick();
+        }
+        assert_eq!(sim.fence_radar_objects(), vec![(10, 3, 2), (9, 4, 2)]);
+        assert!(!sim.objects[2].destroyed);
+        sim.network_mode = 2;
+        assert!(sim.fence_radar_objects().is_empty());
+        assert_eq!(sim.fence_payload(0x70), 0);
     }
 
     #[test]

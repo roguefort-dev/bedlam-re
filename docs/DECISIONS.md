@@ -10763,3 +10763,24 @@ production clippy-Dwarnings pass. Canonical remains3 pass/10 fail, all
 nine actual digests and S3 early-GameOver error unchanged from D259.
 Manifest clean. Release rebuilt; fresh native window replay remains next.
 Logs /tmp/bedlam-return-lib.log and /tmp/bedlam-return-canonical.log.
+
+## D262 — B-2 generator links and radar object markers (2026-09-07)
+
+Use the EXW-anchored B-2 mapping in RE-EXW-FENCE.md for both delayed
+fence shutdown and radar generator/target classification. Other untraced
+zone mappings remain absent. Radar inserts this pass after map tiles
+and before pads, with strict origin bounds and original icon precedence.
+Native object ids are retained unchanged when destroyed, so rebuilding
+the target-type set from all retained records preserves the original
+mission-initial list; destroyed records themselves produce no marker.
+This avoids introducing a second mutable cache with a separate lifetime.
+
+Validation: 168 core, 200 game and 150 shell library tests pass (one
+shell test ignored); production core/game clippy with warnings denied,
+formatting and release shell build pass. New B-2 test covers all six
+mapping entries, generator death, retained linked markers, ninth-tick
+shutdown and multiplayer exclusion. Corpus manifest is clean. Live
+post-fix comparison is pending; both existing windows remain paused at
+B-2, with native PID2650028 still running the prior D261 binary.
+Canonical checks remain 3 passing/10 failing with all nine actual digests
+unchanged from D261 and the same S3 early-GameOver error; no pins changed.
