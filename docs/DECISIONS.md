@@ -10615,3 +10615,21 @@ raising, five-level travel, busy requests and an empty raising stack.
 Actual PAD 1 lowers all eighteen tiles and their collision surface; both
 live games cross the lowered walkway into the scaffold area. Camera cuts,
 SFX and other zones' automatic elevators remain outside this increment.
+
+## D254 — Restore toxic terrain marking and phase-zero damage
+
+Actual Boot Camp staging exposed zero toxic markers. Re-reading the EXW
+proved the hazard tables use raw zone indexes, inclusive five-frame
+ranges and corrected 0x7d3 values. Fix the producer and consume 0x7d2
+once in phase zero using the existing damage/death path. Do not require
+movement or selection. Headless worlds without a grid remain safe.
+The original live pool warning and subsequent mission exit motivated this
+change; the exact damage interval is established by executable evidence
+and a real-map regression, not a timed live capture. The 0x7d3 phase
+clamp, failure/debrief presentation and patched live replay remain open.
+
+Canonical controls now have three passes and ten failures: the three
+pickup S5 variants newly differ, and S7's already-failed actual changes.
+Their harness stages these hazard markers. Preserve expected pins and
+record the evidence-driven changes; do not restore the wrong producer
+merely to retain its hashes. Other seven pre-existing failures remain.

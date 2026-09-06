@@ -240,13 +240,22 @@ fn staging_footprints_and_hazards() {
     assert_eq!(sim.object_grid_word(4, 4), 1);
     assert_eq!(sim.object_grid_word(5, 4), 0);
     // The hazard stamper over staged mirror words [§7j.12/6]:
-    // zone 1 base 0x20 → a z-word 0x20 stamps 0x7d2 OVER the
+    // raw zone 1 base 0x49 → a z-word 0x49 stamps 0x7d2 OVER the
     // footprint (the load order: footprints first).
     let n = (W * H) as usize;
     let mut words = vec![0u16; 8 * n];
-    words[(4 * W + 3) as usize * 8] = 0x20; // z0 of tile (3,4)
+    words[(4 * W + 3) as usize * 8] = 0x49; // z0 of tile (3,4)
+    words[(4 * W + 5) as usize * 8] = 0x4d; // inclusive toxic endpoint
+    words[(4 * W + 6) as usize * 8] = 0x52; // inclusive clamp endpoint
+    words[(4 * W + 7) as usize * 8] = 0x53; // outside both ranges
+    words[(4 * W + 8) as usize * 8] = 0x49;
+    words[(4 * W + 8) as usize * 8 + 1] = 0x4e; // higher layer wins
     assert!(sim.stage_terrain_mirror(&words));
     sim.stamp_hazard_words();
+    assert_eq!(sim.object_grid_word(5, 4), 0x7d2);
+    assert_eq!(sim.object_grid_word(6, 4), 0x7d3);
+    assert_eq!(sim.object_grid_word(7, 4), 0);
+    assert_eq!(sim.object_grid_word(8, 4), 0x7d3);
     assert_eq!(sim.object_grid_word(3, 4), 0x7d2);
     assert_eq!(sim.object_grid_word(4, 4), 1); // untouched neighbor
 }

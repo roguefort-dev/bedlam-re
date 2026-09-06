@@ -2096,10 +2096,13 @@ the type-DB tail producers. All [verified] asm unless tagged.
    call 0x447b8f): for EVERY tile, for z 0..7: z-word in
    `[0x454a20+4·zone, +4]` → `word[0x460dfa+2·tile] = 0x7d2`;
    z-word in `[0x454a3c+4·zone, +4]` → `= 0x7d3` (writers
-   0x422f9a/0x422fc6; later z can overwrite earlier). Zone bases
-   [bytes verified]: 0x7d2 {0x20,0x49,0x49,0x34e,0x49,0x77,0x77},
-   0x7d3 {0x49,0x77,0x77,0x49,0x4e,0x4e,0x349} — the tables sit
-   directly before the 7h pickup tables 0x454a58/74/90.
+   0x422f9a/0x422fc6; later z can overwrite earlier). Correction
+   2026-09-06 (RE-EXW-TOXIC.md): raw zone indexes with NO subtraction;
+   the eight dwords at 0x454a20 are
+   {0x20,0x49,0x49,0x34e,0x49,0x77,0x77,0x49}, and at 0x454a3c
+   {0x49,0x4e,0x4e,0x349,0x4e,0x7c,0x7c,0x4e}. Upper bounds are
+   inclusive (JG), five frames. Within a layer 0x7d3 stamps first,
+   then 0x7d2. The prior transcription/index interpretation was wrong.
 7. **FUN_00422fd1 = the type-DB TAIL stamper (rect list)**
    [verified 0x422fd1..0x423081] (mission-load call 0x447ba3):
    walks up to 45 records @0x4dcae8 stride 0x10 (STOPS at the

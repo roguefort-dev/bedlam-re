@@ -2020,6 +2020,23 @@ impl MissionSim {
             if !robot.alive || !Self::phase_gate(phase, robot) {
                 continue;
             }
+            // EXW 0x40bc1d..38: toxic object-grid tiles damage every
+            // live robot once per frame, before the remaining body pass.
+            if phase == 0 {
+                let (x, y) = robot.tile();
+                let (w, h) = self.terrain.size();
+                if (0..w).contains(&x)
+                    && (0..h).contains(&y)
+                    && self.object_grid.get((y * w + x) as usize) == Some(&0x7d2)
+                {
+                    let outcome = self.apply_damage(idx, 15, -1);
+                    if outcome.died {
+                        for (x, y, z, delay) in outcome.debris {
+                            self.stage_debris(x, y, z, 5, delay, -1);
+                        }
+                    }
+                }
+            }
             // The armor pass (7g.3): PHASE 1, alive robots only —
             // the pad byte of the tile under the robot center decides
             // charge (+20 behind the +0x98 pool, FUN_004100b7) vs
@@ -2963,6 +2980,47 @@ mod tests {
         let mut sim = MissionSim::new(flat_terrain(8, 8, 5, hs), sintable_like(), 11);
         sim.spawn_robot((2, 3, 0));
         sim
+    }
+
+    #[test]
+    fn toxic_floor_uses_phase_zero_and_the_normal_damage_path() {
+        let mut sim = damage_sim();
+        sim.object_grid = vec![0; 64];
+        sim.object_grid[3 * 8 + 2] = 0x7d2;
+        sim.robots_phase(0);
+        assert_eq!(sim.robots[0].hp, 4985);
+        for phase in 1..6 {
+            sim.robots_phase(phase);
+        }
+        assert_eq!(sim.robots[0].hp, 4985);
+        sim.robots[0].shield = 100;
+        sim.robots_phase(0);
+        assert_eq!(sim.robots[0].hp, 4985);
+        assert_eq!(sim.robots[0].shield, 83);
+        sim.robots[0].state = 2;
+        sim.robots_phase(0);
+        assert_eq!(
+            sim.robots[0].shield, 81,
+            "transit ignores damage, but shield decay still runs"
+        );
+        sim.robots[0].state = STATE_IDLE;
+        sim.robots[0].shield = 0;
+        sim.robots[0].hp = 15;
+        sim.robots_phase(0);
+        assert!(!sim.robots[0].alive);
+        assert_eq!(sim.robots[0].hp, 0);
+        assert_eq!(sim.debris_bank().iter().filter(|d| d.kind != 0).count(), 5);
+        let seq = sim.debris_seq;
+        sim.robots_phase(0);
+        assert_eq!(
+            sim.debris_seq, seq,
+            "dead robots do not repeat their death tail"
+        );
+        let mut safe = damage_sim();
+        safe.object_grid = vec![0; 64];
+        safe.object_grid[3 * 8 + 2] = 0x7d3;
+        safe.robots_phase(0);
+        assert_eq!(safe.robots[0].hp, 5000);
     }
 
     #[test]

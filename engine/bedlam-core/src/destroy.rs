@@ -89,12 +89,12 @@ pub const WATER_RANGE: [i32; 8] = [
 ];
 
 /// The 0x7d2 hazard-word zone bases [§7j.12/6, DGROUP 0x454a20
-/// bytes]: a tile whose z-word lies in `[base, base+4)` stamps
-/// object-grid word 0x7d2 at mission load (slot 0 unused).
-pub const HAZARD_7D2: [i32; 8] = [0, 0x20, 0x49, 0x49, 0x34E, 0x49, 0x77, 0x77];
+/// bytes]: a tile whose z-word lies in `[base, base+4]` stamps
+/// object-grid word 0x7d2 at mission load (indexed by raw zone).
+pub const HAZARD_7D2: [i32; 8] = [0x20, 0x49, 0x49, 0x34E, 0x49, 0x77, 0x77, 0x49];
 /// The 0x7d3 phase-clamp zone bases [§7j.12/6, DGROUP 0x454a3c]:
-/// z-word in `[base, base+4)` → grid word 0x7d3.
-pub const HAZARD_7D3: [i32; 8] = [0, 0x49, 0x77, 0x77, 0x49, 0x4E, 0x4E, 0x349];
+/// z-word in `[base, base+4]` → grid word 0x7d3.
+pub const HAZARD_7D3: [i32; 8] = [0x49, 0x4E, 0x4E, 0x349, 0x4E, 0x7C, 0x7C, 0x4E];
 
 /// The per-zone bridge-build TRIGGER CODES of FUN_00422600
 /// [§7j.41/1, table bytes 0x4225e4/0x4225d0]: destroying an
@@ -798,8 +798,8 @@ impl MissionSim {
 
     /// FUN_00422f18 — the 0x7d2/0x7d3 mission-load stamper
     /// [§7j.12/6, verified]: for EVERY tile, for z 0..7, a mirror
-    /// z-word in `[HAZARD_7D2[zone], +4)` stamps the object-grid
-    /// word 0x7d2; in `[HAZARD_7D3[zone], +4)` stamps 0x7d3 (later
+    /// z-word in `[HAZARD_7D2[zone], +4]` stamps the object-grid
+    /// word 0x7d2; in `[HAZARD_7D3[zone], +4]` stamps 0x7d3 (later
     /// z can overwrite earlier). Runs AFTER the footprint stamp in
     /// the original load order — call after
     /// [`MissionSim::stage_destroy_family`] +
@@ -817,10 +817,11 @@ impl MissionSim {
             let mut word = 0u16;
             for z in 0..8 {
                 let zw = self.mirror_words[tile * 8 + z] as i32;
-                if zw != 0 && (b72..b72 + 4).contains(&zw) {
-                    word = 0x7d2;
-                } else if zw != 0 && (b73..b73 + 4).contains(&zw) {
+                if (b73..=b73 + 4).contains(&zw) {
                     word = 0x7d3;
+                }
+                if (b72..=b72 + 4).contains(&zw) {
+                    word = 0x7d2;
                 }
             }
             if word != 0 {
