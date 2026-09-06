@@ -4848,7 +4848,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | memset-0 | FUN_00402965(EAX=0, ECX=len bytes, EDI=dst); 176 callers | §7j.21 |
 | door-rect list boundary | 0x4dcae8..0x4dcdb8 = 45×0x10 door rects (0x2d0); MissionShell clears it @0x447b7b AFTER the stager — ends EXACTLY at the arrival base, no overlap; door consumers use idx 0..0x24 | §7j.21 |
 | door open/close | FUN_004223b8(idx, state 1/2): rect {+0 state,+2 x0,+4 y0,+6 w,+8 h,+0xA variant} (§7j.34-corrected; the §7j.21 w/y/h permutation retired); state<3 only; anim-complete tile test low7(+0x1A)==+0x19 → FUN_004235e4 (state 1: +0x1A:=0x80) / FUN_004235bf (state 2: +0x1A:=0), +0x19 := variant<<4; FUN_004245c9 = the §7j.54 chase-camera cut (old "wall redraw" attribution retired); SFX 0x23/0x24 bank ELEV1 0x4edfb0; 86 callers (FUN_00433980 pads) | §7j.21, §7j.34, §7j.54 |
-| door animator tick | FUN_00423081 (sole caller MissionShell epilogue 0x44808f, after the creep tick 0x44808a): walks the 45 rects; state≥3 = AUTO doors (countdown@+0xC −1 per tick; at 0 → animate; on completion XOR bit7, re-target +0x19, countdown 0x14, SFX ELEV2 0x4edfb4 — cycles forever); state 1/2 = SCRIPTED doors (animate to target, stop); per tile with low7(+0x1A)≠+0x19: walk planes down (bit7: 5, else 6) → DAT volume door-frame byte 0x40+2·nibble (bit7, even) / 0x5F−2·nibble (clear, odd) at the 0x4eaac8-table level; low7++ ; nibble wrap → FINISH PAIR: FUN_004236c6+00423740 (close: DAT seen 1/0 + STACK PUSH-UP word[z+1]:=word[z], plane0:=0 if S+E neighbors are door tiles) / FUN_00423650+004235fb (open: DAT 0 + STACK DROP word[z]:=word[z+1], top cleared — the level leaves the stack); [0x4eaae8] = the 9th z-plane offset | §7j.34 |
+| door animator tick | FUN_00423081 (sole caller MissionShell epilogue 0x44808f, after the creep tick 0x44808a): walks the 45 rects; state≥3 = AUTO doors (countdown@+0xC −1 per tick; at 0 → animate; on completion XOR bit7, re-target +0x19, countdown 0x14, SFX ELEV2 0x4edfb4 — cycles forever); state 1/2 = SCRIPTED doors (animate to target, stop); per tile with low7(+0x1A)≠+0x19: walk planes down (bit7: 6, else 7) → DAT volume door-frame byte 0x40+2·nibble (bit7, even) / 0x5F−2·nibble (clear, odd) at plane level+1 (bit7) or level (clear), table 0x4eaacc; low7++ ; nibble wrap → FINISH PAIR: FUN_004236c6+00423740 (close: DAT seen 1/0 + STACK PUSH-UP word[z+1]:=word[z], plane0:=0 if S+E neighbors are door tiles) / FUN_00423650+004235fb (open: DAT 0 + STACK DROP word[z]:=word[z+1], top cleared — the level leaves the stack); [0x4eaae8] = plane 7 offset (corrected by RE-EXW-ELEVATORS.md) | §7j.34 |
 | tile word grid | word[0x460dfa+2·tile]: 0 = empty, 0x7d2 hazard, 0x7d3 phase-clamp, 0x7d4 platform, else object id+1 → rec n−1 @0x46cbf4 (stride 0x14 {x,y,z,id,flags,hp}) | §7j.12 |
 | platform strength bank | word[0x465daa+2·tile] = platform hp (build 300 via the FUN_00422600 zone-code trigger at the dying instance's own record / 199 via creep; weaken −damage; ≤0 → destroy: clear water z-word + both banks + 5× k7 debris, NO site latch); CORRECTED §7j.41/3 ring gate = (old ≥ 200 ∧ new < 200) ∨ (old ≥ 100 ∧ new < 100) (the 7j.12 "≥100 ∧ (hit <200 ∨ new <100)" gloss rejected by the asm) | §7j.12, §7j.41 |
 | platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; trigger build FUN_00422600 (destroy-tail; id == the zone code — a TYPE-row match; zone table 0x4225e4, zone 3 sub-keyed by the WITHIN-ZONE MISSION NUMBER [0x4edd88] via 0x4225d0); spread ring FUN_00422832/FUN_004228ce (8-tile row-major, needs both banks 0 + claim 0 + no live robot in the SE 2×2 + z ≥ 1 + empty z-word + plane-A byte 0 + plane-B(z−1) volume 1 — CORRECTED §7j.41/2 — writes water z-word at volume 2 (seen 0) + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (the §7j.41/4 PER-FRAME RandA gate draw at entry — unconditional, one draw every mission frame; +2 jitter draws on lucky frames; water ray walk; tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc on the WEAKEN→RING path only (CORRECTED §7j.41/3) | §7j.12, §7j.41 |
@@ -5454,7 +5454,7 @@ tile z-stack when a door finishes opening/closing.**
    - per tile: SKIP if low7(+0x1A) == +0x19 (target reached —
      the door is settled); else walk the tile's plane words
      DOWN from the top for the first nonzero level (bit7 SET
-     starts at plane 5/edx=6, bit7 CLEAR at plane 6/edx=7) and
+     starts at plane 6/edx=6, bit7 CLEAR at plane 7/edx=7) and
      write the DAT volume door-frame byte at that level via
      [0x4edd58] + row-table + z-plane dwords: **bit7 SET:
      0x40 + 2·nibble (EVEN series, table [edx·4+0x4eaad0]);
@@ -5490,15 +5490,14 @@ tile z-stack when a door finishes opening/closing.**
      first nonzero (residual edx); DAT byte at
      [row+col+[edx·4+0x4eaad0]] := 1; if edx < 6 also
      [edx·4+0x4eaad4] (one level up) := 0.
-   - FUN_00423650 (open DAT stamp): same walk; if edx ≠ 0 →
-     DAT byte [edx·4+0x4eaacc] := 0; ALWAYS the extra-plane
-     byte [[0x4eaae8]] := 0 — 0x4eaae8 = dword index 8 of the
-     0x4eaac8 z-plane table, i.e. a NINTH plane offset exists
-     (beyond the 8 stack levels).
-   - The z-plane dword table family is ONE table at 0x4eaac8
-     (indices 0..8+): 0x4eaacc = index 1, 0x4eaad0 = index 2,
-     0x4eaad4 = index 3 — the ±1 entry shifts between the
-     bit7 paths are level+1 arithmetic, not separate tables.
+   - FUN_00423650 (open DAT stamp): walk planes 7..1, default
+     level 0; if edx != 0, clear DAT at that level. Always clear
+     DAT plane 7 through [0x4eaae8].
+   - Correction verified against ordinary z writers 0x4239ac/d5:
+     the eight-plane table begins at 0x4eaacc (plane 0), with
+     0x4eaad0 = plane 1 and 0x4eaae8 = plane 7. The previous
+     ninth-plane inference incorrectly included adjacent state
+     at 0x4eaac8. See RE-EXW-ELEVATORS.md for the bounded audit.
 5. **FUN_004223b8 = the SCRIPTED DOOR stepper** (86 callers,
    ALL in the 0x433xxx-0x435xxx FUN_00433980 pad-script family;
    verified 0x4223b8..0x4225cf): args (rect idx, wanted ∈

@@ -425,6 +425,14 @@ impl MissionView {
         self.blowup_bank = bin.to_vec();
     }
 
+    pub fn set_elevator_bias(&mut self, bias: &[u8]) -> bool {
+        if bias.len() != self.bias.len() {
+            return false;
+        }
+        self.bias.copy_from_slice(bias);
+        true
+    }
+
     pub fn set_teleport_bank(&mut self, bin: &[u8]) {
         self.teleport_bank = bin.to_vec();
     }

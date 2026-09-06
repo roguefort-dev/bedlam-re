@@ -857,6 +857,10 @@ pub struct MissionSim {
     pub(crate) debris: Vec<crate::destroy::DebrisRecord>,
     /// The +0x18 seq counter — the debris LRU eviction key.
     pub(crate) debris_seq: i32,
+    /// Scripted moving-stack rectangles and per-tile animation bytes.
+    pub(crate) elevators: Vec<crate::elevator::Elevator>,
+    pub(crate) elevator_targets: Vec<u8>,
+    pub(crate) elevator_bias: Vec<u8>,
     /// Active prefix of the guest boarding records at 0x4dcdb8.
     pub(crate) rides: Vec<crate::ride::Ride>,
     /// Packed guest payload/countdown records at 0x4ea828.
@@ -990,6 +994,9 @@ impl MissionSim {
             objective_count: 0,
             debris: vec![crate::destroy::DebrisRecord::default(); crate::destroy::DEBRIS_SLOTS],
             debris_seq: 0,
+            elevators: Vec::new(),
+            elevator_targets: Vec::new(),
+            elevator_bias: Vec::new(),
             rides: Vec::new(),
             fence_timers: [(0, 0); 32],
             network_mode: 0,
@@ -1932,6 +1939,7 @@ impl MissionSim {
         if self.platform_family_armed {
             self.platform_creep_tick();
         }
+        self.elevator_tick();
         if let Some(order) = &mut self.order {
             if order.window != 0 {
                 order.window -= 1;
@@ -2051,6 +2059,7 @@ impl MissionSim {
                         let (zone, mission, mode) = self.hint_scope;
                         self.hints.probe(zone, mission, mode, slot);
                     }
+                    self.pad_elevator_trigger(idx);
                     self.pad_ride_trigger(idx);
                     if self.robots[idx].state != 2 {
                         self.pad_extraction_trigger(idx);

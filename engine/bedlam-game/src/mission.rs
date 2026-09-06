@@ -1425,6 +1425,9 @@ impl MissionScene {
             .collect();
         self.view
             .enqueue_rides(self.sim.rides(), self.cam_q5.0, self.cam_q5.1);
+        if self.world_connected {
+            assert!(self.view.set_elevator_bias(self.sim.elevator_bias()));
+        }
         let debris = self.debris_views();
         self.view
             .enqueue_effects(&rows, &debris, self.cam_q5.0, self.cam_q5.1);
@@ -2250,6 +2253,7 @@ mod tests {
         let mut mission = staged(&[]);
         let files = synth_mission_files();
         assert!(mission.sim.stage_pickup_surface(&files[0], 1));
+        mission.sim.stage_elevators();
         mission.sim.observe_terrain_writes();
         mission.world_connected = true;
         mission.activate();
@@ -2302,6 +2306,7 @@ mod tests {
             .sim
             .stage_destroy_family(&table, &pos, &[0, 0], 1, 1));
         assert!(mission.sim.stage_pickup_surface(&files[0], 1));
+        mission.sim.stage_elevators();
         mission.sim.observe_terrain_writes();
         mission.world_connected = true;
         mission.activate();

@@ -10602,3 +10602,16 @@ uses the simulation countdown for the marker effect. Both live games
 reach the same raised platform, and native accepts movement afterward.
 This advances the natural mission path without injecting outcomes or
 changing replay pins. Other zone tables and sound remain explicit work.
+
+## D253 — Wire Boot Camp's scripted pressure-pad elevators
+
+Stage the seven original rectangles and their height variants with world
+assets. Pad dispatch sets packed target/frame bytes, the epilogue ticks
+them after platform creep, and each sixteen-tick wrap moves DAT occupancy
+and the mirrored word/seen stack. Present the same packed frame through
+the existing renderer bias path. Correct the old ninth-DAT-plane claim:
+0x4eaacc is plane zero and 0x4eaae8 is plane seven. Tests cover lowering,
+raising, five-level travel, busy requests and an empty raising stack.
+Actual PAD 1 lowers all eighteen tiles and their collision surface; both
+live games cross the lowered walkway into the scaffold area. Camera cuts,
+SFX and other zones' automatic elevators remain outside this increment.
