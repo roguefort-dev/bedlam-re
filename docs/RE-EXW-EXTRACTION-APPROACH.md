@@ -38,3 +38,24 @@ paused in the title intro. Native PID2373747 retains the blocked roof state.
 The successful outcome resolver is also still incomplete, but must not be
 used to paper over the unreachable trigger. Manifest checks passed around
 these corpus/disassembly reads. No original bytes/assets are committed.
+
+## Height-reader cross-check
+
+[verified, EXW instructions] A second bounded audit rules out a special
+PAD pass-through in the floor reader. At41eb3e..41eb49 the ordinary DAT
+reader maps ff to type1. The floor routine calls it at41e274, reads the
+type's CGR height at41e328..41e353, and, when that height is31, probes the
+next plane at41e376..41e388. A nonempty upper type reads its own CGR
+height at41e3c5..41e3f2; nonzero adds32 to the base at41e400. No PAD or
+object-type exception occurs in this path. This agrees with the current
+`Terrain::floor_z` behavior for the beacon column; changing ff to air
+would contradict the original reader and affect every pad.
+
+[observed] The native window still shows the robot beside the beacon on
+the roof, with Plasma294, score33105 and cash3560. The original English
+Boot Camp message14 instructs the player to reach the beacon; it does
+not instruct the player to destroy it. This text alone does not establish
+how collision becomes traversable. Next audit the mission initialization
+and object/terrain mutations, and obtain the original roof observation.
+No collision workaround or extraction completion was introduced. Corpus
+manifest checks passed before and after the language-file read.
