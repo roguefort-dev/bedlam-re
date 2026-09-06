@@ -2116,7 +2116,8 @@ the type-DB tail producers. All [verified] asm unless tagged.
    nibble; +0x1b/+0x1c (0x4796d7/d8) remain open.
 8. **FUN_00422cc2 = the delayed-TRIGGER timer tick** [verified
    0x422cc2..0x422e0a] (epilogue 0x448085): 32 records @0x4ea828
-   stride 0x18 `{dword payload, word@+4 countdown}`; producers
+   stride 6 `{dword payload, word@+4 countdown}` (corrected by
+   RE-EXW-FENCE.md; increments at 0x422c7f/0x422dd6); producers
    FUN_00422c9b (find-free + set countdown 8) and FUN_00422e0a
    (payload = FUN_00439c20() result, then rec-id match →
    FUN_004245c9(x<<5, y<<5, z<<5) — the §7j.54 chase-camera
@@ -4853,7 +4854,7 @@ banks, 7h.2's POWERUP, 7j.27's BEAMIN all re-confirmed cell-exact.
 | platform family | damage FUN_00422693 ← weapon ray 0x41a8ff; trigger build FUN_00422600 (destroy-tail; id == the zone code — a TYPE-row match; zone table 0x4225e4, zone 3 sub-keyed by the WITHIN-ZONE MISSION NUMBER [0x4edd88] via 0x4225d0); spread ring FUN_00422832/FUN_004228ce (8-tile row-major, needs both banks 0 + claim 0 + no live robot in the SE 2×2 + z ≥ 1 + empty z-word + plane-A byte 0 + plane-B(z−1) volume 1 — CORRECTED §7j.41/2 — writes water z-word at volume 2 (seen 0) + 0x7d4 + strength + scorch+4); creep tick FUN_00422a9c (the §7j.41/4 PER-FRAME RandA gate draw at entry — unconditional, one draw every mission frame; +2 jitter draws on lucky frames; water ray walk; tip→FUN_00422832(…,199)); site latches 0x4dc5c8/cc on the WEAKEN→RING path only (CORRECTED §7j.41/3) | §7j.12, §7j.41 |
 | 0x7d2/0x7d3 stamper | FUN_00422f18 (load 0x447b8f): z-word ∈ [0x454a20+4z, +4] → 0x7d2; ∈ [0x454a3c+4z, +4] → 0x7d3; CORRECTED §7j.35: tables indexed by the RAW set [0x4edd8c] 1..7 → set-indexed bases 0x7d2 {0x49,0x49,0x34E,0x49,0x77,0x77,0x49} / 0x7d3 {0x4E,0x4E,0x349,0x4E,0x7C,0x7C,0x4E} (the 7j.12 prose lists were entries 0..6, one zone off; entry 0 = the previous array's tail) | §7j.12, §7j.35 |
 | type-DB tail stamper | FUN_00422fd1 (load 0x447ba3): 45 rec @0x4dcae8 stride 0x10 {state,x0,y0,w,h,variant,cd,flag}; STATE@+0 ≥ 3 (§7j.34: the 7j.12 "word@+2" qualifier was the wrong field) → byte 0x4796d5 = variant<<4, byte 0x4796d6 = (state==3?0:0x80) | §7j.12, §7j.34 |
-| delayed trigger timers | 32 rec @0x4ea828 stride 0x18 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
+| delayed trigger timers | 32 rec @0x4ea828 stride 6 {payload(lo/hi ids), cd(8)}; tick FUN_00422cc2 (epilogue 0x448085): expiry → SFX 0x4239ef(0x22,3), rec flags 0x40, z-plane-A clear, FUN_0041bd54(x,y,z,floor_word[0x454a90+4·zone]) | §7j.12 |
 | fast z-writer | FUN_0041bd54(x,y,z,word): word@0x4796bc+30·tile+2z + seen=1 (FUN_0042394a without the DAT volume byte) | §7j.12 |
 | scorch increment | FUN_0042223c(x,y,v): byte 0x4796d4 += v clamp 7 (platform damage/build use v=4) — 2nd producer beside FUN_00422287 | §7j.12 |
 | weapon impact resolver | FUN_0041a894(x Q13, y Q13, chain ctr ecx, damage ebx, [stack] score flag): tile from x/y>>13; grid word 0/0x7d2/0x7d3 → ret 0 (pass); 0x7d4 → FUN_00422693; n>0 → rec n−1 hp−=damage, destroyed → flags 0x40 + tail → ret 1; ret 1 only on destroy | §7j.13 |
