@@ -48,3 +48,11 @@ old index and is paused only by its blocked movement, not SIGSTOP.
 Original PID2106527 is SIGSTOP-paused after collecting the first gold
 pickup, 474 Plasma X2 rounds, cash3010, score360. Do not rebaseline replay
 digests to conceal the newly active real-corpus pickup path.
+
+
+[verification follow-up] Implementation bfb6761 passed the real-corpus gold
+regression and subsequently the fresh rebuilt-window journey recorded in
+PLAYTEST-2026-09-06.md, D258 rebuilt-window pickup verification. Gold clears
+and awards are visible in production. The old PID checkpoint above is
+historical: original has exited; native PID2373747 now holds the live run.
+Exact award RNG parity and ammo/episode effects remain open.
