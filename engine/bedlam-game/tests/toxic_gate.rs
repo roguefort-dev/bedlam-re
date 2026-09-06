@@ -52,3 +52,47 @@ fn boot_camp_toxic_tiles_drain_health_and_kill_without_movement() {
     assert!(!sim.robots()[robot].alive);
     assert!(sim.debris_bank().iter().any(|d| d.kind != 0));
 }
+
+#[test]
+fn boot_camp_pool_can_be_crossed_between_its_ramps() {
+    let Some(mut sim) = boot_camp() else { return };
+    sim.stage_elevators();
+    sim.spawn_robot((10, 46, 2));
+    // PAD 2, near platform, entrance ramp, exit ramp, far platform.
+    // These are map waypoints, not a substitute for a live input journey.
+    for (x, y) in [(10, 44), (9, 42), (9, 40), (12, 37), (14, 37)] {
+        sim.stage_command_record(bedlam_core::weapon::CommandRecord {
+            marker: 0,
+            id: 0,
+            spot: 0,
+            flags: 1,
+            x: x * 32 + 16,
+            y: y * 32 + 16,
+            z: 0,
+        });
+        for frame in 0..180 {
+            sim.advance_frame();
+            let r = &sim.robots()[0];
+            assert!(r.alive, "died approaching {x},{y}");
+            if frame > 0 && r.state == 0 {
+                break;
+            }
+        }
+        let r = &sim.robots()[0];
+        let dx = (r.pos_x >> 8) - i32::from(x * 32 + 16);
+        let dy = (r.pos_y >> 8) - i32::from(y * 32 + 16);
+        assert!(dx * dx + dy * dy <= 32 * 32, "missed {x},{y}: {r:?}");
+    }
+    let health = sim.robots()[0].hp;
+    assert!(
+        health > 0 && health < 5000,
+        "crossing must incur toxic damage"
+    );
+    assert_eq!(sim.robots()[0].z, 63, "reached the far platform");
+    // Longer than the idle pool death budget: the exit must actually be safe.
+    for _ in 0..334 {
+        sim.advance_frame();
+    }
+    assert_eq!(sim.robots()[0].hp, health);
+    assert!(sim.robots()[0].alive);
+}
