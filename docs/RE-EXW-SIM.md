@@ -7494,7 +7494,7 @@ slot 0x0A RIDE gate 0x4dcdfc plat 1   slot 0x16..0x1D MSG(1)
                                       slot 0x67..0x69 MSG(0xD)
                                       slot 0x6A..0x71 MSG(0xE)
 ```
-(Message slots are RANGES — 45 .PAD slots carry the 15 hints.)
+(Message slots are RANGES — 97 .PAD slots, 0x11 through 0x71 inclusive, carry the 15 hints.)
 
 ### 4. Zones B..G SP census (compact; rides by gate k =
 base 0x4dcdbc+0x24·k; the FULL generated table is §8-bis below) [verified]
@@ -7587,9 +7587,8 @@ briefing readers at 0x41c2e1/0x41c309/0x447111/0x43ddd1/0x43e3d4/
   min — practically until dismissed.
 - **DISMISSAL = a COMMAND**: inside FUN_00409138 (the COMMAND
   consumer, §7j.37) the bit0-SELECT arm site 0x40a2bc checks
-  `[0x4eaac0] < 0xFDE0` (i.e. the box has been up ≥ 8 frames) ⇒
-  timer := 0, and the sibling site 0x40a396 (threshold 0xFDD4, ≥ 44
-  frames) clears likewise — any player select/fire command dismisses
+  `[0x4eaac0] < 0xFDE0` (i.e. more than 8 timer decrements have elapsed) ⇒
+  timer := 0, and the sibling site 0x40a396 (threshold 0xFDD4, more than 20 timer decrements) clears likewise — any player select/fire command dismisses
   the on-screen hint after a minimum display. A third reader 0x40c570
   (`cmp 0x4eaac0,0; je`) gates the state-0 robot-write at 0x40c587 —
   the box holds the freeze write while visible. MissionShell

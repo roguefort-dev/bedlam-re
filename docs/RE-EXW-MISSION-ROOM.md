@@ -601,3 +601,29 @@ producer; repeated simulation subticks must not accelerate smoothing.
 Overrides at 0x403974..0x4039dd (MP death hold and scripted chase cut)
 remain distinct consumers for later work, not excuses to leave ordinary
 selected-robot following fixed.
+
+## Boot Camp hint implementation boundary
+
+[verified, corpus + EXW] ZONEA/MISSION1.PAD slots 17..21 are
+(18,70,0), (19,70,0), (20,70,0), (21,70,0), (22,70,0). These are
+the first welcome-hint strip (slot range 0x11..0x15 → message 0,
+0x433d05/0x433d07). LANGUAGE.ENG BOOT_CAMP_000 welcomes the player
+and instructs them to approach objects before shooting. The loaded
+Terrain already exposes ordered pad slots, but MissionScene has no
+hint text/state/rendering consumer; the core only dispatches extraction.
+
+[verified, corrected arithmetic] The show timer is 0xfde8=65000.
+Movement flag 1 at 0x40a2ae clears it only when timer < 0xfde0
+(0x40a2bc..0x40a2ca), i.e. more than eight decrements. Firing flag 2
+at 0x40a388 clears it only when timer < 0xfdd4 (0x40a396..0x40a3a4),
+i.e. more than twenty decrements. The earlier 44-frame prose was
+wrong, and equality does not dismiss. All hint ranges together
+cover 97 pad slots (17..113), not the earlier prose count 45.
+
+Implementation must retain per-id show-once latches, apply the
+mission/mode gates, load BOOT_CAMP_000..014 from the chosen language,
+wrap using MONOFONT metrics and render the original animated box.
+A text-only overlay with arbitrary wrapping would not close this task.
+The welcome-strip coordinates provide a concrete production movement
+regression destination once the trigger and display consumer are wired.
+Manifest verified before and after these read-only corpus probes.
