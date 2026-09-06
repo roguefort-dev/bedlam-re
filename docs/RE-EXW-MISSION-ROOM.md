@@ -688,3 +688,24 @@ the per-record delay/color phase without mutating asset banks.
 0x41e049..0x41e054 reads the path at 0x45896e,
 `GAMEGFX\\DARKPAL.PAL`, into 0x4edc00. Production hint staging uses
 that 256-byte file rather than the room's SELDARK or shop's DARKPALS.
+
+## Boot Camp extraction dispatch correction (2026-09-06)
+
+[verified EXW] The prior extraction-slot census over-approximated shared
+switch labels. At 0x43399f/0x434045, zone 1 permits scripted SP behavior
+only for mission 1; network mode 2 takes the probe-only return path.
+After the pad probe at 0x433da1, slots 17..113 take tutorial branches.
+Specifically 0x433e40 compares with 17: slot 16 goes to 0x433cbc and
+then the extraction call 0x433cfb, while 17..21 go to tutorial zero
+and 22..29 to tutorial one. Slot 18 is therefore a welcome tutorial,
+and slot 24 a fence-generator tutorial, never extraction. Slot 8's
+branch at 0x433f44 goes to a door handler, not the extraction call.
+The zone-1 extraction set is only {16}, not {8,16,18,24} as asserted
+in RE-EXW-SIM 7j.40 and the old native zone_extraction_slots table.
+Other zones' old union tables still need mission-aware audit.
+
+[verified live native diagnostic] A fresh menu/Auto/mission run moved
+from (175872,597760) to (155648,573440) Q13, then held state 3 with
+5000 HP and a welcome hint. The extraction armer caused that state;
+subsequent ordinary clicks correctly refused to overwrite it. This
+was a false extraction trigger, not a mouse-input or firing bug.
