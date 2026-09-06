@@ -1039,6 +1039,18 @@ impl MissionScene {
             self.map_lockout -= 1;
         }
         self.sim.advance_frame();
+        // Original sidebar readers use the live robot words, not the
+        // pre-mission shop table (EXW 0x408403). Mirror after consumption.
+        for (index, robot) in self.sim.robots().iter().enumerate() {
+            let groups = robot.weapons.map(|slot| (slot.id, slot.ammo as u16));
+            if self.sidebar.weapons[index] != groups
+                || self.sidebar.order_bits[index] != robot.weapon_mask
+            {
+                self.sidebar.weapons[index] = groups;
+                self.sidebar.order_bits[index] = robot.weapon_mask;
+                self.sidebar.redraw = 2;
+            }
+        }
         // The destroy-score fold [§7j.13/3 + D104]: the destroy tail
         // accumulates the award in the sim's pending cell; the shell
         // folds it into the campaign score (the [0x4dd40c] delta the
@@ -1131,6 +1143,7 @@ impl MissionScene {
             if let Some(groups) = self.sidebar.weapons.get(robot) {
                 if groups[row].1 != 0 {
                     self.sidebar.order_bits[robot] ^= 1 << row;
+                    self.sim.robots_mut()[robot].weapon_mask = self.sidebar.order_bits[robot];
                     self.sidebar.redraw = 2;
                 }
             }
@@ -1599,6 +1612,13 @@ impl MissionScene {
         if let Some(slot) = self.sidebar.weapons.get_mut(robot) {
             *slot = *groups;
             self.sidebar.order_bits[robot] = spawn_order_bits(groups);
+            let unit = &mut self.sim.robots_mut()[robot];
+            unit.weapons = groups.map(|(id, ammo)| bedlam_core::weapon::WeaponSlot {
+                id,
+                ammo: ammo as i16,
+                cooldown: 0,
+            });
+            unit.weapon_mask = self.sidebar.order_bits[robot];
             let battery = i32::from(
                 groups
                     .iter()
@@ -1623,15 +1643,6 @@ impl MissionScene {
                 continue;
             }
             self.set_weapon_loadout(robot, weapons);
-            // EXW 0x40cefd..0x40cf6b copies the session groups into
-            // the robot itself; sidebar rows alone cannot drive firing.
-            let unit = &mut self.sim.robots_mut()[robot];
-            unit.weapons = weapons.map(|(id, ammo)| bedlam_core::weapon::WeaponSlot {
-                id,
-                ammo: ammo as i16,
-                cooldown: 0,
-            });
-            unit.weapon_mask = spawn_order_bits(weapons);
             for row in equipment.iter_mut() {
                 let amount = i32::from(row.1 as i16);
                 match row.0 {
@@ -2402,6 +2413,42 @@ mod tests {
     }
 
     #[test]
+    fn selected_weapon_fires_and_hud_tracks_ammo_and_auto_rearm() {
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        let mut groups = [(0, 0); 7];
+        groups[0] = (9, 1);
+        groups[1] = (10, 2);
+        m.set_weapon_loadout(0, &groups);
+        sidebar_click(&mut m, 0x200, 0x57); // first slot off
+        sidebar_click(&mut m, 0x200, 0x65); // second slot on
+        assert_eq!(m.sim.robots()[0].weapon_mask, 2);
+        m.sim.stage_command_record(CommandRecord {
+            marker: 0,
+            id: 0,
+            spot: 0,
+            flags: 2,
+            x: 80,
+            y: 80,
+            z: 0,
+        });
+        m.tick(&InputFrame::default());
+        assert_eq!(
+            m.sim.robots()[0].weapons[0].ammo,
+            1,
+            "unselected weapon did not fire"
+        );
+        assert_eq!(m.sim.robots()[0].weapons[1].ammo, 1);
+        assert_eq!(m.weapon_loadout(0).unwrap()[1], (10, 1));
+        assert_eq!(
+            m.order_bits(0),
+            1,
+            "artillery auto-rearms first stocked slot"
+        );
+        assert_eq!(m.order_bits(0), m.sim.robots()[0].weapon_mask);
+    }
+
+    #[test]
     fn sidebar_order_rows_toggle_the_selected_robot() {
         // Row click on the SELECTED robot's bits word: row = (y -
         // 0x57)/14 clamp 6, gate = the group AMMO word (record
@@ -2929,7 +2976,7 @@ mod tests {
     fn sidebar_state_never_reaches_the_sim_hash() {
         // D17 split pin: identical tick counts + a sidebar click vs a
         // map-strip toggle click -> identical sim state hashes (both
-        // halves are presentation-only).
+        // selected weapon mask is excluded from this legacy hash).
         let mut a = staged(&[(3, 1, 1)]);
         let mut b = staged(&[(3, 1, 1)]);
         a.activate();
