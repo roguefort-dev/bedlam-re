@@ -357,7 +357,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // fresh-campaign default (RE-EXW-SIM 7d.4, D51) — NO order
     // rows: the weapon table starts EMPTY until the pre-mission
     // shop fills it, so the rows band (y 0x57..0xB8, the 7 order
-    // rects) stays black.
+    // rects) retains the original numbered empty-row chrome.
     let band = |y0: usize, y1: usize| -> usize {
         (y0..y1)
             .map(|r| {
@@ -373,11 +373,19 @@ fn zonea_mission1_scene_frames_hash_pinned() {
         portraits > 2_000,
         "the portrait band carries the GENERAL.BIN art ({portraits})"
     );
-    assert_eq!(
-        band(0x57, 0xB9),
-        0,
-        "the order-rows band stays black (empty loadout)"
+    let mut base = vec![0u8; 640 * 480];
+    bedlam_render::ui_bank::draw_sprite(&mut base, 640, &files[9], 1, 480, 0, false);
+    assert!(
+        band(0x57, 0xB9) > 4000,
+        "original empty-row chrome is present"
     );
+    for y in 0x57..0xB9 {
+        assert_eq!(
+            &frame.indices[y * 640 + 480..(y + 1) * 640],
+            &base[y * 640 + 480..(y + 1) * 640],
+            "empty loadout preserves original base row {y}"
+        );
+    }
     // The HP/armor bars band [RE-EXW-SIM 7f.1, FUN_0040807f]: both
     // spawned robots draw the FULL HP bar (0x18 — staged hp 5000,
     // the dropship-landing default) and the EMPTY armor bar (0x8E —
@@ -547,7 +555,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // click/overlay sim pins now represent walking rather than teleporting.
     assert_eq!(
         format!("{spawn_frame:016x}"),
-        "f46505107b210c69",
+        "9a04e86895078ebf",
         "ZONEA/MISSION1 spawn-moment scene frame (GAMEPAL + portraits + bars + score strip + dither, empty loadout)"
     );
     assert_eq!(
@@ -562,7 +570,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     );
     assert_eq!(
         format!("{walk_frame:016x}"),
-        "162ac8c55cfe15a2",
+        "c4832d8090c64998",
         "ZONEA/MISSION1 mid-walk scene frame (GAMEPAL + portraits + bars + dither, empty loadout)"
     );
     // The overlay pins [7e]: the strategic-map frame after the strip
@@ -574,7 +582,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     // clears them either).
     assert_eq!(
         format!("{overlay_frame:016x}"),
-        "3639153954a3b6db",
+        "558b127bef14277d",
         "ZONEA/MISSION1 strategic-map overlay frame (backdrop + stamps + markers + frozen dithered sidebar)"
     );
     assert_eq!(
@@ -671,7 +679,7 @@ fn zonea_mission1_scene_frames_hash_pinned() {
     }
     assert_eq!(
         format!("{armed_frame:016x}"),
-        "27a1c62fcff25b16",
+        "adc1c8815d1d77b8",
         "ZONEA/MISSION1 spawn frame under a staged loadout (rows + text + bars + strip + dither)"
     );
 

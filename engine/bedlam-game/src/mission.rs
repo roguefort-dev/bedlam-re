@@ -935,6 +935,9 @@ impl MissionScene {
         self.cam_next = 0;
         self.cam_height = anchor.2;
         self.cam_q5 = (anchor.0 - anchor.2, anchor.1 - anchor.2);
+        // Original MissionShell initializes both video buffers with
+        // GENERAL sprite 1; our retained plane needs one base draw.
+        draw_sprite(&mut self.plane, 640, &self.general, 1, 480, 0, false);
         self.sidebar.redraw = 2;
         // The score-strip countdown arms alongside the redraw one
         // (MissionShell 0x447C74/0x447C7A set BOTH `0x46ccec` and
