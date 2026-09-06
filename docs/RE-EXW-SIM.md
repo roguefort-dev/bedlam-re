@@ -10370,10 +10370,12 @@ twin — the two walks are ordinal-identical):**
    chassis consumption (the "0x2a/0x2b/0x2c extras switch"):
    EXW 0x40cf96..0x40d031 on base 0x4deafc ⟷ EXD 0x1dc66..0x1dcff
    on base 0x9240c — per chassis slot (2 × 0xE), a 5-case switch on
-   the slot's name word ∈ 0x2A..0x2E: shield charges := slot word@+2
-   (robot +0x8C), variant := word@+2 (+0x94), battery := word@+2
-   ×0xC8 (+0x98) — then the slot's +0/+2/+6 words are CLEARED
-   (consumed). This is chassis-family (out of the order-table
+   the slot's name word ∈ 0x2A..0x2E: shield charges := signed slot word@+2
+   (robot +0x8C), battery := signed word@+2 (+0x94), damper := signed
+   word@+2 ×0xC8 (+0x98) — then these three cases clear the slot's
+   +0/+2/+6 words (consumed). Scanner cases 0x2D/0x2E set the
+   type-indexed 0x46ae94 bank to 1/2 and retain their rows; see
+   RE-EXW-MISSION-ROOM.md equipment deployment boundary. This is chassis-family (out of the order-table
    window) but is the table's spawn-side sibling consumer; §7j.45/5
    gloss confirmed at both channels.
 2. **MP respawn re-copy** [FUN_0040e230 0x40e97c/0x40e997 ⟷ EXD

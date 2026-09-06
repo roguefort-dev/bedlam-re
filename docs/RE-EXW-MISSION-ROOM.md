@@ -468,3 +468,36 @@ loads Boot Camp and verifies weapon transfer; native mouse play reaches the
 same route through DONE. See PLAYTEST-2026-09-06.md for evidence and limits.
 This does not close the journey queue item: chassis, repeat-new-game lifecycle,
 intro, options and other consumers remain outstanding.
+
+## Equipment deployment boundary (2026-09-06)
+
+[verified, EXW objdump] The shop's two equipment rows are not part of
+the seven weapon groups. load_markers at 0x40cf77..0x40d031 walks the
+0x4deafc + robot.type*0x1c table in two 0x0e increments. The jump-table
+bytes at 0x40cc8c decode to 0x40cfb4, 0x40cff3, 0x40d004, 0x40d01b,
+0x40d028 for names 0x2a..0x2e respectively.
+
+| Name | Deployment write | Session row after copy |
+| --- | --- | --- |
+| 0x2a Auto Shielding | robot +0x8c = signed word quantity | +0, +2, +6 cleared |
+| 0x2b Battery Pack | robot +0x94 = signed word quantity | +0, +2, +6 cleared |
+| 0x2c Damper | robot +0x98 = signed word quantity * 200 | +0, +2, +6 cleared |
+| 0x2d Scanner | scanner bank 0x46ae94[type] = 1 | retained |
+| 0x2e Scanner | scanner bank 0x46ae94[type] = 2 | retained |
+
+The first three read a dword at row +0 then arithmetic-shift by 16
+(0x40cfb4, 0x40cff3, 0x40d004), so the quantity has i16 semantics.
+Their shared tail 0x40cfc3..0x40cfe1 clears name, quantity and paid
+price; it leaves the other shop words alone. Scanner branches skip
+that consumption tail. Because rows are shared by type and consumed
+inside the robot walk, cloning consumables to every robot of the same
+type would be incorrect. Unknown names fall through without consumption.
+
+[implementation finding] MissionScene::set_weapon_loadout currently
+searches its seven weapon pairs for Battery Pack; the real shop puts
+it in equipment, so production never reaches that compatibility path.
+The next implementation must stage the separate chassis table, apply
+its consumed rows in robot order, preserve scanner state, and update
+the retained preparation inventory. Merely appending equipment to the
+weapon list or setting every robot's battery would break this boundary.
+The old synthetic battery-in-weapon test does not prove shop transfer.
