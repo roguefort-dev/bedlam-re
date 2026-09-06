@@ -4,11 +4,77 @@ use bedlam_assets::sprites::{parse_bin_images, SpriteBank};
 use bedlam_render::ui_bank::draw_sprite;
 
 /// Marker position in the selected robot's radar space, centered at (64,64).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Marker {
     pub icon: usize,
     pub x: i32,
     pub y: i32,
+}
+
+/// Verified map, active-pad and robot passes of EXW 0x41ee20.
+/// Object/TRT/critter/arrival/objective producers are not included here yet.
+pub fn mission_markers(
+    sim: &bedlam_core::mission::MissionSim,
+    selected: usize,
+    squad: std::ops::Range<usize>,
+    level: u8,
+) -> Vec<Marker> {
+    let Some(anchor) = sim.robots().get(selected) else {
+        return Vec::new();
+    };
+    let project = |p: i32| ((p >> 8) + 16) >> 4;
+    let center = (project(anchor.pos_x), project(anchor.pos_y));
+    let (w, h) = sim.terrain.size();
+    let lo = (((center.0 >> 1) - 32).max(0), ((center.1 >> 1) - 32).max(0));
+    let hi = (
+        ((center.0 >> 1) + 32).min(w - 1),
+        ((center.1 >> 1) + 32).min(h - 1),
+    );
+    let mut markers = Vec::new();
+    let mut push = |icon, x: i32, y: i32| {
+        let (dx, dy) = (x - center.0, y - center.1);
+        if dx.abs() < 128 && dy.abs() < 128 {
+            markers.push(Marker {
+                icon,
+                x: 64 + dx,
+                y: 64 + dy,
+            });
+        }
+    };
+    for y in lo.1..hi.1 {
+        for x in lo.0..hi.0 {
+            if level >= 1 && sim.platform_strength_word(x, y) != 0 {
+                push(7, 2 * x + 1, 2 * y + 1);
+            } else if sim
+                .claim_bank()
+                .get((y * w + x) as usize)
+                .copied()
+                .unwrap_or(0)
+                != 0
+            {
+                push(13, 2 * x + 1, 2 * y + 1);
+            }
+        }
+    }
+    for slot in 0..sim.terrain.pad_slot_count() {
+        let (x, y, _) = sim.terrain.pad_slot(slot).expect("retained pad slot");
+        if x == 0 && y == 0 {
+            break;
+        }
+        if x > lo.0 && x < hi.0 && y > lo.1 && y < hi.1 {
+            push(12, 2 * x + 1, 2 * y + 1);
+        }
+    }
+    for (index, robot) in sim.robots().iter().enumerate() {
+        if robot.alive {
+            push(
+                if squad.contains(&index) { 1 } else { 2 },
+                project(robot.pos_x),
+                project(robot.pos_y),
+            );
+        }
+    }
+    markers
 }
 
 #[derive(Debug)]
@@ -21,6 +87,10 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    pub fn draw_backdrop(&self, plane: &mut [u8]) {
+        draw_sprite(plane, 640, &self.bytes, 18, 494, 195, true);
+    }
+
     pub fn load(bytes: Vec<u8>) -> Result<Self, GameError> {
         let sprites = parse_bin_images(&bytes)?;
         if sprites.count != 19 || sprites.images.iter().any(|im| !im.ok) {

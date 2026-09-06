@@ -156,6 +156,8 @@ pub fn stage_scene(
         // player: no robots override, no staged markers (the
         // 0x46cbe0 network seam).
         Scene::Mission => {
+            let scanner = bedlam_game::scanner::Scanner::load(source.load("SCANNER.BIN")?)?;
+            names.push("SCANNER.BIN".to_string());
             // Load the optional panel before replacing the host mission so a
             // missing language/font/dark table leaves staging retryable.
             let hints = if host.mission_slot() == (0, 1) {
@@ -198,6 +200,9 @@ pub fn stage_scene(
                 None,
                 &[],
             )?;
+            host.mission_mut()
+                .expect("mission just staged")
+                .stage_scanner(scanner);
             if let Some((panel, dark)) = hints {
                 host.mission_mut()
                     .expect("mission just staged")

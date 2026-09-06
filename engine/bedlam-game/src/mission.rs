@@ -690,6 +690,9 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
 /// LIFECYCLE, the D31/D37 movie pattern).
 #[derive(Debug)]
 pub struct MissionScene {
+    scanner: Option<crate::scanner::Scanner>,
+    scanner_redraw: u8,
+    scanner_buttons: u8,
     hint_panel: Option<(crate::tutorial::HintPanel, [u8; 256])>,
     sim: MissionSim,
     view: MissionView,
@@ -886,6 +889,9 @@ impl MissionScene {
         let sidebar = Sidebar::new(sim.robots().len());
         let (score, money) = FRESH_CAMPAIGN;
         Ok(MissionScene {
+            scanner: None,
+            scanner_redraw: 0,
+            scanner_buttons: 0,
             hint_panel: None,
             sim,
             view,
@@ -1016,6 +1022,35 @@ impl MissionScene {
         self.hint_panel = Some((panel, dark));
     }
 
+    pub fn stage_scanner(&mut self, scanner: crate::scanner::Scanner) {
+        self.scanner = Some(scanner);
+        self.scanner_redraw = 2;
+    }
+
+    fn draw_scanner(&mut self) {
+        let level = self.scanner_level(self.sim.player_type()).unwrap_or(0);
+        if let Some(scanner) = &mut self.scanner {
+            let markers = crate::scanner::mission_markers(
+                &self.sim,
+                self.sidebar.selected,
+                0..self.sidebar.weapons.len(),
+                level,
+            );
+            if self.scanner_redraw > 0 && !self.overlay_on {
+                self.scanner_redraw -= 1;
+                scanner.draw_backdrop(&mut self.plane);
+            }
+            if scanner.draw(
+                &mut self.plane,
+                self.cursor,
+                self.scanner_buttons != 0,
+                &markers,
+            ) {
+                self.scanner_redraw = 2;
+            }
+        }
+    }
+
     fn draw_hint(&mut self) {
         if let Some(id) = self.sim.hints().active() {
             self.sim.tick_hints();
@@ -1050,6 +1085,7 @@ impl MissionScene {
             (self.cursor.0 + i32::from(input.mouse_dx)).clamp(CURSOR_MIN_X, CURSOR_MAX_X);
         self.cursor.1 =
             (self.cursor.1 + i32::from(input.mouse_dy)).clamp(CURSOR_MIN_Y, CURSOR_MAX_Y);
+        self.scanner_buttons = input.mouse_buttons;
         let left = input.mouse_buttons & 0x01;
         if self.prev_buttons == 0 && left != 0 {
             if self.cursor.0 >= 0x1E0 {
@@ -1318,6 +1354,7 @@ impl MissionScene {
             self.dither.churn(&mut self.rand_b);
             self.render_count += 1;
             self.draw_hint();
+            self.draw_scanner();
             return Some(&self.plane);
         }
         // The MissionShell frame epilogue order [7j.3/7j.7, calls
@@ -1391,6 +1428,7 @@ impl MissionScene {
         self.dither.churn(&mut self.rand_b);
         self.render_count += 1;
         self.draw_hint();
+        self.draw_scanner();
         Some(&self.plane)
     }
 
@@ -2139,6 +2177,46 @@ mod tests {
             &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
+    }
+
+    #[test]
+    fn radar_projects_active_pads_then_robots_with_squad_membership() {
+        use crate::scanner::{mission_markers, Marker};
+        let mut mission = staged(&[(2, 2, 1), (2, 2, 1)]);
+        let mut files = synth_mission_files();
+        for (x, y) in [(0u16, 1u16), (3, 1), (1, 1), (0, 0), (2, 2)] {
+            files[2].extend(x.to_le_bytes());
+            files[2].extend(y.to_le_bytes());
+            files[2].extend(0u16.to_le_bytes());
+        }
+        mission.sim.terrain = Terrain::from_mission_bytes(&files[1], &files[2], &files[3]).unwrap();
+        for robot in mission.sim.robots_mut() {
+            robot.pos_x = 32 << 8;
+            robot.pos_y = 32 << 8;
+        }
+        mission.sim.robots_mut()[2].pos_x += 128 << 12;
+        assert_eq!(
+            mission_markers(&mission.sim, 0, 0..1, 0),
+            vec![
+                Marker {
+                    icon: 12,
+                    x: 64,
+                    y: 64
+                },
+                Marker {
+                    icon: 1,
+                    x: 64,
+                    y: 64
+                },
+                Marker {
+                    icon: 2,
+                    x: 64,
+                    y: 64
+                },
+            ]
+        );
+        mission.sim.robots_mut()[1].alive = false;
+        assert_eq!(mission_markers(&mission.sim, 0, 0..1, 0).len(), 2);
     }
 
     #[test]
