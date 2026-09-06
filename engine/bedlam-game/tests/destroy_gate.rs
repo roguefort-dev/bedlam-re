@@ -949,3 +949,49 @@ fn debris_death_tail_stages_five_k5() {
         .collect();
     assert_eq!(k5, vec![0, 1, 3, 5, 7], "the five death-tail chunks");
 }
+
+#[test]
+fn boot_camp_generator_damage_expires_linked_fences_in_frame_loop() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../game-data/BEDLAM/EDITOR/ZONEA");
+    if !root.exists() {
+        return;
+    }
+    let bdg = ObjectTypeTable::from_bdg_bytes(&std::fs::read(root.join("MISSION1.BDG")).unwrap())
+        .unwrap();
+    let pos = std::fs::read(root.join("MISSION1.POS")).unwrap();
+    let trt = std::fs::read(root.join("MISSION1.TRT")).unwrap();
+    let terrain = Terrain::from_parts(100, 100, vec![0; 8 * 100 * 100], vec![]).unwrap();
+    let angles = AngleTable::from_thresholds(&[0; 64]).unwrap();
+    let mut sim = MissionSim::new(terrain, angles, 1);
+    assert!(sim.stage_destroy_family(&bdg, &pos, &trt, 1, 1));
+    sim.observe_terrain_writes();
+    assert!(sim.resolve_object_impact(16 * 8192, 63 * 8192, 0, 100_000, true));
+    let fences = || [0x7f, 0x84];
+    let linked: Vec<_> = sim
+        .objects()
+        .iter()
+        .filter(|o| fences().contains(&o.id))
+        .map(|o| (o.x, o.y, o.z))
+        .collect();
+    assert_eq!(linked.len(), 13);
+    for _ in 0..8 {
+        sim.advance_frame();
+    }
+    assert!(sim
+        .objects()
+        .iter()
+        .filter(|o| fences().contains(&o.id))
+        .all(|o| !o.destroyed));
+    sim.take_terrain_writes();
+    sim.advance_frame();
+    assert!(sim
+        .objects()
+        .iter()
+        .filter(|o| fences().contains(&o.id))
+        .all(|o| o.destroyed));
+    let writes = sim.take_terrain_writes();
+    for (x, y, z) in linked {
+        assert!(writes.contains(&(((y * 100 + x) * 8 + z) as usize, 0x48f, 1)));
+    }
+}

@@ -721,6 +721,7 @@ impl MissionSim {
         }
         let n = (w * h) as usize;
         self.zone = zone;
+        self.fence_timers = [(0, 0); 32];
         self.linear = linear;
         self.object_types = bdg.rows.clone();
         self.structures = parse_trt(trt, linear).unwrap_or_default();
@@ -1003,8 +1004,8 @@ impl MissionSim {
     /// dispatcher FUN_00422600 [§7j.41/1] now MODELED (the
     /// zone-code match builds the strength-300 ring at the dying
     /// instance's record); FUN_00422e0a (the delayed-trigger
-    /// payload producer, FUN_00439c20 census-unidentified) stays a
-    /// no-op E-gap; the [0x46cce4] quake notify is presentation.
+    /// payload producer) is modeled for Boot Camp in fence.rs;
+    /// the [0x46cce4] quake notify is presentation.
     fn destroy_tail(&mut self, idx: usize, counter: i32, score_flag: bool) {
         // notify [0x46cce4] := 2 is presentation (the quake
         // countdown — the renderer's shake tables); zone ≠ 1 →
@@ -1012,6 +1013,7 @@ impl MissionSim {
         if self.zone != 1 {
             self.objective_notify(idx);
         }
+        self.schedule_fence_shutdown(self.objects[idx].id);
         // The bridge-build trigger dispatcher FUN_00422600
         // [§7j.41/1]: id == the zone's code → the ring at the
         // dying instance's own (x,y,z), strength 0x12C.

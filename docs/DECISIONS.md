@@ -10569,3 +10569,15 @@ MissionSim already advances these records; presentation must not tick
 them again. Retain the separate legacy scene damage effects until that
 seam is retired. Live comparison confirms the previously missing burst;
 it does not establish generator/fence or broader combat completion.
+
+## D250 — Wire verified Boot Camp fence shutdown into simulation
+
+Destruction now schedules the executable's linked-type payload, and
+normal frame epilogues advance a 32-slot timer bank. Expiry marks
+matching live instances retired, clears their origin occupancy, and
+journals the raw-set floor word to presentation. It deliberately uses
+the distinct shutdown path: no damage-tail score, chain explosions or
+full footprint restoration. Tests and live original/native comparison
+verify Boot Camp's generator; other set mappings, camera cut and sound
+remain explicit work. Runtime network mode shares the existing mission
+configuration entry with tutorial gates and defaults to single-player.

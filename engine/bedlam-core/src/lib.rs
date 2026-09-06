@@ -38,6 +38,7 @@
 pub mod claim_rects;
 pub mod critter;
 pub mod destroy;
+mod fence;
 pub mod frame;
 pub mod fx;
 pub mod hash;

@@ -857,6 +857,9 @@ pub struct MissionSim {
     pub(crate) debris: Vec<crate::destroy::DebrisRecord>,
     /// The +0x18 seq counter — the debris LRU eviction key.
     pub(crate) debris_seq: i32,
+    /// Packed guest payload/countdown records at 0x4ea828.
+    pub(crate) fence_timers: [(u32, u16); 32],
+    pub(crate) network_mode: u8,
     /// The 250-slot splash bank (0x4e9778) — the T3 surface.
     pub(crate) splashes: Vec<crate::destroy::SplashRecord>,
     /// The pending destroy score award ([0x4dd40c] delta).
@@ -935,6 +938,7 @@ impl MissionSim {
     /// Configure original one-based zone/mission and network-mode hint gates.
     pub fn configure_hints(&mut self, zone: u8, mission: u8, network_mode: u8) {
         self.hint_scope = (zone, mission, network_mode);
+        self.network_mode = network_mode;
         self.hints = Default::default();
     }
 
@@ -984,6 +988,8 @@ impl MissionSim {
             objective_count: 0,
             debris: vec![crate::destroy::DebrisRecord::default(); crate::destroy::DEBRIS_SLOTS],
             debris_seq: 0,
+            fence_timers: [(0, 0); 32],
+            network_mode: 0,
             splashes: vec![crate::destroy::SplashRecord::default(); crate::destroy::SPLASH_SLOTS],
             score_pending: 0,
             strip_arm: false,
@@ -1906,6 +1912,7 @@ impl MissionSim {
         // block (0x448012 < 0x448306) — a craft deployed below first
         // animates the NEXT frame [§7j.40/3].
         self.dropship_tick();
+        self.fence_tick();
         // The platform CREEP tick (FUN_00422a9c, the epilogue call
         // 0x44808a — §7j.41/4): the ORIGINAL runs it every frame,
         // unconditionally drawing the 1/32 gate RandA; E arms it
