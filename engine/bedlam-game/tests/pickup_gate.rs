@@ -64,3 +64,44 @@ fn boot_camp_gold_pickup_is_collected_and_ceases_to_block_movement() {
     );
     assert!(sim.robots()[0].alive);
 }
+
+#[test]
+fn boot_camp_gold_corridor_passes_between_solid_scaffold_pillars() {
+    let Some(mut sim) = boot_camp() else { return };
+    for y in [47, 50] {
+        assert_eq!(sim.terrain.dat_type(2, y, 1), 1);
+        assert_eq!(sim.terrain.dat_type(4, y, 1), 1);
+    }
+    sim.spawn_robot((3, 46, 1));
+    sim.stage_command_record(bedlam_core::weapon::CommandRecord {
+        marker: 0,
+        id: 0,
+        spot: 0,
+        flags: 1,
+        x: 3 * 32 + 15,
+        y: 50 * 32 + 24,
+        z: 0,
+    });
+    for _ in 0..180 {
+        sim.advance_frame();
+    }
+    let robot = &sim.robots()[0];
+    assert!(robot.alive);
+    assert_eq!(robot.z, 31);
+    assert!(
+        robot.pos_y >> 8 >= 50 * 32,
+        "stopped before the second pillar gap: {:?}",
+        robot
+    );
+    for y in [47, 48] {
+        assert_eq!(
+            sim.terrain.dat_type(3, y, 1),
+            0,
+            "gold still blocks the gap"
+        );
+    }
+    for y in [47, 50] {
+        assert_eq!(sim.terrain.dat_type(2, y, 1), 1);
+        assert_eq!(sim.terrain.dat_type(4, y, 1), 1);
+    }
+}
