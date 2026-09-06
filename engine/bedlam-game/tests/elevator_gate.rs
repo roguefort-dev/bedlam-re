@@ -167,3 +167,40 @@ fn boot_camp_green_pad_joins_both_lifts_into_a_crossable_platform() {
     assert!(r.pos_x >> 8 >= 19 * 32, "did not cross both lifts: {r:?}");
     assert_eq!(r.z, 63);
 }
+
+#[test]
+fn boot_camp_hidden_pad_lowers_five_levels_and_opens_the_scaffold_passage() {
+    let Some(mut sim) = boot_camp() else { return };
+    assert_eq!(sim.terrain.pad_slot(6), Some((5, 32, 0)));
+    sim.spawn_robot((6, 32, 1));
+    let width = sim.terrain.size().0 as usize;
+    let cells: Vec<_> = (32..35).map(|y| y * width + 4).collect();
+    let before: Vec<_> = cells
+        .iter()
+        .map(|&t| sim.mirror_words()[t * 8..t * 8 + 8].to_vec())
+        .collect();
+    sim.stage_command_record(CommandRecord {
+        marker: 0,
+        id: 0,
+        spot: 0,
+        flags: 1,
+        x: 2 * 32 + 16,
+        y: 32 * 32 + 16,
+        z: 0,
+    });
+    for _ in 0..180 {
+        sim.advance_frame();
+    }
+    for (tile, old) in cells.into_iter().zip(before) {
+        assert_eq!(sim.elevator_bias()[tile], 80);
+        assert_eq!(&sim.mirror_words()[tile * 8..tile * 8 + 3], &old[5..]);
+        assert_eq!(&sim.mirror_words()[tile * 8 + 3..tile * 8 + 8], &[0; 5]);
+    }
+    let r = &sim.robots()[0];
+    assert!(r.alive);
+    assert!(
+        r.pos_x >> 8 < 4 * 32,
+        "did not cross lowered section: {r:?}"
+    );
+    assert_eq!(r.z, 31);
+}
