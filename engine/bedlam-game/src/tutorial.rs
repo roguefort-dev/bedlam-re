@@ -126,3 +126,6 @@ mod tests {
         assert_eq!(hints.remaining(), 0);
     }
 }
+
+mod panel;
+pub use panel::HintPanel;

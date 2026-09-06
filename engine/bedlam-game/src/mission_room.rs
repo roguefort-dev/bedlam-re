@@ -6,7 +6,7 @@ use bedlam_assets::sprites::{parse_bin_images, SpriteBank, SpriteImage};
 use bedlam_core::input::InputFrame;
 use bedlam_render::Vga6;
 
-mod panel;
+pub(crate) mod panel;
 use panel::RoomPanel;
 
 const W: usize = 640;
@@ -67,7 +67,7 @@ fn full_screen(image: &SpriteImage, name: &'static str) -> Result<(), GameError>
     Ok(())
 }
 
-fn coverage_for_bank(
+pub(crate) fn coverage_for_bank(
     bytes: &[u8],
     images: &SpriteBank,
     name: &'static str,

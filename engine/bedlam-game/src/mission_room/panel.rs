@@ -136,7 +136,7 @@ fn color(state: usize, age: u32, delay: u32) -> Option<u8> {
 }
 
 /// Preserve authored rows and byte encodings; there is no runtime word wrap.
-fn description(data: &[u8], heading: &[u8]) -> Result<Vec<Vec<u8>>, GameError> {
+pub(crate) fn description(data: &[u8], heading: &[u8]) -> Result<Vec<Vec<u8>>, GameError> {
     let start = data
         .windows(heading.len())
         .position(|w| w == heading)

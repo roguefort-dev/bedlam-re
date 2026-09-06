@@ -676,3 +676,10 @@ existing room panel already decodes TINYFONT coverage and high-byte
 accents and can supply the same primitive strategy. Hint rendering and
 mission hookup are still outstanding. Corpus manifest passed before
 and after the PE string/table probe.
+
+[verified, EXW] The ticker's initial call to 0x402a73 darkens the
+5*columns by 7*rows rectangle using byte lookup table [0x4edc00]
+(0x402a8d..0x402aa7), rather than clearing to a solid color. HintPanel
+therefore accepts the active mission darkening table from its caller.
+The implementation uses age one for the first draw and reconstructs
+the per-record delay/color phase without mutating asset banks.
