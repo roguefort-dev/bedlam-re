@@ -622,7 +622,7 @@ cover 97 pad slots (17..113), not the earlier prose count 45.
 
 Implementation must retain per-id show-once latches, apply the
 mission/mode gates, load BOOT_CAMP_000..014 from the chosen language,
-wrap using MONOFONT metrics and render the original animated box.
+retain authored line breaks and measure TINYFONT metrics and render the original animated box.
 A text-only overlay with arbitrary wrapping would not close this task.
 The welcome-strip coordinates provide a concrete production movement
 regression destination once the trigger and display consumer are wired.
@@ -641,3 +641,38 @@ x/y, a third word and a NUL-terminated string at offset 10. Full text
 animation and sprite loader interpretation remain to be decoded before
 implementing the display consumer. These are disassembly findings, not
 a fresh visual comparison.
+
+## Hint rendering corrections and executable layout specification
+
+[verified, EXW and corpus read-only probe] The font is TINYFONT, not
+MONOFONT as older hint notes claimed. Loader 0x41d6af..0x41d6ba passes
+the path at 0x458698 (`GAMEGFX\\TINYFONT.BIN`) into buffer 0x46cdb0.
+The adjacent MONOFONT path at 0x458683 loads into 0x46cdac. Both hint
+measurement 0x424c7f and draw 0x425142 use 0x46cdb0.
+
+The parser 0x424b8e..0x424be9 records authored printable runs, ending
+each at a control byte. 0x424d38..0x424d50 copies those runs; the
+measurement loop does not wrap them. Preserve the language-file lines.
+For N lines and maximum measured width M, the box remains at
+x=240-floor(M/2), y=200, columns=(M+4)/5+2, rows=((N-1)*9+10)/7+2
+(integer divisions). All lines share x+floor((5*columns-M)/2). Let
+D=7*rows-9*N. First text baseline origin is y+floor(D/2)+1; later
+line i uses y+floor(D/2)+2+(D&1)+9*i (0x424dd1..0x424e76).
+Each line's initial delay is its zero-based index.
+
+0x44067e stores border kind+95 as the TINYFONT glyph index: 95/96
+horizontal/vertical and 97..100 corners. The apparent frame counter is
+a color-ramp index, not a sprite animation index. Both border and text
+use the eight dwords at 0x454b70: 103,98,146,164,36,66,255,77.
+For each active record, a positive delay decrements and skips drawing
+that frame; otherwise draw with the current color index and increment
+the index until seven. Text delay reaching zero also emits the sound
+handle at 0x4edfdc, before drawing on the following frame (0x425221..257).
+High bytes are remapped at 0x410493 and any accent is drawn using
+glyph 0x71+accent; the advance remains base-glyph width+1, spaces 3.
+
+These facts replace the previous MONOFONT/wrapping description. The
+existing room panel already decodes TINYFONT coverage and high-byte
+accents and can supply the same primitive strategy. Hint rendering and
+mission hookup are still outstanding. Corpus manifest passed before
+and after the PE string/table probe.
