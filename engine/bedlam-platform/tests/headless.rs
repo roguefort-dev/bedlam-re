@@ -78,7 +78,7 @@ fn readback(gpu: &ParityGpu, target: &wgpu::Texture) -> Vec<u8> {
     slice.get_mapped_range().to_vec()
 }
 
-fn make_target(gpu: &ParityGpu) -> wgpu::Texture {
+fn make_target(gpu: &ParityGpu, format: wgpu::TextureFormat) -> wgpu::Texture {
     gpu.device().create_texture(&wgpu::TextureDescriptor {
         label: Some("test target"),
         size: wgpu::Extent3d {
@@ -89,7 +89,7 @@ fn make_target(gpu: &ParityGpu) -> wgpu::Texture {
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
+        format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     })
@@ -111,7 +111,7 @@ fn parity_offscreen_roundtrip() {
     // Pass 1: dirty palette (first upload).
     let frame = test_frame();
     pipeline.upload_frame(&frame);
-    let target = make_target(&gpu);
+    let target = make_target(&gpu, wgpu::TextureFormat::Rgba8Unorm);
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let cb = pipeline.draw(&view, TW, TH, &PresentConfig::default());
     gpu.queue().submit([cb]);
@@ -146,4 +146,57 @@ fn parity_offscreen_roundtrip() {
     let data2 = readback(&gpu, &target);
     assert_eq!(px(&data2, 100, 100), (252, 0, 0, 255));
     assert_eq!(px(&data2, 116, 100), (0, 252, 0, 255));
+}
+
+#[test]
+fn srgb_surface_preserves_palette_display_values() {
+    let Some(gpu) = ParityGpu::new_headless() else {
+        eprintln!("skip: no wgpu adapter on this host");
+        return;
+    };
+    let mut palette = [[0; 3]; 256];
+    for (i, entry) in palette.iter_mut().take(64).enumerate() {
+        *entry = [i as u8, (63 - i) as u8, (i / 2) as u8];
+    }
+    let mut frame = Frame::new(palette);
+    frame.palette_dirty = true;
+    for y in 0..480 {
+        for x in 0..640 {
+            frame.set(x, y, (x / 10) as u8);
+        }
+    }
+    for format in [
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    ] {
+        let mut pipeline = ParityPipeline::new(&gpu, format);
+        pipeline.upload_frame(&frame);
+        let target = make_target(&gpu, format);
+        let view = target.create_view(&Default::default());
+        for expand in [
+            bedlam_render::VgaExpand::Original,
+            bedlam_render::VgaExpand::Full,
+        ] {
+            let cfg = PresentConfig {
+                expand,
+                ..Default::default()
+            };
+            gpu.queue().submit([pipeline.draw(&view, TW, TH, &cfg)]);
+            let data = readback(&gpu, &target);
+            for i in 0..64u32 {
+                let rgba = px(&data, i * 20 + 5, 100);
+                let expected = palette[i as usize].map(|v| match expand {
+                    bedlam_render::VgaExpand::Original => v << 2,
+                    bedlam_render::VgaExpand::Full => (v << 2) | (v >> 4),
+                });
+                for (actual, expected) in [rgba.0, rgba.1, rgba.2].into_iter().zip(expected) {
+                    assert!(
+                        actual.abs_diff(expected) <= 1,
+                        "{format:?} {expand:?} index {i}: got {actual}, expected {expected}"
+                    );
+                }
+                assert_eq!(rgba.3, 255);
+            }
+        }
+    }
 }

@@ -10507,3 +10507,16 @@ the rendered Boot Camp panel. The room remains a module awaiting the armoury
 consumer and production journey wiring; no mission completion is inferred.
 The shop prerequisite audit also corrects the old DONE predicate: it requires
 an owned weapon and completed icon animation, not a free weapon slot.
+
+
+## D246 — Preserve palette display values on sRGB surfaces
+
+The indexed presentation shader now accounts for the render-target format.
+Expanded VGA palette components are display values, but sRGB attachments
+encode fragment output as though it were linear. Decode the final sampled
+color when targeting sRGB so attachment encoding preserves the intended
+display bytes. Retain the existing expanded-color filtering and non-sRGB
+path. A failing-then-passing offscreen GPU test covers both attachment formats,
+both VGA expansion policies and all 64 intensity levels. Live armoury artwork
+was compared with the original DOSBox view (PLAYTEST-2026-09-06.md). This fixes
+presentation only and changes no canonical indexed frame or simulation state.

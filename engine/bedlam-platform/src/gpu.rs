@@ -18,7 +18,7 @@ const SHADER: &str = r#"
 struct Params {
     filter_linear: u32,
     expand_full: u32,
-    pad0: u32,
+    target_srgb: u32,
     pad1: u32,
 };
 
@@ -94,18 +94,26 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
         mix(uv_rect.r.x, uv_rect.r.z, in.uv.x),
         mix(uv_rect.r.y, uv_rect.r.w, in.uv.y),
     );
-    return vec4<f32>(sample_uv(uv), 1.0);
+    var color = sample_uv(uv);
+    // Palette expansion produces display-encoded values. An sRGB attachment
+    // encodes fragment outputs, so decode here to preserve the intended bytes.
+    if (params.target_srgb != 0u) {
+        color = select(pow((color + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4)),
+                       color / 12.92, color <= vec3<f32>(0.04045));
+    }
+    return vec4<f32>(color, 1.0);
 }
 "#;
 
 /// Uniform bytes for the params buffer: [filter_linear, expand_full,
-/// 0, 0] little-endian u32 x 4 (16 B, no padding surprises).
-fn params_bytes(cfg: &PresentConfig) -> [u8; 16] {
+/// target_srgb, 0] little-endian u32 x 4 (16 B, no padding surprises).
+fn params_bytes(cfg: &PresentConfig, target_srgb: bool) -> [u8; 16] {
     let filter = u32::from(cfg.filter == FilterMode::Linear);
     let expand = u32::from(cfg.expand == VgaExpand::Full);
     let mut out = [0u8; 16];
     out[0..4].copy_from_slice(&filter.to_le_bytes());
     out[4..8].copy_from_slice(&expand.to_le_bytes());
+    out[8..12].copy_from_slice(&u32::from(target_srgb).to_le_bytes());
     out
 }
 
@@ -186,6 +194,7 @@ pub struct ParityPipeline {
     uv_buf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     palette_uploaded: bool,
+    target_srgb: bool,
     plane_w: u32,
     plane_h: u32,
 }
@@ -370,6 +379,7 @@ impl ParityPipeline {
             uv_buf,
             bind_group,
             palette_uploaded: false,
+            target_srgb: target_format.is_srgb(),
             plane_w,
             plane_h,
         }
@@ -497,7 +507,7 @@ impl ParityPipeline {
         }
         let uv = uv_rect(cfg.scale, CANON_W, CANON_H, target_w, target_h);
         self.queue
-            .write_buffer(&self.params_buf, 0, &params_bytes(cfg));
+            .write_buffer(&self.params_buf, 0, &params_bytes(cfg, self.target_srgb));
         let mut uvb = [0u8; 16];
         uvb[0..4].copy_from_slice(&uv[0].to_le_bytes());
         uvb[4..8].copy_from_slice(&uv[1].to_le_bytes());
@@ -557,7 +567,7 @@ impl ParityPipeline {
             return enc.finish();
         }
         self.queue
-            .write_buffer(&self.params_buf, 0, &params_bytes(cfg));
+            .write_buffer(&self.params_buf, 0, &params_bytes(cfg, self.target_srgb));
         let mut uvb = [0u8; 16];
         uvb[0..4].copy_from_slice(&0.0f32.to_le_bytes());
         uvb[4..8].copy_from_slice(&0.0f32.to_le_bytes());
