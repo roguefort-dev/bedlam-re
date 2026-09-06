@@ -49,6 +49,7 @@ pub mod replay;
 pub mod rng;
 pub mod sim;
 pub mod time;
+pub mod tutorial;
 pub mod weapon;
 
 /// Version of the replay/snapshot serialization formats written by this

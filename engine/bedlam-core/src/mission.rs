@@ -757,6 +757,8 @@ pub fn pickup_case(tile_word: i32, set: usize) -> Option<u8> {
 /// the dropship staging FUN_0041faf0 performs) are deliberately absent.
 #[derive(Debug, PartialEq, Eq)]
 pub struct MissionSim {
+    pub(crate) hints: crate::tutorial::HintState,
+    hint_scope: (u8, u8, u8),
     pub terrain: Terrain,
     pub(crate) robots: Vec<Robot>,
     order: Option<Order>,
@@ -929,9 +931,26 @@ pub struct MissionSim {
 }
 
 impl MissionSim {
+    /// Configure original one-based zone/mission and network-mode hint gates.
+    pub fn configure_hints(&mut self, zone: u8, mission: u8, network_mode: u8) {
+        self.hint_scope = (zone, mission, network_mode);
+        self.hints = Default::default();
+    }
+
+    pub fn hints(&self) -> &crate::tutorial::HintState {
+        &self.hints
+    }
+
+    /// MissionShell calls the hint ticker once at its display tail.
+    pub fn tick_hints(&mut self) {
+        self.hints.tick();
+    }
+
     /// Create with terrain, the angle table, and a PRNG seed.
     pub fn new(terrain: Terrain, angles: AngleTable, seed: u64) -> Self {
         MissionSim {
+            hints: Default::default(),
+            hint_scope: (0, 0, 0),
             robots: Vec::new(),
             order: None,
             angles,
@@ -2009,6 +2028,14 @@ impl MissionSim {
             {
                 let r = &self.robots[idx];
                 if matches!(r.state, 1 | STATE_MOVING) && r.target.is_some() {
+                    let r = &self.robots[idx];
+                    if let Some(slot) =
+                        self.terrain
+                            .pad_slot_at(r.pos_x >> 13, r.pos_y >> 13, r.z >> 5)
+                    {
+                        let (zone, mission, mode) = self.hint_scope;
+                        self.hints.probe(zone, mission, mode, slot);
+                    }
                     self.pad_extraction_trigger(idx);
                 }
             }
@@ -2113,6 +2140,12 @@ impl MissionSim {
     /// REQUESTED delta sign.
     pub(crate) fn robot_move(&mut self, idx: usize, dx: i32, dy: i32, angle: u16) {
         if self.robots[idx].state == STATE_ORDERED || self.robots[idx].state == 5 {
+            return;
+        }
+        // EXW 0x40c570..0x40c58f: an active hint writes state zero
+        // and skips movement, retaining the target for a later command.
+        if self.hints.active().is_some() {
+            self.robots[idx].state = STATE_IDLE;
             return;
         }
         self.robots[idx].dir_byte = angle;
@@ -2771,6 +2804,44 @@ mod tests {
 
     /// A sim with one robot staged for damage tests (state IDLE, all
     /// vitals at the spawn defaults unless the test overrides them).
+    #[test]
+    fn hint_pad_halts_same_phase_and_movement_command_dismisses_after_grace() {
+        let mut sim = damage_sim();
+        sim.configure_hints(1, 1, 0);
+        let r = &sim.robots[0];
+        let pos = (r.pos_x, r.pos_y);
+        sim.terrain.pad_slots = vec![(7, 7, 0); 17];
+        sim.terrain
+            .pad_slots
+            .push((r.pos_x >> 13, r.pos_y >> 13, r.z >> 5));
+        let command = CommandRecord {
+            marker: 0,
+            id: 0,
+            spot: 0,
+            flags: 1,
+            x: 6 * 32,
+            y: 3 * 32,
+            z: 0,
+        };
+        sim.stage_command_record(command);
+        sim.advance_frame();
+        assert_eq!(sim.hints().active(), Some(0));
+        assert_eq!((sim.robots[0].pos_x, sim.robots[0].pos_y), pos);
+        assert_eq!(sim.robots[0].state, STATE_IDLE);
+        for _ in 0..8 {
+            sim.tick_hints();
+        }
+        sim.stage_command_record(command);
+        sim.advance_frame();
+        assert_eq!(sim.hints().active(), Some(0));
+        assert_eq!((sim.robots[0].pos_x, sim.robots[0].pos_y), pos);
+        sim.tick_hints();
+        sim.stage_command_record(command);
+        sim.advance_frame();
+        assert_eq!(sim.hints().active(), None);
+        assert_ne!((sim.robots[0].pos_x, sim.robots[0].pos_y), pos);
+    }
+
     fn damage_sim() -> MissionSim {
         let hs = zero_heights(8);
         let mut sim = MissionSim::new(flat_terrain(8, 8, 5, hs), sintable_like(), 11);

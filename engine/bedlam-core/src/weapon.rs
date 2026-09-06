@@ -351,6 +351,7 @@ impl MissionSim {
             return;
         }
         let idx = robot as usize;
+        self.hints.command(rec.flags);
 
         // flags bit0 SELECT [verified]: move-target words (raw Q5)
         // when state ∉ {3,4,5}; auto-arm state := 1 + stop 10^6 when
