@@ -10709,3 +10709,24 @@ the simulation's extraction. Both fail before the fix. Natural rebuilt
 window validation and the mission-owned outcome remain outstanding.
 Canonical pins stay unchanged; new S4/S5c/S7 differences are recorded
 in the playtest log, not accepted as replacement goldens.
+
+## D260 — Mission-owned extraction result, not fabricated objective success (2026-09-07)
+
+MissionScene::tick now returns Running, ExtractionComplete or Failed. The
+extraction result reads the existing craft-departure latch before the
+failure latch, matching EXW0x4486d5..0x448716. The host consumes the returned
+Failed result for its existing GameOver route. ExtractionComplete is not
+yet mapped to MissionComplete: original return1 versus return4 depends on
+the objective bank or Boot Camp, and the campaign handoff must recapture
+loadout and rebuild the room. See RE-EXW-EXTRACTION-APPROACH.md for the
+caller and Boot Camp debrief bypass. This is the result interface portion
+of mission-outcome-v1, not its completion or a product gate.
+
+A scene-level regression stages a small PAD16 map, commands a robot onto
+it, waits through beacon countdown/landing/departure, and proves no result
+on staging or landing alone. Existing host squad-death/movie regression
+also passes. Game198 and shell149 library tests pass (one shell ignored);
+fmt and production clippy-Dwarnings pass. Canonical remains3 pass/10 fail
+with identical nine actual hash strings and the same S3 early-GameOver
+error as D259; no pins changed. Manifest clean. Logs:
+/tmp/bedlam-outcome-lib.log and /tmp/bedlam-outcome-canonical.log.

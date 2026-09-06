@@ -684,6 +684,16 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
     .to_vec()
 }
 
+/// Result of an active mission tick. Extraction is not itself objective success:
+/// EXW 0x4486ec/0x4486f9 additionally checks the objective bank or Boot Camp.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MissionOutcome {
+    #[default]
+    Running,
+    ExtractionComplete,
+    Failed,
+}
+
 /// The staged mission: sim + viewport + the following camera, plus the
 /// presentation buffers. INERT until [`MissionScene::activate`] (the
 /// host calls it on the Mission-scene entry; DESIGN-GAME sec 11
@@ -1104,9 +1114,9 @@ impl MissionScene {
         }
     }
 
-    pub fn tick(&mut self, input: &InputFrame) {
+    pub fn tick(&mut self, input: &InputFrame) -> MissionOutcome {
         if !self.active {
-            return;
+            return MissionOutcome::Running;
         }
         // Integrate the pointer, pinned to the twin-verified model
         // [D160/RE-EXD-MAP §5h, the P2e package]: clamp into
@@ -1212,6 +1222,15 @@ impl MissionScene {
                 let ty = ((robot.pos_y >> 8) + 0x10) >> 5;
                 self.overlay.stamp_territory(tx, ty);
             }
+        }
+        // MissionShell checks completed extraction before squad failure
+        // (EXW 0x4486d5..0x448716). This read has no simulation side effects.
+        if self.sim.extraction_state().1 {
+            MissionOutcome::ExtractionComplete
+        } else if self.death.failed {
+            MissionOutcome::Failed
+        } else {
+            MissionOutcome::Running
         }
     }
 
@@ -2286,6 +2305,64 @@ mod tests {
             &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
+    }
+
+    #[test]
+    fn tick_reports_extraction_only_after_craft_departure() {
+        let mut m = staged(&[(1, 1, 1)]);
+        let f = synth_mission_files();
+        let mut pad = Vec::new();
+        for slot in 0..17 {
+            let record: [u16; 3] = if slot == 16 { [2, 1, 0] } else { [99, 99, 0] };
+            for word in record {
+                pad.extend_from_slice(&word.to_le_bytes());
+            }
+        }
+        pad.extend_from_slice(&[0xff; 6]);
+        m.sim.terrain =
+            bedlam_core::mission::Terrain::from_mission_bytes(&f[1], &pad, &f[3]).unwrap();
+        m.sim.configure_hints(1, 1, 0);
+        m.sim.stage_zone_set(1);
+        m.sim.stage_claim_bank(1, 1);
+        assert_eq!(m.tick(&InputFrame::default()), MissionOutcome::Running);
+        assert_eq!(m.sim.frame(), 0, "staged scene stays inert");
+        m.activate();
+        m.sim
+            .stage_command_record(bedlam_core::weapon::CommandRecord {
+                marker: 0,
+                id: 0,
+                spot: 0,
+                flags: 1,
+                x: 3 * 32,
+                y: 32,
+                z: 0,
+            });
+        let mut saw_landing = false;
+        let mut finished = false;
+        for _ in 0..600 {
+            let outcome = m.tick(&InputFrame::default());
+            let (extracted, departed) = m.sim.extraction_state();
+            if extracted > 0 && !departed {
+                saw_landing = true;
+                assert_eq!(outcome, MissionOutcome::Running);
+            }
+            if departed {
+                assert_eq!(outcome, MissionOutcome::ExtractionComplete);
+                finished = true;
+                break;
+            }
+        }
+        assert!(
+            saw_landing,
+            "boarding alone must not end the mission: {:?} {:?}",
+            m.sim.robots(),
+            m.sim.order()
+        );
+        assert!(finished, "natural craft departure must report extraction");
+        assert_eq!(
+            m.tick(&InputFrame::default()),
+            MissionOutcome::ExtractionComplete
+        );
     }
 
     #[test]

@@ -259,8 +259,8 @@ impl GameHost {
                 // MissionShell order [RE-EXW-SIM sec 1].
                 if self.fsm.scene() == Scene::Mission {
                     if let Some(mission) = self.mission.as_mut() {
-                        mission.tick(input);
-                        if mission.mission_failed() {
+                        let outcome = mission.tick(input);
+                        if outcome == crate::mission::MissionOutcome::Failed {
                             self.fsm.apply(SceneAction::MissionFail);
                         }
                     }
