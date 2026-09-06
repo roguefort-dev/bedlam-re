@@ -11826,3 +11826,15 @@ Watcom code reads a record word at +2k as `dword@[base+2k−2] >>
    family — presentation, reads state/heading only) are the
    documented E-gaps. NOT hashed (the W6 split — the critter-bank
    precedent); no canonical chain movement.
+
+## Plasma command-entry correction (2026-09-06)
+
+The earlier sections 7j.17/7j.37 and their census summary mark the
+w6/7/8 FUN_0040af98 body as an open AI-order family. Its normal
+command entry is now decoded and implemented; docs/RE-EXW-PLASMA.md
+is authoritative for this path. It emits type-5 shots (one aimed
+shot plus 0/1/2 jittered extras), spends ammo per shot and uses
+cooldown 2. The old placeholder's cooldown 8 and no-spawn behavior
+were incorrect. The mask=-1 idle entry and sound gate remain open.
+The type-5 draw in section 7j.28 starts with OLD counters 0,1,2
+before the repeating 3..7 strip; increment occurs before clipping.

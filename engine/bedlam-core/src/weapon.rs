@@ -18,7 +18,7 @@
 //! without COMMAND records [asserted by tests].
 //!
 //! E-gaps (unmodeled, documented — S3.scen's differ findings will
-//! name them): the five AI-order family internals (w2..8/0x18/0x19/
+//! name them): the remaining AI-order family internals (w2..4/0x18/0x19/
 //! 0x21..0x28 spawn bodies), the mortar family FUN_0040a9ff (w0xE),
 //! the impact APPLICATION (FUN_0041a894/0041bc1c need the
 //! terrain-structure bank — S4 pairs it), the debris disbursers, the
@@ -504,7 +504,7 @@ impl MissionSim {
                 }
                 FireDispatch::Spawn(1, 0x24)
             }
-            // The AI-order families: routed, spawn internals are the
+            // The needler family: routed, spawn internals are the
             // documented E-gap. Bookkeeping runs [hypothesis:
             // mirrors the inline cases — the family bodies are
             // unpinned; the differ's cadence watch will arbitrate].
@@ -517,15 +517,7 @@ impl MissionSim {
                 self.spend_ammo(idx, k, 8, false);
                 FireDispatch::Family("FUN_0040b615", n)
             }
-            6..=8 => {
-                let n = match id {
-                    6 => 0,
-                    7 => 1,
-                    _ => 2,
-                };
-                self.spend_ammo(idx, k, 8, false);
-                FireDispatch::Family("FUN_0040af98", n)
-            }
+            6..=8 => FireDispatch::Spawn(self.spawn_plasma_burst(idx, k, usize::from(id - 5)), 5),
             0xE => {
                 self.spend_ammo(idx, k, 8, false);
                 FireDispatch::Family("FUN_0040a9ff", 1)
@@ -556,6 +548,55 @@ impl MissionSim {
             }
             _ => FireDispatch::NoFire,
         }
+    }
+
+    /// Normal command entry of FUN_0040af98. Weapon IDs 6/7/8
+    /// emit 1/2/3 type-5 shots (RE-EXW-PLASMA.md).
+    fn spawn_plasma_burst(&mut self, idx: usize, k: usize, count: usize) -> usize {
+        let mut spawned = 0;
+        for shot in 0..count {
+            let Some(slot) = self.weapon_free_slot() else {
+                break;
+            };
+            if shot != 0 && self.robots[idx].weapons[k].ammo <= 0 {
+                break;
+            }
+            self.spend_ammo(idx, k, 2, false);
+            let robot = &self.robots[idx];
+            let (x, y, z) = (robot.pos_x, robot.pos_y, (robot.z + 21) << 8);
+            let (mut tx, mut ty, tz) = self.order_target;
+            if shot != 0 {
+                tx += (self.rand_a() & 31) as i32 - 16;
+                ty += (self.rand_a() & 31) as i32 - 16;
+            }
+            let dx = tx - (x >> 8);
+            let dy = ty - (y >> 8);
+            let den = (dist_octagonal(dx << 8, dy << 8) / 8).max(1);
+            let vx = (dx << 16) / den;
+            let vy = (dy << 16) / den;
+            let vz = if tz == 0 {
+                0
+            } else {
+                ((tz - (z >> 8)) << 16) / den
+            };
+            if vx == 0 && vy == 0 {
+                break;
+            }
+            // The guest leaves unrelated fields from the prior occupant intact.
+            let rec = &mut self.weapon_bank[slot];
+            rec.kind = 5;
+            rec.owner = idx as i32;
+            rec.tick = 0;
+            rec.draw_ctr = 0;
+            rec.x = x;
+            rec.y = y;
+            rec.z = z;
+            rec.vx = vx;
+            rec.vy = vy;
+            rec.vz = vz;
+            spawned += 1;
+        }
+        spawned
     }
 
     /// Muzzle position of a robot (Q13 pos, Q5 z).
@@ -1400,5 +1441,86 @@ impl WeaponRecordExt for WeaponRecord {
         self.vy = 0;
         self.vz = 0;
         self.arc = 0;
+    }
+}
+
+#[cfg(test)]
+mod plasma_tests {
+    use super::*;
+    use crate::mission::{AngleTable, Terrain};
+
+    fn armed(ammo: i16) -> MissionSim {
+        let terrain = Terrain::from_parts(16, 16, vec![0; 8 * 16 * 16], vec![[0; 1024]]).unwrap();
+        let angles = AngleTable::from_thresholds(&[0; 64]).unwrap();
+        let mut sim = MissionSim::new(terrain, angles, 123);
+        sim.spawn_robot((4, 4, 1));
+        sim.robots[0].weapons[0] = WeaponSlot {
+            id: 8,
+            ammo,
+            cooldown: 0,
+        };
+        sim.robots[0].weapon_mask = 1;
+        let robot = &sim.robots[0];
+        sim.order_target = ((robot.pos_x >> 8) + 32, robot.pos_y >> 8, 0);
+        sim
+    }
+
+    #[test]
+    fn plasma_burst_spawns_shells_and_spends_per_shot() {
+        let mut sim = armed(10);
+        assert_eq!(sim.fire_slot(0, 0, 8), FireDispatch::Spawn(3, 5));
+        let shots: Vec<_> = sim.weapon_bank.iter().filter(|r| r.active()).collect();
+        assert_eq!(shots.len(), 3);
+        assert_eq!((shots[0].vx, shots[0].vy, shots[0].vz), (2048, 0, 0));
+        assert_eq!(shots[0].z, (sim.robots[0].z + 21) << 8);
+        assert!(shots
+            .iter()
+            .all(|r| r.kind == 5 && r.owner == 0 && r.tick == 0 && r.draw_ctr == 0));
+        assert_eq!(sim.robots[0].weapons[0].ammo, 7);
+        assert_eq!(sim.robots[0].weapons[0].cooldown, 2);
+        let mut expected_rng = armed(10);
+        for _ in 0..4 {
+            expected_rng.rand_a();
+        }
+        assert_eq!(
+            sim.rand_a_state(),
+            expected_rng.rand_a_state(),
+            "only extras draw x/y jitter"
+        );
+    }
+
+    #[test]
+    fn plasma_capacity_and_ammo_gates_do_not_invent_shots() {
+        let mut sim = armed(1);
+        assert_eq!(sim.fire_slot(0, 0, 8), FireDispatch::Spawn(1, 5));
+        assert_eq!(sim.robots[0].weapons[0].ammo, 0);
+        assert_eq!(sim.robots[0].weapon_mask, 0);
+        let mut sim = armed(10);
+        for shot in &mut sim.weapon_bank {
+            shot.kind = 5;
+        }
+        let rng_before = sim.rand_a_state();
+        assert_eq!(sim.fire_slot(0, 0, 8), FireDispatch::Spawn(0, 5));
+        assert_eq!(sim.robots[0].weapons[0].ammo, 10);
+        assert_eq!(sim.robots[0].weapons[0].cooldown, 0);
+        assert_eq!(sim.rand_a_state(), rng_before);
+    }
+
+    #[test]
+    fn plasma_degenerate_aim_spends_once_and_keeps_unwritten_slot_fields() {
+        let mut sim = armed(10);
+        let robot = &sim.robots[0];
+        sim.order_target = (robot.pos_x >> 8, robot.pos_y >> 8, 0);
+        assert_eq!(sim.fire_slot(0, 0, 8), FireDispatch::Spawn(0, 5));
+        assert_eq!(sim.robots[0].weapons[0].ammo, 9);
+        assert_eq!(sim.robots[0].weapons[0].cooldown, 2);
+        sim.order_target.0 += 32;
+        sim.weapon_bank[0].class = 99;
+        sim.weapon_bank[0].trail = 17;
+        assert_eq!(sim.fire_slot(0, 0, 6), FireDispatch::Spawn(1, 5));
+        assert_eq!(
+            (sim.weapon_bank[0].class, sim.weapon_bank[0].trail),
+            (99, 17)
+        );
     }
 }

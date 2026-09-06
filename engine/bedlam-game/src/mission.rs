@@ -1046,6 +1046,10 @@ impl MissionScene {
         }
     }
 
+    pub fn stage_weapons_bank(&mut self, bytes: &[u8]) {
+        self.view.set_weapons_bank(bytes);
+    }
+
     pub fn stage_scanner(&mut self, scanner: crate::scanner::Scanner) {
         self.scanner = Some(scanner);
         self.scanner_redraw = 2;
@@ -1418,6 +1422,8 @@ impl MissionScene {
         let debris = self.debris.views();
         self.view
             .enqueue_effects(&rows, &debris, self.cam_q5.0, self.cam_q5.1);
+        self.view
+            .enqueue_plasma(self.sim.weapon_bank_mut(), self.cam_q5.0, self.cam_q5.1);
         let (cam_x, cam_y) = self.cam_q5;
         let zone = self.zone;
         self.view.draw_terrain(

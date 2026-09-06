@@ -278,6 +278,7 @@ pub struct MissionView {
     /// [RE-EXW-SIM 7j.9]: the debris stager's seq words draw from
     /// it, layer 0x12c for kinds 3/7/0xA else 0x12e.
     blowup_bank: Vec<u8>,
+    weapons_bank: Vec<u8>,
     /// The per-frame entity sprite list (empty until
     /// [`MissionView::enqueue_robots`]).
     sprite_list: SpriteList,
@@ -338,6 +339,7 @@ impl MissionView {
             entity_bank: Vec::new(),
             flags_bank: Vec::new(),
             blowup_bank: Vec::new(),
+            weapons_bank: Vec::new(),
             sprite_list: SpriteList::new(),
         })
     }
@@ -419,6 +421,52 @@ impl MissionView {
     /// region-1 BLOWUPG.BIN variant is the host's path choice).
     pub fn set_blowup_bank(&mut self, bin: &[u8]) {
         self.blowup_bank = bin.to_vec();
+    }
+
+    pub fn set_weapons_bank(&mut self, bin: &[u8]) {
+        self.weapons_bank = bin.to_vec();
+    }
+
+    /// Plasma Cannon type-5 shots, EXW 0x404187..0x404275.
+    /// Other weapon draw families remain to be connected.
+    pub fn enqueue_plasma(
+        &mut self,
+        shots: &mut [bedlam_core::weapon::WeaponRecord],
+        cam_x: i32,
+        cam_y: i32,
+    ) {
+        if self.weapons_bank.is_empty() || self.sprite_list.buckets.is_empty() {
+            return;
+        }
+        let col = ((cam_x & 31) - (cam_y & 31) + 32) & 63;
+        let row = ((cam_x & 31) + (cam_y & 31)) >> 1;
+        for shot in shots.iter_mut().filter(|r| r.kind == 5) {
+            let (x, y, z) = (shot.x >> 8, shot.y >> 8, shot.z >> 8);
+            let (dx, dy) = (x - cam_x, y - cam_y);
+            let sx = col + dx - dy + 0x110;
+            let sy = row + ((dx + dy) >> 1) + 0x110 - z;
+            let frame = shot.draw_ctr.min(7);
+            shot.draw_ctr = if shot.draw_ctr >= 7 {
+                3
+            } else {
+                shot.draw_ctr.wrapping_add(1)
+            };
+            if !(0..0x23f).contains(&sx) || !(0..0x23e).contains(&sy) {
+                continue;
+            }
+            self.sprite_list.enqueue(
+                sx,
+                sy,
+                NodeBank::Weapons,
+                x,
+                y,
+                cam_x >> 5,
+                cam_y >> 5,
+                frame as u16,
+                shot.z >> 13,
+                0x12c,
+            );
+        }
     }
 
     /// Queued sprite-list node count (test observability).
@@ -687,6 +735,7 @@ impl MissionView {
         let entity_bank = &self.entity_bank;
         let flags_bank = &self.flags_bank;
         let blowup_bank = &self.blowup_bank;
+        let weapons_bank = &self.weapons_bank;
         let (w, h) = (self.width, self.height);
         let cap = DRAW_CAP;
         for ci in 0..self.cache.len() {
@@ -770,6 +819,7 @@ impl MissionView {
                         NodeBank::Dante => flush_node(buf, node, entity_bank),
                         NodeBank::Flags => flush_node(buf, node, flags_bank),
                         NodeBank::Blowup => flush_node(buf, node, blowup_bank),
+                        NodeBank::Weapons => flush_node(buf, node, weapons_bank),
                         NodeBank::Shield | NodeBank::Variant => {}
                     }
                 }
@@ -875,6 +925,8 @@ pub enum NodeBank {
     /// The debris/effect bank `GAMEGFX\BLOWUP(B/G).BIN` (0x4edd6c)
     /// [RE-EXW-SIM 7j.9] — draws when staged.
     Blowup,
+    /// GAMEGFX/WEAPONS.BIN at 0x4eddbc.
+    Weapons,
 }
 
 /// The flush-facing pickup effect row [RE-EXW-SIM 7j.1]: the 16-B
@@ -1173,6 +1225,36 @@ mod entity_tests {
         let bin = [0u8; 0];
         let lnk = [0u8; 0x4000];
         MissionView::from_mission_bytes(&tot, &dat, &bin, &lnk).unwrap()
+    }
+
+    #[test]
+    fn plasma_draw_uses_startup_frames_and_advances_even_when_clipped() {
+        use bedlam_core::weapon::WeaponRecord;
+        let mut view = tiny_view();
+        view.set_weapons_bank(&synth_bank(0, 0, &[1]));
+        let mut shots = [WeaponRecord {
+            kind: 5,
+            x: 100 << 8,
+            y: 60 << 8,
+            z: 32 << 8,
+            ..Default::default()
+        }];
+        for frame in [0, 1, 2, 3, 4, 5, 6, 7, 3, 4] {
+            view.enqueue_robots(&[], 0, 0, 0, 0);
+            view.enqueue_plasma(&mut shots, 0, 0);
+            let nodes = view.sprite_list_for_test().bucket(12, 10, 1);
+            assert_eq!(nodes.len(), 1);
+            assert_eq!(nodes[0].bank, NodeBank::Weapons);
+            assert_eq!(nodes[0].frame, frame);
+            assert_eq!(nodes[0].mode, 0x12c);
+            assert_eq!(nodes[0].dest, 344 + 320 * VIEW_STRIDE as i32);
+        }
+        shots[0].x = -1000 << 8;
+        shots[0].draw_ctr = 7;
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        view.enqueue_plasma(&mut shots, 0, 0);
+        assert_eq!(view.sprite_nodes(), 0);
+        assert_eq!(shots[0].draw_ctr, 3);
     }
 
     #[test]

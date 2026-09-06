@@ -10547,3 +10547,15 @@ nonempty production instances/HP/footprints/mirror in the ordinary
 controller journey. This connects existing simulation behavior; it
 does not assert that object picking, weapon visuals, every scripted
 destruction effect, or mission completion is finished.
+
+## D248 — Implement normal Plasma Cannon fire before broader projectile art
+
+Live play showed ammo use without effective fire. The command producer
+was a placeholder, so adding draw nodes alone could not fix it. Implement
+FUN_0040af98's normal 6/7/8 entry from executable evidence, then connect
+its emitted type-5 records to WEAPONS.BIN rendering. Retain the verified
+per-shot allocation, spending, jitter and counter behavior, including
+untouched record fields. Idle fire, other weapon families, impact effects
+and target selection remain separately scoped. Live native fire now shows
+the original shot sprites and earns destruction score; no generator/fence
+completion or full combat-parity claim is made.

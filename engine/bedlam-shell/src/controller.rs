@@ -428,6 +428,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(game.host().mission().unwrap().sim().hints().active(), None);
+        let plasma_before = game.host().mission().unwrap().sim().robots()[0].weapons[0].ammo;
+        game.pump(
+            InputFrame {
+                mouse_buttons: 2,
+                ..Default::default()
+            }
+            .into(),
+        )
+        .unwrap();
+        let fired = game.host().mission().unwrap();
+        assert!(fired.sim().robots()[0].weapons[0].ammo < plasma_before);
+        assert!(
+            fired.sim().weapon_bank().iter().any(|shot| shot.kind == 5),
+            "ordinary right mouse input creates actual Plasma Cannon shots"
+        );
         // Arbitrary mouse edges never stand in for MissionComplete.
         for _ in 0..3 {
             game.pump(InputFrame::default().into()).unwrap();
