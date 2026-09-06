@@ -116,6 +116,7 @@ pub struct GameHost {
     mission: Option<MissionScene>,
     preparation: Option<crate::armoury::journey::Preparation>,
     preparation_slot: Option<(u8, u8)>,
+    preparation_transition: bool,
     shop_random: crate::armoury::random::ShopRandom,
     frame: Frame,
     palette: [Vga6; 256],
@@ -146,6 +147,8 @@ struct MovieSlot {
     player: MoviePlayer,
     scene: Scene,
     started: bool,
+    elapsed_subticks: u64,
+    decoded: u32,
 }
 
 impl GameHost {
@@ -169,6 +172,7 @@ impl GameHost {
             mission: None,
             preparation: None,
             preparation_slot: None,
+            preparation_transition: false,
             shop_random: crate::armoury::random::ShopRandom::from_state(0),
             frame: Frame::new(palette),
             palette,
@@ -230,7 +234,11 @@ impl GameHost {
             {
                 use crate::armoury::journey::{Action, Phase};
                 let preparation = self.preparation.as_mut().expect("staged preparation");
-                let action = preparation.tick(input, &mut self.shop_random);
+                let action = if self.preparation_transition {
+                    Action::None
+                } else {
+                    preparation.tick(input, &mut self.shop_random)
+                };
                 let phase = preparation.phase();
                 match action {
                     Action::Launch { zone, mission } => {
@@ -257,15 +265,31 @@ impl GameHost {
                 // split is needed (unlike Title). Order inside the
                 // mission tick: pointer -> click seam -> phases, the
                 // MissionShell order [RE-EXW-SIM sec 1].
-                if self.fsm.scene() == Scene::Mission {
+                let mission_was_active = self.fsm.scene() == Scene::Mission;
+                if mission_was_active {
                     if let Some(mission) = self.mission.as_mut() {
                         let outcome = mission.tick(input);
                         if outcome == crate::mission::MissionOutcome::Failed {
                             self.fsm.apply(SceneAction::MissionFail);
+                        } else if outcome == crate::mission::MissionOutcome::ExtractionComplete
+                            && self.preparation_slot == Some((1, 1))
+                        {
+                            if let Some(preparation) = self.preparation.as_mut() {
+                                preparation.finish_training(mission);
+                                self.preparation_slot = None;
+                                self.preparation_transition = true;
+                                self.fsm.apply(SceneAction::MissionComplete);
+                                // Boot Camp debrief returns immediately (EXW 0x44427e).
+                                self.fsm.apply(SceneAction::Advance);
+                            }
                         }
                     }
                 }
-                self.fsm.tick(input);
+                if mission_was_active && self.fsm.scene() != Scene::Mission {
+                    self.fsm.tick(&InputFrame::default());
+                } else {
+                    self.fsm.tick(input);
+                }
             }
         }
         self.sync_movie();
@@ -473,6 +497,8 @@ impl GameHost {
             player: MoviePlayer::new(data)?,
             scene,
             started: false,
+            elapsed_subticks: 0,
+            decoded: 1,
         });
         Ok(())
     }
@@ -841,8 +867,30 @@ impl GameHost {
         )?;
         self.preparation = Some(preparation);
         self.preparation_slot = None;
+        self.preparation_transition = false;
         self.fsm.enter(Scene::Select);
         self.frame = self.render_now();
+        Ok(())
+    }
+
+    pub fn preparation_return_pending(&self) -> bool {
+        self.fsm.scene() == Scene::Select
+            && self.preparation.as_ref().is_some_and(|p| p.room_pending())
+    }
+
+    pub fn resume_preparation(
+        &mut self,
+        source: &mut dyn ByteSource,
+        language: &str,
+    ) -> Result<(), GameError> {
+        if self.preparation_return_pending() {
+            self.preparation
+                .as_mut()
+                .expect("pending preparation")
+                .reload_room(source, language)?;
+            self.sync_loading();
+            self.frame = self.render_now();
+        }
         Ok(())
     }
 
@@ -1231,6 +1279,14 @@ impl GameHost {
         if let Some(flow) = self.loading.as_mut() {
             flow.advance(dt_subticks);
         }
+        if self.preparation_transition
+            && self.fsm.scene() == Scene::Select
+            && !self.preparation_return_pending()
+            && self.loading_fade_step().is_none_or(|step| step == 10)
+        {
+            self.preparation_transition = false;
+            self.loading = None;
+        }
     }
 
     /// Movie step (D31): advance the started player on the same dt the
@@ -1242,11 +1298,34 @@ impl GameHost {
     fn pump_movie(&mut self, dt_subticks: u32) {
         let mut failed = false;
         let mut game_over_finished = false;
+        let mut campaign_movie_finished = false;
         if let Some(slot) = self.movie.as_mut() {
             if slot.started {
-                let advanced = slot.player.advance(dt_subticks);
+                let advanced = if slot.scene == Scene::Cutscene {
+                    // FUN_0044567c displays frames-1 even for ring movies.
+                    // Keep the last shown frame for its full period, as Boot does.
+                    let target = slot.player.info().frames.saturating_sub(1).max(1);
+                    slot.elapsed_subticks += u64::from(dt_subticks);
+                    let result = slot
+                        .player
+                        .advance_limited(dt_subticks, target.saturating_sub(slot.decoded));
+                    if let Ok(decoded) = result {
+                        slot.decoded += decoded;
+                        if slot.elapsed_subticks * 1_000_000
+                            >= u64::from(target) * slot.player.info().us_per_frame * 240
+                        {
+                            slot.player.finish();
+                        }
+                    }
+                    result.map(|_| ())
+                } else {
+                    slot.player.advance(dt_subticks)
+                };
                 if advanced.is_ok() {
                     game_over_finished = slot.scene == Scene::GameOver && slot.player.finished();
+                    campaign_movie_finished = self.preparation_transition
+                        && slot.scene == Scene::Cutscene
+                        && slot.player.finished();
                     let packets = slot.player.take_audio();
                     // A stream-bus overflow means the host stopped
                     // draining audio (STREAM_CAP_BYTES has 16x headroom
@@ -1264,7 +1343,7 @@ impl GameHost {
             self.movie = None;
             self.mixer.clear_pcm_stream();
         }
-        if game_over_finished {
+        if game_over_finished || campaign_movie_finished {
             self.fsm.apply(SceneAction::Advance);
         }
     }
@@ -1463,7 +1542,9 @@ impl GameHost {
                     palette: p.palette,
                 })
         };
-        let preparation_frame = if matches!(self.fsm.scene(), Scene::Select | Scene::Shop) {
+        let preparation_frame = if !self.preparation_transition
+            && matches!(self.fsm.scene(), Scene::Select | Scene::Shop)
+        {
             self.preparation.as_ref().map(|p| MovieFrame {
                 width: 640,
                 height: 480,
@@ -2368,17 +2449,16 @@ mod tests {
         host.apply(SceneAction::MissionComplete);
         host.apply(SceneAction::Advance);
         assert_eq!(host.scene(), Scene::Cutscene);
-        // Inert until the next pump starts it (D31 lifecycle), then it
-        // plays like the Title movie.
+        // Inert until the next pump starts it (D31 lifecycle).
         assert_eq!(host.movie().unwrap().frame_index(), 0);
         host.pump_frame(4, &InputFrame::default());
         assert!(host.movie().is_some(), "started on Cutscene entry");
-        // 40 ms period: 3 more pumps decode frame 1 and finish the
-        // 2-frame synth stream (non-ring hold).
+        // EXW's frames-1 bound displays only frame0 of this two-frame
+        // fixture, holds it for its period, and never consumes frame1.
         for _ in 0..3 {
             host.pump_frame(4, &InputFrame::default());
         }
-        assert_eq!(host.movie().unwrap().frame_index(), 1);
+        assert_eq!(host.movie().unwrap().frame_index(), 0);
         assert!(host.movie().unwrap().finished());
         // Leaving Cutscene drops the slot and clears the stream.
         host.apply(SceneAction::Advance);

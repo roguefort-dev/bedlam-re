@@ -41,6 +41,11 @@ pub struct Preparation {
     renderer: ArmouryRenderer,
     phase: Phase,
     selected: Option<(u8, u8)>,
+    zone: u8,
+    completed: [bool; 27],
+    flags: [u32; 15],
+    score: i32,
+    room_pending: bool,
 }
 impl Preparation {
     pub fn load(
@@ -61,6 +66,11 @@ impl Preparation {
             renderer,
             phase: Phase::Room,
             selected: None,
+            zone,
+            completed,
+            flags,
+            score: 0,
+            room_pending: false,
         })
     }
     pub fn phase(&self) -> Phase {
@@ -71,7 +81,7 @@ impl Preparation {
     }
     pub(crate) fn deploy(&mut self, mission: &mut crate::mission::MissionScene) {
         // Original shop and mission HUD share money word 0x46ae70.
-        mission.set_campaign(mission.campaign().0, self.transactions().balance() as i32);
+        mission.set_campaign(self.score, self.transactions().balance() as i32);
         let weapons = self
             .transactions()
             .weapons()
@@ -86,6 +96,50 @@ impl Preparation {
             before[i].0 != 0 && equipment[i].0 == 0
         }));
     }
+    /// Boot Camp's verified return1 path; other objective verdicts are separate.
+    pub(crate) fn finish_training(&mut self, mission: &crate::mission::MissionScene) {
+        assert_eq!(self.selected, Some((1, 1)));
+        let mut state = self.transactions().clone();
+        state.recapture(
+            mission.campaign().1 as u32,
+            mission
+                .sim()
+                .robots()
+                .iter()
+                .filter(|r| r.kind == mission.sim().player_type())
+                .map(|r| r.weapons.map(|w| w.ammo)),
+            crate::mission::robots_per_player(i32::from(self.zone) - 1),
+        );
+        self.shop = ArmouryInput::new(state);
+        self.score = mission.campaign().0;
+        self.completed[0] = true; // EXW 0x4474ef marks the selected map row.
+        self.zone = 2;
+        self.room_pending = true;
+    }
+
+    pub fn room_pending(&self) -> bool {
+        self.room_pending
+    }
+
+    /// Load first, then replace: a failed asset read leaves the return retryable.
+    pub(crate) fn reload_room(
+        &mut self,
+        source: &mut dyn ByteSource,
+        language: &str,
+    ) -> Result<(), GameError> {
+        let room = MissionRoom::load(source, self.zone, self.completed, language)?;
+        let mut state = self.transactions().clone();
+        state.enter_zone(
+            Catalog::new(Mode::Campaign, self.zone, self.flags).expect("campaign zone"),
+        );
+        self.room = room;
+        self.shop = ArmouryInput::new(state);
+        self.phase = Phase::Room;
+        self.selected = None;
+        self.room_pending = false;
+        Ok(())
+    }
+
     pub fn cursor(&self) -> (i32, i32) {
         match self.phase {
             Phase::Room => self.room.cursor(),

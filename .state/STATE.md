@@ -1,5 +1,14 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-07 D261: Boot Camp mission-owned extraction now recaptures
+    inventory/cash/score, skips the training debrief, plays ZONEDONE once
+    and returns through loading to the Zone B room. Controller boundary
+    test launches B-2 with retained state. Game200/shell150 tests pass;
+    canonical actuals unchanged (still3 pass/10 fail). Fresh rebuilt
+    window verification remains pending. Original PID2400491 is paused
+    in B-2 armoury with Plasma X2 and cash3250. Older locations below
+    are historical. Dropship rendering and other-zone outcomes remain open.
+
   - 2026-09-06 D259: original DOSBox STANDARD Boot Camp playthrough reached
     the extraction roof, destroyed the beacon, extracted and returned to the
     mission room after its movie. Fixed native elevated-object restoration

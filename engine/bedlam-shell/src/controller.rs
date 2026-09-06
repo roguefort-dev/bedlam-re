@@ -112,7 +112,10 @@ impl<S: ByteSource> ShellController<S> {
 
     fn stage_entered(&mut self) -> Result<(), GameError> {
         if self.host.scene() != self.visits.last().expect("seeded").scene {
-            if self.host.scene() == Scene::Brief
+            if self.host.preparation_return_pending() {
+                self.host
+                    .resume_preparation(&mut self.source, self.config.language)?;
+            } else if self.host.scene() == Scene::Brief
                 && self.host.menu_start_score_seen().is_some()
                 && self.host.preparation().is_none()
             {
@@ -223,6 +226,145 @@ mod tests {
         )
         .unwrap();
         game.pump(InputFrame::default().into()).unwrap();
+    }
+
+    #[test]
+    fn training_extraction_returns_through_movie_to_next_zone_with_live_inventory() {
+        let mut game = game();
+        // Focused return-boundary fixture: real room/shop inputs and assets,
+        // with the robot subsequently positioned beside the actual exit.
+        // This is not the end-to-end Boot Camp product trace.
+        game.host
+            .load_preparation(
+                &mut game.source,
+                1,
+                [false; 27],
+                [0; 15],
+                3500,
+                "LANGUAGE.ENG",
+            )
+            .unwrap();
+        game.stage_entered().unwrap();
+        fn click(game: &mut ShellController<GameGfxSource>, x: i32, y: i32) {
+            for _ in 0..12 {
+                game.pump(ProductionInput::default()).unwrap();
+            }
+            let (cx, cy) = game.host().preparation().unwrap().cursor();
+            game.pump(
+                InputFrame {
+                    mouse_dx: (x - cx) as i16,
+                    mouse_dy: (y - cy) as i16,
+                    mouse_buttons: 1,
+                    ..Default::default()
+                }
+                .into(),
+            )
+            .unwrap();
+        }
+        click(&mut game, 255, 315);
+        click(&mut game, 255, 80);
+        let category = bedlam_game::armoury::catalog::CATEGORIES[6];
+        click(&mut game, category.anchor.0, category.anchor.1);
+        let (x, y) = category.panel_origin();
+        click(&mut game, x + 10, y + 4 + 9 + 4);
+        click(&mut game, 500, 350);
+        assert_eq!(
+            game.host.preparation().unwrap().transactions().weapons()[0]
+                .unwrap()
+                .amount,
+            600
+        );
+        click(&mut game, 590, 455);
+        assert_eq!(game.host.scene(), Scene::Mission);
+        {
+            let mission = game.host.mission_mut().unwrap();
+            mission.set_campaign(70, 3250);
+            let sim = mission.sim_mut();
+            let robot = &mut sim.robots_mut()[0];
+            robot.pos_x = 16 << 13;
+            robot.pos_y = 25 << 13;
+            robot.z = 159;
+            robot.probe_z.fill(159);
+            robot.weapons[0].ammo = 420;
+            assert!(sim.resolve_object_impact(17 << 13, 25 << 13, 0, 400, true));
+            sim.configure_hints(1, 1, 0);
+            sim.stage_command_record(bedlam_core::weapon::CommandRecord {
+                marker: 0,
+                id: 0,
+                spot: 0,
+                flags: 1,
+                x: 568,
+                y: 816,
+                z: 0,
+            });
+        }
+        for frame in 0..180 {
+            game.pump(ProductionInput::default()).unwrap();
+            if game.host.scene() != Scene::Mission {
+                break;
+            }
+            if frame == 12 {
+                game.host
+                    .mission_mut()
+                    .unwrap()
+                    .sim_mut()
+                    .stage_command_record(bedlam_core::weapon::CommandRecord {
+                        marker: 0,
+                        id: 0,
+                        spot: 0,
+                        flags: 1,
+                        x: 568,
+                        y: 816,
+                        z: 0,
+                    });
+            }
+        }
+        assert_eq!(
+            game.host.scene(),
+            Scene::Cutscene,
+            "no blank debrief advance"
+        );
+        assert_eq!(game.host.fsm().episode().stage(), 2);
+        assert!(game.host.movie().is_some(), "zone movie is staged");
+        let mut audio = [0i16; 1600];
+        for _ in 0..2000 {
+            game.pump_with_audio(ProductionInput::default(), &mut audio)
+                .unwrap();
+            if game.host.scene() == Scene::Select && game.host.loading_phase().is_none() {
+                break;
+            }
+        }
+        assert_eq!(
+            game.host.scene(),
+            Scene::Select,
+            "movie {:?}, loading {:?}",
+            game.host.movie().map(|m| (m.frame_index(), m.finished())),
+            game.host.loading_phase()
+        );
+        assert!(
+            game.host.loading_phase().is_none(),
+            "loading must finish automatically"
+        );
+        let p = game.host.preparation().unwrap();
+        assert_eq!(p.phase(), bedlam_game::armoury::journey::Phase::Room);
+        assert!(!p.room_pending());
+        assert_eq!(p.transactions().balance(), 3250);
+        let plasma = p.transactions().weapons()[0].unwrap();
+        assert_eq!((plasma.amount, plasma.paid), (420, 350));
+        assert!(
+            p.transactions().catalog().available(8, 4),
+            "zone2 scanner is unlocked"
+        );
+        // Select a Zone B region and open its retained armoury.
+        click(&mut game, 338, 312);
+        click(&mut game, 255, 80);
+        assert_eq!(game.host.scene(), Scene::Shop);
+        click(&mut game, 590, 455);
+        assert_eq!(game.host.scene(), Scene::Mission);
+        assert_eq!(game.host.mission_slot(), (1, 2));
+        let mission = game.host.mission().unwrap();
+        assert_eq!(mission.campaign(), (110, 3250));
+        assert_eq!(mission.sim().robots()[0].weapons[0].ammo, 420);
     }
 
     #[test]

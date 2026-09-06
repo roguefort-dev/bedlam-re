@@ -49,6 +49,45 @@ impl Transactions {
         }
     }
 
+    /// Post-mission group pooling and resale recapture, EXW 0x41ca2e/0x41cb38.
+    /// The caller supplies every robot of this player type, including dead ones.
+    pub(crate) fn recapture(
+        &mut self,
+        balance: u32,
+        ammunition: impl IntoIterator<Item = [i16; 7]>,
+        squad_size: usize,
+    ) {
+        assert!(squad_size > 0, "configured squad size is nonzero");
+        let mut pooled = [0i32; 7];
+        for robot in ammunition {
+            for (total, ammo) in pooled.iter_mut().zip(robot) {
+                *total = total.wrapping_add(i32::from(ammo));
+            }
+        }
+        for (slot, total) in self.weapons.iter_mut().zip(pooled) {
+            let Some(row) = slot else { continue };
+            let amount = total / squad_size as i32;
+            if amount == 0 {
+                // Original zero-quotient branch writes the remainder to name,
+                // not amount; preserve its nonzero-remainder quirk.
+                row.name = (total % squad_size as i32) as u16;
+                if row.name == 0 {
+                    *slot = None;
+                }
+            } else {
+                let item = self
+                    .catalog
+                    .item(row.category, row.item)
+                    .expect("owned item");
+                row.amount = amount as u16;
+                row.paid =
+                    (i32::from(item.price).wrapping_mul(amount) / i32::from(item.amount)) as u16;
+            }
+        }
+        self.balance = balance;
+        self.cart = None;
+    }
+
     /// EXW Auto transaction pass. The caller supplies secondary bounded
     /// random draws, each strictly below the requested bound.
     pub fn auto(&mut self, mut random: impl FnMut(u32) -> u32) -> ([u8; 7], [u8; 2]) {
@@ -117,6 +156,11 @@ impl Transactions {
             self.equipment
                 .map(|row| row.map_or(9, |r| label_ages[r.name as usize])),
         )
+    }
+
+    pub(crate) fn enter_zone(&mut self, catalog: Catalog) {
+        self.catalog = catalog;
+        self.cart = None;
     }
 
     pub fn catalog(&self) -> &Catalog {
@@ -291,6 +335,42 @@ mod tests {
     use crate::armoury::catalog::Mode;
     fn shop(balance: u32) -> Transactions {
         Transactions::new(Catalog::new(Mode::Campaign, 2, [1; 15]).unwrap(), balance)
+    }
+
+    #[test]
+    fn mission_recapture_averages_ammo_and_reprices_resale_without_refunding() {
+        let mut shop = shop(3500);
+        assert!(shop.select(6, 1)); // Plasma X2, 500 for 600 rounds.
+        assert!(shop.buy());
+        shop.recapture(3250, [[420, 0, 0, 0, 0, 0, 0]], 1);
+        let row = shop.weapons()[0].unwrap();
+        assert_eq!((row.amount, row.paid), (420, 350));
+        assert_eq!(shop.balance(), 3250);
+        assert!(shop.sell_weapon(0));
+        assert_eq!(shop.balance(), 3600);
+
+        assert!(shop.select(6, 1));
+        assert!(shop.buy());
+        shop.recapture(17, [[422, 0, 0, 0, 0, 0, 0], [0; 7]], 2);
+        let row = shop.weapons()[0].unwrap();
+        assert_eq!((row.amount, row.paid), (211, 175));
+        assert_eq!(
+            shop.balance(),
+            17,
+            "recapture is not shop-entry minimum cash"
+        );
+        shop.recapture(17, [[0; 7]], 2);
+        assert!(shop.weapons()[0].is_none());
+    }
+
+    #[test]
+    fn mission_recapture_preserves_zero_quotient_remainder_quirk() {
+        let mut shop = shop(3500);
+        assert!(shop.select(6, 1));
+        assert!(shop.buy());
+        shop.recapture(3000, [[1, 0, 0, 0, 0, 0, 0]], 2);
+        let row = shop.weapons()[0].unwrap();
+        assert_eq!((row.name, row.amount, row.paid), (1, 600, 500));
     }
 
     #[test]

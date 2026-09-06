@@ -10730,3 +10730,36 @@ fmt and production clippy-Dwarnings pass. Canonical remains3 pass/10 fail
 with identical nine actual hash strings and the same S3 early-GameOver
 error as D259; no pins changed. Manifest clean. Logs:
 /tmp/bedlam-outcome-lib.log and /tmp/bedlam-outcome-canonical.log.
+
+## D261 — Boot Camp extraction returns through the zone movie (2026-09-07)
+
+Production preparation now consumes the mission-owned ExtractionComplete
+for its selected Boot Camp mission. It recaptures the player-type ammo
+pool and refundable values, preserves mission cash/score and retained
+equipment, marks Boot Camp complete, advances the campaign, and bypasses
+the empty training debrief as EXW0x44427e does. Other zones' objective
+verdicts remain open; this does not equate arbitrary extraction to success.
+
+Cutscene playback now enforces FUN_0044567c's frames-1 one-pass bound,
+including ring streams. The newly reached ZONEDONE previously repeated
+forever. Last displayed frame holds for its full period; closing-frame
+audio is not consumed. The old two-frame synthetic cutscene expectation
+was corrected to frame0, as required by the bound. No canonical pin changed.
+The real campaign cutscene completes automatically, stages the next room
+atomically, runs the existing loading fade with room input held, then
+restores room input. The subsequent shop receives the retained inventory
+and the next zone's catalog. Mission-ending input cannot advance the new
+scene in the same tick.
+
+Controller regression uses real corpus and shop controls, positions the
+robot beside the actual beacon as a declared boundary fixture, destroys
+it, commands PAD16 entry, waits for departure, movie and loading, selects
+Zone B mission2 and launches with ammo420/cash3250/score110. No fabricated
+MissionComplete is injected. This is a focused boundary test, not the
+full natural Boot Camp product trace. Transactions tests protect the
+420-round resale350 result, squad averaging and zero-quotient remainder
+quirk. Game200/shell150 library tests pass (shell1 ignored), fmt and
+production clippy-Dwarnings pass. Canonical remains3 pass/10 fail, all
+nine actual digests and S3 early-GameOver error unchanged from D259.
+Manifest clean. Release rebuilt; fresh native window replay remains next.
+Logs /tmp/bedlam-return-lib.log and /tmp/bedlam-return-canonical.log.

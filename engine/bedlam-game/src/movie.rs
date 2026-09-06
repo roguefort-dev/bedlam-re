@@ -171,9 +171,8 @@ impl MoviePlayer {
     /// frames-1 frames no matter how starved the pacing is, so a ring
     /// movie plays exactly ONE bounded pass and its final frame is
     /// never decoded, rendered or audibly played. The boot attract
-    /// enforces that bound through this cap; ordinary scene movies
-    /// (TITLE and the cutscenes play whole files) keep the uncapped
-    /// [`Self::advance`].
+    /// and cutscene hosts enforce that bound through this cap; ambient
+    /// ring players keep the uncapped [`Self::advance`].
     pub fn advance_limited(&mut self, dt_subticks: u32, max_frames: u32) -> Result<u32, GameError> {
         if self.finished || max_frames == 0 {
             return Ok(0);
