@@ -39,7 +39,7 @@ squadmate manually cancels the wipe. The source world frame freezes;
 v=480-min(wipe,479), Q16 sampling. The terminal failure gate is twelve
 increments after arming, not an immediate all-dead transition.
 
-## Native work remaining
+## Native gap before D255
 
 MissionScene::tick returns no outcome. RuntimeHost calls it then ticks
 the FSM without inspecting squad death. SceneAction::MissionFail exists,
@@ -60,3 +60,11 @@ MissionShell return minus one: return three enters case two, runs
 Implement a distinct GameOver movie scene returning to Title, with no
 Episode::complete call. The generic Debrief-to-Shop fail placeholder is
 not this route. Post-game score-entry details remain separate work.
+
+## Implemented status
+
+D255 implements the wipe, survivor cancellation/selection, mission-owned
+failure result, GameOver asset scene and natural movie-to-Title return.
+Live pool death now leaves the mission. Tests cover the boundary and
+host route; exact live wipe sampling and post-game high-score entry are
+not claimed. S3 capture now ends early under the genuine failure rule.

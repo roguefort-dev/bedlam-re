@@ -1197,7 +1197,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                     }
                     let executed = host.pump_frame(DT_SUBTICKS, &null);
                     check_cadence(executed)?;
-                    let no = frame_counter_now(&host);
+                    let no = frame_counter_now(&host)?;
                     frames.push(emit_frame(
                         &tick_state(
                             &host,
@@ -1230,7 +1230,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 let input = scan_input(entries);
                 let executed = host.pump_frame(DT_SUBTICKS, &input);
                 check_cadence(executed)?;
-                let no = frame_counter_now(&host);
+                let no = frame_counter_now(&host)?;
                 frames.push(emit_frame(
                     &tick_state(
                         &host,
@@ -1266,7 +1266,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 }
                 let executed = host.pump_frame(DT_SUBTICKS, &null);
                 check_cadence(executed)?;
-                let no = frame_counter_now(&host);
+                let no = frame_counter_now(&host)?;
                 frames.push(emit_frame(
                     &tick_state(
                         &host,
@@ -1311,7 +1311,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 }
                 let executed = host.pump_frame(DT_SUBTICKS, &null);
                 check_cadence(executed)?;
-                let no = frame_counter_now(&host);
+                let no = frame_counter_now(&host)?;
                 frames.push(emit_frame(
                     &tick_state(
                         &host,
@@ -1355,7 +1355,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
                 scene.sim_mut().stage_zone_set(session.zone + 1);
                 let executed = host.pump_frame(DT_SUBTICKS, &null);
                 check_cadence(executed)?;
-                let no = frame_counter_now(&host);
+                let no = frame_counter_now(&host)?;
                 frames.push(emit_frame(
                     &tick_state(
                         &host,
@@ -1383,7 +1383,7 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
     while frames.len() < total as usize {
         let executed = host.pump_frame(DT_SUBTICKS, &null);
         check_cadence(executed)?;
-        let no = frame_counter_now(&host);
+        let no = frame_counter_now(&host)?;
         frames.push(emit_frame(
             &tick_state(
                 &host,
@@ -1426,8 +1426,14 @@ pub fn run_canonical(scenario_src: &str, root: &Path) -> Result<Stitched, Canoni
 }
 
 /// The pre-increment frame counter at the tail (`sim.frame()−1`).
-fn frame_counter_now(host: &GameHost) -> u64 {
-    host.mission().expect("mission staged").sim().frame() - 1
+fn frame_counter_now(host: &GameHost) -> Result<u64, CanonicalError> {
+    let mission = host.mission().ok_or_else(|| {
+        CanonicalError(format!(
+            "mission ended in {:?} before the requested capture length",
+            host.scene()
+        ))
+    })?;
+    Ok(mission.sim().frame() - 1)
 }
 
 /// The per-frame emitter view of the live scene (§6a sources).

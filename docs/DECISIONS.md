@@ -10633,3 +10633,21 @@ pickup S5 variants newly differ, and S7's already-failed actual changes.
 Their harness stages these hazard markers. Preserve expected pins and
 record the evidence-driven changes; do not restore the wrong producer
 merely to retain its hashes. Other seven pre-existing failures remain.
+
+## D255 — Mission-owned squad failure and game-over lifecycle
+
+Add a presentation-owned death-wipe state. Selected SP death freezes the
+last world plane, advances the original twelve increments, reselects the
+last eligible survivor or reports failure using squad death flags. Manual
+live selection cancels it; extraction completion suppresses failure.
+RuntimeHost consumes that result, enters a distinct GameOver scene, loads
+GAMEOVER.SMK through the normal asset chain, and returns to Title on movie
+completion without awarding campaign progress. Held input is consumed
+without advancing the movie scene. The old MissionFail-to-Debrief-to-Shop
+placeholder is retired. High-score entry and successful extraction remain
+open; this is not complete mission-outcome parity.
+
+Canonical S3 now ends in GameOver before its fixed capture budget. Report
+a typed CanonicalError instead of panicking on an absent mission. Do not
+keep a dead mission running or disable failure to preserve that scenario.
+Its capture expectations need a separately evidenced reconciliation.

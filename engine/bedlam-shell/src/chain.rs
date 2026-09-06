@@ -86,6 +86,7 @@ pub fn scene_assets(
             FULLPAL_NAME.to_string(),
             config.language.to_string(),
         ],
+        Scene::GameOver => vec!["GAMEOVER.SMK".to_string()],
         Scene::Shop => vec![bedlam_game::movies::shop_name().to_string()],
         // The mission files as the host selected them (fetch order =
         // the load_mission path families; see
@@ -147,6 +148,7 @@ pub fn stage_scene(
             host.load_loading_screen(&bytes[2], &bytes[3])?;
             host.load_loading_font(&bytes[4], &bytes[5], &bytes[6])?;
         }
+        Scene::GameOver => host.load_movie(Scene::GameOver, &bytes[0])?,
         Scene::Shop => host.load_shop(&bytes[0])?,
         // Fetch order = load_mission order: TOT, DAT, PAD, CGR, BIN,
         // LNK, SINTABLE, DANTE, GAMEPAL, GENERAL, SMLFONT, MRK,
@@ -366,6 +368,10 @@ mod tests {
                 "FLAGS.BIN".to_string(),
                 "BLOWUP.BIN".to_string(),
             ]
+        );
+        assert_eq!(
+            scene_assets(Scene::GameOver, uk, "", None, &no_mission),
+            vec!["GAMEOVER.SMK".to_string()]
         );
         for scene in [
             Scene::Boot,

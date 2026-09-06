@@ -690,6 +690,9 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
 /// LIFECYCLE, the D31/D37 movie pattern).
 #[derive(Debug)]
 pub struct MissionScene {
+    death: crate::mission_death::DeathWipe,
+    death_frame: Vec<u8>,
+    single_player: bool,
     world_connected: bool,
     scanner: Option<crate::scanner::Scanner>,
     scanner_redraw: u8,
@@ -890,6 +893,9 @@ impl MissionScene {
         let sidebar = Sidebar::new(sim.robots().len());
         let (score, money) = FRESH_CAMPAIGN;
         Ok(MissionScene {
+            death: Default::default(),
+            death_frame: Vec::new(),
+            single_player: true,
             world_connected: false,
             scanner: None,
             scanner_redraw: 0,
@@ -1019,6 +1025,7 @@ impl MissionScene {
         mission: u8,
         network_mode: u8,
     ) {
+        self.single_player = network_mode == 0;
         self.sim
             .configure_hints((self.zone + 1) as u8, mission, network_mode);
         self.hint_panel = Some((panel, dark));
@@ -1141,6 +1148,19 @@ impl MissionScene {
             self.map_lockout -= 1;
         }
         self.sim.advance_frame();
+        let was_wiping = self.death.display != 0;
+        if self.death.tick(
+            self.sim.robots(),
+            &mut self.sidebar.selected,
+            self.sim.player_type(),
+            self.sim.extraction_state().1,
+            self.single_player,
+        ) {
+            self.sidebar.redraw = 3;
+        }
+        if !was_wiping && self.death.display != 0 {
+            self.death_frame.clone_from(&self.plane);
+        }
         // Original sidebar readers use the live robot words, not the
         // pre-mission shop table (EXW 0x408403). Mirror after consumption.
         for (index, robot) in self.sim.robots().iter().enumerate() {
@@ -1224,6 +1244,7 @@ impl MissionScene {
                 && (SIDEBAR_SELECT_STRIP_Y.0..=SIDEBAR_SELECT_STRIP_Y.1).contains(&y)
             {
                 if slot < self.sim.robots().len() && self.sim.robots()[slot].alive {
+                    self.death.cancel();
                     self.sidebar.selected = slot;
                     self.sidebar.redraw = 2;
                     // The select-ack blink cursor [7j.6, the
@@ -1341,9 +1362,28 @@ impl MissionScene {
     /// LNK walk + the shared stand-in stream once (terrain edges →
     /// dither draws → churn, the EXW RandB order 7i.4) — one render
     /// per host frame (D17 bucket b). Inert until active.
+    pub fn mission_failed(&self) -> bool {
+        self.death.failed
+    }
+
     pub fn present(&mut self) -> Option<&[u8]> {
         if !self.active {
             return None;
+        }
+        if self.death.display != 0 && self.death_frame.len() == self.plane.len() {
+            let size = 480 - usize::from(self.death.display.min(479));
+            let inset = (480 - size) / 2;
+            for y in 0..480 {
+                self.plane[y * 640..y * 640 + 480].fill(0);
+            }
+            let step = (480usize << 16) / size;
+            for y in 0..size {
+                for x in 0..size {
+                    self.plane[(y + inset) * 640 + x + inset] =
+                        self.death_frame[((y * step) >> 16) * 640 + ((x * step) >> 16)];
+                }
+            }
+            return Some(&self.plane);
         }
         if self.world_connected {
             assert!(self
@@ -2246,6 +2286,27 @@ mod tests {
             &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
+    }
+
+    #[test]
+    fn death_wipe_shrinks_a_frozen_world_and_preserves_sidebar() {
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        for y in 0..480 {
+            for x in 0..640 {
+                m.plane[y * 640 + x] = ((x + y) % 251 + 1) as u8;
+            }
+        }
+        let frozen = m.plane.clone();
+        m.apply_damage(0, 6000, -1);
+        m.tick(&InputFrame::default());
+        m.present().unwrap();
+        m.tick(&InputFrame::default());
+        let plane = m.present().unwrap();
+        assert_eq!(plane[0], 0);
+        assert_eq!(plane[20 * 640 + 20], frozen[0]);
+        assert_eq!(plane[100 * 640 + 500], frozen[100 * 640 + 500]);
+        assert!(!m.mission_failed());
     }
 
     #[test]

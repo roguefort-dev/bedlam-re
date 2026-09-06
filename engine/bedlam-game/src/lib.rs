@@ -159,3 +159,5 @@ mod tests {
 }
 
 pub mod world;
+
+mod mission_death;

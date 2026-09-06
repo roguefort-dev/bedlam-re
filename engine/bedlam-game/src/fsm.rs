@@ -62,6 +62,7 @@ pub enum Scene {
     Shop = 7,
     Cutscene = 8,
     Quit = 9,
+    GameOver = 10,
 }
 
 /// Scene-transition intent. Advance/Back are input-derived (per-tick
@@ -306,7 +307,7 @@ impl SceneFsm {
         self.prev_mouse = mouse;
         let action = match self.scene {
             // Boot ignores input: the GameGoRelease latch-clear analog.
-            Scene::Boot => SceneAction::None,
+            Scene::Boot | Scene::GameOver => SceneAction::None,
             _ if left => SceneAction::Advance,
             _ if right => SceneAction::Back,
             _ => SceneAction::None,
@@ -364,7 +365,7 @@ impl SceneFsm {
                     self.zone_complete_pending |= zone;
                     Some(Scene::Debrief)
                 }
-                SceneAction::MissionFail => Some(Scene::Debrief),
+                SceneAction::MissionFail => Some(Scene::GameOver),
                 _ => None,
             },
             Scene::Debrief => match action {
@@ -384,6 +385,10 @@ impl SceneFsm {
             },
             Scene::Shop => match action {
                 SceneAction::Advance => Some(Scene::Select),
+                _ => None,
+            },
+            Scene::GameOver => match action {
+                SceneAction::Advance => Some(Scene::Title),
                 _ => None,
             },
             Scene::Quit => None,
@@ -482,12 +487,10 @@ mod tests {
         fsm.apply(SceneAction::Advance);
         assert_eq!(fsm.scene(), Scene::Mission);
         fsm.apply(SceneAction::MissionFail);
-        assert_eq!(fsm.scene(), Scene::Debrief);
+        assert_eq!(fsm.scene(), Scene::GameOver);
         assert_eq!(fsm.episode().linear(), 0, "fail applies no progress");
         fsm.apply(SceneAction::Advance);
-        assert_eq!(fsm.scene(), Scene::Shop);
-        fsm.apply(SceneAction::Advance);
-        assert_eq!(fsm.scene(), Scene::Select);
+        assert_eq!(fsm.scene(), Scene::Title);
     }
 
     #[test]

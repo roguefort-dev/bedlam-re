@@ -260,6 +260,9 @@ impl GameHost {
                 if self.fsm.scene() == Scene::Mission {
                     if let Some(mission) = self.mission.as_mut() {
                         mission.tick(input);
+                        if mission.mission_failed() {
+                            self.fsm.apply(SceneAction::MissionFail);
+                        }
                     }
                 }
                 self.fsm.tick(input);
@@ -1238,10 +1241,12 @@ impl GameHost {
     /// load; only corrupt frame data reaches this arm).
     fn pump_movie(&mut self, dt_subticks: u32) {
         let mut failed = false;
+        let mut game_over_finished = false;
         if let Some(slot) = self.movie.as_mut() {
             if slot.started {
                 let advanced = slot.player.advance(dt_subticks);
                 if advanced.is_ok() {
+                    game_over_finished = slot.scene == Scene::GameOver && slot.player.finished();
                     let packets = slot.player.take_audio();
                     // A stream-bus overflow means the host stopped
                     // draining audio (STREAM_CAP_BYTES has 16x headroom
@@ -1258,6 +1263,9 @@ impl GameHost {
         if failed {
             self.movie = None;
             self.mixer.clear_pcm_stream();
+        }
+        if game_over_finished {
+            self.fsm.apply(SceneAction::Advance);
         }
     }
 
@@ -2522,11 +2530,8 @@ mod tests {
         host.apply(SceneAction::Advance); // Title -> Brief
         host.apply(SceneAction::Advance); // -> Select
         host.apply(SceneAction::Advance); // -> Mission
-                                          // A mission FAIL routes through Debrief to Shop (the fail
-                                          // path never pends a zone completion).
-        host.apply(SceneAction::MissionFail);
-        assert_eq!(host.scene(), Scene::Debrief);
-        host.apply(SceneAction::Advance);
+                                          // This tests the legacy shop movie slot, independently of game over.
+        host.fsm.enter(Scene::Shop);
         assert_eq!(host.scene(), Scene::Shop);
         // Inert until the next pump starts it (D31), then it plays
         // like the Title movie (the corpus SHOP ring wraps).
@@ -2989,6 +2994,61 @@ mod tests {
         };
         host.pump_frame(4, &press);
         host.pump_frame(4, &InputFrame::default());
+    }
+
+    #[test]
+    fn squad_death_enters_game_over_then_movie_returns_to_title() {
+        let f = crate::mission::synth_mission_files();
+        let maptran: Vec<&[u8]> = f[14..22].iter().map(|v| v.as_slice()).collect();
+        let mut host = GameHost::new(&GameConfig::default(), &SimConfig::default(), palette());
+        host.load_mission(
+            &f[0],
+            &f[1],
+            &f[2],
+            &f[3],
+            &f[5],
+            &f[6],
+            &f[7],
+            &f[8],
+            &f[9],
+            &f[10],
+            &f[11],
+            &f[4],
+            &f[23],
+            &f[24],
+            &f[12],
+            &maptran,
+            &f[13],
+            &f[22],
+            None,
+            &[(3, 1, 1)],
+        )
+        .unwrap();
+        host.fsm.enter(Scene::Mission);
+        host.sync_mission();
+        let count = host.mission().unwrap().sim().robots().len();
+        for slot in 0..count {
+            host.mission_mut().unwrap().apply_damage(slot, 6000, -1);
+        }
+        let episode = *host.fsm.episode();
+        for _ in 0..11 {
+            host.pump_frame(4, &InputFrame::default());
+            assert_eq!(host.scene(), Scene::Mission);
+        }
+        let held = InputFrame {
+            mouse_buttons: 1,
+            ..InputFrame::default()
+        };
+        host.pump_frame(4, &held);
+        assert_eq!(host.scene(), Scene::GameOver);
+        assert!(host.mission().is_none());
+        assert_eq!(*host.fsm.episode(), episode);
+        host.load_movie(Scene::GameOver, &synth_smk()).unwrap();
+        for _ in 0..4 {
+            host.pump_frame(4, &held);
+        }
+        assert_eq!(host.scene(), Scene::Title);
+        assert_eq!(*host.fsm.episode(), episode);
     }
 
     #[test]
