@@ -10692,3 +10692,20 @@ fixture words and corpus census assertions; leave canonical replay pins
 unchanged. This enables real pickups and exposes the already incomplete
 ammo/episode effect bodies for subsequent work. Source anchors and live
 reference evidence are in RE-EXW-PICKUP-INDEX.md.
+
+## D259 — Restore elevated destructibles from local template layers
+
+The original Boot Camp beacon blocks walking until it is shot, then
+collapses and permits PAD16 extraction. Native awards the destruction
+score but leaves the tower solid. The restore loop used world z to index
+the W×H×D UNDER banks, skipping every cell of the beacon at z5/D3.
+Use z-z0 for bank indexing, retaining world z for the destination. This
+matches EXW41aaf5..41abdb and the existing §7j.32/3 specification; it is
+not a special beacon exception. RE notes were committed first (aaef33a).
+Add a multi-cell/layer regression at origins1/5/7 and a real Boot Camp
+test that dismisses the tutorial, proves intact collision, destroys the
+tower, verifies its restored data, then walks onto PAD16 and completes
+the simulation's extraction. Both fail before the fix. Natural rebuilt
+window validation and the mission-owned outcome remain outstanding.
+Canonical pins stay unchanged; new S4/S5c/S7 differences are recorded
+in the playtest log, not accepted as replacement goldens.

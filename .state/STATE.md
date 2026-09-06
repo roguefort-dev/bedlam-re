@@ -1,5 +1,14 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-06 D259: original DOSBox STANDARD Boot Camp playthrough reached
+    the extraction roof, destroyed the beacon, extracted and returned to the
+    mission room after its movie. Fixed native elevated-object restoration
+    to index local template layers; actual-map test now completes simulation
+    extraction. Rebuilt live replay and mission-owned shell outcome are next.
+    Original remains paused in mission room; old native process still has the
+    pre-fix terrain. Prior blank-menu/ground-input notes below are historical.
+    Product phases remain unproven; canonical controls remain 3 pass/10 fail.
+
   - 2026-09-06 interactive continuation, working alone with legacy workers
     paused at the user's request. Commits 0b9e96d, 1510eac, 39e66fb repair
     mission pointer alignment, title backdrop/palette, and shared production

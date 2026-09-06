@@ -1052,7 +1052,8 @@ impl MissionSim {
         }
         // The terrain RESTORE [§7j.25/2, §7j.32/3]: nested i<H,
         // j<W, z ∈ [z0, min(z0+D, 8)); per cell the linear template
-        // index (z·H+i)·W+j writes the UNDER pair.
+        // index ((z-z0)·H+i)·W+j writes the UNDER pair. The bank's
+        // first layer is local zero, independent of the world height.
         let (w, h) = self.terrain.size();
         let (ox, oy, oz) = {
             let inst = &self.objects[idx];
@@ -1067,8 +1068,8 @@ impl MissionSim {
                     if x < 0 || y < 0 || x >= w || y >= h {
                         continue;
                     }
-                    let lin =
-                        (zz as usize * ty.h as usize + i as usize) * ty.w as usize + j as usize;
+                    let lin = ((zz - oz) as usize * ty.h as usize + i as usize) * ty.w as usize
+                        + j as usize;
                     if lin >= cells {
                         continue;
                     }

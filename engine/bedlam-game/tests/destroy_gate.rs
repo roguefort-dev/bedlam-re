@@ -107,6 +107,56 @@ fn trt_empty() -> Vec<u8> {
     vec![0u8, 0]
 }
 
+#[test]
+fn elevated_object_restore_uses_local_layers_and_clamps_world_height() {
+    for origin_z in [1, 5, 7] {
+        let mut sim = synth_sim();
+        let table = ObjectTypeTable {
+            rows: vec![ObjectType {
+                w: 2,
+                h: 2,
+                d: 3,
+                hp: 1,
+                bank_under_tot: (100..112).collect(),
+                bank_under_dat: vec![0, 2, 3, 4, 5, 0, 7, 8, 9, 10, 0, 12],
+                ..Default::default()
+            }],
+        };
+        assert!(sim.stage_destroy_family(&table, &pos_with(3, 4, origin_z, 0), &trt_empty(), 1, 1));
+        for z in 0..8 {
+            for y in 4..6 {
+                for x in 3..5 {
+                    sim.terrain.dat_write(x, y, z, 20);
+                }
+            }
+        }
+        assert!(sim.resolve_object_impact(3 << 13, 4 << 13, 0, 1, true));
+        let expected = [[0, 2, 3, 4], [5, 0, 7, 8], [9, 10, 0, 12]];
+        for z in 0..8 {
+            for (cell, (x, y)) in [(3, 4), (4, 4), (3, 5), (4, 5)].into_iter().enumerate() {
+                let local = z - origin_z;
+                let index = ((y * W + x) * 8 + z) as usize;
+                if (0..3).contains(&local) {
+                    let dat = expected[local as usize][cell];
+                    assert_eq!(
+                        sim.terrain.dat_type(x, y, z),
+                        dat,
+                        "origin={origin_z}, cell=({x},{y},{z})"
+                    );
+                    assert_eq!(
+                        sim.mirror_words()[index],
+                        100 + local as u16 * 4 + cell as u16
+                    );
+                    assert_eq!(sim.mirror_seen_bank()[index], u8::from(dat == 0));
+                } else {
+                    assert_eq!(sim.terrain.dat_type(x, y, z), 20);
+                    assert_eq!(sim.mirror_words()[index], 0);
+                }
+            }
+        }
+    }
+}
+
 fn trt_with(x: i32, y: i32, z: i32) -> Vec<u8> {
     let mut b = vec![1u8, 0];
     b.extend_from_slice(&x.to_le_bytes());
