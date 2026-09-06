@@ -156,6 +156,9 @@ pub fn stage_scene(
         // player: no robots override, no staged markers (the
         // 0x46cbe0 network seam).
         Scene::Mission => {
+            let (zone, mission) = host.mission_slot();
+            let world = bedlam_game::world::WorldAssets::load(source, zone, mission, &bytes[0])?;
+            names.extend(world.names().iter().cloned());
             let scanner = bedlam_game::scanner::Scanner::load(source.load("SCANNER.BIN")?)?;
             names.push("SCANNER.BIN".to_string());
             // Load the optional panel before replacing the host mission so a
@@ -200,6 +203,9 @@ pub fn stage_scene(
                 None,
                 &[],
             )?;
+            host.mission_mut()
+                .expect("mission just staged")
+                .stage_world(world)?;
             host.mission_mut()
                 .expect("mission just staged")
                 .stage_scanner(scanner);

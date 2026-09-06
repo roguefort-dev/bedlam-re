@@ -828,6 +828,40 @@ impl MissionSim {
         }
     }
 
+    /// Connect the production renderer to world writes. Headless simulations
+    /// do not allocate a journal. Enable after initial bank staging.
+    pub fn observe_terrain_writes(&mut self) {
+        self.terrain_writes = Some(Vec::new());
+    }
+
+    pub fn take_terrain_writes(&mut self) -> Vec<(usize, u16, u8)> {
+        self.terrain_writes
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn write_mirror_cell(&mut self, index: usize, word: u16, seen: u8) {
+        self.mirror_words[index] = word;
+        self.mirror_seen[index] = seen;
+        if let Some(writes) = &mut self.terrain_writes {
+            writes.push((index, word, seen));
+        }
+    }
+
+    /// The original renderer advances LNK words in the same tile bank used
+    /// by simulation. Called after rendering, after all pending writes drain.
+    pub fn accept_rendered_words(&mut self, words: &[u16]) -> bool {
+        if self.terrain_writes.is_none()
+            || self.mirror_words.len() != words.len()
+            || self.terrain_writes.as_ref().is_some_and(|w| !w.is_empty())
+        {
+            return false;
+        }
+        self.mirror_words.copy_from_slice(words);
+        true
+    }
+
     /// The staged object instances in record order.
     pub fn objects(&self) -> &[ObjectInstance] {
         &self.objects
@@ -1032,9 +1066,8 @@ impl MissionSim {
                     let tile = (y * w + x) as usize;
                     let under_tot = ty.bank_under_tot.get(lin).copied().unwrap_or(0);
                     let under_dat = ty.bank_under_dat.get(lin).copied().unwrap_or(0);
-                    self.mirror_words[tile * 8 + zz as usize] = under_tot;
                     let seen = if under_dat == 0 { 1 } else { 0 };
-                    self.mirror_seen[tile * 8 + zz as usize] = seen;
+                    self.write_mirror_cell(tile * 8 + zz as usize, under_tot, seen);
                     self.terrain.dat_write(x, y, zz, (under_dat & 0xFF) as u8);
                 }
             }
@@ -1373,8 +1406,7 @@ impl MissionSim {
         let tile = (ty * w + tx) as usize;
         let zi = z as usize;
         if (0..8).contains(&z) && tile * 8 + zi < self.mirror_words.len() {
-            self.mirror_words[tile * 8 + zi] = rubble as u16;
-            self.mirror_seen[tile * 8 + zi] = 1;
+            self.write_mirror_cell(tile * 8 + zi, rubble as u16, 1);
         }
         self.terrain.dat_write(tx, ty, z, 0);
         // k15 debris (×0x20 coords, delay 0, param −1) + the splash
@@ -1808,8 +1840,7 @@ impl MissionSim {
         if self.mirror_words.len() <= tile {
             return; // nothing staged (the no-inject default)
         }
-        self.mirror_words[tile] = word;
-        self.mirror_seen[tile] = if word != 0 && volume == 0 { 1 } else { 0 };
+        self.write_mirror_cell(tile, word, u8::from(word != 0 && volume == 0));
         self.terrain.dat_write(x, y, z, volume);
     }
 

@@ -10520,3 +10520,30 @@ path. A failing-then-passing offscreen GPU test covers both attachment formats,
 both VGA expansion policies and all 64 intensity levels. Live armoury artwork
 was compared with the original DOSBox view (PLAYTEST-2026-09-06.md). This fixes
 presentation only and changes no canonical indexed frame or simulation state.
+
+## D247 — Production terrain writes and animation share current words
+
+The original tile bank is shared by destructible/pickup simulation and
+the renderer's LNK walk (RE-EXW-MISSIONVIEW, destructible integration
+prerequisite). Production now loads BDG/POS/TRT, then initializes the
+TOT/seen mirror and hazards. Assets are fetched and validated before
+host mission replacement. Headless scenario staging remains explicit.
+
+While connected to a renderer, the core journals every runtime mirror
+write, including repeated writes of the same value. Before drawing,
+MissionScene drains those writes into MissionView's words and seen
+markers. After ordinary or overlay drawing, it copies the advanced
+word bank back to the core. Thus simulation reads current animation
+words and unrelated animation is not reset by stale full-bank copies.
+The journal is disabled by default and is not canonical simulation
+state; headless runs do not accumulate an undrained queue. Loading
+banks must precede enabling observation. Runtime writes from object
+restoration, TRT rubble, z_structure_write and pickups all use the
+same writer. Initial staging remains a complete bank initialization.
+
+Tests cover destruction reaching the render bank, repeated writes,
+unrelated LNK animation, invalid render-write batch atomicity, and
+nonempty production instances/HP/footprints/mirror in the ordinary
+controller journey. This connects existing simulation behavior; it
+does not assert that object picking, weapon visuals, every scripted
+destruction effect, or mission completion is finished.

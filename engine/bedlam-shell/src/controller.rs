@@ -338,6 +338,23 @@ mod tests {
             game.host().mission().is_some(),
             "mission is ready when the transition pump returns"
         );
+        let world = game.host().mission().unwrap().sim();
+        assert!(
+            !world.objects().is_empty(),
+            "production stages POS instances"
+        );
+        assert!(
+            world.objects().iter().any(|o| o.hp > 0),
+            "BDG initializes hit points"
+        );
+        assert!(
+            world.object_grid().iter().any(|&w| w != 0),
+            "footprints and hazards are live"
+        );
+        assert!(
+            world.mirror_words().iter().any(|&w| w != 0),
+            "TOT mirror is live"
+        );
         assert!(game
             .source()
             .fetched()

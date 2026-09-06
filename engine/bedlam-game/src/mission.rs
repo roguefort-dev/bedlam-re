@@ -690,6 +690,7 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
 /// LIFECYCLE, the D31/D37 movie pattern).
 #[derive(Debug)]
 pub struct MissionScene {
+    world_connected: bool,
     scanner: Option<crate::scanner::Scanner>,
     scanner_redraw: u8,
     scanner_buttons: u8,
@@ -889,6 +890,7 @@ impl MissionScene {
         let sidebar = Sidebar::new(sim.robots().len());
         let (score, money) = FRESH_CAMPAIGN;
         Ok(MissionScene {
+            world_connected: false,
             scanner: None,
             scanner_redraw: 0,
             scanner_buttons: 0,
@@ -1022,6 +1024,28 @@ impl MissionScene {
         self.hint_panel = Some((panel, dark));
     }
 
+    pub fn stage_world(&mut self, world: crate::world::WorldAssets) -> Result<(), GameError> {
+        world.install(&mut self.sim)?;
+        let initial: Vec<_> = self
+            .sim
+            .mirror_words()
+            .iter()
+            .copied()
+            .zip(self.sim.mirror_seen_bank().iter().copied())
+            .enumerate()
+            .map(|(i, (word, seen))| (i, word, seen))
+            .collect();
+        assert!(self.view.apply_world_writes(&initial));
+        self.world_connected = true;
+        Ok(())
+    }
+
+    fn finish_world_render(&mut self) {
+        if self.world_connected {
+            assert!(self.sim.accept_rendered_words(self.view.words()));
+        }
+    }
+
     pub fn stage_scanner(&mut self, scanner: crate::scanner::Scanner) {
         self.scanner = Some(scanner);
         self.scanner_redraw = 2;
@@ -1131,6 +1155,7 @@ impl MissionScene {
         let (award, _strip) = self.sim.take_destroy_score();
         if award != 0 {
             self.score += award;
+            self.strip = 2;
         }
         // The case-4 pickup folds [7f.6 + §7h.5/2]: the sim's tile
         // consume (fire_pickup → apply_pickup case 4) draws the
@@ -1312,6 +1337,11 @@ impl MissionScene {
         if !self.active {
             return None;
         }
+        if self.world_connected {
+            assert!(self
+                .view
+                .apply_world_writes(&self.sim.take_terrain_writes()));
+        }
         if self.overlay_on {
             // FUN_004089b1 [7e.1]: clear the presented 480×480 (the
             // 0x4b000 rep-stos), then the overlay draw. The sidebar
@@ -1355,6 +1385,7 @@ impl MissionScene {
             self.render_count += 1;
             self.draw_hint();
             self.draw_scanner();
+            self.finish_world_render();
             return Some(&self.plane);
         }
         // The MissionShell frame epilogue order [7j.3/7j.7, calls
@@ -1429,6 +1460,7 @@ impl MissionScene {
         self.render_count += 1;
         self.draw_hint();
         self.draw_scanner();
+        self.finish_world_render();
         Some(&self.plane)
     }
 
@@ -2177,6 +2209,53 @@ mod tests {
             &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
+    }
+
+    #[test]
+    fn destruction_reaches_view_and_repeated_writes_survive_animation() {
+        use bedlam_core::destroy::{ObjectType, ObjectTypeTable, OBJECT_INSTANCE_SLOTS};
+        let mut mission = staged(&[]);
+        let files = synth_mission_files();
+        let mut pos = vec![0xff; 16 * OBJECT_INSTANCE_SLOTS];
+        for (i, value) in [1i32, 1, 0, 0].iter().enumerate() {
+            pos[4 * i..4 * i + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        let table = ObjectTypeTable {
+            rows: vec![ObjectType {
+                w: 1,
+                h: 1,
+                d: 1,
+                hp: 1,
+                bank_under_tot: vec![0],
+                bank_under_dat: vec![0],
+                ..Default::default()
+            }],
+        };
+        assert!(mission
+            .sim
+            .stage_destroy_family(&table, &pos, &[0, 0], 1, 1));
+        assert!(mission.sim.stage_pickup_surface(&files[0], 1));
+        mission.sim.observe_terrain_writes();
+        mission.world_connected = true;
+        mission.activate();
+        assert_ne!(mission.view.word(5, 0), 0);
+        assert!(mission
+            .sim
+            .resolve_object_impact(1 << 13, 1 << 13, 0, 10, true));
+        mission.present().unwrap();
+        assert_eq!(
+            mission.view.word(5, 0),
+            0,
+            "destroyed tile removed from render bank"
+        );
+        assert_eq!(mission.sim.mirror_words(), mission.view.words());
+        // Same-value writes must be propagated, not lost by a value-diff observer.
+        mission.sim.z_structure_write(1, 1, 0, 1, 0);
+        mission.sim.z_structure_write(1, 1, 0, 1, 0);
+        assert_eq!(
+            mission.sim.take_terrain_writes(),
+            vec![(40, 1, 1), (40, 1, 1)]
+        );
     }
 
     #[test]

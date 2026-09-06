@@ -25,12 +25,18 @@ INVALID-DEADLOCKED) and the worker dies at its own finish line.
 
 5. [READY] [id=zonea-trace-v1] [gate=zonea-trace-v1] ZONE A PRODUCTION TRACE PRODUCT GATE — a natural production-path trace of ZONEA-MISSION1 from mission start through the mission-owned outcome into debrief, driven end to end through the ShellController with real input over the read-only corpus; wired as the second product gate and cited as the product evidence that may later flip ZONEA-MISSION1 green in docs/P5-MISSION-LEDGER.toml.
    ACCEPTANCE: new named test zonea_production_trace green; the ledger checker green with the row still unproven unless the trace meets the full v2 product bar in the same commit that flips it; the validator v2 suites green; MANIFEST.sha256 clean before and after every corpus read.
+   PROGRESS 2026-09-06: radar and its hold legend compared live with DOSBox; production destructible-world loading and simulation/render tile propagation connected under D247. Generator/fence destruction, object targeting, projectile presentation and the mission outcome are still unproven. See docs/PLAYTEST-2026-09-06.md for the reproducible live locations and checks.
 
 6. [READY] [id=autonomy-suite-rot-v1] [gate=autonomy-suite-rot-v1] AUTONOMY SUITE ROT REPAIR — the pre-existing red cases recorded in D240, proven at HEAD b7af042 in an isolated worktree with the synthesis change absent: the test-autonomy-remaining-gaps completion-validation case and six test-reviewer-security-red completion and validator cases still write required-gates-v1 fixtures that the D238 validator refuses outright, so both suites stay red for a reason no current unit owns; move the fixtures to required-gates-v2 with honest evidence classifications while preserving each case's pinned adversarial property.
    ACCEPTANCE: both suites PASS clean end to end and stay PASS under the simulated worker environment pinned by the D240 hermetic guards; no pinned property weakened — fixtures change schema, assertions keep their teeth; tools/test-validate-required-gates.py stays green; bash -n and py_compile clean.
 
 
 ## Backlog
+
+Canonical dump drift: seven corpus assertions fail identically before and after
+the D247 world connection, verified against isolated HEAD 2238fbe. Diagnose
+the earlier drift without blindly replacing digests; actual values and logs
+are recorded in docs/PLAYTEST-2026-09-06.md. No product gate is green on this basis.
 
 ## Done
 1. DONE (2026-09-06, interactive, commit 39e66fb): shell-input-seam-v1 and shell-controller-v1 share ShellController between window and smoke, accept typed ProductionInput, isolate synthetic actions in controller::harness, and stage before the next input. Real-input journey and failed-entry tests pass; compile-fail tests reject fabricated completion and mutable host access. Shell 149 passed/one ignored, doc tests 2 passed, fmt/clippy and canonical controls green; historical smoke scene/frame/audio unchanged. Rebuilt window reaches Mission and MAP works. This is engineering progress, not a product-complete journey.

@@ -347,6 +347,26 @@ impl MissionView {
         (self.width, self.height)
     }
 
+    /// Apply simulation writes to the shared tile bank without rewinding
+    /// unrelated LNK animation. Index is tile-major, eight words per tile.
+    pub fn apply_world_writes(&mut self, writes: &[(usize, u16, u8)]) -> bool {
+        if writes
+            .iter()
+            .any(|&(i, w, _)| i >= self.words.len() || usize::from(w) >= self.lnk.len())
+        {
+            return false;
+        }
+        for &(i, word, seen) in writes {
+            self.words[i] = word;
+            self.seen[i] = seen;
+        }
+        true
+    }
+
+    pub fn words(&self) -> &[u16] {
+        &self.words
+    }
+
     /// The rebuilt viewport cache (gy-major scan order).
     pub fn cache(&self) -> &[ViewEntry] {
         &self.cache
@@ -1153,6 +1173,30 @@ mod entity_tests {
         let bin = [0u8; 0];
         let lnk = [0u8; 0x4000];
         MissionView::from_mission_bytes(&tot, &dat, &bin, &lnk).unwrap()
+    }
+
+    #[test]
+    fn world_writes_preserve_other_animation_and_replace_seen_markers() {
+        let mut view = tiny_view();
+        view.words[0] = 1;
+        view.words[1] = 1;
+        view.lnk[1] = 2;
+        view.lnk[2] = 3;
+        assert_eq!(view.overlay_word_step(0, 0), 2);
+        assert!(view.apply_world_writes(&[(1, 0, 1)]));
+        assert_eq!(view.word(0, 1), 0);
+        assert_eq!(view.seen(0, 1), 1);
+        assert_eq!(
+            view.overlay_word_step(0, 0),
+            3,
+            "unrelated animation continues"
+        );
+        let before = view.words.clone();
+        assert!(!view.apply_world_writes(&[(0, 1, 0), (8, 1, 0)]));
+        assert_eq!(
+            view.words, before,
+            "invalid batches are rejected before mutation"
+        );
     }
 
     /// One synthetic sprite in the FUN_0040179b bank layout: directory

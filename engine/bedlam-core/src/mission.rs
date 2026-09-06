@@ -846,6 +846,7 @@ pub struct MissionSim {
     /// The TOT-mirror plane words, 8 per tile (the 0x1E record
     /// +2·z words at 0x4796bc) [§7j.32/1].
     pub(crate) mirror_words: Vec<u16>,
+    pub(crate) terrain_writes: Option<Vec<(usize, u16, u8)>>,
     /// The seen bytes, 8 per tile (the record +0x10+z bytes).
     pub(crate) mirror_seen: Vec<u8>,
     /// The +0x1B/+0x1C object-height pairs per tile [§7j.32/1].
@@ -977,6 +978,7 @@ impl MissionSim {
             mission_no: 1,
             platform_family_armed: false,
             mirror_words: Vec::new(),
+            terrain_writes: None,
             mirror_seen: Vec::new(),
             mirror_heights: Vec::new(),
             objective_count: 0,
@@ -1588,8 +1590,7 @@ impl MissionSim {
         self.terrain.dat_write(tx, ty, z, 0);
         // (b)+(c) the mirror writes.
         if tile * 8 + (z as usize) < self.mirror_words.len() {
-            self.mirror_words[tile * 8 + z as usize] = floor as u16;
-            self.mirror_seen[tile * 8 + z as usize] = 1;
+            self.write_mirror_cell(tile * 8 + z as usize, floor as u16, 1);
         }
         // The dispatch (the case-4 draws advance the shared stream;
         // cases 1/2/3/7 write the robot fields).
