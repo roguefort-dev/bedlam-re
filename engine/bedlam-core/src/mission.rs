@@ -702,22 +702,14 @@ pub const HP_MAX: i32 = 0x1388;
 /// case 7, 7h.2).
 pub const PICKUP_BOOST: i32 = 0xC8;
 
-/// The pickup range-table A bases per terrain set (7 dwords at
-/// DGROUP 0x454a58, PE bytes, 7h.1): tile words in the closed
-/// groups `[base, base+0x10)` map to cases 1/3/2/4.
-pub const PICKUP_RANGE_A: [i32; 7] = [0x4E, 0x75, 0x75, 0x358, 0x75, 0xA3, 0xA3];
-/// The pickup range-table B bases per terrain set (7 dwords at
-/// DGROUP 0x454a74, PE bytes, 7h.1): tile words in the closed
-/// groups `[base, base+0xC)` map to cases 9/7/8.
-pub const PICKUP_RANGE_B: [i32; 7] = [0x75, 0x535, 0x70B, 0x656, 0x535, 0x4FE, 0x31E];
-/// The bare-floor word table C at DGROUP 0x454a90 (7 dwords, 7h.2
-/// item 3): the word the pickup consume writes over the mirror
-/// cell — the drawer stops drawing the pickup sprite. Indexed by
-/// zone_index 0-based like the range tables (the 0x454a04..
-/// 0x454ac8 family is one contiguous run of 7-dword tables at
-/// exact 0x1C strides — no head slots, so `base+(cell-1)*4`;
-/// §7h.5/1).
-pub const PICKUP_FLOOR_WORD: [i32; 7] = [0x70B, 0x48F, 0x24C, 0x368, 0x48F, 0x39, 0x39];
+/// Raw terrain-set indexed address windows at EXW 0x454a58/74/90.
+/// See RE-EXW-PICKUP-INDEX.md: set 1 is Boot Camp; set 7 reads the
+/// eighth dword, overlapping the next nominal seven-dword table.
+pub const PICKUP_RANGE_A: [i32; 8] = [0x4E, 0x75, 0x75, 0x358, 0x75, 0xA3, 0xA3, 0x75];
+/// Secondary pickup range, raw terrain set (1..7).
+pub const PICKUP_RANGE_B: [i32; 8] = [0x75, 0x535, 0x70B, 0x656, 0x535, 0x4FE, 0x31E, 0x70B];
+/// Replacement floor word after consumption, raw terrain set (1..7).
+pub const PICKUP_FLOOR_WORD: [i32; 8] = [0x70B, 0x48F, 0x24C, 0x368, 0x48F, 0x39, 0x39, 0x24C];
 /// The case-4 score/money award table [7f.6, FUN_0040eba0 case 4]:
 /// `RandA()&1` picks the row (0 = score, 1 = money), `RandA()&3`
 /// the amount.
@@ -1444,8 +1436,8 @@ impl MissionSim {
     /// destroy-score fold precedent). Cases 8 (ammo, effect 0xC)
     /// and 9 (episode, effect 0xD) return their effect ids with NO
     /// field writes — host-seamed: the robot weapons[7] bank is the
-    /// D51 host seam (W12-S3) and no shipped mission stages
-    /// case-8/9 cells (§7h.5/2). No alive/state gates (the caller
+    /// D51 host seam (W12-S3) and the ammo/episode bodies still need implementation
+    /// now that the corrected raw-set lookup reaches them. No alive/state gates (the caller
     /// fires the dispatch on the tile match alone). The SFX +
     /// 0x4dc5d0 effect-row staging are presentation — the host
     /// reads the effect id off [`PickupOutcome`].
@@ -1590,14 +1582,12 @@ impl MissionSim {
         }
         let tile = tile as usize;
         let word = i32::from(self.mirror_word(tile, z as usize));
-        // The staged set [0x4edd8c] = zone_index+1 → the 0-based
-        // table index (§7h.5/1); an unstaged cell 0 never fires.
-        let Some(set) = usize::try_from(self.zone)
-            .ok()
-            .and_then(|z| z.checked_sub(1))
-        else {
+        // EXW 0x40bf3c/0x40bf48: RAW set, with no subtraction.
+        // Set zero is the unstaged engine state, not a campaign zone.
+        if !(1..=7).contains(&self.zone) {
             return;
-        };
+        }
+        let set = self.zone as usize;
         let Some(case) = pickup_case(word, set) else {
             return;
         };
@@ -3498,10 +3488,10 @@ mod tests {
         // the walker's probes latch the type-3 cells walking PAST
         // them; each fire consumes the cell (DAT 0 / floor word /
         // seen 1) and dispatches on the original word — case 4 at
-        // (5,8) (word 0x5A = A+12, zone-1 tables) stages the award,
-        // case 3 at (4,8) (word 0x52 = A+4) heals +2500.
+        // (5,8) (word 0x81 = A+12, zone-1 tables) stages the award,
+        // case 3 at (4,8) (word 0x79 = A+4) heals +2500.
         let mut sim = pickup_walk_sim();
-        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x5A), (8 * 16 + 4, 0, 0x52)]);
+        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x81), (8 * 16 + 4, 0, 0x79)]);
         assert!(sim.stage_pickup_surface(&tot, 1));
         let a = sim.spawn_robot((2, 8, 0));
         let b = sim.spawn_robot((6, 8, 0));
@@ -3516,8 +3506,8 @@ mod tests {
         // Both cells consumed.
         assert_eq!(sim.terrain.dat_type(5, 8, 0), 0, "case-4 cell consumed");
         assert_eq!(sim.terrain.dat_type(4, 8, 0), 0, "case-3 cell consumed");
-        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), PICKUP_FLOOR_WORD[0] as u16);
-        assert_eq!(sim.mirror_word(8 * 16 + 4, 0), PICKUP_FLOOR_WORD[0] as u16);
+        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), PICKUP_FLOOR_WORD[1] as u16);
+        assert_eq!(sim.mirror_word(8 * 16 + 4, 0), PICKUP_FLOOR_WORD[1] as u16);
         assert_eq!(sim.mirror_seen(8 * 16 + 5, 0), 1);
         assert_eq!(sim.mirror_seen(8 * 16 + 4, 0), 1);
         // The case-3 body ran (hp 1000 + 2500) and the case-4 award
@@ -3536,12 +3526,9 @@ mod tests {
 
     #[test]
     fn inert_words_latch_but_never_fire() {
-        // The ZONEA corpus shape [§7h.4/5]: a type-3 cell whose word
-        // (0x81 = a set-2 case-4 shape) is OUT of the staged set's
-        // ranges latches on the walk past but never fires — the
-        // corpus-dead invariant, synthetically.
+        // A type-3 cell outside both raw set-1 ranges stays inert.
         let mut sim = pickup_walk_sim();
-        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x81), (8 * 16 + 4, 0, 0x81)]);
+        let tot = tot_volume(16, 16, &[(8 * 16 + 5, 0, 0x131), (8 * 16 + 4, 0, 0x131)]);
         assert!(sim.stage_pickup_surface(&tot, 1));
         let a = sim.spawn_robot((2, 8, 0));
         let b = sim.spawn_robot((6, 8, 0));
@@ -3554,7 +3541,7 @@ mod tests {
         assert!(frames < 200, "the walk still terminates");
         assert_eq!(sim.terrain.dat_type(5, 8, 0), 3, "cell untouched");
         assert_eq!(sim.terrain.dat_type(4, 8, 0), 3, "cell untouched");
-        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), 0x81);
+        assert_eq!(sim.mirror_word(8 * 16 + 5, 0), 0x131);
         assert_eq!(sim.mirror_seen(8 * 16 + 5, 0), 0);
         assert_eq!(sim.take_pickup_awards(), (0, 0));
         assert_eq!(sim.robots()[b].hp, 5000);
@@ -3612,7 +3599,11 @@ mod tests {
         assert_eq!(pickup_case(0x70B + 4, 2), Some(7));
         assert_eq!(pickup_case(0xA3 + 8, 5), Some(2));
         assert_eq!(pickup_case(0x4FE + 8, 5), Some(8));
-        assert_eq!(pickup_case(0x4FE + 4, 7), None, "set 7 has no table");
+        assert_eq!(
+            pickup_case(0x4FE + 4, 7),
+            None,
+            "word is outside set 7 ranges"
+        );
     }
 
     #[test]

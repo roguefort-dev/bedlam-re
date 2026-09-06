@@ -211,15 +211,10 @@ fn zoneb_mission1_multilevel_spawn_settles_on_the_roof() {
 }
 
 #[test]
-fn zonea_pickup_surface_is_corpus_dead() {
-    // THE W12-S5-prep corpus gate [§7h.4/5 + §7h.5/3]: stage the
-    // FULL pickup surface (init_tiles semantics) on the REAL
-    // ZONEA/MISSION1 bytes and prove it fires NOTHING — every
-    // DAT==3 cell's staged word decodes to no case under the
-    // set-1 tables (the D99 corpus verdict, re-derived live from
-    // the shipped TOT), and the S2-style walk's hash trace is
-    // BYTE-IDENTICAL with and without the staging (the no-inject
-    // invariant that keeps the S0..S4 canonical chains pinned).
+fn zonea_pickup_census_and_start_area_walk() {
+    // Raw set1 recognizes 37 gold cells and one ammo cell. The
+    // separate start-area walk never reaches them and stays unchanged.
+    // Live scaffold collection is covered by bedlam-game/pickup_gate.
     let (Some((dat, pad, _mrk, cgr, sintable)), Some(tot)) =
         (zonea(), read(&["EDITOR", "ZONEA", "MISSION1.TOT"]))
     else {
@@ -235,7 +230,7 @@ fn zonea_pickup_surface_is_corpus_dead() {
 
     // --- 2. The D99 census re-derived live ----------------------------
     // 80 DAT==3 (tile,z) cells; the staged word multiset is exactly
-    // the §7h.4/5 census and EVERY word decodes None under set 1.
+    // the original word census; raw set1 recognizes gold and ammo pickups.
     let n = (w * h) as usize;
     let mut cells = 0usize;
     let mut census: std::collections::BTreeMap<u16, usize> = Default::default();
@@ -249,9 +244,13 @@ fn zonea_pickup_surface_is_corpus_dead() {
                     *census.entry(word).or_default() += 1;
                 }
                 assert_eq!(
-                    pickup_case(word as i32, 0),
-                    None,
-                    "ZONEA set-1 word {word:#x} at tile {tile} z {z} is INERT"
+                    pickup_case(word as i32, 1),
+                    match word {
+                        0x81..=0x84 => Some(4),
+                        0x53d => Some(8),
+                        _ => None,
+                    },
+                    "ZONEA raw set-1 word {word:#x} at tile {tile} z {z}"
                 );
             }
         }
@@ -310,16 +309,15 @@ fn zonea_pickup_surface_is_corpus_dead() {
         seen0.as_slice(),
         "no seen mutated"
     );
-    // The floor-word table is reachable for the ZONEB pairing.
-    assert_eq!(PICKUP_FLOOR_WORD[0] as u16, 0x70B);
+    // Raw set1 floor replacement, EXW 0x40bfb8.
+    assert_eq!(PICKUP_FLOOR_WORD[1] as u16, 0x48F);
 }
 
 #[test]
 fn zoneb_mission1_stages_live_pickup_cells() {
     // The positive control [§7h.4/5, D99]: ZONEB/MISSION1 (set 2)
-    // DOES stage in-range pickup words — 152 of its 199 DAT==3
-    // cells decode to a case under the idx-1 tables, case-4
-    // dominant (the S5 pairing's fuel; ZONEA stages none).
+    // has 160 of 199 DAT==3 cells in its raw set2 ranges.
+    // The older idx-1 census incorrectly omitted eight B-range cells.
     let (Some(dat), Some(cgr), Some(sintable), Some(tot)) = (
         read(&["EDITOR", "ZONEB", "MISSION1.DAT"]),
         read(&["EDITOR", "ZONEB", "MISSIONB.CGR"]),
@@ -342,7 +340,7 @@ fn zoneb_mission1_stages_live_pickup_cells() {
             let (tx, ty) = ((tile % w as usize) as i32, (tile / w as usize) as i32);
             if sim.terrain.dat_type(tx, ty, z as i32) == 3 {
                 cells += 1;
-                if let Some(c) = pickup_case(sim.mirror_word(tile, z) as i32, 1) {
+                if let Some(c) = pickup_case(sim.mirror_word(tile, z) as i32, 2) {
                     *cases.entry(c).or_default() += 1;
                 }
             }
@@ -351,9 +349,17 @@ fn zoneb_mission1_stages_live_pickup_cells() {
     assert_eq!(cells, 199, "the ZONEB/M1 DAT==3 census");
     assert_eq!(
         cases,
-        [(1u8, 3usize), (2, 3), (3, 6), (4, 140)]
-            .into_iter()
-            .collect(),
-        "the D99 M1 census: 152 in-range, case-4 dominant"
+        [
+            (1u8, 3usize),
+            (2, 3),
+            (3, 6),
+            (4, 140),
+            (7, 1),
+            (8, 6),
+            (9, 1)
+        ]
+        .into_iter()
+        .collect(),
+        "raw set2 census: 160 in-range, including eight B-range cells"
     );
 }

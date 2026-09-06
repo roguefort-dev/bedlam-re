@@ -10678,3 +10678,17 @@ without direct damage, and terrain damage at the contact position with
 score flag zero. See RE-EXW-SENTRIES.md, committed before implementation.
 No projectile sprite is invented. Existing replay digests remain pinned;
 new differences are recorded as unresolved controls, not product evidence.
+
+
+## D258 — Restore raw terrain-set indexing for pickup collection
+
+Original Boot Camp visibly collected a rotating gold pickup and added
+10 cash; native was blocked at the same type3/word84 cell. EXW consumer,
+dispatch and floor writer all index by raw [0x4edd8c] with no subtraction.
+Replace the earlier structural deduction with the literal address reads:
+eight-dword A/B/floor windows, campaign indices1..7, unstaged0 still inert.
+Keep the existing probe/consume and award implementation. Correct semantic
+fixture words and corpus census assertions; leave canonical replay pins
+unchanged. This enables real pickups and exposes the already incomplete
+ammo/episode effect bodies for subsequent work. Source anchors and live
+reference evidence are in RE-EXW-PICKUP-INDEX.md.

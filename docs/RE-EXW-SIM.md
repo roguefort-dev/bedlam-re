@@ -5660,6 +5660,13 @@ plus the case-4 score/money pair (the D52 seam fields).
 
 ## 7h.5. THE E-SIDE PICKUP PRODUCER PAIRING — the engine mapping + the range-table INDEXING derivation (2026-08-22, worker f32193a2 claim 2, W12-S5-prep; the §7h.4 decode implemented engine-side, docs-first hop)
 
+**Superseded 2026-09-06:** the subtract-one indexing deduction below
+is contradicted by EXW 0x40bf3c/0x40bf48, 0x40bfb8 and 0x40ebaa.
+The original Boot Camp gold pickup was collected live for +10 cash.
+See RE-EXW-PICKUP-INDEX.md for exact raw-set addressing and corrected
+census; the claimed zero-pickup corpus verdict below is not authoritative.
+
+
 The engine-modeling notes for the W12-S5-prep unit. Nothing here
 re-decodes the binary — it pins WHICH §7h.4 site maps to which
 engine seam and settles the one open gloss the implementation
