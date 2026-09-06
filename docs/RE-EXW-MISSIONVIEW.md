@@ -664,3 +664,15 @@ wrong. The earlier renderer table is superseded by this correction.
 The original full objdump listing was misaligned through the jump table;
 starting disassembly explicitly at 0x408030 exposes the missed decrement.
 Corpus checksums passed before and after the read-only probe.
+
+## Mission sidebar base art
+
+[verified, EXW + corpus header] MissionShell 0x447c82..0x447c96
+draws GENERAL.BIN sprite 1 at x=480,y=0 with transparency parameter
+zero. It then renders the scene and flips, looping twice to initialize
+both original buffers (0x447ca5..0x447cae). Sprite 1 is RLE, no hotspot,
+160x480 in the shipped bank. This is the missing static HUD frame seen
+in the live original/native comparison. The native single retained
+mission plane needs this base once at activation, before portraits, bars,
+weapon rows and score digits. It must not be repainted over those
+dynamic widgets every frame. Corpus checksums passed before/after.
