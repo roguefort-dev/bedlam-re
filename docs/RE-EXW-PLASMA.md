@@ -33,3 +33,12 @@ normal command fire and is not covered by the initial implementation.
 Sound calls and their shared 0x4eb944 gate remain presentation work.
 Type-5 drawing is the WEAPONS.BIN body at 0x404187; it requires a
 separate renderer connection, not sprites for weapon IDs 6/7/8.
+
+Draw cross-check (0x404187..0x404275): type 5 uses the OLD draw
+counter as its frame, increments the stored counter before clipping,
+and when the old value is >=7 draws 7 and stores 3. Thus a freshly
+spawned zero counter draws 0,1,2,3,4,5,6,7,3,...; it does not start
+at frame 3. Screen x is col-adjust + dx-dy + 0x110; y is row-adjust
++ shake + (dx+dy)/2 + 0x110 - (z>>8), with arithmetic shifts.
+Clip x to 0..0x23f exclusive and y to 0..0x23e exclusive. Enqueue
+world x/y in Q5, layer z>>13, WEAPONS bank, mode 0x12c.
