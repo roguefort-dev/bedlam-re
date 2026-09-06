@@ -8713,6 +8713,12 @@ full-.text objdump.
 
 ## 7j.51. THE FUN_00419756 IDENTITY — CLOSED: the TRT-bolt class-3 probe is a first-alive ROBOT-BANK OCCUPANCY BOX (±<0.5 tile lateral, ±<1 level z — NOT octile, NOT critters, NOT TRT structures, NOT tile words); the class-3 death is the "hit an actor, ZERO damage of any kind" leg (2026-08-23, worker 9a23356a claim 2, D123; objdump-only from ghidra-project/exw-text-objdump.txt — no Ghidra run, no corpus read) [verified]
 
+**2026-09-06 correction:** “ZERO damage of any kind” in this historical
+heading is limited to direct projectile damage. The K8 disburser causes
+secondary debris damage and knockback; see RE-EXW-SENTRIES.md, “Secondary
+impact damage”, for the call-chain anchors and live observation.
+
+
 1. **The body (126 B @0x419756..0x4197d3, instruction-exact).**
    `FUN_00419756(x Q13 EAX, y Q13 EDX, z Q13 EBX) → 0/1`:
    - prologue shelves the args: esi := x>>8, edi := y>>8, ebp :=

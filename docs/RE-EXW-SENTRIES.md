@@ -44,7 +44,8 @@ times 8192; velocity is axial +/-255 and the field called vz is 20.
 per call, **never changes z**, and treats vz as a terrain-arming countdown.
 Bounds precede alive-robot occupancy (0x419756), then countdown decrement
 or floor probe. Occupancy is strict per-axis Q5 distance below 16/16/32;
-it disburses and clears the projectile with zero robot damage. Terrain
+it disburses and clears the projectile with zero direct robot damage.
+The resulting K8 debris can damage robots; see the correction below. Terrain
 contact disburses, then damages objects with score flag zero and structures
 using damage key 0x66. Damage is 300/600/1200 by difficulty (7j.50).
 
@@ -63,3 +64,32 @@ once after debris, at 0x44807b. Newly fired shots first step next frame.
 [open] Production implementation and renewed live comparison remain
 required. This note does not establish a mission product gate or normalize
 the live runs' different difficulty, ammunition and damage histories.
+
+
+## Secondary impact damage: live comparison correction
+
+2026-09-06, follow-up on release 1366244. [observed] Native road sentry
+opens and fires; moving into its lane caused knockback and HP loss, then
+retraction outside range. Moving around it caused the glass structure to
+break apart. The original also shows the raised, firing sentry beside a
+broken glass structure. Exact original/native knockback trajectories and
+HP totals have not yet been matched.
+
+[verified] The older RE-EXW-SIM 7j.51 heading, “ZERO damage of any kind”,
+is false when applied to the whole mission frame. The projectile handler
+has no direct damage call, but disburser 0x4127f2..0x412816 stages kind 8
+at the reverted projectile position with delay 0 and owner -1. The K8
+stager writes physics countdown 2 at 0x421819. Physics 0x40ded0 selects
+damage 2 for this kind; the robot lane calls 0x40db9e at 0x40dfb2, whose
+0x40dbc2 calls robot damage 0x40e230 and whose following branch applies
+knockback. Thus one impact can cause two 2-point damage ticks when a robot
+remains in range. The debris pass follows all four projectile passes in
+the same frame. This connects the previously verified 7j.44 physics to
+the newly connected producer; it does not require a new damage rule.
+
+[correction] The first actual-map test at (12,33) lost 32 HP after 32
+frames because its robot lies in the sentry lane and receives impact
+debris, not because that tile has an established independent one-point
+terrain hazard. The subsequent (12,34) test is outside the projectile's
+strict half-tile contact box and remains a useful opening/fire test, but
+cannot prove contact harmlessness. Add a focused impact-then-debris test.
