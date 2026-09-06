@@ -47,3 +47,37 @@ Implementation must preserve timer capacity/order/expiry semantics,
 origin-only occupancy and mirror writes, and avoid substituting
 ordinary building destruction. Other zone mapping branches, chase
 camera behavior and sound remain to be traced/wired separately.
+
+## Zone B mapping and radar consumers (2026-09-07)
+
+[verified, EXW] Targeted disassembly and raw jump-table bytes establish
+set 2's entry at 0x439c7b (table 0x439c04). Network mode 2 returns
+zero; otherwise mission minus one indexes five entries at 0x439b40.
+Mission 2 enters 0x439ce3 and maps types 0x70..0x75 through the
+six entries at 0x439af4 to payloads 0x67, 0x68, 0x69, 0x6d,
+0x64, 0x65 respectively. Other types return zero. This mapping is
+currently absent from native fence shutdown as well as radar.
+
+[verified, EXW; correction to the older radar summary] The object
+radar pass does not classify arbitrary objects by alive/dead flags.
+At 0x41f215..0x41f279 it scans POS records in order, skips full
+id/flags dword -1, and requires origin strictly inside tile bounds.
+It projects the origin center (2*x+1,2*y+1), calls 0x439c20,
+and draws icon 9 for a nonzero linked-fence payload (0x41f2f6).
+Otherwise 0x41f833 tests the complete id against a precomputed
+list of linked target types and selects icon 10 on a match.
+The list producer 0x41f867 scans initial objects, calls the same
+mapping, inserts each nonzero low/high payload byte, and deduplicates
+via 0x41f8ba. This is a mission-initial list, not a fresh list of
+surviving generators on every radar refresh. Object marker rendering
+must preserve that lifetime and compare complete flag-bearing ids.
+The earlier description of icons 9/10 as generic alive flags is
+superseded by these call-site and helper anchors.
+
+[observed, live comparison] Both games reached B-2 from Boot Camp.
+After allowing the native arrival fade and radar refresh to finish,
+the original shows blue/white bars near the north fence while the
+native radar remains almost empty. The missing generator/linked-type
+pass is a concrete implementation gap; exact correspondence of each
+colored marker still needs a post-fix live comparison. Neither the
+remaining radar producers nor full Zone B gameplay is verified.
