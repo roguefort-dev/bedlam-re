@@ -104,3 +104,24 @@ with return4 is reversed. Boot Camp successful extraction returns1.
 Caller handling and evacuation movie selection still require tracing
 before implementing the host route. Native normal-input replay now
 reaches state5 after beacon destruction but remains in Mission.
+
+[verified caller] GameMain calls MissionShell at0x41c57d, saves its return
+in ecx and dispatches (return-1) through table0x41c040 at0x41c5d5.
+Table bytes decode to0x41c604,0x41c5dd,0x41c689,0x41c682. Return1
+recaptures loadout via0x41ca2e, marks the selected mission complete via
+0x4474ef, and calls debrief0x44425c. That function's zone==1 branch
+at0x44427e jumps directly to its return at0x444748: Boot Camp has no
+interactive debrief. Zone-complete tail0x41c778..0x41c796 plays
+GAMEGFX\ZONEDONE.SMK (string0x457b5d, already identified in GAMETHREAD),
+then BETWEEN/loading/next-zone flow. This matches the observed original
+evacuation movie and subsequent mission room. Production must not require
+an extra player advance through an empty Debrief.
+
+The current engine host never consumes successful extraction; the generic
+FSM's MissionComplete action enters Debrief and requires Advance. Its
+legacy campaign completion also chooses the lowest unset sub rather than
+the player-selected mission. The current preparation object survives
+Mission and owns the old room/shop selection; carrying it unchanged into
+Select would reopen the old zone/phase. A complete handoff needs the
+mission-owned result, campaign/loadout recapture, correct zone transition
+and fresh room state, in addition to the missing craft rendering.
