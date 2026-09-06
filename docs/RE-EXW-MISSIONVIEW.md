@@ -760,9 +760,13 @@ not a test of the currently selected robot or chassis type.
 
 [verified, EXW disassembly] The pad-marker pass at 0x41f376 uses
 an eight-byte runtime record bank at 0x4e44f8 with a nonzero first
-word gate, followed by signed x/y words. It must not be populated
-by blindly drawing every six-byte source PAD record: those include
-tutorial trigger positions. The arrival pass and linked-objective
+word gate, followed by signed x/y words. Loader cross-check
+(0x41de8c, 0x41ded4..0x41defa; RE-EXW-SIM section 7c PAD leg)
+confirms that every parsed record before the x=-1 terminator is
+active. Thus Terrain::pad_slots is already the retained active run,
+including tutorial positions. The radar stops at the first active
+x=y=0 record; other records use strict interior tile bounds and
+icon 12. The arrival pass and linked-objective
 pass also require their runtime producers. Full producer coverage
 and a new live radar comparison remain open; the standalone scanner
 renderer in 009df57 does not yet appear in production missions.
