@@ -10784,3 +10784,36 @@ post-fix comparison is pending; both existing windows remain paused at
 B-2, with native PID2650028 still running the prior D261 binary.
 Canonical checks remain 3 passing/10 failing with all nine actual digests
 unchanged from D261 and the same S3 early-GameOver error; no pins changed.
+
+## D263 — Campaign objective lifecycle and radar targets (2026-09-07)
+
+Stage the six objective groups for all 25 B–F campaign missions from
+EXW-verified POS-slot/quota facts (pointer table0x4557f8), in a core
+module shared by destruction and radar. Retain completed entries as -1
+so repeat notifications cannot decrement again. Keep group-zero success
+separate from all-six completion, matching the original caller gate.
+Connect rescue completion to the existing POI escape producer. Stage
+and clear objective footprint heights; correct the final-zone counter
+to inspect object type ids0x44..0x47 rather than BDG kind values.
+
+The production world installer now stages objectives; radar emits their
+original group-order icon5/6 markers after pads and before robots.
+Arrival markers remain absent. The shell still handles successful return
+only for Boot Camp: campaign debrief/retry/room transitions are subsequent
+work, not silently treated as the Boot Camp movie path. Objective status
+messages/audio and height-based presentation also remain to be connected.
+
+Validation: core objective tests distinguish partial/primary/secondary/all
+completion, repeated destruction, quota threshold and zone7 id semantics.
+Read-only corpus tests resolve all B–F objective slots/pads and verify B-2
+primary destruction removes its marker without completing secondary groups.
+The controller's existing Boot Camp return test now verifies actual B-2
+objective staging. Library suites pass (171 core before the additional
+zone7 test, 200 game, 150 shell with one ignored); the four focused
+objective tests then pass including zone7. Production core/game/shell
+clippy with warnings denied passes. Live comparison of the newly added
+white objective markers remains pending; PID2688217 is still D262 at
+B-2 spawn. No phase or product-complete claim is made.
+Final core rerun: all172 pass. Release shell build passes. Canonical
+checks remain3 passing/10 failing, with the same nine actual digests and
+S3 early-GameOver error as D262; no pins changed. Manifest clean.

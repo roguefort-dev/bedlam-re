@@ -475,6 +475,7 @@ impl MissionSim {
                             e.dwell = 0;
                         }
                         self.score_pending += ESCAPE_AWARD;
+                        self.objective_notification(5000);
                     }
                 }
                 6 => {

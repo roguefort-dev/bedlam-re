@@ -46,6 +46,8 @@ pub mod hash;
 pub mod input;
 pub mod mission;
 pub mod mode;
+pub mod objective;
+mod objective_data;
 pub mod poi;
 pub mod replay;
 pub mod ride;

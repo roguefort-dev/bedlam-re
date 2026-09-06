@@ -845,6 +845,7 @@ pub struct MissionSim {
     pub(crate) mirror_heights: Vec<(u8, u8)>,
     /// The zone-7 objective counter [0x46cce0] (§7j.32/2).
     pub(crate) objective_count: i32,
+    pub(crate) objectives: [crate::objective::ObjectiveGroup; 6],
     /// The 128-slot debris ring (0x476fbc) — the T3 surface.
     pub(crate) debris: Vec<crate::destroy::DebrisRecord>,
     /// The +0x18 seq counter — the debris LRU eviction key.
@@ -893,9 +894,7 @@ pub struct MissionSim {
     pub(crate) beacon_claims_latch: [bool; 12],
     /// The objective-resolver phase cell 0x46cd00 {1 first, 2 done,
     /// 3 all-complete, 4 partial} + the light cells 0x46ccfc/0x46ccc4
-    /// (§7j.32/5) — E models the zone-7 destroy-notify at-zero tail;
-    /// the script-objective staging (tables 0x4557f8/0x456810) is
-    /// the documented E-gap, so the cells read 0 elsewhere.
+    /// (§7j.32/5), updated by the campaign objective lifecycle.
     pub(crate) objective_phase: u32,
     pub(crate) objective_blink: u32,
     pub(crate) objective_light: u32,
@@ -984,6 +983,7 @@ impl MissionSim {
             mirror_seen: Vec::new(),
             mirror_heights: Vec::new(),
             objective_count: 0,
+            objectives: Default::default(),
             debris: vec![crate::destroy::DebrisRecord::default(); crate::destroy::DEBRIS_SLOTS],
             debris_seq: 0,
             elevators: Vec::new(),
@@ -1076,8 +1076,7 @@ impl MissionSim {
     }
 
     /// The objective-resolver cells (0x46cd00 phase, 0x46ccfc,
-    /// 0x46ccc4) — §7j.32/5; no watch row (the objective-slots row
-    /// needs the unmodeled script-objective staging).
+    /// 0x46ccc4) — §7j.32/5; groups are exposed separately by objectives().
     pub fn objective_cells(&self) -> (u32, u32, u32) {
         (
             self.objective_phase,

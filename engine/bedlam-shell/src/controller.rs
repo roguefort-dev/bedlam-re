@@ -365,6 +365,9 @@ mod tests {
         let mission = game.host.mission().unwrap();
         assert_eq!(mission.campaign(), (110, 3250));
         assert_eq!(mission.sim().robots()[0].weapons[0].ammo, 420);
+        assert_eq!(mission.sim().objectives()[0].targets, [778]);
+        assert_eq!(mission.sim().objective_radar_markers().len(), 17);
+        assert!(!mission.sim().primary_objective_complete());
     }
 
     #[test]

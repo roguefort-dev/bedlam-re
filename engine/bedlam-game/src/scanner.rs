@@ -12,8 +12,8 @@ pub struct Marker {
 }
 
 /// Verified map, active-pad and robot passes of EXW 0x41ee20.
-/// Includes verified Boot Camp/B-2 fence objects; TRT/critter/arrival/objective
-/// producers and other fence mappings remain incomplete.
+/// Includes campaign objectives and verified Boot Camp/B-2 fence objects;
+/// TRT/critter/arrival producers and other fence mappings remain incomplete.
 pub fn mission_markers(
     sim: &bedlam_core::mission::MissionSim,
     selected: usize,
@@ -70,6 +70,9 @@ pub fn mission_markers(
         if x > lo.0 && x < hi.0 && y > lo.1 && y < hi.1 {
             push(12, 2 * x + 1, 2 * y + 1);
         }
+    }
+    for (icon, x, y) in sim.objective_radar_markers() {
+        push(icon, x, y);
     }
     for (index, robot) in sim.robots().iter().enumerate() {
         if robot.alive {

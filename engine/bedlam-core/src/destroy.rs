@@ -1297,45 +1297,6 @@ impl MissionSim {
         }
     }
 
-    /// FUN_00448b80's modeled subset [§7j.32/2 + §7j.40/7]: zone-7
-    /// gate, the [0x46cce0] counter decrement, the +0x1B/+0x1C
-    /// height clears over the footprint, and the at-zero
-    /// extraction-arm tail (the 0x46cd00 phase := 3 + the light
-    /// cells 0x46ccfc := 0x20 / 0x46ccc4 := 0x32; the SFX pair is
-    /// presentation).
-    fn objective_notify(&mut self, idx: usize) {
-        if self.zone != 7 {
-            return;
-        }
-        let Some(inst) = self.objects.get(idx) else {
-            return;
-        };
-        let Some(ty) = self.object_types.get(inst.id as usize).cloned() else {
-            return;
-        };
-        if !(0x44..=0x47).contains(&ty.kind) {
-            return;
-        }
-        if self.objective_count > 0 {
-            self.objective_count -= 1;
-        }
-        if self.objective_count == 0 {
-            self.objective_phase = 3;
-            self.objective_blink = 0x20;
-            self.objective_light = 0x32;
-        }
-        let (w, h) = self.terrain.size();
-        for i in 0..ty.h as i32 {
-            for j in 0..ty.w as i32 {
-                let (x, y) = (inst.x + j, inst.y + i);
-                if x < 0 || y < 0 || x >= w || y >= h {
-                    continue;
-                }
-                self.mirror_heights[(y * w + x) as usize] = (0, 0);
-            }
-        }
-    }
-
     /// Stage the language latch [0x4eba1c] (1 = GER) — the
     /// destroy-tail GER gate's selector. Host-seamed like
     /// [`MissionSim::set_difficulty`]; 0 = the modeled default.
