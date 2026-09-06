@@ -10357,8 +10357,9 @@ mirror 0x4de664+p·0x62).
    per player p < [0x46cbe0] and group j: `v = pooled[p·0x1c+j·4]`
    idiv **[0x46cbd8] (squad size)**; quotient ≠ 0 → word@+2 := q
    (ammo) and word@+0xA := FUN_0041cb38(ammo, group, player) (the
-   catalog item from the +6/+8 price/category words and the
-   0x4ea2ac/0x4ea2b0 tables); quotient == 0 → word@+0 := remainder
+   refundable value: catalog price times remaining ammo divided by
+   catalog amount; +6/+8 identify category/item, corrected in
+   RE-EXW-MISSION-ROOM post-mission recapture audit); quotient == 0 → word@+0 := remainder
    (the `xor edx,eax` quirk @0x41cae0 — r ^ 0 = r). Writes
    0x41cae2/0x41cb0b/0x41cb24; reads 0x41cb51/0x41cb5b. EXD twin
    0x2d398/0x2d3a1/0x2d3b1/0x2d3bc (+0x2d422/0x2d42c reads).

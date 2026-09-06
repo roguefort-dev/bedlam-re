@@ -709,3 +709,24 @@ from (175872,597760) to (155648,573440) Q13, then held state 3 with
 5000 HP and a welcome hint. The extraction armer caused that state;
 subsequent ordinary clicks correctly refused to overwrite it. This
 was a false extraction trigger, not a mouse-input or firing bug.
+
+## Post-mission ammunition and refundable value (2026-09-07)
+
+[verified EXW asm] FUN_0041ca2e pools signed group-ammo words from every
+robot, grouped by player type (0x41ca5f..0x41ca84), without an alive or
+extracted-state filter. It divides each pool by configured squad size at
+0x41caf5..0x41cb03. Nonzero quotient writes amount at row+2;
+FUN_0041cb38 computes catalog price * remaining amount / catalog amount
+(0x41cb76..0x41cb8a), written as the refundable paid word at row+0xA.
+It does not select a new catalog item, correcting the older SIM7j.70
+recapture gloss. Row+6/+8 identify the original category/item. A zero
+quotient instead writes the division remainder to row+0, leaving the
+other words untouched (0x41cae0..0x41cae2); the nonzero-remainder oddity
+must not be silently converted into an ammo round-up.
+
+For the live Boot Camp Plasma X2 example, catalog price500/amount600 and
+remaining422 rounds imply refundable paid351. No refund is added to cash
+until a later sale. Consumable equipment already cleared at deployment
+remains absent; retained scanners remain owned. The current Transactions
+object still holds the pre-deployment weapon amounts and purchase cost,
+so a mission return must recapture before presenting or selling them.
