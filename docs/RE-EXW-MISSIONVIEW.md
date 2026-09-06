@@ -838,3 +838,35 @@ before >>4 and checks its first slot against -1 (0x41f561..5fb).
 This pass follows arrivals and precedes robots. Full group staging,
 destroy notifications and outcome integration remain unimplemented;
 adding decorative markers alone would not close that gameplay gap.
+
+### Objective destruction and campaign table audit (2026-09-07)
+
+[verified, EXW] 0x448b8a excludes network mode2. Ordinary objective
+notification scans all six groups and all original slot positions,
+compares the notification argument with retained POS slot, clears its
+footprint height pair, replaces the slot with -1, and decrements the
+remaining word (0x448cc6..0x448da5). A repeated notification cannot
+match the replaced slot. When remaining becomes zero, group0 sets
+phase1 and its completion dword, other groups phase2; a partial object
+hit sets phase4. These paths set blink32 (0x448dac..0x448e89).
+If any target changed and all six remaining words are zero, phase3
+and blink32 supersede those states (0x448e8e..0x448ee0).
+The completion dword for group0 alone is the extraction success gate
+at 0x4486ec; secondary groups are not prerequisites for that return.
+
+[verified, EXW] Notification5000 compares group quota with the global
+POI escape count (0x448cdb..ec), removes the sentinel only when quota
+is reached, and otherwise skips the partial-object status update.
+Mission initialization stamps objective footprint heights as (base z,
+base z+BDG depth), 0x448b4f/61. Zone7 uses the separate count of
+object **type ids** 0x44..0x47 at 0x448919/1e, not BDG kind codes;
+this corrects the old native notify subset. Its zero tail sets phase3,
+blink32 and light50, 0x448c43..89.
+
+[verified, EXW raw pointers] Campaign B1..F5 streams occupy 0x454f24
+through 0x4557f4, referenced by entries1..25 at 0x4557f8. All contain
+six groups. E/F primary groups are quota5000 with following quota/pad
+arguments; ordinary entries are POS slots. The A1 stream at0x454ef4
+contains 5000 separators without that regular payload grammar; Boot
+Camp bypasses objective success and radar, so this unit does not
+reinterpret that special stream as ordinary campaign objectives.
