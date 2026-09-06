@@ -1169,6 +1169,7 @@ fn steer_pointer(
         let cursor = match host.scene() {
             Scene::Title => host.menu_cursor(),
             Scene::Mission => host.mission().map(|mission| mission.cursor()),
+            Scene::Select | Scene::Shop => host.preparation().map(|p| p.cursor()),
             _ => None,
         };
         if let Some((mx, my)) = cursor {

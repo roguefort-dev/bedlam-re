@@ -112,7 +112,26 @@ impl<S: ByteSource> ShellController<S> {
 
     fn stage_entered(&mut self) -> Result<(), GameError> {
         if self.host.scene() != self.visits.last().expect("seeded").scene {
-            stage_scene(&mut self.host, &mut self.source, self.config)?;
+            if self.host.scene() == Scene::Brief
+                && self.host.menu_start_score_seen().is_some()
+                && self.host.preparation().is_none()
+            {
+                let balance = self
+                    .host
+                    .menu_start_score_seen()
+                    .expect("new game score")
+                    .max(0) as u32;
+                self.host.load_preparation(
+                    &mut self.source,
+                    1,
+                    [false; 27],
+                    [0; 15],
+                    balance,
+                    self.config.language,
+                )?;
+            } else if !(self.host.scene() == Scene::Shop && self.host.preparation().is_some()) {
+                stage_scene(&mut self.host, &mut self.source, self.config)?;
+            }
             self.visits.push(SceneVisit {
                 scene: self.host.scene(),
                 pumps: 0,
@@ -221,19 +240,43 @@ mod tests {
             .into(),
         )
         .unwrap();
-        assert_eq!(game.host().scene(), Scene::Brief);
-        for expected in [Scene::Select, Scene::Mission] {
-            game.pump(InputFrame::default().into()).unwrap();
+        assert_eq!(game.host().scene(), Scene::Select);
+        fn click(game: &mut ShellController<GameGfxSource>, x: i32, y: i32) {
+            let (cx, cy) = game.host().preparation().unwrap().cursor();
             game.pump(
                 InputFrame {
+                    mouse_dx: (x - cx) as i16,
+                    mouse_dy: (y - cy) as i16,
                     mouse_buttons: 1,
                     ..Default::default()
                 }
                 .into(),
             )
             .unwrap();
-            assert_eq!(game.host().scene(), expected);
         }
+        click(&mut game, 255, 315);
+        for _ in 0..5 {
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        click(&mut game, 255, 80);
+        assert_eq!(game.host().scene(), Scene::Shop);
+        click(&mut game, 500, 400);
+        for _ in 0..12 {
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        let expected = game
+            .host()
+            .preparation()
+            .unwrap()
+            .transactions()
+            .weapons()
+            .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+        click(&mut game, 590, 455);
+        assert_eq!(game.host().scene(), Scene::Mission);
+        assert_eq!(
+            game.host().mission().unwrap().weapon_loadout(0),
+            Some(&expected)
+        );
         assert!(
             game.host().mission().is_some(),
             "mission is ready when the transition pump returns"
@@ -248,8 +291,8 @@ mod tests {
             vec![
                 Scene::Boot,
                 Scene::Title,
-                Scene::Brief,
                 Scene::Select,
+                Scene::Shop,
                 Scene::Mission
             ]
         );

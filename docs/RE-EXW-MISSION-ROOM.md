@@ -459,3 +459,12 @@ needs the ShellController test and window play. Current transfer covers
 robot-zero weapons, not chassis equipment or other robot types. ShopRandom
 is provisionally zero-initialized in GameHost; lifecycle seeding, options,
 briefing and sound/intro consumers still need integration. Queue stays open.
+
+ShellController now activates Preparation on the initial menu-start entry,
+using the selected starting balance, and bypasses the legacy Shop movie
+staging while Preparation owns Shop. Window absolute-pointer steering uses
+the preparation cursor in Select/Shop. The production controller regression
+loads Boot Camp and verifies weapon transfer; native mouse play reaches the
+same route through DONE. See PLAYTEST-2026-09-06.md for evidence and limits.
+This does not close the journey queue item: chassis, repeat-new-game lifecycle,
+intro, options and other consumers remain outstanding.
