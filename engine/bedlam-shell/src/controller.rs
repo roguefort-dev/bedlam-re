@@ -271,12 +271,58 @@ mod tests {
             .transactions()
             .weapons()
             .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+        let equipment = *game
+            .host()
+            .preparation()
+            .unwrap()
+            .transactions()
+            .equipment();
+        assert!(
+            equipment
+                .iter()
+                .flatten()
+                .any(|r| (0x2a..=0x2c).contains(&r.name)),
+            "this production journey must exercise equipment transfer"
+        );
         click(&mut game, 590, 455);
         assert_eq!(game.host().scene(), Scene::Mission);
         assert_eq!(
             game.host().mission().unwrap().weapon_loadout(0),
             Some(&expected)
         );
+        let mission = game.host().mission().unwrap();
+        let first = mission
+            .sim()
+            .robots()
+            .iter()
+            .position(|r| r.kind == 0)
+            .unwrap();
+        for row in equipment.iter().flatten() {
+            let robot = &mission.sim().robots()[first];
+            match row.name {
+                0x2a => assert_eq!(robot.shield_charges, i32::from(row.amount as i16)),
+                0x2b => {
+                    assert_eq!(robot.battery, i32::from(row.amount as i16));
+                    assert_eq!(robot.hp, 5000 + 100 * robot.battery);
+                }
+                0x2c => assert_eq!(robot.armor_pool, i32::from(row.amount as i16) * 200),
+                0x2d | 0x2e => assert_eq!(mission.scanner_level(0), Some((row.name - 0x2c) as u8)),
+                _ => panic!("unexpected equipment"),
+            }
+        }
+        for (before, after) in equipment.iter().zip(
+            game.host()
+                .preparation()
+                .unwrap()
+                .transactions()
+                .equipment(),
+        ) {
+            if before.is_some_and(|r| (0x2a..=0x2c).contains(&r.name)) {
+                assert!(after.is_none(), "deployment consumes without a sell/refund");
+            } else {
+                assert_eq!(before, after);
+            }
+        }
         assert!(
             game.host().mission().is_some(),
             "mission is ready when the transition pump returns"

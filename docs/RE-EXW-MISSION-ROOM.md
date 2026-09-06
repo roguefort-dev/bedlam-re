@@ -501,3 +501,14 @@ its consumed rows in robot order, preserve scanner state, and update
 the retained preparation inventory. Merely appending equipment to the
 weapon list or setting every robot's battery would break this boundary.
 The old synthetic battery-in-weapon test does not prove shop transfer.
+
+The production host now deploys Preparation's weapons by robot type and
+its separate equipment rows in robot order. Shield charges, battery/HP and
+damper pool use signed quantities; consumed rows are removed from retained
+shop inventory without refund. Scanner levels are retained by type and
+scanner rows remain owned. Tests cover two same-type robots behind a
+different-type robot, signed damper quantity, scanner retention, and the
+real-corpus controller Auto/DONE route's resulting mission stats and inventory.
+The old battery-in-weapon seam remains for historical synthetic fixtures;
+production equipment uses the separate path. Scanner-driven map rendering,
+return-to-shop lifecycle and post-mission inventory recapture remain open.

@@ -257,6 +257,7 @@ struct Sidebar {
     redraw: i32,
     order_bits: Vec<u16>,
     weapons: Vec<WeaponLoadout>,
+    scanners: [u8; 12],
     /// The blink-cursor selector `_DAT_004dc5d0` [RE-EXW-SIM 7j.6]:
     /// the SELECTED robot's slot + 1 (1..3), 0 = no cursor.
     /// MissionShell zeroes it at entry (0x447871); the select-ack
@@ -282,6 +283,7 @@ impl Sidebar {
             redraw: 0,
             order_bits: vec![0; robots],
             weapons: vec![[(0, 0); 7]; robots],
+            scanners: [0; 12],
             cursor: 0,
         }
     }
@@ -1590,6 +1592,45 @@ impl MissionScene {
         }
     }
 
+    /// Deploy a type's session weapons and separate chassis rows in robot
+    /// order (EXW 0x40cf77..0x40d031). Consumables go to the first matching
+    /// robot and disappear from the shared rows; scanners remain installed.
+    pub(crate) fn deploy_loadout(
+        &mut self,
+        kind: u16,
+        weapons: &WeaponLoadout,
+        equipment: &mut [WeaponGroup; 2],
+    ) {
+        for robot in 0..self.sim.robots().len() {
+            if self.sim.robots()[robot].kind != kind {
+                continue;
+            }
+            self.set_weapon_loadout(robot, weapons);
+            for row in equipment.iter_mut() {
+                let amount = i32::from(row.1 as i16);
+                match row.0 {
+                    0x2a => self.sim.robots_mut()[robot].shield_charges = amount,
+                    0x2b => self.sim.set_battery(robot, amount),
+                    0x2c => self.sim.robots_mut()[robot].armor_pool = amount * 200,
+                    0x2d | 0x2e => {
+                        if let Some(scanner) = self.sidebar.scanners.get_mut(usize::from(kind)) {
+                            *scanner = (row.0 - 0x2c) as u8;
+                        }
+                    }
+                    _ => continue,
+                }
+                if (0x2a..=0x2c).contains(&row.0) {
+                    *row = (0, 0);
+                }
+            }
+        }
+    }
+
+    /// Installed scanner level for a chassis type (EXW 0x46ae94 bank).
+    pub fn scanner_level(&self, kind: u16) -> Option<u8> {
+        self.sidebar.scanners.get(usize::from(kind)).copied()
+    }
+
     /// Apply damage through the SIM — the FUN_0040e230 host seam
     /// [RE-EXW-SIM 7f.5 + 7g, the damage unit]: delegates to
     /// [`MissionSim::apply_damage`] (state-2/alive gates, the
@@ -2156,6 +2197,44 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn deployment_consumes_chassis_once_in_robot_order() {
+        let mut m = staged(&[(3, 1, 1), (3, 2, 2), (3, 3, 3)]);
+        m.sim.robots_mut()[0].kind = 1;
+        m.sim.robots_mut()[1].kind = 0;
+        m.sim.robots_mut()[2].kind = 0;
+        let mut weapons = [(0, 0); 7];
+        weapons[0] = (2, 300);
+        let mut equipment = [(0x2b, 5), (0x2a, 15)];
+        m.deploy_loadout(0, &weapons, &mut equipment);
+        assert_eq!(equipment, [(0, 0); 2]);
+        assert_eq!(m.sim.robots()[0].battery, 0);
+        assert_eq!(m.weapon_loadout(0), Some(&[(0, 0); 7]));
+        for robot in [1, 2] {
+            assert_eq!(m.weapon_loadout(robot), Some(&weapons));
+        }
+        assert_eq!(m.sim.robots()[1].battery, 5);
+        assert_eq!(m.sim.robots()[1].hp, 5500);
+        assert_eq!(m.sim.robots()[1].shield_charges, 15);
+        assert_eq!(m.sim.robots()[2].battery, 0);
+        assert_eq!(m.sim.robots()[2].shield_charges, 0);
+    }
+
+    #[test]
+    fn deployment_retains_scanner_and_sign_extends_damper_quantity() {
+        let mut m = staged(&[(3, 1, 1)]);
+        m.sim.robots_mut()[0].kind = 0;
+        let mut equipment = [(0x2c, 0xffff), (0x2e, 1)];
+        m.deploy_loadout(0, &[(0, 0); 7], &mut equipment);
+        assert_eq!(m.sim.robots()[0].armor_pool, -200);
+        assert_eq!(equipment, [(0, 0), (0x2e, 1)]);
+        assert_eq!(m.scanner_level(0), Some(2));
+        let mut other_type = [(0x2b, 5), (0x2d, 1)];
+        m.deploy_loadout(1, &[(0, 0); 7], &mut other_type);
+        assert_eq!(other_type, [(0x2b, 5), (0x2d, 1)]);
+        assert_eq!(m.scanner_level(1), Some(0));
     }
 
     #[test]

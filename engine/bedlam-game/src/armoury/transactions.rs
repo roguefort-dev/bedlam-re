@@ -39,6 +39,16 @@ impl Transactions {
         }
     }
 
+    /// Deployment consumes the first three chassis kinds without a refund.
+    /// Cleared original row metadata is hidden behind the empty-row model.
+    pub(crate) fn consume_equipment(&mut self, consumed: [bool; 2]) {
+        for (row, consume) in self.equipment.iter_mut().zip(consumed) {
+            if consume {
+                *row = None;
+            }
+        }
+    }
+
     /// EXW Auto transaction pass. The caller supplies secondary bounded
     /// random draws, each strictly below the requested bound.
     pub fn auto(&mut self, mut random: impl FnMut(u32) -> u32) -> ([u8; 7], [u8; 2]) {

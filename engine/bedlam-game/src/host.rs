@@ -810,13 +810,9 @@ impl GameHost {
         mission
             .sim_mut()
             .stage_claim_bank((zone + 1) as u32, mission_no as u32);
-        if let Some(preparation) = &self.preparation {
+        if let Some(preparation) = &mut self.preparation {
             if self.preparation_slot.is_some() {
-                let loadout = preparation
-                    .transactions()
-                    .weapons()
-                    .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
-                mission.set_weapon_loadout(0, &loadout);
+                preparation.deploy(&mut mission);
             }
         }
         self.mission = Some(mission);

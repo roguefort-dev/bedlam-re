@@ -44,6 +44,9 @@ impl ArmouryInput {
     pub fn state(&self) -> &Transactions {
         &self.state
     }
+    pub(crate) fn consume_equipment(&mut self, consumed: [bool; 2]) {
+        self.state.consume_equipment(consumed);
+    }
     pub fn cursor(&self) -> (i32, i32) {
         self.cursor
     }

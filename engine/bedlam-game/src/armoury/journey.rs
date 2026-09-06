@@ -69,6 +69,21 @@ impl Preparation {
     pub fn transactions(&self) -> &Transactions {
         self.shop.state()
     }
+    pub(crate) fn deploy(&mut self, mission: &mut crate::mission::MissionScene) {
+        let weapons = self
+            .transactions()
+            .weapons()
+            .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+        let mut equipment = self
+            .transactions()
+            .equipment()
+            .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+        let before = equipment;
+        mission.deploy_loadout(0, &weapons, &mut equipment);
+        self.shop.consume_equipment(std::array::from_fn(|i| {
+            before[i].0 != 0 && equipment[i].0 == 0
+        }));
+    }
     pub fn cursor(&self) -> (i32, i32) {
         match self.phase {
             Phase::Room => self.room.cursor(),
