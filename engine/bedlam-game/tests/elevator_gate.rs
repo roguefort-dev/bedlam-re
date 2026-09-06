@@ -126,3 +126,44 @@ fn boot_camp_blue_pad_can_be_approached_from_the_platform() {
         sim.robots()[0]
     );
 }
+
+#[test]
+fn boot_camp_green_pad_joins_both_lifts_into_a_crossable_platform() {
+    let Some(mut sim) = boot_camp() else { return };
+    assert_eq!(sim.terrain.pad_slot(3), Some((15, 37, 1)));
+    sim.spawn_robot((14, 37, 2));
+    let width = sim.terrain.size().0 as usize;
+    let cells: Vec<_> = (35..40)
+        .flat_map(|y| (16..20).map(move |x| (x, y * width + x)))
+        .collect();
+    let before: Vec<_> = cells
+        .iter()
+        .map(|&(_, t)| sim.mirror_words()[t * 8..t * 8 + 8].to_vec())
+        .collect();
+    sim.stage_command_record(CommandRecord {
+        marker: 0,
+        id: 0,
+        spot: 0,
+        flags: 1,
+        x: 20 * 32 + 16,
+        y: 37 * 32 + 16,
+        z: 0,
+    });
+    for _ in 0..160 {
+        sim.advance_frame();
+    }
+    for ((x, tile), old) in cells.into_iter().zip(before) {
+        if x < 18 {
+            assert_eq!(sim.elevator_bias()[tile], 0x90);
+            assert_eq!(&sim.mirror_words()[tile * 8 + 1..tile * 8 + 8], &old[..7]);
+        } else {
+            assert_eq!(sim.elevator_bias()[tile], 16);
+            assert_eq!(&sim.mirror_words()[tile * 8..tile * 8 + 7], &old[1..]);
+            assert_eq!(sim.mirror_words()[tile * 8 + 7], 0);
+        }
+    }
+    let r = &sim.robots()[0];
+    assert!(r.alive);
+    assert!(r.pos_x >> 8 >= 19 * 32, "did not cross both lifts: {r:?}");
+    assert_eq!(r.z, 63);
+}
