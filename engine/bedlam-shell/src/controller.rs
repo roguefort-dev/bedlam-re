@@ -343,6 +343,9 @@ mod tests {
             !world.objects().is_empty(),
             "production stages POS instances"
         );
+        assert_eq!(world.rides().len(), 7);
+        assert_eq!(world.rides()[0].marker, (5, 61, 0));
+        assert_eq!(world.rides()[0].destination, (8, 57, 2));
         assert!(
             world.objects().iter().any(|o| o.hp > 0),
             "BDG initializes hit points"

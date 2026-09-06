@@ -159,6 +159,8 @@ pub fn stage_scene(
             let (zone, mission) = host.mission_slot();
             let world = bedlam_game::world::WorldAssets::load(source, zone, mission, &bytes[0])?;
             names.extend(world.names().iter().cloned());
+            let teleport = source.load("TELEPORT.BIN")?;
+            names.push("TELEPORT.BIN".to_string());
             let weapons = source.load("WEAPONS.BIN")?;
             names.push("WEAPONS.BIN".to_string());
             let scanner = bedlam_game::scanner::Scanner::load(source.load("SCANNER.BIN")?)?;
@@ -211,6 +213,9 @@ pub fn stage_scene(
             host.mission_mut()
                 .expect("mission just staged")
                 .stage_weapons_bank(&weapons);
+            host.mission_mut()
+                .expect("mission staged")
+                .stage_teleport_bank(&teleport);
             host.mission_mut()
                 .expect("mission just staged")
                 .stage_scanner(scanner);

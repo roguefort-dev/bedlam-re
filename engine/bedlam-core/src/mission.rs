@@ -857,6 +857,8 @@ pub struct MissionSim {
     pub(crate) debris: Vec<crate::destroy::DebrisRecord>,
     /// The +0x18 seq counter — the debris LRU eviction key.
     pub(crate) debris_seq: i32,
+    /// Active prefix of the guest boarding records at 0x4dcdb8.
+    pub(crate) rides: Vec<crate::ride::Ride>,
     /// Packed guest payload/countdown records at 0x4ea828.
     pub(crate) fence_timers: [(u32, u16); 32],
     pub(crate) network_mode: u8,
@@ -988,6 +990,7 @@ impl MissionSim {
             objective_count: 0,
             debris: vec![crate::destroy::DebrisRecord::default(); crate::destroy::DEBRIS_SLOTS],
             debris_seq: 0,
+            rides: Vec::new(),
             fence_timers: [(0, 0); 32],
             network_mode: 0,
             splashes: vec![crate::destroy::SplashRecord::default(); crate::destroy::SPLASH_SLOTS],
@@ -1890,6 +1893,7 @@ impl MissionSim {
         // none exists on the unarmed paths (the staging-key
         // discipline: S0..S6/S8 stage none, S4/S7 stage the
         // destroy-tail kinds).
+        self.ride_tick();
         self.debris_tick();
         // The mission-epilogue +0x18 fade [7j.10, verified
         // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue
@@ -2047,7 +2051,10 @@ impl MissionSim {
                         let (zone, mission, mode) = self.hint_scope;
                         self.hints.probe(zone, mission, mode, slot);
                     }
-                    self.pad_extraction_trigger(idx);
+                    self.pad_ride_trigger(idx);
+                    if self.robots[idx].state != 2 {
+                        self.pad_extraction_trigger(idx);
+                    }
                 }
             }
             // Order consumption: pending order, state outside {3,4,5},
@@ -2815,6 +2822,75 @@ mod tests {
 
     /// A sim with one robot staged for damage tests (state IDLE, all
     /// vitals at the spawn defaults unless the test overrides them).
+    #[test]
+    fn boot_camp_ride_boards_then_arrives_on_tenth_frame() {
+        let mut sim = MissionSim::new(
+            flat_terrain(100, 100, 1, zero_heights(8)),
+            sintable_like(),
+            1,
+        );
+        sim.zone = 1;
+        sim.spawn_robot((5, 61, 1));
+        sim.robots[0].z = 31;
+        sim.terrain.pad_slots = vec![(99, 99, 0); 16];
+        sim.terrain.pad_slots[0] = (5, 61, 0);
+        sim.stage_rides();
+        assert_eq!(sim.rides().len(), 7);
+        sim.platform_strength = vec![0; 10000];
+        sim.object_grid = vec![0; 10000];
+        sim.mirror_words = vec![0; 80000];
+        sim.mirror_seen = vec![0; 80000];
+        let destination = 57 * 100 + 8;
+        sim.platform_strength[destination] = 199;
+        sim.object_grid[destination] = 0x7d4;
+        sim.mirror_words[destination * 8 + 1] = 0x25d;
+        sim.mirror_words[destination * 8 + 2] = 0x25d;
+        sim.observe_terrain_writes();
+        sim.stage_command_record(CommandRecord {
+            marker: 0,
+            id: 0,
+            spot: 0,
+            flags: 1,
+            x: 6 * 32,
+            y: 61 * 32,
+            z: 0,
+        });
+        sim.advance_frame();
+        assert_eq!(sim.rides()[0].countdown, 9);
+        assert_eq!(sim.robots[0].state, 2);
+        assert_eq!(sim.robots[0].pos_x, (5 << 13) + 0x1000);
+        assert!(sim.robots[0].target.is_none());
+        sim.pad_ride_trigger(0);
+        assert_eq!(sim.rides()[0].countdown, 9, "busy ride cannot restart");
+        for _ in 0..8 {
+            sim.advance_frame();
+        }
+        assert_eq!(sim.robots[0].state, 2);
+        sim.advance_frame();
+        assert_eq!(
+            (sim.robots[0].pos_x, sim.robots[0].pos_y),
+            (8 << 13, 57 << 13)
+        );
+        assert_eq!(sim.robots[0].state, 0);
+        assert!(sim.rides()[0].rider.is_none());
+        assert_eq!(sim.robots[0].probe_z, [sim.robots[0].z as u16; 8]);
+        assert_eq!(sim.platform_strength[destination], 0);
+        assert_eq!(sim.object_grid[destination], 0);
+        assert_eq!(sim.take_terrain_writes(), vec![(destination * 8 + 1, 0, 0)]);
+        assert_eq!(sim.mirror_words[destination * 8 + 2], 0x25d);
+        sim.stage_command_record(CommandRecord {
+            marker: 0,
+            id: 0,
+            spot: 0,
+            flags: 1,
+            x: 9 * 32,
+            y: 57 * 32,
+            z: 0,
+        });
+        sim.advance_frame();
+        assert_ne!(sim.robots[0].pos_x, 8 << 13, "arrival accepts movement");
+    }
+
     #[test]
     fn boot_camp_exit_pad_keeps_mission_and_network_gates() {
         for (mission, mode, expected) in [(1, 0, true), (2, 0, false), (1, 2, false)] {

@@ -10591,3 +10591,14 @@ producer instead of allowing movement to cancel a legitimate extraction
 waiting state. The S6 actual replay digest changes as documented in the
 playtest journal; retain the old expected pin pending separate control
 repair. Audit other zones' union tables before claiming their parity.
+
+## D252 — Connect Boot Camp's actual teleport ride pipeline
+
+World staging initializes the verified seven-record Boot Camp branch;
+walk-pad dispatch arms a free ride, and frame ticks perform the original
+ten-count arrival. Destination platform cleanup remains conditional,
+clearing only the first water layer. Presentation loads TELEPORT.BIN and
+uses the simulation countdown for the marker effect. Both live games
+reach the same raised platform, and native accepts movement afterward.
+This advances the natural mission path without injecting outcomes or
+changing replay pins. Other zone tables and sound remain explicit work.

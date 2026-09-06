@@ -85,6 +85,7 @@ impl WorldAssets {
         // These calls cannot reject the dimensions and file lengths checked above.
         assert!(sim.stage_destroy_family(&self.table, &self.pos, &self.trt, self.zone, self.tier));
         sim.set_mission_no(self.mission);
+        sim.stage_rides();
         assert!(sim.stage_pickup_surface(&self.tot, self.zone));
         sim.stamp_hazard_words();
         sim.observe_terrain_writes();

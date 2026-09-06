@@ -1046,6 +1046,10 @@ impl MissionScene {
         }
     }
 
+    pub fn stage_teleport_bank(&mut self, bytes: &[u8]) {
+        self.view.set_teleport_bank(bytes);
+    }
+
     pub fn stage_weapons_bank(&mut self, bytes: &[u8]) {
         self.view.set_weapons_bank(bytes);
     }
@@ -1419,6 +1423,8 @@ impl MissionScene {
             .iter()
             .map(|&(x, y, z, id)| EffectRowView { x, y, z, id })
             .collect();
+        self.view
+            .enqueue_rides(self.sim.rides(), self.cam_q5.0, self.cam_q5.1);
         let debris = self.debris_views();
         self.view
             .enqueue_effects(&rows, &debris, self.cam_q5.0, self.cam_q5.1);

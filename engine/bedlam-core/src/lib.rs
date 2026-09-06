@@ -47,6 +47,7 @@ pub mod mission;
 pub mod mode;
 pub mod poi;
 pub mod replay;
+pub mod ride;
 pub mod rng;
 pub mod sim;
 pub mod time;

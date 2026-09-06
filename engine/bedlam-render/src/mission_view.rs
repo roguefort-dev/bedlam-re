@@ -279,6 +279,7 @@ pub struct MissionView {
     /// it, layer 0x12c for kinds 3/7/0xA else 0x12e.
     blowup_bank: Vec<u8>,
     weapons_bank: Vec<u8>,
+    teleport_bank: Vec<u8>,
     /// The per-frame entity sprite list (empty until
     /// [`MissionView::enqueue_robots`]).
     sprite_list: SpriteList,
@@ -340,6 +341,7 @@ impl MissionView {
             flags_bank: Vec::new(),
             blowup_bank: Vec::new(),
             weapons_bank: Vec::new(),
+            teleport_bank: Vec::new(),
             sprite_list: SpriteList::new(),
         })
     }
@@ -421,6 +423,40 @@ impl MissionView {
     /// region-1 BLOWUPG.BIN variant is the host's path choice).
     pub fn set_blowup_bank(&mut self, bin: &[u8]) {
         self.blowup_bank = bin.to_vec();
+    }
+
+    pub fn set_teleport_bank(&mut self, bin: &[u8]) {
+        self.teleport_bank = bin.to_vec();
+    }
+
+    /// Boarding marker effect, EXW 0x4065e5..0x4066e3.
+    pub fn enqueue_rides(&mut self, rides: &[bedlam_core::ride::Ride], cam_x: i32, cam_y: i32) {
+        if self.teleport_bank.is_empty() || self.sprite_list.buckets.is_empty() {
+            return;
+        }
+        let col = ((cam_x & 31) - (cam_y & 31) + 32) & 63;
+        let row = ((cam_x & 31) + (cam_y & 31)) >> 1;
+        for ride in rides.iter().filter(|r| r.countdown != 0) {
+            let (x, y, z) = ride.marker;
+            let (u, v) = ((x << 5) + 16 - cam_x, (y << 5) + 16 - cam_y);
+            let sx = col + u - v + 0x10d;
+            let sy = row + ((u + v) >> 1) + 0xac - (z << 5);
+            if !(0..0x23f).contains(&sx) || !(0..0x1fd).contains(&sy) {
+                continue;
+            }
+            self.sprite_list.enqueue(
+                sx,
+                sy,
+                NodeBank::Teleport,
+                (x << 5) + 16,
+                (y << 5) + 16,
+                cam_x >> 5,
+                cam_y >> 5,
+                (11i32 - i32::from(ride.countdown)).clamp(0, 9) as u16,
+                z,
+                0x12e,
+            );
+        }
     }
 
     pub fn set_weapons_bank(&mut self, bin: &[u8]) {
@@ -736,6 +772,7 @@ impl MissionView {
         let flags_bank = &self.flags_bank;
         let blowup_bank = &self.blowup_bank;
         let weapons_bank = &self.weapons_bank;
+        let teleport_bank = &self.teleport_bank;
         let (w, h) = (self.width, self.height);
         let cap = DRAW_CAP;
         for ci in 0..self.cache.len() {
@@ -820,6 +857,7 @@ impl MissionView {
                         NodeBank::Flags => flush_node(buf, node, flags_bank),
                         NodeBank::Blowup => flush_node(buf, node, blowup_bank),
                         NodeBank::Weapons => flush_node(buf, node, weapons_bank),
+                        NodeBank::Teleport => flush_node(buf, node, teleport_bank),
                         NodeBank::Shield | NodeBank::Variant => {}
                     }
                 }
@@ -927,6 +965,7 @@ pub enum NodeBank {
     Blowup,
     /// GAMEGFX/WEAPONS.BIN at 0x4eddbc.
     Weapons,
+    Teleport,
 }
 
 /// The flush-facing pickup effect row [RE-EXW-SIM 7j.1]: the 16-B
@@ -1225,6 +1264,32 @@ mod entity_tests {
         let bin = [0u8; 0];
         let lnk = [0u8; 0x4000];
         MissionView::from_mission_bytes(&tot, &dat, &bin, &lnk).unwrap()
+    }
+
+    #[test]
+    fn ride_marker_draw_uses_countdown_without_advancing_it() {
+        let mut view = tiny_view();
+        view.set_teleport_bank(&synth_bank(0, 0, &[1]));
+        let mut ride = bedlam_core::ride::Ride {
+            pad_slot: 0,
+            marker: (3, 1, 1),
+            destination: (8, 57, 2),
+            countdown: 9,
+            rider: Some(0),
+        };
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        view.enqueue_rides(&[ride], 0, 0);
+        let nodes = view.sprite_list_for_test().bucket(12, 10, 1);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].bank, NodeBank::Teleport);
+        assert_eq!(nodes[0].frame, 2);
+        assert_eq!(nodes[0].mode, 0x12e);
+        assert_eq!(nodes[0].dest, 365 + 220 * VIEW_STRIDE as i32);
+        assert_eq!(ride.countdown, 9);
+        ride.countdown = 0;
+        view.enqueue_robots(&[], 0, 0, 0, 0);
+        view.enqueue_rides(&[ride], 0, 0);
+        assert_eq!(view.sprite_nodes(), 0);
     }
 
     #[test]
