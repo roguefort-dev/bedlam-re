@@ -42,3 +42,13 @@ at frame 3. Screen x is col-adjust + dx-dy + 0x110; y is row-adjust
 + shake + (dx+dy)/2 + 0x110 - (z>>8), with arithmetic shifts.
 Clip x to 0..0x23f exclusive and y to 0..0x23e exclusive. Enqueue
 world x/y in Q5, layer z>>13, WEAPONS bank, mode 0x12c.
+
+Impact order cross-check (2026-09-06): the floor-hit path calls the
+object and structure resolvers at 0x410c8d/0x410ca2, then calls
+FUN_004124a4 at 0x410cad, then clears the type word at 0x410cb2.
+The effect routine dispatches on that still-live type. Native tick_shell
+had cleared type before calling weapon_disburser, suppressing the
+type-5 to kind-3 impact entirely. Preserve the existing stored position
+(one movement step behind contact) for the effect, as the original does.
+Core debris already ticks in MissionSim::advance_frame; its render view
+must read table[anim] without ticking a second time in presentation.
