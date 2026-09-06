@@ -733,3 +733,36 @@ are raw 5x5 markers with zero hotspot, 10/12 are raw 3x3 with
 hotspot (1,1), 14..16 are empty, and 17/18 are RLE 132x132.
 The specialized raw marker blit therefore remains separate from the
 normal screen sprite drawing used for entries 0/17/18.
+
+### Radar marker producer audit (2026-09-06)
+
+[verified, EXW disassembly] The map pass at 0x41eff0..0x41f210
+visits rows then columns. Bounds are `(center >> 1) +/- 32`, with
+lower bounds clamped to zero and upper bounds clamped to map size
+minus one. Both upper bounds are exclusive (0x41f09d, 0x41f0eb).
+Each tile projects to `(2*x+1, 2*y+1)` before subtracting the radar
+center and adding 64. A nonzero strength word from 0x465daa plus
+scanner level >=1 selects icon 7; otherwise a nonzero claim byte
+through pointer 0x46af58 selects icon 13. These paths are exclusive:
+the icon-7 blit jumps directly to the next column at 0x41f18c.
+EDX still holds the tile index on both branches to 0x41f191;
+the intervening coordinate arithmetic is not executed on that path.
+
+[verified, EXW disassembly] Robots are drawn after the object, pad,
+arrival and linked-objective passes, in record order
+(0x41f6de..0x41f7fc). Count is 0x46ccbc, stride 0xa8, and the
+nonzero dword at 0x4c6a60 gates each record. Coordinates at
+0x4c69e4/0x4c69e8 project as `((position >> 8) + 16) >> 4`.
+Either absolute center delta >=128 rejects the marker. Indices in
+the half-open interval `[0x46cbd4, 0x46cbd4 + 0x46cbd8)` use
+icon 1; every other active robot uses icon 2. This is squad membership,
+not a test of the currently selected robot or chassis type.
+
+[verified, EXW disassembly] The pad-marker pass at 0x41f376 uses
+an eight-byte runtime record bank at 0x4e44f8 with a nonzero first
+word gate, followed by signed x/y words. It must not be populated
+by blindly drawing every six-byte source PAD record: those include
+tutorial trigger positions. The arrival pass and linked-objective
+pass also require their runtime producers. Full producer coverage
+and a new live radar comparison remain open; the standalone scanner
+renderer in 009df57 does not yet appear in production missions.
