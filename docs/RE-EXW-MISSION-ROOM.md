@@ -570,3 +570,34 @@ is therefore the production movement receiver, not arm_order_at_robot
 and not the flag-2 firing triple. Its existing state/alive gates must
 remain in force. Camera tracking and the four-anchor height average
 still need to accompany the production viewport input integration.
+
+## Selected-robot camera follow (2026-09-06)
+
+[verified, EXW objdump] load_markers tail 0x40d146..0x40d18d seeds
+all four 12-byte camera-history records (0x4c71c4..0x4c71f3) with
+the player-base robot's (pos_x>>8, pos_y>>8, z). The offset increments
+BEFORE each store: displacement 0x4c71b8 plus 0x0c is record zero.
+Mission entry resets the rotating index 0x46ccdc to zero at 0x44789b.
+
+For ordinary selected-robot rendering, 0x4039df..0x403a2e writes
+(player_base + selected_slot)'s current triple to history[index].
+0x403a48..0x403a5c increments index modulo four. The subsequent
+0x403a98..0x403b39 sums all four triples and divides each by four
+with signed truncation toward zero. Crucially:
+
+```text
+camera_z = sum(history.z) / 4
+camera_x = sum(history.x) / 4 - camera_z
+camera_y = sum(history.y) / 4 - camera_z
+```
+
+These x/y values drive terrain tile origin and fine crop, as well as
+the input projection. The current fixed-camera approximation uses
+raw robot x/y and therefore also misses the height subtraction.
+Movement must use the retained averaged camera_z rather than fresh
+selected robot z, especially during selection changes or height steps.
+Update history once per rendered mission frame, matching the renderer
+producer; repeated simulation subticks must not accelerate smoothing.
+Overrides at 0x403974..0x4039dd (MP death hold and scripted chase cut)
+remain distinct consumers for later work, not excuses to leave ordinary
+selected-robot following fixed.
