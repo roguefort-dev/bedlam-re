@@ -70,6 +70,8 @@ impl Preparation {
         self.shop.state()
     }
     pub(crate) fn deploy(&mut self, mission: &mut crate::mission::MissionScene) {
+        // Original shop and mission HUD share money word 0x46ae70.
+        mission.set_campaign(mission.campaign().0, self.transactions().balance() as i32);
         let weapons = self
             .transactions()
             .weapons()

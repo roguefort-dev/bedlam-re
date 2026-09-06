@@ -271,6 +271,8 @@ mod tests {
             .transactions()
             .weapons()
             .map(|row| row.map_or((0, 0), |r| (r.name, r.amount)));
+        let expected_cash = game.host().preparation().unwrap().transactions().balance();
+        assert_ne!(expected_cash, 4000, "shop must spend before deployment");
         let equipment = *game
             .host()
             .preparation()
@@ -350,6 +352,11 @@ mod tests {
                 Scene::Shop,
                 Scene::Mission
             ]
+        );
+        assert_eq!(
+            game.host().mission().unwrap().campaign().1,
+            expected_cash as i32,
+            "mission displays the remaining shop balance"
         );
         let before = game.host().mission().unwrap().sim().robots()[0].q5();
         let (cx, cy) = game.host().mission().unwrap().cursor();
