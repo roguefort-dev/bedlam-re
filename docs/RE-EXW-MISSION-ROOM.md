@@ -627,3 +627,17 @@ A text-only overlay with arbitrary wrapping would not close this task.
 The welcome-strip coordinates provide a concrete production movement
 regression destination once the trigger and display consumer are wired.
 Manifest verified before and after these read-only corpus probes.
+
+[verified, EXW] Border construction at 0x424e9f uses five-pixel column
+spacing and seven-pixel row spacing. Top/bottom middle pieces use sprite
+0, vertical sides sprite 1, and corners sprites 2..5. Calls to 0x44067e
+receive stagger delays: horizontal columns use abs(column-floor(width/2))/4;
+side rows use (floor(width/2)+min(row,height-3-row))/4 for the
+height-2 interior rows. The draw ticker at 0x425065..0x4250e5 scans
+300 twelve-byte records, skips inactive records, decrements a nonzero
+delay without drawing, otherwise draws and increments the frame until 7.
+Text registration at 0x43e2eb scans sixteen 0x4a-byte records and stores
+x/y, a third word and a NUL-terminated string at offset 10. Full text
+animation and sprite loader interpretation remain to be decoded before
+implementing the display consumer. These are disassembly findings, not
+a fresh visual comparison.

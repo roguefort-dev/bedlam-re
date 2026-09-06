@@ -34,6 +34,7 @@ pub mod movie;
 pub mod movies;
 pub mod music;
 pub mod save;
+pub mod tutorial;
 
 pub use boot::{BootAttract, BootPhase};
 pub use brief::{BriefIntro, BriefPhase};
