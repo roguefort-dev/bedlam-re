@@ -1,5 +1,15 @@
 # STATE - project state snapshot (rewrite the head when the phase moves)
 
+  - 2026-09-07 live D261: full STANDARD native Boot Camp run now
+    destroys beacon, plays zone movie once, returns to Zone B room and
+    launches B-2 with Plasma420/score3070/cash3000. PID2650028 paused at
+    B-2 runway spawn (975,2319,z31), hp5000; log
+    /tmp/bedlam-d261-standard.log. Original PID2400491 also paused at B-2
+    runway, Plasma420/score10220/cash3250. Score difference is not proof
+    of a completion bonus; random gold awards remain unproven. Original
+    radar has targets absent from native. Dropship art, NME staging and
+    other-zone outcomes remain open. These locations supersede older ones.
+
   - 2026-09-07 D261: Boot Camp mission-owned extraction now recaptures
     inventory/cash/score, skips the training debrief, plays ZONEDONE once
     and returns through loading to the Zone B room. Controller boundary
