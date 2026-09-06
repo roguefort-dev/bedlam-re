@@ -770,3 +770,31 @@ icon 12. The arrival pass and linked-objective
 pass also require their runtime producers. Full producer coverage
 and a new live radar comparison remain open; the standalone scanner
 renderer in 009df57 does not yet appear in production missions.
+
+### Destructible world integration prerequisite (2026-09-06)
+
+[verified, EXW disassembly] MissionShell calls 0x41a4f8 at
+0x447b76 (object type/instance initialization), 0x4254e1 at
+0x447b85 (claims), 0x407e11 at 0x447b8a (tile mirror), then
+0x422f18 at 0x447b8f (hazard stamps). Terrain structures are
+initialized through 0x416458 at 0x447b5d; its call at 0x416487
+enters 0x4170a6. These are ordinary mission-load operations, not
+debug-only scenario features.
+
+[verified, current Rust integration] The canonical harness's destroy
+and pickup arms already compose ObjectTypeTable::from_bdg_bytes,
+stage_destroy_family, set_mission_no, stage_pickup_surface and
+stamp_hazard_words. Production currently does not. Their order
+matters: stage_destroy_family clears the mirror and footprint banks;
+pickup-surface staging fills the complete TOT volume; hazard stamping
+can overwrite footprint words. TRT's tier uses the derived current
+slot value, `clamp(5*(zone_set-2)+mission-1, 1, 26)`, anchored to
+EXW 0x41c534/0x41c53e/0x41c550 in the existing canonical spec.
+
+[integration constraint] MissionView owns mutable LNK-resolved words
+while MissionSim owns destructible/pickup mirror words. Blindly
+copying the entire core mirror every frame would reset animation;
+never copying changes would preserve destroyed art. A production
+connection needs an explicit shared-state or write-propagation seam,
+with a regression proving both destruction visibility and continuing
+animation. No new bank loading or synchronization is claimed here.
