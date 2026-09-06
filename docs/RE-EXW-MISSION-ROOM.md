@@ -512,3 +512,34 @@ real-corpus controller Auto/DONE route's resulting mission stats and inventory.
 The old battery-in-weapon seam remains for historical synthetic fixtures;
 production equipment uses the separate path. Scanner-driven map rendering,
 return-to-shop lifecycle and post-mission inventory recapture remain open.
+
+## Ground-input handoff audit (2026-09-06)
+
+[verified, EXW objdump 0x410693..0x410809] The ground dispatcher
+uses signed IDIV (truncate toward zero), then an arithmetic right shift:
+
+```text
+x_view = ((mouse_x - 240) * zoom) / 480
+y_view = ((camera_z * 480 / zoom + mouse_y - 240) * zoom) / 480 + 21
+world_x = camera_x + (x_view >> 1) + y_view
+world_y = camera_y - (x_view >> 1) + y_view
+world_z = 0
+```
+
+The order of divisions in y matters away from zoom 480. The old §7j.31
+prose omitted the half-x mix in the final pair and flattened the nested
+y expression; the instruction sequence above is authoritative. The
+0x4edd54 camera-z cell is the signed average of the four selected-anchor
+heights, computed in the renderer at 0x403a98..0x403b01. The x/y camera
+anchors are averaged in the same block. Default zoom is 480 (0x447883).
+
+[implementation finding] MissionScene currently routes viewport clicks
+only through click_robot, an old approximate spread-order seam. Its own
+32-pixel robot-box test is not the original single-player picker: original
+SP writes no robot hot rectangles (0x403c87 network gate, §7j.31). Camera
+is fixed on activation, another mismatch with the moving DOSBox reference.
+The core already has CommandRecord processing in weapon.rs; its flag 1
+sets a robot movement target, whereas flag 2 stages an order/fire triple.
+Before wiring this conversion, trace the mouse-button/command-builder
+selection so ordinary movement cannot accidentally become a firing order.
+Existing robot-click synthetic controls cannot certify that production path.

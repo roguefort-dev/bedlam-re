@@ -5106,10 +5106,11 @@ in .text touches the array.
   ≠ −1 (fresh mouse), [0x4ede14] ≠ 0, [0x4edba0] == 0, mx < 0x1E0
   (left of the sidebar).
 - Calls the picker; re-transforms the mouse to view space
-  ((mx−0xF0)·[0x4ede54]/0x1E0; y via [0x4edd54]·15·32/[0x4ede54] +
-  (my−0xF0)·[0x4ede54]/0x1E0 + 0x15).
+  ((mx−0xF0)·zoom/480; y = ((camera_z·480/zoom + my−240)·zoom)/480 + 21,
+  signed truncating divisions in this order).
 - picked == 0 → GROUND order: ORDER TARGET 0x4dd484/88 =
-  camera + transformed mouse, z 0x4dd48c = 0, type cell
+  (camera_x + (view_x >> 1) + view_y, camera_y − (view_x >> 1) + view_y),
+  arithmetic shift; z 0x4dd48c = 0, type cell
   [0x46cc00] := 0.
 - picked & 0x2000 (bit 13; picker TRT-scan only): id &= 0x1FFF;
   reads TRT rec(id−1) through the −0xC-bias base 0x4cccec
