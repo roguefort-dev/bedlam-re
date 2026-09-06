@@ -726,3 +726,10 @@ markers have a separate path at 0x41f191. Remaining marker-loop
 ordering, icon gates and producer availability still need to be
 connected before radar parity can be claimed. No runtime radar code
 has been added by this specification pass.
+
+[verified, corpus header probe] SCANNER.BIN has nineteen images. Entry
+0 is RLE 124x124 with stored y/x hotspot (4,2); entries 1..9,11,13
+are raw 5x5 markers with zero hotspot, 10/12 are raw 3x3 with
+hotspot (1,1), 14..16 are empty, and 17/18 are RLE 132x132.
+The specialized raw marker blit therefore remains separate from the
+normal screen sprite drawing used for entries 0/17/18.
