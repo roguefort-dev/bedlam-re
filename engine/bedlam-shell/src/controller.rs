@@ -355,7 +355,7 @@ mod tests {
         let (cx, cy) = game.host().mission().unwrap().cursor();
         game.pump(
             InputFrame {
-                mouse_dx: (240 - cx) as i16,
+                mouse_dx: (336 - cx) as i16,
                 mouse_dy: (185 - cy) as i16,
                 mouse_buttons: 1,
                 ..Default::default()
@@ -372,6 +372,38 @@ mod tests {
             "ordinary ground input moves the deployed player: {:?}",
             game.host().mission().unwrap().sim().robots()[0]
         );
+        for _ in 0..200 {
+            if game
+                .host()
+                .mission()
+                .unwrap()
+                .sim()
+                .hints()
+                .active()
+                .is_some()
+            {
+                break;
+            }
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        assert_eq!(
+            game.host().mission().unwrap().sim().hints().active(),
+            Some(0),
+            "production movement reaches the welcome strip: {:?}",
+            game.host().mission().unwrap().sim().robots()[0]
+        );
+        for _ in 0..10 {
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        game.pump(
+            InputFrame {
+                mouse_buttons: 1,
+                ..Default::default()
+            }
+            .into(),
+        )
+        .unwrap();
+        assert_eq!(game.host().mission().unwrap().sim().hints().active(), None);
         // Arbitrary mouse edges never stand in for MissionComplete.
         for _ in 0..3 {
             game.pump(InputFrame::default().into()).unwrap();

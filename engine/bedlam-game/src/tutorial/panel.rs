@@ -6,6 +6,7 @@ const COLORS: [u8; 8] = [103, 98, 146, 164, 36, 66, 255, 77];
 const W: usize = 640;
 const H: usize = 480;
 
+#[derive(Debug)]
 pub struct HintPanel {
     font: SpriteBank,
     coverage: Vec<Vec<bool>>,

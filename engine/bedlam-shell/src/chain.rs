@@ -126,7 +126,7 @@ pub fn stage_scene(
     let cutscene = host.cutscene_name().to_string();
     let briefing = host.briefing_name();
     let mission = host.mission_asset_names();
-    let names = scene_assets(scene, config, &cutscene, briefing.as_deref(), &mission);
+    let mut names = scene_assets(scene, config, &cutscene, briefing.as_deref(), &mission);
     if names.is_empty() {
         return Ok(names);
     }
@@ -156,6 +156,25 @@ pub fn stage_scene(
         // player: no robots override, no staged markers (the
         // 0x46cbe0 network seam).
         Scene::Mission => {
+            // Load the optional panel before replacing the host mission so a
+            // missing language/font/dark table leaves staging retryable.
+            let hints = if host.mission_slot() == (0, 1) {
+                let panel = bedlam_game::tutorial::HintPanel::load(source, config.language)?;
+                let dark: [u8; 256] = source.load("DARKPAL.PAL")?.try_into().map_err(|_| {
+                    GameError::BadMissionAsset {
+                        what: "DARKPAL.PAL",
+                        reason: "expected 256-byte hint dark table",
+                    }
+                })?;
+                names.extend([
+                    "TINYFONT.BIN".to_string(),
+                    config.language.to_string(),
+                    "DARKPAL.PAL".to_string(),
+                ]);
+                Some((panel, dark))
+            } else {
+                None
+            };
             let maptran: Vec<&[u8]> = bytes[13..21].iter().map(|v| v.as_slice()).collect();
             host.load_mission(
                 &bytes[0],
@@ -178,7 +197,12 @@ pub fn stage_scene(
                 &bytes[22],
                 None,
                 &[],
-            )?
+            )?;
+            if let Some((panel, dark)) = hints {
+                host.mission_mut()
+                    .expect("mission just staged")
+                    .stage_hints(panel, dark, 1, 0);
+            }
         }
         _ => unreachable!("scene_assets returned empty for this scene"),
     }

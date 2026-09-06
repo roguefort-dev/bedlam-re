@@ -683,3 +683,8 @@ and after the PE string/table probe.
 therefore accepts the active mission darkening table from its caller.
 The implementation uses age one for the first draw and reconstructs
 the per-record delay/color phase without mutating asset banks.
+
+[verified, EXW + PE string probe] Mission dark-table loader
+0x41e049..0x41e054 reads the path at 0x45896e,
+`GAMEGFX\\DARKPAL.PAL`, into 0x4edc00. Production hint staging uses
+that 256-byte file rather than the room's SELDARK or shop's DARKPALS.

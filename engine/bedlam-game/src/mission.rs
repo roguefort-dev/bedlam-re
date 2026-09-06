@@ -690,6 +690,7 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
 /// LIFECYCLE, the D31/D37 movie pattern).
 #[derive(Debug)]
 pub struct MissionScene {
+    hint_panel: Option<(crate::tutorial::HintPanel, [u8; 256])>,
     sim: MissionSim,
     view: MissionView,
     zone: i32,
@@ -885,6 +886,7 @@ impl MissionScene {
         let sidebar = Sidebar::new(sim.robots().len());
         let (score, money) = FRESH_CAMPAIGN;
         Ok(MissionScene {
+            hint_panel: None,
             sim,
             view,
             zone,
@@ -999,6 +1001,32 @@ impl MissionScene {
     /// producer at `x >= 0x1E0` [sec 6c], the robot arm below it
     /// [sec 6.4] — then `advance_frame` (the six unit-manager phases
     /// + the order-window tick). Inert until [`MissionScene::activate`].
+    pub fn stage_hints(
+        &mut self,
+        panel: crate::tutorial::HintPanel,
+        dark: [u8; 256],
+        mission: u8,
+        network_mode: u8,
+    ) {
+        self.sim
+            .configure_hints((self.zone + 1) as u8, mission, network_mode);
+        self.hint_panel = Some((panel, dark));
+    }
+
+    fn draw_hint(&mut self) {
+        if let Some(id) = self.sim.hints().active() {
+            self.sim.tick_hints();
+            if let Some((panel, dark)) = &self.hint_panel {
+                panel.draw(
+                    &mut self.plane,
+                    id,
+                    65_000 - self.sim.hints().remaining(),
+                    dark,
+                );
+            }
+        }
+    }
+
     pub fn tick(&mut self, input: &InputFrame) {
         if !self.active {
             return;
@@ -1286,6 +1314,7 @@ impl MissionScene {
             // passes are skipped, the churn is not.
             self.dither.churn(&mut self.rand_b);
             self.render_count += 1;
+            self.draw_hint();
             return Some(&self.plane);
         }
         // The MissionShell frame epilogue order [7j.3/7j.7, calls
@@ -1358,6 +1387,7 @@ impl MissionScene {
         // bytes re-randomize AFTER the render, every frame.
         self.dither.churn(&mut self.rand_b);
         self.render_count += 1;
+        self.draw_hint();
         Some(&self.plane)
     }
 
