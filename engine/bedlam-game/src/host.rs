@@ -3049,7 +3049,7 @@ mod tests {
         host.pump_frame(4, &InputFrame::default());
         let mission = host.mission().expect("staged");
         assert!(mission.is_active());
-        assert_eq!(mission.camera(), (47, 47));
+        assert_eq!(mission.camera(), (16, 16));
         // The entry pump renders but does not tick; the next pump
         // does (one advance_frame per executed tick).
         assert_eq!(mission.sim().frame(), 0);

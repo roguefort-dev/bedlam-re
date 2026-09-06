@@ -27,7 +27,7 @@ use bedlam_core::frame::{
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
 use bedlam_core::mission::{
-    AngleTable, DamageOutcome, MissionSim, PickupOutcome, Robot, Terrain, STATE_MOVING,
+    AngleTable, DamageOutcome, MissionSim, PickupOutcome, Terrain, STATE_MOVING,
 };
 use bedlam_core::rng::Pcg32;
 use bedlam_core::weapon::CommandRecord;
@@ -684,7 +684,7 @@ pub fn mission_asset_names(zone: i32, mission: i32) -> Vec<String> {
     .to_vec()
 }
 
-/// The staged mission: sim + viewport + the fixed camera, plus the
+/// The staged mission: sim + viewport + the following camera, plus the
 /// presentation buffers. INERT until [`MissionScene::activate`] (the
 /// host calls it on the Mission-scene entry; DESIGN-GAME sec 11
 /// LIFECYCLE, the D31/D37 movie pattern).
@@ -694,9 +694,12 @@ pub struct MissionScene {
     view: MissionView,
     zone: i32,
     /// Q5 camera pair (the EXW `_DAT_004edde4/8` scroll anchor) —
-    /// [design] FIXED at the first spawned robot's Q5 position for
-    /// this slice (scroll input is out of scope).
+    /// Four rendered-frame anchors, averaged with height subtracted from
+    /// both axes (EXW 0x4039df..0x403b39).
     cam_q5: (i32, i32),
+    cam_height: i32,
+    cam_history: [(i32, i32, i32); 4],
+    cam_next: usize,
     /// Pointer in 640x480 screen space, clamped on every integrate
     /// [the menu D42 pattern; EXW clamps in the ISR]. Pinned to the
     /// twin-verified model [D160/RE-EXD-MAP §5h, the P2e package]:
@@ -886,6 +889,9 @@ impl MissionScene {
             view,
             zone,
             cam_q5: (0, 0),
+            cam_height: 0,
+            cam_history: [(0, 0, 0); 4],
+            cam_next: 0,
             cursor: (CURSOR_BOOT_X, CURSOR_BOOT_Y),
             prev_buttons: 0,
             rand_b: Pcg32::new(0x1E240, 0),
@@ -911,8 +917,7 @@ impl MissionScene {
         })
     }
 
-    /// Fix the camera at the first robot's Q5 position [DESIGN-GAME
-    /// sec 11 LIFECYCLE; the EXW cam pair points at the spawn] and
+    /// Seed the camera history from the first robot (EXW 0x40d146) and
     /// arm the initial sidebar draw (MissionShell 0x447C74 sets the
     /// redraw countdown 2 after the mission-load calls [6c.8e], so
     /// the rows draw on the entry frames). Idempotent.
@@ -920,7 +925,14 @@ impl MissionScene {
         if self.active {
             return;
         }
-        self.cam_q5 = self.sim.robots().first().map(Robot::q5).unwrap_or((0, 0));
+        let anchor = self.sim.robots().first().map_or((0, 0, 0), |r| {
+            let (x, y) = r.q5();
+            (x, y, r.z)
+        });
+        self.cam_history.fill(anchor);
+        self.cam_next = 0;
+        self.cam_height = anchor.2;
+        self.cam_q5 = (anchor.0 - anchor.2, anchor.1 - anchor.2);
         self.sidebar.redraw = 2;
         // The score-strip countdown arms alongside the redraw one
         // (MissionShell 0x447C74/0x447C7A set BOTH `0x46ccec` and
@@ -943,7 +955,7 @@ impl MissionScene {
         self.active
     }
 
-    /// The fixed Q5 camera.
+    /// Current height-adjusted Q5 terrain camera.
     pub fn camera(&self) -> (i32, i32) {
         self.cam_q5
     }
@@ -1130,12 +1142,12 @@ impl MissionScene {
     /// projection must not be used here (its vertical offset differs).
     fn move_to_ground(&mut self) {
         let selected = self.sidebar.selected;
-        let Some(robot) = self.sim.robots().get(selected) else {
+        if self.sim.robots().get(selected).is_none() {
             return;
-        };
+        }
         let (width, height) = self.sim.terrain.size();
         let vx = self.cursor.0 - 240;
-        let vy = self.cursor.1 - 240 + robot.z - 8;
+        let vy = self.cursor.1 - 240 + self.cam_height - 8;
         let x = (self.cam_q5.0 + (vx >> 1) + vy).clamp(0, width * 32);
         let y = (self.cam_q5.1 - (vx >> 1) + vy).clamp(0, height * 32);
         self.sim.stage_command_record(CommandRecord {
@@ -1147,6 +1159,22 @@ impl MissionScene {
             y: y as i16,
             z: 0,
         });
+    }
+
+    /// Renderer-owned four-sample selected-anchor history, EXW
+    /// 0x4039df..0x403b39. Simulation subticks do not advance this ring.
+    fn follow_camera(&mut self) {
+        if let Some(robot) = self.sim.robots().get(self.sidebar.selected) {
+            let (x, y) = robot.q5();
+            self.cam_history[self.cam_next] = (x, y, robot.z);
+            self.cam_next = (self.cam_next + 1) % 4;
+            let (x, y, z) = self
+                .cam_history
+                .iter()
+                .fold((0, 0, 0), |sum, p| (sum.0 + p.0, sum.1 + p.1, sum.2 + p.2));
+            self.cam_height = z / 4;
+            self.cam_q5 = (x / 4 - self.cam_height, y / 4 - self.cam_height);
+        }
     }
 
     /// One present [DESIGN-GAME sec 11; MISSIONVIEW secs 5d/7]:
@@ -1242,6 +1270,7 @@ impl MissionScene {
         // blit it at canonical (0, 0) of the 640x480 plane (the
         // sidebar half x ≥ 480 never overlaps it — the pixel output
         // is identical to the old draw order).
+        self.follow_camera();
         let robots: Vec<_> = self.sim.robots().iter().map(RobotView::from_sim).collect();
         self.view
             .enqueue_robots(&robots, self.cam_q5.0, self.cam_q5.1, 0, self.sim.frame());
@@ -2126,7 +2155,7 @@ mod tests {
         assert!(m.is_active());
         // Camera at robot 0 Q5: tile (1,1) + 0xF00 center -> Q5
         // (1*32+15, 1*32+15) = (47, 47).
-        assert_eq!(m.camera(), (47, 47));
+        assert_eq!(m.camera(), (16, 16));
     }
 
     #[test]
@@ -2226,6 +2255,27 @@ mod tests {
     }
 
     #[test]
+    fn camera_tracks_four_rendered_anchors_and_subtracts_averaged_height() {
+        let mut m = staged(&[(3, 1, 1)]);
+        m.activate();
+        assert_eq!(m.camera(), (16, 16));
+        m.sim.robots_mut()[0].pos_x = 79 << 8;
+        m.sim.robots_mut()[0].pos_y = 111 << 8;
+        m.sim.robots_mut()[0].z = 39;
+        let sim_hash = m.sim.state_hash();
+        for expected in [(22, 30), (28, 44), (34, 58), (40, 72)] {
+            m.present().unwrap();
+            assert_eq!(m.camera(), expected);
+            assert_eq!(
+                m.sim.state_hash(),
+                sim_hash,
+                "camera rendering never moves robots"
+            );
+        }
+        assert_eq!(m.cam_height, 39);
+    }
+
+    #[test]
     fn ground_click_assigns_movement_without_spread_order_or_teleport() {
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
@@ -2233,11 +2283,11 @@ mod tests {
         let (cx, cy) = m.cursor();
         m.tick(&InputFrame {
             mouse_dx: (240 - cx) as i16,
-            mouse_dy: (249 - cy) as i16,
+            mouse_dy: (280 - cy) as i16,
             mouse_buttons: 1,
             ..Default::default()
         });
-        // Camera (47,47), height31: vy=9+31-8=32 -> (79,79).
+        // Height-adjusted camera (16,16), vy=40+31-8=63 -> (79,79).
         assert_eq!(m.sim.robots()[0].target, Some((79, 79)));
         assert!(m.sim.order().is_none());
         assert!(!m.sim.command_order_active(), "left movement never fires");
