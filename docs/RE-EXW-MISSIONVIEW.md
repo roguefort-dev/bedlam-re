@@ -798,3 +798,43 @@ never copying changes would preserve destroyed art. A production
 connection needs an explicit shared-state or write-propagation seam,
 with a regression proving both destruction visibility and continuing
 animation. No new bank loading or synchronization is claimed here.
+
+### B-2 live radar and objective-group staging (2026-09-07)
+
+[observed] After D262, a fresh STANDARD native window run completed
+Boot Camp and entered B-2 through the room and armoury. At runway
+spawn (975,2319,31), the blue fence bars now match the original's
+layout. White markers over the north-side targets remain absent.
+Original DOSBox PID2400491 stays paused at the same spawn; rebuilt
+native PID2688217 is paused at frame120, HP5000, ammo420, cash3000,
+score3070. No game-state injection was used in this live run.
+
+[verified, EXW] Objective initialization 0x44898c clears six 0x20-byte
+records at 0x4eaaf0 and six completion dwords at 0x4eb8b8. For zones
+above one, table 0x4557f8 is indexed by 5*(zone-2)+mission
+(0x4489bd..d2). B-2 pointer entry at 0x455800 is 0x454f80.
+The dword stream ends at -1, advances group at -2, otherwise appends
+a POS slot and increments both total/remaining words. Code 5000
+consumes two following dwords into the group's quota and pad fields
+(0x448a2e..69); B-2 contains no such entries.
+
+[verified, EXW bytes and read-only POS] B-2 stream 0x454f80..0x454fd8:
+
+| Group | POS slots | Corpus origins / types |
+| --- | --- | --- |
+| 0 | 778 | (4,89,1), type73 |
+| 1 | 408,407,406,409,421 | x45,41,37,33,29; y66,z1; type68 |
+| 2 | 963,962,503,594,779 | x60,64,68,72,76; y66,z1; type68 |
+| 3 | 405 | (93,93,2), type93 |
+| 4 | 609,596,598 | x26,30,34; y9,z1; type91 |
+| 5 | 774,775 | x12; y17,13,z1; type95 |
+
+[verified, EXW] Radar objective pass 0x41f527 skips zone1, then walks
+six groups. Ordinary object slots not equal to -1 are projected at
+the BDG footprint center: radar x=2*origin_x+width, y=2*origin_y+height
+(0x41f64e..69d). Group zero uses icon5; other groups use icon6
+(0x41f6be..dc). The quota/pad branch uses pad coordinates with +15
+before >>4 and checks its first slot against -1 (0x41f561..5fb).
+This pass follows arrivals and precedes robots. Full group staging,
+destroy notifications and outcome integration remain unimplemented;
+adding decorative markers alone would not close that gameplay gap.
