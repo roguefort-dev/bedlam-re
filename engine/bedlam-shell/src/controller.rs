@@ -342,6 +342,27 @@ mod tests {
                 Scene::Mission
             ]
         );
+        let before = game.host().mission().unwrap().sim().robots()[0].q5();
+        let (cx, cy) = game.host().mission().unwrap().cursor();
+        game.pump(
+            InputFrame {
+                mouse_dx: (240 - cx) as i16,
+                mouse_dy: (185 - cy) as i16,
+                mouse_buttons: 1,
+                ..Default::default()
+            }
+            .into(),
+        )
+        .unwrap();
+        for _ in 0..40 {
+            game.pump(ProductionInput::default()).unwrap();
+        }
+        assert_ne!(
+            game.host().mission().unwrap().sim().robots()[0].q5(),
+            before,
+            "ordinary ground input moves the deployed player: {:?}",
+            game.host().mission().unwrap().sim().robots()[0]
+        );
         // Arbitrary mouse edges never stand in for MissionComplete.
         for _ in 0..3 {
             game.pump(InputFrame::default().into()).unwrap();

@@ -11,8 +11,8 @@
 //! - per-frame: the MissionShell loop order — input (mouse_l_click)
 //!   BEFORE the six unit-manager phases [sec 1], so the click seam
 //!   runs before `advance_frame`;
-//! - the click seam: robot-sprite click family ~0x433cbc arms the
-//!   order AT the clicked robot [sec 6.4]; viewport clicks are
+//! - left viewport input creates movement commands (0x40b835),
+//!   using the separate flag-1 command consumer; viewport clicks are
 //!   x < 0x1E0, x >= 0x1E0 runs the sidebar producer [sec 6c —
 //!   select strips + order rows + the redraw countdown];
 //! - present: the viewport pass order enqueue -> terrain -> window
@@ -26,11 +26,11 @@ use bedlam_core::frame::{
 };
 use bedlam_core::hash::StateHash;
 use bedlam_core::input::InputFrame;
-use bedlam_core::mission::dist_octagonal;
 use bedlam_core::mission::{
     AngleTable, DamageOutcome, MissionSim, PickupOutcome, Robot, Terrain, STATE_MOVING,
 };
 use bedlam_core::rng::Pcg32;
+use bedlam_core::weapon::CommandRecord;
 use bedlam_render::map_overlay::{MapOverlay, OverlayRobot};
 use bedlam_render::mission_view::{
     present_window, DebrisSpriteView, DrawParams, EffectRowView, MissionView, RobotView,
@@ -1015,9 +1015,10 @@ impl MissionScene {
                 // Overlay on: game-area clicks are swallowed
                 // [7e.5, asm 0x40b868 — the dispatch jumps past the
                 // order seam while `_DAT_004edba0` is set].
-            } else {
-                self.click_robot();
             }
+        }
+        if left != 0 && self.cursor.0 < 0x1E0 && !self.overlay_on {
+            self.move_to_ground();
         }
         self.prev_buttons = left;
         // MissionShell's per-frame lockout decrement [7e.5,
@@ -1124,41 +1125,28 @@ impl MissionScene {
         }
     }
 
-    /// The robot click seam [DESIGN-GAME sec 11; RE-EXW-SIM sec 6.4
-    /// click-on-robot arm]: clicks land in the viewport
-    /// (`x < 0x1E0`; `tick` dispatches `x >= 0x1E0` to the sidebar
-    /// producer — the guard below is belt-and-braces), hit-test
-    /// every alive robot by the enqueue projection (MISSIONVIEW
-    /// sec 5d) inside a 0x20-px box [design: half the 64-px sprite
-    /// cell; the EXW walks the sprite outlines ~0x433cbc], nearest
-    /// octagonal screen distance wins (ties -> lowest index), and the
-    /// order is armed AT that robot (the EXW arms at the clicked
-    /// robot's tile — one pending order, spread-assign, state 3).
-    fn click_robot(&mut self) {
-        if self.cursor.0 >= 0x1E0 {
-            return; // sidebar: the tick dispatcher owns this half
-        }
-        let cam = self.cam_q5;
-        let (cx, cy) = self.cursor;
-        let mut best: Option<(i32, usize)> = None;
-        for (idx, r) in self.sim.robots().iter().enumerate() {
-            if !r.alive {
-                continue;
-            }
-            let view = RobotView::from_sim(r);
-            let (sx, sy) = self.view.project_robot(&view, cam.0, cam.1, 0);
-            let (dx, dy) = (sx - cx, sy - cy);
-            if dx.abs() > 0x20 || dy.abs() > 0x20 {
-                continue;
-            }
-            let dist = dist_octagonal(dx, dy);
-            if best.is_none_or(|(d, _)| dist < d) {
-                best = Some((dist, idx));
-            }
-        }
-        if let Some((_, idx)) = best {
-            self.sim.arm_order_at_robot(idx);
-        }
+    /// Left-button movement producer, EXW 0x40b892..0x40b969.
+    /// Default zoom is 480; the separately traced right-button firing
+    /// projection must not be used here (its vertical offset differs).
+    fn move_to_ground(&mut self) {
+        let selected = self.sidebar.selected;
+        let Some(robot) = self.sim.robots().get(selected) else {
+            return;
+        };
+        let (width, height) = self.sim.terrain.size();
+        let vx = self.cursor.0 - 240;
+        let vy = self.cursor.1 - 240 + robot.z - 8;
+        let x = (self.cam_q5.0 + (vx >> 1) + vy).clamp(0, width * 32);
+        let y = (self.cam_q5.1 - (vx >> 1) + vy).clamp(0, height * 32);
+        self.sim.stage_command_record(CommandRecord {
+            marker: 0,
+            id: selected as i16,
+            spot: 0,
+            flags: 1,
+            x: x as i16,
+            y: y as i16,
+            z: 0,
+        });
     }
 
     /// One present [DESIGN-GAME sec 11; MISSIONVIEW secs 5d/7]:
@@ -2238,44 +2226,26 @@ mod tests {
     }
 
     #[test]
-    fn click_seam_arms_at_the_projected_robot() {
+    fn ground_click_assigns_movement_without_spread_order_or_teleport() {
         let mut m = staged(&[(3, 1, 1)]);
         m.activate();
-        // Robot 0 projected at camera == its own position:
-        // dx=dy=0, colAdj = ((15)-(15)+0x20)&0x3F = 0x20, rowAdj =
-        // (15+15)>>1 = 15, z settles 31 -> sx = 0x130 = 304,
-        // sy = 0x10C + 15 - 31 = 252.
-        assert_eq!(m.sim().robots()[0].q5(), m.camera());
-        assert_eq!(m.sim().robots()[0].z, 31, "the deck settles the spawn");
-        fn click_at(m: &mut MissionScene, x: i32, y: i32) {
-            // The cursor integrates DELTAS (the original
-            // [9,631]x[9,463] box, D160); aim it at the absolute
-            // (x, y) with one move tick.
-            let (cx, cy) = m.cursor();
-            m.tick(&InputFrame {
-                mouse_dx: (x - cx) as i16,
-                mouse_dy: (y - cy) as i16,
-                mouse_buttons: 0,
-                ..InputFrame::default()
-            });
-            m.tick(&InputFrame {
-                mouse_buttons: 1,
-                ..InputFrame::default()
-            });
+        let before = m.sim.robots()[0].q5();
+        let (cx, cy) = m.cursor();
+        m.tick(&InputFrame {
+            mouse_dx: (240 - cx) as i16,
+            mouse_dy: (249 - cy) as i16,
+            mouse_buttons: 1,
+            ..Default::default()
+        });
+        // Camera (47,47), height31: vy=9+31-8=32 -> (79,79).
+        assert_eq!(m.sim.robots()[0].target, Some((79, 79)));
+        assert!(m.sim.order().is_none());
+        assert!(!m.sim.command_order_active(), "left movement never fires");
+        assert_ne!(m.sim.robots()[0].q5(), (32, 32), "no old tile-origin snap");
+        for _ in 0..40 {
+            m.tick(&InputFrame::default());
         }
-        // Sidebar click: no arm.
-        click_at(&mut m, 600, 252);
-        assert!(m.sim().order().is_none(), "sidebar click is a no-op");
-        // Far click: no arm.
-        click_at(&mut m, 10, 10);
-        assert!(m.sim().order().is_none(), "no robot under the pointer");
-        // On-robot click: armed at robot 0, snapped to its tile
-        // origin, state 3 [FUN_004247b5].
-        click_at(&mut m, 304, 252);
-        let order = m.sim().order().expect("armed");
-        assert_eq!(order.tile.0, 1, "the order tile is robot 0's tile");
-        assert_eq!(m.sim().robots()[0].state, 3);
-        assert_eq!(m.sim().robots()[0].pos_x, 1 << 13, "snap to tile origin");
+        assert_ne!(m.sim.robots()[0].q5(), before, "robot walks to ground");
     }
 
     #[test]

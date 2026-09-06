@@ -815,6 +815,9 @@ impl GameHost {
                 preparation.deploy(&mut mission);
             }
         }
+        if self.fsm.scene() == Scene::Mission {
+            mission.activate();
+        }
         self.mission = Some(mission);
         Ok(())
     }
