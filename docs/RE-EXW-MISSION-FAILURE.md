@@ -51,3 +51,12 @@ Keep simulation hashes unaffected by presentation timing. Tests must
 cover survivor auto-selection, manual cancellation, death_flag semantics,
 extraction-complete suppression, exact wipe boundary, and no campaign
 completion award on failure. Then replay the toxic death in both windows.
+
+## Host route decision
+
+[verified existing GameMain decode, RE-EXW-GAMETHREAD] Switch on
+MissionShell return minus one: return three enters case two, runs
+0x41ca2e/0x447550, sets quit-current-game and goes to outer_restart.
+Implement a distinct GameOver movie scene returning to Title, with no
+Episode::complete call. The generic Debrief-to-Shop fail placeholder is
+not this route. Post-game score-entry details remain separate work.
