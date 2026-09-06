@@ -1902,6 +1902,7 @@ impl MissionSim {
         // destroy-tail kinds).
         self.ride_tick();
         self.debris_tick();
+        self.sentry_tick();
         // The mission-epilogue +0x18 fade [7j.10, verified
         // 0x42405a..0x42409e]: FUN_00424051 runs in the epilogue
         // chain right after the debris tick and decrements EVERY

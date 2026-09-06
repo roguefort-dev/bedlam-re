@@ -1367,17 +1367,17 @@ impl MissionSim {
         }
     }
 
-    /// The 50×0x22 PROJECTILE TICK — FUN_00412010's modeled subset
-    /// [7j.13/5]: per call x+=vx, y+=vy, z+=vz; deactivate on bounds
-    /// exit; terrain probe FUN_0041eaa1(z); the impact branches on
-    /// the −0x64-normalized type (0x65 → damage(0x65) application —
-    /// the S4 E-gap; 0x66 → + free; 0x67 → free) [the normalization
-    /// is the §7j.37 hypothesis reconciling the 7j.13 "type 1/2/3"
-    /// branches with the 7j.28 draw dispatch]. Called 4×/frame by
-    /// the shell (the enemy pass).
+    /// The 50-slot projectile dispatcher, called four times per frame.
+    /// Kind 0x66 uses the instruction-anchored sentry substep handler
+    /// (RE-EXW-SENTRIES.md); the other kinds retain the older modeled
+    /// subset from RE-EXW-SIM 7j.13/5 and still need producer-led audits.
     pub fn enemy_tick(&mut self) {
         let (map_w, map_h) = self.terrain.size();
         for i in 0..ENEMY_BANK_SLOTS {
+            if self.enemy_bank[i].kind == 0x66 {
+                self.sentry_projectile_tick(i);
+                continue;
+            }
             let r = &mut self.enemy_bank[i];
             if r.kind == 0 {
                 continue;
@@ -1401,12 +1401,6 @@ impl MissionSim {
                 // the 0x22 bank yet; a live record names it].
                 let (x, y, kind) = (r.x, r.y, r.kind);
                 match kind {
-                    0x66 => {
-                        self.projectile_disburser(i);
-                        let dmg = weapon_damage(0x66, self.difficulty);
-                        self.resolve_object_impact(x, y, 0, dmg, true);
-                        self.resolve_structure_impact(x, y, dmg);
-                    }
                     0x67 => {
                         self.projectile_disburser(i);
                     }

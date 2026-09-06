@@ -89,6 +89,7 @@ impl WorldAssets {
         sim.stage_elevators();
         assert!(sim.stage_pickup_surface(&self.tot, self.zone));
         sim.stamp_hazard_words();
+        sim.stamp_sentries();
         sim.observe_terrain_writes();
         Ok(())
     }

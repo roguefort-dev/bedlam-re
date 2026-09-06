@@ -50,6 +50,7 @@ pub mod poi;
 pub mod replay;
 pub mod ride;
 pub mod rng;
+mod sentry;
 pub mod sim;
 pub mod time;
 pub mod tutorial;

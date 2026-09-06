@@ -10663,3 +10663,18 @@ by default and outside simulation state. Include robot height/health/
 target and packed lift state so screenshots can be related to actual
 movement. This is diagnostic evidence only; it does not replace original
 DOSBox comparison or the natural production journey required by the queue.
+
+
+## D257 — Connect the original TRT sentry state machine and projectile handler
+
+Live comparison beside Boot Camp's glass structure found the original
+pop-up sentry active while native only had the destruction record. Add
+state/frame/fire-counter fields to that same record, stamp the initial
+DAT/word after TOT staging, and run animation/fire after debris. Reuse the
+world-write journal for animated words, preserving seen bytes. Implement
+kind 0x66's dedicated ten-substep handler rather than the generic XYZ
+stepper: arming countdown, unconditional final XY rollback, robot contact
+without direct damage, and terrain damage at the contact position with
+score flag zero. See RE-EXW-SENTRIES.md, committed before implementation.
+No projectile sprite is invented. Existing replay digests remain pinned;
+new differences are recorded as unresolved controls, not product evidence.

@@ -285,6 +285,9 @@ pub struct ObjectInstance {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerrainStructure {
     pub active: bool,
+    pub state: i32,
+    pub frame: i32,
+    pub fire_counter: i32,
     pub hp: i32,
     pub x: i32,
     pub y: i32,
@@ -309,6 +312,9 @@ pub fn parse_trt(bytes: &[u8], linear: u32) -> Option<Vec<TerrainStructure>> {
         let rd = |k: usize| i32::from_le_bytes(bytes[o + k..o + k + 4].try_into().unwrap());
         out.push(TerrainStructure {
             active: true,
+            state: 1,
+            frame: 0,
+            fire_counter: 0,
             hp,
             x: rd(0),
             y: rd(4),
@@ -2341,7 +2347,7 @@ mod claim_seam_tests {
         // Platform substrate (plane-B anchor, volume 1) under the
         // claimed tile (2,51) AND the unclaimed control (15,20).
         for &(tx, ty) in &[(2usize, 51usize), (15, 20)] {
-            planes[1 * n + ty * w as usize + tx] = 1;
+            planes[n + ty * w as usize + tx] = 1;
         }
         let terrain = Terrain::from_parts(w, h, planes, Vec::new()).expect("terrain");
         let angles = AngleTable::from_thresholds(&[0u16; 64]).expect("thresholds");

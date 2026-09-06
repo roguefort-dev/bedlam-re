@@ -858,8 +858,8 @@ fn enemy_projectiles_move_and_free_on_terrain() {
     assert!(s
         .stage_enemy_projectile(EnemyProjectile {
             kind: 0x66,
-            x: 16 * 0x2000,
-            y: 16 * 0x2000,
+            x: 10 * 0x2000,
+            y: 10 * 0x2000,
             z: 0x2000,
             vx: 0x200,
             vy: 0,
@@ -867,7 +867,10 @@ fn enemy_projectiles_move_and_free_on_terrain() {
         })
         .is_some());
     s.enemy_tick();
-    assert_eq!(s.enemy_bank()[0].x, 16 * 0x2000 + 0x200);
+    assert_eq!(s.enemy_bank()[0].x, 10 * 0x2000 + 9 * 0x200);
+    // EXW 0x412407 rolls back even a clear ten-substep dispatch.
+    // Return to the height fixture corner for terrain contact.
+    s.enemy_bank_mut()[0].x = 10 * 0x2000;
     // Terrain hit: 0x66 disburser (K8 + clear) + the resolver pair
     // [§7j.14/4 type-2 branch + §7j.13/5].
     s.enemy_bank_mut()[0].z = 0x100;
