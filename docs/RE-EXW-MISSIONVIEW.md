@@ -676,3 +676,53 @@ in the live original/native comparison. The native single retained
 mission plane needs this base once at activation, before portraits, bars,
 weapon rows and score digits. It must not be repainted over those
 dynamic widgets every frame. Corpus checksums passed before/after.
+
+## Radar scan lifecycle and compositing
+
+[verified, EXW] MissionShell calls 0x41ec68 at 0x447b53: radius
+0x4edd68 := 64 and clear the 128x128 backing image at 0x4eddb8
+(0x402482 writes 4096 zero dwords). The per-frame caller is
+0x448142 → 0x41ec81. This is a repeating reveal, not a one-time
+opening animation as earlier shorthand suggested.
+
+Normal state at radius 64: copy the full OLD backing image to the
+screen (0x402504), clear the backing image, compute selected robot
+center ((pos_x>>8)+16)>>4, ((pos_y>>8)+16)>>4, set radius zero,
+then rebuild marker pixels through 0x41ee20. Other frames increment
+radius by four and copy the central 2r by 2r square from the backing
+image. For r<64 draw the expanding color-7 rectangular outline through
+0x402492. At r=64 omit the outline; the next call copies that full
+image again and starts a fresh marker capture. Thus refreshes are
+separated by seventeen calls, with the new backing image revealed
+starting on the call after capture.
+
+Copy origin is screen (496+64-r,197+64-r), backing
+(64-r,64-r), width/height 2r (0x402504..0x40256a). The outline
+origin is (496+64-r,195+64-r), top/bottom width 2r, side pixels
+x and x+2r for 2r rows; its last row is y+2r-1. Finally draw
+SCANNER.BIN sprite 0 at (496,195), transparent (0x41edff..0x41ee16).
+The +2 Y difference between copy and outline is in the executable.
+
+Mouse-down inside inclusive x=494..625,y=195..326 latches the
+pressed state. While held inside it draws sprite 17 at (494,195)
+and skips scanning. Release or leaving the rectangle resets radius
+64, clears the backing image, draws sprite 18 at (494,195), clears
+the latch, and sets the existing scanner backdrop redraw count to 2
+(0x41ec87..0x41ed2c). On the first press, normal scanning still runs
+after the latch is set (0x41ed31..0x41ed74).
+
+Marker space is axis-aligned, not the viewport isometric projection:
+x=64+object_x-center_x, y=64+object_y-center_y; reject if either
+absolute delta is >=128. Robot coordinates are Q5 rounded by +16
+then shifted four; tile centers are (tile*32+16)>>4. Marker blitter
+0x402572 reads raw SCANNER glyph bytes, applies unsigned stored
+hotspot offsets then subtracts 2 from each coordinate, clips to
+128x128, and skips source color zero (0x4026cc..0x4026d3). Do not
+reuse the screen RLE/transparency path without matching those details.
+
+Scanner equipment level >=1 gates TRT and destructible-strength
+markers (0x41ee2b..0x41ee38,0x41f10c..0x41f119). Claim-bank tile
+markers have a separate path at 0x41f191. Remaining marker-loop
+ordering, icon gates and producer availability still need to be
+connected before radar parity can be claimed. No runtime radar code
+has been added by this specification pass.
