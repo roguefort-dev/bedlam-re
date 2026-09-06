@@ -4,9 +4,10 @@
     the extraction roof, destroyed the beacon, extracted and returned to the
     mission room after its movie. Fixed native elevated-object restoration
     to index local template layers; actual-map test now completes simulation
-    extraction. Rebuilt live replay and mission-owned shell outcome are next.
-    Original remains paused in mission room; old native process still has the
-    pre-fix terrain. Prior blank-menu/ground-input notes below are historical.
+    extraction. Rebuilt native normal-input replay now destroys the beacon and enters
+    extraction state5, but remains on the rooftop after five seconds.
+    Successful host outcome and dropship presentation remain open. Native
+    PID2584686 is paused there; original remains paused in mission room. Prior blank-menu/ground-input notes below are historical.
     Product phases remain unproven; canonical controls remain 3 pass/10 fail.
 
   - 2026-09-06 interactive continuation, working alone with legacy workers

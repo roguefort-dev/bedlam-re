@@ -89,3 +89,18 @@ the bank index to use zz-oz, preserving world z for DAT/mirror writes.
 Protect nonzero origins, multiple layers/footprint cells, upper-plane
 clamping, and the actual Boot Camp beacon's movement/extraction seam.
 Manifest checks passed around corpus reads; no original bytes committed.
+
+## Successful MissionShell return audit
+
+[verified asm, 2026-09-06] ghidra-project/exw-text-objdump.txt:
+0x4486d5 reads extraction-complete 0x4dc67c; zero branches to failure
+detection at0x44870d. Nonzero clears0x4edb64, then0x4486ec tests
+objective-done bank slot0 at0x4eb8b8. Nonzero jumps0x4481f4. Otherwise
+0x4486f9 tests zone0x4edd8c==1, also jumping0x4481f4. That shared target
+loads eax=1 and returns via0x44873e. Only the remaining extracted-but-
+objective-incomplete, non-Boot-Camp path loads eax=4 at0x448706.
+Thus the older SIM7j.57 parenthesis associating the objective/zone branch
+with return4 is reversed. Boot Camp successful extraction returns1.
+Caller handling and evacuation movie selection still require tracing
+before implementing the host route. Native normal-input replay now
+reaches state5 after beacon destruction but remains in Mission.
