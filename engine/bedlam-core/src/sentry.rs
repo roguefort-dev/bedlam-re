@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn armed_delay_does_not_bypass_robot_contact_or_apply_robot_damage() {
+    fn robot_contact_has_no_direct_damage_but_impact_debris_damages_twice() {
         let mut sim = scene();
         sim.spawn_robot((1, 1, 1));
         let r = &sim.robots[0];
@@ -346,6 +346,14 @@ mod tests {
         assert_eq!(sim.enemy_bank[0].x, p.x);
         assert_eq!(sim.enemy_bank[0].vz, 20);
         assert_eq!(sim.robots[0].hp, hp);
+        // EXW 0x412816 -> K8, 0x421819 -> physics countdown 2;
+        // 0x40ded0/0x40dbc2 apply 2 damage on each debris physics tick.
+        sim.debris_tick();
+        assert_eq!(sim.robots[0].hp, hp - 2);
+        sim.debris_tick();
+        assert_eq!(sim.robots[0].hp, hp - 4);
+        sim.debris_tick();
+        assert_eq!(sim.robots[0].hp, hp - 4);
     }
 
     #[test]
