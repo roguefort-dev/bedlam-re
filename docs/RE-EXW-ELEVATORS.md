@@ -67,3 +67,14 @@ observe the 18-tile strip lower in native as in DOSBox, then walk across.
 Test both directions and the five-level rect, in-flight command behavior,
 frame boundary shifts, and unchanged unrelated cells. Other-zone auto
 cycles, camera cue and sounds remain separate scope, not completion claims.
+
+## DAT-index correction before implementation
+
+[verified EXW] 0x4239ac/0x4239d5 index the DAT plane table at
+0x4eaacc by the SAME z passed to the ordinary z writer. Therefore
+0x4eaacc is plane 0, 0x4eaad0 plane 1, and 0x4eaae8 plane 7.
+The old 7j.34 interpretation of 0x4eaae8 as a ninth plane was wrong:
+0x4eaac8 is adjacent state, not the plane-table base. Lowering's finish
+clears the highest occupied level when nonzero AND always plane 7.
+Raising stamps one level above its highest occupied word. Native must
+use these actual plane indices, not the earlier table-base gloss.
