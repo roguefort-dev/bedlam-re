@@ -1032,6 +1032,9 @@ impl MissionScene {
         if left != 0 && self.cursor.0 < 0x1E0 && !self.overlay_on {
             self.move_to_ground();
         }
+        if input.mouse_buttons & 2 != 0 && self.cursor.0 < 0x1E0 && !self.overlay_on {
+            self.fire_at_ground();
+        }
         self.prev_buttons = left;
         // MissionShell's per-frame lockout decrement [7e.5,
         // 0x44871d..0x44872a].
@@ -1170,6 +1173,25 @@ impl MissionScene {
             flags: 1,
             x: x as i16,
             y: y as i16,
+            z: 0,
+        });
+    }
+
+    /// Ground fallback of the right-button dispatcher, EXW 0x410693..0x410809.
+    /// Actor/structure hot-rectangle picking still needs renderer integration.
+    fn fire_at_ground(&mut self) {
+        if self.sim.robots().get(self.sidebar.selected).is_none() {
+            return;
+        }
+        let vx = self.cursor.0 - 240;
+        let vy = self.cursor.1 - 240 + self.cam_height + 21;
+        self.sim.stage_command_record(CommandRecord {
+            marker: 0,
+            id: self.sidebar.selected as i16,
+            spot: 0,
+            flags: 2,
+            x: (self.cam_q5.0 + (vx >> 1) + vy) as i16,
+            y: (self.cam_q5.1 - (vx >> 1) + vy) as i16,
             z: 0,
         });
     }
@@ -2423,16 +2445,14 @@ mod tests {
         sidebar_click(&mut m, 0x200, 0x57); // first slot off
         sidebar_click(&mut m, 0x200, 0x65); // second slot on
         assert_eq!(m.sim.robots()[0].weapon_mask, 2);
-        m.sim.stage_command_record(CommandRecord {
-            marker: 0,
-            id: 0,
-            spot: 0,
-            flags: 2,
-            x: 80,
-            y: 80,
-            z: 0,
+        let (cx, cy) = m.cursor();
+        m.tick(&InputFrame {
+            mouse_dx: (240 - cx) as i16,
+            mouse_dy: (252 - cy) as i16,
+            mouse_buttons: 2,
+            ..Default::default()
         });
-        m.tick(&InputFrame::default());
+        assert_eq!(m.sim.command_order_target(), (80, 80, 0));
         assert_eq!(
             m.sim.robots()[0].weapons[0].ammo,
             1,
@@ -2446,6 +2466,20 @@ mod tests {
             "artillery auto-rearms first stocked slot"
         );
         assert_eq!(m.order_bits(0), m.sim.robots()[0].weapon_mask);
+        sidebar_click(&mut m, 0x230, 0x1c0);
+        let before = m.sim.robots()[0].weapons;
+        let (cx, cy) = m.cursor();
+        m.tick(&InputFrame {
+            mouse_dx: (240 - cx) as i16,
+            mouse_dy: (252 - cy) as i16,
+            mouse_buttons: 2,
+            ..Default::default()
+        });
+        assert_eq!(
+            m.sim.robots()[0].weapons,
+            before,
+            "map overlay swallows firing"
+        );
     }
 
     #[test]
