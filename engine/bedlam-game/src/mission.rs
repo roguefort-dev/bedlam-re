@@ -1419,7 +1419,7 @@ impl MissionScene {
             .iter()
             .map(|&(x, y, z, id)| EffectRowView { x, y, z, id })
             .collect();
-        let debris = self.debris.views();
+        let debris = self.debris_views();
         self.view
             .enqueue_effects(&rows, &debris, self.cam_q5.0, self.cam_q5.1);
         self.view
@@ -1468,6 +1468,28 @@ impl MissionScene {
         self.draw_scanner();
         self.finish_world_render();
         Some(&self.plane)
+    }
+
+    fn debris_views(&self) -> Vec<DebrisSpriteView> {
+        let mut views = self.debris.views();
+        if self.world_connected {
+            views.extend(self.sim.debris_bank().iter().map(|r| {
+                DebrisSpriteView {
+                    active: r.active,
+                    x: r.x,
+                    y: r.y,
+                    z: r.z,
+                    kind: r.kind,
+                    delay: r.delay,
+                    seq: bedlam_core::destroy::DEBRIS_SEQ_TABLES
+                        .get(usize::from(r.table))
+                        .and_then(|table| table.get(r.anim as usize))
+                        .copied()
+                        .unwrap_or(-1) as i32,
+                }
+            }));
+        }
+        views
     }
 
     /// The FUN_00408403 order-row pass [sec 6c.8a]: 7 rows over the
@@ -2215,6 +2237,39 @@ mod tests {
             &f[22], &f[23], &f[24], &f[12], &f[13], &maptran, 0, None, markers,
         )
         .expect("synth mission stages")
+    }
+
+    #[test]
+    fn production_debris_uses_core_animation_without_a_second_tick() {
+        let mut mission = staged(&[]);
+        let files = synth_mission_files();
+        assert!(mission.sim.stage_pickup_surface(&files[0], 1));
+        mission.sim.observe_terrain_writes();
+        mission.world_connected = true;
+        mission.activate();
+        mission.sim.stage_debris(32, 32, 40, 3, 0, -1);
+        let before = mission.sim.debris_bank()[0].anim;
+        mission.present().unwrap();
+        assert_eq!(mission.sim.debris_bank()[0].anim, before);
+        let shown = mission
+            .debris_views()
+            .into_iter()
+            .find(|d| d.active && d.kind == 3)
+            .unwrap();
+        assert_eq!(
+            shown.seq,
+            i32::from(bedlam_core::destroy::debris_seq_table(3)[0])
+        );
+        mission.sim.debris_tick();
+        let shown = mission
+            .debris_views()
+            .into_iter()
+            .find(|d| d.active && d.kind == 3)
+            .unwrap();
+        assert_eq!(
+            shown.seq,
+            i32::from(bedlam_core::destroy::debris_seq_table(3)[1])
+        );
     }
 
     #[test]

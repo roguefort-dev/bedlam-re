@@ -901,7 +901,7 @@ impl MissionSim {
             let dmg = weapon_damage(5, self.difficulty);
             self.resolve_object_impact(x, y, 0, dmg, true);
             self.resolve_structure_impact(x, y, dmg);
-            self.weapon_bank[i].kind = 0;
+            // EXW 0x410cad dispatches the effect while type 5 is still live.
             self.weapon_disburser(i);
             return;
         }

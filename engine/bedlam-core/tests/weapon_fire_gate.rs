@@ -594,6 +594,16 @@ fn shell_moves_and_frees_on_floor() {
     s.weapon_bank_mut()[0].z = 0x100;
     s.weapon_tick(1);
     assert_eq!(s.weapon_bank()[0].kind, 0, "floor impact frees the shell");
+    let burst = s
+        .debris_bank()
+        .iter()
+        .find(|d| d.active && d.kind == 3)
+        .expect("impact dispatch must see the shell type before retirement");
+    assert_eq!(
+        (burst.x, burst.y, burst.z),
+        (16 * 32 + 2, 16 * 32, 32),
+        "effect uses the stored pre-contact position and clamps its height"
+    );
 }
 
 #[test]

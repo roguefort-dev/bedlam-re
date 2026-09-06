@@ -10559,3 +10559,13 @@ untouched record fields. Idle fire, other weapon families, impact effects
 and target selection remain separately scoped. Live native fire now shows
 the original shot sprites and earns destruction score; no generator/fence
 completion or full combat-parity claim is made.
+
+## D249 — Preserve impact dispatch and render core-owned debris
+
+EXW calls the type-sensitive disburser before clearing a plasma shot.
+Remove the premature native clear, then expose core debris records to
+the production renderer using their existing table/animation state.
+MissionSim already advances these records; presentation must not tick
+them again. Retain the separate legacy scene damage effects until that
+seam is retired. Live comparison confirms the previously missing burst;
+it does not establish generator/fence or broader combat completion.
