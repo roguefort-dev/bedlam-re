@@ -10651,3 +10651,15 @@ Canonical S3 now ends in GameOver before its fixed capture budget. Report
 a typed CanonicalError instead of panicking on an absent mission. Do not
 keep a dead mission running or disable failure to preserve that scenario.
 Its capture expectations need a separately evidenced reconciliation.
+
+
+## D256 — Opt-in window gameplay trace for original/native playtesting
+
+Repeated live pool attempts reached an ambiguous wall/ramp overlap and
+died before a safe exit was established. Add `--trace-gameplay` at the
+window boundary: report consumed input and read-only post-pump state to
+stderr, on input, periodic mission frames and scene changes. Keep it off
+by default and outside simulation state. Include robot height/health/
+target and packed lift state so screenshots can be related to actual
+movement. This is diagnostic evidence only; it does not replace original
+DOSBox comparison or the natural production journey required by the queue.

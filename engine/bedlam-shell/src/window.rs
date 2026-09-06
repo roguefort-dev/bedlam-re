@@ -548,6 +548,8 @@ fn volume_mixers_stepped(mixers: VolumeMixers, adj: VolumeAdjust) -> VolumeMixer
 /// Window host options.
 #[derive(Debug, Clone)]
 pub struct WindowOptions {
+    /// Opt-in live playtest diagnostics on stderr; never changes simulation input.
+    pub trace_gameplay: bool,
     /// Install root (e.g. game-data/BEDLAM; the source also
     /// accepts GAMEGFX directly - see [`GameGfxSource`]).
     pub gfx_dir: PathBuf,
@@ -691,6 +693,7 @@ impl WindowOptions {
     /// integer scale of 640x480 at 1.0 DPI), Integer + Nearest.
     pub fn new(gfx_dir: impl Into<PathBuf>) -> WindowOptions {
         WindowOptions {
+            trace_gameplay: false,
             gfx_dir: gfx_dir.into(),
             config: ChainConfig::default(),
             title: String::from("Bedlam (1996) - re shell"),
@@ -1179,6 +1182,46 @@ fn steer_pointer(
     }
 }
 
+/// Read-only snapshot for relating visible playtest input to simulation state.
+fn gameplay_trace(host: &GameHost, input: &bedlam_core::input::InputFrame) -> String {
+    let mut line = format!("bedlam-gameplay scene={:?} input={input:?}", host.scene());
+    if let Some(mission) = host.mission() {
+        let sim = mission.sim();
+        let robots: Vec<_> = sim
+            .robots()
+            .iter()
+            .enumerate()
+            .map(|(id, r)| {
+                (
+                    id,
+                    r.pos_x >> 8,
+                    r.pos_y >> 8,
+                    r.z,
+                    r.hp,
+                    r.alive,
+                    r.state,
+                    r.target,
+                )
+            })
+            .collect();
+        let lifts: Vec<_> = sim
+            .elevator_bias()
+            .iter()
+            .enumerate()
+            .filter_map(|(tile, &bias)| (bias != 0).then_some((tile, bias)))
+            .collect();
+        line.push_str(&format!(
+            " frame={} cursor={:?} camera={:?} robots={robots:?} lifts={lifts:?}",
+            sim.frame(),
+            mission.cursor(),
+            mission.camera()
+        ));
+    } else {
+        line.push_str(&format!(" cursor={:?}", host.menu_cursor()));
+    }
+    line
+}
+
 #[cfg(test)]
 mod mission_pointer_tests {
     use super::*;
@@ -1248,7 +1291,19 @@ impl ShellApp {
                 &mut frame,
                 self.game_cursor_target(),
             );
+            let previous_scene = self.controller.host().scene();
             self.controller.pump(frame.into())?;
+            if self.opts.trace_gameplay {
+                let host = self.controller.host();
+                let input_active = frame.buttons != 0
+                    || frame.mouse_buttons != 0
+                    || frame.mouse_dx != 0
+                    || frame.mouse_dy != 0;
+                let periodic = host.mission().is_some_and(|m| m.sim().frame() % 60 == 0);
+                if input_active || periodic || host.scene() != previous_scene {
+                    eprintln!("{}", gameplay_trace(host, &frame));
+                }
+            }
         }
         Ok(())
     }

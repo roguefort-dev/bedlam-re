@@ -53,7 +53,7 @@
 //!   BEDLAM02..08.WAV / TRACK02..08.WAV rips with a SILENT MISS —
 //!   music silent + a note, never fatal; ignored headless).
 //!
-//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--pumps N]
+//! Usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--trace-gameplay] [--pumps N]
 //! INSTALL_DIR defaults to `game-data/BEDLAM` (repo layout; GAMEGFX
 //! is resolved inside it).
 
@@ -87,6 +87,7 @@ fn main() -> ExitCode {
     let mut autosave = false;
     let mut music_dir: Option<PathBuf> = None;
     let mut no_music_cache = false;
+    let mut trace_gameplay = false;
     let mut scale: Option<ScaleMode> = None;
     let mut filter: Option<FilterMode> = None;
     let mut presentation: Option<PresentationMode> = None;
@@ -135,6 +136,7 @@ fn main() -> ExitCode {
                 }
             },
             "--no-music-cache" => no_music_cache = true,
+            "--trace-gameplay" => trace_gameplay = true,
             "--scale" => match args.next().and_then(|w| scale_mode_from_cli(&w)) {
                 Some(mode) => scale = Some(mode),
                 None => {
@@ -164,7 +166,7 @@ fn main() -> ExitCode {
                 }
             },
             "--help" | "-h" => {
-                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--pumps N]");
+                println!("usage: bedlam-shell [INSTALL_DIR] [--window] [--classic] [--uncapped] [--fullscreen] [--borderless] [--music PCT] [--sfx PCT] [--save-slot N] [--autosave] [--scale MODE] [--filter MODE] [--presentation MODE] [--music-dir DIR] [--no-music-cache] [--trace-gameplay] [--pumps N]");
                 println!("  --window: interactive host (env BEDLAM_WINDOW_EXIT_MS=N auto-exits after N ms)");
                 println!(
                     "  --classic: window host runs the classic purist mode (P6 ModeConfig preset;"
@@ -255,6 +257,9 @@ fn main() -> ExitCode {
                     "                   rips case-insensitively; a miss = music silent + a note,"
                 );
                 println!("                   never fatal; the BEDLAM_MUSIC_DIR env is the twin)");
+                println!(
+                    "  --trace-gameplay: write live input, robot and lift diagnostics to stderr"
+                );
                 println!("  --no-music-cache: window host skips the optional local lossy cache");
                 println!("                    (P7; default generates it on first run into the");
                 println!("                    user-owned cache dir, keyed by source identity and");
@@ -409,8 +414,12 @@ fn main() -> ExitCode {
         if no_music_cache {
             opts.music.cache = bedlam_shell::cdda::MusicCachePolicy::Disabled;
         }
+        opts.trace_gameplay = trace_gameplay;
         run_window(opts).map(|()| None).map_err(Into::into)
     } else {
+        if trace_gameplay {
+            eprintln!("bedlam-shell: --trace-gameplay requires --window; ignored headless");
+        }
         if uncapped {
             // The headless path owns no present surface; the option
             // is a no-op there (noted, never fatal).
